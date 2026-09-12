@@ -36,6 +36,12 @@ namespace RimAgent.UI
 
         public override Vector2 RequestedTabSize => new Vector2(760f, 580f);
 
+        public MainTabWindow_Agent()
+        {
+            // Window 預設 Enter 會關閉視窗；輸入列在忙碌或無法送出時 Enter 不會被消費，分頁就會突然消失。
+            closeOnAccept = false;
+        }
+
         public override void PreOpen()
         {
             base.PreOpen();
@@ -160,10 +166,11 @@ namespace RimAgent.UI
             var sendRect = new Rect(stopRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
             var inputRect = new Rect(rect.x, rect.y, sendRect.x - rect.x - 4f, rect.height);
 
+            // 跟原版 Dialog_Rename 一樣：分頁開著、按 Enter 就送出（GetNameOfFocusedControl 在遊戲內查不到名稱）。
+            // 有其他視窗疊在上面時 Window 會把鍵盤事件吃掉，不會誤觸。
             bool enterPressed = canSend &&
                                 Event.current.type == EventType.KeyDown &&
-                                (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter) &&
-                                GUI.GetNameOfFocusedControl() == InputControlName;
+                                (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
             GUI.SetNextControlName(InputControlName);
             _input = Widgets.TextField(inputRect, _input);
