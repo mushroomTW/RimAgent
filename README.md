@@ -29,6 +29,8 @@ Two seams make the mod testable without the game:
 * **`IChatClient`** — the agent accepts any MEAI chat client; tests use a scripted fake.
 * **`IGameWorld`** — tools only see plain data; tests use an in-memory fake world. `RimWorldGameWorld` is a thin adapter verified in-game.
 
+UI strings ship in English, Traditional Chinese and Simplified Chinese (`Languages/`). Planned work is tracked in [TODO.md](TODO.md).
+
 ## Building
 
 ```bash
