@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+
+  <!-- Agent tab -->
+  <RimAgent.Placeholder>Tell the agent what to do, e.g. "set Alice's Doctor priority to 1"</RimAgent.Placeholder>
+  <RimAgent.Send>Send</RimAgent.Send>
+  <RimAgent.Stop>Stop</RimAgent.Stop>
+  <RimAgent.Clear>Clear</RimAgent.Clear>
+  <RimAgent.Working>Agent is working…</RimAgent.Working>
+  <RimAgent.NoGame>Load a colony first.</RimAgent.NoGame>
+  <RimAgent.EmptyReply>(the agent finished without a reply)</RimAgent.EmptyReply>
+  <RimAgent.ToolsStripped>Tools were not available for this reply: the model that answered does not support tool calling, so nothing was changed.</RimAgent.ToolsStripped>
+  <RimAgent.CombatLatencyNote>Combat orders arrive several seconds after you speak. Use them for positioning and retreats, not real-time fighting.</RimAgent.CombatLatencyNote>
+
+  <!-- Capability warnings -->
+  <RimAgent.NoFunctionCalling>None of the models in your RimLLM Framework fallback chain supports tool calling, so the agent cannot act. Adjust the chain in RimLLM Framework's mod settings.</RimAgent.NoFunctionCalling>
+  <RimAgent.NoProvider>RimLLM Framework has no usable provider: {0}. Configure one in RimLLM Framework's mod settings.</RimAgent.NoProvider>
+  <RimAgent.FrameworkTooOld>The installed RimLLM Framework is too old for RimAgent. Update it to a version from 2026-09-12 or later.</RimAgent.FrameworkTooOld>
+
+  <!-- Errors -->
+  <RimAgent.Error.Cancelled>Stopped.</RimAgent.Error.Cancelled>
+  <RimAgent.Error.Configuration>The LLM provider refused the request ({0}). Check the API key, credit and fallback chain in RimLLM Framework's mod settings.</RimAgent.Error.Configuration>
+  <RimAgent.Error.Transient>The request did not get through ({0}). Try again in a moment.</RimAgent.Error.Transient>
+  <RimAgent.Error.ContextTooLong>The conversation is too long for the model. Press Clear and start again.</RimAgent.Error.ContextTooLong>
+  <RimAgent.Error.Unknown>Something went wrong: {0}</RimAgent.Error.Unknown>
+
+  <!-- Settings -->
+  <RimAgent.Settings.PermissionsHeader>What the agent is allowed to do</RimAgent.Settings.PermissionsHeader>
+  <RimAgent.Settings.Observe>Observe — read colony state</RimAgent.Settings.Observe>
+  <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research and map object search. Read-only.</RimAgent.Settings.ObserveTip>
+  <RimAgent.Settings.Work>Work — priorities and schedules</RimAgent.Settings.Work>
+  <RimAgent.Settings.WorkTip>Change work priorities and daily schedules. Easy to undo by hand.</RimAgent.Settings.WorkTip>
+  <RimAgent.Settings.Build>Build — designations and blueprints</RimAgent.Settings.Build>
+  <RimAgent.Settings.BuildTip>Mark things for mining, cutting, harvesting, deconstruction and hauling, and place blueprints. Off by default.</RimAgent.Settings.BuildTip>
+  <RimAgent.Settings.Combat>Combat — draft, move and attack orders</RimAgent.Settings.Combat>
+  <RimAgent.Settings.CombatTip>Draft colonists and give move or attack orders. The model needs several seconds to respond, so this is for positioning and retreats, not real-time control. Off by default.</RimAgent.Settings.CombatTip>
+  <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
+  <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies to newly loaded games.</RimAgent.Settings.MaxStepsTip>
+  <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>
+
+</LanguageData>

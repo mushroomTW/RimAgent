@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>RimAgent</AssemblyName>
+    <RootNamespace>RimAgent</RootNamespace>
+    <LangVersion>8.0</LangVersion>
+    <Deterministic>true</Deterministic>
+    <Authors>mushroomTW</Authors>
+    <!-- AssemblyInfo.cs 手寫（InternalsVisibleTo 給測試專案），避免與自動產生的屬性重複。 -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Release 才寫入出貨的 Assemblies/；Debug 與 dotnet test 走 bin/，不會蓋掉出貨 DLL。 -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath Condition="'$(Configuration)' == 'Release'">..\..\Assemblies\</OutputPath>
+    <OutputPath Condition="'$(Configuration)' != 'Release'">bin\$(Configuration)\</OutputPath>
+    <DebugSymbols Condition="'$(Configuration)' != 'Release'">true</DebugSymbols>
+    <DebugType Condition="'$(Configuration)' != 'Release'">portable</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <!--
+      RimAgent 只出貨自己這一顆 DLL。MEAI 與其相依全部由 RimLLM Framework 的 Assemblies/ 提供，
+      RimWorld 把所有 mod 載入同一個 AppDomain，第二份 IChatClient 會讓所有型別轉換失敗。
+      因此絕不開 CopyLocalLockFileAssemblies，套件一律 ExcludeAssets="runtime"。
+    -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <!-- 已安裝的框架位置；RimWorld 不在預設 Steam 路徑時以 /p:RimLLMDir=... 覆寫。 -->
+    <RimLLMDir Condition="'$(RimLLMDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\RimLLM Framework\Assemblies</RimLLMDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
+    <!-- 版本必須與框架載入的組件識別一致（10.9.0.0），不可浮動。 -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" ExcludeAssets="runtime" />
+    <!--
+      Krafs 附帶的 RimWorld Mono mscorlib 同樣定義 IAsyncEnumerable<T> 與 ValueTask，
+      與 BCL 套件撞名（CS0433）；沿用框架的 alias 隔離法。
+      InvokeCoreAsync 的 ValueTask<object> 與 IChatClient 的 IAsyncEnumerable 都會碰到。
+    -->
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.11" Aliases="bclasync" ExcludeAssets="runtime" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" Aliases="ste" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 直接參考已安裝的框架 DLL；Private=false 讓 MSBuild 不複製它到輸出。 -->
+    <Reference Include="RimLLM Framework">
+      <HintPath>$(RimLLMDir)\RimLLM Framework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

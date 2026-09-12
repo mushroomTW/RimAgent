@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+
+  <!-- Agent 分頁 -->
+  <RimAgent.Placeholder>告訴 Agent 要做什麼，例如「把 Alice 的醫療優先級設成 1」</RimAgent.Placeholder>
+  <RimAgent.Send>送出</RimAgent.Send>
+  <RimAgent.Stop>停止</RimAgent.Stop>
+  <RimAgent.Clear>清除對話</RimAgent.Clear>
+  <RimAgent.Working>Agent 執行中…</RimAgent.Working>
+  <RimAgent.NoGame>請先載入殖民地。</RimAgent.NoGame>
+  <RimAgent.EmptyReply>（Agent 結束了但沒有回覆）</RimAgent.EmptyReply>
+  <RimAgent.ToolsStripped>這次回覆沒有工具可用：回答的模型不支援工具呼叫，因此沒有改動任何東西。</RimAgent.ToolsStripped>
+  <RimAgent.CombatLatencyNote>戰鬥指令會在你說完後數秒才送達，只適合佈署與撤退，不適合即時對戰。</RimAgent.CombatLatencyNote>
+
+  <!-- 能力警告 -->
+  <RimAgent.NoFunctionCalling>RimLLM Framework 的備援鏈裡沒有任何模型支援工具呼叫，Agent 無法執行操作。請到 RimLLM Framework 的 mod 設定調整備援鏈。</RimAgent.NoFunctionCalling>
+  <RimAgent.NoProvider>RimLLM Framework 沒有可用的供應商：{0}。請到 RimLLM Framework 的 mod 設定完成設定。</RimAgent.NoProvider>
+  <RimAgent.FrameworkTooOld>安裝的 RimLLM Framework 版本太舊，RimAgent 無法使用。請更新到 2026-09-12 之後的版本。</RimAgent.FrameworkTooOld>
+
+  <!-- 錯誤 -->
+  <RimAgent.Error.Cancelled>已停止。</RimAgent.Error.Cancelled>
+  <RimAgent.Error.Configuration>LLM 供應商拒絕了請求（{0}）。請到 RimLLM Framework 的 mod 設定檢查 API 金鑰、額度與備援鏈。</RimAgent.Error.Configuration>
+  <RimAgent.Error.Transient>請求沒有送達（{0}）。請稍後再試。</RimAgent.Error.Transient>
+  <RimAgent.Error.ContextTooLong>對話已超過模型的長度上限。請按「清除對話」重新開始。</RimAgent.Error.ContextTooLong>
+  <RimAgent.Error.Unknown>發生錯誤：{0}</RimAgent.Error.Unknown>
+
+  <!-- 設定 -->
+  <RimAgent.Settings.PermissionsHeader>允許 Agent 做的事</RimAgent.Settings.PermissionsHeader>
+  <RimAgent.Settings.Observe>觀察 — 讀取殖民地狀態</RimAgent.Settings.Observe>
+  <RimAgent.Settings.ObserveTip>殖民地概況、殖民者、資源、威脅、研究與地圖物件搜尋。唯讀。</RimAgent.Settings.ObserveTip>
+  <RimAgent.Settings.Work>工作 — 優先級與作息</RimAgent.Settings.Work>
+  <RimAgent.Settings.WorkTip>修改工作優先級與每日作息。容易手動改回。</RimAgent.Settings.WorkTip>
+  <RimAgent.Settings.Build>建造 — 標記與藍圖</RimAgent.Settings.Build>
+  <RimAgent.Settings.BuildTip>標記開採、砍伐、收成、拆除、搬運，以及放置藍圖。預設關閉。</RimAgent.Settings.BuildTip>
+  <RimAgent.Settings.Combat>戰鬥 — 徵召、移動與攻擊指令</RimAgent.Settings.Combat>
+  <RimAgent.Settings.CombatTip>徵召殖民者並下移動或攻擊指令。模型需要數秒才會回應，只適合佈署與撤退，不適合即時操作。預設關閉。</RimAgent.Settings.CombatTip>
+  <RimAgent.Settings.MaxSteps>每句指令最多呼叫工具次數：{0}</RimAgent.Settings.MaxSteps>
+  <RimAgent.Settings.MaxStepsTip>避免失控迴圈燒掉 API 額度。對之後載入的遊戲生效。</RimAgent.Settings.MaxStepsTip>
+  <RimAgent.Settings.FrameworkNote>供應商、API 金鑰、模型與備援鏈都在 RimLLM Framework 的設定裡調整。</RimAgent.Settings.FrameworkNote>
+
+</LanguageData>

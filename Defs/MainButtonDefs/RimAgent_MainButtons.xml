@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+
+  <MainButtonDef>
+    <defName>RimAgent</defName>
+    <label>agent</label>
+    <description>Give the colony orders in natural language and watch the agent carry them out.</description>
+    <tabWindowClass>RimAgent.UI.MainTabWindow_Agent</tabWindowClass>
+    <order>95</order>
+    <closesWorldView>true</closesWorldView>
+  </MainButtonDef>
+
+</Defs>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>RimAgent</name>
+  <author>綠菇</author>
+  <packageId>GreenMushroom.RimAgent</packageId>
+  <modVersion>2026.09.12.1</modVersion>
+  <supportedVersions>
+    <li>1.6</li>
+  </supportedVersions>
+  <description><![CDATA[RimAgent — An LLM agent that controls your colony through natural language.
+
+Open the "Agent" tab on the bottom bar and type what you want done: "set Alice's Doctor priority to 1", "mark the steel ore in the selected area for mining", "draft everyone and move to (25, 30)". The agent reads colony state through tools, plans, executes real game actions, and reports every tool call in an action log.
+
+<b>Requires RimLLM Framework</b> (2026.09.12 or later). Provider, API key, model and fallback chain are configured once in the framework's settings; RimAgent only adds per-category tool permissions.
+
+<b>Tool categories</b> (each can be toggled in mod settings):
+1. <b>Observe</b> — colony overview, colonists, resources, threats, research, map object search.
+2. <b>Work</b> — work priorities and schedules.
+3. <b>Build</b> — mining / cutting / harvesting / deconstruction designations and blueprints. Off by default.
+4. <b>Combat</b> — draft, move and attack orders. Off by default. LLM latency is several seconds, so this is for pre-deployment and retreats, not real-time control.
+
+The agent never touches game state outside of these tools, and every call is visible in the action log.]]></description>
+  <modDependencies>
+    <li>
+      <packageId>GreenMushroom.RimLLMFramework</packageId>
+      <displayName>RimLLM Framework</displayName>
+      <downloadUrl>https://github.com/mushroomTW/RimLLM-Framework</downloadUrl>
+    </li>
+  </modDependencies>
+  <loadAfter>
+    <li>GreenMushroom.RimLLMFramework</li>
+  </loadAfter>
+</ModMetaData>

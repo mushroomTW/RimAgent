@@ -1,0 +1,31 @@
+# IDE
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+
+# AI agent workspaces
+.claude/
+.gemini/
+CLAUDE.md
+CONTEXT.md
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
+*.pdb
+
+# Test results & coverage
+TestResults/
+*.trx
+*.log
+.scannerwork/
+.sonarqube/
+coverage*.xml
+coverage*.json
+
+# OS
+.DS_Store
+Thumbs.db
+[Dd]esktop.ini

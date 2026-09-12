@@ -1,0 +1,40 @@
+using RimAgent.Tools;
+using Verse;
+
+namespace RimAgent
+{
+    /// <summary>玩家可調的設定：四類工具的開關與單次任務的步數上限。</summary>
+    public class RimAgentSettings : ModSettings
+    {
+        public const int DefaultMaxSteps = 8;
+        public const int MinSteps = 1;
+        public const int MaxSteps = 20;
+
+        public bool allowObserve = true;
+        public bool allowWork = true;
+        public bool allowBuild;
+        public bool allowCombat;
+        public int maxSteps = DefaultMaxSteps;
+
+        public override void ExposeData()
+        {
+            base.ExposeData();
+            Scribe_Values.Look(ref allowObserve, "allowObserve", true);
+            Scribe_Values.Look(ref allowWork, "allowWork", true);
+            Scribe_Values.Look(ref allowBuild, "allowBuild", false);
+            Scribe_Values.Look(ref allowCombat, "allowCombat", false);
+            Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
+        }
+
+        public ToolPermissions ToPermissions()
+        {
+            return new ToolPermissions
+            {
+                Observe = allowObserve,
+                Work = allowWork,
+                Build = allowBuild,
+                Combat = allowCombat
+            };
+        }
+    }
+}

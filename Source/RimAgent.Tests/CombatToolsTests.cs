@@ -1,0 +1,87 @@
+using NUnit.Framework;
+using RimAgent.Game;
+using RimAgent.Tools;
+
+namespace RimAgent.Tests
+{
+    [TestFixture]
+    public class CombatToolsTests
+    {
+        private FakeGameWorld _world;
+        private CombatTools _tools;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _world = new FakeGameWorld();
+            _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
+            _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
+            _world.Colonists.Add(FakeGameWorld.MakeColonist(103, "Cid", "", "Lee"));
+            _world.Colonists[2].Downed = true;
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _tools = new CombatTools(_world);
+        }
+
+        [Test]
+        public void DraftAllSkipsDowned()
+        {
+            string text = _tools.Draft("all", true);
+            Assert.That(text, Does.StartWith("Drafted 2: Ali, Bob.").And.Contain("Cid is downed"));
+            Assert.That(_world.Colonists[0].Drafted, Is.True);
+            Assert.That(_world.Colonists[2].Drafted, Is.False);
+        }
+
+        [Test]
+        public void UndraftReportsVerb()
+        {
+            _world.Colonists[1].Drafted = true;
+            Assert.That(_tools.Draft("Bob", false), Is.EqualTo("Undrafted 1: Bob."));
+            Assert.That(_world.Colonists[1].Drafted, Is.False);
+        }
+
+        [Test]
+        public void MoveDraftsFirstAndOrdersMove()
+        {
+            _world.Colonists[0].Drafted = true;
+            string text = _tools.OrderMove("Ali, Bob", 25, 30);
+            Assert.That(text, Is.EqualTo("Ordered Ali, Bob to move to (25,30). Drafted first: Bob."));
+            Assert.That(_world.Calls, Is.EqualTo(new[] { "OrderMoveTo(101,25,30)", "SetDrafted(102,True)", "OrderMoveTo(102,25,30)" }));
+        }
+
+        [Test]
+        public void MoveOutsideMapIsRejectedBeforeAnything()
+        {
+            Assert.That(_tools.OrderMove("all", 500, 30), Does.StartWith("Error:").And.Contain("outside"));
+            Assert.That(_world.Calls, Is.Empty);
+        }
+
+        [Test]
+        public void MoveToUnwalkableCellReportsGameReason()
+        {
+            _world.UnwalkableCells.Add((25, 30));
+            Assert.That(_tools.OrderMove("Bob", 25, 30), Does.StartWith("Error:").And.Contain("not walkable"));
+        }
+
+        [Test]
+        public void AttackKnownThreat()
+        {
+            string text = _tools.OrderAttack("all", 900);
+            Assert.That(text, Does.StartWith("Ordered Ali, Bob to attack grizzly bear [900].").And.Contain("Cid is downed"));
+            Assert.That(_world.Calls, Does.Contain("OrderAttack(101,900)").And.Contain("SetDrafted(101,True)"));
+        }
+
+        [Test]
+        public void AttackUnknownTargetIsAnError()
+        {
+            Assert.That(_tools.OrderAttack("all", 1234), Does.StartWith("Error:").And.Contain("list_threats"));
+            Assert.That(_world.Calls, Is.Empty);
+        }
+
+        [Test]
+        public void AttackFallsBackToPawnsFromFindThings()
+        {
+            _world.Things.Add(FakeGameWorld.MakeThing(77, "Deer", "deer", ThingKind.Pawn, 1, 1));
+            Assert.That(_tools.OrderAttack("Bob", 77), Does.StartWith("Ordered Bob to attack deer [77]."));
+        }
+    }
+}

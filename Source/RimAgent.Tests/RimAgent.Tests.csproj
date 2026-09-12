@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <RootNamespace>RimAgent.Tests</RootNamespace>
+    <AssemblyName>RimAgent.Tests</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <IsPackable>false</IsPackable>
+    <DefaultRimWorldManagedDir>C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed</DefaultRimWorldManagedDir>
+    <RimWorldManagedDir Condition="'$(RimWorldManagedDir)' == '' and '$(RIMWORLD_MANAGED_DIR)' != ''">$(RIMWORLD_MANAGED_DIR)</RimWorldManagedDir>
+    <RimWorldManagedDir Condition="'$(RimWorldManagedDir)' == ''">$(DefaultRimWorldManagedDir)</RimWorldManagedDir>
+    <RimLLMDir Condition="'$(RimLLMDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\RimLLM Framework\Assemblies</RimLLMDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="NUnit" Version="4.6.1" />
+    <PackageReference Include="NUnit3TestAdapter" Version="6.3.0" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <!-- 與主專案相同的 alias 隔離，避免 Mono mscorlib 與 BCL 套件的 CS0433。 -->
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.11" Aliases="bclasync" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" Aliases="ste" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RimAgent\RimAgent.csproj" />
+    <!-- 測試在真 .NET Framework 上執行，框架 DLL 要複製到測試輸出（Private 預設 true）。 -->
+    <Reference Include="RimLLM Framework">
+      <HintPath>$(RimLLMDir)\RimLLM Framework.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <!-- 與框架測試專案相同：只複製 RimWorld 與 Unity 的實體 DLL，排除 mscorlib / System 等基礎類別庫以免 CLR 衝突。 -->
+  <Target Name="CopyRimWorldAssemblies" AfterTargets="Build" Condition="Exists('$(RimWorldManagedDir)')">
+    <ItemGroup>
+      <RimWorldAssemblies Include="$(RimWorldManagedDir)\Assembly-CSharp*.dll" />
+      <RimWorldAssemblies Include="$(RimWorldManagedDir)\UnityEngine*.dll" />
+      <RimWorldAssemblies Include="$(RimWorldManagedDir)\Unity.*.dll" />
+      <RimWorldAssemblies Include="$(RimWorldManagedDir)\netstandard.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RimWorldAssemblies)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="WarnMissingRimWorldAssemblies" AfterTargets="Build" Condition="!Exists('$(RimWorldManagedDir)')">
+    <Warning Text="RimWorld managed assembly folder not found: $(RimWorldManagedDir). Set RimWorldManagedDir or RIMWORLD_MANAGED_DIR." />
+  </Target>
+</Project>

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RimAgent/RimAgent.csproj" />
+  <Project Path="RimAgent.Tests/RimAgent.Tests.csproj" />
+</Solution>

@@ -1,0 +1,90 @@
+extern alias bclasync;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
+
+namespace RimAgent.Tests
+{
+    /// <summary>
+    /// 腳本化的假 IChatClient：每次呼叫依序吐出預先排好的回應（工具呼叫或文字），
+    /// 並記錄收到的訊息與 options，供整合測試斷言。腳本用完後重複最後一則。
+    /// </summary>
+    internal sealed class ScriptedChatClient : IChatClient
+    {
+        // 用 List 而非 Queue<T>：Krafs 的 Mono mscorlib 把 Queue<T> 放在 mscorlib，
+        // 真 .NET Framework 放在 System.dll，測試組件會綁錯組件而 TypeLoadException。
+        private readonly List<Func<IList<ChatMessage>, ChatOptions, ChatResponse>> _script = new();
+        private int _scriptIndex;
+        private int _callIds;
+
+        public List<IList<ChatMessage>> ReceivedMessages { get; } = new();
+        public List<ChatOptions> ReceivedOptions { get; } = new();
+        public int CallCount => ReceivedMessages.Count;
+
+        public ScriptedChatClient Reply(string text)
+        {
+            _script.Add((_, __) => new ChatResponse(new ChatMessage(ChatRole.Assistant, text)));
+            return this;
+        }
+
+        /// <summary>回一則要求呼叫工具的 assistant 訊息。</summary>
+        public ScriptedChatClient CallTool(string name, object arguments)
+        {
+            _script.Add((_, __) =>
+            {
+                string callId = "call_" + (++_callIds);
+                var args = arguments == null
+                    ? new Dictionary<string, object>()
+                    : arguments.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(arguments));
+                var message = new ChatMessage(ChatRole.Assistant, new List<AIContent> { new FunctionCallContent(callId, name, args) });
+                return new ChatResponse(message) { FinishReason = ChatFinishReason.ToolCalls };
+            });
+            return this;
+        }
+
+        public ScriptedChatClient Throw(Exception exception)
+        {
+            _script.Add((_, __) => throw exception);
+            return this;
+        }
+
+        /// <summary>回一則帶「工具已被剝除」標記的文字回應。</summary>
+        public ScriptedChatClient ReplyWithToolsStripped(string text)
+        {
+            _script.Add((_, __) => new ChatResponse(new ChatMessage(ChatRole.Assistant, text))
+            {
+                AdditionalProperties = new AdditionalPropertiesDictionary { ["rimllm_tools_stripped"] = true }
+            });
+            return this;
+        }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var list = messages.ToList();
+            ReceivedMessages.Add(list);
+            ReceivedOptions.Add(options);
+
+            if (_script.Count == 0) throw new InvalidOperationException("ScriptedChatClient has no scripted response.");
+            // 腳本用完後重複最後一則。
+            Func<IList<ChatMessage>, ChatOptions, ChatResponse> step = _script[Math.Min(_scriptIndex, _script.Count - 1)];
+            _scriptIndex++;
+            return Task.FromResult(step(list, options));
+        }
+
+        public bclasync::System.Collections.Generic.IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("RimAgent does not stream.");
+        }
+
+        public object GetService(Type serviceType, object serviceKey = null) => serviceType.IsInstanceOfType(this) ? this : null;
+
+        public void Dispose()
+        {
+        }
+    }
+}
