@@ -7,7 +7,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>健康查詢與醫療等級調整。手術排程在後續 issue 補上。</summary>
+    /// <summary>健康查詢、醫療等級調整與手術排程。</summary>
     public sealed class MedicalTools
     {
         /// <summary>單一殖民者最多列出的異常數，超過則截斷並註明（省 token）。</summary>
@@ -94,6 +94,30 @@ namespace RimAgent.Tools
                 }
             }
             return sb.ToString().Trim();
+        }
+
+        [AgentTool("schedule_surgery", ToolCategory.Medical)]
+        [Description("Schedules an operation on a colonist: adds a medical bill to their bill stack for a doctor to carry out. Use get_health first to see injuries and pick the surgery. Reports the scheduled operation and body part, or the reason it cannot be scheduled (unknown surgery, missing research, unsuitable part, already scheduled).")]
+        public string ScheduleSurgery(
+            [Description("Colonist name, nickname or id.")] string colonist,
+            [Description("Surgery name, e.g. \"remove body part\".")] string surgery,
+            [Description("Body part, e.g. \"left lung\". Empty string lets the game pick the first suitable part; ignored by surgeries that need no part.")] string part)
+        {
+            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
+            if (!pawn.Success) return pawn.Error;
+
+            ResolveResult<DefInfo> recipe = DefResolver.Resolve(surgery, _world.SurgeryRecipes, "surgery");
+            if (!recipe.Success) return recipe.Error;
+
+            var request = new SurgeryRequest
+            {
+                PawnId = pawn.Value.Id,
+                RecipeDefName = recipe.Value.DefName,
+                BodyPartLabel = (part ?? string.Empty).Trim()
+            };
+            CommandResult result = _world.ScheduleSurgery(request);
+            if (!result.Success) return ToolText.Error(result.Message);
+            return result.Message;
         }
 
         /// <summary>沒有健康資料（世界沒回傳）視為健康，不炸。</summary>

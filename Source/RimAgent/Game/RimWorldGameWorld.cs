@@ -23,6 +23,7 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _timeAssignments;
         private IReadOnlyList<DefInfo> _tradeGoods;
         private IReadOnlyList<DefInfo> _medicalCareLevels;
+        private IReadOnlyList<DefInfo> _surgeryRecipes;
 
         private static Map Map => Find.CurrentMap;
 
@@ -319,6 +320,55 @@ namespace RimAgent.Game
             if (!Enum.IsDefined(typeof(MedicalCareCategory), parsed)) return CommandResult.Fail($"unknown medical care level {careDefName}");
             pawn.playerSettings.medCare = (MedicalCareCategory)parsed;
             return CommandResult.Ok();
+        }
+
+        public IReadOnlyList<DefInfo> SurgeryRecipes =>
+            _surgeryRecipes ?? (_surgeryRecipes = DefDatabase<RecipeDef>.AllDefsListForReading
+                .Where(r => r.workerClass != null && typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass))
+                .Select(r => new DefInfo(r.defName, r.label))
+                .ToList());
+
+        public CommandResult ScheduleSurgery(SurgeryRequest request)
+        {
+            Pawn pawn = FindColonist(request.PawnId);
+            if (pawn == null) return CommandResult.Fail("colonist not found");
+            RecipeDef recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(request.RecipeDefName);
+            if (recipe == null || recipe.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(recipe.workerClass))
+                return CommandResult.Fail($"unknown surgery {request.RecipeDefName}");
+            if (recipe.researchPrerequisite != null && !recipe.researchPrerequisite.IsFinished)
+                return CommandResult.Fail($"{recipe.label} needs research {recipe.researchPrerequisite.label} first");
+            if (recipe.researchPrerequisites != null)
+            {
+                foreach (ResearchProjectDef prerequisite in recipe.researchPrerequisites)
+                {
+                    if (prerequisite != null && !prerequisite.IsFinished)
+                        return CommandResult.Fail($"{recipe.label} needs research {prerequisite.label} first");
+                }
+            }
+            BodyPartRecord part = null;
+            List<BodyPartRecord> options = recipe.Worker.GetPartsToApplyOn(pawn, recipe).ToList();
+            if (recipe.targetsBodyPart)
+            {
+                if (options.Count == 0) return CommandResult.Fail($"{recipe.label} does not apply to {pawn.LabelShort}");
+                string want = (request.BodyPartLabel ?? string.Empty).Trim();
+                part = want.Length == 0 ? options[0] : options.FirstOrDefault(p => MatchesBodyPart(p, want));
+                if (part == null) return CommandResult.Fail($"{pawn.LabelShort} has no body part matching \"{want}\" for {recipe.label}");
+            }
+            if (pawn.BillStack.Bills.OfType<Bill_Medical>().Any(b => b.recipe == recipe && b.Part == part))
+                return CommandResult.Fail($"{recipe.label} is already scheduled on {pawn.LabelShort}");
+            var bill = new Bill_Medical(recipe, null) { Part = part };
+            pawn.BillStack.AddBill(bill);
+            string detail = $"Scheduled {recipe.label} on {pawn.LabelShort}";
+            if (part != null) detail += $" ({part.LabelCap})";
+            return CommandResult.Ok(detail + ".");
+        }
+
+        private static bool MatchesBodyPart(BodyPartRecord part, string want)
+        {
+            return string.Equals(part.LabelCap, want, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(part.Label, want, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrEmpty(part.customLabel) && string.Equals(part.customLabel, want, StringComparison.OrdinalIgnoreCase))
+                || (part.def != null && string.Equals(part.def.label, want, StringComparison.OrdinalIgnoreCase));
         }
 
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)

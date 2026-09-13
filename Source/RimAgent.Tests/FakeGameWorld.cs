@@ -68,6 +68,16 @@ namespace RimAgent.Tests
             new DefInfo("Best", "best")
         };
 
+        public IReadOnlyList<DefInfo> SurgeryRecipes { get; set; } = new[]
+        {
+            new DefInfo("RemoveBodyPart", "remove body part"),
+            new DefInfo("InstallArtificialBodyPart", "install artificial body part"),
+            new DefInfo("AdministerAnesthetic", "administer anesthetic")
+        };
+
+        /// <summary>研究還沒完成的手術 defName（正式端用遊戲研究狀態判斷）。</summary>
+        public HashSet<string> LockedSurgeries { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         public static ColonistInfo MakeColonist(int id, string first, string nick, string last, int x = 10, int z = 10)
         {
             var workTypes = new[] { "Firefighter", "Patient", "Doctor", "Cooking", "Hunting", "Construction", "Growing", "Mining", "PlantCutting", "Hauling", "Cleaning", "Research" };
@@ -223,6 +233,31 @@ namespace RimAgent.Tests
                 return CommandResult.Fail($"unknown medical care level {careDefName}");
             pawn.MedicalCare = careDefName;
             return CommandResult.Ok();
+        }
+
+        public CommandResult ScheduleSurgery(SurgeryRequest request)
+        {
+            Calls.Add($"ScheduleSurgery({request?.PawnId},{request?.RecipeDefName},{request?.BodyPartLabel})");
+            if (request == null) return CommandResult.Fail("no surgery requested");
+            ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == request.PawnId);
+            if (pawn == null) return CommandResult.Fail("colonist not found");
+            DefInfo recipe = SurgeryRecipes.FirstOrDefault(d => string.Equals(d.DefName, request.RecipeDefName, StringComparison.OrdinalIgnoreCase));
+            if (recipe == null) return CommandResult.Fail($"unknown surgery {request.RecipeDefName}");
+            if (LockedSurgeries.Contains(recipe.DefName)) return CommandResult.Fail($"{recipe.Label} needs more research first");
+            ColonistHealthInfo health = Health.FirstOrDefault(h => h.PawnId == request.PawnId);
+            if (health == null)
+            {
+                health = new ColonistHealthInfo { PawnId = request.PawnId };
+                Health.Add(health);
+            }
+            string part = request.BodyPartLabel ?? string.Empty;
+            var pending = health.PendingSurgeries.ToList();
+            if (pending.Any(b => string.Equals(b.Label, recipe.Label, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(b.Part ?? string.Empty, part, StringComparison.OrdinalIgnoreCase)))
+                return CommandResult.Fail($"{recipe.Label} is already scheduled on {pawn.Name}");
+            pending.Add(new SurgeryBillInfo { Label = recipe.Label, Part = part });
+            health.PendingSurgeries = pending;
+            return CommandResult.Ok($"Scheduled {recipe.Label} on {pawn.Name}" + (part.Length > 0 ? $" ({part})" : string.Empty) + ".");
         }
 
         /// <summary>

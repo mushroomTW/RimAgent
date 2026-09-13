@@ -124,6 +124,15 @@ namespace RimAgent.Game
         public IReadOnlyList<TradeLine> Sells { get; set; } = Array.Empty<TradeLine>();
     }
 
+    /// <summary>排一台手術：把一張 Bill_Medical 掛進殖民者的 BillStack，等醫生執行。</summary>
+    public sealed class SurgeryRequest
+    {
+        public int PawnId { get; set; }
+        public string RecipeDefName { get; set; } = string.Empty;
+        /// <summary>部位顯示名；空字串由實作端選第一個適用部位（不需部位的手術忽略）。</summary>
+        public string BodyPartLabel { get; set; } = string.Empty;
+    }
+
     /// <summary>一條健康異常：傷口、疾病或缺失部位。</summary>
     public sealed class HealthConditionInfo
     {
