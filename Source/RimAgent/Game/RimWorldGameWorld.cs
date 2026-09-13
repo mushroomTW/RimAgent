@@ -4,6 +4,7 @@ using System.Linq;
 using RimWorld;
 using Verse;
 using Verse.AI;
+using Verse.AI.Group;
 
 namespace RimAgent.Game
 {
@@ -128,7 +129,44 @@ namespace RimAgent.Game
                         .ToList()
                 });
             }
-            // 來訪商隊（Visitor）在 issue 02 補上；這裡刻意不回傳，不拿軌道商人頂替。
+            // 來訪商隊（Visitor）：同一 Lord 共用整隊庫存，只列一次；不拿軌道商人頂替。
+            // CanTradeNow 已排除死亡、倒地、俘虜、玩家派系與敵對派系，只剩地圖歸屬要自己檢查。
+            foreach (IGrouping<object, Pawn> group in map.mapPawns.AllPawnsSpawned
+                         .Where(p => p.Map == map && p.trader != null && p.trader.traderKind != null && p.trader.CanTradeNow)
+                         .GroupBy(p => (object)p.GetLord() ?? p))
+            {
+                Pawn leader = group.First();
+                var goods = new List<TradeGoodsInfo>();
+                int silver = 0;
+                foreach (Thing t in leader.trader.Goods)
+                {
+                    if (t == null || t.Destroyed) continue;
+                    if (t.def == ThingDefOf.Silver)
+                    {
+                        silver += t.stackCount;
+                        continue;
+                    }
+                    Pawn goodsPawn = t as Pawn;
+                    goods.Add(new TradeGoodsInfo
+                    {
+                        DefName = t.def.defName,
+                        Label = goodsPawn != null ? goodsPawn.LabelShort : t.def.label,
+                        Count = Math.Max(1, t.stackCount),
+                        MarketValue = t.MarketValue
+                    });
+                }
+                result.Add(new TraderInfo
+                {
+                    Kind = TraderInfo.VisitorKind,
+                    Name = leader.LabelShort + " (" + leader.trader.traderKind.label + ")",
+                    Faction = leader.Faction?.Name ?? string.Empty,
+                    Silver = silver,
+                    Goods = goods
+                        .OrderBy(g => g.Label, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(g => g.DefName, StringComparer.Ordinal)
+                        .ToList()
+                });
+            }
             return result;
         }
 

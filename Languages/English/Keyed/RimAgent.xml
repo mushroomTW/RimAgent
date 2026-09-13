@@ -35,7 +35,7 @@
   <RimAgent.Settings.Combat>Combat — draft, move and attack orders</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>Draft colonists and give move or attack orders. The model needs several seconds to respond, so this is for positioning and retreats, not real-time control. Off by default.</RimAgent.Settings.CombatTip>
   <RimAgent.Settings.Trade>Trade — orbital trader stock</RimAgent.Settings.Trade>
-  <RimAgent.Settings.TradeTip>List what orbital traders are selling, with their silver reserves. Read-only for now. Off by default.</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.TradeTip>List what orbital traders and visiting caravans are selling, with their silver reserves. Read-only for now. Off by default.</RimAgent.Settings.TradeTip>
   <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies to newly loaded games.</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>

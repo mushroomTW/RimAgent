@@ -32,9 +32,29 @@ namespace RimAgent.Tools
                 return "There are no orbital traders around the colony right now. " +
                        "Do not invent one; tell the player there is nothing in orbit to trade with.";
             }
+            return FormatTraders(traders, "orbital trader");
+        }
 
+        [AgentTool("list_visitor_caravans", ToolCategory.Trade)]
+        [Description("Lists the visiting caravans at the colony and what each one is selling, with its silver reserve. Visiting caravans are traders on the ground; do not confuse them with orbital traders in orbit, which this tool never lists.")]
+        public string ListVisitorCaravans()
+        {
+            List<TraderInfo> traders = _world.GetTraders()
+                .Where(t => string.Equals(t.Kind, TraderInfo.VisitorKind, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (traders.Count == 0)
+            {
+                return "There are no visiting caravans at the colony right now. " +
+                       "Do not invent one, and do not substitute an orbital trader; tell the player nobody is visiting to trade with.";
+            }
+            return FormatTraders(traders, "visiting caravan");
+        }
+
+        /// <param name="kindLabel">單數稱謂，必含完整詞彙（orbital trader／visiting caravan），不單用 caravan。</param>
+        private static string FormatTraders(List<TraderInfo> traders, string kindLabel)
+        {
             var sb = new StringBuilder();
-            sb.Append(traders.Count).Append(traders.Count == 1 ? " orbital trader:" : " orbital traders:").AppendLine();
+            sb.Append(traders.Count).Append(traders.Count == 1 ? " " + kindLabel + ":" : " " + kindLabel + "s:").AppendLine();
             foreach (TraderInfo t in traders)
             {
                 sb.Append("- ").Append(t.Name);

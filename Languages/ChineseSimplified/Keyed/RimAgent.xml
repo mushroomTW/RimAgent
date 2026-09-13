@@ -35,7 +35,7 @@
   <RimAgent.Settings.Combat>战斗 — 征召、移动与攻击指令</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>征召殖民者并下移动或攻击指令。模型需要数秒才会响应，只适合部署与撤退，不适合实时操作。默认关闭。</RimAgent.Settings.CombatTip>
   <RimAgent.Settings.Trade>交易 — 查看轨道商人库存</RimAgent.Settings.Trade>
-  <RimAgent.Settings.TradeTip>列出轨道商人在卖什么与其银两存量。目前只读。默认关闭。</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.TradeTip>列出轨道商人与来访商队在卖什么与其银两存量。目前只读。默认关闭。</RimAgent.Settings.TradeTip>
   <RimAgent.Settings.MaxSteps>每句指令最多调用工具次数：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控循环烧掉 API 额度。对之后载入的游戏生效。</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>供应商、API 密钥、模型与备援链都在 RimLLM Framework 的设置里调整。</RimAgent.Settings.FrameworkNote>
