@@ -10,7 +10,7 @@
 - [x] 囚犯（查詢、互動模式、立即釋放；招募走獄卒原生機制；遊戲內驗收待玩家實測，見 `.scratch/prisoner/issues/01-prisoner-manage.md`）
 - [x] 動物（查詢、馴養、訓練、區域指派；遊戲內驗收待玩家實測，見 `.scratch/animal/issues/01-animal-manage.md`）
 - [x] 區域與儲存設定（查詢、新增儲藏／種植區、刪除、儲藏篩選；遊戲內驗收待玩家實測，見 `.scratch/zone/issues/01-zone-manage.md`）
-- [ ] 生產帳單（工作台加減帳單、數量、材料）
+- [x] 生產帳單（工作台查詢、帳單增刪與次數；遊戲內驗收待玩家實測，見 `.scratch/bill/issues/01-bill-manage.md`）
 - [ ] 研究切換（`get_research_status` 目前唯讀）
 - [ ] 多地圖（目前只操作 `Find.CurrentMap`）
 

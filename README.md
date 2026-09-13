@@ -17,6 +17,7 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 | Prisoner | prisoner listing, interaction modes, release | off |
 | Animal | animal listing, taming, training, allowed areas | off |
 | Zone | zone listing, stockpile and growing zones, storage filters | off |
+| Production | work tables and production bills | off |
 
 Combat orders reach the game several seconds after you speak — they are for positioning and retreats, not real-time control.
 
@@ -29,7 +30,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-           │                              33 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+           │                              37 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
          │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```

@@ -1,0 +1,117 @@
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
+using NUnit.Framework;
+using RimAgent.Agent;
+using RimAgent.Game;
+using RimAgent.Tools;
+
+namespace RimAgent.Tests
+{
+    /// <summary>生產類別（bill issue 01）：工作台與帳單增刪。</summary>
+    [TestFixture]
+    public class ProductionToolsTests
+    {
+        private FakeGameWorld _world;
+        private ProductionTools _tools;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _world = new FakeGameWorld();
+            _world.WorkTables.Add(new WorkTableInfo { Id = 501, Label = "Fueled smithy", X = 30, Z = 40 });
+            _world.WorkTables.Add(new WorkTableInfo { Id = 502, Label = "Butcher table", X = 32, Z = 41, BillCount = 1 });
+            _world.TableBills[502] = new System.Collections.Generic.List<BillInfo>
+            {
+                new BillInfo { Index = 1, Label = "Butcher creature", Repeat = "2x" }
+            };
+            _tools = new ProductionTools(_world);
+        }
+
+        [Test]
+        public void ProductionIsOffByDefault()
+        {
+            Assert.That(new ToolPermissions().Production, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Production, Is.False);
+        }
+
+        [Test]
+        public void RegistryGatesTheProductionToolsByPermission()
+        {
+            var registry = new AgentToolRegistry(_world, new AgentTranscript());
+
+            Assert.That(registry.Select(new ToolPermissions { Production = true }).OfType<AIFunction>().Count(t => t.Name == "list_worktables" || t.Name == "list_bills" || t.Name == "add_bill" || t.Name == "delete_bill"), Is.EqualTo(4));
+            Assert.That(registry.Select(new ToolPermissions { Production = false }).OfType<AIFunction>().Any(t => t.Name == "list_bills"), Is.False);
+        }
+
+        [Test]
+        public void ListsWorktablesWithBillCounts()
+        {
+            string text = _tools.ListWorktables();
+
+            Assert.That(text, Does.Contain("2 work tables").And.Contain("[501] Fueled smithy").And.Contain("(30,40)").And.Contain("0 bills"));
+            Assert.That(text, Does.Contain("[502] Butcher table").And.Contain("1 bill"));
+        }
+
+        [Test]
+        public void ListsBillsWithRepeatCounts()
+        {
+            Assert.That(_tools.ListBills("502"), Does.Contain("Bills on Butcher table:").And.Contain("[1] Butcher creature (2x)"));
+            Assert.That(_tools.ListBills("501"), Is.EqualTo("Fueled smithy has no bills."));
+        }
+
+        [Test]
+        public void AddsBillWithCount()
+        {
+            string text = _tools.AddBill("501", "component", 5);
+
+            Assert.That(text, Is.EqualTo("Added bill [1] Make component x5 on Fueled smithy."));
+            Assert.That(_world.WorkTables[0].BillCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void UnknownTableRecipeAndCountAreRejected()
+        {
+            Assert.That(_tools.AddBill("999", "component", 1), Does.StartWith("Error:"));
+            Assert.That(_tools.ListBills("999"), Does.StartWith("Error:"));
+            Assert.That(_tools.AddBill("501", "warp drive", 1), Does.StartWith("Error:"));
+            Assert.That(_tools.AddBill("501", "component", 0), Does.StartWith("Error:").And.Contain("at least 1"));
+            Assert.That(_world.TableBills.ContainsKey(501), Is.False);
+        }
+
+        [Test]
+        public void DeleteRenumbersRemainingBills()
+        {
+            _tools.AddBill("501", "component", 5);
+            _tools.AddBill("501", "short bow", 2);
+
+            string text = _tools.DeleteBill("501", 1);
+
+            Assert.That(text, Does.Contain("Deleted bill Make component"));
+            Assert.That(_world.TableBills[501].Select(b => b.Index).ToArray(), Is.EqualTo(new[] { 1 }));
+            Assert.That(_world.TableBills[501][0].Label, Is.EqualTo("Make short bow"));
+        }
+
+        [Test]
+        public void UnknownBillNumberIsRejected()
+        {
+            Assert.That(_tools.DeleteBill("502", 7), Does.StartWith("Error:").And.Contain("does not exist"));
+            Assert.That(_world.TableBills[502].Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task AddBillIsLoggedAsAToolCall()
+        {
+            var client = new ScriptedChatClient();
+            client.CallTool("add_bill", new { table = "501", recipe = "component", count = 5 }).Reply("Done.");
+            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Production = true }, 8);
+
+            await session.SendAsync("做 5 個零件");
+
+            TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+            Assert.That(tool.ToolName, Is.EqualTo("add_bill"));
+            Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Production));
+            Assert.That(tool.Result, Does.Contain("Make component").And.Contain("Fueled smithy"));
+        }
+    }
+}

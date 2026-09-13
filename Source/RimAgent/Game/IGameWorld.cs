@@ -16,6 +16,9 @@ namespace RimAgent.Game
         /// <summary>地圖上的動物（殖民地與野生，見 AnimalInfo.Wild）。</summary>
         IReadOnlyList<AnimalInfo> GetAnimals();
         IReadOnlyList<ZoneInfo> GetZones();
+        IReadOnlyList<WorkTableInfo> GetWorkTables();
+        /// <summary>一張工作台的帳單（未知工作台回傳空表）。</summary>
+        IReadOnlyList<BillInfo> GetBills(int tableId);
         IReadOnlyList<ColonistHealthInfo> GetHealth();
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
@@ -44,6 +47,8 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> AnimalAreas { get; }
         /// <summary>儲藏篩選可開關的品項目錄（物品類 ThingDef）。</summary>
         IReadOnlyList<DefInfo> StorageFilterables { get; }
+        /// <summary>可生產配方目錄（有產出物的 RecipeDef，不含手術）。</summary>
+        IReadOnlyList<DefInfo> BillRecipes { get; }
         /// <summary>可排程的手術目錄（worker 為手術的 RecipeDef）。</summary>
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
 
@@ -79,6 +84,10 @@ namespace RimAgent.Game
         CommandResult DeleteZone(int zoneId);
         /// <summary>開關儲藏區允收品項；兩個清單都空即報錯。</summary>
         CommandResult SetZoneFilter(int zoneId, IReadOnlyList<string> allowDefNames, IReadOnlyList<string> disallowDefNames);
+        /// <summary>工作台加一張生產帳單（做 count 次）。</summary>
+        CommandResult AddBill(int tableId, string recipeDefName, int count);
+        /// <summary>刪工作台帳單（index 為列表序號，1 起）。</summary>
+        CommandResult DeleteBill(int tableId, int index);
         /// <summary>排一台手術：驗證不過不掛單，成功時 Message 為排程明細。</summary>
         CommandResult ScheduleSurgery(SurgeryRequest request);
     }

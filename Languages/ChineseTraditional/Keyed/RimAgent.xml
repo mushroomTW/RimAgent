@@ -44,6 +44,8 @@
   <RimAgent.Settings.AnimalTip>列出動物，標記野生動物馴養，開關訓練項目，指派活動區域。馴養與訓練走遊戲機制。預設關閉。</RimAgent.Settings.AnimalTip>
   <RimAgent.Settings.Zone>區域 — 儲藏區、種植區與篩選</RimAgent.Settings.Zone>
   <RimAgent.Settings.ZoneTip>列出區域，新增儲藏區與種植區，刪除區域，調整儲藏區允收品項。預設關閉。</RimAgent.Settings.ZoneTip>
+  <RimAgent.Settings.Production>生產 — 工作台與帳單</RimAgent.Settings.Production>
+  <RimAgent.Settings.ProductionTip>列出工作台與帳單，新增指定次數的帳單，刪除帳單。預設關閉。</RimAgent.Settings.ProductionTip>
   <RimAgent.Settings.MaxSteps>每句指令最多呼叫工具次數：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控迴圈燒掉 API 額度。對之後載入的遊戲生效。</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>供應商、API 金鑰、模型與備援鏈都在 RimLLM Framework 的設定裡調整。</RimAgent.Settings.FrameworkNote>

@@ -117,6 +117,17 @@ namespace RimAgent.Tests
         /// <summary>各儲藏區明確禁收的 defName（正式端讀 ThingFilter）。</summary>
         public Dictionary<int, HashSet<string>> ZoneDisallowed { get; } = new Dictionary<int, HashSet<string>>();
 
+        public List<WorkTableInfo> WorkTables { get; } = new List<WorkTableInfo>();
+
+        /// <summary>各工作台的帳單（正式端讀 BillStack）。</summary>
+        public Dictionary<int, List<BillInfo>> TableBills { get; } = new Dictionary<int, List<BillInfo>>();
+
+        public IReadOnlyList<DefInfo> BillRecipes { get; set; } = new[]
+        {
+            new DefInfo("MakeComponent", "component"), new DefInfo("MakeShortBow", "short bow"),
+            new DefInfo("ButcherCreature", "butcher creature")
+        };
+
         public static ColonistInfo MakeColonist(int id, string first, string nick, string last, int x = 10, int z = 10)
         {
             var workTypes = new[] { "Firefighter", "Patient", "Doctor", "Cooking", "Hunting", "Construction", "Growing", "Mining", "PlantCutting", "Hauling", "Cleaning", "Research" };
@@ -155,6 +166,11 @@ namespace RimAgent.Tests
         public IReadOnlyList<PrisonerInfo> GetPrisoners() => Prisoners;
         public IReadOnlyList<AnimalInfo> GetAnimals() => Animals;
         public IReadOnlyList<ZoneInfo> GetZones() => Zones;
+        public IReadOnlyList<WorkTableInfo> GetWorkTables() => WorkTables;
+        public IReadOnlyList<BillInfo> GetBills(int tableId)
+        {
+            return TableBills.TryGetValue(tableId, out List<BillInfo> bills) ? bills : (IReadOnlyList<BillInfo>)Array.Empty<BillInfo>();
+        }
         public List<ColonistHealthInfo> Health { get; } = new List<ColonistHealthInfo>();
         public IReadOnlyList<ColonistHealthInfo> GetHealth() => Health;
         public ResourceSnapshot GetResources() => Resources;
@@ -448,6 +464,38 @@ namespace RimAgent.Tests
         {
             DefInfo def = StorageFilterables.FirstOrDefault(d => string.Equals(d.DefName, defName, StringComparison.OrdinalIgnoreCase));
             return def != null ? def.Label : defName;
+        }
+
+        public CommandResult AddBill(int tableId, string recipeDefName, int count)
+        {
+            Calls.Add($"AddBill({tableId},{recipeDefName},{count})");
+            WorkTableInfo table = WorkTables.FirstOrDefault(t => t.Id == tableId);
+            if (table == null) return CommandResult.Fail($"no work table has id {tableId}");
+            DefInfo recipe = BillRecipes.FirstOrDefault(d => string.Equals(d.DefName, recipeDefName, StringComparison.OrdinalIgnoreCase));
+            if (recipe == null) return CommandResult.Fail($"unknown bill recipe {recipeDefName}");
+            if (count < 1) return CommandResult.Fail($"count must be at least 1, not {count}");
+            if (!TableBills.TryGetValue(tableId, out List<BillInfo> bills))
+            {
+                bills = new List<BillInfo>();
+                TableBills[tableId] = bills;
+            }
+            bills.Add(new BillInfo { Index = bills.Count + 1, Label = $"Make {recipe.Label}", Repeat = $"{count}x" });
+            table.BillCount = bills.Count;
+            return CommandResult.Ok($"Added bill [{bills.Count}] Make {recipe.Label} x{count} on {table.Label}.");
+        }
+
+        public CommandResult DeleteBill(int tableId, int index)
+        {
+            Calls.Add($"DeleteBill({tableId},{index})");
+            WorkTableInfo table = WorkTables.FirstOrDefault(t => t.Id == tableId);
+            if (table == null) return CommandResult.Fail($"no work table has id {tableId}");
+            if (!TableBills.TryGetValue(tableId, out List<BillInfo> bills) || index < 1 || index > bills.Count)
+                return CommandResult.Fail($"bill [{index}] does not exist on {table?.Label ?? "that table"}. List the bills again to get valid numbers.");
+            BillInfo removed = bills[index - 1];
+            bills.RemoveAt(index - 1);
+            for (int i = 0; i < bills.Count; i++) bills[i].Index = i + 1;
+            table.BillCount = bills.Count;
+            return CommandResult.Ok($"Deleted bill {removed.Label} from {table.Label}. Materials already gathered stay where they are.");
         }
 
         /// <summary>

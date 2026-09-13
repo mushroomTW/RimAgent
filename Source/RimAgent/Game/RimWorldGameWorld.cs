@@ -29,6 +29,7 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _animalTraining;
         private IReadOnlyList<DefInfo> _animalAreas;
         private IReadOnlyList<DefInfo> _storageFilterables;
+        private IReadOnlyList<DefInfo> _billRecipes;
 
         private static Map Map => Find.CurrentMap;
 
@@ -614,6 +615,92 @@ namespace RimAgent.Game
             if (applied.Count > 0) parts.Add("allows " + string.Join(", ", applied.Select(d => d.label).ToArray()));
             if (removed.Count > 0) parts.Add("disallows " + string.Join(", ", removed.Select(d => d.label).ToArray()));
             return CommandResult.Ok($"Zone [{zoneId}] {zone.label} now {string.Join("; ", parts.ToArray())}.");
+        }
+
+        public IReadOnlyList<WorkTableInfo> GetWorkTables()
+        {
+            return Map.listerBuildings.allBuildingsColonist
+                .Where(b => b is IBillGiver)
+                .Select(b => new WorkTableInfo
+                {
+                    Id = b.thingIDNumber,
+                    Label = b.LabelCap,
+                    X = b.Position.x,
+                    Z = b.Position.z,
+                    BillCount = ((IBillGiver)b).BillStack.Bills.Count
+                })
+                .ToList();
+        }
+
+        public IReadOnlyList<BillInfo> GetBills(int tableId)
+        {
+            IBillGiver giver = FindBillGiver(tableId);
+            if (giver == null) return Array.Empty<BillInfo>();
+            var bills = new List<BillInfo>();
+            for (int i = 0; i < giver.BillStack.Bills.Count; i++)
+            {
+                Bill bill = giver.BillStack.Bills[i];
+                bills.Add(new BillInfo { Index = i + 1, Label = bill.LabelCap, Repeat = RepeatLabel(bill) });
+            }
+            return bills;
+        }
+
+        private static string RepeatLabel(Bill bill)
+        {
+            var production = bill as Bill_Production;
+            if (production == null) return string.Empty;
+            if (production.repeatMode == BillRepeatModeDefOf.Forever) return "forever";
+            if (production.repeatMode == BillRepeatModeDefOf.TargetCount) return $"until {production.targetCount}";
+            if (production.repeatMode == BillRepeatModeDefOf.RepeatCount) return $"{production.repeatCount}x";
+            return production.repeatMode?.label ?? string.Empty;
+        }
+
+        public IReadOnlyList<DefInfo> BillRecipes =>
+            _billRecipes ?? (_billRecipes = DefDatabase<RecipeDef>.AllDefsListForReading
+                .Where(r => r.ProducedThingDef != null && (r.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass)))
+                .Select(r => new DefInfo(r.defName, r.ProducedThingDef.label))
+                .ToList());
+
+        public CommandResult AddBill(int tableId, string recipeDefName, int count)
+        {
+            IBillGiver giver = FindBillGiver(tableId);
+            if (giver == null) return CommandResult.Fail($"no work table has id {tableId}");
+            var table = (Thing)giver;
+            RecipeDef recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(recipeDefName);
+            if (recipe == null) return CommandResult.Fail($"unknown bill recipe {recipeDefName}");
+            if (!table.def.AllRecipes.Contains(recipe))
+                return CommandResult.Fail($"{table.LabelCap} cannot make {recipe.ProducedThingDef?.label ?? recipe.label}");
+            if (!recipe.AvailableOnNow(table))
+                return CommandResult.Fail($"{table.LabelCap} cannot make {recipe.ProducedThingDef?.label ?? recipe.label} yet: missing research or facilities");
+            if (count < 1) return CommandResult.Fail($"count must be at least 1, not {count}");
+            var bill = new Bill_Production(recipe)
+            {
+                repeatMode = BillRepeatModeDefOf.RepeatCount,
+                repeatCount = count
+            };
+            giver.BillStack.AddBill(bill);
+            return CommandResult.Ok($"Added bill [{giver.BillStack.Bills.Count}] {bill.LabelCap} x{count} on {table.LabelCap}.");
+        }
+
+        public CommandResult DeleteBill(int tableId, int index)
+        {
+            IBillGiver giver = FindBillGiver(tableId);
+            if (giver == null) return CommandResult.Fail($"no work table has id {tableId}");
+            var table = (Thing)giver;
+            if (index < 1 || index > giver.BillStack.Bills.Count)
+                return CommandResult.Fail($"bill [{index}] does not exist on {table.LabelCap}. List the bills again to get valid numbers.");
+            Bill bill = giver.BillStack.Bills[index - 1];
+            string label = bill.LabelCap;
+            giver.BillStack.Delete(bill);
+            return CommandResult.Ok($"Deleted bill {label} from {table.LabelCap}. Materials already gathered stay where they are.");
+        }
+
+        private static IBillGiver FindBillGiver(int id)
+        {
+            return Map.listerBuildings.allBuildingsColonist
+                .Where(b => b is IBillGiver)
+                .Cast<IBillGiver>()
+                .FirstOrDefault(g => ((Thing)g).thingIDNumber == id);
         }
 
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)

@@ -132,6 +132,25 @@ namespace RimAgent.Game
         public string Heading { get; set; } = string.Empty;
     }
 
+    /// <summary>一張可接帳單的工作台（遊戲內有 BillStack 的建築）。</summary>
+    public sealed class WorkTableInfo
+    {
+        public int Id { get; set; }
+        public string Label { get; set; } = string.Empty;
+        public int X { get; set; }
+        public int Z { get; set; }
+        public int BillCount { get; set; }
+    }
+
+    /// <summary>工作台上的一張生產帳單。Index 是當次列表序號（1 起），刪單前重查。</summary>
+    public sealed class BillInfo
+    {
+        public int Index { get; set; }
+        public string Label { get; set; } = string.Empty;
+        /// <summary>重複方式顯示，如 3x、until 10、forever。</summary>
+        public string Repeat { get; set; } = string.Empty;
+    }
+
     /// <summary>地圖上的一個區域（儲藏區、種植區等）。</summary>
     public sealed class ZoneInfo
     {

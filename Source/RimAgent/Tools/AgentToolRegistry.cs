@@ -8,7 +8,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>九類工具各自的開關。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
+    /// <summary>十類工具各自的開關。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
     public sealed class ToolPermissions
     {
         public bool Observe { get; set; } = true;
@@ -20,6 +20,7 @@ namespace RimAgent.Tools
         public bool Prisoner { get; set; }
         public bool Animal { get; set; }
         public bool Zone { get; set; }
+        public bool Production { get; set; }
 
         public bool Allows(ToolCategory category)
         {
@@ -34,6 +35,7 @@ namespace RimAgent.Tools
                 case ToolCategory.Prisoner: return Prisoner;
                 case ToolCategory.Animal: return Animal;
                 case ToolCategory.Zone: return Zone;
+                case ToolCategory.Production: return Production;
                 default: return false;
             }
         }
@@ -67,6 +69,7 @@ namespace RimAgent.Tools
             Register(new PrisonerTools(world), transcript);
             Register(new AnimalTools(world), transcript);
             Register(new ZoneTools(world), transcript);
+            Register(new ProductionTools(world), transcript);
         }
 
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>

@@ -12,7 +12,8 @@ namespace RimAgent.Tools
         Medical,
         Prisoner,
         Animal,
-        Zone
+        Zone,
+        Production
     }
 
     /// <summary>
