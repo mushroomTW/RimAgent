@@ -103,6 +103,8 @@ namespace RimAgent.Tests
 
         public ColonyOverview GetOverview() => Overview;
         public IReadOnlyList<ColonistInfo> GetColonists() => Colonists;
+        public List<ColonistHealthInfo> Health { get; } = new List<ColonistHealthInfo>();
+        public IReadOnlyList<ColonistHealthInfo> GetHealth() => Health;
         public ResourceSnapshot GetResources() => Resources;
         public IReadOnlyList<ThreatInfo> GetThreats() => Threats;
         public IReadOnlyList<TraderInfo> GetTraders() => Traders;

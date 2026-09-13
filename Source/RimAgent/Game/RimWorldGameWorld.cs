@@ -51,6 +51,46 @@ namespace RimAgent.Game
             return Map.mapPawns.FreeColonistsSpawned.Select(ToColonist).ToList();
         }
 
+        public IReadOnlyList<ColonistHealthInfo> GetHealth()
+        {
+            return Map.mapPawns.FreeColonistsSpawned.Select(ToHealth).ToList();
+        }
+
+        private static ColonistHealthInfo ToHealth(Pawn pawn)
+        {
+            var conditions = new List<HealthConditionInfo>();
+            foreach (Hediff hediff in pawn.health.hediffSet.hediffs)
+            {
+                string kind = hediff is Hediff_MissingPart ? HealthConditionInfo.MissingKind
+                    : hediff is Hediff_Injury ? HealthConditionInfo.InjuryKind
+                    : HealthConditionInfo.ConditionKind;
+                bool tended = false, needsTending = false;
+                if (hediff.def.tendable)
+                {
+                    HediffComp_TendDuration tend = (hediff as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>();
+                    tended = tend != null && tend.IsTended;
+                    needsTending = !tended && hediff.TendableNow(false);
+                }
+                conditions.Add(new HealthConditionInfo
+                {
+                    Label = hediff.LabelCap,
+                    Part = hediff.Part != null ? hediff.Part.LabelCap : string.Empty,
+                    Severity = hediff.Severity,
+                    Kind = kind,
+                    Bleeding = hediff.BleedRate > 0f,
+                    Tended = tended,
+                    NeedsTending = needsTending
+                });
+            }
+            List<SurgeryBillInfo> surgeries = pawn.BillStack.Bills.OfType<Bill_Medical>().Select(b => new SurgeryBillInfo
+            {
+                Label = b.LabelCap,
+                Part = b.Part != null ? b.Part.LabelCap : string.Empty,
+                Suspended = b.suspended
+            }).ToList();
+            return new ColonistHealthInfo { PawnId = pawn.thingIDNumber, Conditions = conditions, PendingSurgeries = surgeries };
+        }
+
         public ResourceSnapshot GetResources()
         {
             ResourceCounter counter = Map.resourceCounter;

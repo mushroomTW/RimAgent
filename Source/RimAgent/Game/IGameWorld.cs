@@ -12,6 +12,7 @@ namespace RimAgent.Game
     {
         ColonyOverview GetOverview();
         IReadOnlyList<ColonistInfo> GetColonists();
+        IReadOnlyList<ColonistHealthInfo> GetHealth();
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
         ResearchInfo GetResearch();

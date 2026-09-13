@@ -124,6 +124,44 @@ namespace RimAgent.Game
         public IReadOnlyList<TradeLine> Sells { get; set; } = Array.Empty<TradeLine>();
     }
 
+    /// <summary>一條健康異常：傷口、疾病或缺失部位。</summary>
+    public sealed class HealthConditionInfo
+    {
+        /// <summary>外傷（割傷、槍傷、燒傷等）。</summary>
+        public const string InjuryKind = "Injury";
+        /// <summary>缺失的身體部位。</summary>
+        public const string MissingKind = "Missing";
+        /// <summary>其他（疾病、慢性病、植入物副作用等）。</summary>
+        public const string ConditionKind = "Condition";
+
+        public string Label { get; set; } = string.Empty;
+        /// <summary>部位顯示名；空字串代表全身。</summary>
+        public string Part { get; set; } = string.Empty;
+        public float Severity { get; set; }
+        /// <summary>見 <see cref="InjuryKind"/>／<see cref="MissingKind"/>／<see cref="ConditionKind"/>。</summary>
+        public string Kind { get; set; } = ConditionKind;
+        public bool Bleeding { get; set; }
+        public bool Tended { get; set; }
+        public bool NeedsTending { get; set; }
+    }
+
+    /// <summary>已排上但還沒動的手術。</summary>
+    public sealed class SurgeryBillInfo
+    {
+        public string Label { get; set; } = string.Empty;
+        /// <summary>部位顯示名；空字串代表全身。</summary>
+        public string Part { get; set; } = string.Empty;
+        public bool Suspended { get; set; }
+    }
+
+    /// <summary>一位殖民者的健康狀況。</summary>
+    public sealed class ColonistHealthInfo
+    {
+        public int PawnId { get; set; }
+        public IReadOnlyList<HealthConditionInfo> Conditions { get; set; } = Array.Empty<HealthConditionInfo>();
+        public IReadOnlyList<SurgeryBillInfo> PendingSurgeries { get; set; } = Array.Empty<SurgeryBillInfo>();
+    }
+
     /// <summary>
     /// 一位可交易的商人。Kind 區分「軌道商人」與「來訪商隊」，兩者絕不互相頂替：
     /// 查軌道只看 Orbital，查來訪只看 Visitor。
