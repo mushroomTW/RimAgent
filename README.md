@@ -13,6 +13,7 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 | Build | mine / cut / harvest / deconstruct / haul designations, blueprints (single or in a line) | off |
 | Combat | draft, move, attack | off |
 | Trade | orbital trader and visiting caravan stock listing, buying and selling in a single deal | off |
+| Medical | medical care levels | off |
 
 Combat orders reach the game several seconds after you speak — they are for positioning and retreats, not real-time control.
 
@@ -25,7 +26,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-          │                              18 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+          │                              19 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
          │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```

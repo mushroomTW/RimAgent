@@ -29,6 +29,8 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> TimeAssignments { get; }
         /// <summary>可交易的物品目錄（銀兩除外，銀兩自動結算）。</summary>
         IReadOnlyList<DefInfo> TradeGoods { get; }
+        /// <summary>五種醫療等級目錄（NoCare … Best）。</summary>
+        IReadOnlyList<DefInfo> MedicalCareLevels { get; }
 
         CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority);
         CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName);
@@ -43,5 +45,6 @@ namespace RimAgent.Game
         CommandResult OrderAttack(int pawnId, int targetId);
         /// <summary>一次結清的買賣：驗證不過整筆不做，成功時 Message 為買賣明細。</summary>
         CommandResult ExecuteTrade(TradeRequest request);
+        CommandResult SetMedicalCare(int pawnId, string careDefName);
     }
 }

@@ -36,6 +36,8 @@
   <RimAgent.Settings.CombatTip>Draft colonists and give move or attack orders. The model needs several seconds to respond, so this is for positioning and retreats, not real-time control. Off by default.</RimAgent.Settings.CombatTip>
   <RimAgent.Settings.Trade>Trade — list stock, buy and sell</RimAgent.Settings.Trade>
   <RimAgent.Settings.TradeTip>List what orbital traders and visiting caravans are selling, and buy or sell in a single deal with the game's trade prices. Off by default.</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.Medical>Medical — care levels</RimAgent.Settings.Medical>
+  <RimAgent.Settings.MedicalTip>Change each colonist's medical care level (how good the medicine doctors may use). Off by default.</RimAgent.Settings.MedicalTip>
   <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies to newly loaded games.</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>

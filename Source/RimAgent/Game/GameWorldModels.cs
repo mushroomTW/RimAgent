@@ -60,6 +60,8 @@ namespace RimAgent.Game
         public string MentalStateLabel { get; set; } = string.Empty;
         public string CurrentActivity { get; set; } = string.Empty;
         public bool Drafted { get; set; }
+        /// <summary>醫療等級（MedicalCareCategory 名稱，如 Best）。</summary>
+        public string MedicalCare { get; set; } = string.Empty;
         public IReadOnlyList<SkillInfo> Skills { get; set; } = Array.Empty<SkillInfo>();
         public IReadOnlyList<WorkPriorityInfo> WorkPriorities { get; set; } = Array.Empty<WorkPriorityInfo>();
         /// <summary>24 個小時各自的 TimeAssignment defName（索引即小時）。</summary>

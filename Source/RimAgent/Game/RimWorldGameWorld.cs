@@ -22,6 +22,7 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _stuffs;
         private IReadOnlyList<DefInfo> _timeAssignments;
         private IReadOnlyList<DefInfo> _tradeGoods;
+        private IReadOnlyList<DefInfo> _medicalCareLevels;
 
         private static Map Map => Find.CurrentMap;
 
@@ -254,6 +255,31 @@ namespace RimAgent.Game
                 .Where(d => d.category == ThingCategory.Item)
                 .Select(d => new DefInfo(d.defName, d.label))
                 .ToList());
+
+        public IReadOnlyList<DefInfo> MedicalCareLevels =>
+            _medicalCareLevels ?? (_medicalCareLevels = Enum.GetValues(typeof(MedicalCareCategory))
+                .Cast<MedicalCareCategory>()
+                .Select(c => new DefInfo(c.ToString(), MedicalCareUtility.GetLabel(c)))
+                .ToList());
+
+        public CommandResult SetMedicalCare(int pawnId, string careDefName)
+        {
+            Pawn pawn = FindColonist(pawnId);
+            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn.playerSettings == null) return CommandResult.Fail($"{pawn.LabelShort} has no medical care settings");
+            object parsed;
+            try
+            {
+                parsed = Enum.Parse(typeof(MedicalCareCategory), careDefName, true);
+            }
+            catch (ArgumentException)
+            {
+                return CommandResult.Fail($"unknown medical care level {careDefName}");
+            }
+            if (!Enum.IsDefined(typeof(MedicalCareCategory), parsed)) return CommandResult.Fail($"unknown medical care level {careDefName}");
+            pawn.playerSettings.medCare = (MedicalCareCategory)parsed;
+            return CommandResult.Ok();
+        }
 
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)
         {
@@ -589,6 +615,7 @@ namespace RimAgent.Game
                 MentalStateLabel = pawn.MentalStateDef?.label ?? string.Empty,
                 CurrentActivity = SafeReport(pawn),
                 Drafted = pawn.Drafted,
+                MedicalCare = pawn.playerSettings != null ? pawn.playerSettings.medCare.ToString() : string.Empty,
                 Skills = pawn.skills?.skills.Select(s => new SkillInfo
                 {
                     DefName = s.def.defName,

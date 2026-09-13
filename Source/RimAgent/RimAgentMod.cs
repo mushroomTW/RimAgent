@@ -30,6 +30,7 @@ namespace RimAgent
             listing.CheckboxLabeled("RimAgent.Settings.Build".Translate(), ref Settings.allowBuild, "RimAgent.Settings.BuildTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.Combat".Translate(), ref Settings.allowCombat, "RimAgent.Settings.CombatTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.Trade".Translate(), ref Settings.allowTrade, "RimAgent.Settings.TradeTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.Medical".Translate(), ref Settings.allowMedical, "RimAgent.Settings.MedicalTip".Translate());
 
             listing.Gap();
             listing.Label("RimAgent.Settings.MaxSteps".Translate(Settings.maxSteps), -1f, "RimAgent.Settings.MaxStepsTip".Translate());

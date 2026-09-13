@@ -8,7 +8,8 @@ namespace RimAgent.Tools
         Work,
         Build,
         Combat,
-        Trade
+        Trade,
+        Medical
     }
 
     /// <summary>

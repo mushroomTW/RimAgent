@@ -61,6 +61,13 @@ namespace RimAgent.Tests
         /// <summary>假結算的單件價格（正式端用遊戲公式）。買賣同價；缺省為 1。</summary>
         public Dictionary<string, float> Prices { get; } = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
+        public IReadOnlyList<DefInfo> MedicalCareLevels { get; set; } = new[]
+        {
+            new DefInfo("NoCare", "no care"), new DefInfo("NoMeds", "doctor care only, no medicine"),
+            new DefInfo("HerbalOrWorse", "herbal medicine or worse"), new DefInfo("NormalOrWorse", "industrial medicine or worse"),
+            new DefInfo("Best", "best")
+        };
+
         public static ColonistInfo MakeColonist(int id, string first, string nick, string last, int x = 10, int z = 10)
         {
             var workTypes = new[] { "Firefighter", "Patient", "Doctor", "Cooking", "Hunting", "Construction", "Growing", "Mining", "PlantCutting", "Hauling", "Cleaning", "Research" };
@@ -84,7 +91,8 @@ namespace RimAgent.Tests
                     new SkillInfo { DefName = "Plants", Label = "plants", Level = 0, Disabled = true }
                 },
                 WorkPriorities = workTypes.Select(w => new WorkPriorityInfo { WorkTypeDefName = w, Label = w.ToLowerInvariant(), Priority = 3 }).ToList(),
-                Timetable = Enumerable.Repeat("Anything", 24).ToList()
+                Timetable = Enumerable.Repeat("Anything", 24).ToList(),
+                MedicalCare = "NoMeds"
             };
         }
 
@@ -202,6 +210,17 @@ namespace RimAgent.Tests
             Calls.Add($"OrderAttack({pawnId},{targetId})");
             bool targetExists = Threats.Any(t => t.Id == targetId) || Things.Any(t => t.Id == targetId);
             return targetExists ? CommandResult.Ok() : CommandResult.Fail("target not found");
+        }
+
+        public CommandResult SetMedicalCare(int pawnId, string careDefName)
+        {
+            Calls.Add($"SetMedicalCare({pawnId},{careDefName})");
+            ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == pawnId);
+            if (pawn == null) return CommandResult.Fail("pawn not found");
+            if (!MedicalCareLevels.Any(d => string.Equals(d.DefName, careDefName, StringComparison.OrdinalIgnoreCase)))
+                return CommandResult.Fail($"unknown medical care level {careDefName}");
+            pawn.MedicalCare = careDefName;
+            return CommandResult.Ok();
         }
 
         /// <summary>
