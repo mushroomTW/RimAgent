@@ -34,10 +34,12 @@
   <RimAgent.Settings.BuildTip>标记开采、砍伐、收获、拆除、搬运，以及放置蓝图。默认关闭。</RimAgent.Settings.BuildTip>
   <RimAgent.Settings.Combat>战斗 — 征召、移动与攻击指令</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>征召殖民者并下移动或攻击指令。模型需要数秒才会响应，只适合部署与撤退，不适合实时操作。默认关闭。</RimAgent.Settings.CombatTip>
-  <RimAgent.Settings.Trade>交易 — 查库存、买入卖出</RimAgent.Settings.Trade>
-  <RimAgent.Settings.TradeTip>列出轨道商人与来访商队在卖什么，并以游戏交易价格一次结清买卖。默认关闭。</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.Trade>交易 — 查库存、买入卖出、商队</RimAgent.Settings.Trade>
+  <RimAgent.Settings.TradeTip>列出轨道商人与来访商队在卖什么，以游戏交易价格一次结清买卖，并组自己的商队外出。默认关闭。</RimAgent.Settings.TradeTip>
   <RimAgent.Settings.Medical>医疗 — 健康与医疗等级</RimAgent.Settings.Medical>
   <RimAgent.Settings.MedicalTip>查看殖民者健康（伤口、疾病、流血、手术）并调整医疗等级。默认关闭。</RimAgent.Settings.MedicalTip>
+  <RimAgent.Settings.Prisoner>囚犯 — 互动与释放</RimAgent.Settings.Prisoner>
+  <RimAgent.Settings.PrisonerTip>列出囚犯并切换互动模式（招募、释放、处决）；招募与日常照料仍走游戏狱卒机制。默认关闭。</RimAgent.Settings.PrisonerTip>
   <RimAgent.Settings.MaxSteps>每句指令最多调用工具次数：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控循环烧掉 API 额度。对之后载入的游戏生效。</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>供应商、API 密钥、模型与备援链都在 RimLLM Framework 的设置里调整。</RimAgent.Settings.FrameworkNote>

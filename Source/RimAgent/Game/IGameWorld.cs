@@ -12,6 +12,7 @@ namespace RimAgent.Game
     {
         ColonyOverview GetOverview();
         IReadOnlyList<ColonistInfo> GetColonists();
+        IReadOnlyList<PrisonerInfo> GetPrisoners();
         IReadOnlyList<ColonistHealthInfo> GetHealth();
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
@@ -32,6 +33,8 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> TradeGoods { get; }
         /// <summary>五種醫療等級目錄（NoCare … Best）。</summary>
         IReadOnlyList<DefInfo> MedicalCareLevels { get; }
+        /// <summary>囚犯互動模式目錄（PrisonerInteractionModeDef，如 AttemptRecruit）。</summary>
+        IReadOnlyList<DefInfo> PrisonerInteractionModes { get; }
         /// <summary>可排程的手術目錄（worker 為手術的 RecipeDef）。</summary>
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
 
@@ -51,6 +54,10 @@ namespace RimAgent.Game
         /// <summary>組商隊外出：驗證不過不組，成功時 Message 為成團明細。</summary>
         CommandResult FormCaravan(CaravanRequest request);
         CommandResult SetMedicalCare(int pawnId, string careDefName);
+        /// <summary>切換囚犯互動模式（走獄卒原生機制，不硬轉派系）。</summary>
+        CommandResult SetPrisonerInteraction(int pawnId, string modeDefName);
+        /// <summary>立刻釋放囚犯（等同遊戲原生釋放）。</summary>
+        CommandResult ReleasePrisoner(int pawnId);
         /// <summary>排一台手術：驗證不過不掛單，成功時 Message 為排程明細。</summary>
         CommandResult ScheduleSurgery(SurgeryRequest request);
     }

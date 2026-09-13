@@ -9,7 +9,8 @@ namespace RimAgent.Tools
         Build,
         Combat,
         Trade,
-        Medical
+        Medical,
+        Prisoner
     }
 
     /// <summary>

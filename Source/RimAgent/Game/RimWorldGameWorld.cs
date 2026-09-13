@@ -25,6 +25,7 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _tradeGoods;
         private IReadOnlyList<DefInfo> _medicalCareLevels;
         private IReadOnlyList<DefInfo> _surgeryRecipes;
+        private IReadOnlyList<DefInfo> _prisonerInteractionModes;
 
         private static Map Map => Find.CurrentMap;
 
@@ -370,6 +371,60 @@ namespace RimAgent.Game
                 || string.Equals(part.Label, want, StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrEmpty(part.customLabel) && string.Equals(part.customLabel, want, StringComparison.OrdinalIgnoreCase))
                 || (part.def != null && string.Equals(part.def.label, want, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public IReadOnlyList<PrisonerInfo> GetPrisoners()
+        {
+            return Map.mapPawns.PrisonersOfColonySpawned.Select(ToPrisoner).ToList();
+        }
+
+        private static PrisonerInfo ToPrisoner(Pawn pawn)
+        {
+            var triple = pawn.Name as NameTriple;
+            string nick = triple?.Nick ?? string.Empty;
+            string first = triple?.First ?? pawn.Name?.ToStringShort ?? pawn.LabelShort;
+            PrisonerInteractionModeDef mode = pawn.guest?.ExclusiveInteractionMode;
+            return new PrisonerInfo
+            {
+                Id = pawn.thingIDNumber,
+                Name = pawn.LabelShort,
+                Nickname = !string.IsNullOrEmpty(nick) && nick != first ? nick : string.Empty,
+                FullName = pawn.Name?.ToStringFull ?? pawn.LabelShort,
+                Resistance = pawn.guest?.Resistance ?? -1f,
+                Recruitable = pawn.guest?.Recruitable ?? false,
+                InteractionMode = mode?.defName ?? string.Empty,
+                InteractionModeLabel = mode?.label ?? string.Empty,
+                HealthPercent = pawn.health?.summaryHealth?.SummaryHealthPercent ?? 1f,
+                Downed = pawn.Downed
+            };
+        }
+
+        public IReadOnlyList<DefInfo> PrisonerInteractionModes =>
+            _prisonerInteractionModes ?? (_prisonerInteractionModes = DefDatabase<PrisonerInteractionModeDef>.AllDefsListForReading
+                .Select(d => new DefInfo(d.defName, d.label))
+                .ToList());
+
+        public CommandResult SetPrisonerInteraction(int pawnId, string modeDefName)
+        {
+            Pawn pawn = FindPrisoner(pawnId);
+            if (pawn == null) return CommandResult.Fail("prisoner not found");
+            PrisonerInteractionModeDef mode = DefDatabase<PrisonerInteractionModeDef>.GetNamedSilentFail(modeDefName);
+            if (mode == null) return CommandResult.Fail($"unknown prisoner interaction mode {modeDefName}");
+            pawn.guest.SetExclusiveInteraction(mode);
+            return CommandResult.Ok();
+        }
+
+        public CommandResult ReleasePrisoner(int pawnId)
+        {
+            Pawn pawn = FindPrisoner(pawnId);
+            if (pawn == null) return CommandResult.Fail("prisoner not found");
+            GenGuest.PrisonerRelease(pawn);
+            return CommandResult.Ok($"{pawn.LabelShort} was released and left the colony.");
+        }
+
+        private static Pawn FindPrisoner(int id)
+        {
+            return Map.mapPawns.PrisonersOfColonySpawned.FirstOrDefault(p => p.thingIDNumber == id);
         }
 
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)

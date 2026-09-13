@@ -132,6 +132,24 @@ namespace RimAgent.Game
         public string Heading { get; set; } = string.Empty;
     }
 
+    /// <summary>一位殖民地囚犯。</summary>
+    public sealed class PrisonerInfo
+    {
+        public int Id { get; set; }
+        /// <summary>顯示用短名（綽號優先）。</summary>
+        public string Name { get; set; } = string.Empty;
+        public string Nickname { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        /// <summary>剩餘抗拒值；負值代表無需勸降（可直接招募）。</summary>
+        public float Resistance { get; set; } = -1f;
+        public bool Recruitable { get; set; }
+        /// <summary>目前互動模式 defName（如 AttemptRecruit）。</summary>
+        public string InteractionMode { get; set; } = string.Empty;
+        public string InteractionModeLabel { get; set; } = string.Empty;
+        public float HealthPercent { get; set; } = 1f;
+        public bool Downed { get; set; }
+    }
+
     /// <summary>排一台手術：把一張 Bill_Medical 掛進殖民者的 BillStack，等醫生執行。</summary>
     public sealed class SurgeryRequest
     {

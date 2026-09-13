@@ -78,6 +78,15 @@ namespace RimAgent.Tests
         /// <summary>研究還沒完成的手術 defName（正式端用遊戲研究狀態判斷）。</summary>
         public HashSet<string> LockedSurgeries { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        public List<PrisonerInfo> Prisoners { get; } = new List<PrisonerInfo>();
+
+        public IReadOnlyList<DefInfo> PrisonerInteractionModes { get; set; } = new[]
+        {
+            new DefInfo("MaintainOnly", "maintain only"), new DefInfo("AttemptRecruit", "recruit"),
+            new DefInfo("ReduceResistance", "reduce resistance"), new DefInfo("Release", "release"),
+            new DefInfo("Execution", "execution")
+        };
+
         public static ColonistInfo MakeColonist(int id, string first, string nick, string last, int x = 10, int z = 10)
         {
             var workTypes = new[] { "Firefighter", "Patient", "Doctor", "Cooking", "Hunting", "Construction", "Growing", "Mining", "PlantCutting", "Hauling", "Cleaning", "Research" };
@@ -113,6 +122,7 @@ namespace RimAgent.Tests
 
         public ColonyOverview GetOverview() => Overview;
         public IReadOnlyList<ColonistInfo> GetColonists() => Colonists;
+        public IReadOnlyList<PrisonerInfo> GetPrisoners() => Prisoners;
         public List<ColonistHealthInfo> Health { get; } = new List<ColonistHealthInfo>();
         public IReadOnlyList<ColonistHealthInfo> GetHealth() => Health;
         public ResourceSnapshot GetResources() => Resources;
@@ -290,6 +300,27 @@ namespace RimAgent.Tests
             pending.Add(new SurgeryBillInfo { Label = recipe.Label, Part = part });
             health.PendingSurgeries = pending;
             return CommandResult.Ok($"Scheduled {recipe.Label} on {pawn.Name}" + (part.Length > 0 ? $" ({part})" : string.Empty) + ".");
+        }
+
+        public CommandResult SetPrisonerInteraction(int pawnId, string modeDefName)
+        {
+            Calls.Add($"SetPrisonerInteraction({pawnId},{modeDefName})");
+            PrisonerInfo pawn = Prisoners.FirstOrDefault(p => p.Id == pawnId);
+            if (pawn == null) return CommandResult.Fail("prisoner not found");
+            DefInfo mode = PrisonerInteractionModes.FirstOrDefault(d => string.Equals(d.DefName, modeDefName, StringComparison.OrdinalIgnoreCase));
+            if (mode == null) return CommandResult.Fail($"unknown prisoner interaction mode {modeDefName}");
+            pawn.InteractionMode = mode.DefName;
+            pawn.InteractionModeLabel = mode.Label;
+            return CommandResult.Ok();
+        }
+
+        public CommandResult ReleasePrisoner(int pawnId)
+        {
+            Calls.Add($"ReleasePrisoner({pawnId})");
+            PrisonerInfo pawn = Prisoners.FirstOrDefault(p => p.Id == pawnId);
+            if (pawn == null) return CommandResult.Fail("prisoner not found");
+            Prisoners.Remove(pawn);
+            return CommandResult.Ok($"{pawn.Name} was released and left the colony.");
         }
 
         /// <summary>

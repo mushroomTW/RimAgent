@@ -7,7 +7,7 @@
 - [x] 貿易查詢與下單（軌道商人／來訪商隊庫存、一次結清買賣；遊戲內驗收待玩家實測，見 `.scratch/trade/issues/04-ingame-verify-i18n.md`）
 - [x] 組商隊（指名殖民者往羅盤方向離圖；遊戲內驗收待玩家實測，見 `.scratch/caravan/issues/01-form-caravan.md`）
 - [ ] 醫療手術與健康查詢（醫療等級、健康查詢、手術排程已做，剩遊戲內驗收，見 `.scratch/medical/issues/`）
-- [ ] 囚犯（招募／釋放／互動模式）
+- [x] 囚犯（查詢、互動模式、立即釋放；招募走獄卒原生機制；遊戲內驗收待玩家實測，見 `.scratch/prisoner/issues/01-prisoner-manage.md`）
 - [ ] 動物（馴養、訓練、區域指派）
 - [ ] 區域與儲存設定（建立／修改區域、儲存區篩選）
 - [ ] 生產帳單（工作台加減帳單、數量、材料）
