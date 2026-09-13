@@ -15,6 +15,8 @@ namespace RimAgent.Game
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
         ResearchInfo GetResearch();
+        /// <summary>當前地圖可交易的商人（軌道商人與來訪商隊，見 TraderInfo.Kind）。</summary>
+        IReadOnlyList<TraderInfo> GetTraders();
         IReadOnlyList<ThingInfo> FindThings(ThingQuery query);
         /// <summary>玩家目前框選的地圖物件。</summary>
         IReadOnlyList<ThingInfo> GetSelection();

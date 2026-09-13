@@ -7,7 +7,8 @@ namespace RimAgent.Tools
         Observe,
         Work,
         Build,
-        Combat
+        Combat,
+        Trade
     }
 
     /// <summary>

@@ -95,6 +95,43 @@ namespace RimAgent.Game
             return threats;
         }
 
+        public IReadOnlyList<TraderInfo> GetTraders()
+        {
+            Map map = Map;
+            var result = new List<TraderInfo>();
+            foreach (TradeShip ship in map.passingShipManager.passingShips.OfType<TradeShip>())
+            {
+                if (!ship.CanTradeNow) continue;
+                var goods = new List<TradeGoodsInfo>();
+                foreach (Thing t in ship.Goods)
+                {
+                    if (t == null || t.Destroyed) continue;
+                    if (t.def == ThingDefOf.Silver) continue;
+                    Pawn pawn = t as Pawn;
+                    goods.Add(new TradeGoodsInfo
+                    {
+                        DefName = t.def.defName,
+                        Label = pawn != null ? pawn.LabelShort : t.def.label,
+                        Count = Math.Max(1, t.stackCount),
+                        MarketValue = t.MarketValue
+                    });
+                }
+                result.Add(new TraderInfo
+                {
+                    Kind = TraderInfo.OrbitalKind,
+                    Name = ship.FullTitle,
+                    Faction = ship.Faction?.Name ?? string.Empty,
+                    Silver = ship.Silver,
+                    Goods = goods
+                        .OrderBy(g => g.Label, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(g => g.DefName, StringComparer.Ordinal)
+                        .ToList()
+                });
+            }
+            // 來訪商隊（Visitor）在 issue 02 補上；這裡刻意不回傳，不拿軌道商人頂替。
+            return result;
+        }
+
         public ResearchInfo GetResearch()
         {
             ResearchProjectDef current = Find.ResearchManager.GetProject();

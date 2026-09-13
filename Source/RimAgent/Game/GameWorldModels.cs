@@ -92,6 +92,37 @@ namespace RimAgent.Game
         public bool Downed { get; set; }
     }
 
+    /// <summary>商人庫存裡的一項貨物（不含貨幣本身，貨幣另見 <see cref="TraderInfo.Silver"/>）。</summary>
+    public sealed class TradeGoodsInfo
+    {
+        public string DefName { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public int Count { get; set; } = 1;
+        /// <summary>單件市價（僅供參考，實際成交價依交涉者與難度浮動）。</summary>
+        public float MarketValue { get; set; }
+    }
+
+    /// <summary>
+    /// 一位可交易的商人。Kind 區分「軌道商人」與「來訪商隊」，兩者絕不互相頂替：
+    /// 查軌道只看 Orbital，查來訪只看 Visitor。
+    /// </summary>
+    public sealed class TraderInfo
+    {
+        /// <summary>軌道商人（在軌道上的貿易船）。</summary>
+        public const string OrbitalKind = "Orbital";
+        /// <summary>來訪商隊（親自到訪殖民地的商隊）。</summary>
+        public const string VisitorKind = "Visitor";
+
+        /// <summary>見 <see cref="OrbitalKind"/>／<see cref="VisitorKind"/>。</summary>
+        public string Kind { get; set; } = OrbitalKind;
+        /// <summary>顯示用全名，後續交易指令以此指名商人。</summary>
+        public string Name { get; set; } = string.Empty;
+        public string Faction { get; set; } = string.Empty;
+        /// <summary>商人持有的銀兩（買入時殖民地能拿到的上限參考）。</summary>
+        public int Silver { get; set; }
+        public IReadOnlyList<TradeGoodsInfo> Goods { get; set; } = Array.Empty<TradeGoodsInfo>();
+    }
+
     public sealed class ResearchProjectInfo
     {
         public string DefName { get; set; } = string.Empty;

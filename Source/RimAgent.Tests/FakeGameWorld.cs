@@ -14,6 +14,7 @@ namespace RimAgent.Tests
         public List<ThingInfo> Things { get; } = new List<ThingInfo>();
         public List<ThingInfo> Selection { get; } = new List<ThingInfo>();
         public List<ThreatInfo> Threats { get; } = new List<ThreatInfo>();
+        public List<TraderInfo> Traders { get; } = new List<TraderInfo>();
         public ColonyOverview Overview { get; set; } = new ColonyOverview { ColonyName = "New Arrivals", ColonistCount = 2, Year = 5500, Season = "Spring", DayOfSeason = 3, Hour = 14, Weather = "Clear", OutdoorTemperatureC = 21.4f, Wealth = 12000f };
         public ResourceSnapshot Resources { get; set; } = new ResourceSnapshot();
         public ResearchInfo Research { get; set; } = new ResearchInfo();
@@ -86,6 +87,7 @@ namespace RimAgent.Tests
         public IReadOnlyList<ColonistInfo> GetColonists() => Colonists;
         public ResourceSnapshot GetResources() => Resources;
         public IReadOnlyList<ThreatInfo> GetThreats() => Threats;
+        public IReadOnlyList<TraderInfo> GetTraders() => Traders;
         public ResearchInfo GetResearch() => Research;
         public IReadOnlyList<ThingInfo> GetSelection() => Selection;
         public MapBounds GetMapBounds() => Bounds;
