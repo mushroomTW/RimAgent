@@ -9,7 +9,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>交易：查詢商人庫存。買入賣出在後續 issue 補上。</summary>
+    /// <summary>交易：商人庫存查詢、一次結清買賣、組商隊外出。</summary>
     public sealed class TradeTools
     {
         /// <summary>單一商人最多列出的品項數，超過則截斷並註明（省 token）。</summary>
@@ -106,6 +106,37 @@ namespace RimAgent.Tools
             CommandResult result = _world.ExecuteTrade(request);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
+        }
+
+        [AgentTool("form_caravan", ToolCategory.Trade)]
+        [Description("Forms the named colonists into a caravan that leaves the map toward a compass direction. Members must be named explicitly (\"all\" is refused); drafted members must be undrafted first. Pack animals are not included yet.")]
+        public string FormCaravan(
+            [Description("Colonist names or ids separated by commas, e.g. \"Ali, Bob\".")] string colonists,
+            [Description("Compass heading: N, NE, E, SE, S, SW, W or NW.")] string heading)
+        {
+            if (IsEveryoneKeyword(colonists))
+            {
+                return ToolText.Error("name the caravan members explicitly, e.g. \"Ali, Bob\"; \"all\" would send the whole colony away.");
+            }
+            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
+            if (!pawns.Success) return pawns.Error;
+
+            var request = new CaravanRequest
+            {
+                PawnIds = pawns.Value.Select(c => c.Id).ToList(),
+                Heading = (heading ?? string.Empty).Trim()
+            };
+            CommandResult result = _world.FormCaravan(request);
+            if (!result.Success) return ToolText.Error(result.Message);
+            return result.Message;
+        }
+
+        private static bool IsEveryoneKeyword(string input)
+        {
+            string needle = (input ?? string.Empty).Trim();
+            return string.Equals(needle, "all", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(needle, "everyone", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(needle, "*", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>品名解析到 defName；銀兩不用列（自動結算），列了直接擋下並說明。</summary>

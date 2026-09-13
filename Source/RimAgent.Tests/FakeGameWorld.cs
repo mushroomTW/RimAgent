@@ -235,6 +235,38 @@ namespace RimAgent.Tests
             return CommandResult.Ok();
         }
 
+        private static readonly Dictionary<string, string> CaravanHeadings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "N", "north" }, { "NORTH", "north" },
+            { "NE", "north-east" }, { "NORTHEAST", "north-east" }, { "NORTH-EAST", "north-east" },
+            { "E", "east" }, { "EAST", "east" },
+            { "SE", "south-east" }, { "SOUTHEAST", "south-east" }, { "SOUTH-EAST", "south-east" },
+            { "S", "south" }, { "SOUTH", "south" },
+            { "SW", "south-west" }, { "SOUTHWEST", "south-west" }, { "SOUTH-WEST", "south-west" },
+            { "W", "west" }, { "WEST", "west" },
+            { "NW", "north-west" }, { "NORTHWEST", "north-west" }, { "NORTH-WEST", "north-west" }
+        };
+
+        public CommandResult FormCaravan(CaravanRequest request)
+        {
+            Calls.Add($"FormCaravan({string.Join("+", (request?.PawnIds ?? Array.Empty<int>()).ToArray())},{request?.Heading})");
+            if (request == null) return CommandResult.Fail("no caravan requested");
+            var ids = (request.PawnIds ?? Array.Empty<int>()).ToList();
+            if (ids.Count == 0) return CommandResult.Fail("no colonists named. Give at least one member, e.g. \"Ali, Bob\".");
+            string display;
+            if (!CaravanHeadings.TryGetValue((request.Heading ?? string.Empty).Trim(), out display))
+                return CommandResult.Fail($"unknown heading \"{request.Heading}\". Use N, NE, E, SE, S, SW, W or NW.");
+            var members = new List<ColonistInfo>();
+            foreach (int id in ids)
+            {
+                ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == id);
+                if (pawn == null) return CommandResult.Fail("colonist not found");
+                if (pawn.Drafted) return CommandResult.Fail($"{pawn.Name} is drafted; undraft them first");
+                members.Add(pawn);
+            }
+            return CommandResult.Ok($"Formed a caravan with {string.Join(", ", members.Select(m => m.Name).ToArray())}, heading {display}.");
+        }
+
         public CommandResult ScheduleSurgery(SurgeryRequest request)
         {
             Calls.Add($"ScheduleSurgery({request?.PawnId},{request?.RecipeDefName},{request?.BodyPartLabel})");

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using RimWorld;
+using RimWorld.Planet;
 using Verse;
 using Verse.AI;
 using Verse.AI.Group;
@@ -607,6 +608,60 @@ namespace RimAgent.Game
             finally
             {
                 TradeSession.Close();
+            }
+        }
+
+        public CommandResult FormCaravan(CaravanRequest request)
+        {
+            if (request == null) return CommandResult.Fail("no caravan requested");
+            List<int> ids = (request.PawnIds ?? Array.Empty<int>()).ToList();
+            if (ids.Count == 0) return CommandResult.Fail("no colonists named. Give at least one member, e.g. \"Ali, Bob\".");
+            Direction8Way dir;
+            string display;
+            if (!TryParseHeading(request.Heading, out dir, out display))
+                return CommandResult.Fail($"unknown heading \"{request.Heading}\". Use N, NE, E, SE, S, SW, W or NW.");
+            Map map = Map;
+            var pawns = new List<Pawn>();
+            foreach (int id in ids)
+            {
+                Pawn pawn = FindColonist(id);
+                if (pawn == null) return CommandResult.Fail("colonist not found");
+                if (pawn.Dead) return CommandResult.Fail($"{pawn.LabelShort} is dead");
+                if (pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is drafted; undraft them first");
+                pawns.Add(pawn);
+            }
+            Caravan caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(pawns, Faction.OfPlayer, map.Tile, dir, PlanetTile.Invalid);
+            if (caravan == null) return CommandResult.Fail("the game could not form a caravan from the current map");
+            string names = string.Join(", ", pawns.Select(p => p.LabelShort).ToArray());
+            return CommandResult.Ok($"Formed {caravan.Name} with {names}, heading {display}.");
+        }
+
+        private static bool TryParseHeading(string heading, out Direction8Way dir, out string display)
+        {
+            string needle = (heading ?? string.Empty).Trim().ToUpperInvariant();
+            switch (needle)
+            {
+                case "N":
+                case "NORTH": dir = Direction8Way.North; display = "north"; return true;
+                case "NE":
+                case "NORTHEAST":
+                case "NORTH-EAST": dir = Direction8Way.NorthEast; display = "north-east"; return true;
+                case "E":
+                case "EAST": dir = Direction8Way.East; display = "east"; return true;
+                case "SE":
+                case "SOUTHEAST":
+                case "SOUTH-EAST": dir = Direction8Way.SouthEast; display = "south-east"; return true;
+                case "S":
+                case "SOUTH": dir = Direction8Way.South; display = "south"; return true;
+                case "SW":
+                case "SOUTHWEST":
+                case "SOUTH-WEST": dir = Direction8Way.SouthWest; display = "south-west"; return true;
+                case "W":
+                case "WEST": dir = Direction8Way.West; display = "west"; return true;
+                case "NW":
+                case "NORTHWEST":
+                case "NORTH-WEST": dir = Direction8Way.NorthWest; display = "north-west"; return true;
+                default: dir = Direction8Way.Invalid; display = string.Empty; return false;
             }
         }
 

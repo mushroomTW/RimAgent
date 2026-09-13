@@ -124,6 +124,14 @@ namespace RimAgent.Game
         public IReadOnlyList<TradeLine> Sells { get; set; } = Array.Empty<TradeLine>();
     }
 
+    /// <summary>組一支商隊外出：指定的殖民者離開地圖往羅盤方向走。</summary>
+    public sealed class CaravanRequest
+    {
+        public IReadOnlyList<int> PawnIds { get; set; } = Array.Empty<int>();
+        /// <summary>羅盤方向（N、NE、E、SE、S、SW、W、NW，大小寫不敏感）。</summary>
+        public string Heading { get; set; } = string.Empty;
+    }
+
     /// <summary>排一台手術：把一張 Bill_Medical 掛進殖民者的 BillStack，等醫生執行。</summary>
     public sealed class SurgeryRequest
     {

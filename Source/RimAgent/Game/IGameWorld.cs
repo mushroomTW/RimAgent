@@ -48,6 +48,8 @@ namespace RimAgent.Game
         CommandResult OrderAttack(int pawnId, int targetId);
         /// <summary>一次結清的買賣：驗證不過整筆不做，成功時 Message 為買賣明細。</summary>
         CommandResult ExecuteTrade(TradeRequest request);
+        /// <summary>組商隊外出：驗證不過不組，成功時 Message 為成團明細。</summary>
+        CommandResult FormCaravan(CaravanRequest request);
         CommandResult SetMedicalCare(int pawnId, string careDefName);
         /// <summary>排一台手術：驗證不過不掛單，成功時 Message 為排程明細。</summary>
         CommandResult ScheduleSurgery(SurgeryRequest request);
