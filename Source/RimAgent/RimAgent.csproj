@@ -28,15 +28,30 @@
 
   <ItemGroup>
     <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
-    <!-- 版本必須與框架載入的組件識別一致（10.9.0.0），不可浮動。 -->
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" ExcludeAssets="runtime" />
+    <!-- 版本必須與框架載入的組件識別一致（10.10.0.0），不可浮動。 -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" ExcludeAssets="runtime" />
     <!--
       Krafs 附帶的 RimWorld Mono mscorlib 同樣定義 IAsyncEnumerable<T> 與 ValueTask，
       與 BCL 套件撞名（CS0433）；沿用框架的 alias 隔離法。
       InvokeCoreAsync 的 ValueTask<object> 與 IChatClient 的 IAsyncEnumerable 都會碰到。
+      版本對齊框架（Bcl.AsyncInterfaces 10.0.12）。
     -->
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.11" Aliases="bclasync" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.12" Aliases="bclasync" ExcludeAssets="runtime" />
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" Aliases="ste" ExcludeAssets="runtime" />
+    <!-- Microsoft Agent Framework：只用 ChatClientAgent 置換工具迴圈，不碰 Workflows。 -->
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" ExcludeAssets="runtime" />
+    <!--
+      框架強制 MEAI.Abstractions 用 netstandard2.0 資產（見 RimLLM Framework.csproj）：
+      net462 資產參考 System.ComponentModel.DataAnnotations，RimWorld 的 Unity Mono 沒有出貨這顆 DLL，
+      AIFunctionFactory.Create 會在遊戲內擲 TypeLoadException。這裡沿用同一招：
+      PackageReference 只留相依圖（compile;runtime 都不要），再以 Reference 指到 netstandard2.0 的 DLL。
+      版本必須與框架載入的組件識別一致（10.10.0.0），不可浮動。
+    -->
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.0" ExcludeAssets="compile;runtime" />
+    <Reference Include="Microsoft.Extensions.AI.Abstractions">
+      <HintPath>$(NuGetPackageRoot)microsoft.extensions.ai.abstractions\10.10.0\lib\netstandard2.0\Microsoft.Extensions.AI.Abstractions.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -46,4 +61,28 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+
+  <!--
+    Agent Framework 的 DLL 必須由 RimAgent 出貨（框架的 Assemblies/ 沒有 Agents.AI*、
+    Compliance.Abstractions、Tokenizers、VectorData.Abstractions、FileSystemGlobbing，
+   也沒有 Bcl.Memory）。
+    CopyLocalLockFileAssemblies 保持 false（見上方註解），改以固定白名單從 NuGet 快取複製：
+    白名單來自 Microsoft.Agents.AI 1.21.0 的 nuspec 相依清單；框架已出貨者
+    （Text.Json、Channels、DiagnosticSource、DI/Logging.Abstractions、Bcl.AsyncInterfaces、STTE）
+    一律不複製，避免第二份組件。net472/net462 優先於 netstandard2.0（與 NuGet 解析一致）。
+    Release 寫入 Assemblies/（出貨），Debug 寫入 bin/（測試與本機建置用）。
+  -->
+  <Target Name="CopyAgentFrameworkAssemblies" AfterTargets="Build">
+    <ItemGroup>
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai\1.21.0\lib\net472\Microsoft.Agents.AI.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai.abstractions\1.21.0\lib\net472\Microsoft.Agents.AI.Abstractions.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.compliance.abstractions\10.10.0\lib\netstandard2.0\Microsoft.Extensions.Compliance.Abstractions.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.vectordata.abstractions\10.10.0\lib\net462\Microsoft.Extensions.VectorData.Abstractions.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\netstandard2.0\Microsoft.ML.Tokenizers.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.filesystemglobbing\10.0.12\lib\net462\Microsoft.Extensions.FileSystemGlobbing.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.memory\10.0.12\lib\net462\Microsoft.Bcl.Memory.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.hashcode\6.0.0\lib\net462\Microsoft.Bcl.HashCode.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AgentFrameworkAssemblies)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

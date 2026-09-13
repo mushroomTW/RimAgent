@@ -1,8 +1,11 @@
 namespace RimAgent.Agent
 {
     /// <summary>
-    /// 固定不變的系統提示詞。放進 RimLLMChatOptions.CachedContext，讓供應商端的 prompt caching
-    /// 逐次命中；因此這裡刻意不含任何會變動的殖民地資訊——狀態一律由模型呼叫 observe 工具取得。
+    /// 固定不變的系統提示詞。經 ChatClientAgentOptions.ChatOptions.Instructions 交給模型
+    /// （AF 只合併、不產生訊息，最終由管線底層轉成 system message）；因此這裡刻意不含任何
+    /// 會變動的殖民地資訊——狀態一律由模型呼叫 observe 工具取得。
+    /// 不再經 RimLLMChatOptions.CachedContext（框架看不見 Instructions，prompt caching 暫無折扣；
+    /// 待實測 token 後再決定是否加回快取）。
     /// </summary>
     public static class AgentSystemPrompt
     {

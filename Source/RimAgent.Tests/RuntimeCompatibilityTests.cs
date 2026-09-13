@@ -19,7 +19,7 @@ namespace RimAgent.Tests
         [Test]
         public void EveryMethodInRimAgentJitsOnDotNetFramework()
         {
-            Assembly assembly = typeof(AgentSession).Assembly;
+            Assembly assembly = typeof(ColonyAgentSession).Assembly;
             var failures = new List<string>();
             int prepared = 0;
             int unityNative = 0;

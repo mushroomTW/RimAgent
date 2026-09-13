@@ -7,7 +7,7 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 ## What it can do
 
 | Category | Tools | Default |
-|---|---|---|
+| --- | --- | --- |
 | Observe | colony overview, colonists, resources, threats, research, map object search | on |
 | Work | work priorities, daily schedules | on |
 | Build | mine / cut / harvest / deconstruct / haul designations, blueprints (single or in a line) | off |
@@ -17,11 +17,16 @@ Combat orders reach the game several seconds after you speak — they are for po
 
 ## How it works
 
-```
-player text ──► AgentSession ──► FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
-                                      │ tool calls
-                                      ▼
-                              15 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+```text
+player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Agent Framework)
+         │                                    │ single GetResponseAsync, history in AF session
+         │                                    ▼
+         │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
+         │                                    │ tool calls
+         │                                    ▼
+         │                              15 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+         │
+         └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```
 
 Two seams make the mod testable without the game:
@@ -37,9 +42,9 @@ UI strings ship in English, Traditional Chinese and Simplified Chinese (`Languag
 dotnet build "Source/RimAgent/RimAgent.csproj" -c Release
 ```
 
-Release writes `Assemblies/RimAgent.dll` (the only file shipped). Debug builds and `dotnet test` write to `bin/` and never touch `Assemblies/`.
+Release writes `Assemblies/RimAgent.dll` plus the 8 Agent Framework DLLs the framework does not ship (`Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.ML.Tokenizers`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.Bcl.Memory`, `Microsoft.Bcl.HashCode`). Debug builds and `dotnet test` write to `bin/` and never touch `Assemblies/`.
 
-The project references the installed framework at `../RimLLM Framework/Assemblies`; override with `/p:RimLLMDir=<path>` if RimWorld is not under the default Steam folder. Package versions are pinned to what the framework ships (`Microsoft.Extensions.AI` 10.9.0); do not enable `CopyLocalLockFileAssemblies` — RimWorld loads every mod into one AppDomain and a second copy of `IChatClient` breaks every cast.
+The project references the installed framework at `../RimLLM Framework/Assemblies`; override with `/p:RimLLMDir=<path>` if RimWorld is not under the default Steam folder. Package versions are pinned to what the framework ships (`Microsoft.Extensions.AI` 10.10.0, `Microsoft.Agents.AI` 1.21.0); do not enable `CopyLocalLockFileAssemblies` — RimWorld loads every mod into one AppDomain and a second copy of `IChatClient` breaks every cast. The framework DLLs are copied from the NuGet cache by the `CopyAgentFrameworkAssemblies` target instead.
 
 ## Tests
 

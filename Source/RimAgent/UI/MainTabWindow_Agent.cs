@@ -58,7 +58,7 @@ namespace RimAgent.UI
                 return;
             }
 
-            AgentSession session = component.Session;
+            ColonyAgentSession session = component.Session;
             float top = inRect.y;
             if (_capabilityWarning != null)
             {
@@ -77,7 +77,7 @@ namespace RimAgent.UI
             DrawBottomBar(bottom, session);
         }
 
-        private void DrawTranscript(Rect outRect, AgentSession session)
+        private void DrawTranscript(Rect outRect, ColonyAgentSession session)
         {
             IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
             float width = outRect.width - 20f;
@@ -157,7 +157,7 @@ namespace RimAgent.UI
             }
         }
 
-        private void DrawBottomBar(Rect rect, AgentSession session)
+        private void DrawBottomBar(Rect rect, ColonyAgentSession session)
         {
             bool busy = session.IsBusy;
             bool canSend = !busy && _capabilityWarning == null;
@@ -197,7 +197,7 @@ namespace RimAgent.UI
             }
         }
 
-        private void Send(AgentSession session)
+        private void Send(ColonyAgentSession session)
         {
             string text = _input.Trim();
             if (text.Length == 0) return;

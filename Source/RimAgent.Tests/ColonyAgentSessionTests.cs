@@ -15,7 +15,7 @@ namespace RimAgent.Tests
     /// 整合測試：假 IChatClient + 真工具 + 假世界。從兩條接縫外側驅動，只斷言可觀察結果。
     /// </summary>
     [TestFixture]
-    public class AgentSessionTests
+    public class ColonyAgentSessionTests
     {
         private FakeGameWorld _world;
         private ScriptedChatClient _client;
@@ -31,9 +31,9 @@ namespace RimAgent.Tests
             _permissions = new ToolPermissions { Observe = true, Work = true, Build = false, Combat = false };
         }
 
-        private AgentSession NewSession(int maxSteps = 8)
+        private ColonyAgentSession NewSession(int maxSteps = 8)
         {
-            return new AgentSession(_client, _world, () => _permissions, maxSteps);
+            return new ColonyAgentSession(_client, _world, () => _permissions, maxSteps);
         }
 
         [Test]
@@ -41,7 +41,7 @@ namespace RimAgent.Tests
         {
             _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
                    .Reply("Done: Ali's doctor priority is now 1.");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
 
             string reply = await session.SendAsync("把 Ali 的醫療設成最高");
 
@@ -70,7 +70,7 @@ namespace RimAgent.Tests
         {
             _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 9 })
                    .Reply("That priority is invalid.");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
 
             await session.SendAsync("set doctor to 9");
 
@@ -98,7 +98,7 @@ namespace RimAgent.Tests
         public async Task PermissionChangesApplyToTheNextRequest()
         {
             _client.Reply("ok").Reply("ok");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
             await session.SendAsync("one");
             _permissions.Build = true;
             await session.SendAsync("two");
@@ -108,25 +108,28 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task SystemPromptGoesToCachedContextAndIsStable()
+        public async Task SystemPromptGoesToInstructionsAndIsStable()
         {
             _client.Reply("a").Reply("b");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
             await session.SendAsync("one");
             await session.SendAsync("two");
 
-            string first = _client.ReceivedOptions[0].AdditionalProperties["rimllm_cached_context"] as string;
-            string second = _client.ReceivedOptions[1].AdditionalProperties["rimllm_cached_context"] as string;
+            // 系統提示走 ChatOptions.Instructions（AF 正統），不再經 CachedContext。
+            // AF 的 CreateConfiguredChatOptions 對 run 端 ChatOptions 做 Clone()，
+            // 底層收到的是基底 ChatOptions（RimLLMChatOptions 的欄位全在 AdditionalProperties，本就穿透）。
+            string first = _client.ReceivedOptions[0].Instructions;
+            string second = _client.ReceivedOptions[1].Instructions;
             Assert.That(first, Is.EqualTo(AgentSystemPrompt.Text));
             Assert.That(second, Is.EqualTo(first));
-            Assert.That(_client.ReceivedOptions[0], Is.InstanceOf<RimLLMChatOptions>());
+            Assert.That(_client.ReceivedOptions[0].AdditionalProperties, Is.Null.Or.Empty);
         }
 
         [Test]
         public async Task MaxStepsBoundsARunawayLoop()
         {
             _client.CallTool("get_colony_overview", null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具
-            AgentSession session = NewSession(maxSteps: 3);
+            ColonyAgentSession session = NewSession(maxSteps: 3);
 
             Assert.DoesNotThrowAsync(async () => await session.SendAsync("loop forever"));
 
@@ -139,7 +142,7 @@ namespace RimAgent.Tests
         public async Task StrippedToolsAreFlaggedOnTheReply()
         {
             _client.ReplyWithToolsStripped("I cannot use tools right now.");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
             await session.SendAsync("do something");
 
             TranscriptEntry reply = session.Transcript.Snapshot().Last();
@@ -158,7 +161,7 @@ namespace RimAgent.Tests
         public async Task FrameworkErrorsAreClassifiedAndTheUserMessageIsRolledBack(LLMError error, AgentErrorKind expected)
         {
             _client.Throw(new RimLLMException(error, "boom"));
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
 
             string reply = await session.SendAsync("anything");
 
@@ -172,10 +175,27 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task FailedTurnLeavesNoTraceInLaterHistory()
+        {
+            // 失敗那一輪的使用者訊息不進 AF session：靠 AF ChatHistoryProvider 在例外時略過儲存，
+            // 而非自己的回滾碼。下一句成功時，底層收到的歷史不該含有失敗那句。
+            _client.Throw(new RimLLMException(LLMError.Timeout, "boom")).Reply("recovered");
+            ColonyAgentSession session = NewSession();
+
+            Assert.That(await session.SendAsync("failed question"), Is.Null);
+            Assert.That(await session.SendAsync("next question"), Is.EqualTo("recovered"));
+
+            IList<ChatMessage> secondCall = _client.ReceivedMessages[1];
+            Assert.That(secondCall.Count(m => m.Role == ChatRole.User), Is.EqualTo(1));
+            Assert.That(secondCall.Single(m => m.Role == ChatRole.User).Text, Is.EqualTo("next question"));
+            Assert.That(secondCall.SelectMany(m => m.Contents).OfType<TextContent>().Any(c => c.Text.Contains("failed question")), Is.False);
+        }
+
+        [Test]
         public async Task CancellationIsReportedAsCancelled()
         {
             _client.Reply("never");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
@@ -190,7 +210,7 @@ namespace RimAgent.Tests
         public async Task SecondInstructionCarriesTheWholeHistory()
         {
             _client.CallTool("get_colony_overview", null).Reply("Two colonists.").Reply("Sure.");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
             await session.SendAsync("status?");
             await session.SendAsync("thanks");
 
@@ -204,7 +224,7 @@ namespace RimAgent.Tests
         public async Task ClearForgetsHistoryAndTranscript()
         {
             _client.Reply("hi").Reply("again");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
             await session.SendAsync("one");
             session.Clear();
             await session.SendAsync("two");
@@ -217,7 +237,7 @@ namespace RimAgent.Tests
         public async Task UnknownToolNameDoesNotCrashTheSession()
         {
             _client.CallTool("fly_to_the_moon", new { speed = 9 }).Reply("I can't do that.");
-            AgentSession session = NewSession();
+            ColonyAgentSession session = NewSession();
 
             string reply = await session.SendAsync("go");
 
