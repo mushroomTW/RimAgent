@@ -40,6 +40,8 @@
   <RimAgent.Settings.MedicalTip>Check colonist health (injuries, diseases, bleeding, operations) and change medical care levels. Off by default.</RimAgent.Settings.MedicalTip>
   <RimAgent.Settings.Prisoner>Prisoners — interaction and release</RimAgent.Settings.Prisoner>
   <RimAgent.Settings.PrisonerTip>List prisoners and set their interaction mode (recruit, release, execution); recruitment and daily care still run through the game's warden mechanics. Off by default.</RimAgent.Settings.PrisonerTip>
+  <RimAgent.Settings.Animal>Animals — taming, training and areas</RimAgent.Settings.Animal>
+  <RimAgent.Settings.AnimalTip>List animals, mark wild ones for taming, switch training on and off, and assign allowed areas. Taming and training run through the game's mechanics. Off by default.</RimAgent.Settings.AnimalTip>
   <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies to newly loaded games.</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>

@@ -10,7 +10,8 @@ namespace RimAgent.Tools
         Combat,
         Trade,
         Medical,
-        Prisoner
+        Prisoner,
+        Animal
     }
 
     /// <summary>

@@ -3,7 +3,7 @@ using Verse;
 
 namespace RimAgent
 {
-    /// <summary>玩家可調的設定：七類工具的開關與單次任務的步數上限。</summary>
+    /// <summary>玩家可調的設定：八類工具的開關與單次任務的步數上限。</summary>
     public class RimAgentSettings : ModSettings
     {
         public const int DefaultMaxSteps = 8;
@@ -17,6 +17,7 @@ namespace RimAgent
         public bool allowTrade;
         public bool allowMedical;
         public bool allowPrisoner;
+        public bool allowAnimal;
         public int maxSteps = DefaultMaxSteps;
 
         public override void ExposeData()
@@ -29,6 +30,7 @@ namespace RimAgent
             Scribe_Values.Look(ref allowTrade, "allowTrade", false);
             Scribe_Values.Look(ref allowMedical, "allowMedical", false);
             Scribe_Values.Look(ref allowPrisoner, "allowPrisoner", false);
+            Scribe_Values.Look(ref allowAnimal, "allowAnimal", false);
             Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
         }
 
@@ -42,7 +44,8 @@ namespace RimAgent
                 Combat = allowCombat,
                 Trade = allowTrade,
                 Medical = allowMedical,
-                Prisoner = allowPrisoner
+                Prisoner = allowPrisoner,
+                Animal = allowAnimal
             };
         }
     }

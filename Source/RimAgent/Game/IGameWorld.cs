@@ -13,6 +13,8 @@ namespace RimAgent.Game
         ColonyOverview GetOverview();
         IReadOnlyList<ColonistInfo> GetColonists();
         IReadOnlyList<PrisonerInfo> GetPrisoners();
+        /// <summary>地圖上的動物（殖民地與野生，見 AnimalInfo.Wild）。</summary>
+        IReadOnlyList<AnimalInfo> GetAnimals();
         IReadOnlyList<ColonistHealthInfo> GetHealth();
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
@@ -35,6 +37,10 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> MedicalCareLevels { get; }
         /// <summary>囚犯互動模式目錄（PrisonerInteractionModeDef，如 AttemptRecruit）。</summary>
         IReadOnlyList<DefInfo> PrisonerInteractionModes { get; }
+        /// <summary>可訓練項目目錄（TrainableDef，如 Obedience）。</summary>
+        IReadOnlyList<DefInfo> AnimalTraining { get; }
+        /// <summary>動物可指派的區域目錄（另有無限制，不在目錄內）。</summary>
+        IReadOnlyList<DefInfo> AnimalAreas { get; }
         /// <summary>可排程的手術目錄（worker 為手術的 RecipeDef）。</summary>
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
 
@@ -58,6 +64,12 @@ namespace RimAgent.Game
         CommandResult SetPrisonerInteraction(int pawnId, string modeDefName);
         /// <summary>立刻釋放囚犯（等同遊戲原生釋放）。</summary>
         CommandResult ReleasePrisoner(int pawnId);
+        /// <summary>標記馴養野生動物（走遊戲原生 Tame designation）。</summary>
+        CommandResult TameAnimal(int pawnId);
+        /// <summary>開關一項動物訓練。</summary>
+        CommandResult SetAnimalTraining(int pawnId, string trainableDefName, bool enable);
+        /// <summary>指派動物活動區域；空字串代表無限制。</summary>
+        CommandResult SetAnimalArea(int pawnId, string areaLabel);
         /// <summary>排一台手術：驗證不過不掛單，成功時 Message 為排程明細。</summary>
         CommandResult ScheduleSurgery(SurgeryRequest request);
     }

@@ -40,6 +40,8 @@
   <RimAgent.Settings.MedicalTip>查看殖民者健康（伤口、疾病、流血、手术）并调整医疗等级。默认关闭。</RimAgent.Settings.MedicalTip>
   <RimAgent.Settings.Prisoner>囚犯 — 互动与释放</RimAgent.Settings.Prisoner>
   <RimAgent.Settings.PrisonerTip>列出囚犯并切换互动模式（招募、释放、处决）；招募与日常照料仍走游戏狱卒机制。默认关闭。</RimAgent.Settings.PrisonerTip>
+  <RimAgent.Settings.Animal>动物 — 驯养、训练与区域</RimAgent.Settings.Animal>
+  <RimAgent.Settings.AnimalTip>列出动物，标记野生动物驯养，开关训练项目，指派活动区域。驯养与训练走游戏机制。默认关闭。</RimAgent.Settings.AnimalTip>
   <RimAgent.Settings.MaxSteps>每句指令最多调用工具次数：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控循环烧掉 API 额度。对之后载入的游戏生效。</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>供应商、API 密钥、模型与备援链都在 RimLLM Framework 的设置里调整。</RimAgent.Settings.FrameworkNote>

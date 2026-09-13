@@ -132,6 +132,22 @@ namespace RimAgent.Game
         public string Heading { get; set; } = string.Empty;
     }
 
+    /// <summary>地圖上的一隻動物（殖民地或野生）。</summary>
+    public sealed class AnimalInfo
+    {
+        public int Id { get; set; }
+        /// <summary>顯示名（命名動物為名字，否則為物種）。</summary>
+        public string Name { get; set; } = string.Empty;
+        public string SpeciesDefName { get; set; } = string.Empty;
+        public string Species { get; set; } = string.Empty;
+        /// <summary>是否野生（非殖民地所有）。</summary>
+        public bool Wild { get; set; }
+        /// <summary>活動區域；空字串代表無限制。</summary>
+        public string Area { get; set; } = string.Empty;
+        public float HealthPercent { get; set; } = 1f;
+        public bool Downed { get; set; }
+    }
+
     /// <summary>一位殖民地囚犯。</summary>
     public sealed class PrisonerInfo
     {

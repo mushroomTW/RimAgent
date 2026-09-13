@@ -26,6 +26,8 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _medicalCareLevels;
         private IReadOnlyList<DefInfo> _surgeryRecipes;
         private IReadOnlyList<DefInfo> _prisonerInteractionModes;
+        private IReadOnlyList<DefInfo> _animalTraining;
+        private IReadOnlyList<DefInfo> _animalAreas;
 
         private static Map Map => Find.CurrentMap;
 
@@ -425,6 +427,86 @@ namespace RimAgent.Game
         private static Pawn FindPrisoner(int id)
         {
             return Map.mapPawns.PrisonersOfColonySpawned.FirstOrDefault(p => p.thingIDNumber == id);
+        }
+
+        public IReadOnlyList<AnimalInfo> GetAnimals()
+        {
+            return Map.mapPawns.AllPawnsSpawned.Where(p => p.RaceProps.Animal).Select(ToAnimal).ToList();
+        }
+
+        private static AnimalInfo ToAnimal(Pawn pawn)
+        {
+            return new AnimalInfo
+            {
+                Id = pawn.thingIDNumber,
+                Name = pawn.LabelShort,
+                SpeciesDefName = pawn.def.defName,
+                Species = pawn.def.label,
+                Wild = pawn.Faction != Faction.OfPlayer,
+                Area = pawn.playerSettings?.AreaRestrictionInPawnCurrentMap?.Label ?? string.Empty,
+                HealthPercent = pawn.health?.summaryHealth?.SummaryHealthPercent ?? 1f,
+                Downed = pawn.Downed
+            };
+        }
+
+        public IReadOnlyList<DefInfo> AnimalTraining =>
+            _animalTraining ?? (_animalTraining = DefDatabase<TrainableDef>.AllDefsListForReading
+                .Select(d => new DefInfo(d.defName, d.label))
+                .ToList());
+
+        public IReadOnlyList<DefInfo> AnimalAreas =>
+            _animalAreas ?? (_animalAreas = Map.areaManager.AllAreas
+                .Select(a => new DefInfo(a.Label, a.Label))
+                .ToList());
+
+        public CommandResult TameAnimal(int pawnId)
+        {
+            Map map = Map;
+            Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == pawnId && p.RaceProps.Animal);
+            if (pawn == null) return CommandResult.Fail("animal not found");
+            if (pawn.Dead) return CommandResult.Fail($"{pawn.LabelShort} is dead");
+            if (pawn.Faction == Faction.OfPlayer) return CommandResult.Fail($"{pawn.LabelShort} is already tame");
+            if (map.designationManager.DesignationOn(pawn, DesignationDefOf.Tame) != null)
+                return CommandResult.Fail($"{pawn.LabelShort} is already marked for taming");
+            map.designationManager.AddDesignation(new Designation(pawn, DesignationDefOf.Tame));
+            return CommandResult.Ok($"Marked {pawn.LabelShort} for taming. A handler will attempt it when available.");
+        }
+
+        public CommandResult SetAnimalTraining(int pawnId, string trainableDefName, bool enable)
+        {
+            Pawn pawn = FindColonyAnimal(pawnId);
+            if (pawn == null) return CommandResult.Fail("colony animal not found");
+            TrainableDef training = DefDatabase<TrainableDef>.GetNamedSilentFail(trainableDefName);
+            if (training == null) return CommandResult.Fail($"unknown animal training {trainableDefName}");
+            if (pawn.training == null) return CommandResult.Fail($"{pawn.LabelShort} cannot be trained");
+            if (enable && !pawn.training.CanBeTrained(training))
+                return CommandResult.Fail($"{pawn.LabelShort} cannot learn {training.label}");
+            pawn.training.SetWantedRecursive(training, enable);
+            return CommandResult.Ok(enable
+                ? $"{pawn.LabelShort} will now be trained in {training.label}."
+                : $"{pawn.LabelShort} will no longer be trained in {training.label}.");
+        }
+
+        public CommandResult SetAnimalArea(int pawnId, string areaLabel)
+        {
+            Pawn pawn = FindColonyAnimal(pawnId);
+            if (pawn == null) return CommandResult.Fail("colony animal not found");
+            if (pawn.playerSettings == null) return CommandResult.Fail($"{pawn.LabelShort} has no area settings");
+            string label = (areaLabel ?? string.Empty).Trim();
+            if (label.Length == 0)
+            {
+                pawn.playerSettings.AreaRestrictionInPawnCurrentMap = null;
+                return CommandResult.Ok($"{pawn.LabelShort}'s allowed area is now unrestricted.");
+            }
+            Area area = Map.areaManager.AllAreas.FirstOrDefault(a => string.Equals(a.Label, label, StringComparison.OrdinalIgnoreCase));
+            if (area == null) return CommandResult.Fail($"unknown animal area {label}");
+            pawn.playerSettings.AreaRestrictionInPawnCurrentMap = area;
+            return CommandResult.Ok($"{pawn.LabelShort}'s allowed area is now {area.Label}.");
+        }
+
+        private static Pawn FindColonyAnimal(int id)
+        {
+            return Map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id && p.RaceProps.Animal && p.Faction == Faction.OfPlayer);
         }
 
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)

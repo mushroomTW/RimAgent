@@ -87,6 +87,24 @@ namespace RimAgent.Tests
             new DefInfo("Execution", "execution")
         };
 
+        public List<AnimalInfo> Animals { get; } = new List<AnimalInfo>();
+
+        public IReadOnlyList<DefInfo> AnimalTraining { get; set; } = new[]
+        {
+            new DefInfo("Obedience", "obedience"), new DefInfo("Release", "release"),
+            new DefInfo("Rescue", "rescue"), new DefInfo("Haul", "haul")
+        };
+
+        public IReadOnlyList<DefInfo> AnimalAreas { get; set; } = new[]
+        {
+            new DefInfo("Barn", "Barn"), new DefInfo("Pasture", "Pasture")
+        };
+
+        /// <summary>已標記馴養的動物 id（正式端讀 designation）。</summary>
+        public HashSet<int> TameMarked { get; } = new HashSet<int>();
+        /// <summary>開啟中的訓練，key 為 pawnId:defName（正式端讀 training tracker）。</summary>
+        public HashSet<string> TrainingOn { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         public static ColonistInfo MakeColonist(int id, string first, string nick, string last, int x = 10, int z = 10)
         {
             var workTypes = new[] { "Firefighter", "Patient", "Doctor", "Cooking", "Hunting", "Construction", "Growing", "Mining", "PlantCutting", "Hauling", "Cleaning", "Research" };
@@ -123,6 +141,7 @@ namespace RimAgent.Tests
         public ColonyOverview GetOverview() => Overview;
         public IReadOnlyList<ColonistInfo> GetColonists() => Colonists;
         public IReadOnlyList<PrisonerInfo> GetPrisoners() => Prisoners;
+        public IReadOnlyList<AnimalInfo> GetAnimals() => Animals;
         public List<ColonistHealthInfo> Health { get; } = new List<ColonistHealthInfo>();
         public IReadOnlyList<ColonistHealthInfo> GetHealth() => Health;
         public ResourceSnapshot GetResources() => Resources;
@@ -321,6 +340,45 @@ namespace RimAgent.Tests
             if (pawn == null) return CommandResult.Fail("prisoner not found");
             Prisoners.Remove(pawn);
             return CommandResult.Ok($"{pawn.Name} was released and left the colony.");
+        }
+
+        public CommandResult TameAnimal(int pawnId)
+        {
+            Calls.Add($"TameAnimal({pawnId})");
+            AnimalInfo animal = Animals.FirstOrDefault(a => a.Id == pawnId);
+            if (animal == null) return CommandResult.Fail("animal not found");
+            if (!animal.Wild) return CommandResult.Fail($"{animal.Name} is already tame");
+            if (!TameMarked.Add(pawnId)) return CommandResult.Fail($"{animal.Name} is already marked for taming");
+            return CommandResult.Ok($"Marked {animal.Name} for taming. A handler will attempt it when available.");
+        }
+
+        public CommandResult SetAnimalTraining(int pawnId, string trainableDefName, bool enable)
+        {
+            Calls.Add($"SetAnimalTraining({pawnId},{trainableDefName},{enable})");
+            AnimalInfo animal = Animals.FirstOrDefault(a => a.Id == pawnId);
+            if (animal == null) return CommandResult.Fail("animal not found");
+            if (animal.Wild) return CommandResult.Fail($"{animal.Name} is wild; tame it first");
+            DefInfo training = AnimalTraining.FirstOrDefault(d => string.Equals(d.DefName, trainableDefName, StringComparison.OrdinalIgnoreCase));
+            if (training == null) return CommandResult.Fail($"unknown animal training {trainableDefName}");
+            string key = $"{pawnId}:{training.DefName}";
+            if (enable) TrainingOn.Add(key);
+            else TrainingOn.Remove(key);
+            return CommandResult.Ok(enable
+                ? $"{animal.Name} will now be trained in {training.Label}."
+                : $"{animal.Name} will no longer be trained in {training.Label}.");
+        }
+
+        public CommandResult SetAnimalArea(int pawnId, string areaLabel)
+        {
+            Calls.Add($"SetAnimalArea({pawnId},{areaLabel})");
+            AnimalInfo animal = Animals.FirstOrDefault(a => a.Id == pawnId);
+            if (animal == null) return CommandResult.Fail("animal not found");
+            if (animal.Wild) return CommandResult.Fail($"{animal.Name} is wild; tame it first");
+            string label = areaLabel ?? string.Empty;
+            if (label.Length > 0 && !AnimalAreas.Any(d => string.Equals(d.Label, label, StringComparison.OrdinalIgnoreCase)))
+                return CommandResult.Fail($"unknown animal area {label}");
+            animal.Area = label;
+            return CommandResult.Ok($"{animal.Name}'s allowed area is now {(label.Length > 0 ? label : "unrestricted")}.");
         }
 
         /// <summary>
