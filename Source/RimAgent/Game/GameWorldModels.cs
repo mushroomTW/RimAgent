@@ -132,6 +132,17 @@ namespace RimAgent.Game
         public string Heading { get; set; } = string.Empty;
     }
 
+    /// <summary>地圖上的一個區域（儲藏區、種植區等）。</summary>
+    public sealed class ZoneInfo
+    {
+        /// <summary>ZoneManager 配發的編號（查詢工具回傳的不透明編號，指名區域用它）。</summary>
+        public int Id { get; set; }
+        public string Label { get; set; } = string.Empty;
+        /// <summary>Stockpile / Growing 等。</summary>
+        public string Kind { get; set; } = string.Empty;
+        public int CellCount { get; set; }
+    }
+
     /// <summary>地圖上的一隻動物（殖民地或野生）。</summary>
     public sealed class AnimalInfo
     {

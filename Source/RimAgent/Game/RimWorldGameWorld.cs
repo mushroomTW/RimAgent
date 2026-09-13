@@ -28,6 +28,7 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _prisonerInteractionModes;
         private IReadOnlyList<DefInfo> _animalTraining;
         private IReadOnlyList<DefInfo> _animalAreas;
+        private IReadOnlyList<DefInfo> _storageFilterables;
 
         private static Map Map => Find.CurrentMap;
 
@@ -507,6 +508,112 @@ namespace RimAgent.Game
         private static Pawn FindColonyAnimal(int id)
         {
             return Map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id && p.RaceProps.Animal && p.Faction == Faction.OfPlayer);
+        }
+
+        public IReadOnlyList<ZoneInfo> GetZones()
+        {
+            return Map.zoneManager.AllZones.Select(ToZone).ToList();
+        }
+
+        private static ZoneInfo ToZone(Zone zone)
+        {
+            return new ZoneInfo
+            {
+                Id = zone.ID,
+                Label = zone.label,
+                Kind = zone is Zone_Stockpile ? "Stockpile" : zone is Zone_Growing ? "Growing" : zone.GetType().Name,
+                CellCount = zone.CellCount
+            };
+        }
+
+        public IReadOnlyList<DefInfo> StorageFilterables =>
+            _storageFilterables ?? (_storageFilterables = DefDatabase<ThingDef>.AllDefsListForReading
+                .Where(d => d.category == ThingCategory.Item)
+                .Select(d => new DefInfo(d.defName, d.label))
+                .ToList());
+
+        public CommandResult AddZone(string kind, CellRectSpec rect, string plantDefName)
+        {
+            Map map = Map;
+            bool stockpile = string.Equals(kind, "Stockpile", StringComparison.OrdinalIgnoreCase);
+            bool growing = string.Equals(kind, "Growing", StringComparison.OrdinalIgnoreCase);
+            if (!stockpile && !growing) return CommandResult.Fail($"unknown zone kind {kind}. Use stockpile or growing.");
+            ThingDef plant = null;
+            if (growing && !string.IsNullOrEmpty(plantDefName))
+            {
+                plant = DefDatabase<ThingDef>.GetNamedSilentFail(plantDefName);
+                if (plant == null || plant.category != ThingCategory.Plant || plant.plant == null)
+                    return CommandResult.Fail($"{plantDefName} is not a growable plant");
+            }
+            var cells = new List<IntVec3>();
+            for (int x = rect.MinX; x <= rect.MaxX; x++)
+            {
+                for (int z = rect.MinZ; z <= rect.MaxZ; z++)
+                {
+                    var cell = new IntVec3(x, 0, z);
+                    if (!cell.InBounds(map)) return CommandResult.Fail($"cell ({x},{z}) is outside the map");
+                    Zone existing = map.zoneManager.ZoneAt(cell);
+                    if (existing != null) return CommandResult.Fail($"cell ({x},{z}) already belongs to zone \"{existing.label}\"");
+                    cells.Add(cell);
+                }
+            }
+            Zone zone;
+            if (stockpile)
+            {
+                zone = new Zone_Stockpile(StorageSettingsPreset.DefaultStockpile, map.zoneManager);
+            }
+            else
+            {
+                var growingZone = new Zone_Growing(map.zoneManager);
+                if (plant != null) growingZone.SetPlantDefToGrow(plant);
+                zone = growingZone;
+            }
+            map.zoneManager.RegisterZone(zone);
+            foreach (IntVec3 cell in cells) zone.AddCell(cell);
+            return CommandResult.Ok($"Added {zone.label} [{zone.ID}] covering {cells.Count} cells.");
+        }
+
+        public CommandResult DeleteZone(int zoneId)
+        {
+            Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
+            if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
+            string label = zone.label;
+            zone.Delete();
+            return CommandResult.Ok($"Deleted zone [{zoneId}] {label}. Stored items stay on the ground.");
+        }
+
+        public CommandResult SetZoneFilter(int zoneId, IReadOnlyList<string> allowDefNames, IReadOnlyList<string> disallowDefNames)
+        {
+            Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
+            if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
+            var stockpile = zone as Zone_Stockpile;
+            if (stockpile == null) return CommandResult.Fail($"{zone.label} is not a stockpile and has no storage filter");
+            List<string> allows = (allowDefNames ?? Array.Empty<string>()).ToList();
+            List<string> disallows = (disallowDefNames ?? Array.Empty<string>()).ToList();
+            if (allows.Count == 0 && disallows.Count == 0) return CommandResult.Fail("nothing to allow or disallow");
+            var applied = new List<ThingDef>();
+            var removed = new List<ThingDef>();
+            foreach (string defName in allows.Concat(disallows))
+            {
+                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(defName);
+                if (def == null) return CommandResult.Fail($"unknown stored item {defName}");
+            }
+            foreach (string defName in allows)
+            {
+                ThingDef def = DefDatabase<ThingDef>.GetNamed(defName);
+                stockpile.settings.filter.SetAllow(def, true);
+                applied.Add(def);
+            }
+            foreach (string defName in disallows)
+            {
+                ThingDef def = DefDatabase<ThingDef>.GetNamed(defName);
+                stockpile.settings.filter.SetAllow(def, false);
+                removed.Add(def);
+            }
+            var parts = new List<string>();
+            if (applied.Count > 0) parts.Add("allows " + string.Join(", ", applied.Select(d => d.label).ToArray()));
+            if (removed.Count > 0) parts.Add("disallows " + string.Join(", ", removed.Select(d => d.label).ToArray()));
+            return CommandResult.Ok($"Zone [{zoneId}] {zone.label} now {string.Join("; ", parts.ToArray())}.");
         }
 
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)

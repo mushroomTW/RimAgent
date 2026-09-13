@@ -246,10 +246,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void RegistryExposesAllTwentyNineTools()
+        public void RegistryExposesAllThirtyThreeTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(29));
+            Assert.That(registry.All.Count, Is.EqualTo(33));
             Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(6));
             Assert.That(registry.Select(new ToolPermissions { Observe = false, Work = false, Build = false, Combat = false }), Is.Empty);
         }

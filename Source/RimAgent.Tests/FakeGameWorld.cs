@@ -105,6 +105,18 @@ namespace RimAgent.Tests
         /// <summary>開啟中的訓練，key 為 pawnId:defName（正式端讀 training tracker）。</summary>
         public HashSet<string> TrainingOn { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        public List<ZoneInfo> Zones { get; } = new List<ZoneInfo>();
+
+        public IReadOnlyList<DefInfo> StorageFilterables { get; set; } = new[]
+        {
+            new DefInfo("Steel", "steel"), new DefInfo("WoodLog", "wood"), new DefInfo("Corn", "corn"),
+            new DefInfo("Rice", "rice"), new DefInfo("MedicineUltratech", "ultratech medicine"),
+            new DefInfo("ComponentSpacer", "spacer component")
+        };
+
+        /// <summary>各儲藏區明確禁收的 defName（正式端讀 ThingFilter）。</summary>
+        public Dictionary<int, HashSet<string>> ZoneDisallowed { get; } = new Dictionary<int, HashSet<string>>();
+
         public static ColonistInfo MakeColonist(int id, string first, string nick, string last, int x = 10, int z = 10)
         {
             var workTypes = new[] { "Firefighter", "Patient", "Doctor", "Cooking", "Hunting", "Construction", "Growing", "Mining", "PlantCutting", "Hauling", "Cleaning", "Research" };
@@ -142,6 +154,7 @@ namespace RimAgent.Tests
         public IReadOnlyList<ColonistInfo> GetColonists() => Colonists;
         public IReadOnlyList<PrisonerInfo> GetPrisoners() => Prisoners;
         public IReadOnlyList<AnimalInfo> GetAnimals() => Animals;
+        public IReadOnlyList<ZoneInfo> GetZones() => Zones;
         public List<ColonistHealthInfo> Health { get; } = new List<ColonistHealthInfo>();
         public IReadOnlyList<ColonistHealthInfo> GetHealth() => Health;
         public ResourceSnapshot GetResources() => Resources;
@@ -379,6 +392,62 @@ namespace RimAgent.Tests
                 return CommandResult.Fail($"unknown animal area {label}");
             animal.Area = label;
             return CommandResult.Ok($"{animal.Name}'s allowed area is now {(label.Length > 0 ? label : "unrestricted")}.");
+        }
+
+        public CommandResult AddZone(string kind, CellRectSpec rect, string plantDefName)
+        {
+            Calls.Add($"AddZone({kind},{rect})");
+            bool stockpile = string.Equals(kind, "Stockpile", StringComparison.OrdinalIgnoreCase);
+            bool growing = string.Equals(kind, "Growing", StringComparison.OrdinalIgnoreCase);
+            if (!stockpile && !growing) return CommandResult.Fail($"unknown zone kind {kind}. Use stockpile or growing.");
+            int id = Zones.Count == 0 ? 1 : Zones.Max(z => z.Id) + 1;
+            string label = stockpile ? $"Stockpile {id}" : $"Growing zone {id}";
+            Zones.Add(new ZoneInfo { Id = id, Label = label, Kind = stockpile ? "Stockpile" : "Growing", CellCount = rect.CellCount });
+            return CommandResult.Ok($"Added {label.ToLowerInvariant()} [{id}] covering {rect.CellCount} cells.");
+        }
+
+        public CommandResult DeleteZone(int zoneId)
+        {
+            Calls.Add($"DeleteZone({zoneId})");
+            ZoneInfo zone = Zones.FirstOrDefault(z => z.Id == zoneId);
+            if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
+            Zones.Remove(zone);
+            ZoneDisallowed.Remove(zoneId);
+            return CommandResult.Ok($"Deleted zone [{zoneId}] {zone.Label}. Stored items stay on the ground.");
+        }
+
+        public CommandResult SetZoneFilter(int zoneId, IReadOnlyList<string> allowDefNames, IReadOnlyList<string> disallowDefNames)
+        {
+            Calls.Add($"SetZoneFilter({zoneId})");
+            ZoneInfo zone = Zones.FirstOrDefault(z => z.Id == zoneId);
+            if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
+            if (!string.Equals(zone.Kind, "Stockpile", StringComparison.OrdinalIgnoreCase))
+                return CommandResult.Fail($"{zone.Label} is a growing zone and has no storage filter");
+            var allows = (allowDefNames ?? Array.Empty<string>()).ToList();
+            var disallows = (disallowDefNames ?? Array.Empty<string>()).ToList();
+            if (allows.Count == 0 && disallows.Count == 0) return CommandResult.Fail("nothing to allow or disallow");
+            foreach (string defName in allows.Concat(disallows))
+            {
+                if (!StorageFilterables.Any(d => string.Equals(d.DefName, defName, StringComparison.OrdinalIgnoreCase)))
+                    return CommandResult.Fail($"unknown stored item {defName}");
+            }
+            if (!ZoneDisallowed.TryGetValue(zoneId, out HashSet<string> banned))
+            {
+                banned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                ZoneDisallowed[zoneId] = banned;
+            }
+            foreach (string defName in allows) banned.Remove(defName);
+            foreach (string defName in disallows) banned.Add(defName);
+            var parts = new List<string>();
+            if (allows.Count > 0) parts.Add("allows " + string.Join(", ", allows.Select(ItemLabel).ToArray()));
+            if (disallows.Count > 0) parts.Add("disallows " + string.Join(", ", disallows.Select(ItemLabel).ToArray()));
+            return CommandResult.Ok($"Zone [{zoneId}] {zone.Label} now {string.Join("; ", parts.ToArray())}.");
+        }
+
+        private string ItemLabel(string defName)
+        {
+            DefInfo def = StorageFilterables.FirstOrDefault(d => string.Equals(d.DefName, defName, StringComparison.OrdinalIgnoreCase));
+            return def != null ? def.Label : defName;
         }
 
         /// <summary>

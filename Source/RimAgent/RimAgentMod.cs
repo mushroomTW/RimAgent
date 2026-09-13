@@ -33,6 +33,7 @@ namespace RimAgent
             listing.CheckboxLabeled("RimAgent.Settings.Medical".Translate(), ref Settings.allowMedical, "RimAgent.Settings.MedicalTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.Prisoner".Translate(), ref Settings.allowPrisoner, "RimAgent.Settings.PrisonerTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.Animal".Translate(), ref Settings.allowAnimal, "RimAgent.Settings.AnimalTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.Zone".Translate(), ref Settings.allowZone, "RimAgent.Settings.ZoneTip".Translate());
 
             listing.Gap();
             listing.Label("RimAgent.Settings.MaxSteps".Translate(Settings.maxSteps), -1f, "RimAgent.Settings.MaxStepsTip".Translate());

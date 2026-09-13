@@ -15,6 +15,7 @@ namespace RimAgent.Game
         IReadOnlyList<PrisonerInfo> GetPrisoners();
         /// <summary>地圖上的動物（殖民地與野生，見 AnimalInfo.Wild）。</summary>
         IReadOnlyList<AnimalInfo> GetAnimals();
+        IReadOnlyList<ZoneInfo> GetZones();
         IReadOnlyList<ColonistHealthInfo> GetHealth();
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
@@ -41,6 +42,8 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> AnimalTraining { get; }
         /// <summary>動物可指派的區域目錄（另有無限制，不在目錄內）。</summary>
         IReadOnlyList<DefInfo> AnimalAreas { get; }
+        /// <summary>儲藏篩選可開關的品項目錄（物品類 ThingDef）。</summary>
+        IReadOnlyList<DefInfo> StorageFilterables { get; }
         /// <summary>可排程的手術目錄（worker 為手術的 RecipeDef）。</summary>
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
 
@@ -70,6 +73,12 @@ namespace RimAgent.Game
         CommandResult SetAnimalTraining(int pawnId, string trainableDefName, bool enable);
         /// <summary>指派動物活動區域；空字串代表無限制。</summary>
         CommandResult SetAnimalArea(int pawnId, string areaLabel);
+        /// <summary>新增儲藏／種植區：矩形含邊界，任一格越界或已有區域即整筆不做。</summary>
+        CommandResult AddZone(string kind, CellRectSpec rect, string plantDefName);
+        /// <summary>刪除區域。</summary>
+        CommandResult DeleteZone(int zoneId);
+        /// <summary>開關儲藏區允收品項；兩個清單都空即報錯。</summary>
+        CommandResult SetZoneFilter(int zoneId, IReadOnlyList<string> allowDefNames, IReadOnlyList<string> disallowDefNames);
         /// <summary>排一台手術：驗證不過不掛單，成功時 Message 為排程明細。</summary>
         CommandResult ScheduleSurgery(SurgeryRequest request);
     }

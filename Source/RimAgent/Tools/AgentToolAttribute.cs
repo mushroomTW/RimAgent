@@ -11,7 +11,8 @@ namespace RimAgent.Tools
         Trade,
         Medical,
         Prisoner,
-        Animal
+        Animal,
+        Zone
     }
 
     /// <summary>
