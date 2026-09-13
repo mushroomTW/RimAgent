@@ -28,6 +28,7 @@ namespace RimAgent.Tests
             return new TraderInfo
             {
                 Kind = TraderInfo.OrbitalKind,
+                Id = "PassingShip_1",
                 Name = name,
                 Faction = "Outlanders",
                 Silver = 1200,
@@ -44,6 +45,7 @@ namespace RimAgent.Tests
             return new TraderInfo
             {
                 Kind = TraderInfo.VisitorKind,
+                Id = "Thing_2",
                 Name = name,
                 Faction = "Tribe",
                 Silver = 350,
@@ -53,6 +55,46 @@ namespace RimAgent.Tests
                     new TradeGoodsInfo { DefName = "HerbalMedicine", Label = "herbal medicine", Count = 20, MarketValue = 8 }
                 }
             };
+        }
+
+        private void SeedColonyStock()
+        {
+            _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
+            _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
+            _world.Resources = new ResourceSnapshot
+            {
+                Items = new[]
+                {
+                    new ResourceInfo { DefName = "Silver", Label = "silver", Count = 5000, Category = "Resources" },
+                    new ResourceInfo { DefName = "Steel", Label = "steel", Count = 300, Category = "Resources" }
+                }
+            };
+            _world.Prices["ComponentSpacer"] = 55;
+            _world.Prices["MedicineUltratech"] = 38;
+            _world.Prices["Steel"] = 2;
+            _world.Prices["HerbalMedicine"] = 8;
+        }
+
+        private static void SetSocial(ColonistInfo colonist, int level)
+        {
+            var skills = colonist.Skills.ToList();
+            skills.Add(new SkillInfo { DefName = "Social", Label = "social", Level = level });
+            colonist.Skills = skills;
+        }
+
+        private static int ColonySilver(FakeGameWorld world)
+        {
+            return world.Resources.Items.Where(r => r.DefName == "Silver").Sum(r => r.Count);
+        }
+
+        private static int ColonyStock(FakeGameWorld world, string defName)
+        {
+            return world.Resources.Items.Where(r => r.DefName == defName).Sum(r => r.Count);
+        }
+
+        private static int TraderStock(TraderInfo trader, string defName)
+        {
+            return trader.Goods.Where(g => g.DefName == defName).Sum(g => g.Count);
         }
 
         [Test]
@@ -209,6 +251,166 @@ namespace RimAgent.Tests
             Assert.That(tool.ToolName, Is.EqualTo("list_visitor_caravans"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
             Assert.That(tool.Result, Does.Contain("Rook"));
+        }
+
+        [Test]
+        public void TraderListShowsIdsForLaterDeals()
+        {
+            _world.Traders.Add(MakeOrbitalShip());
+            _world.Traders.Add(MakeVisitorCaravan());
+
+            Assert.That(_tools.ListOrbitalTraders(), Does.Contain("[PassingShip_1]"));
+            Assert.That(_tools.ListVisitorCaravans(), Does.Contain("[Thing_2]"));
+        }
+
+        [Test]
+        public void BuySucceedsAndMovesItemsAndSilver()
+        {
+            SeedColonyStock();
+            SetSocial(_world.Colonists[0], 3);
+            SetSocial(_world.Colonists[1], 10);
+            TraderInfo ship = MakeOrbitalShip();
+            _world.Traders.Add(ship);
+
+            string text = _tools.ExecuteTrade("PassingShip_1", "spacer component x4", string.Empty, string.Empty);
+
+            Assert.That(text, Does.Contain("bought spacer component (ComponentSpacer) x4").And.Contain("Starweaver").And.Contain("Bob"));
+            Assert.That(TraderStock(ship, "ComponentSpacer"), Is.EqualTo(4));
+            Assert.That(ship.Silver, Is.EqualTo(1200 + 4 * 55));
+            Assert.That(ColonySilver(_world), Is.EqualTo(5000 - 4 * 55));
+            Assert.That(ColonyStock(_world, "ComponentSpacer"), Is.EqualTo(4));
+        }
+
+        [Test]
+        public void SellSucceedsAndMovesItemsAndSilver()
+        {
+            SeedColonyStock();
+            TraderInfo ship = MakeOrbitalShip();
+            _world.Traders.Add(ship);
+
+            string text = _tools.ExecuteTrade("PassingShip_1", string.Empty, "steel x100", "Ali");
+
+            Assert.That(text, Does.Contain("sold steel (Steel) x100").And.Contain("Ali"));
+            Assert.That(ColonyStock(_world, "Steel"), Is.EqualTo(200));
+            Assert.That(ColonySilver(_world), Is.EqualTo(5000 + 100 * 2));
+            Assert.That(ship.Silver, Is.EqualTo(1200 - 100 * 2));
+            Assert.That(TraderStock(ship, "Steel"), Is.EqualTo(100));
+        }
+
+        [Test]
+        public void BuyAndSellSettleInOneDeal()
+        {
+            SeedColonyStock();
+            TraderInfo caravan = MakeVisitorCaravan();
+            _world.Traders.Add(caravan);
+
+            string text = _tools.ExecuteTrade("Thing_2", "herbal medicine x10", "steel x50", string.Empty);
+
+            Assert.That(text, Does.Contain("bought herbal medicine (HerbalMedicine) x10").And.Contain("sold steel (Steel) x50"));
+            Assert.That(text, Does.Contain("Colony silver 5000 -> 5020"));
+            Assert.That(ColonySilver(_world), Is.EqualTo(5020));
+            Assert.That(caravan.Silver, Is.EqualTo(350 - 20));
+        }
+
+        [Test]
+        public void BuyMoreThanStockFailsWithoutPartialTrade()
+        {
+            SeedColonyStock();
+            TraderInfo ship = MakeOrbitalShip();
+            _world.Traders.Add(ship);
+
+            string text = _tools.ExecuteTrade("PassingShip_1", "spacer component x20", string.Empty, string.Empty);
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("only has 8"));
+            Assert.That(TraderStock(ship, "ComponentSpacer"), Is.EqualTo(8));
+            Assert.That(ship.Silver, Is.EqualTo(1200));
+            Assert.That(ColonySilver(_world), Is.EqualTo(5000));
+        }
+
+        [Test]
+        public void ColonySilverInsufficientFailsWithoutPartialTrade()
+        {
+            SeedColonyStock();
+            _world.Resources.Items.First(r => r.DefName == "Silver").Count = 100;
+            TraderInfo ship = MakeOrbitalShip();
+            _world.Traders.Add(ship);
+
+            string text = _tools.ExecuteTrade("PassingShip_1", "ultratech medicine x12", string.Empty, string.Empty);
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("cannot afford"));
+            Assert.That(TraderStock(ship, "MedicineUltratech"), Is.EqualTo(12));
+            Assert.That(ColonySilver(_world), Is.EqualTo(100));
+        }
+
+        [Test]
+        public void SellMoreThanStockFailsWithoutPartialTrade()
+        {
+            SeedColonyStock();
+            TraderInfo ship = MakeOrbitalShip();
+            _world.Traders.Add(ship);
+
+            string text = _tools.ExecuteTrade("PassingShip_1", string.Empty, "steel x500", string.Empty);
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("only has 300"));
+            Assert.That(ColonyStock(_world, "Steel"), Is.EqualTo(300));
+            Assert.That(ship.Silver, Is.EqualTo(1200));
+        }
+
+        [Test]
+        public void TraderSilverInsufficientFailsWithoutPartialTrade()
+        {
+            SeedColonyStock();
+            TraderInfo caravan = MakeVisitorCaravan();
+            caravan.Silver = 50;
+            _world.Traders.Add(caravan);
+
+            string text = _tools.ExecuteTrade("Thing_2", string.Empty, "steel x100", string.Empty);
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("cannot afford"));
+            Assert.That(ColonyStock(_world, "Steel"), Is.EqualTo(300));
+            Assert.That(caravan.Silver, Is.EqualTo(50));
+        }
+
+        [Test]
+        public void UnknownTraderIsRejected()
+        {
+            SeedColonyStock();
+            _world.Traders.Add(MakeOrbitalShip());
+
+            string text = _tools.ExecuteTrade("PassingShip_9", "spacer component x1", string.Empty, string.Empty);
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("unknown trader"));
+        }
+
+        [Test]
+        public void BadItemListsAreRejected()
+        {
+            SeedColonyStock();
+            _world.Traders.Add(MakeOrbitalShip());
+
+            Assert.That(_tools.ExecuteTrade("PassingShip_1", "lots of steel", string.Empty, string.Empty), Does.StartWith("Error:"));
+            Assert.That(_tools.ExecuteTrade("PassingShip_1", string.Empty, string.Empty, string.Empty), Does.StartWith("Error:").And.Contain("nothing to buy or sell"));
+            Assert.That(_tools.ExecuteTrade("PassingShip_1", "silver x10", string.Empty, string.Empty), Does.StartWith("Error:").And.Contain("silver"));
+            Assert.That(_tools.ExecuteTrade("PassingShip_1", "unicorn horn x1", string.Empty, string.Empty), Does.StartWith("Error:"));
+        }
+
+        [Test]
+        public async Task ExecuteTradeIsLoggedWithReceipt()
+        {
+            SeedColonyStock();
+            _world.Traders.Add(MakeOrbitalShip());
+            var client = new ScriptedChatClient();
+            client.CallTool("execute_trade", new { trader = "PassingShip_1", buys = "spacer component x2", sells = "", negotiator = "" })
+                  .Reply("Bought 2 spacer components.");
+            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Trade = true }, 8);
+
+            string reply = await session.SendAsync("買 2 個太空元件");
+
+            Assert.That(reply, Is.EqualTo("Bought 2 spacer components."));
+            TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+            Assert.That(tool.ToolName, Is.EqualTo("execute_trade"));
+            Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
+            Assert.That(tool.Result, Does.Contain("bought spacer component (ComponentSpacer) x2").And.Contain("Colony silver"));
         }
     }
 }

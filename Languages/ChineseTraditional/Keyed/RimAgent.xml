@@ -34,8 +34,8 @@
   <RimAgent.Settings.BuildTip>標記開採、砍伐、收成、拆除、搬運，以及放置藍圖。預設關閉。</RimAgent.Settings.BuildTip>
   <RimAgent.Settings.Combat>戰鬥 — 徵召、移動與攻擊指令</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>徵召殖民者並下移動或攻擊指令。模型需要數秒才會回應，只適合佈署與撤退，不適合即時操作。預設關閉。</RimAgent.Settings.CombatTip>
-  <RimAgent.Settings.Trade>交易 — 查看軌道商人庫存</RimAgent.Settings.Trade>
-  <RimAgent.Settings.TradeTip>列出軌道商人與來訪商隊在賣什麼與其銀兩存量。目前唯讀。預設關閉。</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.Trade>交易 — 查庫存、買入賣出</RimAgent.Settings.Trade>
+  <RimAgent.Settings.TradeTip>列出軌道商人與來訪商隊在賣什麼，並以遊戲交易價格一次結清買賣。預設關閉。</RimAgent.Settings.TradeTip>
   <RimAgent.Settings.MaxSteps>每句指令最多呼叫工具次數：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控迴圈燒掉 API 額度。對之後載入的遊戲生效。</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.FrameworkNote>供應商、API 金鑰、模型與備援鏈都在 RimLLM Framework 的設定裡調整。</RimAgent.Settings.FrameworkNote>

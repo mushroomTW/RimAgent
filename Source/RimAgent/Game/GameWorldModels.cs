@@ -102,6 +102,26 @@ namespace RimAgent.Game
         public float MarketValue { get; set; }
     }
 
+    /// <summary>買賣各一行：已解析到 defName 的品項與數量。</summary>
+    public sealed class TradeLine
+    {
+        public string DefName { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    /// <summary>一次結清的交易請求：買賣明細一次交割，驗證不過則整筆不做。</summary>
+    public sealed class TradeRequest
+    {
+        /// <summary>見 <see cref="TraderInfo.Id"/>。</summary>
+        public string TraderId { get; set; } = string.Empty;
+        /// <summary>交涉者 pawnId（工具層已解析；未指名時填社交技能最高者）。</summary>
+        public int NegotiatorPawnId { get; set; }
+        /// <summary>向商人買入的品項。</summary>
+        public IReadOnlyList<TradeLine> Buys { get; set; } = Array.Empty<TradeLine>();
+        /// <summary>賣給商人的品項。</summary>
+        public IReadOnlyList<TradeLine> Sells { get; set; } = Array.Empty<TradeLine>();
+    }
+
     /// <summary>
     /// 一位可交易的商人。Kind 區分「軌道商人」與「來訪商隊」，兩者絕不互相頂替：
     /// 查軌道只看 Orbital，查來訪只看 Visitor。
@@ -115,7 +135,9 @@ namespace RimAgent.Game
 
         /// <summary>見 <see cref="OrbitalKind"/>／<see cref="VisitorKind"/>。</summary>
         public string Kind { get; set; } = OrbitalKind;
-        /// <summary>顯示用全名，後續交易指令以此指名商人。</summary>
+        /// <summary>查詢工具回傳的不透明編號，交易指令以此指名商人（存檔間穩定）。</summary>
+        public string Id { get; set; } = string.Empty;
+        /// <summary>顯示用全名，僅供閱讀，指名商人請用 <see cref="Id"/>。</summary>
         public string Name { get; set; } = string.Empty;
         public string Faction { get; set; } = string.Empty;
         /// <summary>商人持有的銀兩（買入時殖民地能拿到的上限參考）。</summary>
