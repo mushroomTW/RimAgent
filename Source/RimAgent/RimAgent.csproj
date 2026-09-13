@@ -64,21 +64,24 @@
 
   <!--
     Agent Framework 的 DLL 必須由 RimAgent 出貨（框架的 Assemblies/ 沒有 Agents.AI*、
-    Compliance.Abstractions、Tokenizers、VectorData.Abstractions、FileSystemGlobbing，
-   也沒有 Bcl.Memory）。
+    VectorData.Abstractions、FileSystemGlobbing，也沒有 Bcl.Memory）。
     CopyLocalLockFileAssemblies 保持 false（見上方註解），改以固定白名單從 NuGet 快取複製：
     白名單來自 Microsoft.Agents.AI 1.21.0 的 nuspec 相依清單；框架已出貨者
     （Text.Json、Channels、DiagnosticSource、DI/Logging.Abstractions、Bcl.AsyncInterfaces、STTE）
     一律不複製，避免第二份組件。net472/net462 優先於 netstandard2.0（與 NuGet 解析一致）。
     Release 寫入 Assemblies/（出貨），Debug 寫入 bin/（測試與本機建置用）。
+    刻意不出的兩顆（實機探針結論，見 docs/AgentFramework-Migration.md §7）：
+    Compliance.Abstractions（型別繼承 ObjectPool 8.0.0.0，未出貨）與
+    ML.Tokenizers（型別實作 Protobuf 3.30.2.0 介面，未出貨）在 Unity Mono 下
+    Assembly.GetTypes() 直接爆炸；而 AF 內用到它們的只有 opt-in 的
+    ChatHistoryMemoryProvider、TextSearchProvider、Compaction，我方路徑
+    （UseProvidedChatClientAsIs + 預設 InMemory history）永遠碰不到，CLR 不會載入。
   -->
   <Target Name="CopyAgentFrameworkAssemblies" AfterTargets="Build">
     <ItemGroup>
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai\1.21.0\lib\net472\Microsoft.Agents.AI.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai.abstractions\1.21.0\lib\net472\Microsoft.Agents.AI.Abstractions.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.compliance.abstractions\10.10.0\lib\netstandard2.0\Microsoft.Extensions.Compliance.Abstractions.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.vectordata.abstractions\10.10.0\lib\net462\Microsoft.Extensions.VectorData.Abstractions.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\netstandard2.0\Microsoft.ML.Tokenizers.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.filesystemglobbing\10.0.12\lib\net462\Microsoft.Extensions.FileSystemGlobbing.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.memory\10.0.12\lib\net462\Microsoft.Bcl.Memory.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.hashcode\6.0.0\lib\net462\Microsoft.Bcl.HashCode.dll" />
