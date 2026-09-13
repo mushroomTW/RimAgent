@@ -8,6 +8,9 @@
 # AI agent workspaces
 .claude/
 .gemini/
+docs/
+.scratch/
+AGENTS.md
 CLAUDE.md
 CONTEXT.md
 

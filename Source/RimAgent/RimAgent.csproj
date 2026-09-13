@@ -78,8 +78,13 @@
       沒有它連 Microsoft.Agents.AI.dll 自身的 GetTypes 都過不了。
     - 留：ObjectPool 8.0.31（組件版號 8.0.0.0，唯 netstandard 參考）。
       Compliance 內六個 Pooled*Policy 的基底，沒有它 Compliance 的 GetTypes 過不了。
-    - 不出：ML.Tokenizers。AF 裡只有 Compaction* 的方法簽名提到 Tokenizer，
-      無任何型別繼承它；我方路徑碰不到，CLR 永遠不會載入。
+    - 留：ML.Tokenizers 2.0.0（組件版號 1.0.0.0）＋ Google.Protobuf 3.30.2。
+      AF 的 CompactionMessageIndex 有 Tokenizer 型別的欄位，RimWorld 的 GetFields()
+      掃描會解析欄位型別，缺 DLL 就在啟動 log 留一組 AggregateException。
+      Tokenizers 參照 STJ 9.0.0.0 / Bcl.Memory 9.0.0.4 / System.Memory 4.0.2.0，
+      全比已出貨版本舊——Unity Mono 對「同名同 token、版本 ≥ 要求」放行
+      （框架的 Abstractions 參照 STJ 10.0.0.0、實際載入 10.0.0.12，實機運作即為證據），
+      真正缺的只有 Protobuf，其閉包（System.Memory 4.0.1.1、Unsafe 4.0.4.1）框架皆已出貨。
   -->
   <Target Name="CopyAgentFrameworkAssemblies" AfterTargets="Build">
     <ItemGroup>
@@ -91,6 +96,8 @@
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.filesystemglobbing\10.0.12\lib\net462\Microsoft.Extensions.FileSystemGlobbing.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.memory\10.0.12\lib\net462\Microsoft.Bcl.Memory.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.hashcode\6.0.0\lib\net462\Microsoft.Bcl.HashCode.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\netstandard2.0\Microsoft.ML.Tokenizers.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)google.protobuf\3.30.2\lib\net45\Google.Protobuf.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(AgentFrameworkAssemblies)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
