@@ -27,6 +27,21 @@ namespace RimAgent
         /// </summary>
         public bool requireConfirmation;
 
+        // 自主模式（排程器）：全局開關與配額在設定頁，玩家設的長期目標跟著存檔走。
+        public const int DefaultAutoIntervalHours = 6;
+        public const int MinAutoIntervalHours = 1;
+        public const int MaxAutoIntervalHours = 24;
+        public const int DefaultAutoBudget = 60;
+        public const int MinAutoBudget = 10;
+        public const int MaxAutoBudget = 300;
+
+        public bool allowAutonomous;
+        public int autonomousIntervalHours = DefaultAutoIntervalHours;
+        public int autonomousBudgetPerDay = DefaultAutoBudget;
+        public bool autoOnRaid = true;
+        public bool autoOnMentalBreak = true;
+        public bool autoOnFoodShortage = true;
+
         public override void ExposeData()
         {
             base.ExposeData();
@@ -42,6 +57,12 @@ namespace RimAgent
             Scribe_Values.Look(ref allowProduction, "allowProduction", false);
             Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
             Scribe_Values.Look(ref requireConfirmation, "requireConfirmation", false);
+            Scribe_Values.Look(ref allowAutonomous, "allowAutonomous", false);
+            Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);
+            Scribe_Values.Look(ref autonomousBudgetPerDay, "autonomousBudgetPerDay", DefaultAutoBudget);
+            Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);
+            Scribe_Values.Look(ref autoOnMentalBreak, "autoOnMentalBreak", true);
+            Scribe_Values.Look(ref autoOnFoodShortage, "autoOnFoodShortage", true);
         }
 
         public ToolPermissions ToPermissions()

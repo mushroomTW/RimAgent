@@ -54,6 +54,24 @@
   <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies immediately, even mid-game.</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.RequireConfirmation>Confirm — approve Work / Build / Combat first</RimAgent.Settings.RequireConfirmation>
   <RimAgent.Settings.RequireConfirmationTip>When on, Work, Build and Combat tools only preview what they would do. Press Confirm to execute them. Off by default.</RimAgent.Settings.RequireConfirmationTip>
+  <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
+  <RimAgent.Settings.Autonomous>Autonomy — scheduled and event-driven runs</RimAgent.Settings.Autonomous>
+  <RimAgent.Settings.AutonomousTip>When on, the agent starts its own instructions: routine inspections plus raids, mental breaks and food shortages. Every run is logged and bounded by the daily budget below. Off by default.</RimAgent.Settings.AutonomousTip>
+  <RimAgent.Settings.AutoInterval>Routine inspection every: {0} hours</RimAgent.Settings.AutoInterval>
+  <RimAgent.Settings.AutoBudget>Autonomous tool calls per day: {0}</RimAgent.Settings.AutoBudget>
+  <RimAgent.Settings.AutoOnRaid>React to raids</RimAgent.Settings.AutoOnRaid>
+  <RimAgent.Settings.AutoOnMentalBreak>React to colonists near mental break</RimAgent.Settings.AutoOnMentalBreak>
+  <RimAgent.Settings.AutoOnFoodShortage>React to food shortages</RimAgent.Settings.AutoOnFoodShortage>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>
+
+  <!-- Autonomy -->
+  <RimAgent.Auto.StatusOn>Autonomy on · {0}/{1} used today</RimAgent.Auto.StatusOn>
+  <RimAgent.Auto.StatusOff>Autonomy off (mod settings)</RimAgent.Auto.StatusOff>
+  <RimAgent.Auto.Goals>Goals</RimAgent.Auto.Goals>
+  <RimAgent.Goals.Title>Long-term goals — autonomous runs work toward these</RimAgent.Goals.Title>
+  <RimAgent.Goals.Empty>No goals yet. Add one below, e.g. "research electricity".</RimAgent.Goals.Empty>
+  <RimAgent.Goals.Add>Add</RimAgent.Goals.Add>
+  <RimAgent.Goals.Remove>Delete</RimAgent.Goals.Remove>
+  <RimAgent.Goals.Close>Close</RimAgent.Goals.Close>
 
 </LanguageData>

@@ -19,6 +19,7 @@ namespace RimAgent.UI
     {
         private const string InputControlName = "RimAgentInput";
         private const float BottomBarHeight = 32f;
+        private const float AutoStripHeight = 26f;
         private const float ButtonWidth = 80f;
         private const float EntryGap = 6f;
         private const int MaxResultChars = 600;
@@ -72,9 +73,31 @@ namespace RimAgent.UI
             }
 
             var bottom = new Rect(inRect.x, inRect.yMax - BottomBarHeight, inRect.width, BottomBarHeight);
-            var transcriptRect = new Rect(inRect.x, top, inRect.width, bottom.y - top - EntryGap);
+            var autoStrip = new Rect(inRect.x, bottom.y - AutoStripHeight - EntryGap, inRect.width, AutoStripHeight);
+            var transcriptRect = new Rect(inRect.x, top, inRect.width, autoStrip.y - top - EntryGap);
             DrawTranscript(transcriptRect, session);
+            DrawAutoStrip(autoStrip, component, session);
             DrawBottomBar(bottom, session);
+        }
+
+        /// <summary>自主模式狀態列：開關、今日用量、目標管理入口。</summary>
+        private void DrawAutoStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
+        {
+            const float GoalsButtonWidth = 64f;
+            var buttonRect = new Rect(rect.xMax - GoalsButtonWidth, rect.y, GoalsButtonWidth, rect.height);
+            var labelRect = new Rect(rect.x, rect.y, buttonRect.x - rect.x - 4f, rect.height);
+
+            GUI.color = ToolColor;
+            string status = component.AutonomousEnabled
+                ? "RimAgent.Auto.StatusOn".Translate(component.AutonomousToolsUsed, component.AutonomousBudget).ToString()
+                : "RimAgent.Auto.StatusOff".Translate().ToString();
+            Widgets.Label(labelRect, status);
+            GUI.color = Color.white;
+
+            if (Widgets.ButtonText(buttonRect, "RimAgent.Auto.Goals".Translate(), true, false, !session.IsBusy))
+            {
+                Find.WindowStack.Add(new Dialog_AutonomousGoals());
+            }
         }
 
         private void DrawTranscript(Rect outRect, ColonyAgentSession session)

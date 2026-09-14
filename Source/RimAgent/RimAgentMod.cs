@@ -44,6 +44,18 @@ namespace RimAgent
             listing.CheckboxLabeled("RimAgent.Settings.RequireConfirmation".Translate(), ref Settings.requireConfirmation, "RimAgent.Settings.RequireConfirmationTip".Translate());
 
             listing.Gap();
+            listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
+            listing.GapLine();
+            listing.CheckboxLabeled("RimAgent.Settings.Autonomous".Translate(), ref Settings.allowAutonomous, "RimAgent.Settings.AutonomousTip".Translate());
+            listing.Label("RimAgent.Settings.AutoInterval".Translate(Settings.autonomousIntervalHours));
+            Settings.autonomousIntervalHours = Mathf.RoundToInt(listing.Slider(Settings.autonomousIntervalHours, RimAgentSettings.MinAutoIntervalHours, RimAgentSettings.MaxAutoIntervalHours));
+            listing.Label("RimAgent.Settings.AutoBudget".Translate(Settings.autonomousBudgetPerDay));
+            Settings.autonomousBudgetPerDay = Mathf.RoundToInt(listing.Slider(Settings.autonomousBudgetPerDay, RimAgentSettings.MinAutoBudget, RimAgentSettings.MaxAutoBudget));
+            listing.CheckboxLabeled("RimAgent.Settings.AutoOnRaid".Translate(), ref Settings.autoOnRaid);
+            listing.CheckboxLabeled("RimAgent.Settings.AutoOnMentalBreak".Translate(), ref Settings.autoOnMentalBreak);
+            listing.CheckboxLabeled("RimAgent.Settings.AutoOnFoodShortage".Translate(), ref Settings.autoOnFoodShortage);
+
+            listing.Gap();
             listing.Label("RimAgent.Settings.FrameworkNote".Translate());
 
             listing.End();

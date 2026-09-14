@@ -28,6 +28,10 @@ Combat orders reach the game several seconds after you speak — they are for po
 * The visible conversation (instructions, replies, action log) is saved with the game; the model's context still resets on load.
 * The combat-latency reminder appears once per instruction, and Markdown in model replies is shown as plain text.
 
+## Autonomy (off by default)
+
+Enable it in mod settings and the agent starts its own instructions: routine inspections on an interval, plus reactions to raids, colonists near mental break and food shortages. Every run uses the same session (history, permissions, confirm mode), shows in the action log, and counts against a daily tool-call budget. Long-term goals are managed per game from the Agent tab (Goals button) and saved with the game.
+
 ## How it works
 
 ```text

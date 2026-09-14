@@ -1,0 +1,124 @@
+namespace RimAgent.Agent
+{
+    /// <summary>自主模式一次自動任務的觸發原因。None 代表現在不該跑。</summary>
+    public enum AutonomousTrigger
+    {
+        None,
+        Interval,
+        Raid,
+        MentalBreak,
+        FoodShortage
+    }
+
+    /// <summary>排程器做判斷用的殖民地訊號（呼叫端在主線程收集的純資料）。</summary>
+    public struct AutonomousSignals
+    {
+        public int HostileCount;
+        public int NearMentalBreakCount;
+        public float FoodNutrition;
+        public int ColonistCount;
+    }
+
+    /// <summary>排程器設定（單位皆為 tick；2500 tick＝1 遊戲小時，60000 tick＝1 天）。</summary>
+    public struct AutonomousConfig
+    {
+        public bool Enabled;
+        /// <summary>例行巡檢間隔；0 代表關掉間隔觸發，只留事件觸發。</summary>
+        public int IntervalTicks;
+        /// <summary>預算視窗長度（一天）。</summary>
+        public int WindowTicks;
+        /// <summary>一個視窗內自主任務最多消耗的工具呼叫次數（每句上限另由 maxSteps 管）。</summary>
+        public int BudgetPerWindow;
+        public bool OnRaid;
+        public bool OnMentalBreak;
+        public bool OnFoodShortage;
+    }
+
+    /// <summary>
+    /// 自主排程器：純邏輯，不碰遊戲 API，方便測試。
+    /// 語義：事件採邊緣觸發（無→有才跑一次），任何兩次任務間至少隔 <see cref="CooldownTicks"/>，
+    /// 一個視窗內的工具呼叫總數不超過預算。觸發優先序：襲擊＞心情＞缺糧＞間隔。
+    /// </summary>
+    public sealed class AutonomousScheduler
+    {
+        /// <summary>兩次自主任務的最短間隔（1 遊戲小時），避免觸發風暴。</summary>
+        public const int CooldownTicks = 2500;
+
+        /// <summary>缺糧線：人均可食營養低於此值視為短缺（殖民者一天約吃 1.6）。</summary>
+        public const float FoodShortagePerColonist = 4f;
+
+        private long _windowStartTick;
+        private bool _windowOpen;
+        private int _toolsUsed;
+        private int _runs;
+        private long _lastRunTick = -CooldownTicks;
+        private bool _prevRaid;
+        private bool _prevMental;
+        private bool _prevFoodOk = true;
+
+        public int ToolsUsed => _toolsUsed;
+        public int Runs => _runs;
+
+        /// <summary>現在是否該起一次任務；回傳觸發原因或 None。</summary>
+        public AutonomousTrigger Evaluate(long tick, AutonomousSignals signals, AutonomousConfig config)
+        {
+            if (!config.Enabled) return AutonomousTrigger.None;
+            ResetWindowIfNeeded(tick, config);
+            if (_toolsUsed >= config.BudgetPerWindow) return AutonomousTrigger.None;
+            if (tick - _lastRunTick < CooldownTicks) return AutonomousTrigger.None;
+
+            bool raid = signals.HostileCount > 0;
+            bool mental = signals.NearMentalBreakCount > 0;
+            bool foodOk = !IsShortage(signals);
+            AutonomousTrigger trigger = AutonomousTrigger.None;
+
+            if (config.OnRaid && raid && !_prevRaid) trigger = AutonomousTrigger.Raid;
+            else if (config.OnMentalBreak && mental && !_prevMental) trigger = AutonomousTrigger.MentalBreak;
+            else if (config.OnFoodShortage && !foodOk && _prevFoodOk) trigger = AutonomousTrigger.FoodShortage;
+            else if (config.IntervalTicks > 0 && tick - _lastRunTick >= config.IntervalTicks) trigger = AutonomousTrigger.Interval;
+
+            _prevRaid = raid;
+            _prevMental = mental;
+            _prevFoodOk = foodOk;
+            return trigger;
+        }
+
+        /// <summary>任務結束後記錄：推進冷卻、累計本次消耗的工具呼叫次數。</summary>
+        public void RecordRun(long tick, int toolCalls, AutonomousConfig config)
+        {
+            ResetWindowIfNeeded(tick, config);
+            _lastRunTick = tick;
+            _toolsUsed += toolCalls < 0 ? 0 : toolCalls;
+            _runs++;
+        }
+
+        public void Reset()
+        {
+            _windowOpen = false;
+            _toolsUsed = 0;
+            _runs = 0;
+            _lastRunTick = -CooldownTicks;
+            _prevRaid = false;
+            _prevMental = false;
+            _prevFoodOk = true;
+        }
+
+        private void ResetWindowIfNeeded(long tick, AutonomousConfig config)
+        {
+            int window = config.WindowTicks > 0 ? config.WindowTicks : 60000;
+            if (!_windowOpen || tick - _windowStartTick >= window)
+            {
+                _windowOpen = true;
+                _windowStartTick = tick;
+                _toolsUsed = 0;
+                _runs = 0;
+            }
+        }
+
+        private static bool IsShortage(AutonomousSignals signals)
+        {
+            if (signals.ColonistCount <= 0) return false;
+            return signals.FoodNutrition < signals.ColonistCount * FoodShortagePerColonist;
+        }
+    }
+}
