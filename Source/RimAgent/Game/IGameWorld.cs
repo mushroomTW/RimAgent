@@ -23,6 +23,8 @@ namespace RimAgent.Game
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
         ResearchInfo GetResearch();
+        /// <summary>存檔裡的所有地圖（含不在當前地圖的殖民地與商隊所在地）。</summary>
+        IReadOnlyList<MapInfo> GetMaps();
         /// <summary>當前地圖可交易的商人（軌道商人與來訪商隊，見 TraderInfo.Kind）。</summary>
         IReadOnlyList<TraderInfo> GetTraders();
         IReadOnlyList<ThingInfo> FindThings(ThingQuery query);
@@ -51,6 +53,8 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> BillRecipes { get; }
         /// <summary>可排程的手術目錄（worker 為手術的 RecipeDef）。</summary>
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
+        /// <summary>尚未完成的研發目錄（供 set_research 把名稱對到 defName）。</summary>
+        IReadOnlyList<DefInfo> ResearchProjects { get; }
 
         CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority);
         CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName);
@@ -90,5 +94,12 @@ namespace RimAgent.Game
         CommandResult DeleteBill(int tableId, int index);
         /// <summary>排一台手術：驗證不過不掛單，成功時 Message 為排程明細。</summary>
         CommandResult ScheduleSurgery(SurgeryRequest request);
+        /// <summary>
+        /// 切換進行中的研發：驗證不過不切換。defName 為空、"none" 或 "stop" 代表停下目前研發
+        /// （不斷 本次存檔的研究進度，下次可再切回來）。
+        /// </summary>
+        CommandResult SetResearch(string researchDefName);
+        /// <summary>切換工具操作的當前地圖（等同玩家切換視角的地圖）。</summary>
+        CommandResult SetCurrentMap(int mapId);
     }
 }

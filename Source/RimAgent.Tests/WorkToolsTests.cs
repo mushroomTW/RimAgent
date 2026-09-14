@@ -1,5 +1,6 @@
 using System.Linq;
 using NUnit.Framework;
+using RimAgent.Agent;
 using RimAgent.Tools;
 
 namespace RimAgent.Tests
@@ -87,6 +88,29 @@ namespace RimAgent.Tests
         public void ScheduleUnknownAssignmentIsAnError()
         {
             Assert.That(_tools.SetSchedule("Ali", 8, 12, "party"), Does.StartWith("Error:").And.Contain("time assignment"));
+        }
+
+        [Test]
+        public void BlockedPriorityReturnsPreviewWithoutTouchingWorld()
+        {
+            var gated = new WorkTools(_world, null, new ConfirmationGate(() => true));
+
+            string text = gated.SetWorkPriority("Ali", "doctor", 1);
+
+            Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("Ali's doctor priority 3 -> 1"));
+            Assert.That(_world.Calls, Is.Empty);
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void BlockedScheduleReturnsPreviewWithoutTouchingWorld()
+        {
+            var gated = new WorkTools(_world, null, new ConfirmationGate(() => true));
+
+            string text = gated.SetSchedule("Ali", 22, 23, "sleep");
+
+            Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("sleep"));
+            Assert.That(_world.Calls, Is.Empty);
         }
     }
 }

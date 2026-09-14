@@ -21,6 +21,11 @@ namespace RimAgent
         public bool allowZone;
         public bool allowProduction;
         public int maxSteps = DefaultMaxSteps;
+        /// <summary>
+        /// 「需確認」模式：開啟後 Work／Build／Combat 命令先回傳預覽，玩家按確認才執行。
+        /// 查詢不受影響。
+        /// </summary>
+        public bool requireConfirmation;
 
         public override void ExposeData()
         {
@@ -36,6 +41,7 @@ namespace RimAgent
             Scribe_Values.Look(ref allowZone, "allowZone", false);
             Scribe_Values.Look(ref allowProduction, "allowProduction", false);
             Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
+            Scribe_Values.Look(ref requireConfirmation, "requireConfirmation", false);
         }
 
         public ToolPermissions ToPermissions()

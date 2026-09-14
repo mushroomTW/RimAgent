@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -11,10 +12,22 @@ namespace RimAgent.Tools
     public sealed class WorkTools
     {
         private readonly IGameWorld _world;
+        private readonly WorkUndoStack _undo;
+        private readonly ICommandGate _gate;
 
-        public WorkTools(IGameWorld world)
+        public WorkTools(IGameWorld world) : this(world, null, null)
+        {
+        }
+
+        public WorkTools(IGameWorld world, WorkUndoStack undo) : this(world, undo, null)
+        {
+        }
+
+        public WorkTools(IGameWorld world, WorkUndoStack undo, ICommandGate gate)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
+            _undo = undo;
+            _gate = gate;
         }
 
         [AgentTool("set_work_priority", ToolCategory.Work)]
@@ -44,8 +57,20 @@ namespace RimAgent.Tools
 
             // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
             string previous = current != null ? current.Priority.ToString() : "?";
+            int oldPriority = current != null ? current.Priority : 3;
+
+            if (_gate != null && !_gate.AllowCommands(ToolCategory.Work))
+            {
+                string preview = $"would set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.";
+                string blocked = ToolText.Confirmation(preview);
+                _gate.NoteBlocked(blocked);
+                return blocked;
+            }
+
             CommandResult result = _world.SetWorkPriority(pawn.Value.Id, work.Value.DefName, priority);
             if (!result.Success) return ToolText.Error(result.Message);
+
+            if (_undo != null && current != null) _undo.RecordPriority(pawn.Value.Id, work.Value.DefName, oldPriority);
 
             string suffix = string.IsNullOrEmpty(result.Message) ? string.Empty : " " + result.Message;
             return $"Set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.{suffix}";
@@ -95,17 +120,30 @@ namespace RimAgent.Tools
             var hours = new List<int>();
             for (int h = startHour; h != endHour; h = (h + 1) % 24) hours.Add(h);
 
+            if (_gate != null && !_gate.AllowCommands(ToolCategory.Work))
+            {
+                string schedulePreview = $"would set hours {startHour}-{(endHour + 23) % 24} " +
+                    $"({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
+                string blockedSchedule = ToolText.Confirmation(schedulePreview);
+                _gate.NoteBlocked(blockedSchedule);
+                return blockedSchedule;
+            }
+
             var failures = new List<string>();
             foreach (ColonistInfo c in pawns.Value)
             {
+                // 舊作息先抓：成功一個小時記一個，復原時才寫得回去。
+                IReadOnlyList<string> oldTable = c.Timetable;
                 foreach (int hour in hours)
                 {
+                    string oldAssignment = oldTable != null && hour < oldTable.Count ? oldTable[hour] : string.Empty;
                     CommandResult r = _world.SetTimeAssignment(c.Id, hour, assign.Value.DefName);
                     if (!r.Success)
                     {
                         failures.Add($"{c.Name} hour {hour}: {r.Message}");
                         break;
                     }
+                    if (_undo != null) _undo.RecordAssignment(c.Id, hour, oldAssignment);
                 }
             }
 

@@ -107,6 +107,16 @@ namespace RimAgent.Tests
 
         public List<ZoneInfo> Zones { get; } = new List<ZoneInfo>();
 
+        public List<MapInfo> Maps { get; } = new List<MapInfo>
+        {
+            new MapInfo { Id = 1, Label = "New Arrivals", Tile = 12345, ColonistCount = 2, IsCurrent = true }
+        };
+
+        /// <summary>目前操作的地圖 id（正式端為 Find.CurrentMap）。</summary>
+        public int CurrentMapId { get; set; } = 1;
+
+        /// <summary>已完成的研究 defName（正式端用遊戲研究狀態判斷）。</summary>
+        public HashSet<string> FinishedResearch { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public IReadOnlyList<DefInfo> StorageFilterables { get; set; } = new[]
         {
             new DefInfo("Steel", "steel"), new DefInfo("WoodLog", "wood"), new DefInfo("Corn", "corn"),
@@ -177,6 +187,67 @@ namespace RimAgent.Tests
         public IReadOnlyList<ThreatInfo> GetThreats() => Threats;
         public IReadOnlyList<TraderInfo> GetTraders() => Traders;
         public ResearchInfo GetResearch() => Research;
+
+        public IReadOnlyList<DefInfo> ResearchProjects
+        {
+            get
+            {
+                var projects = new List<DefInfo>();
+                if (Research.Current != null) projects.Add(new DefInfo(Research.Current.DefName, Research.Current.Label));
+                foreach (ResearchProjectInfo p in Research.Available)
+                {
+                    if (projects.Any(d => string.Equals(d.DefName, p.DefName, StringComparison.OrdinalIgnoreCase))) continue;
+                    projects.Add(new DefInfo(p.DefName, p.Label));
+                }
+                return projects;
+            }
+        }
+
+        public CommandResult SetResearch(string researchDefName)
+        {
+            Calls.Add($"SetResearch({researchDefName})");
+            string want = (researchDefName ?? string.Empty).Trim();
+            if (want.Length == 0 || string.Equals(want, "none", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(want, "stop", StringComparison.OrdinalIgnoreCase))
+            {
+                if (Research.Current == null) return CommandResult.Ok("No research is running.");
+                string stopped = Research.Current.Label;
+                Research = new ResearchInfo { Available = Research.Available };
+                return CommandResult.Ok($"Stopped research {stopped}.");
+            }
+            if (Research.Current != null && string.Equals(Research.Current.DefName, want, StringComparison.OrdinalIgnoreCase))
+                return CommandResult.Ok($"Research {Research.Current.Label} is already running.");
+            ResearchProjectInfo project = Research.Available.FirstOrDefault(p => string.Equals(p.DefName, want, StringComparison.OrdinalIgnoreCase));
+            if (project == null)
+            {
+                if (FinishedResearch.Contains(want)) return CommandResult.Fail($"{want} is already finished");
+                return CommandResult.Fail($"unknown research {want}");
+            }
+            Research = new ResearchInfo { Current = project, Available = Research.Available };
+            return CommandResult.Ok($"Research switched to {project.Label}.");
+        }
+
+        public IReadOnlyList<MapInfo> GetMaps()
+        {
+            return Maps.Select(m => new MapInfo
+            {
+                Id = m.Id,
+                Label = m.Label,
+                Tile = m.Tile,
+                ColonistCount = m.ColonistCount,
+                IsCurrent = m.Id == CurrentMapId
+            }).ToList();
+        }
+
+        public CommandResult SetCurrentMap(int mapId)
+        {
+            Calls.Add($"SetCurrentMap({mapId})");
+            MapInfo map = Maps.FirstOrDefault(m => m.Id == mapId);
+            if (map == null) return CommandResult.Fail($"no map has id {mapId}");
+            if (mapId == CurrentMapId) return CommandResult.Ok($"{map.Label} is already the current map.");
+            CurrentMapId = mapId;
+            return CommandResult.Ok($"Switched to {map.Label} [{mapId}]. Later tools now operate on this map.");
+        }
         public IReadOnlyList<ThingInfo> GetSelection() => Selection;
         public MapBounds GetMapBounds() => Bounds;
 

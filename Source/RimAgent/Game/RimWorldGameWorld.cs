@@ -235,6 +235,59 @@ namespace RimAgent.Game
             };
         }
 
+        /// <summary>
+        /// 尚未完成的研發目錄。不快取：研究完成後目錄即變，
+        /// 每次都重讀 DefDatabase（約百來個 def，可接受）。
+        /// </summary>
+        public IReadOnlyList<DefInfo> ResearchProjects =>
+            DefDatabase<ResearchProjectDef>.AllDefsListForReading
+                .Where(r => !r.IsFinished)
+                .Select(r => new DefInfo(r.defName, r.label))
+                .ToList();
+
+        public CommandResult SetResearch(string researchDefName)
+        {
+            string want = (researchDefName ?? string.Empty).Trim();
+            if (want.Length == 0 || string.Equals(want, "none", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(want, "stop", StringComparison.OrdinalIgnoreCase))
+            {
+                ResearchProjectDef current = Find.ResearchManager.GetProject();
+                if (current == null) return CommandResult.Ok("No research is running.");
+                Find.ResearchManager.StopProject(current);
+                return CommandResult.Ok($"Stopped research {current.label}.");
+            }
+            ResearchProjectDef def = DefDatabase<ResearchProjectDef>.GetNamedSilentFail(want);
+            if (def == null) return CommandResult.Fail($"unknown research {want}");
+            if (def.IsFinished) return CommandResult.Fail($"{def.label} is already finished");
+            if (!def.CanStartNow) return CommandResult.Fail($"{def.label} cannot start yet: finish its prerequisites first");
+            if (Find.ResearchManager.GetProject() == def) return CommandResult.Ok($"Research {def.label} is already running.");
+            Find.ResearchManager.SetCurrentProject(def);
+            return CommandResult.Ok($"Research switched to {def.label}.");
+        }
+
+        public IReadOnlyList<MapInfo> GetMaps()
+        {
+            Map current = Map;
+            return Find.Maps.Select(m => new MapInfo
+            {
+                Id = m.uniqueID,
+                Label = m.Parent?.LabelCap ?? ("Map " + m.uniqueID),
+                Tile = m.Tile,
+                ColonistCount = m.mapPawns.FreeColonistsSpawnedCount,
+                IsCurrent = m == current
+            }).ToList();
+        }
+
+        public CommandResult SetCurrentMap(int mapId)
+        {
+            Map map = Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
+            if (map == null) return CommandResult.Fail($"no map has id {mapId}");
+            string label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID);
+            if (map == Map) return CommandResult.Ok($"{label} is already the current map.");
+            Current.Game.CurrentMap = map;
+            return CommandResult.Ok($"Switched to {label} [{mapId}]. Later tools now operate on this map.");
+        }
+
         public IReadOnlyList<ThingInfo> FindThings(ThingQuery query)
         {
             Map map = Map;

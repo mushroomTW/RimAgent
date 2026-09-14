@@ -35,7 +35,8 @@ namespace RimAgent.Tools
                 Kind = TranscriptKind.Tool,
                 ToolName = Name,
                 ToolCategory = _category,
-                Arguments = FormatArguments(arguments)
+                Arguments = FormatArguments(arguments),
+                InstructionId = _transcript.CurrentInstructionId
             };
 
             try

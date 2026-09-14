@@ -1,5 +1,6 @@
 using System.Linq;
 using NUnit.Framework;
+using RimAgent.Agent;
 using RimAgent.Game;
 using RimAgent.Tools;
 
@@ -135,6 +136,29 @@ namespace RimAgent.Tests
         {
             _world.Stuffs = new[] { new DefInfo("WoodLog", "wood"), new DefInfo("WoodPlanks", "wooden planks") };
             Assert.That(_tools.PlaceBlueprint("wall", 3, 3, 0, "woo", 1, ""), Does.StartWith("Error:").And.Contain("WoodLog").And.Contain("WoodPlanks"));
+        }
+
+        [Test]
+        public void BlockedDesignationReturnsPreviewWithoutTouchingWorld()
+        {
+            var gated = new BuildTools(_world, new ConfirmationGate(() => true));
+
+            string text = gated.DesignateArea("mine", false, 0, 0, 10, 10, "steel");
+
+            Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("mining"));
+            Assert.That(_world.Calls, Is.Empty);
+            Assert.That(_world.Things.All(t => t.Designations.Count == 0), Is.True);
+        }
+
+        [Test]
+        public void BlockedBlueprintReturnsPreviewWithoutTouchingWorld()
+        {
+            var gated = new BuildTools(_world, new ConfirmationGate(() => true));
+
+            string text = gated.PlaceBlueprint("wall", 3, 3, 0, "", 1, "");
+
+            Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("wall"));
+            Assert.That(_world.Blueprints, Is.Empty);
         }
     }
 }

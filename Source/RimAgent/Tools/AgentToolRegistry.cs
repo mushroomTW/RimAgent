@@ -55,15 +55,24 @@ namespace RimAgent.Tools
 
         private readonly List<Entry> _tools = new List<Entry>();
 
-        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript)
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, null, null)
+        {
+        }
+
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo)
+            : this(world, transcript, undo, null)
+        {
+        }
+
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ICommandGate gate)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (transcript == null) throw new ArgumentNullException(nameof(transcript));
 
             Register(new ObserveTools(world), transcript);
-            Register(new WorkTools(world), transcript);
-            Register(new BuildTools(world), transcript);
-            Register(new CombatTools(world), transcript);
+            Register(new WorkTools(world, undo ?? new WorkUndoStack(), gate), transcript);
+            Register(new BuildTools(world, gate), transcript);
+            Register(new CombatTools(world, gate), transcript);
             Register(new TradeTools(world), transcript);
             Register(new MedicalTools(world), transcript);
             Register(new PrisonerTools(world), transcript);

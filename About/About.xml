@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>綠菇</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.09.13.15</modVersion>
+  <modVersion>2026.09.14.1</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
@@ -14,10 +14,18 @@ Open the "Agent" tab on the bottom bar and type what you want done: "set Alice's
 <b>Requires RimLLM Framework</b> (2026.09.12 or later). Provider, API key, model and fallback chain are configured once in the framework's settings; RimAgent only adds per-category tool permissions.
 
 <b>Tool categories</b> (each can be toggled in mod settings):
-1. <b>Observe</b> — colony overview, colonists, resources, threats, research, map object search.
-2. <b>Work</b> — work priorities and schedules.
+1. <b>Observe</b> — colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search.
+2. <b>Work</b> — work priorities and schedules (undoable).
 3. <b>Build</b> — mining / cutting / harvesting / deconstruction designations and blueprints. Off by default.
 4. <b>Combat</b> — draft, move and attack orders. Off by default. LLM latency is several seconds, so this is for pre-deployment and retreats, not real-time control.
+5. <b>Trade</b> — orbital trader and visiting caravan stock, single-deal buy/sell at game prices, player caravans. Off by default.
+6. <b>Medical</b> — colonist health, medical care levels, surgery scheduling. Off by default.
+7. <b>Prisoners</b> — listing, interaction modes, release. Off by default.
+8. <b>Animals</b> — listing, taming, training, allowed areas. Off by default.
+9. <b>Zones</b> — stockpile and growing zones, storage filters. Off by default.
+10. <b>Production</b> — work tables and bills. Off by default.
+
+<b>Safety</b>: optional confirm mode previews Work / Build / Combat commands before executing them; work settings can be undone; the visible conversation is saved with the game.
 
 The agent never touches game state outside of these tools, and every call is visible in the action log.]]></description>
   <modDependencies>

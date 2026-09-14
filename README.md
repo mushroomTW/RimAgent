@@ -8,8 +8,8 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 
 | Category | Tools | Default |
 | --- | --- | --- |
-| Observe | colony overview, colonists, resources, threats, research, map object search | on |
-| Work | work priorities, daily schedules | on |
+| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search | on |
+| Work | work priorities, daily schedules (undoable) | on |
 | Build | mine / cut / harvest / deconstruct / haul designations, blueprints (single or in a line) | off |
 | Combat | draft, move, attack | off |
 | Trade | orbital trader and visiting caravan stock listing, buying and selling in a single deal, forming player caravans | off |
@@ -21,6 +21,13 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 
 Combat orders reach the game several seconds after you speak — they are for positioning and retreats, not real-time control.
 
+## Safety
+
+* **Confirm mode** (mod settings, off by default): Work / Build / Combat tools only preview what they would do; press **Confirm** to execute, **Discard** (or a new instruction) to drop the plan.
+* **Undo**: restores the previous instruction's work priorities and daily schedules.
+* The visible conversation (instructions, replies, action log) is saved with the game; the model's context still resets on load.
+* The combat-latency reminder appears once per instruction, and Markdown in model replies is shown as plain text.
+
 ## How it works
 
 ```text
@@ -30,7 +37,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-           │                              37 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+           │                              40 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
          │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```

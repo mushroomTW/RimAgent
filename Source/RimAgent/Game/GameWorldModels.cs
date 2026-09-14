@@ -281,6 +281,17 @@ namespace RimAgent.Game
         public IReadOnlyList<ResearchProjectInfo> Available { get; set; } = Array.Empty<ResearchProjectInfo>();
     }
 
+    /// <summary>存檔裡的一張地圖。Id 為遊戲配發的編號（查詢工具回傳的不透明編號，切換地圖用它）。</summary>
+    public sealed class MapInfo
+    {
+        public int Id { get; set; }
+        public string Label { get; set; } = string.Empty;
+        public int Tile { get; set; }
+        public int ColonistCount { get; set; }
+        /// <summary>是否為工具目前操作的地圖（Find.CurrentMap）。</summary>
+        public bool IsCurrent { get; set; }
+    }
+
     public enum ThingKind
     {
         Any,

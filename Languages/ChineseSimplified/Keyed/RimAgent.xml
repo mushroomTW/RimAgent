@@ -6,6 +6,10 @@
   <RimAgent.Send>发送</RimAgent.Send>
   <RimAgent.Stop>停止</RimAgent.Stop>
   <RimAgent.Clear>清除对话</RimAgent.Clear>
+  <RimAgent.Undo>复原</RimAgent.Undo>
+  <RimAgent.Confirm>确认执行</RimAgent.Confirm>
+  <RimAgent.ConfirmDiscard>舍弃</RimAgent.ConfirmDiscard>
+  <RimAgent.ConfirmNote>上面是预览，还没有改动任何东西。</RimAgent.ConfirmNote>
   <RimAgent.Working>Agent 执行中…</RimAgent.Working>
   <RimAgent.NoGame>请先载入殖民地。</RimAgent.NoGame>
   <RimAgent.EmptyReply>（Agent 结束了但没有回复）</RimAgent.EmptyReply>
@@ -27,7 +31,7 @@
   <!-- 设置 -->
   <RimAgent.Settings.PermissionsHeader>允许 Agent 做的事</RimAgent.Settings.PermissionsHeader>
   <RimAgent.Settings.Observe>观察 — 读取殖民地状态</RimAgent.Settings.Observe>
-  <RimAgent.Settings.ObserveTip>殖民地概况、殖民者、资源、威胁、研究与地图物件搜索。只读。</RimAgent.Settings.ObserveTip>
+  <RimAgent.Settings.ObserveTip>殖民地概况、殖民者、资源、威胁、研究（查询与切换）、地图（列出与切换）与地图物件搜索。</RimAgent.Settings.ObserveTip>
   <RimAgent.Settings.Work>工作 — 优先级与作息</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>修改工作优先级与每日作息。容易手动改回。</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>建造 — 标记与蓝图</RimAgent.Settings.Build>
@@ -47,7 +51,9 @@
   <RimAgent.Settings.Production>生产 — 工作台与账单</RimAgent.Settings.Production>
   <RimAgent.Settings.ProductionTip>列出工作台与账单，新增指定次数的账单，删除账单。默认关闭。</RimAgent.Settings.ProductionTip>
   <RimAgent.Settings.MaxSteps>每句指令最多调用工具次数：{0}</RimAgent.Settings.MaxSteps>
-  <RimAgent.Settings.MaxStepsTip>避免失控循环烧掉 API 额度。对之后载入的游戏生效。</RimAgent.Settings.MaxStepsTip>
+  <RimAgent.Settings.MaxStepsTip>避免失控循环烧掉 API 额度。立即生效，游戏中调整也有效。</RimAgent.Settings.MaxStepsTip>
+  <RimAgent.Settings.RequireConfirmation>确认 — 工作／建造／战斗先预览再执行</RimAgent.Settings.RequireConfirmation>
+  <RimAgent.Settings.RequireConfirmationTip>开启后，工作、建造与战斗三类工具只会列出将做的事，按下确认才执行。默认关闭。</RimAgent.Settings.RequireConfirmationTip>
   <RimAgent.Settings.FrameworkNote>供应商、API 密钥、模型与备援链都在 RimLLM Framework 的设置里调整。</RimAgent.Settings.FrameworkNote>
 
 </LanguageData>

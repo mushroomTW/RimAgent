@@ -12,10 +12,16 @@ namespace RimAgent.Tools
         private const int MaxBlueprintCount = 50;
 
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public BuildTools(IGameWorld world)
+        public BuildTools(IGameWorld world) : this(world, null)
+        {
+        }
+
+        public BuildTools(IGameWorld world, ICommandGate gate)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
         }
 
         /// <summary>模型看到的標記種類 → 要找的物件種類、標記 defName、標記是掛在格子還是物件上。</summary>
@@ -56,6 +62,19 @@ namespace RimAgent.Tools
 
             ResolveResult<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, filter);
             if (!targets.Success) return targets.Error;
+
+            if (_gate != null && !_gate.AllowCommands(ToolCategory.Build))
+            {
+                int eligible = targets.Value.Count(t => dk.Applies(t) && !t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase));
+                string where = useSelection
+                    ? "the player's selection"
+                    : $"rectangle ({x1},{z1})-({x2},{z2})";
+                string preview = $"would mark {eligible} object(s) for {dk.Verb} " +
+                    $"among {targets.Value.Count} matching object(s) in {where}.";
+                string blocked = ToolText.Confirmation(preview);
+                _gate.NoteBlocked(blocked);
+                return blocked;
+            }
 
             int marked = 0, skipped = 0, notApplicable = 0;
             var failures = new List<string>();
@@ -108,9 +127,18 @@ namespace RimAgent.Tools
             ResolveResult<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, string.Empty);
             if (!targets.Success) return targets.Error;
 
+            List<ThingInfo> markedTargets = targets.Value.Where(t => t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase)).ToList();
+            if (_gate != null && !_gate.AllowCommands(ToolCategory.Build))
+            {
+                string cancelPreview = $"would remove {markedTargets.Count} {dk.Verb} mark(s).";
+                string cancelBlocked = ToolText.Confirmation(cancelPreview);
+                _gate.NoteBlocked(cancelBlocked);
+                return cancelBlocked;
+            }
+
             int removed = 0;
             var failures = new List<string>();
-            foreach (ThingInfo t in targets.Value.Where(t => t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase)))
+            foreach (ThingInfo t in markedTargets)
             {
                 CommandResult r = dk.OnCell
                     ? _world.RemoveDesignationOnCell(t.X, t.Z, dk.DefName)
@@ -165,6 +193,18 @@ namespace RimAgent.Tools
             MapBounds bounds = _world.GetMapBounds();
             int placed = 0;
             var failures = new List<string>();
+
+            if (_gate != null && !_gate.AllowCommands(ToolCategory.Build))
+            {
+                string whatPreview = def.Value.Label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
+                string linePreview = count > 1 ? $" in a line toward {direction}" : string.Empty;
+                string blueprintPreview = $"would place {count} {whatPreview} blueprint(s) " +
+                    $"starting at {ToolText.Cell(x, z)}{linePreview}.";
+                string blueprintBlocked = ToolText.Confirmation(blueprintPreview);
+                _gate.NoteBlocked(blueprintBlocked);
+                return blueprintBlocked;
+            }
+
             for (int i = 0; i < count; i++)
             {
                 int cx = x + dx * i;

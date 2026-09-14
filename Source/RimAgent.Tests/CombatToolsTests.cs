@@ -1,4 +1,6 @@
+using System.Linq;
 using NUnit.Framework;
+using RimAgent.Agent;
 using RimAgent.Game;
 using RimAgent.Tools;
 
@@ -82,6 +84,29 @@ namespace RimAgent.Tests
         {
             _world.Things.Add(FakeGameWorld.MakeThing(77, "Deer", "deer", ThingKind.Pawn, 1, 1));
             Assert.That(_tools.OrderAttack("Bob", 77), Does.StartWith("Ordered Bob to attack deer [77]."));
+        }
+
+        [Test]
+        public void BlockedDraftReturnsPreviewWithoutTouchingWorld()
+        {
+            var gated = new CombatTools(_world, new ConfirmationGate(() => true));
+
+            string text = gated.Draft("all", true);
+
+            Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("draft"));
+            Assert.That(_world.Calls, Is.Empty);
+            Assert.That(_world.Colonists.All(c => !c.Drafted), Is.True);
+        }
+
+        [Test]
+        public void BlockedAttackReturnsPreviewWithoutTouchingWorld()
+        {
+            var gated = new CombatTools(_world, new ConfirmationGate(() => true));
+
+            string text = gated.OrderAttack("Bob", 900);
+
+            Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("grizzly bear"));
+            Assert.That(_world.Calls, Is.Empty);
         }
     }
 }

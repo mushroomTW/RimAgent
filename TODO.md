@@ -11,17 +11,17 @@
 - [x] 動物（查詢、馴養、訓練、區域指派；遊戲內驗收待玩家實測，見 `.scratch/animal/issues/01-animal-manage.md`）
 - [x] 區域與儲存設定（查詢、新增儲藏／種植區、刪除、儲藏篩選；遊戲內驗收待玩家實測，見 `.scratch/zone/issues/01-zone-manage.md`）
 - [x] 生產帳單（工作台查詢、帳單增刪與次數；遊戲內驗收待玩家實測，見 `.scratch/bill/issues/01-bill-manage.md`）
-- [ ] 研究切換（`get_research_status` 目前唯讀）
-- [ ] 多地圖（目前只操作 `Find.CurrentMap`）
+- [x] 研究切換（`set_research`：切換進行中專案，`none` 停下並保留進度；遊戲內驗收待玩家實測）
+- [x] 多地圖（`get_maps` 列出存檔內所有地圖，`set_current_map` 切換工具操作的當前地圖；遊戲內驗收待玩家實測）
 
 ## 互動與安全
 
-- [ ] 「需確認」模式：Work / Build / Combat 類工具執行前先列出將做的事，玩家按確認才執行
-- [ ] 復原：一鍵回到上一句指令改動前的值（至少工作優先級與時間表）
-- [ ] 對話歷史寫入存檔（目前新局／讀檔歸零；歷史現由 Agent Framework 的 session 持有，未來可評估 `SerializeSessionAsync` 持久化，而非自持歷史）
-- [ ] `maxSteps` 設定即時生效（目前 session 建立時綁定，對之後載入的遊戲才生效；AF 化後重建範圍是 `inner + agent + AF session`）
-- [ ] 戰鬥延遲提醒一句指令只顯示一次（目前每個戰鬥工具各顯示一次）
-- [ ] 模型回覆中的 Markdown（`**粗體**` 等）在 UI 去除或渲染
+- [x] 「需確認」模式：設定頁開啟後，Work / Build / Combat 類工具只回傳預覽，玩家按確認才執行（重送同一句並放行一次；送新指令或按捨棄即作廢）
+- [x] 復原：一鍵回到上一句指令改動前的值（工作優先級與時間表；失敗的那句不進堆疊，清除對話時一併清空）
+- [x] 對話歷史寫入存檔（玩家看得到的對話：指令、回覆、行動紀錄，近 200 則；模型的 AF session 上下文照舊歸零，待框架提供版本化的 session 序列化再評估）
+- [x] `maxSteps` 設定即時生效（重設工具迴圈屬性，AF session 歷史不受影響）
+- [x] 戰鬥延遲提醒一句指令只顯示一次（以指令編號去重）
+- [x] 模型回覆中的 Markdown（`**粗體**` 等）在 UI 去除顯示（成對標記與連結還原成純文字，單個 `*`／`_` 保留）
 
 ## 自主模式（架構已預留）
 
@@ -32,7 +32,7 @@
 ## 本地化與發佈
 
 - [x] 英文、繁體中文、簡體中文 Keyed 與 MainButtonDef DefInjected
-- [ ] Steam 工作坊描述與 Preview 圖
+- [ ] Steam 工作坊上傳與 Preview 圖（描述三語已備妥於 `SteamDescriptions/`，上傳與遊戲內截圖待玩家操作）
 - [ ] `About.xml` 無法表達框架最低版本：目前靠能力探測擋，舊版框架會 `MissingMethodException`——等框架提供版本 API 後改用
 
 ## 已知限制（不打算改）

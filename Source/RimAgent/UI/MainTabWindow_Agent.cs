@@ -84,9 +84,11 @@ namespace RimAgent.UI
 
             var lines = new List<(string Text, Color Color, float Height)>(entries.Count + 1);
             float total = 0f;
+            // 戰鬥延遲提醒以指令為單位只顯示一次：記下已經提醒過的指令編號。
+            var combatNoted = new HashSet<int>();
             foreach (TranscriptEntry entry in entries)
             {
-                foreach ((string text, Color color) in Render(entry))
+                foreach ((string text, Color color) in Render(entry, combatNoted))
                 {
                     float height = Text.CalcHeight(text, width);
                     lines.Add((text, color, height));
@@ -119,7 +121,7 @@ namespace RimAgent.UI
             Widgets.EndScrollView();
         }
 
-        private static IEnumerable<(string Text, Color Color)> Render(TranscriptEntry entry)
+        private static IEnumerable<(string Text, Color Color)> Render(TranscriptEntry entry, HashSet<int> combatNoted)
         {
             switch (entry.Kind)
             {
@@ -127,14 +129,19 @@ namespace RimAgent.UI
                     yield return ("> " + entry.Text, UserColor);
                     break;
                 case TranscriptKind.Assistant:
-                    yield return (entry.Text.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : entry.Text, Color.white);
+                    string reply = ToolText.StripMarkdown(entry.Text);
+                    yield return (reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply, Color.white);
                     if (entry.ToolsStripped) yield return ("RimAgent.ToolsStripped".Translate(), NoticeColor);
                     break;
                 case TranscriptKind.Tool:
                     string call = "* " + entry.ToolName + "(" + entry.Arguments + ")";
                     string result = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
                     yield return (call + "\n  -> " + result, entry.Failed ? ErrorColor : ToolColor);
-                    if (entry.ToolCategory == ToolCategory.Combat) yield return ("RimAgent.CombatLatencyNote".Translate(), NoticeColor);
+                    // 同一句指令只提醒一次（舊存檔載入的紀錄 InstructionId 為 0，同樣只提醒一次）。
+                    if (entry.ToolCategory == ToolCategory.Combat && combatNoted.Add(entry.InstructionId))
+                    {
+                        yield return ("RimAgent.CombatLatencyNote".Translate(), NoticeColor);
+                    }
                     break;
                 case TranscriptKind.Error:
                     yield return ("! " + DescribeError(entry), ErrorColor);
@@ -160,9 +167,17 @@ namespace RimAgent.UI
         private void DrawBottomBar(Rect rect, ColonyAgentSession session)
         {
             bool busy = session.IsBusy;
+            // 有命令在等確認時，整列換成確認操作：先看預覽再決定，避免誤觸送出。
+            if (session.HasPendingConfirmation && !busy)
+            {
+                DrawConfirmBar(rect, session);
+                return;
+            }
             bool canSend = !busy && _capabilityWarning == null;
+            bool canUndo = !busy && session.Undo.CanUndo;
             var clearRect = new Rect(rect.xMax - ButtonWidth, rect.y, ButtonWidth, rect.height);
-            var stopRect = new Rect(clearRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
+            var undoRect = new Rect(clearRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
+            var stopRect = new Rect(undoRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
             var sendRect = new Rect(stopRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
             var inputRect = new Rect(rect.x, rect.y, sendRect.x - rect.x - 4f, rect.height);
 
@@ -190,11 +205,40 @@ namespace RimAgent.UI
             {
                 _cts?.Cancel();
             }
+            if (Widgets.ButtonText(undoRect, "RimAgent.Undo".Translate(), true, true, canUndo) && canUndo)
+            {
+                session.UndoLast();
+            }
             if (Widgets.ButtonText(clearRect, "RimAgent.Clear".Translate(), true, true, !busy))
             {
                 session.Clear();
                 _lastEntryCount = -1;
             }
+        }
+
+        private void DrawConfirmBar(Rect rect, ColonyAgentSession session)
+        {
+            const float WideButtonWidth = 120f;
+            var confirmRect = new Rect(rect.x, rect.y, WideButtonWidth, rect.height);
+            var discardRect = new Rect(confirmRect.xMax + 4f, rect.y, WideButtonWidth, rect.height);
+            var noteRect = new Rect(discardRect.xMax + 8f, rect.y, Mathf.Max(0f, rect.xMax - discardRect.xMax - 8f), rect.height);
+
+            if (Widgets.ButtonText(confirmRect, "RimAgent.Confirm".Translate()))
+            {
+                _cts?.Dispose();
+                _cts = new CancellationTokenSource();
+                // 結果全部寫進 transcript，這裡不等待；例外也在 session 內部處理完畢。
+                _ = session.ConfirmAsync(_cts.Token);
+            }
+            if (Widgets.ButtonText(discardRect, "RimAgent.ConfirmDiscard".Translate()))
+            {
+                session.DiscardPendingConfirmation();
+            }
+            Text.Font = GameFont.Tiny;
+            GUI.color = NoticeColor;
+            Widgets.Label(noteRect, "RimAgent.ConfirmNote".Translate());
+            GUI.color = Color.white;
+            Text.Font = GameFont.Small;
         }
 
         private void Send(ColonyAgentSession session)

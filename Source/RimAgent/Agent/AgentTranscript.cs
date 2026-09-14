@@ -30,6 +30,11 @@ namespace RimAgent.Agent
         public TranscriptKind Kind { get; set; }
         public DateTime Time { get; set; } = DateTime.Now;
         public string Text { get; set; } = string.Empty;
+        /// <summary>
+        /// 所屬的那一句指令（由 SendAsync 配號；0 代表不屬於任何指令，如舊存檔載入的紀錄）。
+        /// 戰鬥延遲提醒以此為單位只顯示一次。
+        /// </summary>
+        public int InstructionId { get; set; }
 
         // Tool 專用
         public string ToolName { get; set; } = string.Empty;
@@ -51,6 +56,43 @@ namespace RimAgent.Agent
     {
         private readonly object _gate = new object();
         private readonly List<TranscriptEntry> _entries = new List<TranscriptEntry>();
+        private int _instructionIds;
+
+        /// <summary>
+        /// 開啟新的一句指令並取號。工具在執行時讀 <see cref="CurrentInstructionId"/>
+        /// 標記自己的紀錄，UI 再以此把「每句一次」的提醒去重。
+        /// </summary>
+        public int BeginInstruction()
+        {
+            lock (_gate)
+            {
+                _instructionIds++;
+                return _instructionIds;
+            }
+        }
+
+        public int CurrentInstructionId
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _instructionIds;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 存檔載入後把編號推過已載入的最大值，避免新指令的編號撞到舊紀錄
+        /// （戰鬥提醒以編號去重，撞號會讓新指令的提醒被吞掉）。
+        /// </summary>
+        public void EnsureInstructionIdAtLeast(int value)
+        {
+            lock (_gate)
+            {
+                if (value > _instructionIds) _instructionIds = value;
+            }
+        }
 
         public void Add(TranscriptEntry entry)
         {

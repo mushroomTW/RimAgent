@@ -246,11 +246,161 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void RegistryExposesAllThirtySevenTools()
+        public async Task UpdatedMaxStepsApplyWithoutReloading()
+        {
+            _client.CallTool("get_colony_overview", null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具
+            ColonyAgentSession session = NewSession(maxSteps: 8);
+            session.UpdateMaxSteps(2);
+
+            Assert.That(session.MaxSteps, Is.EqualTo(2));
+            Assert.DoesNotThrowAsync(async () => await session.SendAsync("loop forever"));
+
+            Assert.That(_client.CallCount, Is.LessThanOrEqualTo(3));
+            Assert.That(session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool), Is.LessThanOrEqualTo(2));
+            Assert.That(session.IsBusy, Is.False);
+        }
+
+        [Test]
+        public async Task EntriesOfOneInstructionShareAnInstructionId()
+        {
+            _client.CallTool("get_colony_overview", null).Reply("Two colonists.").Reply("Sure.");
+            ColonyAgentSession session = NewSession();
+            await session.SendAsync("status?");
+            await session.SendAsync("thanks");
+
+            IReadOnlyList<TranscriptEntry> transcript = session.Transcript.Snapshot();
+            // 第一句：User + Tool + Assistant 同為 1；第二句：User + Assistant 同為 2。
+            Assert.That(transcript[0].InstructionId, Is.EqualTo(1));
+            Assert.That(transcript[1].InstructionId, Is.EqualTo(1));
+            Assert.That(transcript[2].InstructionId, Is.EqualTo(1));
+            Assert.That(transcript[3].InstructionId, Is.EqualTo(2));
+            Assert.That(transcript[4].InstructionId, Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task UndoRestoresWorkPriority()
+        {
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("Done.");
+            ColonyAgentSession session = NewSession();
+            await session.SendAsync("set doctor to 1");
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
+
+            string summary = session.UndoLast();
+
+            Assert.That(summary, Does.Contain("restored 1"));
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(3));
+            Assert.That(session.Undo.CanUndo, Is.False);
+            Assert.That(session.UndoLast(), Is.Null);
+            Assert.That(session.Transcript.Snapshot().Last().Kind, Is.EqualTo(TranscriptKind.Notice));
+        }
+
+        [Test]
+        public async Task UndoRestoresTimetable()
+        {
+            _client.CallTool("set_schedule", new { colonists = "Ali", startHour = 22, endHour = 23, assignment = "sleep" })
+                   .Reply("Done.");
+            ColonyAgentSession session = NewSession();
+            await session.SendAsync("Ali sleeps at 22");
+            Assert.That(_world.Colonists[0].Timetable[22], Is.EqualTo("Sleep"));
+
+            string summary = session.UndoLast();
+
+            Assert.That(summary, Does.Contain("restored 1"));
+            Assert.That(_world.Colonists[0].Timetable[22], Is.EqualTo("Anything"));
+        }
+
+        [Test]
+        public async Task ReadOnlyInstructionLeavesNothingToUndo()
+        {
+            _client.CallTool("get_colony_overview", null).Reply("Two colonists.");
+            ColonyAgentSession session = NewSession();
+            await session.SendAsync("status?");
+
+            Assert.That(session.Undo.CanUndo, Is.False);
+            Assert.That(session.UndoLast(), Is.Null);
+        }
+
+        [Test]
+        public void TranscriptSaveRoundTripKeepsKindsAndInstructionIds()
+        {
+            var transcript = new AgentTranscript();
+            transcript.Add(new TranscriptEntry { Kind = TranscriptKind.User, Text = "hi", InstructionId = 2 });
+            transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Tool,
+                ToolName = "draft",
+                ToolCategory = ToolCategory.Combat,
+                Arguments = "colonists=all",
+                Result = "Drafted 2.",
+                InstructionId = 2
+            });
+
+            List<TranscriptEntryData> data = TranscriptEntryData.FromTranscript(transcript);
+
+            Assert.That(data.Count, Is.EqualTo(2));
+            TranscriptEntry back = data[1].ToEntry();
+            Assert.That(back.Kind, Is.EqualTo(TranscriptKind.Tool));
+            Assert.That(back.ToolName, Is.EqualTo("draft"));
+            Assert.That(back.ToolCategory, Is.EqualTo(ToolCategory.Combat));
+            Assert.That(back.Result, Is.EqualTo("Drafted 2."));
+            Assert.That(back.InstructionId, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void TranscriptSaveTruncatesLongFieldsAndKeepsTheTail()
+        {
+            var transcript = new AgentTranscript();
+            for (int i = 0; i < TranscriptEntryData.MaxSavedEntries + 10; i++)
+            {
+                transcript.Add(new TranscriptEntry { Kind = TranscriptKind.User, Text = "x" + i, InstructionId = i });
+            }
+            transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, Result = new string('x', 3000) });
+
+            List<TranscriptEntryData> data = TranscriptEntryData.FromTranscript(transcript);
+
+            Assert.That(data.Count, Is.EqualTo(TranscriptEntryData.MaxSavedEntries));
+            Assert.That(data[data.Count - 1].result.Length, Is.EqualTo(TranscriptEntryData.MaxFieldChars + 1));
+            Assert.That(data[0].ToEntry().InstructionId, Is.EqualTo(11));
+        }
+
+        [Test]
+        public async Task ConfirmationModeBlocksThenExecutesOnConfirm()
+        {
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("I will set Ali's doctor priority to 1.")
+                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("Done.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => true);
+
+            string preview = await session.SendAsync("set doctor to 1");
+
+            Assert.That(preview, Does.Contain("set Ali's doctor"));
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority,
+                Is.EqualTo(3), "被擋下那次不可碰世界");
+            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.Undo.CanUndo, Is.False, "預覽沒有改世界，不該留下可復原的框");
+            Assert.That(session.Transcript.Snapshot().Last().Kind, Is.EqualTo(TranscriptKind.Notice));
+
+            string done = await session.ConfirmAsync();
+
+            Assert.That(done, Is.EqualTo("Done."));
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
+            Assert.That(session.HasPendingConfirmation, Is.False);
+        }
+
+        [Test]
+        public async Task ConfirmWithoutPendingReturnsNull()
+        {
+            Assert.That(await NewSession().ConfirmAsync(), Is.Null);
+        }
+
+        [Test]
+        public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(37));
-            Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(6));
+            Assert.That(registry.All.Count, Is.EqualTo(40));
+            Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(9));
             Assert.That(registry.Select(new ToolPermissions { Observe = false, Work = false, Build = false, Combat = false }), Is.Empty);
         }
 

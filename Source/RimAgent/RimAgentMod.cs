@@ -41,6 +41,9 @@ namespace RimAgent
             Settings.maxSteps = Mathf.RoundToInt(listing.Slider(Settings.maxSteps, RimAgentSettings.MinSteps, RimAgentSettings.MaxSteps));
 
             listing.Gap();
+            listing.CheckboxLabeled("RimAgent.Settings.RequireConfirmation".Translate(), ref Settings.requireConfirmation, "RimAgent.Settings.RequireConfirmationTip".Translate());
+
+            listing.Gap();
             listing.Label("RimAgent.Settings.FrameworkNote".Translate());
 
             listing.End();

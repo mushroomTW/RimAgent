@@ -6,6 +6,10 @@
   <RimAgent.Send>Send</RimAgent.Send>
   <RimAgent.Stop>Stop</RimAgent.Stop>
   <RimAgent.Clear>Clear</RimAgent.Clear>
+  <RimAgent.Undo>Undo</RimAgent.Undo>
+  <RimAgent.Confirm>Confirm</RimAgent.Confirm>
+  <RimAgent.ConfirmDiscard>Discard</RimAgent.ConfirmDiscard>
+  <RimAgent.ConfirmNote>The plan above is a preview — nothing has changed yet.</RimAgent.ConfirmNote>
   <RimAgent.Working>Agent is working…</RimAgent.Working>
   <RimAgent.NoGame>Load a colony first.</RimAgent.NoGame>
   <RimAgent.EmptyReply>(the agent finished without a reply)</RimAgent.EmptyReply>
@@ -27,7 +31,7 @@
   <!-- Settings -->
   <RimAgent.Settings.PermissionsHeader>What the agent is allowed to do</RimAgent.Settings.PermissionsHeader>
   <RimAgent.Settings.Observe>Observe — read colony state</RimAgent.Settings.Observe>
-  <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research and map object search. Read-only.</RimAgent.Settings.ObserveTip>
+  <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research (status and switching), maps (listing and switching) and map object search.</RimAgent.Settings.ObserveTip>
   <RimAgent.Settings.Work>Work — priorities and schedules</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>Change work priorities and daily schedules. Easy to undo by hand.</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>Build — designations and blueprints</RimAgent.Settings.Build>
@@ -47,7 +51,9 @@
   <RimAgent.Settings.Production>Production — work tables and bills</RimAgent.Settings.Production>
   <RimAgent.Settings.ProductionTip>List work tables and their bills, add bills with a repeat count, and delete bills. Off by default.</RimAgent.Settings.ProductionTip>
   <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
-  <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies to newly loaded games.</RimAgent.Settings.MaxStepsTip>
+  <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies immediately, even mid-game.</RimAgent.Settings.MaxStepsTip>
+  <RimAgent.Settings.RequireConfirmation>Confirm — approve Work / Build / Combat first</RimAgent.Settings.RequireConfirmation>
+  <RimAgent.Settings.RequireConfirmationTip>When on, Work, Build and Combat tools only preview what they would do. Press Confirm to execute them. Off by default.</RimAgent.Settings.RequireConfirmationTip>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>
 
 </LanguageData>

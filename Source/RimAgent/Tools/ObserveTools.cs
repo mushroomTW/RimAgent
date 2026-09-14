@@ -127,6 +127,96 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
+        [AgentTool("set_research", ToolCategory.Observe)]
+        [Description("Switches the colony's active research project. Pass \"none\" to stop the current research without losing its progress. Reports the previous and new project.")]
+        public string SetResearch(
+            [Description("Research name or defName, e.g. \"Electricity\", or \"none\" to stop the current research.")] string project)
+        {
+            string want = (project ?? string.Empty).Trim();
+            ResearchInfo before = _world.GetResearch();
+            string previous = before.Current == null ? "none" : $"{before.Current.Label} ({before.Current.DefName})";
+
+            string defName = want;
+            if (!IsStopWord(want))
+            {
+                ResolveResult<DefInfo> match = DefResolver.Resolve(want, _world.ResearchProjects, "research project");
+                if (!match.Success) return match.Error;
+                defName = match.Value.DefName;
+            }
+
+            CommandResult result = _world.SetResearch(defName);
+            if (!result.Success) return ToolText.Error(result.Message);
+
+            // 世界層已保證冪等（重選目前專案直接成功），這裡讀最新狀態回報。
+            ResearchInfo after = _world.GetResearch();
+            string current = after.Current == null ? "none" : $"{after.Current.Label} ({after.Current.DefName})";
+            string suffix = string.IsNullOrEmpty(result.Message) ? string.Empty : " " + result.Message;
+            return $"Research {previous} -> {current}.{suffix}";
+        }
+
+        [AgentTool("get_maps", ToolCategory.Observe)]
+        [Description("Lists every map in this save with its id, name, tile and colonist count. Tools operate on the current map; use set_current_map first to work on another map.")]
+        public string GetMaps()
+        {
+            IReadOnlyList<MapInfo> maps = _world.GetMaps();
+            if (maps.Count == 0) return "There are no maps.";
+
+            var sb = new StringBuilder();
+            foreach (MapInfo m in maps)
+            {
+                sb.Append('[').Append(m.Id).Append("] ").Append(m.Label)
+                  .Append(", tile ").Append(m.Tile)
+                  .Append(", colonists ").Append(m.ColonistCount);
+                if (m.IsCurrent) sb.Append(" (current)");
+                sb.AppendLine();
+            }
+            return sb.ToString().Trim();
+        }
+
+        [AgentTool("set_current_map", ToolCategory.Observe)]
+        [Description("Switches which map later tools operate on (the same as the player switching to another map). Map switching only changes the viewed map; pawns and items stay where they are.")]
+        public string SetCurrentMap(
+            [Description("Map id from get_maps, or part of the map name.")] string map)
+        {
+            ResolveResult<MapInfo> match = ResolveMap(map, _world.GetMaps());
+            if (!match.Success) return match.Error;
+
+            CommandResult result = _world.SetCurrentMap(match.Value.Id);
+            if (!result.Success) return ToolText.Error(result.Message);
+            return result.Message;
+        }
+
+        /// <summary>停下研發的關鍵字（大小寫不敏感）；世界層認得同樣的字。</summary>
+        internal static bool IsStopWord(string input)
+        {
+            return input.Length == 0
+                || string.Equals(input, "none", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(input, "stop", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>用 id 或名稱找地圖：整數先對 id，否則對名稱做精確→包含比對。</summary>
+        internal static ResolveResult<MapInfo> ResolveMap(string input, IReadOnlyList<MapInfo> maps)
+        {
+            string needle = (input ?? string.Empty).Trim();
+            if (needle.Length == 0) return ResolveResult<MapInfo>.Fail("Error: map name is empty.");
+            if (int.TryParse(needle, out int id))
+            {
+                MapInfo byId = maps.FirstOrDefault(m => m.Id == id);
+                if (byId != null) return ResolveResult<MapInfo>.Ok(byId);
+                return ResolveResult<MapInfo>.Fail($"Error: no map has id {id}.");
+            }
+            MapInfo exact = maps.FirstOrDefault(m => string.Equals(m.Label, needle, StringComparison.OrdinalIgnoreCase));
+            if (exact != null) return ResolveResult<MapInfo>.Ok(exact);
+            List<MapInfo> contains = maps.Where(m => m.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            if (contains.Count == 1) return ResolveResult<MapInfo>.Ok(contains[0]);
+            if (contains.Count > 1)
+            {
+                return ResolveResult<MapInfo>.Fail($"Error: \"{needle}\" matches several maps: " +
+                    string.Join(", ", contains.Select(m => $"[{m.Id}] {m.Label}")) + ". Use the map id.");
+            }
+            return ResolveResult<MapInfo>.Fail($"Error: no map matches \"{needle}\".");
+        }
+
         [AgentTool("find_things", ToolCategory.Observe)]
         [Description("Finds map objects by kind and optional name, optionally inside a rectangle. Returns id, defName, label, position and existing designations. Use the returned ids and positions in build and combat tools.")]
         public string FindThings(

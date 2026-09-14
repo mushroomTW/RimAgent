@@ -76,6 +76,68 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void SetResearchSwitchesAndReportsPreviousAndNew()
+        {
+            _world.Research = new ResearchInfo
+            {
+                Current = new ResearchProjectInfo { DefName = "Electricity", Label = "electricity", Cost = 1600 },
+                Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } }
+            };
+
+            string text = _tools.SetResearch("batteries");
+
+            Assert.That(text, Does.Contain("electricity (Electricity) -> batteries (Batteries)"));
+            Assert.That(_world.Research.Current.DefName, Is.EqualTo("Batteries"));
+        }
+
+        [Test]
+        public void SetResearchUnknownNameIsAnError()
+        {
+            _world.Research = new ResearchInfo
+            {
+                Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } }
+            };
+            Assert.That(_tools.SetResearch("warp drive"), Does.StartWith("Error:"));
+            Assert.That(_world.Research.Current, Is.Null);
+        }
+
+        [Test]
+        public void SetResearchNoneStopsTheCurrentProject()
+        {
+            _world.Research = new ResearchInfo
+            {
+                Current = new ResearchProjectInfo { DefName = "Electricity", Label = "electricity", Cost = 1600 },
+                Available = new ResearchProjectInfo[0]
+            };
+
+            string text = _tools.SetResearch("none");
+
+            Assert.That(text, Does.Contain("electricity (Electricity) -> none"));
+            Assert.That(_world.Research.Current, Is.Null);
+        }
+
+        [Test]
+        public void MapsListCurrentMarkerAndSwitchingChangesCurrent()
+        {
+            _world.Maps.Add(new MapInfo { Id = 2, Label = "Mining outpost", Tile = 777, ColonistCount = 1 });
+
+            string listed = _tools.GetMaps();
+            Assert.That(listed, Does.Contain("[1] New Arrivals").And.Contain("(current)").And.Contain("[2] Mining outpost"));
+
+            string switched = _tools.SetCurrentMap("2");
+            Assert.That(switched, Does.Contain("Mining outpost"));
+            Assert.That(_world.CurrentMapId, Is.EqualTo(2));
+            Assert.That(_tools.GetMaps(), Does.Contain("[2] Mining outpost, tile 777, colonists 1 (current)"));
+        }
+
+        [Test]
+        public void SetCurrentMapUnknownIdIsAnError()
+        {
+            Assert.That(_tools.SetCurrentMap("99"), Does.StartWith("Error:"));
+            Assert.That(_world.CurrentMapId, Is.EqualTo(1));
+        }
+
+        [Test]
         public void FindThingsWholeMapWithNameFilter()
         {
             string text = _tools.FindThings("mineable", "steel", -1, -1, -1, -1, 20);
