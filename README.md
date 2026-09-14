@@ -18,6 +18,8 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 | Animal | animal listing, taming, training, allowed areas | off |
 | Zone | zone listing, stockpile and growing zones, storage filters | off |
 | Production | work tables and production bills | off |
+| Time | pause and time flow speed | off |
+| MCP | external tools from local MCP servers | off |
 
 Combat orders reach the game several seconds after you speak — they are for positioning and retreats, not real-time control.
 
@@ -26,7 +28,8 @@ Combat orders reach the game several seconds after you speak — they are for po
 * **Confirm mode** (mod settings, off by default): Work / Build / Combat tools only preview what they would do; press **Confirm** to execute, **Discard** (or a new instruction) to drop the plan.
 * **Undo**: restores the previous instruction's work priorities and daily schedules.
 * The visible conversation (instructions, replies, action log) is saved with the game; the model's context still resets on load.
-* The combat-latency reminder appears once per instruction, and Markdown in model replies is shown as plain text.
+* The combat-latency reminder appears once per instruction, and Markdown in model replies is rendered via RimLLM Framework (bold, italics, headings, links, code).
+* Standing instructions (per-game rules) and skill packs (`AgentPack/`) are included with every instruction. MCP servers run as local processes with your user privileges — only enable ones you trust.
 
 ## Autonomy (off by default)
 
@@ -41,7 +44,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-           │                              40 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+           │                              45 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
          │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```
@@ -51,7 +54,7 @@ Two seams make the mod testable without the game:
 * **`IChatClient`** — the agent accepts any MEAI chat client; tests use a scripted fake.
 * **`IGameWorld`** — tools only see plain data; tests use an in-memory fake world. `RimWorldGameWorld` is a thin adapter verified in-game.
 
-UI strings (`Languages/` Keyed) and the Agent main-button label (`Languages/` DefInjected) ship in English, Traditional Chinese and Simplified Chinese. Planned work is tracked in [TODO.md](TODO.md).
+UI strings (`Languages/` Keyed) and the Agent main-button label (`Languages/` DefInjected) ship in English, Traditional Chinese and Simplified Chinese.
 
 ## Building
 
@@ -59,7 +62,7 @@ UI strings (`Languages/` Keyed) and the Agent main-button label (`Languages/` De
 dotnet build "Source/RimAgent/RimAgent.csproj" -c Release
 ```
 
-Release writes `Assemblies/RimAgent.dll` plus the 10 Agent Framework DLLs the framework does not ship (`Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.ObjectPool`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.Bcl.Memory`, `Microsoft.Bcl.HashCode`, `Microsoft.ML.Tokenizers`, `Google.Protobuf`). RimWorld scans every DLL with `Assembly.GetTypes()` and `GetFields()`, so base types and field types must resolve even for code paths we never execute: `Compliance.Abstractions` stays because AF's internal `ReplacingRedactor` derives from its `Redactor`, `ObjectPool 8.0.x` (assembly version 8.0.0.0, netstandard-only) stays because six `Pooled*Policy` types in Compliance derive from it, and `ML.Tokenizers` + `Google.Protobuf` stay because AF's `CompactionMessageIndex` has a `Tokenizer` field and Tokenizers' types implement Protobuf interfaces. Tokenizers references older `System.Text.Json` / `Microsoft.Bcl.Memory` / `System.Memory` than what is loaded in-game; Unity Mono binds a same-name, same-token assembly of a newer version, so no version alignment is needed (verified in-game). Debug builds and `dotnet test` write to `bin/` and never touch `Assemblies/`.
+Release writes `Assemblies/RimAgent.dll` plus the 12 DLLs the framework does not ship: 10 Agent Framework DLLs (`Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.ObjectPool`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.Bcl.Memory`, `Microsoft.Bcl.HashCode`, `Microsoft.ML.Tokenizers`, `Google.Protobuf`) and 2 MCP SDK DLLs (`ModelContextProtocol.Core`, `System.Collections.Immutable`; the rest of the SDK closure is covered by the framework). RimWorld scans every DLL with `Assembly.GetTypes()` and `GetFields()`, so base types and field types must resolve even for code paths we never execute: `Compliance.Abstractions` stays because AF's internal `ReplacingRedactor` derives from its `Redactor`, `ObjectPool 8.0.x` (assembly version 8.0.0.0, netstandard-only) stays because six `Pooled*Policy` types in Compliance derive from it, and `ML.Tokenizers` + `Google.Protobuf` stay because AF's `CompactionMessageIndex` has a `Tokenizer` field and Tokenizers' types implement Protobuf interfaces. Tokenizers references older `System.Text.Json` / `Microsoft.Bcl.Memory` / `System.Memory` than what is loaded in-game; Unity Mono binds a same-name, same-token assembly of a newer version, so no version alignment is needed (verified in-game). Debug builds and `dotnet test` write to `bin/` and never touch `Assemblies/`.
 
 The project references the installed framework at `../RimLLM Framework/Assemblies`; override with `/p:RimLLMDir=<path>` if RimWorld is not under the default Steam folder. Package versions are pinned to what the framework ships (`Microsoft.Extensions.AI` 10.10.0, `Microsoft.Agents.AI` 1.21.0); do not enable `CopyLocalLockFileAssemblies` — RimWorld loads every mod into one AppDomain and a second copy of `IChatClient` breaks every cast. The framework DLLs are copied from the NuGet cache by the `CopyAgentFrameworkAssemblies` target instead.
 

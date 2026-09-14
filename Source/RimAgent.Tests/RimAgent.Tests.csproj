@@ -27,6 +27,8 @@
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" Aliases="ste" />
     <!-- 與主專案同版；測試在真 .NET Framework 上執行，需要 runtime 資產複製到測試輸出。 -->
     <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" />
+    <!-- MCP SDK：RimAgent.dll 的型別掃描（GetTypes）需要它在測試輸出裡（主專案只留編譯期資產）。 -->
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -23,6 +23,8 @@ namespace RimAgent.Game
         ResourceSnapshot GetResources();
         IReadOnlyList<ThreatInfo> GetThreats();
         ResearchInfo GetResearch();
+        /// <summary>目前的遊戲時間流速（含可切換的速度目錄）。</summary>
+        TimeSpeedInfo GetTimeSpeed();
         /// <summary>存檔裡的所有地圖（含不在當前地圖的殖民地與商隊所在地）。</summary>
         IReadOnlyList<MapInfo> GetMaps();
         /// <summary>當前地圖可交易的商人（軌道商人與來訪商隊，見 TraderInfo.Kind）。</summary>
@@ -55,6 +57,8 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
         /// <summary>尚未完成的研發目錄（供 set_research 把名稱對到 defName）。</summary>
         IReadOnlyList<DefInfo> ResearchProjects { get; }
+        /// <summary>可切換的時間流速目錄（供 set_time_speed 把名稱對到 defName）。</summary>
+        IReadOnlyList<DefInfo> TimeSpeeds { get; }
 
         CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority);
         CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName);
@@ -101,5 +105,7 @@ namespace RimAgent.Game
         CommandResult SetResearch(string researchDefName);
         /// <summary>切換工具操作的當前地圖（等同玩家切換視角的地圖）。</summary>
         CommandResult SetCurrentMap(int mapId);
+        /// <summary>切換遊戲時間流速（暫停／正常／加速）。</summary>
+        CommandResult SetTimeSpeed(string speedDefName);
     }
 }

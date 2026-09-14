@@ -35,6 +35,8 @@ namespace RimAgent
             listing.CheckboxLabeled("RimAgent.Settings.Animal".Translate(), ref Settings.allowAnimal, "RimAgent.Settings.AnimalTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.Zone".Translate(), ref Settings.allowZone, "RimAgent.Settings.ZoneTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.Production".Translate(), ref Settings.allowProduction, "RimAgent.Settings.ProductionTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.Time".Translate(), ref Settings.allowTime, "RimAgent.Settings.TimeTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.MCP".Translate(), ref Settings.allowMCP, "RimAgent.Settings.MCPTip".Translate());
 
             listing.Gap();
             listing.Label("RimAgent.Settings.MaxSteps".Translate(Settings.maxSteps), -1f, "RimAgent.Settings.MaxStepsTip".Translate());

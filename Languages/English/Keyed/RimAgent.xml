@@ -19,6 +19,7 @@
   <!-- Capability warnings -->
   <RimAgent.NoFunctionCalling>None of the models in your RimLLM Framework fallback chain supports tool calling, so the agent cannot act. Adjust the chain in RimLLM Framework's mod settings.</RimAgent.NoFunctionCalling>
   <RimAgent.NoProvider>RimLLM Framework has no usable provider: {0}. Configure one in RimLLM Framework's mod settings.</RimAgent.NoProvider>
+  <RimAgent.FrameworkNotInitialized>RimLLM Framework did not initialize. Check the debug log for errors when RimLLM Framework was loading.</RimAgent.FrameworkNotInitialized>
   <RimAgent.FrameworkTooOld>The installed RimLLM Framework is too old for RimAgent. Update it to a version from 2026-09-12 or later.</RimAgent.FrameworkTooOld>
 
   <!-- Errors -->
@@ -50,6 +51,10 @@
   <RimAgent.Settings.ZoneTip>List zones, add stockpile and growing zones, delete zones, and change what stockpiles accept. Off by default.</RimAgent.Settings.ZoneTip>
   <RimAgent.Settings.Production>Production — work tables and bills</RimAgent.Settings.Production>
   <RimAgent.Settings.ProductionTip>List work tables and their bills, add bills with a repeat count, and delete bills. Off by default.</RimAgent.Settings.ProductionTip>
+  <RimAgent.Settings.Time>Time — pause and flow speed</RimAgent.Settings.Time>
+  <RimAgent.Settings.TimeTip>Check the current time flow speed, pause the game, or switch between normal and fast speeds. Off by default.</RimAgent.Settings.TimeTip>
+  <RimAgent.Settings.MCP>MCP — external tools via local servers</RimAgent.Settings.MCP>
+  <RimAgent.Settings.MCPTip>Let the agent call tools from local MCP servers configured in AgentPack/MCP/servers.json. Servers run with your user privileges; only enable ones you trust. Off by default.</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies immediately, even mid-game.</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.RequireConfirmation>Confirm — approve Work / Build / Combat first</RimAgent.Settings.RequireConfirmation>
@@ -73,5 +78,9 @@
   <RimAgent.Goals.Add>Add</RimAgent.Goals.Add>
   <RimAgent.Goals.Remove>Delete</RimAgent.Goals.Remove>
   <RimAgent.Goals.Close>Close</RimAgent.Goals.Close>
+  <RimAgent.Standing.Button>Standing</RimAgent.Standing.Button>
+  <RimAgent.Standing.Title>Standing instructions — included with every instruction</RimAgent.Standing.Title>
+  <RimAgent.Standing.Save>Save</RimAgent.Standing.Save>
+  <RimAgent.Standing.Close>Close</RimAgent.Standing.Close>
 
 </LanguageData>

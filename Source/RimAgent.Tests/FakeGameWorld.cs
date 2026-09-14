@@ -115,6 +115,25 @@ namespace RimAgent.Tests
         /// <summary>目前操作的地圖 id（正式端為 Find.CurrentMap）。</summary>
         public int CurrentMapId { get; set; } = 1;
 
+        /// <summary>目前時間流速 defName（正式端讀 TickManager）。</summary>
+        public string CurrentTimeSpeed { get; set; } = "Normal";
+
+        public IReadOnlyList<DefInfo> TimeSpeeds { get; set; } = TimeSpeedDirectory.Default;
+
+        public TimeSpeedInfo GetTimeSpeed()
+        {
+            return new TimeSpeedInfo { Current = CurrentTimeSpeed, Available = TimeSpeeds };
+        }
+
+        public CommandResult SetTimeSpeed(string speedDefName)
+        {
+            Calls.Add($"SetTimeSpeed({speedDefName})");
+            DefInfo match = TimeSpeeds.FirstOrDefault(d => string.Equals(d.DefName, speedDefName, StringComparison.OrdinalIgnoreCase));
+            if (match == null) return CommandResult.Fail($"unknown time speed {speedDefName}");
+            CurrentTimeSpeed = match.DefName;
+            return CommandResult.Ok($"Time speed set to {match.DefName}.");
+        }
+
         /// <summary>已完成的研究 defName（正式端用遊戲研究狀態判斷）。</summary>
         public HashSet<string> FinishedResearch { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public IReadOnlyList<DefInfo> StorageFilterables { get; set; } = new[]

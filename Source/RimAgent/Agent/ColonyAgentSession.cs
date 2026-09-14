@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using RimAgent.Game;
+using RimAgent.Mcp;
 using RimAgent.Tools;
 using RimLLM_Framework;
 using RimLLM_Framework.Api;
@@ -30,6 +31,7 @@ namespace RimAgent.Agent
         private readonly Func<ToolPermissions> _permissions;
         private readonly IChatClient _inner;
         private readonly IGameWorld _world;
+        private readonly Func<string> _instructions;
         private AgentSession _session;
         private int _busy;
         private int _maxSteps;
@@ -37,7 +39,9 @@ namespace RimAgent.Agent
         /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
         /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
         /// <param name="requireConfirmation">「需確認」模式是否開啟；同樣每次送出時讀取。</param>
-        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<bool> requireConfirmation = null)
+        /// <param name="instructions">每句送出時組裝的完整系統提示詞；null 則沿用核心提示詞。</param>
+        /// <param name="mcp">MCP 管理器；null 則用停用的預設管理器。</param>
+        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<bool> requireConfirmation = null, Func<string> instructions = null, McpManager mcp = null)
         {
             if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -47,7 +51,8 @@ namespace RimAgent.Agent
             Undo = new WorkUndoStack();
             ConfirmGate = new ConfirmationGate(requireConfirmation ?? (() => false));
             _world = world;
-            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate);
+            _instructions = instructions;
+            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp);
             _inner = innerClient.AsMainThreadFunctionInvokingClient(maxSteps);
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
@@ -275,13 +280,20 @@ namespace RimAgent.Agent
 
         internal RimLLMChatOptions BuildRunOptions()
         {
-            return new RimLLMChatOptions
+            var options = new RimLLMChatOptions
             {
                 Tools = _registry.Select(_permissions()),
                 ToolMode = ChatToolMode.Auto,
                 Temperature = Temperature,
                 MaxOutputTokens = MaxOutputTokens
             };
+            // Run 層覆寫 agent 層的核心提示詞：常駐指令等改完下一句生效，不必重建會話。
+            if (_instructions != null)
+            {
+                string composed = _instructions();
+                if (!string.IsNullOrWhiteSpace(composed)) options.Instructions = composed;
+            }
+            return options;
         }
 
         /// <summary>迴圈中間的 assistant 訊息可能夾雜「讓我看看…」之類的文字；玩家要的是最後那則。</summary>

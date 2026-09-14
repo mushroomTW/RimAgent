@@ -80,11 +80,13 @@ namespace RimAgent.UI
             DrawBottomBar(bottom, session);
         }
 
-        /// <summary>自主模式狀態列：開關、今日用量、目標管理入口。</summary>
+        /// <summary>自主模式狀態列：開關、今日用量、目標與常駐指令入口。</summary>
         private void DrawAutoStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
         {
             const float GoalsButtonWidth = 64f;
-            var buttonRect = new Rect(rect.xMax - GoalsButtonWidth, rect.y, GoalsButtonWidth, rect.height);
+            const float StandingButtonWidth = 64f;
+            var standingRect = new Rect(rect.xMax - StandingButtonWidth, rect.y, StandingButtonWidth, rect.height);
+            var buttonRect = new Rect(standingRect.x - GoalsButtonWidth - 4f, rect.y, GoalsButtonWidth, rect.height);
             var labelRect = new Rect(rect.x, rect.y, buttonRect.x - rect.x - 4f, rect.height);
 
             GUI.color = ToolColor;
@@ -97,6 +99,10 @@ namespace RimAgent.UI
             if (Widgets.ButtonText(buttonRect, "RimAgent.Auto.Goals".Translate(), true, false, !session.IsBusy))
             {
                 Find.WindowStack.Add(new Dialog_AutonomousGoals());
+            }
+            if (Widgets.ButtonText(standingRect, "RimAgent.Standing.Button".Translate(), true, false, !session.IsBusy))
+            {
+                Find.WindowStack.Add(new Dialog_StandingInstructions());
             }
         }
 
@@ -152,7 +158,7 @@ namespace RimAgent.UI
                     yield return ("> " + entry.Text, UserColor);
                     break;
                 case TranscriptKind.Assistant:
-                    string reply = ToolText.StripMarkdown(entry.Text);
+                    string reply = RenderReply(entry.Text);
                     yield return (reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply, Color.white);
                     if (entry.ToolsStripped) yield return ("RimAgent.ToolsStripped".Translate(), NoticeColor);
                     break;
@@ -286,6 +292,12 @@ namespace RimAgent.UI
             {
                 _capabilityWarning = "RimAgent.NoProvider".Translate(ex.Message);
             }
+            catch (InvalidOperationException)
+            {
+                // 框架 mod 在清單裡但 SDK 從未初始化（典型情況：框架 DLL 被 RimWorld 拒載）。
+                // 不能讓例外冒到 OnGUI，否則每幀一條紅字且分頁無法使用。
+                _capabilityWarning = "RimAgent.FrameworkNotInitialized".Translate();
+            }
             catch (Exception ex) when (ex is MissingMethodException || ex is TypeLoadException)
             {
                 // 舊版框架沒有 GetEffectiveCapabilities；把 JIT 失敗轉成看得懂的訊息。
@@ -298,6 +310,36 @@ namespace RimAgent.UI
         private static bool CheckFunctionCalling()
         {
             return RimLLMProvider.GetEffectiveCapabilities().SupportsFunctionCalling;
+        }
+
+        /// <summary>
+        /// 模型回覆的 Markdown 轉 Unity rich text（框架的 RimLLMMarkdown，Markdig 解析）。
+        /// 舊版框架沒有此 API 時退回原文顯示，不炸出例外。
+        /// </summary>
+        private static bool? _markdownAvailable;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static string RenderReply(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
+            if (_markdownAvailable == false) return text;
+            try
+            {
+                string rich = RimLLM_Framework.Mod.RimLLMMarkdown.ToRichText(text);
+                _markdownAvailable = true;
+                return rich ?? text;
+            }
+            catch (Exception ex) when (ex is MissingMethodException || ex is TypeLoadException)
+            {
+                // 舊框架沒有渲染 API：永久退回原文。
+                _markdownAvailable = false;
+                return text;
+            }
+            catch (Exception)
+            {
+                // 單句解析失敗只影響這一句：退回原文，渲染保持開啟。
+                return text;
+            }
         }
     }
 }

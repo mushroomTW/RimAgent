@@ -288,6 +288,33 @@ namespace RimAgent.Game
             return CommandResult.Ok($"Switched to {label} [{mapId}]. Later tools now operate on this map.");
         }
 
+        public IReadOnlyList<DefInfo> TimeSpeeds => TimeSpeedDirectory.Default;
+
+        public TimeSpeedInfo GetTimeSpeed()
+        {
+            return new TimeSpeedInfo { Current = Find.TickManager.CurTimeSpeed.ToString(), Available = TimeSpeedDirectory.Default };
+        }
+
+        public CommandResult SetTimeSpeed(string speedDefName)
+        {
+            object parsed;
+            try
+            {
+                parsed = Enum.Parse(typeof(TimeSpeed), (speedDefName ?? string.Empty).Trim(), true);
+            }
+            catch (ArgumentException)
+            {
+                return CommandResult.Fail($"unknown time speed {speedDefName}");
+            }
+            var speed = (TimeSpeed)parsed;
+            if (!Enum.IsDefined(typeof(TimeSpeed), speed)) return CommandResult.Fail($"unknown time speed {speedDefName}");
+            if (speed == TimeSpeed.Ultrafast) return CommandResult.Fail("Ultrafast is only for development; use Paused, Normal, Fast or Superfast");
+            TimeSpeed previous = Find.TickManager.CurTimeSpeed;
+            if (previous == speed) return CommandResult.Ok($"Time speed is already {speed}.");
+            Find.TickManager.CurTimeSpeed = speed;
+            return CommandResult.Ok($"Time speed set to {speed}.");
+        }
+
         public IReadOnlyList<ThingInfo> FindThings(ThingQuery query)
         {
             Map map = Map;

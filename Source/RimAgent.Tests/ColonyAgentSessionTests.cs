@@ -396,10 +396,26 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void ComposedInstructionsOverrideCorePerRun()
+        {
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, null, () => "COMPOSED PROMPT");
+
+            Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT"));
+        }
+
+        [Test]
+        public void DefaultSessionLeavesRunInstructionsUnset()
+        {
+            ColonyAgentSession session = NewSession();
+
+            Assert.That(session.BuildRunOptions().Instructions, Is.Null);
+        }
+
+        [Test]
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(40));
+            Assert.That(registry.All.Count, Is.EqualTo(45));
             Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(9));
             Assert.That(registry.Select(new ToolPermissions { Observe = false, Work = false, Build = false, Combat = false }), Is.Empty);
         }

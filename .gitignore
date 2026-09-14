@@ -14,6 +14,10 @@ AGENTS.md
 CLAUDE.md
 CONTEXT.md
 
+# Local-only workflow files (kept on disk, never committed)
+SteamDescriptions/
+TODO.md
+
 # .NET build output
 [Bb]in/
 [Oo]bj/

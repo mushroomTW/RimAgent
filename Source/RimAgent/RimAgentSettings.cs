@@ -3,7 +3,7 @@ using Verse;
 
 namespace RimAgent
 {
-    /// <summary>玩家可調的設定：十類工具的開關與單句指令的步數上限。</summary>
+    /// <summary>玩家可調的設定：十二類工具的開關與單句指令的步數上限。</summary>
     public class RimAgentSettings : ModSettings
     {
         public const int DefaultMaxSteps = 8;
@@ -20,6 +20,8 @@ namespace RimAgent
         public bool allowAnimal;
         public bool allowZone;
         public bool allowProduction;
+        public bool allowTime;
+        public bool allowMCP;
         public int maxSteps = DefaultMaxSteps;
         /// <summary>
         /// 「需確認」模式：開啟後 Work／Build／Combat 命令先回傳預覽，玩家按確認才執行。
@@ -55,6 +57,8 @@ namespace RimAgent
             Scribe_Values.Look(ref allowAnimal, "allowAnimal", false);
             Scribe_Values.Look(ref allowZone, "allowZone", false);
             Scribe_Values.Look(ref allowProduction, "allowProduction", false);
+            Scribe_Values.Look(ref allowTime, "allowTime", false);
+            Scribe_Values.Look(ref allowMCP, "allowMCP", false);
             Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
             Scribe_Values.Look(ref requireConfirmation, "requireConfirmation", false);
             Scribe_Values.Look(ref allowAutonomous, "allowAutonomous", false);
@@ -78,7 +82,9 @@ namespace RimAgent
                 Prisoner = allowPrisoner,
                 Animal = allowAnimal,
                 Zone = allowZone,
-                Production = allowProduction
+                Production = allowProduction,
+                Time = allowTime,
+                Mcp = allowMCP
             };
         }
     }

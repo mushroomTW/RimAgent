@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>綠菇</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.09.14.3</modVersion>
+  <modVersion>2026.09.14.7</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
@@ -24,6 +24,8 @@ Open the "Agent" tab on the bottom bar and type what you want done: "set Alice's
 8. <b>Animals</b> — listing, taming, training, allowed areas. Off by default.
 9. <b>Zones</b> — stockpile and growing zones, storage filters. Off by default.
 10. <b>Production</b> — work tables and bills. Off by default.
+11. <b>Time</b> — pause and time flow speed. Off by default.
+12. <b>MCP</b> — external tools from local MCP servers (official SDK, stdio). Off by default.
 
 <b>Safety</b>: optional confirm mode previews Work / Build / Combat commands before executing them; work settings can be undone; the visible conversation is saved with the game.
 

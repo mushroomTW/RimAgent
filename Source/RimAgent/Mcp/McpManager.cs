@@ -1,0 +1,245 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace RimAgent.Mcp
+{
+    /// <summary>
+    /// 一場遊戲期間的 MCP server 管理：設定讀一次，server 全部延遲連線，
+    /// 閒置逾時掃蕩，關閉不阻塞主線程。缺設定時所有操作回報原因。
+    /// </summary>
+    public sealed class McpManager
+    {
+        /// <summary>server 閒置多久視為可關（分鐘）。</summary>
+        public static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(10);
+
+        private readonly string _configPath;
+        private readonly Func<McpServerEntry, IMcpServer> _factory;
+        private readonly object _gate = new object();
+        private List<McpServerEntry> _entries;
+        private bool _loaded;
+        private string _loadError = string.Empty;
+        private readonly Dictionary<string, IMcpServer> _clients =
+            new Dictionary<string, IMcpServer>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DateTime> _lastUsed =
+            new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+
+        public McpManager(string configPath) : this(configPath, SdkMcpServer.Create)
+        {
+        }
+
+        internal McpManager(string configPath, Func<McpServerEntry, IMcpServer> factory)
+        {
+            _configPath = configPath;
+            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        }
+
+        /// <summary>設定與連線狀態的人類可讀摘要（mcp_status 用）。</summary>
+        public string Status()
+        {
+            List<McpServerEntry> entries = Entries();
+            if (entries.Count == 0)
+            {
+                return string.IsNullOrEmpty(_loadError)
+                    ? "No MCP servers configured."
+                    : "MCP unavailable: " + _loadError;
+            }
+            var sb = new StringBuilder();
+            lock (_gate)
+            {
+                foreach (McpServerEntry entry in entries)
+                {
+                    string state = !entry.Enabled ? "disabled"
+                        : _clients.ContainsKey(entry.Name) ? "running" : "idle";
+                    sb.Append('[').Append(entry.Name).Append("] ").Append(state).AppendLine();
+                }
+            }
+            return sb.ToString().Trim();
+        }
+
+        /// <summary>列出已啟用 server 的工具（會連線；失敗的 server 內嵌原因）。</summary>
+        public async Task<string> ListToolsAsync(CancellationToken cancellationToken)
+        {
+            SweepIdle();
+            List<McpServerEntry> entries = Entries();
+            if (entries.Count == 0) return Status();
+            var sb = new StringBuilder();
+            foreach (McpServerEntry entry in entries)
+            {
+                if (!entry.Enabled) continue;
+                try
+                {
+                    IMcpServer server = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
+                    IList<McpServerTool> tools = await server.ListToolsAsync(cancellationToken).ConfigureAwait(false);
+                    sb.Append('[').Append(entry.Name).Append("] ").Append(tools.Count).Append(" tool(s):").AppendLine();
+                    foreach (McpServerTool tool in tools)
+                    {
+                        sb.Append("  - ").Append(tool.Name);
+                        if (tool.Description.Length > 0) sb.Append(": ").Append(tool.Description);
+                        sb.AppendLine();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    sb.Append('[').Append(entry.Name).Append("] failed: ").Append(ex.Message).AppendLine();
+                    Drop(entry.Name);
+                }
+            }
+            string text = sb.ToString().Trim();
+            return text.Length == 0 ? "No MCP servers enabled." : text;
+        }
+
+        /// <summary>呼叫指定 server 的工具；server 未啟用或未知時回報原因。</summary>
+        public async Task<string> CallAsync(string server, string tool, string argsJson, CancellationToken cancellationToken)
+        {
+            SweepIdle();
+            List<McpServerEntry> entries = Entries();
+            if (entries.Count == 0) return Status();
+            McpServerEntry entry = entries.Find(e => string.Equals(e.Name, server ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+            if (entry == null) return Tools.ToolText.Error("unknown MCP server \"" + server + "\".");
+            if (!entry.Enabled) return Tools.ToolText.Error("MCP server \"" + entry.Name + "\" is disabled.");
+            try
+            {
+                IMcpServer client = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
+                return await client.CallAsync(tool, argsJson, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Drop(entry.Name);
+                return Tools.ToolText.Error("MCP server \"" + entry.Name + "\" failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>暖機：在背景把已啟用的 server 先連起來，玩家真正用時不必等開行程。</summary>
+        public async Task WarmUpAsync()
+        {
+            List<McpServerEntry> entries = Entries();
+            foreach (McpServerEntry entry in entries)
+            {
+                if (!entry.Enabled) continue;
+                try
+                {
+                    IMcpServer server = await EnsureConnectedAsync(entry, CancellationToken.None).ConfigureAwait(false);
+                    await server.ListToolsAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    Drop(entry.Name);
+                }
+            }
+        }
+
+        /// <summary>關掉閒置逾時的 server（存檔時與每次使用前呼叫，不阻塞）。</summary>
+        public void SweepIdle()
+        {
+            List<string> stale = new List<string>();
+            lock (_gate)
+            {
+                DateTime now = DateTime.UtcNow;
+                foreach (KeyValuePair<string, DateTime> pair in _lastUsed)
+                {
+                    if (_clients.ContainsKey(pair.Key) && now - pair.Value > IdleTimeout) stale.Add(pair.Key);
+                }
+            }
+            foreach (string name in stale) Drop(name);
+        }
+
+        /// <summary>關掉全部 server（不等待行程結束）。</summary>
+        public void Shutdown()
+        {
+            List<string> names;
+            lock (_gate)
+            {
+                names = new List<string>(_clients.Keys);
+            }
+            foreach (string name in names) Drop(name);
+        }
+
+        private List<McpServerEntry> Entries()
+        {
+            if (_loaded) return _entries;
+            lock (_gate)
+            {
+                if (_loaded) return _entries;
+                List<McpServerEntry> servers;
+                string error;
+                if (McpServerConfig.TryLoad(_configPath, out servers, out error))
+                {
+                    _entries = servers;
+                }
+                else
+                {
+                    _entries = new List<McpServerEntry>();
+                    _loadError = error;
+                }
+                _loaded = true;
+                return _entries;
+            }
+        }
+
+        private async Task<IMcpServer> EnsureConnectedAsync(McpServerEntry entry, CancellationToken cancellationToken)
+        {
+            lock (_gate)
+            {
+                IMcpServer running;
+                if (_clients.TryGetValue(entry.Name, out running))
+                {
+                    _lastUsed[entry.Name] = DateTime.UtcNow;
+                    return running;
+                }
+            }
+            // 建構只組參數不連線；真正的握手在第一次 list／call 內發生。
+            IMcpServer server = _factory(entry);
+            bool stored = false;
+            try
+            {
+                // 先做一次 list 確認連線可用，壞 server 在這裡就現形。
+                await server.ListToolsAsync(cancellationToken).ConfigureAwait(false);
+                lock (_gate)
+                {
+                    IMcpServer existing;
+                    if (_clients.TryGetValue(entry.Name, out existing))
+                    {
+                        server.Dispose();
+                        server = existing;
+                    }
+                    else
+                    {
+                        _clients[entry.Name] = server;
+                        stored = true;
+                    }
+                    _lastUsed[entry.Name] = DateTime.UtcNow;
+                }
+                return server;
+            }
+            catch (Exception)
+            {
+                if (!stored) server.Dispose();
+                throw;
+            }
+        }
+
+        private void Drop(string name)
+        {
+            IMcpServer server = null;
+            lock (_gate)
+            {
+                if (_clients.TryGetValue(name, out server)) _clients.Remove(name);
+                _lastUsed.Remove(name);
+            }
+            if (server != null)
+            {
+                try
+                {
+                    server.Dispose();
+                }
+                catch (Exception)
+                {
+                    // 關閉失敗不影響遊戲。
+                }
+            }
+        }
+    }
+}

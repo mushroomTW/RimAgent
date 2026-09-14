@@ -40,6 +40,8 @@
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" Aliases="ste" ExcludeAssets="runtime" />
     <!-- Microsoft Agent Framework：只用 ChatClientAgent 置換工具迴圈，不碰 Workflows。 -->
     <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" ExcludeAssets="runtime" />
+    <!-- 官方 MCP SDK（stdio client）：遊戲內 agent 呼叫本機 MCP 伺服器。執行期 DLL 見下方出貨白名單。 -->
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" ExcludeAssets="runtime" />
     <!--
       框架強制 MEAI.Abstractions 用 netstandard2.0 資產（見 RimLLM Framework.csproj）：
       net462 資產參考 System.ComponentModel.DataAnnotations，RimWorld 的 Unity Mono 沒有出貨這顆 DLL，
@@ -98,6 +100,15 @@
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.hashcode\6.0.0\lib\net462\Microsoft.Bcl.HashCode.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\netstandard2.0\Microsoft.ML.Tokenizers.dll" />
       <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)google.protobuf\3.30.2\lib\net45\Google.Protobuf.dll" />
+      <!--
+        MCP 官方 SDK（netstandard2.0 資產）：遊戲內 agent 當 client 連本機 stdio 伺服器。
+        只出這兩顆（程式碼只用到 Core 的型別，主包 ModelContextProtocol.dll 無人參考就不出貨）；
+        其餘閉包框架皆已出貨（STJ、Channels、Pipelines、SSE、DiagnosticSource、
+        Caching/Hosting/Logging.Abstractions 皆 10.0.0.x ≥ SDK 要求的 10.0.0.0，
+        Bcl.Memory 由 RimAgent 出貨的 10.0.12 覆蓋，MEAI.Abstractions 沿用既有參考）。
+      -->
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)modelcontextprotocol.core\2.2.0\lib\netstandard2.0\ModelContextProtocol.Core.dll" />
+      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)system.collections.immutable\10.0.10\lib\netstandard2.0\System.Collections.Immutable.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(AgentFrameworkAssemblies)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>

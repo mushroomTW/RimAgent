@@ -266,6 +266,25 @@ namespace RimAgent.Game
         public IReadOnlyList<TradeGoodsInfo> Goods { get; set; } = Array.Empty<TradeGoodsInfo>();
     }
 
+    /// <summary>遊戲時間流速：目前速度與可切換的速度目錄。</summary>
+    public sealed class TimeSpeedInfo
+    {
+        /// <summary>目前速度 defName（Paused／Normal／Fast／Superfast）。</summary>
+        public string Current { get; set; } = "Normal";
+        /// <summary>可切換的速度目錄。</summary>
+        public IReadOnlyList<DefInfo> Available { get; set; } = Array.Empty<DefInfo>();
+    }
+
+    /// <summary>玩家可按鍵切到的四檔速度目錄；Ultrafast 只留給開發模式。正式與假世界共用同一份。</summary>
+    public static class TimeSpeedDirectory
+    {
+        public static readonly IReadOnlyList<DefInfo> Default = new[]
+        {
+            new DefInfo("Paused", "Paused"), new DefInfo("Normal", "Normal"),
+            new DefInfo("Fast", "Fast"), new DefInfo("Superfast", "Superfast")
+        };
+    }
+
     public sealed class ResearchProjectInfo
     {
         public string DefName { get; set; } = string.Empty;

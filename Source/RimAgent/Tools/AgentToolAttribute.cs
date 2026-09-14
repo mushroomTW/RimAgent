@@ -13,7 +13,9 @@ namespace RimAgent.Tools
         Prisoner,
         Animal,
         Zone,
-        Production
+        Production,
+        Time,
+        Mcp
     }
 
     /// <summary>

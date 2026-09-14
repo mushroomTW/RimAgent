@@ -8,7 +8,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>十類工具各自的開關。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
+    /// <summary>十二類工具各自的開關。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
     public sealed class ToolPermissions
     {
         public bool Observe { get; set; } = true;
@@ -21,6 +21,8 @@ namespace RimAgent.Tools
         public bool Animal { get; set; }
         public bool Zone { get; set; }
         public bool Production { get; set; }
+        public bool Time { get; set; }
+        public bool Mcp { get; set; }
 
         public bool Allows(ToolCategory category)
         {
@@ -36,6 +38,8 @@ namespace RimAgent.Tools
                 case ToolCategory.Animal: return Animal;
                 case ToolCategory.Zone: return Zone;
                 case ToolCategory.Production: return Production;
+                case ToolCategory.Time: return Time;
+                case ToolCategory.Mcp: return Mcp;
                 default: return false;
             }
         }
@@ -64,7 +68,7 @@ namespace RimAgent.Tools
         {
         }
 
-        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ICommandGate gate)
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ICommandGate gate, Mcp.McpManager mcp = null)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (transcript == null) throw new ArgumentNullException(nameof(transcript));
@@ -79,6 +83,8 @@ namespace RimAgent.Tools
             Register(new AnimalTools(world), transcript);
             Register(new ZoneTools(world), transcript);
             Register(new ProductionTools(world), transcript);
+            Register(new TimeTools(world), transcript);
+            Register(new McpTools(mcp ?? new Mcp.McpManager(null)), transcript);
         }
 
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>

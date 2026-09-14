@@ -19,6 +19,7 @@
   <!-- 能力警告 -->
   <RimAgent.NoFunctionCalling>RimLLM Framework 的備援鏈裡沒有任何模型支援工具呼叫，Agent 無法執行操作。請到 RimLLM Framework 的 mod 設定調整備援鏈。</RimAgent.NoFunctionCalling>
   <RimAgent.NoProvider>RimLLM Framework 沒有可用的供應商：{0}。請到 RimLLM Framework 的 mod 設定完成設定。</RimAgent.NoProvider>
+  <RimAgent.FrameworkNotInitialized>RimLLM Framework 未完成初始化。請查看除錯記錄中 RimLLM Framework 載入時的錯誤。</RimAgent.FrameworkNotInitialized>
   <RimAgent.FrameworkTooOld>安裝的 RimLLM Framework 版本太舊，RimAgent 無法使用。請更新到 2026-09-12 之後的版本。</RimAgent.FrameworkTooOld>
 
   <!-- 錯誤 -->
@@ -50,6 +51,10 @@
   <RimAgent.Settings.ZoneTip>列出區域，新增儲藏區與種植區，刪除區域，調整儲藏區允收品項。預設關閉。</RimAgent.Settings.ZoneTip>
   <RimAgent.Settings.Production>生產 — 工作台與帳單</RimAgent.Settings.Production>
   <RimAgent.Settings.ProductionTip>列出工作台與帳單，新增指定次數的帳單，刪除帳單。預設關閉。</RimAgent.Settings.ProductionTip>
+  <RimAgent.Settings.Time>時間 — 暫停與流速</RimAgent.Settings.Time>
+  <RimAgent.Settings.TimeTip>查看目前時間流速，暫停遊戲或切換正常與加速。預設關閉。</RimAgent.Settings.TimeTip>
+  <RimAgent.Settings.MCP>MCP — 本機伺服器的外部工具</RimAgent.Settings.MCP>
+  <RimAgent.Settings.MCPTip>讓 agent 呼叫 AgentPack/MCP/servers.json 裡設定的本機 MCP 伺服器工具。伺服器以你的使用者權限執行，只開信任的。預設關閉。</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.MaxSteps>每句指令最多呼叫工具次數：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控迴圈燒掉 API 額度。立即生效，遊戲中調整也有效。</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.RequireConfirmation>確認 — 工作／建造／戰鬥先預覽再執行</RimAgent.Settings.RequireConfirmation>
@@ -73,5 +78,9 @@
   <RimAgent.Goals.Add>新增</RimAgent.Goals.Add>
   <RimAgent.Goals.Remove>刪除</RimAgent.Goals.Remove>
   <RimAgent.Goals.Close>關閉</RimAgent.Goals.Close>
+  <RimAgent.Standing.Button>常駐</RimAgent.Standing.Button>
+  <RimAgent.Standing.Title>常駐指令 — 每次指令都會附上</RimAgent.Standing.Title>
+  <RimAgent.Standing.Save>儲存</RimAgent.Standing.Save>
+  <RimAgent.Standing.Close>關閉</RimAgent.Standing.Close>
 
 </LanguageData>
