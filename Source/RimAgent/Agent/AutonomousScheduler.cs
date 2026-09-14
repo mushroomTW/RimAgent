@@ -1,6 +1,6 @@
 namespace RimAgent.Agent
 {
-    /// <summary>自主模式一次自動任務的觸發原因。None 代表現在不該跑。</summary>
+    /// <summary>自主模式一次自主任務的觸發原因。None 代表現在不該跑。</summary>
     public enum AutonomousTrigger
     {
         None,
@@ -36,7 +36,7 @@ namespace RimAgent.Agent
 
     /// <summary>
     /// 自主排程器：純邏輯，不碰遊戲 API，方便測試。
-    /// 語義：事件採邊緣觸發（無→有才跑一次），任何兩次任務間至少隔 <see cref="CooldownTicks"/>，
+    /// 語義：事件採邊緣觸發（無→有才跑一次），任何兩次自主任務間至少隔 <see cref="CooldownTicks"/>，
     /// 一個視窗內的工具呼叫總數不超過預算。觸發優先序：襲擊＞心情＞缺糧＞間隔。
     /// </summary>
     public sealed class AutonomousScheduler
@@ -59,7 +59,7 @@ namespace RimAgent.Agent
         public int ToolsUsed => _toolsUsed;
         public int Runs => _runs;
 
-        /// <summary>現在是否該起一次任務；回傳觸發原因或 None。</summary>
+        /// <summary>現在是否該起一次自主任務；回傳觸發原因或 None。</summary>
         public AutonomousTrigger Evaluate(long tick, AutonomousSignals signals, AutonomousConfig config)
         {
             if (!config.Enabled) return AutonomousTrigger.None;
@@ -83,7 +83,7 @@ namespace RimAgent.Agent
             return trigger;
         }
 
-        /// <summary>任務結束後記錄：推進冷卻、累計本次消耗的工具呼叫次數。</summary>
+        /// <summary>自主任務結束後記錄：推進冷卻、累計本次消耗的工具呼叫次數。</summary>
         public void RecordRun(long tick, int toolCalls, AutonomousConfig config)
         {
             ResetWindowIfNeeded(tick, config);

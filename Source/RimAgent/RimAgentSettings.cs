@@ -3,7 +3,7 @@ using Verse;
 
 namespace RimAgent
 {
-    /// <summary>玩家可調的設定：十類工具的開關與單次任務的步數上限。</summary>
+    /// <summary>玩家可調的設定：十類工具的開關與單句指令的步數上限。</summary>
     public class RimAgentSettings : ModSettings
     {
         public const int DefaultMaxSteps = 8;

@@ -70,6 +70,10 @@ namespace RimAgent.Tools
 
         private static readonly Regex BoldAsterisks = new Regex(@"\*\*(.+?)\*\*", RegexOptions.Singleline);
         private static readonly Regex BoldUnderscores = new Regex(@"__(.+?)__", RegexOptions.Singleline);
+        // 單星／單底線斜體：只認前後不黏著英數字（保護 defName 如 Plant_TreeOak、算式如 2*3*4），
+        // 且標記緊貼文字（* 後／* 前不留白，符合 Markdown 左右相鄰規則，保護 3 * 4 這類算式）。
+        private static readonly Regex SingleAsterisks = new Regex(@"(?<![A-Za-z0-9*])\*([^*\s][^*\n]*?[^*\s]|[^*\s])\*(?![A-Za-z0-9*])", RegexOptions.Singleline);
+        private static readonly Regex SingleUnderscores = new Regex(@"(?<![A-Za-z0-9_])_([^_\s][^_\n]*?[^_\s]|[^_\s])_(?![A-Za-z0-9_])", RegexOptions.Singleline);
         private static readonly Regex InlineCode = new Regex(@"`(.+?)`", RegexOptions.Singleline);
         private static readonly Regex Strikethrough = new Regex(@"~~(.+?)~~", RegexOptions.Singleline);
         private static readonly Regex Link = new Regex(@"\[(.+?)\]\(.+?\)", RegexOptions.Singleline);
@@ -77,13 +81,15 @@ namespace RimAgent.Tools
 
         /// <summary>
         /// 把模型回覆裡的 Markdown 標記還原成純文字再顯示（遊戲內 UI 不渲染 Markdown）。
-        /// 只處理無歧義的成對標記與連結；單個 * 或 _（如 defName、數字運算）一律保留。
+        /// 處理成對標記（粗體、斜體、代碼、刪除線、標題）與連結；未成對的 * 或 _（如 defName、數字運算）一律保留。
         /// </summary>
         public static string StripMarkdown(string text)
         {
             if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
             string stripped = BoldAsterisks.Replace(text, "$1");
             stripped = BoldUnderscores.Replace(stripped, "$1");
+            stripped = SingleAsterisks.Replace(stripped, "$1");
+            stripped = SingleUnderscores.Replace(stripped, "$1");
             stripped = InlineCode.Replace(stripped, "$1");
             stripped = Strikethrough.Replace(stripped, "$1");
             stripped = Link.Replace(stripped, "$1");

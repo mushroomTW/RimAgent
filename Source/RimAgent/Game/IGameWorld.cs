@@ -67,9 +67,9 @@ namespace RimAgent.Game
         CommandResult SetDrafted(int pawnId, bool drafted);
         CommandResult OrderMoveTo(int pawnId, int x, int z);
         CommandResult OrderAttack(int pawnId, int targetId);
-        /// <summary>一次結清的買賣：驗證不過整筆不做，成功時 Message 為買賣明細。</summary>
+        /// <summary>一次結清的交易：驗證不過整筆不做，成功時 Message 為交易明細。</summary>
         CommandResult ExecuteTrade(TradeRequest request);
-        /// <summary>組商隊外出：驗證不過不組，成功時 Message 為成團明細。</summary>
+        /// <summary>組織商隊外出：驗證不過不組，成功時 Message 為成團明細。</summary>
         CommandResult FormCaravan(CaravanRequest request);
         CommandResult SetMedicalCare(int pawnId, string careDefName);
         /// <summary>切換囚犯互動模式（走獄卒原生機制，不硬轉派系）。</summary>

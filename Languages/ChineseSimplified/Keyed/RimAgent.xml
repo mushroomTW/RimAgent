@@ -38,8 +38,8 @@
   <RimAgent.Settings.BuildTip>标记开采、砍伐、收获、拆除、搬运，以及放置蓝图。默认关闭。</RimAgent.Settings.BuildTip>
   <RimAgent.Settings.Combat>战斗 — 征召、移动与攻击指令</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>征召殖民者并下移动或攻击指令。模型需要数秒才会响应，只适合部署与撤退，不适合实时操作。默认关闭。</RimAgent.Settings.CombatTip>
-  <RimAgent.Settings.Trade>交易 — 查库存、买入卖出、商队</RimAgent.Settings.Trade>
-  <RimAgent.Settings.TradeTip>列出轨道商人与来访商队在卖什么，以游戏交易价格一次结清买卖，并组自己的商队外出。默认关闭。</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.Trade>交易 — 查库存、买入卖出、组织商队</RimAgent.Settings.Trade>
+  <RimAgent.Settings.TradeTip>列出轨道商人与来访商队在卖什么，以游戏交易价格买入卖出一次结清，并组织自己的商队外出。默认关闭。</RimAgent.Settings.TradeTip>
   <RimAgent.Settings.Medical>医疗 — 健康与医疗等级</RimAgent.Settings.Medical>
   <RimAgent.Settings.MedicalTip>查看殖民者健康（伤口、疾病、流血、手术）并调整医疗等级。默认关闭。</RimAgent.Settings.MedicalTip>
   <RimAgent.Settings.Prisoner>囚犯 — 互动与释放</RimAgent.Settings.Prisoner>
@@ -55,8 +55,8 @@
   <RimAgent.Settings.RequireConfirmation>确认 — 工作／建造／战斗先预览再执行</RimAgent.Settings.RequireConfirmation>
   <RimAgent.Settings.RequireConfirmationTip>开启后，工作、建造与战斗三类工具只会列出将做的事，按下确认才执行。默认关闭。</RimAgent.Settings.RequireConfirmationTip>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行动</RimAgent.Settings.AutonomousHeader>
-  <RimAgent.Settings.Autonomous>自主 — 排程与事件触发的自动任务</RimAgent.Settings.Autonomous>
-  <RimAgent.Settings.AutonomousTip>开启后 Agent 会自己起任务：例行巡检，外加袭击、心情警戒与缺粮。每次任务都有记录，并受下方每日上限管制。默认关闭。</RimAgent.Settings.AutonomousTip>
+  <RimAgent.Settings.Autonomous>自主 — 排程与事件触发的自主任务</RimAgent.Settings.Autonomous>
+  <RimAgent.Settings.AutonomousTip>开启后 Agent 会自己起自主任务：例行巡检，外加袭击、心情警戒与缺粮。每次自主任务都有记录，并受下方每日上限管制。默认关闭。</RimAgent.Settings.AutonomousTip>
   <RimAgent.Settings.AutoInterval>例行巡检间隔：{0} 小时</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoBudget>自主每日工具调用上限：{0} 次</RimAgent.Settings.AutoBudget>
   <RimAgent.Settings.AutoOnRaid>袭击时反应</RimAgent.Settings.AutoOnRaid>

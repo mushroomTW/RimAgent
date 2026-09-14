@@ -58,7 +58,7 @@ namespace RimAgent.Tests
             new DefInfo("HerbalMedicine", "herbal medicine"), new DefInfo("Corn", "corn")
         };
 
-        /// <summary>假結算的單件價格（正式端用遊戲公式）。買賣同價；缺省為 1。</summary>
+        /// <summary>假結算的單件價格（正式端用遊戲公式）。買入賣出同價；缺省為 1。</summary>
         public Dictionary<string, float> Prices { get; } = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
         public IReadOnlyList<DefInfo> MedicalCareLevels { get; set; } = new[]
@@ -389,7 +389,8 @@ namespace RimAgent.Tests
             foreach (int id in ids)
             {
                 ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == id);
-                if (pawn == null) return CommandResult.Fail("colonist not found");
+                if (pawn == null) return CommandResult.Fail($"no colonist has id {id} (prisoners and visitors cannot form a caravan)");
+                if (pawn.Downed) return CommandResult.Fail($"{pawn.Name} is downed and cannot join a caravan");
                 if (pawn.Drafted) return CommandResult.Fail($"{pawn.Name} is drafted; undraft them first");
                 members.Add(pawn);
             }

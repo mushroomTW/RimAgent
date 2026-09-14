@@ -104,14 +104,14 @@ namespace RimAgent.Game
         public float MarketValue { get; set; }
     }
 
-    /// <summary>買賣各一行：已解析到 defName 的品項與數量。</summary>
+    /// <summary>買入賣出各一行：已解析到 defName 的品項與數量。</summary>
     public sealed class TradeLine
     {
         public string DefName { get; set; } = string.Empty;
         public int Count { get; set; }
     }
 
-    /// <summary>一次結清的交易請求：買賣明細一次交割，驗證不過則整筆不做。</summary>
+    /// <summary>一次結清的交易請求：買入與賣出明細一次交割，驗證不過則整筆不做。</summary>
     public sealed class TradeRequest
     {
         /// <summary>見 <see cref="TraderInfo.Id"/>。</summary>
@@ -124,7 +124,7 @@ namespace RimAgent.Game
         public IReadOnlyList<TradeLine> Sells { get; set; } = Array.Empty<TradeLine>();
     }
 
-    /// <summary>組一支商隊外出：指定的殖民者離開地圖往羅盤方向走。</summary>
+    /// <summary>組織一支商隊外出：指定的殖民者離開地圖往羅盤方向走。</summary>
     public sealed class CaravanRequest
     {
         public IReadOnlyList<int> PawnIds { get; set; } = Array.Empty<int>();

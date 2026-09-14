@@ -8,7 +8,7 @@ using RimAgent.Tools;
 
 namespace RimAgent.Tests
 {
-    /// <summary>交易類別（caravan issue 01）：組商隊外出。</summary>
+    /// <summary>交易類別（caravan issue 01）：組織商隊外出。</summary>
     [TestFixture]
     public class CaravanToolsTests
     {
@@ -84,6 +84,16 @@ namespace RimAgent.Tests
             string text = _tools.FormCaravan("Ali, Bob", "E");
 
             Assert.That(text, Does.StartWith("Error:").And.Contain("drafted"));
+        }
+
+        [Test]
+        public void DownedMemberIsRefused()
+        {
+            _world.Colonists[0].Downed = true;
+
+            string text = _tools.FormCaravan("Ali, Bob", "E");
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("downed"));
         }
 
         [Test]

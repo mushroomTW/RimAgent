@@ -632,6 +632,7 @@ namespace RimAgent.Game
             Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
             if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
             string label = zone.label;
+            // 原生刪除路徑：Zone.Delete() 清格子並經 Deregister() 走 ZoneManager.DeregisterZone。
             zone.Delete();
             return CommandResult.Ok($"Deleted zone [{zoneId}] {label}. Stored items stay on the ground.");
         }
@@ -947,7 +948,7 @@ namespace RimAgent.Game
             try
             {
                 TradeDeal deal = TradeSession.deal;
-                // 買賣分開追蹤：同 def 可能兩邊都有貨而併在同一行，淨額結算。
+                // 買入賣出分開追蹤：同 def 可能兩邊都有貨而併在同一行，淨額結算。
                 var buyAllocations = new Dictionary<Tradeable, int>();
                 var sellAllocations = new Dictionary<Tradeable, int>();
                 foreach (TradeLine line in buys)
@@ -1009,8 +1010,9 @@ namespace RimAgent.Game
             foreach (int id in ids)
             {
                 Pawn pawn = FindColonist(id);
-                if (pawn == null) return CommandResult.Fail("colonist not found");
+                if (pawn == null) return CommandResult.Fail($"no colonist has id {id} (prisoners and visitors cannot form a caravan)");
                 if (pawn.Dead) return CommandResult.Fail($"{pawn.LabelShort} is dead");
+                if (pawn.Downed) return CommandResult.Fail($"{pawn.LabelShort} is downed and cannot join a caravan");
                 if (pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is drafted; undraft them first");
                 pawns.Add(pawn);
             }
@@ -1050,7 +1052,7 @@ namespace RimAgent.Game
         }
 
         /// <summary>
-        /// 把一行買賣需求按方向分到同 def 的各行（同 def 可能因品質／材料分多行）。
+        /// 把一行買入賣出需求按方向分到同 def 的各行（同 def 可能因品質／材料分多行）。
         /// 全部吃不下回傳原因字串；成功回傳 null。只算數不動遊戲狀態。
         /// </summary>
         private static string Allocate(Dictionary<Tradeable, int> allocations, TradeDeal deal, TradeLine line, bool buy, string traderLabel)

@@ -9,7 +9,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>交易：商人庫存查詢、一次結清買賣、組商隊外出。</summary>
+    /// <summary>交易：商人庫存查詢、買入與賣出一次結清、組織商隊外出。</summary>
     public sealed class TradeTools
     {
         /// <summary>單一商人最多列出的品項數，超過則截斷並註明（省 token）。</summary>

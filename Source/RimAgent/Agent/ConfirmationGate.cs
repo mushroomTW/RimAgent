@@ -24,6 +24,9 @@ namespace RimAgent.Agent
 
         public bool AllowCommands(ToolCategory category)
         {
+            // 只有 Work／Build／Combat 受「需確認」管制，其他類別（含查詢）永遠放行。
+            if (category != ToolCategory.Work && category != ToolCategory.Build && category != ToolCategory.Combat)
+                return true;
             if (Volatile.Read(ref _bypass) == 1) return true;
             return !_required();
         }

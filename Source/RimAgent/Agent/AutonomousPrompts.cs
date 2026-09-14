@@ -12,7 +12,7 @@ namespace RimAgent.Agent
     }
 
     /// <summary>
-    /// 自主任務的指令文字：依觸發原因給模型一個明確的當下任務，並附上玩家設的長期目標。
+    /// 自主任務的指令文字：依觸發原因給模型一個明確的當下自主任務，並附上玩家設的長期目標。
     /// 放在程式碼而非語言檔——跟系統提示詞一樣是給模型的，不是給玩家看的 UI。
     /// </summary>
     public static class AutonomousPrompts
@@ -67,10 +67,10 @@ namespace RimAgent.Agent
             switch (language)
             {
                 case AutoLanguage.Traditional:
-                    sb.Append("\n處理完當下任務後，若有餘力就順手推進這些目標。");
+                    sb.Append("\n處理完當下自主任務後，若有餘力就順手推進這些目標。");
                     break;
                 case AutoLanguage.Simplified:
-                    sb.Append("\n处理完当下任务后，若有余力就顺手推进这些目标。");
+                    sb.Append("\n处理完当下自主任务后，若有余力就顺手推进这些目标。");
                     break;
                 default:
                     sb.Append("\nAfter the urgent task, work toward these goals if you have steps left.");

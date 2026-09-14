@@ -16,8 +16,8 @@ namespace RimAgent
     /// 照舊歸零（等框架提供版本化的 session 序列化再評估），新局時兩者都清空，
     /// 避免把上一個殖民地的脈絡帶進來。RimWorld 會自動為每個 GameComponent 子類建立實例。
     ///
-    /// 自主模式：設定頁打開後，每 500 tick 检查一次訊號（襲擊、心境、糧食、間隔），
-    /// 條件成立就起一次任務。任務與玩家指令走同一個 session（同歷史、同權限、同確認閘門），
+    /// 自主模式：設定頁打開後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、間隔），
+    /// 條件成立就起一次自主任務。自主任務與玩家指令走同一個 session（同歷史、同權限、同確認閘門），
     /// 差別只在指令文字由排程器產生並附上長期目標；每日工具呼叫總量有上限。
     /// </summary>
     public class RimAgentGameComponent : GameComponent
@@ -205,7 +205,7 @@ namespace RimAgent
             }
             catch (Exception)
             {
-                // 語言偵測失敗就用英文，任務本身不受影響。
+                // 語言偵測失敗就用英文，自主任務本身不受影響。
             }
             return AutoLanguage.English;
         }

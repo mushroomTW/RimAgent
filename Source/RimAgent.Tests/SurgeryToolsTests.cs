@@ -99,7 +99,7 @@ namespace RimAgent.Tests
             client.CallTool("schedule_surgery", new { colonist = "Ali", surgery = "remove body part", part = "left lung" }).Reply("Done.");
             var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Medical = true }, 8);
 
-            await session.SendAsync("Ali 左肺 Gallstone 開刀");
+            await session.SendAsync("Ali 左肺 Gallstone 排手術");
 
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.ToolName, Is.EqualTo("schedule_surgery"));

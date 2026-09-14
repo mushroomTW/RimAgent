@@ -128,9 +128,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_research", ToolCategory.Observe)]
-        [Description("Switches the colony's active research project. Pass \"none\" to stop the current research without losing its progress. Reports the previous and new project.")]
+        [Description("Switches the colony's active research project. Pass \"none\" (also accepts \"stop\" or empty) to stop the current research without losing its progress. Reports the previous and new project.")]
         public string SetResearch(
-            [Description("Research name or defName, e.g. \"Electricity\", or \"none\" to stop the current research.")] string project)
+            [Description("Research name or defName, e.g. \"Electricity\", or \"none\" (also \"stop\" or empty) to stop the current research.")] string project)
         {
             string want = (project ?? string.Empty).Trim();
             ResearchInfo before = _world.GetResearch();
