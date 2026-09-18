@@ -82,20 +82,9 @@ namespace RimAgent.Tools
                 return ToolText.Error($"unknown trader \"{trader}\". Use list_orbital_traders or list_visitor_caravans to get a valid id.");
             }
 
-            ColonistInfo pawn;
-            if (string.IsNullOrWhiteSpace(negotiator))
-            {
-                // 交涉者預設：社交技能最高且未倒地者。
-                pawn = _world.GetColonists().Where(c => !c.Downed).OrderByDescending(SocialLevel).FirstOrDefault();
-                if (pawn == null) return ToolText.Error("no colonist is available to negotiate.");
-            }
-            else
-            {
-                ResolveResult<ColonistInfo> resolved = TargetResolver.ResolveColonist(negotiator, _world.GetColonists());
-                if (!resolved.Success) return resolved.Error;
-                if (resolved.Value.Downed) return ToolText.Error($"{resolved.Value.Name} is downed and cannot negotiate.");
-                pawn = resolved.Value;
-            }
+            ResolveResult<ColonistInfo> negotiatorResult = ResolveNegotiator(negotiator);
+            if (!negotiatorResult.Success) return negotiatorResult.Error;
+            ColonistInfo pawn = negotiatorResult.Value;
 
             ResolveResult<List<TradeLine>> resolvedBuys = ResolveLines(buyLines.Value);
             if (!resolvedBuys.Success) return resolvedBuys.Error;
@@ -208,6 +197,21 @@ namespace RimAgent.Tools
                 lines.Add(new ParsedLine { Item = item, Count = count });
             }
             return ResolveResult<List<ParsedLine>>.Ok(lines);
+        }
+
+        private ResolveResult<ColonistInfo> ResolveNegotiator(string negotiator)
+        {
+            if (string.IsNullOrWhiteSpace(negotiator))
+            {
+                // 交涉者預設：社交技能最高且未倒地者。
+                ColonistInfo defaultPawn = _world.GetColonists().Where(c => !c.Downed).OrderByDescending(SocialLevel).FirstOrDefault();
+                if (defaultPawn == null) return ResolveResult<ColonistInfo>.Fail(ToolText.Error("no colonist is available to negotiate."));
+                return ResolveResult<ColonistInfo>.Ok(defaultPawn);
+            }
+            ResolveResult<ColonistInfo> resolved = TargetResolver.ResolveColonist(negotiator, _world.GetColonists());
+            if (!resolved.Success) return resolved;
+            if (resolved.Value.Downed) return ResolveResult<ColonistInfo>.Fail(ToolText.Error($"{resolved.Value.Name} is downed and cannot negotiate."));
+            return resolved;
         }
 
         private static int SocialLevel(ColonistInfo c)

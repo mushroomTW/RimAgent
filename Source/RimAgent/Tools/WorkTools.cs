@@ -130,14 +130,22 @@ namespace RimAgent.Tools
             }
 
             var failures = new List<string>();
-            foreach (ColonistInfo c in pawns.Value)
+            ApplyScheduleToColonists(pawns.Value, hours, assign.Value, failures);
+
+            string summary = $"Set hours {startHour}-{(endHour + 23) % 24} ({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
+            return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures);
+        }
+
+        private void ApplyScheduleToColonists(List<ColonistInfo> pawns, List<int> hours, DefInfo assign, List<string> failures)
+        {
+            foreach (ColonistInfo c in pawns)
             {
                 // 舊作息先抓：成功一個小時記一個，復原時才寫得回去。
                 IReadOnlyList<string> oldTable = c.Timetable;
                 foreach (int hour in hours)
                 {
                     string oldAssignment = oldTable != null && hour < oldTable.Count ? oldTable[hour] : string.Empty;
-                    CommandResult r = _world.SetTimeAssignment(c.Id, hour, assign.Value.DefName);
+                    CommandResult r = _world.SetTimeAssignment(c.Id, hour, assign.DefName);
                     if (!r.Success)
                     {
                         failures.Add($"{c.Name} hour {hour}: {r.Message}");
@@ -146,9 +154,6 @@ namespace RimAgent.Tools
                     if (_undo != null) _undo.RecordAssignment(c.Id, hour, oldAssignment);
                 }
             }
-
-            string summary = $"Set hours {startHour}-{(endHour + 23) % 24} ({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
-            return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures);
         }
     }
 }

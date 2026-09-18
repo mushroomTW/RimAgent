@@ -86,21 +86,9 @@ namespace RimAgent.Tools
             var failures = new List<string>();
             foreach (ColonistInfo c in pawns.Value)
             {
-                if (c.Downed)
-                {
-                    failures.Add($"{c.Name} is downed");
-                    continue;
-                }
-                if (!c.Drafted)
-                {
-                    CommandResult draft = _world.SetDrafted(c.Id, true);
-                    if (!draft.Success)
-                    {
-                        failures.Add($"{c.Name}: {draft.Message}");
-                        continue;
-                    }
-                    draftedNow.Add(c);
-                }
+                if (!TryPrepareColonistForCombat(c, failures, out bool newlyDrafted)) continue;
+                if (newlyDrafted) draftedNow.Add(c);
+
                 CommandResult r = _world.OrderMoveTo(c.Id, x, z);
                 if (r.Success) moved.Add(c);
                 else failures.Add($"{c.Name}: {r.Message}");
@@ -118,15 +106,11 @@ namespace RimAgent.Tools
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
             [Description("Id of the target, e.g. a hostile pawn from list_threats.")] int targetId)
         {
-            ThreatInfo threat = _world.GetThreats().FirstOrDefault(t => t.Id == targetId);
-            ThingInfo thing = threat == null
-                ? _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = 500 }).FirstOrDefault(t => t.Id == targetId)
-                : null;
-            if (threat == null && thing == null)
+            string targetLabel = ResolveTargetLabel(targetId);
+            if (targetLabel == null)
             {
                 return ToolText.Error($"no target with id {targetId} on the map. Use list_threats or find_things to get a valid id.");
             }
-            string targetLabel = threat != null ? threat.Label : thing.Label;
 
             ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
@@ -143,20 +127,8 @@ namespace RimAgent.Tools
             var failures = new List<string>();
             foreach (ColonistInfo c in pawns.Value)
             {
-                if (c.Downed)
-                {
-                    failures.Add($"{c.Name} is downed");
-                    continue;
-                }
-                if (!c.Drafted)
-                {
-                    CommandResult draft = _world.SetDrafted(c.Id, true);
-                    if (!draft.Success)
-                    {
-                        failures.Add($"{c.Name}: {draft.Message}");
-                        continue;
-                    }
-                }
+                if (!TryPrepareColonistForCombat(c, failures, out _)) continue;
+
                 CommandResult r = _world.OrderAttack(c.Id, targetId);
                 if (r.Success) attacking.Add(c);
                 else failures.Add($"{c.Name}: {r.Message}");
@@ -165,6 +137,35 @@ namespace RimAgent.Tools
             if (attacking.Count == 0) return ToolText.Error($"nobody could attack {targetLabel} [{targetId}]. " + string.Join("; ", failures));
             string summary = $"Ordered {ToolText.Names(attacking)} to attack {targetLabel} [{targetId}].";
             return failures.Count == 0 ? summary : summary + " Skipped: " + string.Join("; ", failures);
+        }
+
+        private string ResolveTargetLabel(int targetId)
+        {
+            ThreatInfo threat = _world.GetThreats().FirstOrDefault(t => t.Id == targetId);
+            if (threat != null) return threat.Label;
+            ThingInfo thing = _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = 500 }).FirstOrDefault(t => t.Id == targetId);
+            return thing?.Label;
+        }
+
+        private bool TryPrepareColonistForCombat(ColonistInfo c, List<string> failures, out bool draftedNow)
+        {
+            draftedNow = false;
+            if (c.Downed)
+            {
+                failures.Add($"{c.Name} is downed");
+                return false;
+            }
+            if (!c.Drafted)
+            {
+                CommandResult draft = _world.SetDrafted(c.Id, true);
+                if (!draft.Success)
+                {
+                    failures.Add($"{c.Name}: {draft.Message}");
+                    return false;
+                }
+                draftedNow = true;
+            }
+            return true;
         }
     }
 }

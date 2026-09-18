@@ -93,8 +93,10 @@ namespace RimAgent.Tools
             Register(new McpTools(mcp ?? new Mcp.McpManager(null), gate), transcript);
         }
 
+        private IReadOnlyList<AITool> _allTools;
+
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
-        public IReadOnlyList<AITool> All => _tools.Select(t => t.Tool).ToList();
+        public IReadOnlyList<AITool> All => _allTools ?? (_allTools = _tools.Select(t => t.Tool).ToList());
 
         /// <summary>依權限挑選，不分模式（除詢問模式外各模式的工具清單相同）。</summary>
         public IList<AITool> Select(ToolPermissions permissions)

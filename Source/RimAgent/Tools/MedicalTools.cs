@@ -68,41 +68,56 @@ namespace RimAgent.Tools
             var sb = new StringBuilder();
             foreach (ColonistInfo c in pawns.Value)
             {
-                sb.Append(ToolText.Colonist(c)).Append(" (health ").Append(ToolText.Pct(c.HealthPercent)).Append(')');
-                if (c.Downed) sb.Append(" DOWNED");
-                sb.AppendLine();
-                if (!HasProblems(c, health))
-                {
-                    sb.Append("  healthy.").AppendLine();
-                    continue;
-                }
-                ColonistHealthInfo h = health[c.Id];
-                foreach (HealthConditionInfo cond in h.Conditions.Take(MaxConditionsListed))
-                {
-                    sb.Append("  - ").Append(cond.Label);
-                    if (!string.IsNullOrEmpty(cond.Part)) sb.Append(" (").Append(cond.Part).Append(')');
-                    if (!string.Equals(cond.Kind, HealthConditionInfo.MissingKind, StringComparison.Ordinal))
-                    {
-                        sb.Append(", severity ").Append(ToolText.Num(cond.Severity));
-                    }
-                    if (cond.Bleeding) sb.Append(", bleeding");
-                    if (cond.Tended) sb.Append(", tended");
-                    else if (cond.NeedsTending) sb.Append(", needs tending");
-                    sb.AppendLine();
-                }
-                if (h.Conditions.Count > MaxConditionsListed)
-                {
-                    sb.Append("  ... and ").Append(h.Conditions.Count - MaxConditionsListed).Append(" more.").AppendLine();
-                }
-                foreach (SurgeryBillInfo bill in h.PendingSurgeries)
-                {
-                    sb.Append("  - pending operation: ").Append(bill.Label);
-                    if (!string.IsNullOrEmpty(bill.Part)) sb.Append(" (").Append(bill.Part).Append(')');
-                    if (bill.Suspended) sb.Append(" [suspended]");
-                    sb.AppendLine();
-                }
+                AppendColonistHealth(sb, c, health);
             }
             return sb.ToString().Trim();
+        }
+
+        private static void AppendColonistHealth(StringBuilder sb, ColonistInfo c, Dictionary<int, ColonistHealthInfo> health)
+        {
+            sb.Append(ToolText.Colonist(c)).Append(" (health ").Append(ToolText.Pct(c.HealthPercent)).Append(')');
+            if (c.Downed) sb.Append(" DOWNED");
+            sb.AppendLine();
+            if (!HasProblems(c, health))
+            {
+                sb.Append("  healthy.").AppendLine();
+                return;
+            }
+            ColonistHealthInfo h = health[c.Id];
+            AppendConditions(sb, h);
+            AppendPendingSurgeries(sb, h);
+        }
+
+        private static void AppendConditions(StringBuilder sb, ColonistHealthInfo h)
+        {
+            foreach (HealthConditionInfo cond in h.Conditions.Take(MaxConditionsListed))
+            {
+                sb.Append("  - ").Append(cond.Label);
+                if (!string.IsNullOrEmpty(cond.Part)) sb.Append(" (").Append(cond.Part).Append(')');
+                if (!string.Equals(cond.Kind, HealthConditionInfo.MissingKind, StringComparison.Ordinal))
+                {
+                    sb.Append(", severity ").Append(ToolText.Num(cond.Severity));
+                }
+                if (cond.Bleeding) sb.Append(", bleeding");
+                if (cond.Tended) sb.Append(", tended");
+                else if (cond.NeedsTending) sb.Append(", needs tending");
+                sb.AppendLine();
+            }
+            if (h.Conditions.Count > MaxConditionsListed)
+            {
+                sb.Append("  ... and ").Append(h.Conditions.Count - MaxConditionsListed).Append(" more.").AppendLine();
+            }
+        }
+
+        private static void AppendPendingSurgeries(StringBuilder sb, ColonistHealthInfo h)
+        {
+            foreach (SurgeryBillInfo bill in h.PendingSurgeries)
+            {
+                sb.Append("  - pending operation: ").Append(bill.Label);
+                if (!string.IsNullOrEmpty(bill.Part)) sb.Append(" (").Append(bill.Part).Append(')');
+                if (bill.Suspended) sb.Append(" [suspended]");
+                sb.AppendLine();
+            }
         }
 
         [AgentTool("schedule_surgery", ToolCategory.Medical, ToolRisk.Confirm)]
@@ -142,11 +157,8 @@ namespace RimAgent.Tools
 
         private string CareLabel(string defName)
         {
-            foreach (DefInfo d in _world.MedicalCareLevels)
-            {
-                if (string.Equals(d.DefName, defName, StringComparison.OrdinalIgnoreCase)) return d.Label;
-            }
-            return defName;
+            DefInfo match = _world.MedicalCareLevels.FirstOrDefault(d => string.Equals(d.DefName, defName, StringComparison.OrdinalIgnoreCase));
+            return match != null ? match.Label : defName;
         }
     }
 }
