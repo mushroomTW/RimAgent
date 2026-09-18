@@ -98,7 +98,7 @@ namespace RimAgent.UI
         }
 
         /// <summary>模式狀態列：目前模式或自主用量、目標與常駐指令入口。</summary>
-        private void DrawAutoStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
+        private static void DrawAutoStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
         {
             const float GoalsButtonWidth = 64f;
             const float StandingButtonWidth = 64f;
@@ -107,8 +107,8 @@ namespace RimAgent.UI
             var labelRect = new Rect(rect.x, rect.y, buttonRect.x - rect.x - 4f, rect.height);
 
             GUI.color = ToolColor;
-            string status = component.AutonomousEnabled
-                ? "RimAgent.Auto.StatusOn".Translate(component.AutonomousToolsUsed, component.AutonomousBudget).ToString()
+            string status = RimAgentGameComponent.AutonomousEnabled
+                ? "RimAgent.Auto.StatusOn".Translate(component.AutonomousToolsUsed, RimAgentGameComponent.AutonomousBudget).ToString()
                 : "RimAgent.Mode.Status".Translate(ModeLabel(session.Mode)).ToString();
             Widgets.Label(labelRect, status);
             GUI.color = Color.white;

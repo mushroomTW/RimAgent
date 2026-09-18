@@ -74,7 +74,9 @@ namespace RimAgent.Agent
                 {
                     string front = text.Substring(3, end - 3);
                     body = text.Substring(end + 3).Trim();
+#pragma warning disable S3878 // net472 mscorlib requires char[] overload at runtime to prevent MissingMethodException
                     foreach (string rawLine in front.Split(new[] { '\n' }))
+#pragma warning restore S3878
                     {
                         // 單字元 TrimEnd(char) 是 Mono 專屬多載，這裡只用 Trim()（本就清掉 \r）。
                         string line = rawLine.Trim();
@@ -103,11 +105,13 @@ namespace RimAgent.Agent
 
         private static string FirstLine(string text)
         {
+#pragma warning disable S3878 // net472 mscorlib requires char[] overload at runtime to prevent MissingMethodException
             foreach (string rawLine in text.Split(new[] { '\n' }))
             {
                 string line = rawLine.Trim().TrimStart(new[] { '#', ' ', '\t' });
                 if (line.Length > 0) return line;
             }
+#pragma warning restore S3878
             return string.Empty;
         }
     }

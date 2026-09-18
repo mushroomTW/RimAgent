@@ -101,9 +101,9 @@ namespace RimAgent.Tools
             ResolveResult<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
             if (!target.Success) return target.Error;
 
-            ResolveResult<List<DefInfo>> allows = ResolveItems(allow, "allow");
+            ResolveResult<List<DefInfo>> allows = ResolveItems(allow);
             if (!allows.Success) return allows.Error;
-            ResolveResult<List<DefInfo>> disallows = ResolveItems(disallow, "disallow");
+            ResolveResult<List<DefInfo>> disallows = ResolveItems(disallow);
             if (!disallows.Success) return disallows.Error;
             if (allows.Value.Count == 0 && disallows.Value.Count == 0)
             {
@@ -132,7 +132,7 @@ namespace RimAgent.Tools
             return null;
         }
 
-        private ResolveResult<List<DefInfo>> ResolveItems(string input, string side)
+        private ResolveResult<List<DefInfo>> ResolveItems(string input)
         {
             var defs = new List<DefInfo>();
             foreach (string part in (input ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))

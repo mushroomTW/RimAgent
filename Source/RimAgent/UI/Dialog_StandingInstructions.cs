@@ -7,6 +7,7 @@ namespace RimAgent.UI
     /// 常駐指令編輯窗：玩家寫給 agent 的長期守則，跟著存檔走，
     /// 每句指令的提示詞都附上（改完下一句生效，不必重開）。
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "S101:TypesShouldBeNamedInPascalCase", Justification = "RimWorld Window dialog naming convention")]
     public class Dialog_StandingInstructions : Window
     {
         private string _input = string.Empty;

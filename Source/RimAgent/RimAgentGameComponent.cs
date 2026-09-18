@@ -128,12 +128,12 @@ namespace RimAgent
         }
 
         /// <summary>UI 狀態列用：自主模式是否開啟中。</summary>
-        public bool AutonomousEnabled => RimAgentMod.Settings != null && RimAgentMod.Settings.mode == AgentMode.Autonomous;
+        public static bool AutonomousEnabled => RimAgentMod.Settings != null && RimAgentMod.Settings.mode == AgentMode.Autonomous;
 
         /// <summary>今日自主任務已消耗的工具呼叫次數／上限。</summary>
         public int AutonomousToolsUsed => _scheduler.ToolsUsed;
 
-        public int AutonomousBudget => RimAgentMod.Settings != null ? RimAgentMod.Settings.autonomousBudgetPerDay : 0;
+        public static int AutonomousBudget => RimAgentMod.Settings != null ? RimAgentMod.Settings.autonomousBudgetPerDay : 0;
 
         public override void ExposeData()
         {

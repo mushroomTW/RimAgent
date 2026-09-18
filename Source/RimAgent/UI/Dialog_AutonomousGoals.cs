@@ -8,6 +8,7 @@ namespace RimAgent.UI
     /// 長期目標管理視窗：玩家設長期目標，自主任務會附上並持續推進。
     /// 目標跟著存檔走（存在 GameComponent），跟設定頁的全局開關分開。
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "S101:TypesShouldBeNamedInPascalCase", Justification = "RimWorld Window dialog naming convention")]
     public class Dialog_AutonomousGoals : Window
     {
         private string _input = string.Empty;
@@ -56,9 +57,9 @@ namespace RimAgent.UI
             listing.Gap();
             Rect addRow = listing.GetRect(30f);
             _input = Widgets.TextField(new Rect(addRow.x, addRow.y, addRow.width - 110f, addRow.height), _input);
-            if (addRow.width > 220f && Widgets.ButtonText(new Rect(addRow.xMax - 104f, addRow.y, 104f, addRow.height), "RimAgent.Goals.Add".Translate()))
+            if (addRow.width > 220f && Widgets.ButtonText(new Rect(addRow.xMax - 104f, addRow.y, 104f, addRow.height), "RimAgent.Goals.Add".Translate()) && component.AddGoal(_input))
             {
-                if (component.AddGoal(_input)) _input = string.Empty;
+                _input = string.Empty;
             }
 
             listing.Gap();

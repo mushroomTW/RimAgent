@@ -50,7 +50,9 @@ namespace RimAgent.Agent
             }
             if (section.Length == 0) return;
             // 無參數 TrimEnd() 只有 Mono 有；這裡只清行尾空白。
+#pragma warning disable S3878 // net472 mscorlib requires char[] overload at runtime to prevent MissingMethodException
             sb.Append("\n\nAvailable skills:\n").Append(section.ToString().TrimEnd(new[] { '\r', '\n', ' ', '\t' }));
+#pragma warning restore S3878
             if (omitted > 0) sb.Append("\n[").Append(omitted).Append(" further skill(s) omitted: over budget]");
         }
     }

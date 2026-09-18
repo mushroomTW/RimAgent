@@ -75,7 +75,9 @@ namespace RimAgent.Tools
         public static string Skill(SkillInfo s)
         {
             if (s.Disabled) return s.Label + " (disabled)";
-            string passion = s.Passion >= 2 ? "**" : s.Passion == 1 ? "*" : string.Empty;
+            string passion = string.Empty;
+            if (s.Passion >= 2) passion = "**";
+            else if (s.Passion == 1) passion = "*";
             return s.Label + " " + s.Level + passion;
         }
     }

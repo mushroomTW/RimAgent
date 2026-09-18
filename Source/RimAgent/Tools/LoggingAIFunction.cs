@@ -98,7 +98,16 @@ namespace RimAgent.Tools
                 Arguments = entry.Arguments,
                 Preview = preview.Substring(ToolText.ConfirmationPrefix.Length)
             }, cancellationToken);
-            entry.RiskCheck = verdict.Risky ? (verdict.Failed ? "unavailable" : "high") : "low";
+            string riskCheck;
+            if (!verdict.Risky)
+            {
+                riskCheck = "low";
+            }
+            else
+            {
+                riskCheck = verdict.Failed ? "unavailable" : "high";
+            }
+            entry.RiskCheck = riskCheck;
 
             if (verdict.Risky)
             {

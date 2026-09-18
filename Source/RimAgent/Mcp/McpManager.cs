@@ -51,8 +51,19 @@ namespace RimAgent.Mcp
             {
                 foreach (McpServerEntry entry in entries)
                 {
-                    string state = !entry.Enabled ? "disabled"
-                        : _clients.ContainsKey(entry.Name) ? "running" : "idle";
+                    string state;
+                    if (!entry.Enabled)
+                    {
+                        state = "disabled";
+                    }
+                    else if (_clients.ContainsKey(entry.Name))
+                    {
+                        state = "running";
+                    }
+                    else
+                    {
+                        state = "idle";
+                    }
                     sb.Append('[').Append(entry.Name).Append("] ").Append(state).AppendLine();
                 }
             }

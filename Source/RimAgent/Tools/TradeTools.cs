@@ -184,7 +184,7 @@ namespace RimAgent.Tools
             if (string.IsNullOrWhiteSpace(text)) return ResolveResult<List<ParsedLine>>.Ok(lines);
             foreach (string raw in text.Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
             {
-                Match m = Regex.Match(raw.Trim(), @"^(.*?)\s*[x×*]\s*(\d+)\s*$");
+                Match m = Regex.Match(raw.Trim(), @"^(.*?)\s*[x×*]\s*(\d+)\s*$", RegexOptions.None, TimeSpan.FromSeconds(1));
                 if (!m.Success)
                 {
                     return ResolveResult<List<ParsedLine>>.Fail(ToolText.Error(
