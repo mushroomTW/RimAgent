@@ -74,22 +74,7 @@ namespace RimAgent.Agent
                 {
                     string front = text.Substring(3, end - 3);
                     body = text.Substring(end + 3).Trim();
-#pragma warning disable S3878 // net472 mscorlib requires char[] overload at runtime to prevent MissingMethodException
-                    foreach (string rawLine in front.Split(new[] { '\n' }))
-#pragma warning restore S3878
-                    {
-                        // 單字元 TrimEnd(char) 是 Mono 專屬多載，這裡只用 Trim()（本就清掉 \r）。
-                        string line = rawLine.Trim();
-                        if (line.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            string value = line.Substring(5).Trim();
-                            if (value.Length > 0) name = value;
-                        }
-                        else if (line.StartsWith("description:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            description = line.Substring(12).Trim();
-                        }
-                    }
+                    ParseFrontmatter(front, ref name, ref description);
                 }
             }
             if (description.Length == 0)
@@ -101,6 +86,26 @@ namespace RimAgent.Agent
                 body = body.Substring(0, MaxSkillChars) + "\n[skill truncated]";
             }
             return new AgentSkill { Name = name, Description = description, Body = body };
+        }
+
+        private static void ParseFrontmatter(string front, ref string name, ref string description)
+        {
+#pragma warning disable S3878 // net472 mscorlib requires char[] overload at runtime to prevent MissingMethodException
+            foreach (string rawLine in front.Split(new[] { '\n' }))
+#pragma warning restore S3878
+            {
+                // 單字元 TrimEnd(char) 是 Mono 專屬多載，這裡只用 Trim()（本就清掉 \r）。
+                string line = rawLine.Trim();
+                if (line.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = line.Substring(5).Trim();
+                    if (value.Length > 0) name = value;
+                }
+                else if (line.StartsWith("description:", StringComparison.OrdinalIgnoreCase))
+                {
+                    description = line.Substring(12).Trim();
+                }
+            }
         }
 
         private static string FirstLine(string text)

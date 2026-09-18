@@ -48,27 +48,8 @@ namespace RimAgent.Mcp
                     foreach (JsonElement element in list.EnumerateArray())
                     {
                         if (element.ValueKind != JsonValueKind.Object) continue;
-                        string name = GetString(element, "name");
-                        string command = GetString(element, "command");
-                        if (name.Length == 0 || command.Length == 0) continue;
-                        var entry = new McpServerEntry { Name = name, Command = command };
-                        JsonElement args;
-                        if (element.TryGetProperty("args", out args) && args.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (JsonElement arg in args.EnumerateArray())
-                            {
-                                if (arg.ValueKind == JsonValueKind.String) entry.Args.Add(arg.GetString() ?? string.Empty);
-                            }
-                        }
-                        JsonElement enabled;
-                        if (element.TryGetProperty("enabled", out enabled)
-                            && (enabled.ValueKind == JsonValueKind.True || enabled.ValueKind == JsonValueKind.False))
-                        {
-                            entry.Enabled = enabled.GetBoolean();
-                        }
-                        int timeout = GetInt(element, "timeoutSeconds");
-                        entry.TimeoutSeconds = timeout > 0 ? timeout : DefaultTimeoutSeconds;
-                        servers.Add(entry);
+                        McpServerEntry entry = ParseServerEntry(element);
+                        if (entry != null) servers.Add(entry);
                     }
                 }
             }
@@ -78,6 +59,30 @@ namespace RimAgent.Mcp
                 return false;
             }
             return true;
+        }
+
+        private static McpServerEntry ParseServerEntry(JsonElement element)
+        {
+            string name = GetString(element, "name");
+            string command = GetString(element, "command");
+            if (name.Length == 0 || command.Length == 0) return null;
+
+            var entry = new McpServerEntry { Name = name, Command = command };
+            if (element.TryGetProperty("args", out JsonElement args) && args.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement arg in args.EnumerateArray())
+                {
+                    if (arg.ValueKind == JsonValueKind.String) entry.Args.Add(arg.GetString() ?? string.Empty);
+                }
+            }
+            if (element.TryGetProperty("enabled", out JsonElement enabled)
+                && (enabled.ValueKind == JsonValueKind.True || enabled.ValueKind == JsonValueKind.False))
+            {
+                entry.Enabled = enabled.GetBoolean();
+            }
+            int timeout = GetInt(element, "timeoutSeconds");
+            entry.TimeoutSeconds = timeout > 0 ? timeout : DefaultTimeoutSeconds;
+            return entry;
         }
 
         private static string GetString(JsonElement element, string property)

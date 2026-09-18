@@ -153,23 +153,27 @@ namespace RimAgent.Mcp
             {
                 foreach (ContentBlock block in result.Content)
                 {
-                    var text = block as TextContentBlock;
-                    if (text != null)
-                    {
-                        if (sb.Length > 0) sb.Append('\n');
-                        sb.Append(text.Text);
-                    }
-                    else if (block != null)
-                    {
-                        if (sb.Length > 0) sb.Append('\n');
-                        sb.Append("[non-text content omitted: ").Append(block.Type).Append(']');
-                    }
+                    AppendContentBlock(sb, block);
                 }
             }
             string output = sb.ToString().Trim();
             if (output.Length == 0) output = "(empty result)";
             if (result.IsError == true) return ToolText.Error(output);
             return output;
+        }
+
+        private static void AppendContentBlock(StringBuilder sb, ContentBlock block)
+        {
+            if (block is TextContentBlock text)
+            {
+                if (sb.Length > 0) sb.Append('\n');
+                sb.Append(text.Text);
+            }
+            else if (block != null)
+            {
+                if (sb.Length > 0) sb.Append('\n');
+                sb.Append("[non-text content omitted: ").Append(block.Type).Append(']');
+            }
         }
     }
 }
