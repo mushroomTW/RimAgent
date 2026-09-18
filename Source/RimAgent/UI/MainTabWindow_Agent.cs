@@ -196,20 +196,10 @@ namespace RimAgent.UI
                     yield return ((entry.Autonomous ? "[auto] " : "> ") + entry.Text, entry.Autonomous ? NoticeColor : UserColor);
                     break;
                 case TranscriptKind.Assistant:
-                    string reply = RenderReply(entry.Text);
-                    yield return (reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply, Color.white);
-                    if (entry.ToolsStripped) yield return ("RimAgent.ToolsStripped".Translate(), NoticeColor);
+                    foreach (var line in RenderAssistant(entry)) yield return line;
                     break;
                 case TranscriptKind.Tool:
-                    string call = "* " + entry.ToolName + "(" + entry.Arguments + ")";
-                    if (entry.RiskCheck.Length > 0) call += " [risk: " + entry.RiskCheck + "]";
-                    string result = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
-                    yield return (call + "\n  -> " + result, entry.Failed ? ErrorColor : ToolColor);
-                    // 同一句指令只提醒一次（舊存檔載入的紀錄 InstructionId 為 0，同樣只提醒一次）。
-                    if (entry.ToolCategory == ToolCategory.Combat && combatNoted.Add(entry.InstructionId))
-                    {
-                        yield return ("RimAgent.CombatLatencyNote".Translate(), NoticeColor);
-                    }
+                    foreach (var line in RenderTool(entry, combatNoted)) yield return line;
                     break;
                 case TranscriptKind.Error:
                     yield return ("! " + DescribeError(entry), ErrorColor);
@@ -217,6 +207,26 @@ namespace RimAgent.UI
                 default:
                     yield return (entry.Text, NoticeColor);
                     break;
+            }
+        }
+
+        private static IEnumerable<(string Text, Color Color)> RenderAssistant(TranscriptEntry entry)
+        {
+            string reply = RenderReply(entry.Text);
+            yield return (reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply, Color.white);
+            if (entry.ToolsStripped) yield return ("RimAgent.ToolsStripped".Translate(), NoticeColor);
+        }
+
+        private static IEnumerable<(string Text, Color Color)> RenderTool(TranscriptEntry entry, HashSet<int> combatNoted)
+        {
+            string call = "* " + entry.ToolName + "(" + entry.Arguments + ")";
+            if (entry.RiskCheck.Length > 0) call += " [risk: " + entry.RiskCheck + "]";
+            string result = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
+            yield return (call + "\n  -> " + result, entry.Failed ? ErrorColor : ToolColor);
+            // 同一句指令只提醒一次（舊存檔載入的紀錄 InstructionId 為 0，同樣只提醒一次）。
+            if (entry.ToolCategory == ToolCategory.Combat && combatNoted.Add(entry.InstructionId))
+            {
+                yield return ("RimAgent.CombatLatencyNote".Translate(), NoticeColor);
             }
         }
 
@@ -255,6 +265,12 @@ namespace RimAgent.UI
                                 Event.current.type == EventType.KeyDown &&
                                 (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
+            DrawInputField(inputRect);
+            DrawActionButtons(session, sendRect, stopRect, undoRect, clearRect, canSend, canUndo, busy, enterPressed);
+        }
+
+        private void DrawInputField(Rect inputRect)
+        {
             GUI.SetNextControlName(InputControlName);
             _input = Widgets.TextField(inputRect, _input);
             if (_input.Length == 0 && GUI.GetNameOfFocusedControl() != InputControlName)
@@ -263,7 +279,10 @@ namespace RimAgent.UI
                 Widgets.Label(inputRect.ContractedBy(4f, 0f), "RimAgent.Placeholder".Translate());
                 GUI.color = Color.white;
             }
+        }
 
+        private void DrawActionButtons(ColonyAgentSession session, Rect sendRect, Rect stopRect, Rect undoRect, Rect clearRect, bool canSend, bool canUndo, bool busy, bool enterPressed)
+        {
             if ((Widgets.ButtonText(sendRect, "RimAgent.Send".Translate(), true, true, canSend) || enterPressed) && canSend)
             {
                 if (enterPressed) Event.current.Use();

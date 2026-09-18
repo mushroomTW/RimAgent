@@ -13,25 +13,25 @@ namespace RimAgent.Agent
     /// <summary>排程器做判斷用的殖民地訊號（呼叫端在主線程收集的純資料）。</summary>
     public struct AutonomousSignals
     {
-        public int HostileCount;
-        public int NearMentalBreakCount;
-        public float FoodNutrition;
-        public int ColonistCount;
+        public int HostileCount { get; set; }
+        public int NearMentalBreakCount { get; set; }
+        public float FoodNutrition { get; set; }
+        public int ColonistCount { get; set; }
     }
 
     /// <summary>排程器設定（單位皆為 tick；2500 tick＝1 遊戲小時，60000 tick＝1 天）。</summary>
     public struct AutonomousConfig
     {
-        public bool Enabled;
+        public bool Enabled { get; set; }
         /// <summary>例行巡檢間隔；0 代表關掉間隔觸發，只留事件觸發。</summary>
-        public int IntervalTicks;
+        public int IntervalTicks { get; set; }
         /// <summary>預算視窗長度（一天）。</summary>
-        public int WindowTicks;
+        public int WindowTicks { get; set; }
         /// <summary>一個視窗內自主任務最多消耗的工具呼叫次數（每句上限另由 maxSteps 管）。</summary>
-        public int BudgetPerWindow;
-        public bool OnRaid;
-        public bool OnMentalBreak;
-        public bool OnFoodShortage;
+        public int BudgetPerWindow { get; set; }
+        public bool OnRaid { get; set; }
+        public bool OnMentalBreak { get; set; }
+        public bool OnFoodShortage { get; set; }
     }
 
     /// <summary>

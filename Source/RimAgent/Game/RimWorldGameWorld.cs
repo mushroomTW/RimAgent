@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using RimWorld;
 using RimWorld.Planet;
@@ -17,6 +18,7 @@ namespace RimAgent.Game
     internal sealed class RimWorldGameWorld : IGameWorld
     {
         private const string MineDefName = "Mine";
+        private const string ColonistNotFound = "colonist not found";
 
         private IReadOnlyList<DefInfo> _workTypes;
         private IReadOnlyList<DefInfo> _buildables;
@@ -68,9 +70,7 @@ namespace RimAgent.Game
             var conditions = new List<HealthConditionInfo>();
             foreach (Hediff hediff in pawn.health.hediffSet.hediffs)
             {
-                string kind = hediff is Hediff_MissingPart ? HealthConditionInfo.MissingKind
-                    : hediff is Hediff_Injury ? HealthConditionInfo.InjuryKind
-                    : HealthConditionInfo.ConditionKind;
+                string kind = ResolveConditionKind(hediff);
                 bool tended = false, needsTending = false;
                 if (hediff.def.tendable)
                 {
@@ -96,6 +96,13 @@ namespace RimAgent.Game
                 Suspended = b.suspended
             }).ToList();
             return new ColonistHealthInfo { PawnId = pawn.thingIDNumber, Conditions = conditions, PendingSurgeries = surgeries };
+        }
+
+        private static string ResolveConditionKind(Hediff hediff)
+        {
+            if (hediff is Hediff_MissingPart) return HealthConditionInfo.MissingKind;
+            if (hediff is Hediff_Injury) return HealthConditionInfo.InjuryKind;
+            return HealthConditionInfo.ConditionKind;
         }
 
         public ResourceSnapshot GetResources()
@@ -124,9 +131,7 @@ namespace RimAgent.Game
             foreach (Pawn pawn in map.mapPawns.AllPawnsSpawned)
             {
                 if (pawn.Dead || !pawn.HostileTo(Faction.OfPlayer)) continue;
-                string kind = pawn.RaceProps.Humanlike ? "HostilePawn"
-                    : pawn.InMentalState ? "Manhunter"
-                    : "HostileAnimal";
+                string kind = ResolveThreatKind(pawn);
                 threats.Add(new ThreatInfo
                 {
                     Id = pawn.thingIDNumber,
@@ -145,39 +150,23 @@ namespace RimAgent.Game
             return threats;
         }
 
+        private static string ResolveThreatKind(Pawn pawn)
+        {
+            if (pawn.RaceProps.Humanlike) return "HostilePawn";
+            if (pawn.InMentalState) return "Manhunter";
+            return "HostileAnimal";
+        }
+
         public IReadOnlyList<TraderInfo> GetTraders()
         {
             Map map = Map;
             var result = new List<TraderInfo>();
             foreach (TradeShip ship in map.passingShipManager.passingShips.OfType<TradeShip>())
             {
-                if (!ship.CanTradeNow) continue;
-                var goods = new List<TradeGoodsInfo>();
-                foreach (Thing t in ship.Goods)
+                if (ship.CanTradeNow)
                 {
-                    if (t == null || t.Destroyed) continue;
-                    if (t.def == ThingDefOf.Silver) continue;
-                    Pawn pawn = t as Pawn;
-                    goods.Add(new TradeGoodsInfo
-                    {
-                        DefName = t.def.defName,
-                        Label = pawn != null ? pawn.LabelShort : t.def.label,
-                        Count = Math.Max(1, t.stackCount),
-                        MarketValue = t.MarketValue
-                    });
+                    result.Add(CreateOrbitalTraderInfo(ship));
                 }
-                result.Add(new TraderInfo
-                {
-                    Kind = TraderInfo.OrbitalKind,
-                    Id = ship.GetUniqueLoadID(),
-                    Name = ship.FullTitle,
-                    Faction = ship.Faction?.Name ?? string.Empty,
-                    Silver = ship.Silver,
-                    Goods = goods
-                        .OrderBy(g => g.Label, StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(g => g.DefName, StringComparer.Ordinal)
-                        .ToList()
-                });
             }
             // 來訪商隊（Visitor）：同一 Lord 共用整隊庫存，只列一次；不拿軌道商人頂替。
             // CanTradeNow 已排除死亡、倒地、俘虜、玩家派系與敵對派系，只剩地圖歸屬要自己檢查。
@@ -185,40 +174,64 @@ namespace RimAgent.Game
                          .Where(p => p.Map == map && p.trader != null && p.trader.traderKind != null && p.trader.CanTradeNow)
                          .GroupBy(p => (object)p.GetLord() ?? p))
             {
-                Pawn leader = group.First();
-                var goods = new List<TradeGoodsInfo>();
-                int silver = 0;
-                foreach (Thing t in leader.trader.Goods)
-                {
-                    if (t == null || t.Destroyed) continue;
-                    if (t.def == ThingDefOf.Silver)
-                    {
-                        silver += t.stackCount;
-                        continue;
-                    }
-                    Pawn goodsPawn = t as Pawn;
-                    goods.Add(new TradeGoodsInfo
-                    {
-                        DefName = t.def.defName,
-                        Label = goodsPawn != null ? goodsPawn.LabelShort : t.def.label,
-                        Count = Math.Max(1, t.stackCount),
-                        MarketValue = t.MarketValue
-                    });
-                }
-                result.Add(new TraderInfo
-                {
-                    Kind = TraderInfo.VisitorKind,
-                    Id = leader.GetUniqueLoadID(),
-                    Name = leader.LabelShort + " (" + leader.trader.traderKind.label + ")",
-                    Faction = leader.Faction?.Name ?? string.Empty,
-                    Silver = silver,
-                    Goods = goods
-                        .OrderBy(g => g.Label, StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(g => g.DefName, StringComparer.Ordinal)
-                        .ToList()
-                });
+                result.Add(CreateVisitorTraderInfo(group.First()));
             }
             return result;
+        }
+
+        private static List<TradeGoodsInfo> ExtractGoods(IEnumerable<Thing> rawGoods, out int silver)
+        {
+            var goods = new List<TradeGoodsInfo>();
+            silver = 0;
+            foreach (Thing t in rawGoods)
+            {
+                if (t == null || t.Destroyed) continue;
+                if (t.def == ThingDefOf.Silver)
+                {
+                    silver += t.stackCount;
+                    continue;
+                }
+                Pawn goodsPawn = t as Pawn;
+                goods.Add(new TradeGoodsInfo
+                {
+                    DefName = t.def.defName,
+                    Label = goodsPawn != null ? goodsPawn.LabelShort : t.def.label,
+                    Count = Math.Max(1, t.stackCount),
+                    MarketValue = t.MarketValue
+                });
+            }
+            return goods
+                .OrderBy(g => g.Label, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(g => g.DefName, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static TraderInfo CreateOrbitalTraderInfo(TradeShip ship)
+        {
+            var goods = ExtractGoods(ship.Goods, out _);
+            return new TraderInfo
+            {
+                Kind = TraderInfo.OrbitalKind,
+                Id = ship.GetUniqueLoadID(),
+                Name = ship.FullTitle,
+                Faction = ship.Faction?.Name ?? string.Empty,
+                Silver = ship.Silver,
+                Goods = goods
+            };
+        }
+
+        private static TraderInfo CreateVisitorTraderInfo(Pawn leader)
+        {
+            var goods = ExtractGoods(leader.trader.Goods, out int silver);
+            return new TraderInfo
+            {
+                Kind = TraderInfo.VisitorKind,
+                Id = leader.GetUniqueLoadID(),
+                Name = leader.LabelShort + " (" + leader.trader.traderKind.label + ")",
+                Faction = leader.Faction?.Name ?? string.Empty,
+                Silver = silver,
+                Goods = goods
+            };
         }
 
         public ResearchInfo GetResearch()
@@ -239,6 +252,7 @@ namespace RimAgent.Game
         /// 尚未完成的研發目錄。不快取：研究完成後目錄即變，
         /// 每次都重讀 DefDatabase（約百來個 def，可接受）。
         /// </summary>
+        [SuppressMessage("Major Code Smell", "S2365:Properties should not copy collections", Justification = "Implements IGameWorld property contract which reflects dynamic game state")]
         public IReadOnlyList<DefInfo> ResearchProjects =>
             DefDatabase<ResearchProjectDef>.AllDefsListForReading
                 .Where(r => !r.IsFinished)
@@ -392,7 +406,7 @@ namespace RimAgent.Game
         public CommandResult SetMedicalCare(int pawnId, string careDefName)
         {
             Pawn pawn = FindColonist(pawnId);
-            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
             if (pawn.playerSettings == null) return CommandResult.Fail($"{pawn.LabelShort} has no medical care settings");
             object parsed;
             try
@@ -417,10 +431,27 @@ namespace RimAgent.Game
         public CommandResult ScheduleSurgery(SurgeryRequest request)
         {
             Pawn pawn = FindColonist(request.PawnId);
-            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
             RecipeDef recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(request.RecipeDefName);
             if (recipe == null || recipe.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(recipe.workerClass))
                 return CommandResult.Fail($"unknown surgery {request.RecipeDefName}");
+            CommandResult researchFail = CheckSurgeryResearch(recipe);
+            if (researchFail != null) return researchFail;
+            CommandResult partFail = ResolveSurgeryTargetPart(recipe, pawn, request.BodyPartLabel, out BodyPartRecord part);
+            if (partFail != null) return partFail;
+            if (!recipe.AvailableOnNow(pawn, part))
+                return CommandResult.Fail($"{recipe.label} is not available on {pawn.LabelShort} right now");
+            if (pawn.BillStack.Bills.OfType<Bill_Medical>().Any(b => b.recipe == recipe && b.Part == part))
+                return CommandResult.Fail($"{recipe.label} is already scheduled on {pawn.LabelShort}");
+            var bill = new Bill_Medical(recipe, null) { Part = part };
+            pawn.BillStack.AddBill(bill);
+            string detail = $"Scheduled {recipe.label} on {pawn.LabelShort}";
+            if (part != null) detail += $" ({part.LabelCap})";
+            return CommandResult.Ok(detail + ".");
+        }
+
+        private static CommandResult CheckSurgeryResearch(RecipeDef recipe)
+        {
             if (recipe.researchPrerequisite != null && !recipe.researchPrerequisite.IsFinished)
                 return CommandResult.Fail($"{recipe.label} needs research {recipe.researchPrerequisite.label} first");
             if (recipe.researchPrerequisites != null)
@@ -431,30 +462,25 @@ namespace RimAgent.Game
                         return CommandResult.Fail($"{recipe.label} needs research {prerequisite.label} first");
                 }
             }
-            BodyPartRecord part = null;
+            return null;
+        }
+
+        private static CommandResult ResolveSurgeryTargetPart(RecipeDef recipe, Pawn pawn, string wantLabel, out BodyPartRecord part)
+        {
+            part = null;
+            if (!recipe.targetsBodyPart) return null;
             List<BodyPartRecord> options = recipe.Worker.GetPartsToApplyOn(pawn, recipe).ToList();
-            if (recipe.targetsBodyPart)
+            if (options.Count == 0) return CommandResult.Fail($"{recipe.label} does not apply to {pawn.LabelShort}");
+            string want = (wantLabel ?? string.Empty).Trim();
+            // 截肢、摘除器官這類手術不能替玩家挑部位：沒指定就列出候選要模型問清楚。
+            if (want.Length == 0)
             {
-                if (options.Count == 0) return CommandResult.Fail($"{recipe.label} does not apply to {pawn.LabelShort}");
-                string want = (request.BodyPartLabel ?? string.Empty).Trim();
-                // 截肢、摘除器官這類手術不能替玩家挑部位：沒指定就列出候選要模型問清楚。
-                if (want.Length == 0)
-                {
-                    return CommandResult.Fail($"{recipe.label} needs a body part. Ask the player which one: " +
-                                              string.Join(", ", options.Select(p => p.LabelCap).Distinct().ToArray()));
-                }
-                part = options.FirstOrDefault(p => MatchesBodyPart(p, want));
-                if (part == null) return CommandResult.Fail($"{pawn.LabelShort} has no body part matching \"{want}\" for {recipe.label}");
+                return CommandResult.Fail($"{recipe.label} needs a body part. Ask the player which one: " +
+                                          string.Join(", ", options.Select(p => p.LabelCap).Distinct().ToArray()));
             }
-            if (!recipe.AvailableOnNow(pawn, part))
-                return CommandResult.Fail($"{recipe.label} is not available on {pawn.LabelShort} right now");
-            if (pawn.BillStack.Bills.OfType<Bill_Medical>().Any(b => b.recipe == recipe && b.Part == part))
-                return CommandResult.Fail($"{recipe.label} is already scheduled on {pawn.LabelShort}");
-            var bill = new Bill_Medical(recipe, null) { Part = part };
-            pawn.BillStack.AddBill(bill);
-            string detail = $"Scheduled {recipe.label} on {pawn.LabelShort}";
-            if (part != null) detail += $" ({part.LabelCap})";
-            return CommandResult.Ok(detail + ".");
+            part = options.FirstOrDefault(p => MatchesBodyPart(p, want));
+            if (part == null) return CommandResult.Fail($"{pawn.LabelShort} has no body part matching \"{want}\" for {recipe.label}");
+            return null;
         }
 
         private static bool MatchesBodyPart(BodyPartRecord part, string want)
@@ -545,6 +571,7 @@ namespace RimAgent.Game
                 .ToList());
 
         /// <summary>區域是每張地圖的執行期資料（玩家隨時新增、切圖就換），不快取。</summary>
+        [SuppressMessage("Major Code Smell", "S2365:Properties should not copy collections", Justification = "Implements IGameWorld property contract border reflects dynamic game state")]
         public IReadOnlyList<DefInfo> AnimalAreas =>
             Map.areaManager.AllAreas
                 .Select(a => new DefInfo(a.Label, a.Label))
@@ -611,9 +638,16 @@ namespace RimAgent.Game
             {
                 Id = zone.ID,
                 Label = zone.label,
-                Kind = zone is Zone_Stockpile ? "Stockpile" : zone is Zone_Growing ? "Growing" : zone.GetType().Name,
+                Kind = ResolveZoneKind(zone),
                 CellCount = zone.CellCount
             };
+        }
+
+        private static string ResolveZoneKind(Zone zone)
+        {
+            if (zone is Zone_Stockpile) return "Stockpile";
+            if (zone is Zone_Growing) return "Growing";
+            return zone.GetType().Name;
         }
 
         public IReadOnlyList<DefInfo> StorageFilterables =>
@@ -628,18 +662,39 @@ namespace RimAgent.Game
             bool stockpile = string.Equals(kind, "Stockpile", StringComparison.OrdinalIgnoreCase);
             bool growing = string.Equals(kind, "Growing", StringComparison.OrdinalIgnoreCase);
             if (!stockpile && !growing) return CommandResult.Fail($"unknown zone kind {kind}. Use stockpile or growing.");
-            ThingDef plant = null;
+
+            CommandResult plantResult = TryResolveGrowingPlant(growing, plantDefName, out ThingDef plant);
+            if (plantResult != null) return plantResult;
+
+            // 格子能不能畫區域交給原版 designator 判斷（迷霧、地圖邊緣禁區、不可重疊的物件、種植區的肥沃度）。
+            Designator_ZoneAdd designator = stockpile
+                ? (Designator_ZoneAdd)new Designator_ZoneAddStockpile_Resources()
+                : new Designator_ZoneAdd_Growing();
+
+            CommandResult cellResult = ValidateZoneCells(map, rect, designator, growing, kind, out List<IntVec3> cells);
+            if (cellResult != null) return cellResult;
+
+            Zone zone = CreateZoneInstance(map, stockpile, plant);
+            map.zoneManager.RegisterZone(zone);
+            foreach (IntVec3 cell in cells) zone.AddCell(cell);
+            return CommandResult.Ok($"Added {zone.label} [{zone.ID}] covering {cells.Count} cells.");
+        }
+
+        private static CommandResult TryResolveGrowingPlant(bool growing, string plantDefName, out ThingDef plant)
+        {
+            plant = null;
             if (growing && !string.IsNullOrEmpty(plantDefName))
             {
                 plant = DefDatabase<ThingDef>.GetNamedSilentFail(plantDefName);
                 if (plant == null || plant.category != ThingCategory.Plant || plant.plant == null)
                     return CommandResult.Fail($"{plantDefName} is not a growable plant");
             }
-            // 格子能不能畫區域交給原版 designator 判斷（迷霧、地圖邊緣禁區、不可重疊的物件、種植區的肥沃度）。
-            Designator_ZoneAdd designator = stockpile
-                ? (Designator_ZoneAdd)new Designator_ZoneAddStockpile_Resources()
-                : new Designator_ZoneAdd_Growing();
-            var cells = new List<IntVec3>();
+            return null;
+        }
+
+        private static CommandResult ValidateZoneCells(Map map, CellRectSpec rect, Designator_ZoneAdd designator, bool growing, string kind, out List<IntVec3> cells)
+        {
+            cells = new List<IntVec3>();
             for (int x = rect.MinX; x <= rect.MaxX; x++)
             {
                 for (int z = rect.MinZ; z <= rect.MaxZ; z++)
@@ -651,28 +706,30 @@ namespace RimAgent.Game
                     AcceptanceReport report = designator.CanDesignateCell(cell);
                     if (!report.Accepted)
                     {
-                        string why = string.IsNullOrEmpty(report.Reason)
-                            ? (growing ? "not fertile enough, fogged, blocked or at the map edge" : "fogged, blocked or at the map edge")
-                            : report.Reason;
+                        string why = GetZoneRejectionReason(report, growing);
                         return CommandResult.Fail($"cell ({x},{z}) cannot hold a {kind.ToLowerInvariant()} zone: {why}");
                     }
                     cells.Add(cell);
                 }
             }
-            Zone zone;
+            return null;
+        }
+
+        private static string GetZoneRejectionReason(AcceptanceReport report, bool growing)
+        {
+            if (!string.IsNullOrEmpty(report.Reason)) return report.Reason;
+            return growing ? "not fertile enough, fogged, blocked or at the map edge" : "fogged, blocked or at the map edge";
+        }
+
+        private static Zone CreateZoneInstance(Map map, bool stockpile, ThingDef plant)
+        {
             if (stockpile)
             {
-                zone = new Zone_Stockpile(StorageSettingsPreset.DefaultStockpile, map.zoneManager);
+                return new Zone_Stockpile(StorageSettingsPreset.DefaultStockpile, map.zoneManager);
             }
-            else
-            {
-                var growingZone = new Zone_Growing(map.zoneManager);
-                if (plant != null) growingZone.SetPlantDefToGrow(plant);
-                zone = growingZone;
-            }
-            map.zoneManager.RegisterZone(zone);
-            foreach (IntVec3 cell in cells) zone.AddCell(cell);
-            return CommandResult.Ok($"Added {zone.label} [{zone.ID}] covering {cells.Count} cells.");
+            var growingZone = new Zone_Growing(map.zoneManager);
+            if (plant != null) growingZone.SetPlantDefToGrow(plant);
+            return growingZone;
         }
 
         public CommandResult DeleteZone(int zoneId)
@@ -808,7 +865,7 @@ namespace RimAgent.Game
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)
         {
             Pawn pawn = FindColonist(pawnId);
-            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
             if (pawn.workSettings == null) return CommandResult.Fail($"{pawn.LabelShort} has no work settings");
             WorkTypeDef workType = DefDatabase<WorkTypeDef>.GetNamedSilentFail(workTypeDefName);
             if (workType == null) return CommandResult.Fail($"unknown work type {workTypeDefName}");
@@ -829,7 +886,7 @@ namespace RimAgent.Game
         public CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName)
         {
             Pawn pawn = FindColonist(pawnId);
-            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
             if (pawn.timetable == null) return CommandResult.Fail($"{pawn.LabelShort} has no schedule");
             TimeAssignmentDef assignment = DefDatabase<TimeAssignmentDef>.GetNamedSilentFail(assignmentDefName);
             if (assignment == null) return CommandResult.Fail($"unknown time assignment {assignmentDefName}");
@@ -923,7 +980,7 @@ namespace RimAgent.Game
         public CommandResult SetDrafted(int pawnId, bool drafted)
         {
             Pawn pawn = FindColonist(pawnId);
-            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
             if (pawn.drafter == null) return CommandResult.Fail($"{pawn.LabelShort} cannot be drafted");
             if (pawn.Downed && drafted) return CommandResult.Fail($"{pawn.LabelShort} is downed");
             pawn.drafter.Drafted = drafted;
@@ -934,7 +991,7 @@ namespace RimAgent.Game
         {
             Map map = Map;
             Pawn pawn = FindColonist(pawnId);
-            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
             if (!pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is not drafted");
             var cell = new IntVec3(x, 0, z);
             if (!cell.InBounds(map)) return CommandResult.Fail("cell is outside the map");
@@ -951,7 +1008,7 @@ namespace RimAgent.Game
         public CommandResult OrderAttack(int pawnId, int targetId)
         {
             Pawn pawn = FindColonist(pawnId);
-            if (pawn == null) return CommandResult.Fail("colonist not found");
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
             if (!pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is not drafted");
             Thing target = FindThing(targetId);
             if (target == null) return CommandResult.Fail("target not found on the map");
@@ -970,36 +1027,19 @@ namespace RimAgent.Game
 
         public CommandResult ExecuteTrade(TradeRequest request)
         {
-            if (request == null) return CommandResult.Fail("no trade requested");
-            if (string.IsNullOrEmpty(request.TraderId)) return CommandResult.Fail("no trader specified");
-            IReadOnlyList<TradeLine> buys = request.Buys ?? Array.Empty<TradeLine>();
-            IReadOnlyList<TradeLine> sells = request.Sells ?? Array.Empty<TradeLine>();
-            if (buys.Count == 0 && sells.Count == 0) return CommandResult.Fail("nothing to buy or sell");
-            foreach (TradeLine line in buys.Concat(sells))
-            {
-                if (string.Equals(line.DefName, ThingDefOf.Silver.defName, StringComparison.OrdinalIgnoreCase))
-                    return CommandResult.Fail("silver moves automatically as payment; do not list it");
-                if (line.Count <= 0) return CommandResult.Fail($"invalid count {line.Count} for {line.DefName}");
-            }
+            CommandResult linesResult = ValidateTradeLines(request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells);
+            if (linesResult != null) return linesResult;
 
             // 玩家手動開著交易窗時不搶 TradeSession，否則對方的結算會被掀掉。
             if (TradeSession.Active) return CommandResult.Fail("a trade window is already open. Close it first.");
 
             ITrader trader = FindTrader(request.TraderId);
-            if (trader == null) return CommandResult.Fail($"trader \"{request.TraderId}\" was not found. List the traders again to get a valid id.");
-            if (!trader.CanTradeNow) return CommandResult.Fail($"{TraderLabel(trader)} cannot trade right now.");
-            if (trader.TradeCurrency != TradeCurrency.Silver) return CommandResult.Fail($"{TraderLabel(trader)} does not trade in silver.");
+            CommandResult traderResult = ValidateTrader(trader, request.TraderId);
+            if (traderResult != null) return traderResult;
 
             Pawn negotiator = FindColonist(request.NegotiatorPawnId);
-            if (negotiator == null) return CommandResult.Fail("negotiator was not found among the colonists.");
-            if (negotiator.Downed) return CommandResult.Fail($"{negotiator.LabelShort} is downed and cannot negotiate.");
-            // 沿用原版交易的門檻：要能說話、社交沒被禁用；軌道商人還要一台有電的通訊台。
-            if (negotiator.health?.capacities?.CapableOf(PawnCapacityDefOf.Talking) == false)
-                return CommandResult.Fail($"{negotiator.LabelShort} is incapable of talking and cannot negotiate.");
-            if (negotiator.skills?.GetSkill(SkillDefOf.Social)?.TotallyDisabled == true)
-                return CommandResult.Fail($"{negotiator.LabelShort} is incapable of social work and cannot negotiate.");
-            if (trader is TradeShip && !Map.listerBuildings.AllBuildingsColonistOfClass<Building_CommsConsole>().Any(c => c.CanUseCommsNow))
-                return CommandResult.Fail("trading with an orbital trader needs a powered comms console.");
+            CommandResult negResult = ValidateNegotiator(negotiator, trader);
+            if (negResult != null) return negResult;
 
             // 之後全走遊戲的原生結算：價格、銀兩與物品交割都由 TradeDeal 處理，
             // 這裡只做「先驗證全部、再一次交割」，餘額或庫存不足整筆不做。
@@ -1165,18 +1205,53 @@ namespace RimAgent.Game
             return trader.TraderName;
         }
 
+        private static CommandResult ValidateTradeLines(TradeRequest request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells)
+        {
+            buys = request?.Buys ?? Array.Empty<TradeLine>();
+            sells = request?.Sells ?? Array.Empty<TradeLine>();
+            if (request == null) return CommandResult.Fail("no trade requested");
+            if (string.IsNullOrEmpty(request.TraderId)) return CommandResult.Fail("no trader specified");
+            if (buys.Count == 0 && sells.Count == 0) return CommandResult.Fail("nothing to buy or sell");
+            foreach (TradeLine line in buys.Concat(sells))
+            {
+                if (string.Equals(line.DefName, ThingDefOf.Silver.defName, StringComparison.OrdinalIgnoreCase))
+                    return CommandResult.Fail("silver moves automatically as payment; do not list it");
+                if (line.Count <= 0) return CommandResult.Fail($"invalid count {line.Count} for {line.DefName}");
+            }
+            return null;
+        }
+
+        private static CommandResult ValidateTrader(ITrader trader, string traderId)
+        {
+            if (trader == null) return CommandResult.Fail($"trader \"{traderId}\" was not found. List the traders again to get a valid id.");
+            if (!trader.CanTradeNow) return CommandResult.Fail($"{TraderLabel(trader)} cannot trade right now.");
+            if (trader.TradeCurrency != TradeCurrency.Silver) return CommandResult.Fail($"{TraderLabel(trader)} does not trade in silver.");
+            return null;
+        }
+
+        private static CommandResult ValidateNegotiator(Pawn negotiator, ITrader trader)
+        {
+            if (negotiator == null) return CommandResult.Fail("negotiator was not found among the colonists.");
+            if (negotiator.Downed) return CommandResult.Fail($"{negotiator.LabelShort} is downed and cannot negotiate.");
+            // 沿用原版交易的門檻：要能說話、社交沒被禁用；軌道商人還要一台有電的通訊台。
+            if (negotiator.health?.capacities?.CapableOf(PawnCapacityDefOf.Talking) == false)
+                return CommandResult.Fail($"{negotiator.LabelShort} is incapable of talking and cannot negotiate.");
+            if (negotiator.skills?.GetSkill(SkillDefOf.Social)?.TotallyDisabled == true)
+                return CommandResult.Fail($"{negotiator.LabelShort} is incapable of social work and cannot negotiate.");
+            if (trader is TradeShip && !Map.listerBuildings.AllBuildingsColonistOfClass<Building_CommsConsole>().Any(c => c.CanUseCommsNow))
+                return CommandResult.Fail("trading with an orbital trader needs a powered comms console.");
+            return null;
+        }
+
         private static ITrader FindTrader(string id)
         {
             Map map = Map;
-            foreach (TradeShip ship in map.passingShipManager.passingShips.OfType<TradeShip>())
-            {
-                if (ship.GetUniqueLoadID() == id) return ship;
-            }
-            foreach (Pawn pawn in map.mapPawns.AllPawnsSpawned)
-            {
-                if (pawn.trader != null && pawn.trader.traderKind != null && pawn.GetUniqueLoadID() == id) return pawn;
-            }
-            return null;
+            TradeShip ship = map.passingShipManager.passingShips.OfType<TradeShip>()
+                .FirstOrDefault(s => s.GetUniqueLoadID() == id);
+            if (ship != null) return ship;
+
+            return map.mapPawns.AllPawnsSpawned
+                .FirstOrDefault(p => p.trader != null && p.trader.traderKind != null && p.GetUniqueLoadID() == id);
         }
 
         // ---- 轉換 ----
