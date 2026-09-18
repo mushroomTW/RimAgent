@@ -1047,42 +1047,16 @@ namespace RimAgent.Game
             try
             {
                 TradeDeal deal = TradeSession.deal;
-                // 買入賣出分開追蹤：同 def 可能兩邊都有貨而併在同一行，淨額結算。
-                var buyAllocations = new Dictionary<Tradeable, int>();
-                var sellAllocations = new Dictionary<Tradeable, int>();
-                foreach (TradeLine line in buys)
-                {
-                    string fail = Allocate(buyAllocations, deal, line, true, TraderLabel(trader));
-                    if (fail != null) return CommandResult.Fail(fail);
-                }
-                foreach (TradeLine line in sells)
-                {
-                    string fail = Allocate(sellAllocations, deal, line, false, TraderLabel(trader));
-                    if (fail != null) return CommandResult.Fail(fail);
-                }
-                foreach (Tradeable row in buyAllocations.Keys.Concat(sellAllocations.Keys).Distinct())
-                {
-                    row.AdjustTo(row.CountToTransfer + Allocated(buyAllocations, row) - Allocated(sellAllocations, row));
-                }
+                CommandResult allocResult = ApplyAllocations(deal, trader, buys, sells);
+                if (allocResult != null) return allocResult;
 
-                deal.UpdateCurrencyCount();
-                Tradeable currency = deal.CurrencyTradeable;
-                int colonySilver = currency != null ? currency.CountHeldBy(Transactor.Colony) : 0;
-                if (currency == null || currency.CountPostDealFor(Transactor.Colony) < 0)
-                {
-                    // 先擋下：TryExecute 的殖民地餘額不足分支會對不存在的對話窗呼叫 FlashSilver。
-                    int need = colonySilver - (currency != null ? currency.CountPostDealFor(Transactor.Colony) : 0);
-                    return CommandResult.Fail($"the colony cannot afford this: needs {need} silver but has {colonySilver}.");
-                }
-                if (!deal.DoesTraderHaveEnoughSilver())
-                {
-                    return CommandResult.Fail($"{TraderLabel(trader)} cannot afford this: needs more silver to pay for the colony's goods.");
-                }
+                CommandResult affordResult = ValidateAffordability(deal, trader, out int colonySilver, out int postDealSilver);
+                if (affordResult != null) return affordResult;
 
                 // 交割前先把收據算好：銀兩實際變動取自貨幣行的公式值，品項數量即交割數量。
                 string receipt = $"Traded with {TraderLabel(trader)} (negotiated by {negotiator.LabelShort}): " +
                     string.Join("; ", ReceiptParts(buys, sells)) +
-                    $". Colony silver {colonySilver} -> {currency.CountPostDealFor(Transactor.Colony)}.";
+                    $". Colony silver {colonySilver} -> {postDealSilver}.";
                 if (!deal.TryExecute(out _))
                 {
                     return CommandResult.Fail("the trade was blocked before anything changed hands.");
@@ -1093,6 +1067,45 @@ namespace RimAgent.Game
             {
                 TradeSession.Close();
             }
+        }
+
+        private static CommandResult ApplyAllocations(TradeDeal deal, ITrader trader, IReadOnlyList<TradeLine> buys, IReadOnlyList<TradeLine> sells)
+        {
+            var buyAllocations = new Dictionary<Tradeable, int>();
+            var sellAllocations = new Dictionary<Tradeable, int>();
+            foreach (TradeLine line in buys)
+            {
+                string fail = Allocate(buyAllocations, deal, line, true, TraderLabel(trader));
+                if (fail != null) return CommandResult.Fail(fail);
+            }
+            foreach (TradeLine line in sells)
+            {
+                string fail = Allocate(sellAllocations, deal, line, false, TraderLabel(trader));
+                if (fail != null) return CommandResult.Fail(fail);
+            }
+            foreach (Tradeable row in buyAllocations.Keys.Concat(sellAllocations.Keys).Distinct())
+            {
+                row.AdjustTo(row.CountToTransfer + Allocated(buyAllocations, row) - Allocated(sellAllocations, row));
+            }
+            return null;
+        }
+
+        private static CommandResult ValidateAffordability(TradeDeal deal, ITrader trader, out int colonySilver, out int postDealSilver)
+        {
+            deal.UpdateCurrencyCount();
+            Tradeable currency = deal.CurrencyTradeable;
+            colonySilver = currency != null ? currency.CountHeldBy(Transactor.Colony) : 0;
+            postDealSilver = currency != null ? currency.CountPostDealFor(Transactor.Colony) : 0;
+            if (currency == null || postDealSilver < 0)
+            {
+                int need = colonySilver - postDealSilver;
+                return CommandResult.Fail($"the colony cannot afford this: needs {need} silver but has {colonySilver}.");
+            }
+            if (!deal.DoesTraderHaveEnoughSilver())
+            {
+                return CommandResult.Fail($"{TraderLabel(trader)} cannot afford this: needs more silver to pay for the colony's goods.");
+            }
+            return null;
         }
 
         public CommandResult FormCaravan(CaravanRequest request)

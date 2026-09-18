@@ -85,27 +85,36 @@ namespace RimAgent.Tools
             var failures = new List<string>();
             foreach (ThingInfo t in targets)
             {
-                if (!dk.Applies(t))
-                {
-                    notApplicable++;
-                    continue;
-                }
-                if (t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase))
-                {
-                    skipped++;
-                    continue;
-                }
+                ApplyDesignationTarget(dk, t, ref marked, ref skipped, ref notApplicable, failures);
+            }
+            return FormatDesignateSummary(dk, targets.Count, marked, skipped, notApplicable, failures);
+        }
 
-                CommandResult r = dk.OnCell
-                    ? _world.AddDesignationOnCell(t.X, t.Z, dk.DefName)
-                    : _world.AddDesignationOnThing(t.Id, dk.DefName);
-                if (r.Success) marked++;
-                else failures.Add($"{t.Label} at {ToolText.Cell(t.X, t.Z)}: {r.Message}");
+        private void ApplyDesignationTarget(DesignationKind dk, ThingInfo t, ref int marked, ref int skipped, ref int notApplicable, List<string> failures)
+        {
+            if (!dk.Applies(t))
+            {
+                notApplicable++;
+                return;
+            }
+            if (t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase))
+            {
+                skipped++;
+                return;
             }
 
+            CommandResult r = dk.OnCell
+                ? _world.AddDesignationOnCell(t.X, t.Z, dk.DefName)
+                : _world.AddDesignationOnThing(t.Id, dk.DefName);
+            if (r.Success) marked++;
+            else failures.Add($"{t.Label} at {ToolText.Cell(t.X, t.Z)}: {r.Message}");
+        }
+
+        private static string FormatDesignateSummary(DesignationKind dk, int totalTargets, int marked, int skipped, int notApplicable, List<string> failures)
+        {
             if (marked == 0 && skipped == 0 && failures.Count == 0)
             {
-                return ToolText.Error($"nothing eligible for {dk.Verb} among {targets.Count} matching object(s)" +
+                return ToolText.Error($"nothing eligible for {dk.Verb} among {totalTargets} matching object(s)" +
                                       (notApplicable > 0 ? $" ({notApplicable} not applicable, e.g. not ripe or not player-owned)." : "."));
             }
 
@@ -157,6 +166,18 @@ namespace RimAgent.Tools
             return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
         }
 
+        private sealed class BlueprintLineSpec
+        {
+            public string DefName { get; set; }
+            public string StuffDefName { get; set; }
+            public int X { get; set; }
+            public int Z { get; set; }
+            public int Dx { get; set; }
+            public int Dz { get; set; }
+            public int Count { get; set; }
+            public int Rotation { get; set; }
+        }
+
         [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
         [Description("Places construction blueprints for colonists to build. Can place a line of several blueprints (e.g. a wall) by giving count and direction. Fails with the game's reason when a cell is not buildable.")]
         public string PlaceBlueprint(
@@ -171,38 +192,31 @@ namespace RimAgent.Tools
             ResolveResult<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
             if (!def.Success) return def.Error;
 
-            string stuffDefName = string.Empty;
-            if (!string.IsNullOrWhiteSpace(stuff))
-            {
-                ResolveResult<DefInfo> stuffDef = DefResolver.Resolve(stuff, _world.Stuffs, "material");
-                if (!stuffDef.Success) return stuffDef.Error;
-                stuffDefName = stuffDef.Value.DefName;
-            }
+            ResolveResult<string> stuffResult = ResolveStuffDefName(stuff);
+            if (!stuffResult.Success) return stuffResult.Error;
+            string stuffDefName = stuffResult.Value;
 
-            if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
-            if (count < 1 || count > MaxBlueprintCount) return ToolText.Error($"count must be between 1 and {MaxBlueprintCount}.");
-
-            int dx = 0, dz = 0;
-            if (count > 1 && !TryGetDirectionDelta(direction, out dx, out dz))
-            {
-                return ToolText.Error($"direction \"{direction}\" is not north, east, south or west.");
-            }
-
-            MapBounds bounds = _world.GetMapBounds();
-            var failures = new List<string>();
+            string validationError = ValidatePlacementArgs(rotation, count, direction, out int dx, out int dz);
+            if (validationError != null) return validationError;
 
             if (_gate != null && !_gate.AllowCommands())
             {
-                string whatPreview = def.Value.Label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
-                string linePreview = count > 1 ? $" in a line toward {direction}" : string.Empty;
-                string blueprintPreview = $"would place {count} {whatPreview} blueprint(s) " +
-                    $"starting at {ToolText.Cell(x, z)}{linePreview}.";
-                string blueprintBlocked = ToolText.Confirmation(blueprintPreview);
-                _gate.NoteBlocked(blueprintBlocked);
-                return blueprintBlocked;
+                return CheckBlueprintPreview(def.Value.Label, stuffDefName, count, direction, x, z);
             }
 
-            int placed = PlaceBlueprintLine(def.Value.DefName, stuffDefName, x, z, dx, dz, count, rotation, bounds, failures);
+            var failures = new List<string>();
+            var spec = new BlueprintLineSpec
+            {
+                DefName = def.Value.DefName,
+                StuffDefName = stuffDefName,
+                X = x,
+                Z = z,
+                Dx = dx,
+                Dz = dz,
+                Count = count,
+                Rotation = rotation
+            };
+            int placed = PlaceBlueprintLine(spec, _world.GetMapBounds(), failures);
 
             string what = def.Value.Label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
             if (placed == 0)
@@ -212,6 +226,38 @@ namespace RimAgent.Tools
 
             string summary = $"Placed {placed} {what} blueprint(s) starting at {ToolText.Cell(x, z)}.";
             return failures.Count == 0 ? summary : summary + $" {failures.Count} failed: " + string.Join("; ", failures.Take(5));
+        }
+
+        private ResolveResult<string> ResolveStuffDefName(string stuff)
+        {
+            if (string.IsNullOrWhiteSpace(stuff)) return ResolveResult<string>.Ok(string.Empty);
+            ResolveResult<DefInfo> stuffDef = DefResolver.Resolve(stuff, _world.Stuffs, "material");
+            if (!stuffDef.Success) return ResolveResult<string>.Fail(stuffDef.Error);
+            return ResolveResult<string>.Ok(stuffDef.Value.DefName);
+        }
+
+        private static string ValidatePlacementArgs(int rotation, int count, string direction, out int dx, out int dz)
+        {
+            dx = 0;
+            dz = 0;
+            if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
+            if (count < 1 || count > MaxBlueprintCount) return ToolText.Error($"count must be between 1 and {MaxBlueprintCount}.");
+            if (count > 1 && !TryGetDirectionDelta(direction, out dx, out dz))
+            {
+                return ToolText.Error($"direction \"{direction}\" is not north, east, south or west.");
+            }
+            return null;
+        }
+
+        private string CheckBlueprintPreview(string label, string stuffDefName, int count, string direction, int x, int z)
+        {
+            string whatPreview = label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
+            string linePreview = count > 1 ? $" in a line toward {direction}" : string.Empty;
+            string blueprintPreview = $"would place {count} {whatPreview} blueprint(s) " +
+                $"starting at {ToolText.Cell(x, z)}{linePreview}.";
+            string blueprintBlocked = ToolText.Confirmation(blueprintPreview);
+            _gate.NoteBlocked(blueprintBlocked);
+            return blueprintBlocked;
         }
 
         private static bool TryGetDirectionDelta(string direction, out int dx, out int dz)
@@ -228,13 +274,13 @@ namespace RimAgent.Tools
             }
         }
 
-        private int PlaceBlueprintLine(string defName, string stuffDefName, int x, int z, int dx, int dz, int count, int rotation, MapBounds bounds, List<string> failures)
+        private int PlaceBlueprintLine(BlueprintLineSpec spec, MapBounds bounds, List<string> failures)
         {
             int placed = 0;
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < spec.Count; i++)
             {
-                int cx = x + dx * i;
-                int cz = z + dz * i;
+                int cx = spec.X + spec.Dx * i;
+                int cz = spec.Z + spec.Dz * i;
                 string outOfBounds = TargetResolver.CheckCell(cx, cz, bounds);
                 if (outOfBounds != null)
                 {
@@ -242,7 +288,7 @@ namespace RimAgent.Tools
                     continue;
                 }
 
-                CommandResult r = _world.TryPlaceBlueprint(defName, cx, cz, rotation, stuffDefName);
+                CommandResult r = _world.TryPlaceBlueprint(spec.DefName, cx, cz, spec.Rotation, spec.StuffDefName);
                 if (r.Success) placed++;
                 else failures.Add($"{ToolText.Cell(cx, cz)}: {r.Message}");
             }

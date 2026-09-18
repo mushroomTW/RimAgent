@@ -244,29 +244,21 @@ namespace RimAgent.UI
 
         private void DrawBottomBar(Rect rect, ColonyAgentSession session)
         {
-            bool busy = session.IsBusy;
-            // 有命令在等確認時，整列換成確認操作：先看預覽再決定，避免誤觸送出。
-            if (session.HasPendingConfirmation && !busy)
+            if (session.HasPendingConfirmation && !session.IsBusy)
             {
                 DrawConfirmBar(rect, session);
                 return;
             }
-            bool canSend = !busy && _capabilityWarning == null;
-            bool canUndo = !busy && session.Undo.CanUndo;
-            var clearRect = new Rect(rect.xMax - ButtonWidth, rect.y, ButtonWidth, rect.height);
-            var undoRect = new Rect(clearRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
-            var stopRect = new Rect(undoRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
-            var sendRect = new Rect(stopRect.x - ButtonWidth - 4f, rect.y, ButtonWidth, rect.height);
-            var inputRect = new Rect(rect.x, rect.y, sendRect.x - rect.x - 4f, rect.height);
+            bool canSend = !session.IsBusy && _capabilityWarning == null;
+            float buttonsTotalWidth = (ButtonWidth + 4f) * 4f;
+            var inputRect = new Rect(rect.x, rect.y, rect.width - buttonsTotalWidth, rect.height);
 
-            // 跟原版 Dialog_Rename 一樣：分頁開著、按 Enter 就送出（GetNameOfFocusedControl 在遊戲內查不到名稱）。
-            // 有其他視窗疊在上面時 Window 會把鍵盤事件吃掉，不會誤觸。
             bool enterPressed = canSend &&
                                 Event.current.type == EventType.KeyDown &&
                                 (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
             DrawInputField(inputRect);
-            DrawActionButtons(session, sendRect, stopRect, undoRect, clearRect, canSend, canUndo, busy, enterPressed);
+            DrawActionButtons(session, rect, canSend, enterPressed);
         }
 
         private void DrawInputField(Rect inputRect)
@@ -281,8 +273,15 @@ namespace RimAgent.UI
             }
         }
 
-        private void DrawActionButtons(ColonyAgentSession session, Rect sendRect, Rect stopRect, Rect undoRect, Rect clearRect, bool canSend, bool canUndo, bool busy, bool enterPressed)
+        private void DrawActionButtons(ColonyAgentSession session, Rect barRect, bool canSend, bool enterPressed)
         {
+            bool busy = session.IsBusy;
+            bool canUndo = !busy && session.Undo.CanUndo;
+            var clearRect = new Rect(barRect.xMax - ButtonWidth, barRect.y, ButtonWidth, barRect.height);
+            var undoRect = new Rect(clearRect.x - ButtonWidth - 4f, barRect.y, ButtonWidth, barRect.height);
+            var stopRect = new Rect(undoRect.x - ButtonWidth - 4f, barRect.y, ButtonWidth, barRect.height);
+            var sendRect = new Rect(stopRect.x - ButtonWidth - 4f, barRect.y, ButtonWidth, barRect.height);
+
             if ((Widgets.ButtonText(sendRect, "RimAgent.Send".Translate(), true, true, canSend) || enterPressed) && canSend)
             {
                 if (enterPressed) Event.current.Use();
