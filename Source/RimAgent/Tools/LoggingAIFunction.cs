@@ -3,14 +3,18 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using RimAgent.Agent;
 
 namespace RimAgent.Tools
 {
     /// <summary>
-    /// 包住每個工具，在被 FunctionInvokingChatClient 叫用時即時寫入行動紀錄，
-    /// 玩家不必等整個迴圈結束才看到 agent 在做什麼。
+    /// 包住每個工具：被 FunctionInvokingChatClient 叫用時即時寫入行動紀錄（玩家不必等整個迴圈
+    /// 結束才看到 agent 在做什麼），在呼叫前後把工具的靜態風險告知閘門，
+    /// 並在自動模式下做兩段式執行：先強制預覽拿到「將做的事」，交給分類器判定，
+    /// 低風險再強制執行一次，高風險就把預覽當「需確認」回給模型。
+    /// 這裡刻意不用 ConfigureAwait(false)：續行要留在主線程，第二段執行才能碰遊戲狀態。
     /// </summary>
     internal sealed class LoggingAIFunction : DelegatingAIFunction
     {
@@ -18,12 +22,18 @@ namespace RimAgent.Tools
 
         private readonly AgentTranscript _transcript;
         private readonly ToolCategory _category;
+        private readonly ToolRisk _risk;
+        private readonly ConfirmationGate _gate;
+        private readonly RiskClassifier _classifier;
 
-        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, ToolCategory category)
+        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null)
             : base(inner)
         {
             _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
             _category = category;
+            _risk = risk;
+            _gate = gate;
+            _classifier = classifier;
         }
 
         protected override async ste::System.Threading.Tasks.ValueTask<object> InvokeCoreAsync(
@@ -39,9 +49,12 @@ namespace RimAgent.Tools
                 InstructionId = _transcript.CurrentInstructionId
             };
 
+            _gate?.BeginInvocation(_risk);
             try
             {
-                object result = await base.InvokeCoreAsync(arguments, cancellationToken).ConfigureAwait(false);
+                object result = _gate != null && _classifier != null && _gate.NeedsClassification(_risk)
+                    ? await InvokeClassifiedAsync(arguments, entry, cancellationToken)
+                    : await base.InvokeCoreAsync(arguments, cancellationToken);
                 string text = result?.ToString() ?? string.Empty;
                 entry.Result = text;
                 entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
@@ -55,7 +68,52 @@ namespace RimAgent.Tools
             }
             finally
             {
+                _gate?.EndInvocation();
                 _transcript.Add(entry);
+            }
+        }
+
+        /// <summary>自動模式：預覽 → 分類 → 執行或擋下。工具的預覽分支不碰世界，靠 CommandGateTests 鎖住。</summary>
+        private async Task<object> InvokeClassifiedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
+        {
+            object previewResult;
+            _gate.ForcePreview();
+            try
+            {
+                previewResult = await base.InvokeCoreAsync(arguments, cancellationToken);
+            }
+            finally
+            {
+                _gate.ClearForce();
+            }
+
+            string preview = previewResult?.ToString() ?? string.Empty;
+            // 沒走到閘門（參數錯、目標不存在）就沒有可判定的命令，原樣回給模型。
+            if (!preview.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) return previewResult;
+
+            RiskVerdict verdict = await _classifier.ClassifyAsync(new RiskQuestion
+            {
+                Instruction = _transcript.CurrentInstructionText,
+                ToolName = Name,
+                Arguments = entry.Arguments,
+                Preview = preview.Substring(ToolText.ConfirmationPrefix.Length)
+            }, cancellationToken);
+            entry.RiskCheck = verdict.Risky ? (verdict.Failed ? "unavailable" : "high") : "low";
+
+            if (verdict.Risky)
+            {
+                _gate.NoteBlocked(preview);
+                return string.IsNullOrEmpty(verdict.Reason) ? preview : preview + " (risk check: " + verdict.Reason + ")";
+            }
+
+            _gate.ForceExecute();
+            try
+            {
+                return await base.InvokeCoreAsync(arguments, cancellationToken);
+            }
+            finally
+            {
+                _gate.ClearForce();
             }
         }
 

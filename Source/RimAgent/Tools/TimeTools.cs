@@ -9,13 +9,19 @@ namespace RimAgent.Tools
     public sealed class TimeTools
     {
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public TimeTools(IGameWorld world)
+        public TimeTools(IGameWorld world) : this(world, null)
         {
-            _world = world ?? throw new ArgumentNullException(nameof(world));
         }
 
-        [AgentTool("get_time_speed", ToolCategory.Time)]
+        public TimeTools(IGameWorld world, ICommandGate gate)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
+        }
+
+        [AgentTool("get_time_speed", ToolCategory.Time, ToolRisk.Query)]
         [Description("Shows the current game time flow speed: paused, normal, fast or superfast, with the speeds you can switch to.")]
         public string GetTimeSpeed()
         {
@@ -25,7 +31,7 @@ namespace RimAgent.Tools
             return $"Current time speed: {current}. Available: {available}.";
         }
 
-        [AgentTool("set_time_speed", ToolCategory.Time)]
+        [AgentTool("set_time_speed", ToolCategory.Time, ToolRisk.Safe)]
         [Description("Pauses the game or changes the time flow speed. Pause before giving orders that need a still game, speed up while waiting. Reports the previous and new speed.")]
         public string SetTimeSpeed(
             [Description("Speed: Paused (or 暫停), Normal, Fast or Superfast.")] string speed)
@@ -36,6 +42,9 @@ namespace RimAgent.Tools
 
             ResolveResult<DefInfo> match = DefResolver.Resolve(want, _world.TimeSpeeds, "time speed");
             if (!match.Success) return match.Error;
+
+            string blocked = ToolText.Blocked(_gate, $"would set time speed {previous} -> {match.Value.Label} ({match.Value.DefName}).");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.SetTimeSpeed(match.Value.DefName);
             if (!result.Success) return ToolText.Error(result.Message);

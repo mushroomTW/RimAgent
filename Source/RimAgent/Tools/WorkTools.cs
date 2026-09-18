@@ -30,7 +30,7 @@ namespace RimAgent.Tools
             _gate = gate;
         }
 
-        [AgentTool("set_work_priority", ToolCategory.Work)]
+        [AgentTool("set_work_priority", ToolCategory.Work, ToolRisk.Safe)]
         [Description("Sets one colonist's priority for one work type. Priority 1 is highest, 4 is lowest, 0 disables that work for the colonist. Reports the previous and new value.")]
         public string SetWorkPriority(
             [Description("Colonist name, nickname or id.")] string colonist,
@@ -59,7 +59,7 @@ namespace RimAgent.Tools
             string previous = current != null ? current.Priority.ToString() : "?";
             int oldPriority = current != null ? current.Priority : 3;
 
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Work))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 string preview = $"would set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.";
                 string blocked = ToolText.Confirmation(preview);
@@ -76,7 +76,7 @@ namespace RimAgent.Tools
             return $"Set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.{suffix}";
         }
 
-        [AgentTool("list_work_priorities", ToolCategory.Work)]
+        [AgentTool("list_work_priorities", ToolCategory.Work, ToolRisk.Query)]
         [Description("Lists work priorities for one colonist, or for everyone. 0 means the work is disabled for that colonist; 1 is highest, 4 lowest.")]
         public string ListWorkPriorities(
             [Description("Colonist name, nickname or id, or \"all\" for everyone.")] string colonist)
@@ -94,7 +94,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("set_schedule", ToolCategory.Work)]
+        [AgentTool("set_schedule", ToolCategory.Work, ToolRisk.Safe)]
         [Description("Sets what colonists do during a range of hours in their daily schedule. Hours wrap around midnight, e.g. start 22 end 6 covers 22:00 to 05:59.")]
         public string SetSchedule(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
@@ -120,7 +120,7 @@ namespace RimAgent.Tools
             var hours = new List<int>();
             for (int h = startHour; h != endHour; h = (h + 1) % 24) hours.Add(h);
 
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Work))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 string schedulePreview = $"would set hours {startHour}-{(endHour + 23) % 24} " +
                     $"({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";

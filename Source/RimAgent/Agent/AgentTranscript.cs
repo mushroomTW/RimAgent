@@ -35,6 +35,8 @@ namespace RimAgent.Agent
         /// 戰鬥延遲提醒以此為單位只顯示一次。
         /// </summary>
         public int InstructionId { get; set; }
+        /// <summary>User 專用：這句是排程器起的自主任務，不是玩家打的。</summary>
+        public bool Autonomous { get; set; }
 
         // Tool 專用
         public string ToolName { get; set; } = string.Empty;
@@ -42,6 +44,8 @@ namespace RimAgent.Agent
         public string Arguments { get; set; } = string.Empty;
         public string Result { get; set; } = string.Empty;
         public bool Failed { get; set; }
+        /// <summary>自動模式的分類結果：low／high／unavailable；沒經分類器為空。</summary>
+        public string RiskCheck { get; set; } = string.Empty;
 
         // Assistant / Error 專用
         public bool ToolsStripped { get; set; }
@@ -57,6 +61,19 @@ namespace RimAgent.Agent
         private readonly object _gate = new object();
         private readonly List<TranscriptEntry> _entries = new List<TranscriptEntry>();
         private int _instructionIds;
+        private int _version;
+
+        /// <summary>每次 Add／Clear 遞增；UI 以此判斷是否要重建渲染快取。</summary>
+        public int Version
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _version;
+                }
+            }
+        }
 
         /// <summary>
         /// 開啟新的一句指令並取號。工具在執行時讀 <see cref="CurrentInstructionId"/>
@@ -94,12 +111,29 @@ namespace RimAgent.Agent
             }
         }
 
+        /// <summary>目前這句指令的原文（最後一則 User 紀錄）；沒有則為空字串。分類器要看玩家原話。</summary>
+        public string CurrentInstructionText
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    for (int i = _entries.Count - 1; i >= 0; i--)
+                    {
+                        if (_entries[i].Kind == TranscriptKind.User) return _entries[i].Text;
+                    }
+                    return string.Empty;
+                }
+            }
+        }
+
         public void Add(TranscriptEntry entry)
         {
             if (entry == null) throw new ArgumentNullException(nameof(entry));
             lock (_gate)
             {
                 _entries.Add(entry);
+                _version++;
             }
         }
 
@@ -127,6 +161,7 @@ namespace RimAgent.Agent
             lock (_gate)
             {
                 _entries.Clear();
+                _version++;
             }
         }
     }

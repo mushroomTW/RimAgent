@@ -32,6 +32,12 @@ namespace RimAgent.UI
         private string _input = string.Empty;
         private Vector2 _scroll;
         private int _lastEntryCount = -1;
+        // 渲染快取：Markdown 轉換與 CalcHeight 只在紀錄數或寬度變時重做，不每幀重跑（OnGUI 一幀會跑多次）。
+        private readonly List<(string Text, Color Color, float Height)> _lines = new List<(string, Color, float)>();
+        private float _linesTotal;
+        private float _linesWidth = -1f;
+        private int _linesEntryCount = -1;
+        private int _linesTranscriptVersion = -1;
         private string _capabilityWarning;
         private CancellationTokenSource _cts;
 
@@ -80,7 +86,18 @@ namespace RimAgent.UI
             DrawBottomBar(bottom, session);
         }
 
-        /// <summary>自主模式狀態列：開關、今日用量、目標與常駐指令入口。</summary>
+        private static string ModeLabel(AgentMode mode)
+        {
+            switch (mode)
+            {
+                case AgentMode.Ask: return "RimAgent.Settings.Mode.Ask".Translate();
+                case AgentMode.Confirm: return "RimAgent.Settings.Mode.Confirm".Translate();
+                case AgentMode.Auto: return "RimAgent.Settings.Mode.Auto".Translate();
+                default: return "RimAgent.Settings.Mode.Autonomous".Translate();
+            }
+        }
+
+        /// <summary>模式狀態列：目前模式或自主用量、目標與常駐指令入口。</summary>
         private void DrawAutoStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
         {
             const float GoalsButtonWidth = 64f;
@@ -92,7 +109,7 @@ namespace RimAgent.UI
             GUI.color = ToolColor;
             string status = component.AutonomousEnabled
                 ? "RimAgent.Auto.StatusOn".Translate(component.AutonomousToolsUsed, component.AutonomousBudget).ToString()
-                : "RimAgent.Auto.StatusOff".Translate().ToString();
+                : "RimAgent.Mode.Status".Translate(ModeLabel(session.Mode)).ToString();
             Widgets.Label(labelRect, status);
             GUI.color = Color.white;
 
@@ -108,11 +125,54 @@ namespace RimAgent.UI
 
         private void DrawTranscript(Rect outRect, ColonyAgentSession session)
         {
-            IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
             float width = outRect.width - 20f;
+            int version = session.Transcript.Version;
+            if (version != _linesTranscriptVersion || width != _linesWidth)
+            {
+                RebuildLines(session.Transcript.Snapshot(), width);
+                _linesTranscriptVersion = version;
+                _linesWidth = width;
+            }
 
-            var lines = new List<(string Text, Color Color, float Height)>(entries.Count + 1);
-            float total = 0f;
+            float total = _linesTotal;
+            string working = null;
+            float workingHeight = 0f;
+            if (session.IsBusy)
+            {
+                working = "RimAgent.Working".Translate();
+                workingHeight = Text.CalcHeight(working, width);
+                total += workingHeight + EntryGap;
+            }
+
+            if (_linesEntryCount != _lastEntryCount)
+            {
+                _lastEntryCount = _linesEntryCount;
+                _scroll.y = float.MaxValue;
+            }
+
+            var viewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height));
+            Widgets.BeginScrollView(outRect, ref _scroll, viewRect);
+            float y = 0f;
+            foreach ((string text, Color color, float height) in _lines)
+            {
+                GUI.color = color;
+                Widgets.Label(new Rect(0f, y, width, height), text);
+                y += height + EntryGap;
+            }
+            if (working != null)
+            {
+                GUI.color = NoticeColor;
+                Widgets.Label(new Rect(0f, y, width, workingHeight), working);
+            }
+            GUI.color = Color.white;
+            Widgets.EndScrollView();
+        }
+
+        private void RebuildLines(IReadOnlyList<TranscriptEntry> entries, float width)
+        {
+            _lines.Clear();
+            _linesTotal = 0f;
+            _linesEntryCount = entries.Count;
             // 戰鬥延遲提醒以指令為單位只顯示一次：記下已經提醒過的指令編號。
             var combatNoted = new HashSet<int>();
             foreach (TranscriptEntry entry in entries)
@@ -120,34 +180,10 @@ namespace RimAgent.UI
                 foreach ((string text, Color color) in Render(entry, combatNoted))
                 {
                     float height = Text.CalcHeight(text, width);
-                    lines.Add((text, color, height));
-                    total += height + EntryGap;
+                    _lines.Add((text, color, height));
+                    _linesTotal += height + EntryGap;
                 }
             }
-            if (session.IsBusy)
-            {
-                string working = "RimAgent.Working".Translate();
-                lines.Add((working, NoticeColor, Text.CalcHeight(working, width)));
-                total += lines[lines.Count - 1].Height + EntryGap;
-            }
-
-            if (entries.Count != _lastEntryCount)
-            {
-                _lastEntryCount = entries.Count;
-                _scroll.y = float.MaxValue;
-            }
-
-            var viewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height));
-            Widgets.BeginScrollView(outRect, ref _scroll, viewRect);
-            float y = 0f;
-            foreach ((string text, Color color, float height) in lines)
-            {
-                GUI.color = color;
-                Widgets.Label(new Rect(0f, y, width, height), text);
-                y += height + EntryGap;
-            }
-            GUI.color = Color.white;
-            Widgets.EndScrollView();
         }
 
         private static IEnumerable<(string Text, Color Color)> Render(TranscriptEntry entry, HashSet<int> combatNoted)
@@ -155,7 +191,8 @@ namespace RimAgent.UI
             switch (entry.Kind)
             {
                 case TranscriptKind.User:
-                    yield return ("> " + entry.Text, UserColor);
+                    // 自主任務的指令是排程器產生的，跟玩家打的字分開標示。
+                    yield return ((entry.Autonomous ? "[auto] " : "> ") + entry.Text, entry.Autonomous ? NoticeColor : UserColor);
                     break;
                 case TranscriptKind.Assistant:
                     string reply = RenderReply(entry.Text);
@@ -164,6 +201,7 @@ namespace RimAgent.UI
                     break;
                 case TranscriptKind.Tool:
                     string call = "* " + entry.ToolName + "(" + entry.Arguments + ")";
+                    if (entry.RiskCheck.Length > 0) call += " [risk: " + entry.RiskCheck + "]";
                     string result = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
                     yield return (call + "\n  -> " + result, entry.Failed ? ErrorColor : ToolColor);
                     // 同一句指令只提醒一次（舊存檔載入的紀錄 InstructionId 為 0，同樣只提醒一次）。
@@ -233,6 +271,7 @@ namespace RimAgent.UI
             if (Widgets.ButtonText(stopRect, "RimAgent.Stop".Translate(), true, true, busy))
             {
                 _cts?.Cancel();
+                RimAgentGameComponent.Instance?.StopAutonomousRun();
             }
             if (Widgets.ButtonText(undoRect, "RimAgent.Undo".Translate(), true, true, canUndo) && canUndo)
             {

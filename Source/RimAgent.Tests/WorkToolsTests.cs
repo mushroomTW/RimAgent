@@ -93,7 +93,7 @@ namespace RimAgent.Tests
         [Test]
         public void BlockedPriorityReturnsPreviewWithoutTouchingWorld()
         {
-            var gated = new WorkTools(_world, null, new ConfirmationGate(() => true));
+            var gated = new WorkTools(_world, null, new ConfirmationGate(() => AgentMode.Confirm));
 
             string text = gated.SetWorkPriority("Ali", "doctor", 1);
 
@@ -105,7 +105,7 @@ namespace RimAgent.Tests
         [Test]
         public void BlockedScheduleReturnsPreviewWithoutTouchingWorld()
         {
-            var gated = new WorkTools(_world, null, new ConfirmationGate(() => true));
+            var gated = new WorkTools(_world, null, new ConfirmationGate(() => AgentMode.Confirm));
 
             string text = gated.SetSchedule("Ali", 22, 23, "sleep");
 

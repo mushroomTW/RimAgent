@@ -46,7 +46,7 @@ namespace RimAgent.Tools
 
         private const string KindList = "mine, cut_plants, harvest, deconstruct or haul";
 
-        [AgentTool("designate_area", ToolCategory.Build)]
+        [AgentTool("designate_area", ToolCategory.Build, ToolRisk.Confirm)]
         [Description("Marks map objects for colonists to work on: mine (ore/rock), cut_plants, harvest (ripe plants), deconstruct (player buildings) or haul (items). Targets either the player's current selection or a rectangle, optionally filtered by name. Reports how many were marked.")]
         public string DesignateArea(
             [Description("One of: mine, cut_plants, harvest, deconstruct, haul.")] string kind,
@@ -63,7 +63,7 @@ namespace RimAgent.Tools
             ResolveResult<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, filter);
             if (!targets.Success) return targets.Error;
 
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Build))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 int eligible = targets.Value.Count(t => dk.Applies(t) && !t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase));
                 string where = useSelection
@@ -111,7 +111,7 @@ namespace RimAgent.Tools
             return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
         }
 
-        [AgentTool("cancel_designation", ToolCategory.Build)]
+        [AgentTool("cancel_designation", ToolCategory.Build, ToolRisk.Safe)]
         [Description("Removes marks of one kind (mine, cut_plants, harvest, deconstruct, haul) from the player's selection or from a rectangle.")]
         public string CancelDesignation(
             [Description("One of: mine, cut_plants, harvest, deconstruct, haul.")] string kind,
@@ -128,7 +128,7 @@ namespace RimAgent.Tools
             if (!targets.Success) return targets.Error;
 
             List<ThingInfo> markedTargets = targets.Value.Where(t => t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase)).ToList();
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Build))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 string cancelPreview = $"would remove {markedTargets.Count} {dk.Verb} mark(s).";
                 string cancelBlocked = ToolText.Confirmation(cancelPreview);
@@ -152,7 +152,7 @@ namespace RimAgent.Tools
             return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
         }
 
-        [AgentTool("place_blueprint", ToolCategory.Build)]
+        [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
         [Description("Places construction blueprints for colonists to build. Can place a line of several blueprints (e.g. a wall) by giving count and direction. Fails with the game's reason when a cell is not buildable.")]
         public string PlaceBlueprint(
             [Description("Building or floor name or defName, e.g. \"wall\", \"door\", \"solar generator\", \"bed\".")] string building,
@@ -194,7 +194,7 @@ namespace RimAgent.Tools
             int placed = 0;
             var failures = new List<string>();
 
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Build))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 string whatPreview = def.Value.Label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
                 string linePreview = count > 1 ? $" in a line toward {direction}" : string.Empty;

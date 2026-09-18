@@ -116,15 +116,6 @@ namespace RimAgent.Agent
             }
         }
 
-        /// <summary>丟掉正在開的框（指令失敗時）：工具可能已改了世界，但失敗那句不保證完整，不提供復原。</summary>
-        public void DiscardFrame()
-        {
-            lock (_gate)
-            {
-                _open = null;
-            }
-        }
-
         public UndoFrame Pop()
         {
             lock (_gate)

@@ -141,7 +141,7 @@ namespace RimAgent.Tests
         [Test]
         public void BlockedDesignationReturnsPreviewWithoutTouchingWorld()
         {
-            var gated = new BuildTools(_world, new ConfirmationGate(() => true));
+            var gated = new BuildTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
             string text = gated.DesignateArea("mine", false, 0, 0, 10, 10, "steel");
 
@@ -153,7 +153,7 @@ namespace RimAgent.Tests
         [Test]
         public void BlockedBlueprintReturnsPreviewWithoutTouchingWorld()
         {
-            var gated = new BuildTools(_world, new ConfirmationGate(() => true));
+            var gated = new BuildTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
             string text = gated.PlaceBlueprint("wall", 3, 3, 0, "", 1, "");
 

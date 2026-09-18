@@ -57,11 +57,16 @@
   <RimAgent.Settings.MCPTip>Let the agent call tools from local MCP servers configured in AgentPack/MCP/servers.json. Servers run with your user privileges; only enable ones you trust. Off by default.</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies immediately, even mid-game.</RimAgent.Settings.MaxStepsTip>
-  <RimAgent.Settings.RequireConfirmation>Confirm — approve Work / Build / Combat first</RimAgent.Settings.RequireConfirmation>
-  <RimAgent.Settings.RequireConfirmationTip>When on, Work, Build and Combat tools only preview what they would do. Press Confirm to execute them. Off by default.</RimAgent.Settings.RequireConfirmationTip>
+  <RimAgent.Settings.ModeHeader>Mode — how the agent may act</RimAgent.Settings.ModeHeader>
+  <RimAgent.Settings.Mode.Ask>Ask</RimAgent.Settings.Mode.Ask>
+  <RimAgent.Settings.Mode.AskDesc>Read-only. The agent can inspect the colony and advise, but has no tools that change it.</RimAgent.Settings.Mode.AskDesc>
+  <RimAgent.Settings.Mode.Confirm>Confirm</RimAgent.Settings.Mode.Confirm>
+  <RimAgent.Settings.Mode.ConfirmDesc>Irreversible actions (trades, caravans, surgery, releases, deletions, attacks) are previewed and wait for your Confirm; everything else runs directly.</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
+  <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action; risky ones wait for your Confirm, the rest run directly. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
+  <RimAgent.Settings.Mode.AutonomousDesc>Fully delegated: every action runs without asking, and the agent starts its own runs on the schedule below. You can still give instructions.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
-  <RimAgent.Settings.Autonomous>Autonomy — scheduled and event-driven runs</RimAgent.Settings.Autonomous>
-  <RimAgent.Settings.AutonomousTip>When on, the agent starts its own instructions: routine inspections plus raids, mental breaks and food shortages. Every run is logged and bounded by the daily budget below. Off by default.</RimAgent.Settings.AutonomousTip>
   <RimAgent.Settings.AutoInterval>Routine inspection every: {0} hours</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoBudget>Autonomous tool calls per day: {0}</RimAgent.Settings.AutoBudget>
   <RimAgent.Settings.AutoOnRaid>React to raids</RimAgent.Settings.AutoOnRaid>
@@ -71,7 +76,7 @@
 
   <!-- Autonomy -->
   <RimAgent.Auto.StatusOn>Autonomy on · {0}/{1} used today</RimAgent.Auto.StatusOn>
-  <RimAgent.Auto.StatusOff>Autonomy off (mod settings)</RimAgent.Auto.StatusOff>
+  <RimAgent.Mode.Status>Mode: {0}</RimAgent.Mode.Status>
   <RimAgent.Auto.Goals>Goals</RimAgent.Auto.Goals>
   <RimAgent.Goals.Title>Long-term goals — autonomous runs work toward these</RimAgent.Goals.Title>
   <RimAgent.Goals.Empty>No goals yet. Add one below, e.g. "research electricity".</RimAgent.Goals.Empty>

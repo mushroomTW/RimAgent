@@ -1,9 +1,10 @@
+using RimAgent.Agent;
 using RimAgent.Tools;
 using Verse;
 
 namespace RimAgent
 {
-    /// <summary>玩家可調的設定：十二類工具的開關與單句指令的步數上限。</summary>
+    /// <summary>玩家可調的設定：執行模式、十二類工具的開關與單句指令的步數上限。</summary>
     public class RimAgentSettings : ModSettings
     {
         public const int DefaultMaxSteps = 8;
@@ -23,13 +24,10 @@ namespace RimAgent
         public bool allowTime;
         public bool allowMCP;
         public int maxSteps = DefaultMaxSteps;
-        /// <summary>
-        /// 「需確認」模式：開啟後 Work／Build／Combat 命令先回傳預覽，玩家按確認才執行。
-        /// 查詢不受影響。
-        /// </summary>
-        public bool requireConfirmation;
+        /// <summary>執行模式：詢問／確認／自動／自主，見 <see cref="AgentMode"/>。</summary>
+        public AgentMode mode = AgentMode.Confirm;
 
-        // 自主模式（排程器）：全局開關與配額在設定頁，玩家設的長期目標跟著存檔走。
+        // 自主模式（排程器）的節奏與配額在設定頁，玩家設的長期目標跟著存檔走。
         public const int DefaultAutoIntervalHours = 6;
         public const int MinAutoIntervalHours = 1;
         public const int MaxAutoIntervalHours = 24;
@@ -37,7 +35,6 @@ namespace RimAgent
         public const int MinAutoBudget = 10;
         public const int MaxAutoBudget = 300;
 
-        public bool allowAutonomous;
         public int autonomousIntervalHours = DefaultAutoIntervalHours;
         public int autonomousBudgetPerDay = DefaultAutoBudget;
         public bool autoOnRaid = true;
@@ -60,8 +57,7 @@ namespace RimAgent
             Scribe_Values.Look(ref allowTime, "allowTime", false);
             Scribe_Values.Look(ref allowMCP, "allowMCP", false);
             Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
-            Scribe_Values.Look(ref requireConfirmation, "requireConfirmation", false);
-            Scribe_Values.Look(ref allowAutonomous, "allowAutonomous", false);
+            Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
             Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);
             Scribe_Values.Look(ref autonomousBudgetPerDay, "autonomousBudgetPerDay", DefaultAutoBudget);
             Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);

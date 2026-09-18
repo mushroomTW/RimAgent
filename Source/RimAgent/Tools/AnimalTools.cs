@@ -14,13 +14,19 @@ namespace RimAgent.Tools
         internal const string UnrestrictedKeyword = "unrestricted";
 
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public AnimalTools(IGameWorld world)
+        public AnimalTools(IGameWorld world) : this(world, null)
         {
-            _world = world ?? throw new ArgumentNullException(nameof(world));
         }
 
-        [AgentTool("list_animals", ToolCategory.Animal)]
+        public AnimalTools(IGameWorld world, ICommandGate gate)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
+        }
+
+        [AgentTool("list_animals", ToolCategory.Animal, ToolRisk.Query)]
         [Description("Lists the colony's animals: species, name, allowed area and health, plus a count of wild animals on the map. Use this before taming, training or assigning areas.")]
         public string ListAnimals()
         {
@@ -52,7 +58,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("tame_animal", ToolCategory.Animal)]
+        [AgentTool("tame_animal", ToolCategory.Animal, ToolRisk.Safe)]
         [Description("Marks a wild animal for taming: a handler will attempt it when available, using the game's taming mechanics and success chances. Give the animal's id from list_animals.")]
         public string TameAnimal(
             [Description("Wild animal id.")] string animal)
@@ -61,12 +67,15 @@ namespace RimAgent.Tools
             if (!target.Success) return target.Error;
             if (!target.Value.Wild) return ToolText.Error($"{target.Value.Name} is already tame.");
 
+            string blocked = ToolText.Blocked(_gate, $"would mark {target.Value.Name} [{target.Value.Id}] for taming.");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.TameAnimal(target.Value.Id);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
         }
 
-        [AgentTool("train_animal", ToolCategory.Animal)]
+        [AgentTool("train_animal", ToolCategory.Animal, ToolRisk.Safe)]
         [Description("Turns one trainable skill on or off for a colony animal, e.g. obedience, release, rescue or haul. Animals that cannot learn it are reported, not forced.")]
         public string TrainAnimal(
             [Description("Colony animal name or id.")] string animal,
@@ -80,12 +89,15 @@ namespace RimAgent.Tools
             ResolveResult<DefInfo> def = DefResolver.Resolve(training, _world.AnimalTraining, "animal training");
             if (!def.Success) return def.Error;
 
+            string blocked = ToolText.Blocked(_gate, $"would {(enable ? "start" : "stop")} training {target.Value.Name} in {def.Value.Label}.");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.SetAnimalTraining(target.Value.Id, def.Value.DefName, enable);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
         }
 
-        [AgentTool("set_animal_area", ToolCategory.Animal)]
+        [AgentTool("set_animal_area", ToolCategory.Animal, ToolRisk.Safe)]
         [Description("Restricts a colony animal to one allowed area, or \"unrestricted\" to let it roam the home region.")]
         public string SetAnimalArea(
             [Description("Colony animal name or id.")] string animal,
@@ -103,6 +115,9 @@ namespace RimAgent.Tools
                 if (!def.Success) return def.Error;
                 label = def.Value.Label;
             }
+
+            string blocked = ToolText.Blocked(_gate, $"would set {target.Value.Name}'s allowed area to {(label.Length == 0 ? UnrestrictedKeyword : label)}.");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.SetAnimalArea(target.Value.Id, label);
             if (!result.Success) return ToolText.Error(result.Message);

@@ -57,11 +57,16 @@
   <RimAgent.Settings.MCPTip>讓 agent 呼叫 AgentPack/MCP/servers.json 裡設定的本機 MCP 伺服器工具。伺服器以你的使用者權限執行，只開信任的。預設關閉。</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.MaxSteps>每句指令最多呼叫工具次數：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控迴圈燒掉 API 額度。立即生效，遊戲中調整也有效。</RimAgent.Settings.MaxStepsTip>
-  <RimAgent.Settings.RequireConfirmation>確認 — 工作／建造／戰鬥先預覽再執行</RimAgent.Settings.RequireConfirmation>
-  <RimAgent.Settings.RequireConfirmationTip>開啟後，工作、建造與戰鬥三類工具只會列出將做的事，按下確認才執行。預設關閉。</RimAgent.Settings.RequireConfirmationTip>
+  <RimAgent.Settings.ModeHeader>模式 — Agent 可以怎麼行動</RimAgent.Settings.ModeHeader>
+  <RimAgent.Settings.Mode.Ask>詢問</RimAgent.Settings.Mode.Ask>
+  <RimAgent.Settings.Mode.AskDesc>唯讀。Agent 可以查看殖民地並給建議，但沒有任何會改變遊戲的工具。</RimAgent.Settings.Mode.AskDesc>
+  <RimAgent.Settings.Mode.Confirm>確認</RimAgent.Settings.Mode.Confirm>
+  <RimAgent.Settings.Mode.ConfirmDesc>不可逆的操作（交易、商隊、手術、釋放、刪除、攻擊）先預覽、等你按確認；其餘直接執行。</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.Auto>自動</RimAgent.Settings.Mode.Auto>
+  <RimAgent.Settings.Mode.AutoDesc>每個操作先由另一次模型呼叫判斷風險：有風險的等你確認，其餘直接執行。每個操作多一次請求。</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
+  <RimAgent.Settings.Mode.AutonomousDesc>完全託管：所有操作不問直接做，並依下方排程自己行動。你仍可下指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行動</RimAgent.Settings.AutonomousHeader>
-  <RimAgent.Settings.Autonomous>自主 — 排程與事件觸發的自主任務</RimAgent.Settings.Autonomous>
-  <RimAgent.Settings.AutonomousTip>開啟後 Agent 會自己起自主任務：例行巡檢，外加襲擊、心情警戒與缺糧。每次自主任務都有紀錄，並受下方每日上限管制。預設關閉。</RimAgent.Settings.AutonomousTip>
   <RimAgent.Settings.AutoInterval>例行巡檢間隔：{0} 小時</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoBudget>自主每日工具呼叫上限：{0} 次</RimAgent.Settings.AutoBudget>
   <RimAgent.Settings.AutoOnRaid>襲擊時反應</RimAgent.Settings.AutoOnRaid>
@@ -71,7 +76,7 @@
 
   <!-- 自主 -->
   <RimAgent.Auto.StatusOn>自主開 · 今日已用 {0}/{1} 次</RimAgent.Auto.StatusOn>
-  <RimAgent.Auto.StatusOff>自主關（設定頁開啟）</RimAgent.Auto.StatusOff>
+  <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
   <RimAgent.Auto.Goals>目標</RimAgent.Auto.Goals>
   <RimAgent.Goals.Title>長期目標 — 自主任務會持續推進這些</RimAgent.Goals.Title>
   <RimAgent.Goals.Empty>還沒有目標。在下面加一個，例如「研發電力」。</RimAgent.Goals.Empty>

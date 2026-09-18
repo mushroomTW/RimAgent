@@ -89,7 +89,7 @@ namespace RimAgent.Tests
         [Test]
         public void BlockedDraftReturnsPreviewWithoutTouchingWorld()
         {
-            var gated = new CombatTools(_world, new ConfirmationGate(() => true));
+            var gated = new CombatTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
             string text = gated.Draft("all", true);
 
@@ -101,7 +101,7 @@ namespace RimAgent.Tests
         [Test]
         public void BlockedAttackReturnsPreviewWithoutTouchingWorld()
         {
-            var gated = new CombatTools(_world, new ConfirmationGate(() => true));
+            var gated = new CombatTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
             string text = gated.OrderAttack("Bob", 900);
 

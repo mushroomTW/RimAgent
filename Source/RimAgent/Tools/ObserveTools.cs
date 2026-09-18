@@ -12,13 +12,19 @@ namespace RimAgent.Tools
     {
         private const int MaxResearchListed = 30;
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public ObserveTools(IGameWorld world)
+        public ObserveTools(IGameWorld world) : this(world, null)
         {
-            _world = world ?? throw new ArgumentNullException(nameof(world));
         }
 
-        [AgentTool("get_colony_overview", ToolCategory.Observe)]
+        public ObserveTools(IGameWorld world, ICommandGate gate)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
+        }
+
+        [AgentTool("get_colony_overview", ToolCategory.Observe, ToolRisk.Query)]
         [Description("One-line summary of the colony: population, date and time, weather, outdoor temperature, wealth, hostiles on the map and colonists close to a mental break. Call this first when asked about the general situation.")]
         public string GetColonyOverview()
         {
@@ -28,7 +34,7 @@ namespace RimAgent.Tools
                    $" | Hostiles on map: {o.HostileCount} | Colonists near mental break: {o.ColonistsNearMentalBreak}";
         }
 
-        [AgentTool("list_colonists", ToolCategory.Observe)]
+        [AgentTool("list_colonists", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Lists every colonist with id, name, age, position, health, mood, current activity, draft status and skills (* = minor passion, ** = major passion). Use the id or name in other tools.")]
         public string ListColonists()
         {
@@ -53,7 +59,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("get_resources", ToolCategory.Observe)]
+        [AgentTool("get_resources", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Lists stockpiled resources (counted items on the map) grouped by category, plus total human-edible nutrition. Useful for questions about food, materials, medicine and components.")]
         public string GetResources()
         {
@@ -78,7 +84,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("list_threats", ToolCategory.Observe)]
+        [AgentTool("list_threats", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Lists active threats on the map: hostile pawns, manhunting animals, predators and fires, each with id, faction and position.")]
         public string ListThreats()
         {
@@ -98,7 +104,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("get_research_status", ToolCategory.Observe)]
+        [AgentTool("get_research_status", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Shows the current research project with its progress, and the projects that can be started now.")]
         public string GetResearchStatus()
         {
@@ -127,7 +133,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("set_research", ToolCategory.Observe)]
+        [AgentTool("set_research", ToolCategory.Observe, ToolRisk.Safe)]
         [Description("Switches the colony's active research project. Pass \"none\" (also accepts \"stop\" or empty) to stop the current research without losing its progress. Reports the previous and new project.")]
         public string SetResearch(
             [Description("Research name or defName, e.g. \"Electricity\", or \"none\" (also \"stop\" or empty) to stop the current research.")] string project)
@@ -144,6 +150,9 @@ namespace RimAgent.Tools
                 defName = match.Value.DefName;
             }
 
+            string blocked = ToolText.Blocked(_gate, $"would switch research {previous} -> {(IsStopWord(want) ? "none" : defName)}.");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.SetResearch(defName);
             if (!result.Success) return ToolText.Error(result.Message);
 
@@ -154,7 +163,7 @@ namespace RimAgent.Tools
             return $"Research {previous} -> {current}.{suffix}";
         }
 
-        [AgentTool("get_maps", ToolCategory.Observe)]
+        [AgentTool("get_maps", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Lists every map in this save with its id, name, tile and colonist count. Tools operate on the current map; use set_current_map first to work on another map.")]
         public string GetMaps()
         {
@@ -173,13 +182,16 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("set_current_map", ToolCategory.Observe)]
+        [AgentTool("set_current_map", ToolCategory.Observe, ToolRisk.Safe)]
         [Description("Switches which map later tools operate on (the same as the player switching to another map). Map switching only changes the viewed map; pawns and items stay where they are.")]
         public string SetCurrentMap(
             [Description("Map id from get_maps, or part of the map name.")] string map)
         {
             ResolveResult<MapInfo> match = ResolveMap(map, _world.GetMaps());
             if (!match.Success) return match.Error;
+
+            string blocked = ToolText.Blocked(_gate, $"would switch the current map to {match.Value.Label} [{match.Value.Id}].");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.SetCurrentMap(match.Value.Id);
             if (!result.Success) return ToolText.Error(result.Message);
@@ -217,7 +229,7 @@ namespace RimAgent.Tools
             return ResolveResult<MapInfo>.Fail($"Error: no map matches \"{needle}\".");
         }
 
-        [AgentTool("find_things", ToolCategory.Observe)]
+        [AgentTool("find_things", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Finds map objects by kind and optional name, optionally inside a rectangle. Returns id, defName, label, position and existing designations. Use the returned ids and positions in build and combat tools.")]
         public string FindThings(
             [Description("What to look for: any, mineable, plant, building, item or pawn.")] string kind,

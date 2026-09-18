@@ -27,7 +27,6 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _surgeryRecipes;
         private IReadOnlyList<DefInfo> _prisonerInteractionModes;
         private IReadOnlyList<DefInfo> _animalTraining;
-        private IReadOnlyList<DefInfo> _animalAreas;
         private IReadOnlyList<DefInfo> _storageFilterables;
         private IReadOnlyList<DefInfo> _billRecipes;
 
@@ -48,7 +47,8 @@ namespace RimAgent.Game
                 Weather = map.weatherManager.curWeather?.label ?? string.Empty,
                 OutdoorTemperatureC = map.mapTemperature.OutdoorTemp,
                 Wealth = map.wealthWatcher.WealthTotal,
-                HostileCount = GetThreats().Count(t => t.Kind != "Fire"),
+                // 倒地的敵人不算威脅：留著會讓「襲擊結束」的邊緣永遠不歸零，下一波真襲擊就觸發不了。
+                HostileCount = GetThreats().Count(t => t.Kind != "Fire" && !t.Downed),
                 ColonistsNearMentalBreak = colonists.Count(IsNearMentalBreak)
             };
         }
@@ -437,9 +437,17 @@ namespace RimAgent.Game
             {
                 if (options.Count == 0) return CommandResult.Fail($"{recipe.label} does not apply to {pawn.LabelShort}");
                 string want = (request.BodyPartLabel ?? string.Empty).Trim();
-                part = want.Length == 0 ? options[0] : options.FirstOrDefault(p => MatchesBodyPart(p, want));
+                // 截肢、摘除器官這類手術不能替玩家挑部位：沒指定就列出候選要模型問清楚。
+                if (want.Length == 0)
+                {
+                    return CommandResult.Fail($"{recipe.label} needs a body part. Ask the player which one: " +
+                                              string.Join(", ", options.Select(p => p.LabelCap).Distinct().ToArray()));
+                }
+                part = options.FirstOrDefault(p => MatchesBodyPart(p, want));
                 if (part == null) return CommandResult.Fail($"{pawn.LabelShort} has no body part matching \"{want}\" for {recipe.label}");
             }
+            if (!recipe.AvailableOnNow(pawn, part))
+                return CommandResult.Fail($"{recipe.label} is not available on {pawn.LabelShort} right now");
             if (pawn.BillStack.Bills.OfType<Bill_Medical>().Any(b => b.recipe == recipe && b.Part == part))
                 return CommandResult.Fail($"{recipe.label} is already scheduled on {pawn.LabelShort}");
             var bill = new Bill_Medical(recipe, null) { Part = part };
@@ -536,10 +544,11 @@ namespace RimAgent.Game
                 .Select(d => new DefInfo(d.defName, d.label))
                 .ToList());
 
+        /// <summary>區域是每張地圖的執行期資料（玩家隨時新增、切圖就換），不快取。</summary>
         public IReadOnlyList<DefInfo> AnimalAreas =>
-            _animalAreas ?? (_animalAreas = Map.areaManager.AllAreas
+            Map.areaManager.AllAreas
                 .Select(a => new DefInfo(a.Label, a.Label))
-                .ToList());
+                .ToList();
 
         public CommandResult TameAnimal(int pawnId)
         {
@@ -626,6 +635,10 @@ namespace RimAgent.Game
                 if (plant == null || plant.category != ThingCategory.Plant || plant.plant == null)
                     return CommandResult.Fail($"{plantDefName} is not a growable plant");
             }
+            // 格子能不能畫區域交給原版 designator 判斷（迷霧、地圖邊緣禁區、不可重疊的物件、種植區的肥沃度）。
+            Designator_ZoneAdd designator = stockpile
+                ? (Designator_ZoneAdd)new Designator_ZoneAddStockpile_Resources()
+                : new Designator_ZoneAdd_Growing();
             var cells = new List<IntVec3>();
             for (int x = rect.MinX; x <= rect.MaxX; x++)
             {
@@ -635,6 +648,14 @@ namespace RimAgent.Game
                     if (!cell.InBounds(map)) return CommandResult.Fail($"cell ({x},{z}) is outside the map");
                     Zone existing = map.zoneManager.ZoneAt(cell);
                     if (existing != null) return CommandResult.Fail($"cell ({x},{z}) already belongs to zone \"{existing.label}\"");
+                    AcceptanceReport report = designator.CanDesignateCell(cell);
+                    if (!report.Accepted)
+                    {
+                        string why = string.IsNullOrEmpty(report.Reason)
+                            ? (growing ? "not fertile enough, fogged, blocked or at the map edge" : "fogged, blocked or at the map edge")
+                            : report.Reason;
+                        return CommandResult.Fail($"cell ({x},{z}) cannot hold a {kind.ToLowerInvariant()} zone: {why}");
+                    }
                     cells.Add(cell);
                 }
             }
@@ -934,6 +955,10 @@ namespace RimAgent.Game
             if (!pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is not drafted");
             Thing target = FindThing(targetId);
             if (target == null) return CommandResult.Fail("target not found on the map");
+            // 不打自己人、囚犯與友好派系：模型一次幻覺就能開火，那是外交事件。無派系的野生動物照舊可打（狩獵）。
+            if (target.Faction == Faction.OfPlayer) return CommandResult.Fail($"{target.LabelShort} belongs to the colony");
+            if ((target as Pawn)?.IsPrisonerOfColony == true) return CommandResult.Fail($"{target.LabelShort} is the colony's prisoner");
+            if (target.Faction != null && !target.HostileTo(Faction.OfPlayer)) return CommandResult.Fail($"{target.LabelShort} belongs to a faction that is not hostile to the colony");
 
             bool ranged = pawn.equipment?.Primary?.def.IsRangedWeapon == true;
             Job job = JobMaker.MakeJob(ranged ? JobDefOf.AttackStatic : JobDefOf.AttackMelee, target);
@@ -968,6 +993,13 @@ namespace RimAgent.Game
             Pawn negotiator = FindColonist(request.NegotiatorPawnId);
             if (negotiator == null) return CommandResult.Fail("negotiator was not found among the colonists.");
             if (negotiator.Downed) return CommandResult.Fail($"{negotiator.LabelShort} is downed and cannot negotiate.");
+            // 沿用原版交易的門檻：要能說話、社交沒被禁用；軌道商人還要一台有電的通訊台。
+            if (negotiator.health?.capacities?.CapableOf(PawnCapacityDefOf.Talking) == false)
+                return CommandResult.Fail($"{negotiator.LabelShort} is incapable of talking and cannot negotiate.");
+            if (negotiator.skills?.GetSkill(SkillDefOf.Social)?.TotallyDisabled == true)
+                return CommandResult.Fail($"{negotiator.LabelShort} is incapable of social work and cannot negotiate.");
+            if (trader is TradeShip && !Map.listerBuildings.AllBuildingsColonistOfClass<Building_CommsConsole>().Any(c => c.CanUseCommsNow))
+                return CommandResult.Fail("trading with an orbital trader needs a powered comms console.");
 
             // 之後全走遊戲的原生結算：價格、銀兩與物品交割都由 TradeDeal 處理，
             // 這裡只做「先驗證全部、再一次交割」，餘額或庫存不足整筆不做。

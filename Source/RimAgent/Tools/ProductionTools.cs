@@ -11,13 +11,19 @@ namespace RimAgent.Tools
     public sealed class ProductionTools
     {
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public ProductionTools(IGameWorld world)
+        public ProductionTools(IGameWorld world) : this(world, null)
         {
-            _world = world ?? throw new ArgumentNullException(nameof(world));
         }
 
-        [AgentTool("list_worktables", ToolCategory.Production)]
+        public ProductionTools(IGameWorld world, ICommandGate gate)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
+        }
+
+        [AgentTool("list_worktables", ToolCategory.Production, ToolRisk.Query)]
         [Description("Lists the work tables that can take bills, with their ids, positions and bill counts. Use this before listing, adding or deleting bills.")]
         public string ListWorktables()
         {
@@ -35,7 +41,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("list_bills", ToolCategory.Production)]
+        [AgentTool("list_bills", ToolCategory.Production, ToolRisk.Query)]
         [Description("Lists the production bills on one work table with their repeat counts. Bill numbers shift when bills are deleted, so list again right before deleting.")]
         public string ListBills(
             [Description("Work table id in square brackets from list_worktables.")] string table)
@@ -56,7 +62,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("add_bill", ToolCategory.Production)]
+        [AgentTool("add_bill", ToolCategory.Production, ToolRisk.Safe)]
         [Description("Adds a production bill to a work table, e.g. make components 5 times. The table must be able to make the recipe; missing research or facilities are reported, not bypassed.")]
         public string AddBill(
             [Description("Work table id in square brackets from list_worktables.")] string table,
@@ -70,12 +76,15 @@ namespace RimAgent.Tools
             if (!def.Success) return def.Error;
             if (count < 1) return ToolText.Error($"count must be at least 1, not {count}.");
 
+            string blocked = ToolText.Blocked(_gate, $"would add bill {def.Value.Label} x{count} on {target.Value.Label} [{target.Value.Id}].");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.AddBill(target.Value.Id, def.Value.DefName, count);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
         }
 
-        [AgentTool("delete_bill", ToolCategory.Production)]
+        [AgentTool("delete_bill", ToolCategory.Production, ToolRisk.Confirm)]
         [Description("Deletes one bill from a work table by its number from list_bills. Materials already gathered stay where they are.")]
         public string DeleteBill(
             [Description("Work table id in square brackets from list_worktables.")] string table,
@@ -84,6 +93,9 @@ namespace RimAgent.Tools
             ResolveResult<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
             if (!target.Success) return target.Error;
             if (bill < 1) return ToolText.Error($"bill number must be at least 1, not {bill}.");
+
+            string blocked = ToolText.Blocked(_gate, $"would delete bill [{bill}] from {target.Value.Label} [{target.Value.Id}].");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.DeleteBill(target.Value.Id, bill);
             if (!result.Success) return ToolText.Error(result.Message);

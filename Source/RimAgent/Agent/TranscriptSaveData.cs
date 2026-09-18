@@ -27,6 +27,8 @@ namespace RimAgent.Agent
         public bool failed;
         public bool toolsStripped;
         public int errorKind;
+        public string riskCheck = string.Empty;
+        public bool autonomous;
 
         public void ExposeData()
         {
@@ -40,6 +42,8 @@ namespace RimAgent.Agent
             Scribe_Values.Look(ref failed, "failed", false);
             Scribe_Values.Look(ref toolsStripped, "stripped", false);
             Scribe_Values.Look(ref errorKind, "error", 0);
+            Scribe_Values.Look(ref riskCheck, "risk", string.Empty);
+            Scribe_Values.Look(ref autonomous, "autonomous", false);
         }
 
         public TranscriptEntry ToEntry()
@@ -55,7 +59,9 @@ namespace RimAgent.Agent
                 Result = result ?? string.Empty,
                 Failed = failed,
                 ToolsStripped = toolsStripped,
-                ErrorKind = (AgentErrorKind)errorKind
+                ErrorKind = (AgentErrorKind)errorKind,
+                RiskCheck = riskCheck ?? string.Empty,
+                Autonomous = autonomous
             };
         }
 
@@ -79,7 +85,9 @@ namespace RimAgent.Agent
                     result = Truncate(e.Result),
                     failed = e.Failed,
                     toolsStripped = e.ToolsStripped,
-                    errorKind = (int)e.ErrorKind
+                    errorKind = (int)e.ErrorKind,
+                    riskCheck = e.RiskCheck ?? string.Empty,
+                    autonomous = e.Autonomous
                 });
             }
             return data;

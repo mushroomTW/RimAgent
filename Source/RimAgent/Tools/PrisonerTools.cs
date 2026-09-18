@@ -11,13 +11,19 @@ namespace RimAgent.Tools
     public sealed class PrisonerTools
     {
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public PrisonerTools(IGameWorld world)
+        public PrisonerTools(IGameWorld world) : this(world, null)
         {
-            _world = world ?? throw new ArgumentNullException(nameof(world));
         }
 
-        [AgentTool("list_prisoners", ToolCategory.Prisoner)]
+        public PrisonerTools(IGameWorld world, ICommandGate gate)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
+        }
+
+        [AgentTool("list_prisoners", ToolCategory.Prisoner, ToolRisk.Query)]
         [Description("Lists the colony's prisoners: remaining resistance, recruitability, interaction mode and health. Use this before changing how a prisoner is treated.")]
         public string ListPrisoners()
         {
@@ -39,7 +45,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("set_prisoner_interaction", ToolCategory.Prisoner)]
+        [AgentTool("set_prisoner_interaction", ToolCategory.Prisoner, ToolRisk.Confirm)]
         [Description("Sets how wardens treat a prisoner: recruit, release, execution and other modes from the game. Recruitment itself still happens through the game's warden chats over time, not instantly.")]
         public string SetPrisonerInteraction(
             [Description("Prisoner name, nickname or id.")] string prisoner,
@@ -52,19 +58,25 @@ namespace RimAgent.Tools
             if (!def.Success) return def.Error;
 
             string previous = string.IsNullOrEmpty(pawn.Value.InteractionModeLabel) ? pawn.Value.InteractionMode : pawn.Value.InteractionModeLabel;
+            string blocked = ToolText.Blocked(_gate, $"would set {DisplayName(pawn.Value)}'s interaction {previous} -> {def.Value.Label}.");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.SetPrisonerInteraction(pawn.Value.Id, def.Value.DefName);
             if (!result.Success) return ToolText.Error(result.Message);
 
             return $"Set {DisplayName(pawn.Value)}'s interaction {previous} -> {def.Value.Label}.";
         }
 
-        [AgentTool("release_prisoner", ToolCategory.Prisoner)]
+        [AgentTool("release_prisoner", ToolCategory.Prisoner, ToolRisk.Confirm)]
         [Description("Releases a prisoner immediately, the same as the game's release action. They leave the colony for good.")]
         public string ReleasePrisoner(
             [Description("Prisoner name, nickname or id.")] string prisoner)
         {
             ResolveResult<PrisonerInfo> pawn = ResolvePrisoner(prisoner, _world.GetPrisoners());
             if (!pawn.Success) return pawn.Error;
+
+            string blocked = ToolText.Blocked(_gate, $"would release {DisplayName(pawn.Value)} [{pawn.Value.Id}]; they leave the colony for good.");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.ReleasePrisoner(pawn.Value.Id);
             if (!result.Success) return ToolText.Error(result.Message);

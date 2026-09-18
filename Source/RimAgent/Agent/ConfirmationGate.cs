@@ -6,33 +6,50 @@ using RimAgent.Tools;
 namespace RimAgent.Agent
 {
     /// <summary>
-    /// 「需確認」模式的閘門實作：拥有者是 <see cref="ColonyAgentSession"/>。
-    /// 設定頁打開開關時擋下 Work／Build／Combat 命令（工具回傳預覽），
-    /// 玩家按確認後放行一次（同一句指令重送，模型會重新下相同的工具呼叫）。
+    /// 命令閘門實作，擁有者是 <see cref="ColonyAgentSession"/>。
+    /// 依 <see cref="AgentMode"/> 與目前工具的 <see cref="ToolRisk"/> 決定放行或擋下：
+    /// 確認模式擋 Confirm 級工具（回傳預覽），玩家按確認後放行一次（同一句重送）；
+    /// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再強制執行。
+    /// 工具的風險由 <see cref="LoggingAIFunction"/> 在每次呼叫前經 <see cref="BeginInvocation"/> 告知；
+    /// 工具串行執行（框架禁止並行），所以這裡用單一欄位即可。
     /// </summary>
     public sealed class ConfirmationGate : ICommandGate
     {
-        private readonly Func<bool> _required;
+        private readonly Func<AgentMode> _mode;
         private readonly object _gate = new object();
         private readonly List<string> _blocked = new List<string>();
         private int _bypass;
+        // 不在工具呼叫期間（直接建構工具的測試）時以最保守的 Confirm 看待。
+        private ToolRisk _currentRisk = ToolRisk.Confirm;
+        // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
+        private bool? _forced;
 
-        public ConfirmationGate(Func<bool> required)
+        public ConfirmationGate(Func<AgentMode> mode)
         {
-            _required = required ?? (() => false);
+            _mode = mode ?? (() => AgentMode.Autonomous);
         }
 
-        public bool AllowCommands(ToolCategory category)
+        public AgentMode Mode => _mode();
+
+        public bool AllowCommands()
         {
-            // 只有 Work／Build／Combat 受「需確認」管制，其他類別（含查詢）永遠放行。
-            if (category != ToolCategory.Work && category != ToolCategory.Build && category != ToolCategory.Combat)
-                return true;
-            if (Volatile.Read(ref _bypass) == 1) return true;
-            return !_required();
+            if (_forced.HasValue) return _forced.Value;
+            if (IsBypassing) return true;
+            switch (_mode())
+            {
+                case AgentMode.Ask:
+                    return false;
+                case AgentMode.Confirm:
+                    return _currentRisk != ToolRisk.Confirm;
+                default:
+                    return true;
+            }
         }
 
         public void NoteBlocked(string preview)
         {
+            // 強制預覽那一段只是為了拿預覽文字給分類器看，還沒決定要不要擋，先不記。
+            if (_forced == false) return;
             lock (_gate)
             {
                 _blocked.Add(preview ?? string.Empty);
@@ -60,6 +77,43 @@ namespace RimAgent.Agent
         public void ResetBypass()
         {
             Volatile.Write(ref _bypass, 0);
+        }
+
+        internal bool IsBypassing => Volatile.Read(ref _bypass) == 1;
+
+        /// <summary>這次工具呼叫是否要先問分類器：自動模式、是命令、且不在確認後的放行重送中。</summary>
+        internal bool NeedsClassification(ToolRisk risk)
+        {
+            return _mode() == AgentMode.Auto && risk != ToolRisk.Query && !IsBypassing;
+        }
+
+        /// <summary>工具呼叫開始：記下這次工具的靜態風險。</summary>
+        internal void BeginInvocation(ToolRisk risk)
+        {
+            _currentRisk = risk;
+            _forced = null;
+        }
+
+        /// <summary>工具呼叫結束：回到保守預設。</summary>
+        internal void EndInvocation()
+        {
+            _currentRisk = ToolRisk.Confirm;
+            _forced = null;
+        }
+
+        internal void ForcePreview()
+        {
+            _forced = false;
+        }
+
+        internal void ForceExecute()
+        {
+            _forced = true;
+        }
+
+        internal void ClearForce()
+        {
+            _forced = null;
         }
     }
 }

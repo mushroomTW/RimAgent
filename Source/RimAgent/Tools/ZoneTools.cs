@@ -11,13 +11,19 @@ namespace RimAgent.Tools
     public sealed class ZoneTools
     {
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public ZoneTools(IGameWorld world)
+        public ZoneTools(IGameWorld world) : this(world, null)
         {
-            _world = world ?? throw new ArgumentNullException(nameof(world));
         }
 
-        [AgentTool("list_zones", ToolCategory.Zone)]
+        public ZoneTools(IGameWorld world, ICommandGate gate)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
+        }
+
+        [AgentTool("list_zones", ToolCategory.Zone, ToolRisk.Query)]
         [Description("Lists the zones on the map: stockpiles and growing zones with their labels and cell counts. Use this before deleting a zone or changing a stockpile filter.")]
         public string ListZones()
         {
@@ -34,7 +40,7 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("add_zone", ToolCategory.Zone)]
+        [AgentTool("add_zone", ToolCategory.Zone, ToolRisk.Safe)]
         [Description("Adds a stockpile or growing zone over a map rectangle. Every cell must be inside the map and free of other zones, otherwise nothing is built.")]
         public string AddZone(
             [Description("Zone kind: \"stockpile\" or \"growing\".")] string kind,
@@ -60,12 +66,16 @@ namespace RimAgent.Tools
                 plantDef = (plant ?? string.Empty).Trim();
             }
 
+            string growing = plantDef.Length > 0 ? $" growing {plantDef}" : string.Empty;
+            string blocked = ToolText.Blocked(_gate, $"would add a {canonical.ToLowerInvariant()} zone over {rect.Value}{growing}.");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.AddZone(canonical, rect.Value, plantDef);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
         }
 
-        [AgentTool("delete_zone", ToolCategory.Zone)]
+        [AgentTool("delete_zone", ToolCategory.Zone, ToolRisk.Confirm)]
         [Description("Deletes a zone by its id or label. Stockpiled items stay on the ground.")]
         public string DeleteZone(
             [Description("Zone id in square brackets from list_zones, or its label.")] string zone)
@@ -73,12 +83,15 @@ namespace RimAgent.Tools
             ResolveResult<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
             if (!target.Success) return target.Error;
 
+            string blocked = ToolText.Blocked(_gate, $"would delete zone [{target.Value.Id}] {target.Value.Label} ({target.Value.CellCount} cells).");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.DeleteZone(target.Value.Id);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
         }
 
-        [AgentTool("set_zone_filter", ToolCategory.Zone)]
+        [AgentTool("set_zone_filter", ToolCategory.Zone, ToolRisk.Safe)]
         [Description("Allows or disallows items in a stockpile zone's storage filter, e.g. allow \"corn, rice\", disallow \"steel\". At least one side must name something.")]
         public string SetZoneFilter(
             [Description("Zone id in square brackets from list_zones, or its label.")] string zone,
@@ -96,6 +109,12 @@ namespace RimAgent.Tools
             {
                 return ToolText.Error("nothing to allow or disallow. Name at least one item, e.g. allow \"corn\".");
             }
+
+            var parts = new List<string>();
+            if (allows.Value.Count > 0) parts.Add("allow " + string.Join(", ", allows.Value.Select(d => d.Label)));
+            if (disallows.Value.Count > 0) parts.Add("disallow " + string.Join(", ", disallows.Value.Select(d => d.Label)));
+            string blocked = ToolText.Blocked(_gate, $"would change zone [{target.Value.Id}] {target.Value.Label}'s filter: {string.Join("; ", parts)}.");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.SetZoneFilter(
                 target.Value.Id,

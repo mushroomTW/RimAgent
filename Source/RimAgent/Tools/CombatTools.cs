@@ -22,7 +22,7 @@ namespace RimAgent.Tools
             _gate = gate;
         }
 
-        [AgentTool("draft", ToolCategory.Combat)]
+        [AgentTool("draft", ToolCategory.Combat, ToolRisk.Safe)]
         [Description("Drafts or undrafts colonists. Drafted colonists stop working and follow direct orders; undraft them afterwards so they return to work.")]
         public string Draft(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
@@ -31,7 +31,7 @@ namespace RimAgent.Tools
             ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Combat))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 string verbPreview = drafted ? "draft" : "undraft";
                 string draftPreview = $"would {verbPreview} {ToolText.Names(pawns.Value)} (downed members will be skipped).";
@@ -60,7 +60,7 @@ namespace RimAgent.Tools
             return failures.Count == 0 ? summary : summary + " Skipped: " + string.Join("; ", failures);
         }
 
-        [AgentTool("order_move", ToolCategory.Combat)]
+        [AgentTool("order_move", ToolCategory.Combat, ToolRisk.Safe)]
         [Description("Orders colonists to walk to a map cell. Colonists are drafted automatically if needed. Remember the model's latency: use this for positioning and retreats, not real-time dodging.")]
         public string OrderMove(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
@@ -73,7 +73,7 @@ namespace RimAgent.Tools
             ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Combat))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 string movePreview = $"would order {ToolText.Names(pawns.Value)} to move to {ToolText.Cell(x, z)} (drafted first if needed).";
                 string moveBlocked = ToolText.Confirmation(movePreview);
@@ -112,8 +112,8 @@ namespace RimAgent.Tools
             return failures.Count == 0 ? summary : summary + " Skipped: " + string.Join("; ", failures);
         }
 
-        [AgentTool("order_attack", ToolCategory.Combat)]
-        [Description("Orders colonists to attack one target by its id (from list_threats or find_things). Colonists are drafted automatically if needed.")]
+        [AgentTool("order_attack", ToolCategory.Combat, ToolRisk.Confirm)]
+        [Description("Orders colonists to attack one hostile target by its id from list_threats. Colonists are drafted automatically if needed. Colony members, prisoners and members of friendly factions are refused; wild animals can be targeted.")]
         public string OrderAttack(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
             [Description("Id of the target, e.g. a hostile pawn from list_threats.")] int targetId)
@@ -131,7 +131,7 @@ namespace RimAgent.Tools
             ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
-            if (_gate != null && !_gate.AllowCommands(ToolCategory.Combat))
+            if (_gate != null && !_gate.AllowCommands())
             {
                 string attackPreview = $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed).";
                 string attackBlocked = ToolText.Confirmation(attackPreview);

@@ -23,17 +23,31 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 
 Combat orders reach the game several seconds after you speak — they are for positioning and retreats, not real-time control.
 
+## Modes
+
+One setting decides how much the agent may do on its own (per-category permissions above still decide which tools exist at all):
+
+| Mode | What happens |
+| --- | --- |
+| **Ask** | Read-only. Only query tools are offered to the model; it inspects and advises. |
+| **Confirm** (default) | Tools tagged irreversible — trades, caravans, surgery, prisoner release/interaction, zone and bill deletion, blueprints, designations, attacks — return a preview and wait for **Confirm**; everything else runs directly. |
+| **Auto** | Every command is previewed first, then a second model call classifies it (`low` / `high`). Low runs immediately, high waits for **Confirm**. Any classifier failure counts as high. Costs one extra request per command. |
+| **Autonomous** | Fully delegated: every command runs without asking, and the scheduler below starts the agent's own runs. You can still type instructions. |
+
+Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every command tool has a preview branch that touches nothing — the test suite checks both for all 45 tools, because Auto mode relies on running a command twice (preview, then execute).
+
 ## Safety
 
-* **Confirm mode** (mod settings, off by default): Work / Build / Combat tools only preview what they would do; press **Confirm** to execute, **Discard** (or a new instruction) to drop the plan.
-* **Undo**: restores the previous instruction's work priorities and daily schedules.
+* **Confirm** / **Discard**: a pending preview is executed by re-sending the same instruction with the gate open; a new instruction discards it.
+* **Undo**: restores the previous instruction's work priorities and daily schedules — also for an instruction that failed halfway, so whatever did land can be reverted.
+* Guard rails inside the tools: `order_attack` refuses colony members, prisoners and friendly factions; `schedule_surgery` requires an explicit body part for surgeries that target one; `execute_trade` needs a negotiator who can talk and is not incapable of social work, and a powered comms console for orbital traders; `form_caravan` moves the named colonists off the map immediately (no walking to the edge, no supplies packed); zones are validated with the game's own zone designators (fog, map edge, blocking things, fertility).
 * The visible conversation (instructions, replies, action log) is saved with the game; the model's context still resets on load.
 * The combat-latency reminder appears once per instruction, and Markdown in model replies is rendered via RimLLM Framework (bold, italics, headings, links, code).
-* Standing instructions (per-game rules) and skill packs (`AgentPack/`) are included with every instruction. MCP servers run as local processes with your user privileges — only enable ones you trust.
+* The shipped conduct file (`AgentPack/AGENTS.md`), standing instructions (per-game rules) and skill packs (`AgentPack/Skills/`) are included with every instruction. MCP servers run as local processes with your user privileges — only enable ones you trust.
 
-## Autonomy (off by default)
+## Autonomy (Autonomous mode)
 
-Enable it in mod settings and the agent starts its own instructions: routine inspections on an interval, plus reactions to raids, colonists near mental break and food shortages. Every run uses the same session (history, permissions, confirm mode), shows in the action log, and counts against a daily tool-call budget. Long-term goals are managed per game from the Agent tab (Goals button) and saved with the game.
+Pick the Autonomous mode in mod settings and the agent starts its own instructions: routine inspections on an interval, plus reactions to raids, colonists near mental break and food shortages. Every run uses the same session (history, permissions), shows in the action log tagged `[auto]`, can be stopped with the **Stop** button, and counts against a daily tool-call budget. Long-term goals are managed per game from the Agent tab (Goals button) and saved with the game.
 
 ## How it works
 

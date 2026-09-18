@@ -10,7 +10,7 @@
 .gemini/
 docs/
 .scratch/
-AGENTS.md
+/AGENTS.md
 CLAUDE.md
 CONTEXT.md
 

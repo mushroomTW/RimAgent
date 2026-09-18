@@ -24,6 +24,18 @@ namespace RimAgent.Tools
             return preview.StartsWith(ConfirmationPrefix) ? preview : ConfirmationPrefix + preview;
         }
 
+        /// <summary>
+        /// 命令前的閘門檢查：擋下時回傳要交給模型的預覽（已記入閘門），放行時回傳 null。
+        /// 呼叫點應在所有參數解析之後、真正動世界之前。
+        /// </summary>
+        public static string Blocked(ICommandGate gate, string preview)
+        {
+            if (gate == null || gate.AllowCommands()) return null;
+            string blocked = Confirmation(preview);
+            gate.NoteBlocked(blocked);
+            return blocked;
+        }
+
         public static string Pct(float fraction)
         {
             return ((int)(fraction * 100f)).ToString(CultureInfo.InvariantCulture) + "%";

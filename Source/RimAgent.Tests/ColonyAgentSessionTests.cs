@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
 using RimAgent.Agent;
+using RimAgent.Game;
 using RimAgent.Tools;
 using RimLLM_Framework;
 
@@ -192,6 +193,38 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task FailedTurnKeepsUndoForChangesAlreadyMade()
+        {
+            // 工具跑完才在最後一輪炸掉：改動已落地，玩家仍該能一鍵復原。
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Throw(new RimLLMException(LLMError.NetworkError, "boom"));
+            ColonyAgentSession session = NewSession();
+
+            Assert.That(await session.SendAsync("set doctor to 1"), Is.Null);
+
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
+            Assert.That(session.Undo.CanUndo, Is.True);
+            Assert.That(session.UndoLast(), Does.Contain("(failed)"));
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task AutonomousInstructionIsMarkedInTranscript()
+        {
+            _client.Reply("Nothing to do.");
+            ColonyAgentSession session = NewSession();
+
+            await session.SendAsync("Routine inspection.", default, autonomous: true);
+            await session.SendAsync("player says hi");
+
+            List<TranscriptEntry> users = session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.User).ToList();
+            Assert.That(users.Select(u => u.Autonomous), Is.EqualTo(new[] { true, false }));
+            TranscriptEntryData saved = TranscriptEntryData.FromTranscript(session.Transcript).First();
+            Assert.That(saved.autonomous, Is.True);
+            Assert.That(saved.ToEntry().Autonomous, Is.True);
+        }
+
+        [Test]
         public async Task CancellationIsReportedAsCancelled()
         {
             _client.Reply("never");
@@ -365,28 +398,93 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task ConfirmationModeBlocksThenExecutesOnConfirm()
+        public async Task ConfirmModeBlocksIrreversibleToolThenExecutesOnConfirm()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
-                   .Reply("I will set Ali's doctor priority to 1.")
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Combat = true;
+            _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("I will send Bob to attack the bear.")
+                   .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                    .Reply("Done.");
-            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => true);
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
-            string preview = await session.SendAsync("set doctor to 1");
+            string preview = await session.SendAsync("attack the bear");
 
-            Assert.That(preview, Does.Contain("set Ali's doctor"));
-            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority,
-                Is.EqualTo(3), "被擋下那次不可碰世界");
+            Assert.That(preview, Does.Contain("attack the bear"));
+            Assert.That(_world.Calls, Is.Empty, "被擋下那次不可碰世界");
             Assert.That(session.HasPendingConfirmation, Is.True);
-            Assert.That(session.Undo.CanUndo, Is.False, "預覽沒有改世界，不該留下可復原的框");
             Assert.That(session.Transcript.Snapshot().Last().Kind, Is.EqualTo(TranscriptKind.Notice));
 
             string done = await session.ConfirmAsync();
 
             Assert.That(done, Is.EqualTo("Done."));
+            Assert.That(_world.Calls, Does.Contain("SetDrafted(102,True)").And.Contain("OrderAttack(102,900)"));
+            Assert.That(session.HasPendingConfirmation, Is.False);
+        }
+
+        [Test]
+        public async Task ConfirmModeRunsSafeToolDirectly()
+        {
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("Done.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("set doctor to 1");
+
             Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
             Assert.That(session.HasPendingConfirmation, Is.False);
+            Assert.That(session.Undo.CanUndo, Is.True);
+        }
+
+        [Test]
+        public async Task AutonomousModeRunsIrreversibleToolDirectly()
+        {
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Combat = true;
+            _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 }).Reply("Done.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+
+            await session.SendAsync("attack the bear");
+
+            Assert.That(_world.Calls, Does.Contain("OrderAttack(102,900)"));
+            Assert.That(session.HasPendingConfirmation, Is.False);
+        }
+
+        [Test]
+        public void AskModeOffersOnlyQueryTools()
+        {
+            var session = new ColonyAgentSession(_client, _world, () => new ToolPermissions
+            {
+                Observe = true, Work = true, Build = true, Combat = true, Trade = true, Medical = true,
+                Prisoner = true, Animal = true, Zone = true, Production = true, Time = true, Mcp = true
+            }, 8, () => AgentMode.Ask);
+
+            List<string> names = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
+
+            Assert.That(names, Does.Contain("list_colonists").And.Contain("get_health").And.Contain("mcp_list_tools"));
+            Assert.That(names, Does.Not.Contain("set_work_priority").And.Not.Contain("execute_trade").And.Not.Contain("mcp_call_tool"));
+        }
+
+        [Test]
+        public void AskModeAppendsReadOnlyNoteToInstructions()
+        {
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Ask, () => "COMPOSED PROMPT");
+
+            Assert.That(session.BuildRunOptions().Instructions, Does.StartWith("COMPOSED PROMPT").And.Contain("Read-only mode"));
+            Assert.That(NewSession().BuildRunOptions().Instructions, Is.Null, "非詢問模式不動 Instructions");
+        }
+
+        [Test]
+        public void RiskTagsFollowReversibility()
+        {
+            var registry = new AgentToolRegistry(_world, new AgentTranscript());
+
+            foreach (string name in new[] { "execute_trade", "form_caravan", "release_prisoner", "set_prisoner_interaction", "schedule_surgery", "delete_zone", "delete_bill", "place_blueprint", "designate_area", "order_attack" })
+                Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Confirm), name);
+            foreach (string name in new[] { "set_work_priority", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_current_map", "set_time_speed", "mcp_call_tool" })
+                Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Safe), name);
+            foreach (string name in new[] { "get_colony_overview", "list_colonists", "find_things", "get_health", "list_prisoners", "list_bills", "get_time_speed", "mcp_status", "mcp_list_tools" })
+                Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Query), name);
         }
 
         [Test]

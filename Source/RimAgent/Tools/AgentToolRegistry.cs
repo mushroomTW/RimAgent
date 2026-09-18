@@ -47,17 +47,21 @@ namespace RimAgent.Tools
 
     /// <summary>
     /// 以反射收集標了 <see cref="AgentToolAttribute"/> 的方法，透過 AIFunctionFactory 建成 MEAI 工具，
-    /// 並包上行動紀錄。建構時建好一次，之後依權限挑選。
+    /// 並包上行動紀錄與閘門通知。建構時建好一次，之後依權限與模式挑選。
     /// </summary>
     public sealed class AgentToolRegistry
     {
         private sealed class Entry
         {
+            public string Name;
             public ToolCategory Category;
+            public ToolRisk Risk;
             public AITool Tool;
         }
 
         private readonly List<Entry> _tools = new List<Entry>();
+        private readonly ConfirmationGate _gate;
+        private readonly RiskClassifier _classifier;
 
         public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, null, null)
         {
@@ -68,32 +72,53 @@ namespace RimAgent.Tools
         {
         }
 
-        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ICommandGate gate, Mcp.McpManager mcp = null)
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (transcript == null) throw new ArgumentNullException(nameof(transcript));
+            _gate = gate;
+            _classifier = classifier;
 
-            Register(new ObserveTools(world), transcript);
+            Register(new ObserveTools(world, gate), transcript);
             Register(new WorkTools(world, undo ?? new WorkUndoStack(), gate), transcript);
             Register(new BuildTools(world, gate), transcript);
             Register(new CombatTools(world, gate), transcript);
-            Register(new TradeTools(world), transcript);
-            Register(new MedicalTools(world), transcript);
-            Register(new PrisonerTools(world), transcript);
-            Register(new AnimalTools(world), transcript);
-            Register(new ZoneTools(world), transcript);
-            Register(new ProductionTools(world), transcript);
-            Register(new TimeTools(world), transcript);
-            Register(new McpTools(mcp ?? new Mcp.McpManager(null)), transcript);
+            Register(new TradeTools(world, gate), transcript);
+            Register(new MedicalTools(world, gate), transcript);
+            Register(new PrisonerTools(world, gate), transcript);
+            Register(new AnimalTools(world, gate), transcript);
+            Register(new ZoneTools(world, gate), transcript);
+            Register(new ProductionTools(world, gate), transcript);
+            Register(new TimeTools(world, gate), transcript);
+            Register(new McpTools(mcp ?? new Mcp.McpManager(null), gate), transcript);
         }
 
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
         public IReadOnlyList<AITool> All => _tools.Select(t => t.Tool).ToList();
 
+        /// <summary>依權限挑選，不分模式（除詢問模式外各模式的工具清單相同）。</summary>
         public IList<AITool> Select(ToolPermissions permissions)
         {
+            return Select(permissions, AgentMode.Autonomous);
+        }
+
+        /// <summary>依權限與模式挑選：詢問模式只留查詢工具，命令工具連 schema 都不送給模型。</summary>
+        public IList<AITool> Select(ToolPermissions permissions, AgentMode mode)
+        {
             if (permissions == null) throw new ArgumentNullException(nameof(permissions));
-            return _tools.Where(t => permissions.Allows(t.Category)).Select(t => t.Tool).ToList();
+            return _tools
+                .Where(t => permissions.Allows(t.Category))
+                .Where(t => mode != AgentMode.Ask || t.Risk == ToolRisk.Query)
+                .Select(t => t.Tool)
+                .ToList();
+        }
+
+        /// <summary>工具名稱 → 靜態風險（供測試檢查標記）。</summary>
+        public ToolRisk RiskOf(string toolName)
+        {
+            Entry entry = _tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal));
+            if (entry == null) throw new ArgumentException($"unknown tool {toolName}", nameof(toolName));
+            return entry.Risk;
         }
 
         private void Register(object target, AgentTranscript transcript)
@@ -107,8 +132,10 @@ namespace RimAgent.Tools
                 AIFunction function = AIFunctionFactory.Create(method, target, attribute.Name, null, null);
                 _tools.Add(new Entry
                 {
+                    Name = attribute.Name,
                     Category = attribute.Category,
-                    Tool = new LoggingAIFunction(function, transcript, attribute.Category)
+                    Risk = attribute.Risk,
+                    Tool = new LoggingAIFunction(function, transcript, attribute.Category, attribute.Risk, _gate, _classifier)
                 });
             }
         }

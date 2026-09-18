@@ -38,10 +38,11 @@ namespace RimAgent.Agent
 
         /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
         /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
-        /// <param name="requireConfirmation">「需確認」模式是否開啟；同樣每次送出時讀取。</param>
+        /// <param name="mode">執行模式；同樣每次送出時讀取。null 視為 <see cref="AgentMode.Autonomous"/>（命令全放行；排程器不在這層）。</param>
         /// <param name="instructions">每句送出時組裝的完整系統提示詞；null 則沿用核心提示詞。</param>
         /// <param name="mcp">MCP 管理器；null 則用停用的預設管理器。</param>
-        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<bool> requireConfirmation = null, Func<string> instructions = null, McpManager mcp = null)
+        /// <param name="classifierClient">自動模式分類器用的 client；null 則與 innerClient 共用（測試可另給假 client）。</param>
+        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null)
         {
             if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -49,10 +50,10 @@ namespace RimAgent.Agent
 
             Transcript = new AgentTranscript();
             Undo = new WorkUndoStack();
-            ConfirmGate = new ConfirmationGate(requireConfirmation ?? (() => false));
+            ConfirmGate = new ConfirmationGate(mode ?? (() => AgentMode.Autonomous));
             _world = world;
             _instructions = instructions;
-            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp);
+            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient));
             _inner = innerClient.AsMainThreadFunctionInvokingClient(maxSteps);
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
@@ -70,8 +71,11 @@ namespace RimAgent.Agent
         /// <summary>工作設定復原堆疊（工作優先級與時間表）。UI 的復原鍵經此操作。</summary>
         public WorkUndoStack Undo { get; }
 
-        /// <summary>「需確認」模式的閘門：Work／Build／Combat 工具經此決定執行或預覽。</summary>
+        /// <summary>命令閘門：命令工具經此決定執行或預覽。</summary>
         public ConfirmationGate ConfirmGate { get; }
+
+        /// <summary>目前的執行模式（每次讀取設定）。</summary>
+        public AgentMode Mode => ConfirmGate.Mode;
 
         private string _pendingConfirmation;
 
@@ -121,7 +125,8 @@ namespace RimAgent.Agent
         /// 失敗時把錯誤寫進 transcript 並回傳 null；失敗那一輪的使用者訊息不會進歷史
         /// （AF 的 ChatHistoryProvider 在例外時略過儲存，等同以往的手動回滾）。
         /// </summary>
-        public async Task<string> SendAsync(string userText, CancellationToken cancellationToken = default)
+        /// <param name="autonomous">這句是排程器起的自主任務；只影響對話裡的標示，模型看到的內容相同。</param>
+        public async Task<string> SendAsync(string userText, CancellationToken cancellationToken = default, bool autonomous = false)
         {
             if (string.IsNullOrWhiteSpace(userText)) return null;
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
@@ -131,7 +136,7 @@ namespace RimAgent.Agent
 
             string text = userText.Trim();
             int instructionId = Transcript.BeginInstruction();
-            Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.User, Text = text, InstructionId = instructionId });
+            Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.User, Text = text, InstructionId = instructionId, Autonomous = autonomous });
             Undo.BeginFrame();
             // 新指令取代舊的等待：之前沒按的確認自動作廢，玩家以最新一句為準。
             _pendingConfirmation = null;
@@ -173,8 +178,8 @@ namespace RimAgent.Agent
             }
             catch (Exception ex)
             {
-                // 失敗那句不保證完整（工具可能只跑了一半），不推進復原堆疊。
-                Undo.DiscardFrame();
+                // 失敗那句可能只做了一半，但做了的部分仍該能復原；空框會被 EndFrame 丟掉。
+                Undo.EndFrame(text + " (failed)");
                 Transcript.Add(new TranscriptEntry
                 {
                     Kind = TranscriptKind.Error,
@@ -282,17 +287,24 @@ namespace RimAgent.Agent
         {
             var options = new RimLLMChatOptions
             {
-                Tools = _registry.Select(_permissions()),
+                Tools = _registry.Select(_permissions(), Mode),
                 ToolMode = ChatToolMode.Auto,
                 Temperature = Temperature,
                 MaxOutputTokens = MaxOutputTokens
             };
             // Run 層覆寫 agent 層的核心提示詞：常駐指令等改完下一句生效，不必重建會話。
+            string instructions = null;
             if (_instructions != null)
             {
                 string composed = _instructions();
-                if (!string.IsNullOrWhiteSpace(composed)) options.Instructions = composed;
+                if (!string.IsNullOrWhiteSpace(composed)) instructions = composed;
             }
+            if (Mode == AgentMode.Ask)
+            {
+                // 詢問模式：命令工具根本不在清單裡，跟模型講清楚免得它道歉說類別被關掉。
+                instructions = (instructions ?? AgentSystemPrompt.Text) + AgentSystemPrompt.AskModeNote;
+            }
+            if (instructions != null) options.Instructions = instructions;
             return options;
         }
 

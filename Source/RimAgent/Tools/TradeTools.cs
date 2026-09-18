@@ -16,13 +16,19 @@ namespace RimAgent.Tools
         internal const int MaxGoodsListed = 80;
 
         private readonly IGameWorld _world;
+        private readonly ICommandGate _gate;
 
-        public TradeTools(IGameWorld world)
+        public TradeTools(IGameWorld world) : this(world, null)
         {
-            _world = world ?? throw new ArgumentNullException(nameof(world));
         }
 
-        [AgentTool("list_orbital_traders", ToolCategory.Trade)]
+        public TradeTools(IGameWorld world, ICommandGate gate)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+            _gate = gate;
+        }
+
+        [AgentTool("list_orbital_traders", ToolCategory.Trade, ToolRisk.Query)]
         [Description("Lists the orbital traders around the colony and what each one is selling, with its silver reserve. Orbital traders are trade ships in orbit; do not confuse them with visiting caravans on the ground, which this tool never lists.")]
         public string ListOrbitalTraders()
         {
@@ -37,7 +43,7 @@ namespace RimAgent.Tools
             return FormatTraders(traders, "orbital trader");
         }
 
-        [AgentTool("list_visitor_caravans", ToolCategory.Trade)]
+        [AgentTool("list_visitor_caravans", ToolCategory.Trade, ToolRisk.Query)]
         [Description("Lists the visiting caravans at the colony and what each one is selling, with its silver reserve. Visiting caravans are traders on the ground; do not confuse them with orbital traders in orbit, which this tool never lists.")]
         public string ListVisitorCaravans()
         {
@@ -52,7 +58,7 @@ namespace RimAgent.Tools
             return FormatTraders(traders, "visiting caravan");
         }
 
-        [AgentTool("execute_trade", ToolCategory.Trade)]
+        [AgentTool("execute_trade", ToolCategory.Trade, ToolRisk.Confirm)]
         [Description("Buys from and sells to one trader in a single deal: items and silver change hands at once with the game's trade prices. Ask for the trader's id from list_orbital_traders or list_visitor_caravans first so names and stock are exact. Only items are listed; silver moves automatically as payment.")]
         public string ExecuteTrade(
             [Description("Trader id in square brackets from list_orbital_traders or list_visitor_caravans.")] string trader,
@@ -103,12 +109,18 @@ namespace RimAgent.Tools
                 Sells = resolvedSells.Value
             };
 
+            var parts = new List<string>();
+            if (request.Buys.Count > 0) parts.Add("buy " + string.Join(", ", request.Buys.Select(l => $"{l.DefName} x{l.Count}")));
+            if (request.Sells.Count > 0) parts.Add("sell " + string.Join(", ", request.Sells.Select(l => $"{l.DefName} x{l.Count}")));
+            string blocked = ToolText.Blocked(_gate, $"would trade with {deal.Name} [{deal.Id}] (negotiator {pawn.Name}): {string.Join("; ", parts)}.");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.ExecuteTrade(request);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
         }
 
-        [AgentTool("form_caravan", ToolCategory.Trade)]
+        [AgentTool("form_caravan", ToolCategory.Trade, ToolRisk.Confirm)]
         [Description("Forms the named colonists into a caravan that leaves the map toward a compass direction. Members must be named explicitly (\"all\" is refused); drafted members must be undrafted first. Pack animals are not included yet.")]
         public string FormCaravan(
             [Description("Colonist names or ids separated by commas, e.g. \"Ali, Bob\".")] string colonists,
@@ -126,6 +138,9 @@ namespace RimAgent.Tools
                 PawnIds = pawns.Value.Select(c => c.Id).ToList(),
                 Heading = (heading ?? string.Empty).Trim()
             };
+            string blocked = ToolText.Blocked(_gate, $"would form a caravan with {ToolText.Names(pawns.Value)} heading {request.Heading} (they leave the map immediately).");
+            if (blocked != null) return blocked;
+
             CommandResult result = _world.FormCaravan(request);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;

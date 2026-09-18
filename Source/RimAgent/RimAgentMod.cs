@@ -1,9 +1,10 @@
+using RimAgent.Agent;
 using UnityEngine;
 using Verse;
 
 namespace RimAgent
 {
-    /// <summary>Mod 進入點與設定頁。LLM 相關設定全在 RimLLM Framework，這裡只有工具權限與步數上限。</summary>
+    /// <summary>Mod 進入點與設定頁。LLM 相關設定全在 RimLLM Framework，這裡只有工具權限、執行模式與步數上限。</summary>
     public class RimAgentMod : Mod
     {
         public static RimAgentSettings Settings { get; private set; }
@@ -43,12 +44,16 @@ namespace RimAgent
             Settings.maxSteps = Mathf.RoundToInt(listing.Slider(Settings.maxSteps, RimAgentSettings.MinSteps, RimAgentSettings.MaxSteps));
 
             listing.Gap();
-            listing.CheckboxLabeled("RimAgent.Settings.RequireConfirmation".Translate(), ref Settings.requireConfirmation, "RimAgent.Settings.RequireConfirmationTip".Translate());
+            listing.Label("RimAgent.Settings.ModeHeader".Translate());
+            listing.GapLine();
+            ModeOption(listing, AgentMode.Ask, "RimAgent.Settings.Mode.Ask", "RimAgent.Settings.Mode.AskDesc");
+            ModeOption(listing, AgentMode.Confirm, "RimAgent.Settings.Mode.Confirm", "RimAgent.Settings.Mode.ConfirmDesc");
+            ModeOption(listing, AgentMode.Auto, "RimAgent.Settings.Mode.Auto", "RimAgent.Settings.Mode.AutoDesc");
+            ModeOption(listing, AgentMode.Autonomous, "RimAgent.Settings.Mode.Autonomous", "RimAgent.Settings.Mode.AutonomousDesc");
 
             listing.Gap();
             listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
             listing.GapLine();
-            listing.CheckboxLabeled("RimAgent.Settings.Autonomous".Translate(), ref Settings.allowAutonomous, "RimAgent.Settings.AutonomousTip".Translate());
             listing.Label("RimAgent.Settings.AutoInterval".Translate(Settings.autonomousIntervalHours));
             Settings.autonomousIntervalHours = Mathf.RoundToInt(listing.Slider(Settings.autonomousIntervalHours, RimAgentSettings.MinAutoIntervalHours, RimAgentSettings.MaxAutoIntervalHours));
             listing.Label("RimAgent.Settings.AutoBudget".Translate(Settings.autonomousBudgetPerDay));
@@ -61,6 +66,21 @@ namespace RimAgent
             listing.Label("RimAgent.Settings.FrameworkNote".Translate());
 
             listing.End();
+        }
+
+        /// <summary>模式單選列：標題一行、灰字說明一行，點任一行都選取。</summary>
+        private static void ModeOption(Listing_Standard listing, AgentMode mode, string titleKey, string descKey)
+        {
+            if (listing.RadioButton(titleKey.Translate(), Settings.mode == mode))
+            {
+                Settings.mode = mode;
+            }
+            Text.Font = GameFont.Tiny;
+            GUI.color = new Color(0.7f, 0.7f, 0.7f);
+            listing.Label(descKey.Translate());
+            GUI.color = Color.white;
+            Text.Font = GameFont.Small;
+            listing.Gap(4f);
         }
     }
 }

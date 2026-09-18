@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using RimAgent.Agent;
@@ -18,8 +19,8 @@ namespace RimAgent
     /// 照舊歸零（等框架提供版本化的 session 序列化再評估），新局時兩者都清空，
     /// 避免把上一個殖民地的脈絡帶進來。RimWorld 會自動為每個 GameComponent 子類建立實例。
     ///
-    /// 自主模式：設定頁打開後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、間隔），
-    /// 條件成立就起一次自主任務。自主任務與玩家指令走同一個 session（同歷史、同權限、同確認閘門），
+    /// 自主模式：設定頁選「自主」後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、間隔），
+    /// 條件成立就起一次自主任務。自主任務與玩家指令走同一個 session（同歷史、同權限、同閘門），
     /// 差別只在指令文字由排程器產生並附上長期目標；每日工具呼叫總量有上限。
     /// </summary>
     public class RimAgentGameComponent : GameComponent
@@ -43,6 +44,7 @@ namespace RimAgent
         private readonly AutonomousScheduler _scheduler = new AutonomousScheduler();
         private readonly RimWorldGameWorld _autoWorld = new RimWorldGameWorld();
         private string _lastAutoError;
+        private CancellationTokenSource _autoCts;
 
         // RimAgent.Game 命名空間會遮蔽 Verse.Game，這裡要寫全名。
         public RimAgentGameComponent(Verse.Game game)
@@ -126,7 +128,7 @@ namespace RimAgent
         }
 
         /// <summary>UI 狀態列用：自主模式是否開啟中。</summary>
-        public bool AutonomousEnabled => RimAgentMod.Settings != null && RimAgentMod.Settings.allowAutonomous;
+        public bool AutonomousEnabled => RimAgentMod.Settings != null && RimAgentMod.Settings.mode == AgentMode.Autonomous;
 
         /// <summary>今日自主任務已消耗的工具呼叫次數／上限。</summary>
         public int AutonomousToolsUsed => _scheduler.ToolsUsed;
@@ -143,7 +145,8 @@ namespace RimAgent
                 data = TranscriptEntryData.FromTranscript(_session.Transcript);
             }
             Scribe_Collections.Look(ref data, "transcript", LookMode.Deep);
-            if (Scribe.mode == LoadSaveMode.PostLoadInit) _loadedTranscript = data;
+            // Scribe_Collections 只在 LoadingVars 階段填 list（PostLoadInit 對 Deep 清單什麼都不做），要在這裡接住。
+            if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedTranscript = data;
 
             Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
             if (_goals == null) _goals = new List<string>();
@@ -189,7 +192,7 @@ namespace RimAgent
         {
             base.GameComponentTick();
             RimAgentSettings settings = RimAgentMod.Settings;
-            if (settings == null || !settings.allowAutonomous) return;
+            if (settings == null || settings.mode != AgentMode.Autonomous) return;
             int tick = Find.TickManager.TicksGame;
             if (tick % SignalCheckIntervalTicks != 0) return;
             if (Find.CurrentMap == null) return;
@@ -243,23 +246,33 @@ namespace RimAgent
             };
         }
 
+        /// <summary>UI 的停止鍵：取消進行中的自主任務（玩家指令另有自己的 token）。</summary>
+        public void StopAutonomousRun()
+        {
+            _autoCts?.Cancel();
+        }
+
         private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config)
         {
             int before = CountToolEntries(session);
+            _autoCts?.Dispose();
+            _autoCts = new CancellationTokenSource();
             try
             {
                 string instruction = AutonomousPrompts.Build(trigger, _goals, DetectLanguage());
-                await session.SendAsync(instruction).ConfigureAwait(false);
+                await session.SendAsync(instruction, _autoCts.Token, autonomous: true).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // 玩家在同一幀搶先送了指令：這次沒跑，不算一次自主任務、不吃冷卻。
+                return;
             }
             catch (Exception ex)
             {
                 Log.Warning("RimAgent autonomous run failed: " + ex.Message);
             }
-            finally
-            {
-                int used = CountToolEntries(session) - before;
-                _scheduler.RecordRun(tick, used < 0 ? 0 : used, config);
-            }
+            int used = CountToolEntries(session) - before;
+            _scheduler.RecordRun(tick, used < 0 ? 0 : used, config);
         }
 
         private static int CountToolEntries(ColonyAgentSession session)
@@ -302,7 +315,7 @@ namespace RimAgent
         {
             IChatClient client = RimLLMProvider.CreateChatClient(ColonyAgentSession.ModId);
             RimAgentSettings settings = RimAgentMod.Settings;
-            return new ColonyAgentSession(client, new RimWorldGameWorld(), () => settings.ToPermissions(), settings.maxSteps, () => settings.requireConfirmation, ComposeInstructions, _mcp);
+            return new ColonyAgentSession(client, new RimWorldGameWorld(), () => settings.ToPermissions(), settings.maxSteps, () => settings.mode, ComposeInstructions, _mcp);
         }
 
         /// <summary>

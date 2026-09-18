@@ -57,11 +57,16 @@
   <RimAgent.Settings.MCPTip>让 agent 调用 AgentPack/MCP/servers.json 里设定的本地 MCP 服务器工具。服务器以你的用户权限执行，只开信任的。默认关闭。</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.MaxSteps>每句指令最多调用工具次数：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控循环烧掉 API 额度。立即生效，游戏中调整也有效。</RimAgent.Settings.MaxStepsTip>
-  <RimAgent.Settings.RequireConfirmation>确认 — 工作／建造／战斗先预览再执行</RimAgent.Settings.RequireConfirmation>
-  <RimAgent.Settings.RequireConfirmationTip>开启后，工作、建造与战斗三类工具只会列出将做的事，按下确认才执行。默认关闭。</RimAgent.Settings.RequireConfirmationTip>
+  <RimAgent.Settings.ModeHeader>模式 — Agent 可以怎么行动</RimAgent.Settings.ModeHeader>
+  <RimAgent.Settings.Mode.Ask>询问</RimAgent.Settings.Mode.Ask>
+  <RimAgent.Settings.Mode.AskDesc>只读。Agent 可以查看殖民地并给建议，但没有任何会改变游戏的工具。</RimAgent.Settings.Mode.AskDesc>
+  <RimAgent.Settings.Mode.Confirm>确认</RimAgent.Settings.Mode.Confirm>
+  <RimAgent.Settings.Mode.ConfirmDesc>不可逆的操作（交易、商队、手术、释放、删除、攻击）先预览、等你按确认；其余直接执行。</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.Auto>自动</RimAgent.Settings.Mode.Auto>
+  <RimAgent.Settings.Mode.AutoDesc>每个操作先由另一次模型调用判断风险：有风险的等你确认，其余直接执行。每个操作多一次请求。</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
+  <RimAgent.Settings.Mode.AutonomousDesc>完全托管：所有操作不问直接做，并按下方排程自己行动。你仍可下指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行动</RimAgent.Settings.AutonomousHeader>
-  <RimAgent.Settings.Autonomous>自主 — 排程与事件触发的自主任务</RimAgent.Settings.Autonomous>
-  <RimAgent.Settings.AutonomousTip>开启后 Agent 会自己起自主任务：例行巡检，外加袭击、心情警戒与缺粮。每次自主任务都有记录，并受下方每日上限管制。默认关闭。</RimAgent.Settings.AutonomousTip>
   <RimAgent.Settings.AutoInterval>例行巡检间隔：{0} 小时</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoBudget>自主每日工具调用上限：{0} 次</RimAgent.Settings.AutoBudget>
   <RimAgent.Settings.AutoOnRaid>袭击时反应</RimAgent.Settings.AutoOnRaid>
@@ -71,7 +76,7 @@
 
   <!-- 自主 -->
   <RimAgent.Auto.StatusOn>自主开 · 今日已用 {0}/{1} 次</RimAgent.Auto.StatusOn>
-  <RimAgent.Auto.StatusOff>自主关（设置页开启）</RimAgent.Auto.StatusOff>
+  <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
   <RimAgent.Auto.Goals>目标</RimAgent.Auto.Goals>
   <RimAgent.Goals.Title>长期目标 — 自主任务会持续推进这些</RimAgent.Goals.Title>
   <RimAgent.Goals.Empty>还没有目标。在下面加一个，例如「研发电力」。</RimAgent.Goals.Empty>

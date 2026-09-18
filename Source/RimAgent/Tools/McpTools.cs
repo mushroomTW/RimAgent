@@ -10,20 +10,26 @@ namespace RimAgent.Tools
     public sealed class McpTools
     {
         private readonly McpManager _manager;
+        private readonly ICommandGate _gate;
 
-        public McpTools(McpManager manager)
+        public McpTools(McpManager manager) : this(manager, null)
         {
-            _manager = manager ?? throw new ArgumentNullException(nameof(manager));
         }
 
-        [AgentTool("mcp_status", ToolCategory.Mcp)]
+        public McpTools(McpManager manager, ICommandGate gate)
+        {
+            _manager = manager ?? throw new ArgumentNullException(nameof(manager));
+            _gate = gate;
+        }
+
+        [AgentTool("mcp_status", ToolCategory.Mcp, ToolRisk.Query)]
         [Description("Shows the configured MCP servers and whether each one is disabled, idle or running. Servers come from AgentPack/MCP/servers.json.")]
         public string Status()
         {
             return _manager.Status();
         }
 
-        [AgentTool("mcp_list_tools", ToolCategory.Mcp)]
+        [AgentTool("mcp_list_tools", ToolCategory.Mcp, ToolRisk.Query)]
         [Description("Lists the tools offered by every enabled MCP server, with names and descriptions. Call this before mcp_call_tool to learn exact tool names and arguments.")]
         public async Task<string> ListTools(CancellationToken cancellationToken)
         {
@@ -37,7 +43,7 @@ namespace RimAgent.Tools
             }
         }
 
-        [AgentTool("mcp_call_tool", ToolCategory.Mcp)]
+        [AgentTool("mcp_call_tool", ToolCategory.Mcp, ToolRisk.Safe)]
         [Description("Calls one tool on one MCP server. Arguments must be a single JSON object string matching that tool's input schema.")]
         public async Task<string> CallTool(
             [Description("Server name from mcp_status, e.g. \"fetch\".")] string server,
@@ -45,6 +51,9 @@ namespace RimAgent.Tools
             [Description("Tool arguments as a JSON object string, e.g. \"{\\\"url\\\": \\\"https://example.com\\\"}\".")] string args,
             CancellationToken cancellationToken)
         {
+            string blocked = ToolText.Blocked(_gate, $"would call MCP tool {tool} on server {server} with {(string.IsNullOrWhiteSpace(args) ? "no arguments" : args)}.");
+            if (blocked != null) return blocked;
+
             try
             {
                 return await _manager.CallAsync(server, tool, args, cancellationToken).ConfigureAwait(false);
