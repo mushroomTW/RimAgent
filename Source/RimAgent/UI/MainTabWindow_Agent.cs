@@ -15,6 +15,7 @@ namespace RimAgent.UI
     /// 底部工具列的「Agent」分頁：對話與行動紀錄、輸入列、能力警告。
     /// 每幀讀 session 的 transcript 快照，不做跨執行緒回呼。
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "S101:TypesShouldBeNamedInPascalCase", Justification = "RimWorld MainTabWindow naming convention referenced in XML Defs")]
     public class MainTabWindow_Agent : MainTabWindow
     {
         private const string InputControlName = "RimAgentInput";
@@ -127,7 +128,7 @@ namespace RimAgent.UI
         {
             float width = outRect.width - 20f;
             int version = session.Transcript.Version;
-            if (version != _linesTranscriptVersion || width != _linesWidth)
+            if (version != _linesTranscriptVersion || Mathf.Abs(width - _linesWidth) > 0.001f)
             {
                 RebuildLines(session.Transcript.Snapshot(), width);
                 _linesTranscriptVersion = version;

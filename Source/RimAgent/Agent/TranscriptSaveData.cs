@@ -17,6 +17,7 @@ namespace RimAgent.Agent
         /// <summary>單一欄位上限（工具結果可能很長，存檔時截斷）。</summary>
         public const int MaxFieldChars = 2000;
 
+#pragma warning disable S1104 // RimWorld Scribe requires public fields passed by ref
         public int kind;
         public string text = string.Empty;
         public int instructionId;
@@ -29,6 +30,7 @@ namespace RimAgent.Agent
         public int errorKind;
         public string riskCheck = string.Empty;
         public bool autonomous;
+#pragma warning restore S1104
 
         public void ExposeData()
         {

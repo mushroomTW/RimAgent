@@ -11,6 +11,7 @@ namespace RimAgent
         public const int MinSteps = 1;
         public const int MaxSteps = 20;
 
+#pragma warning disable S1104 // RimWorld ModSettings and Listing_Standard require public fields passed by ref
         public bool allowObserve = true;
         public bool allowWork = true;
         public bool allowBuild;
@@ -40,6 +41,7 @@ namespace RimAgent
         public bool autoOnRaid = true;
         public bool autoOnMentalBreak = true;
         public bool autoOnFoodShortage = true;
+#pragma warning restore S1104
 
         public override void ExposeData()
         {
