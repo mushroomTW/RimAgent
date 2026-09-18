@@ -8,7 +8,7 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 
 | Category | Tools | Default |
 | --- | --- | --- |
-| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search | on |
+| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search, game screenshots | on |
 | Work | work priorities, daily schedules (undoable) | on |
 | Build | mine / cut / harvest / deconstruct / haul designations, blueprints (single or in a line) | off |
 | Combat | draft, move, attack | off |
@@ -34,7 +34,7 @@ One setting decides how much the agent may do on its own (per-category permissio
 | **Auto** | Every command is previewed first, then a second model call classifies it (`low` / `high`). Low runs immediately, high waits for **Confirm**. Any classifier failure counts as high. Costs one extra request per command. |
 | **Autonomous** | Fully delegated: every command runs without asking, and the scheduler below starts the agent's own runs. You can still type instructions. |
 
-Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every command tool has a preview branch that touches nothing — the test suite checks both for all 45 tools, because Auto mode relies on running a command twice (preview, then execute).
+Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every command tool has a preview branch that touches nothing — the test suite checks both for all 46 tools, because Auto mode relies on running a command twice (preview, then execute).
 
 ## Safety
 
@@ -58,8 +58,8 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-           │                              45 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
-         │
+            │                              46 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+          │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```
 

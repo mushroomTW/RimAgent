@@ -107,5 +107,7 @@ namespace RimAgent.Game
         CommandResult SetCurrentMap(int mapId);
         /// <summary>切換遊戲時間流速（暫停／正常／加速）。</summary>
         CommandResult SetTimeSpeed(string speedDefName);
+        /// <summary>擷取當前遊戲畫面並存檔。filename 為可選檔名（不含路徑與副檔名）；空值則自動以時間戳記命名。</summary>
+        ScreenshotInfo TakeScreenshot(string filename = null);
     }
 }

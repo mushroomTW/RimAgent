@@ -278,5 +278,18 @@ namespace RimAgent.Tools
         {
             return Enum.TryParse((kind ?? string.Empty).Trim(), true, out parsed) && Enum.IsDefined(typeof(ThingKind), parsed);
         }
+
+        [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Takes a screenshot of the current game screen and saves it to disk. Returns the saved PNG file path and screen resolution.")]
+        public string TakeScreenshot(
+            [Description("Optional file name for the screenshot (without directory path or .png extension). If empty, an automatic timestamped name will be used.")] string name = null)
+        {
+            ScreenshotInfo info = _world.TakeScreenshot(name);
+            if (!info.Success)
+            {
+                return ToolText.Error(string.IsNullOrEmpty(info.Error) ? "failed to take screenshot." : info.Error);
+            }
+            return $"Screenshot saved: {info.FilePath} ({info.Width}x{info.Height})";
+        }
     }
 }

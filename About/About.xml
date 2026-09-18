@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>綠菇</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.09.18.2</modVersion>
+  <modVersion>2026.09.19.1</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
@@ -14,7 +14,7 @@ Open the "Agent" tab on the bottom bar and type what you want done: "set Alice's
 <b>Requires RimLLM Framework</b> (2026.09.12 or later). Provider, API key, model and fallback chain are configured once in the framework's settings; RimAgent only adds per-category tool permissions.
 
 <b>Tool categories</b> (each can be toggled in mod settings):
-1. <b>Observe</b> — colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search.
+1. <b>Observe</b> — colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search, game screenshots.
 2. <b>Work</b> — work priorities and schedules (undoable).
 3. <b>Build</b> — mining / cutting / harvesting / deconstruction designations and blueprints. Off by default.
 4. <b>Combat</b> — draft, move and attack orders. Off by default. LLM latency is several seconds, so this is for pre-deployment and retreats, not real-time control.

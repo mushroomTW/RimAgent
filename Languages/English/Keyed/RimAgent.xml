@@ -32,7 +32,7 @@
   <!-- Settings -->
   <RimAgent.Settings.PermissionsHeader>What the agent is allowed to do</RimAgent.Settings.PermissionsHeader>
   <RimAgent.Settings.Observe>Observe — read colony state</RimAgent.Settings.Observe>
-  <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research (status and switching), maps (listing and switching) and map object search.</RimAgent.Settings.ObserveTip>
+  <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research (status and switching), maps (listing and switching), map object search and game screenshots.</RimAgent.Settings.ObserveTip>
   <RimAgent.Settings.Work>Work — priorities and schedules</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>Change work priorities and daily schedules. Easy to undo by hand.</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>Build — designations and blueprints</RimAgent.Settings.Build>

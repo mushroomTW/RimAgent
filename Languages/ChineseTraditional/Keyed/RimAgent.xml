@@ -32,7 +32,7 @@
   <!-- 設定 -->
   <RimAgent.Settings.PermissionsHeader>允許 Agent 做的事</RimAgent.Settings.PermissionsHeader>
   <RimAgent.Settings.Observe>觀察 — 讀取殖民地狀態</RimAgent.Settings.Observe>
-  <RimAgent.Settings.ObserveTip>殖民地概況、殖民者、資源、威脅、研究（查詢與切換）、地圖（列出與切換）與地圖物件搜尋。</RimAgent.Settings.ObserveTip>
+  <RimAgent.Settings.ObserveTip>殖民地概況、殖民者、資源、威脅、研究（查詢與切換）、地圖（列出與切換）、地圖物件搜尋與遊戲截圖。</RimAgent.Settings.ObserveTip>
   <RimAgent.Settings.Work>工作 — 優先級與作息</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>修改工作優先級與每日作息。容易手動改回。</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>建造 — 標記與藍圖</RimAgent.Settings.Build>

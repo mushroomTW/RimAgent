@@ -134,6 +134,33 @@ namespace RimAgent.Tests
             return CommandResult.Ok($"Time speed set to {match.DefName}.");
         }
 
+        public ScreenshotInfo ScreenshotResult { get; set; } = new ScreenshotInfo
+        {
+            Success = true,
+            FilePath = "C:/RimWorld/Screenshots/screenshot.png",
+            Width = 1920,
+            Height = 1080
+        };
+
+        public ScreenshotInfo TakeScreenshot(string filename = null)
+        {
+            Calls.Add($"TakeScreenshot({filename ?? "null"})");
+            if (ScreenshotResult != null && !ScreenshotResult.Success)
+            {
+                return ScreenshotResult;
+            }
+
+            string name = string.IsNullOrWhiteSpace(filename) ? "screenshot" : filename;
+            return new ScreenshotInfo
+            {
+                Success = ScreenshotResult?.Success ?? true,
+                FilePath = $"C:/RimWorld/Screenshots/{name}.png",
+                Width = ScreenshotResult?.Width ?? 1920,
+                Height = ScreenshotResult?.Height ?? 1080,
+                Error = ScreenshotResult?.Error ?? string.Empty
+            };
+        }
+
         /// <summary>已完成的研究 defName（正式端用遊戲研究狀態判斷）。</summary>
         public HashSet<string> FinishedResearch { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public IReadOnlyList<DefInfo> StorageFilterables { get; set; } = new[]

@@ -169,5 +169,30 @@ namespace RimAgent.Tests
         {
             Assert.That(_tools.FindThings("any", "", 0, 0, 500, 10, 20), Does.StartWith("Error:"));
         }
+
+        [Test]
+        public void TakeScreenshotSucceedsWithDefaultAndCustomName()
+        {
+            string defaultText = _tools.TakeScreenshot();
+            Assert.That(defaultText, Does.StartWith("Screenshot saved:").And.Contain("screenshot.png").And.Contain("1920x1080"));
+            Assert.That(_world.Calls, Does.Contain("TakeScreenshot(null)"));
+
+            string customText = _tools.TakeScreenshot("colony_base");
+            Assert.That(customText, Does.StartWith("Screenshot saved:").And.Contain("colony_base.png").And.Contain("1920x1080"));
+            Assert.That(_world.Calls, Does.Contain("TakeScreenshot(colony_base)"));
+        }
+
+        [Test]
+        public void TakeScreenshotReturnsErrorOnFailure()
+        {
+            _world.ScreenshotResult = new ScreenshotInfo
+            {
+                Success = false,
+                Error = "disk full"
+            };
+
+            string text = _tools.TakeScreenshot("test");
+            Assert.That(text, Does.StartWith("Error:").And.Contain("disk full"));
+        }
     }
 }

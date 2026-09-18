@@ -483,7 +483,7 @@ namespace RimAgent.Tests
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Confirm), name);
             foreach (string name in new[] { "set_work_priority", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_current_map", "set_time_speed", "mcp_call_tool" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Safe), name);
-            foreach (string name in new[] { "get_colony_overview", "list_colonists", "find_things", "get_health", "list_prisoners", "list_bills", "get_time_speed", "mcp_status", "mcp_list_tools" })
+            foreach (string name in new[] { "get_colony_overview", "list_colonists", "find_things", "get_health", "list_prisoners", "list_bills", "get_time_speed", "take_screenshot", "mcp_status", "mcp_list_tools" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Query), name);
         }
 
@@ -513,8 +513,8 @@ namespace RimAgent.Tests
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(45));
-            Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(9));
+            Assert.That(registry.All.Count, Is.EqualTo(46));
+            Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(10));
             Assert.That(registry.Select(new ToolPermissions { Observe = false, Work = false, Build = false, Combat = false }), Is.Empty);
         }
 

@@ -430,4 +430,14 @@ namespace RimAgent.Game
             return new CommandResult(false, message);
         }
     }
+
+    /// <summary>遊戲截圖結果資料。</summary>
+    public sealed class ScreenshotInfo
+    {
+        public bool Success { get; set; }
+        public string FilePath { get; set; } = string.Empty;
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public string Error { get; set; } = string.Empty;
+    }
 }
