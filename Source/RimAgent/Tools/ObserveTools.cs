@@ -284,12 +284,43 @@ namespace RimAgent.Tools
         public string TakeScreenshot(
             [Description("Optional file name for the screenshot (without directory path or .png extension). If empty, an automatic timestamped name will be used.")] string name = null)
         {
-            ScreenshotInfo info = _world.TakeScreenshot(name);
+            string safeName = ResolveScreenshotName(name);
+            ScreenshotInfo info = _world.TakeScreenshot(safeName);
             if (!info.Success)
             {
                 return ToolText.Error(string.IsNullOrEmpty(info.Error) ? "failed to take screenshot." : info.Error);
             }
             return $"Screenshot saved: {info.FilePath} ({info.Width}x{info.Height})";
+        }
+
+        internal static string ResolveScreenshotName(string input)
+        {
+            string name = (input ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(name))
+            {
+                return "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            }
+
+            int lastSep = name.LastIndexOfAny(new[] { '/', '\\' });
+            if (lastSep >= 0)
+            {
+                name = name.Substring(lastSep + 1);
+            }
+
+            if (name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name.Substring(0, name.Length - 4);
+            }
+
+            foreach (char c in System.IO.Path.GetInvalidFileNameChars())
+            {
+                name = name.Replace(c, '_');
+            }
+
+            name = name.Trim();
+            return name.Replace("_", string.Empty).Length == 0
+                ? "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss")
+                : name;
         }
     }
 }

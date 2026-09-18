@@ -1413,13 +1413,8 @@ namespace RimAgent.Game
         {
             try
             {
+                string baseName = Tools.ObserveTools.ResolveScreenshotName(filename);
                 string folder = GenFilePaths.ScreenshotFolderPath;
-                if (!System.IO.Directory.Exists(folder))
-                {
-                    System.IO.Directory.CreateDirectory(folder);
-                }
-
-                string baseName = SanitizeScreenshotFileName(filename);
                 string safeName = baseName;
                 string fullPath = System.IO.Path.Combine(folder, safeName + ".png");
 
@@ -1449,29 +1444,6 @@ namespace RimAgent.Game
                     Error = ex.Message
                 };
             }
-        }
-
-        private static string SanitizeScreenshotFileName(string input)
-        {
-            string name = (input ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(name))
-            {
-                return "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            }
-
-            name = System.IO.Path.GetFileNameWithoutExtension(name);
-            foreach (char c in System.IO.Path.GetInvalidFileNameChars())
-            {
-                name = name.Replace(c, '_');
-            }
-
-            name = name.Trim();
-            if (string.IsNullOrEmpty(name))
-            {
-                return "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            }
-
-            return name;
         }
     }
 }
