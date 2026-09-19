@@ -400,9 +400,16 @@ namespace RimAgent.Tests
             SeedColonyStock();
             _world.Traders.Add(MakeOrbitalShip());
             var client = new ScriptedChatClient();
+            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\"}");
             client.CallTool("execute_trade", new { trader = "PassingShip_1", buys = "spacer component x2", sells = "", negotiator = "" })
                   .Reply("Bought 2 spacer components.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Trade = true }, 8);
+            var session = new ColonyAgentSession(
+                client,
+                _world,
+                () => new ToolPermissions { Observe = true, Trade = true },
+                8,
+                () => AgentMode.Auto,
+                classifierClient: classifier);
 
             string reply = await session.SendAsync("買 2 個太空元件");
 

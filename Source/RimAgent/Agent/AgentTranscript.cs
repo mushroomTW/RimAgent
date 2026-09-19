@@ -44,6 +44,8 @@ namespace RimAgent.Agent
         public string Arguments { get; set; } = string.Empty;
         public string Result { get; set; } = string.Empty;
         public bool Failed { get; set; }
+        /// <summary>本次呼叫是否實際扣除自主模式的每日工具額度。</summary>
+        public bool BudgetConsumed { get; set; }
         /// <summary>自動模式的分類結果：low／high／unavailable；沒經分類器為空。</summary>
         public string RiskCheck { get; set; } = string.Empty;
 
@@ -69,7 +71,7 @@ namespace RimAgent.Agent
         private int _version;
         private int _epoch;
 
-        /// <summary>每次 Add／Clear 遞增；UI 以此判斷是否要更新渲染快取。</summary>
+        /// <summary>每次 Add／Clear／既有紀錄更新時遞增；UI 以此判斷是否要更新渲染快取。</summary>
         public int Version
         {
             get
@@ -81,7 +83,7 @@ namespace RimAgent.Agent
             }
         }
 
-        /// <summary>只在 Clear 或裁掉舊紀錄時遞增：同一 Epoch 內清單只會在尾端增加，UI 可以只渲染新增的部分。</summary>
+        /// <summary>在 Clear、裁掉舊紀錄或更新既有紀錄時遞增；同一 Epoch 內清單只會在尾端增加。</summary>
         public int Epoch
         {
             get
@@ -157,6 +159,25 @@ namespace RimAgent.Agent
                     _epoch++;
                 }
                 _version++;
+            }
+        }
+
+        /// <summary>
+        /// 原子更新已加入清單的工具紀錄。既有項目內容改變時遞增 Epoch，要求 UI 全量重建，
+        /// 避免確認執行後仍顯示舊的預覽結果。
+        /// </summary>
+        public void UpdateToolResult(TranscriptEntry entry, string result, bool failed)
+        {
+            if (entry == null) throw new ArgumentNullException(nameof(entry));
+            lock (_gate)
+            {
+                entry.Result = result ?? string.Empty;
+                entry.Failed = failed;
+                if (_entries.Contains(entry))
+                {
+                    _version++;
+                    _epoch++;
+                }
             }
         }
 

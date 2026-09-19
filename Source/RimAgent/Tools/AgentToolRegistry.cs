@@ -13,16 +13,16 @@ namespace RimAgent.Tools
     {
         public bool Observe { get; set; } = true;
         public bool Work { get; set; } = true;
-        public bool Build { get; set; } = true;
-        public bool Combat { get; set; } = true;
-        public bool Trade { get; set; } = true;
-        public bool Medical { get; set; } = true;
-        public bool Prisoner { get; set; } = true;
-        public bool Animal { get; set; } = true;
-        public bool Zone { get; set; } = true;
-        public bool Production { get; set; } = true;
-        public bool Time { get; set; } = true;
-        public bool Mcp { get; set; } = true;
+        public bool Build { get; set; }
+        public bool Combat { get; set; }
+        public bool Trade { get; set; }
+        public bool Medical { get; set; }
+        public bool Prisoner { get; set; }
+        public bool Animal { get; set; }
+        public bool Zone { get; set; }
+        public bool Production { get; set; }
+        public bool Time { get; set; }
+        public bool Mcp { get; set; }
 
         public bool Allows(ToolCategory category)
         {
@@ -98,10 +98,10 @@ namespace RimAgent.Tools
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
         public IReadOnlyList<AITool> All => _allTools ?? (_allTools = _tools.Select(t => t.Tool).ToList());
 
-        /// <summary>依權限挑選，不分模式（除詢問模式外各模式的工具清單相同）。</summary>
+        /// <summary>依權限挑選完整工具清單；未指定模式時採確認模式，不套用自主模式的禁止清單。</summary>
         public IList<AITool> Select(ToolPermissions permissions)
         {
-            return Select(permissions, AgentMode.Autonomous);
+            return Select(permissions, AgentMode.Confirm);
         }
 
         /// <summary>依權限與模式挑選：詢問模式只留查詢工具，命令工具連 schema 都不送給模型。</summary>

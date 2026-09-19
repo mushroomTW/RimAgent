@@ -120,6 +120,11 @@ namespace RimAgent.Agent
         public int ToolsUsed => _toolsUsed;
         public int Runs => _runs;
 
+        public int RemainingBudget(AutonomousConfig config)
+        {
+            return Math.Max(0, config.BudgetPerWindow - _toolsUsed);
+        }
+
         /// <summary>現在是否該起一次自主任務；回傳觸發原因或 None。</summary>
         public AutonomousTrigger Evaluate(long tick, AutonomousSignals signals, AutonomousConfig config)
         {

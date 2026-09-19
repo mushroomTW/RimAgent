@@ -103,6 +103,16 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void RemainingBudgetNeverDropsBelowZero()
+        {
+            _scheduler.RecordRun(0, 59, _config);
+            Assert.That(_scheduler.RemainingBudget(_config), Is.EqualTo(1));
+
+            _scheduler.RecordRun(3000, 8, _config);
+            Assert.That(_scheduler.RemainingBudget(_config), Is.Zero);
+        }
+
+        [Test]
         public void DisabledTriggerTypesAreIgnored()
         {
             _config.OnRaid = false;

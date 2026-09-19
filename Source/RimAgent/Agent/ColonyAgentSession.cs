@@ -146,7 +146,12 @@ namespace RimAgent.Agent
         /// （AF 的 ChatHistoryProvider 在例外時略過儲存，等同以往的手動回滾）。
         /// </summary>
         /// <param name="autonomous">這句是排程器起的自主任務；只影響對話裡的標示，模型看到的內容相同。</param>
-        public async Task<string> SendAsync(string userText, CancellationToken cancellationToken = default, bool autonomous = false)
+        /// <param name="maxToolSteps">本輪額外步數上限；自主排程器用它把單輪呼叫夾在剩餘每日預算內。</param>
+        public async Task<string> SendAsync(
+            string userText,
+            CancellationToken cancellationToken = default,
+            bool autonomous = false,
+            int? maxToolSteps = null)
         {
             if (string.IsNullOrWhiteSpace(userText)) return null;
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
@@ -160,6 +165,9 @@ namespace RimAgent.Agent
             Undo.BeginFrame();
             // 新指令取代舊的等待：之前沒按的確認自動作廢，玩家以最新一句為準。
             _pendingConfirmation = null;
+            ConfirmGate.DiscardPendingApprovals();
+            ConfirmGate.BeginToolBudget(maxToolSteps);
+            ApplyRunStepLimit(maxToolSteps);
 
             try
             {
@@ -177,6 +185,11 @@ namespace RimAgent.Agent
                 }
                 catch (Exception ex) when (Classify(ex) == AgentErrorKind.ContextTooLong)
                 {
+                    // 工具若已經執行，整句重跑可能造成重複副作用；只允許尚未呼叫工具的請求自動重試。
+                    if (Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId))
+                    {
+                        throw;
+                    }
                     // 供應商仍可能因 schema、推理 token 或既有舊存檔超出視窗。
                     // 重建 AF session 後僅重試一次目前指令，避免玩家卡死在每句都失敗的狀態。
                     _session = await _agent.CreateSessionAsync(cancellationToken).AsTask().ConfigureAwait(false);
@@ -239,8 +252,19 @@ namespace RimAgent.Agent
             }
             finally
             {
+                ConfirmGate.EndToolBudget();
+                ApplyRunStepLimit(null);
                 Volatile.Write(ref _busy, 0);
             }
+        }
+
+        private void ApplyRunStepLimit(int? overrideSteps)
+        {
+            if (!(_inner is FunctionInvokingChatClient invoking)) return;
+            int configured = MaxSteps;
+            invoking.MaximumIterationsPerRequest = overrideSteps.HasValue
+                ? Math.Max(1, Math.Min(configured, overrideSteps.Value))
+                : configured;
         }
 
         public void Clear()
@@ -251,6 +275,7 @@ namespace RimAgent.Agent
             _session = null;
             _serializedSession = null;
             _pendingConfirmation = null;
+            ConfirmGate.DiscardPendingApprovals();
             ConfirmGate.ResetBypass();
             Transcript.Clear();
             Undo.Clear();
@@ -283,10 +308,18 @@ namespace RimAgent.Agent
                 });
                 return summary;
             }
-            catch
+            catch (Exception ex)
             {
                 Undo.EndFrame(text + " (confirmation failed)");
-                throw;
+                _pendingConfirmation = null;
+                Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Error,
+                    ErrorKind = Classify(ex),
+                    Text = ex.Message,
+                    InstructionId = Transcript.CurrentInstructionId
+                });
+                return null;
             }
             finally
             {
@@ -299,7 +332,6 @@ namespace RimAgent.Agent
         {
             if (_pendingConfirmation == null) return;
             _pendingConfirmation = null;
-            ConfirmGate.DiscardPendingApprovals();
             ConfirmGate.DiscardPendingApprovals();
             Transcript.Add(new TranscriptEntry
             {

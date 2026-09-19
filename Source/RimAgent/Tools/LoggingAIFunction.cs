@@ -27,6 +27,9 @@ namespace RimAgent.Tools
         private readonly ConfirmationGate _gate;
         private readonly RiskClassifier _classifier;
 
+        private bool RequiresExplicitConfirmation =>
+            string.Equals(Name, "mcp_call_tool", StringComparison.Ordinal);
+
         public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null)
             : base(inner)
         {
@@ -50,12 +53,32 @@ namespace RimAgent.Tools
                 InstructionId = _transcript.CurrentInstructionId
             };
 
+            bool budgetConsumed = false;
+            if (_gate != null && !_gate.TryConsumeToolBudget(out budgetConsumed))
+            {
+                entry.Result = ToolText.Error("autonomous tool budget exhausted.");
+                entry.Failed = true;
+                _transcript.Add(entry);
+                return entry.Result;
+            }
+            entry.BudgetConsumed = budgetConsumed;
+
             _gate?.BeginInvocation(_risk);
             try
             {
-                object result = _gate != null && _classifier != null && _gate.NeedsClassification(_risk)
-                    ? await InvokeClassifiedAsync(arguments, entry, cancellationToken)
-                    : await base.InvokeCoreAsync(arguments, cancellationToken);
+                object result;
+                if (_gate != null && RequiresExplicitConfirmation)
+                {
+                    result = await InvokeExplicitConfirmationAsync(arguments, cancellationToken);
+                }
+                else if (_gate != null && _classifier != null && _gate.NeedsClassification(_risk))
+                {
+                    result = await InvokeClassifiedAsync(arguments, entry, cancellationToken);
+                }
+                else
+                {
+                    result = await base.InvokeCoreAsync(arguments, cancellationToken);
+                }
                 string text = result?.ToString() ?? string.Empty;
                 entry.Result = text;
                 entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
@@ -86,20 +109,42 @@ namespace RimAgent.Tools
             {
                 object result = await base.InvokeCoreAsync(arguments, cancellationToken);
                 string text = result?.ToString() ?? string.Empty;
-                entry.Result = text;
-                entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
+                _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
                 return result;
             }
             catch (Exception ex)
             {
-                entry.Result = ex.GetType().Name + ": " + ex.Message;
-                entry.Failed = true;
+                _transcript.UpdateToolResult(entry, ex.GetType().Name + ": " + ex.Message, true);
                 throw;
             }
             finally
             {
                 _gate?.ClearForce();
             }
+        }
+
+        /// <summary>MCP 以使用者權限執行本機程式；所有可執行模式都必須先取得玩家明確確認。</summary>
+        private async Task<object> InvokeExplicitConfirmationAsync(
+            AIFunctionArguments arguments,
+            CancellationToken cancellationToken)
+        {
+            object preview;
+            _gate.ForcePreview();
+            try
+            {
+                preview = await base.InvokeCoreAsync(arguments, cancellationToken);
+            }
+            finally
+            {
+                _gate.ClearForce();
+            }
+
+            string text = preview?.ToString() ?? string.Empty;
+            if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
+            {
+                _gate.NoteBlocked(text);
+            }
+            return preview;
         }
 
         /// <summary>自動模式：預覽 → 分類 → 執行或擋下。工具的預覽分支不碰世界，靠 CommandGateTests 鎖住。</summary>

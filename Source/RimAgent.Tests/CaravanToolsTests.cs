@@ -100,8 +100,15 @@ namespace RimAgent.Tests
         public async Task FormCaravanIsLoggedAsAToolCall()
         {
             var client = new ScriptedChatClient();
+            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\"}");
             client.CallTool("form_caravan", new { colonists = "Ali, Bob", heading = "NE" }).Reply("Done.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Trade = true }, 8);
+            var session = new ColonyAgentSession(
+                client,
+                _world,
+                () => new ToolPermissions { Observe = true, Trade = true },
+                8,
+                () => AgentMode.Auto,
+                classifierClient: classifier);
 
             await session.SendAsync("Ali 跟 Bob 往東北組商隊出發");
 

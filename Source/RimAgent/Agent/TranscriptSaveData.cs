@@ -26,6 +26,7 @@ namespace RimAgent.Agent
         public string arguments = string.Empty;
         public string result = string.Empty;
         public bool failed;
+        public bool budgetConsumed;
         public bool toolsStripped;
         public int errorKind;
         public string riskCheck = string.Empty;
@@ -42,6 +43,7 @@ namespace RimAgent.Agent
             Scribe_Values.Look(ref arguments, "args", string.Empty);
             Scribe_Values.Look(ref result, "result", string.Empty);
             Scribe_Values.Look(ref failed, "failed", false);
+            Scribe_Values.Look(ref budgetConsumed, "budgetConsumed", false);
             Scribe_Values.Look(ref toolsStripped, "stripped", false);
             Scribe_Values.Look(ref errorKind, "error", 0);
             Scribe_Values.Look(ref riskCheck, "risk", string.Empty);
@@ -60,6 +62,7 @@ namespace RimAgent.Agent
                 Arguments = arguments ?? string.Empty,
                 Result = result ?? string.Empty,
                 Failed = failed,
+                BudgetConsumed = budgetConsumed,
                 ToolsStripped = toolsStripped,
                 ErrorKind = (AgentErrorKind)errorKind,
                 RiskCheck = riskCheck ?? string.Empty,
@@ -86,6 +89,7 @@ namespace RimAgent.Agent
                     arguments = Truncate(e.Arguments),
                     result = Truncate(e.Result),
                     failed = e.Failed,
+                    budgetConsumed = e.BudgetConsumed,
                     toolsStripped = e.ToolsStripped,
                     errorKind = (int)e.ErrorKind,
                     riskCheck = e.RiskCheck ?? string.Empty,

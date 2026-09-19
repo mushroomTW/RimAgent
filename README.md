@@ -50,6 +50,7 @@ Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every co
 ## Safety
 
 * **Confirm** / **Discard**: Confirm executes the captured previewed calls with their original arguments; it does not make another LLM request. A new instruction or Discard drops every pending call.
+* **MCP always confirms**: `mcp_call_tool` always waits for explicit player confirmation, including in Auto and Autonomous modes; the risk classifier cannot waive this prompt.
 * **`/undo`**: restores the previous instruction's work priorities and daily schedules — also for an instruction that failed halfway, so whatever did land can be reverted.
 * Guard rails inside the tools: `order_attack` refuses colony members, prisoners and friendly factions; `schedule_surgery` requires an explicit body part for surgeries that target one; `execute_trade` needs a negotiator who can talk and is not incapable of social work, and a powered comms console for orbital traders; `form_caravan` moves the named colonists off the map immediately (no walking to the edge, no supplies packed); zones are validated with the game's own zone designators (fog, map edge, blocking things, fertility).
 * The visible conversation, compacted model session, autonomous scheduler budget and work undo history are saved with the game. If an older session cannot be deserialized after an upgrade, RimAgent safely starts a fresh model session while retaining the visible transcript.
@@ -58,7 +59,7 @@ Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every co
 
 ## Autonomy (Autonomous mode)
 
-Pick the Autonomous mode (mod settings or the mode dropdown in the Agent tab) and the agent starts its own instructions: routine inspections on an interval, plus reactions to raid start/end, colonists near mental break, food shortages, downed or bleeding colonists, and fire. Signals aggregate every map in the save. Every run uses the same session (history, permissions), shows in the action log tagged `[auto]`, can be stopped with the **Stop** button or `/stop`, and counts against a daily tool-call budget (shown next to the dropdowns). Long-term goals are managed with `/goal` and saved with the game.
+Pick the Autonomous mode (mod settings or the mode dropdown in the Agent tab) and the agent starts its own instructions: routine inspections on an interval, plus reactions to raid start/end, colonists near mental break, food shortages, downed or bleeding colonists, and fire. Signals aggregate every map in the save. Every run uses the same session (history, permissions), shows in the action log tagged `[auto]`, can be stopped with the **Stop** button or `/stop`, and is capped by the remaining daily tool-call budget (shown next to the dropdowns). Long-term goals are managed with `/goal` and saved with the game.
 
 ## How it works
 

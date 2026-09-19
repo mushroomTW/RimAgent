@@ -86,6 +86,22 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task McpExecutionAlwaysWaitsForConfirmationAndSkipsClassifier()
+        {
+            _permissions.Mcp = true;
+            _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
+                        .Reply("Waiting for confirmation.");
+            ColonyAgentSession session = NewSession();
+
+            await session.SendAsync("call the MCP tool");
+
+            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(_classifierClient.CallCount, Is.EqualTo(0));
+            Assert.That(session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool).Result,
+                Does.StartWith(ToolText.ConfirmationPrefix));
+        }
+
+        [Test]
         public async Task ClassifierFailureFailsClosed()
         {
             _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Waiting.");

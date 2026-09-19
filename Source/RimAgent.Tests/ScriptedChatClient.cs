@@ -45,6 +45,26 @@ namespace RimAgent.Tests
             return this;
         }
 
+        /// <summary>在同一則 assistant 回應中要求多個工具，用來覆蓋批次 tool calls。</summary>
+        public ScriptedChatClient CallTools(params (string Name, object Arguments)[] calls)
+        {
+            _script.Add((_, __) =>
+            {
+                var contents = new List<AIContent>();
+                foreach ((string name, object arguments) in calls)
+                {
+                    string callId = "call_" + (++_callIds);
+                    var args = arguments == null
+                        ? new Dictionary<string, object>()
+                        : arguments.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(arguments));
+                    contents.Add(new FunctionCallContent(callId, name, args));
+                }
+                var message = new ChatMessage(ChatRole.Assistant, contents);
+                return new ChatResponse(message) { FinishReason = ChatFinishReason.ToolCalls };
+            });
+            return this;
+        }
+
         public ScriptedChatClient Throw(Exception exception)
         {
             _script.Add((_, __) => throw exception);

@@ -269,7 +269,12 @@ namespace RimAgent
             try
             {
                 string instruction = AutonomousPrompts.Build(trigger, _goals, DetectLanguage());
-                await session.SendAsync(instruction, _autoCts.Token, autonomous: true).ConfigureAwait(false);
+                int remainingBudget = _scheduler.RemainingBudget(config);
+                await session.SendAsync(
+                    instruction,
+                    _autoCts.Token,
+                    autonomous: true,
+                    maxToolSteps: remainingBudget).ConfigureAwait(false);
             }
             catch (InvalidOperationException)
             {
@@ -281,7 +286,8 @@ namespace RimAgent
                 Log.Warning("RimAgent autonomous run failed: " + ex.Message);
             }
             // 只數這一句的工具紀錄：transcript 會裁掉最舊的紀錄，前後相減會失準。
-            int used = session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId);
+            int used = session.Transcript.Snapshot().Count(e =>
+                e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId && e.BudgetConsumed);
             _scheduler.RecordRun(tick, used, config);
         }
 

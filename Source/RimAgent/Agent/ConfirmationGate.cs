@@ -30,6 +30,8 @@ namespace RimAgent.Agent
         private ToolRisk _currentRisk = ToolRisk.Confirm;
         // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
         private bool? _forced;
+        // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
+        private int _remainingToolCalls = -1;
 
         public ConfirmationGate(Func<AgentMode> mode)
         {
@@ -107,6 +109,43 @@ namespace RimAgent.Agent
             {
                 _pending.Clear();
                 _blocked.Clear();
+            }
+        }
+
+        internal void BeginToolBudget(int? maximumCalls)
+        {
+            lock (_gate)
+            {
+                _remainingToolCalls = maximumCalls.HasValue ? Math.Max(0, maximumCalls.Value) : -1;
+            }
+        }
+
+        internal void EndToolBudget()
+        {
+            lock (_gate)
+            {
+                _remainingToolCalls = -1;
+            }
+        }
+
+        /// <summary>在工具碰觸世界前原子扣除一次額度；無預算限制的玩家指令不計入自主配額。</summary>
+        internal bool TryConsumeToolBudget(out bool consumed)
+        {
+            lock (_gate)
+            {
+                if (_remainingToolCalls < 0)
+                {
+                    consumed = false;
+                    return true;
+                }
+                if (_remainingToolCalls == 0)
+                {
+                    consumed = false;
+                    return false;
+                }
+                _remainingToolCalls--;
+                consumed = true;
+                return true;
             }
         }
 

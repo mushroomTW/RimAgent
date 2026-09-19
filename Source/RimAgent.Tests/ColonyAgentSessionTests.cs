@@ -140,6 +140,44 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task PerRunStepLimitIsAppliedAndThenRestored()
+        {
+            _client.CallTool("get_colony_overview", null); // 腳本用完後持續要求同一工具。
+            ColonyAgentSession session = NewSession(maxSteps: 4);
+
+            await session.SendAsync("budgeted autonomous run", maxToolSteps: 1);
+            int firstRunTools = session.Transcript.Snapshot()
+                .Count(e => e.Kind == TranscriptKind.Tool && e.InstructionId == 1);
+
+            await session.SendAsync("normal run");
+            int secondRunTools = session.Transcript.Snapshot()
+                .Count(e => e.Kind == TranscriptKind.Tool && e.InstructionId == 2);
+
+            Assert.That(firstRunTools, Is.LessThanOrEqualTo(1));
+            Assert.That(secondRunTools, Is.GreaterThan(1).And.LessThanOrEqualTo(4));
+            Assert.That(session.MaxSteps, Is.EqualTo(4));
+        }
+
+        [Test]
+        public async Task PerRunToolBudgetRejectsExtraCallsFromTheSameModelResponse()
+        {
+            _client.CallTools(
+                       ("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }),
+                       ("set_work_priority", new { colonist = "Bob", workType = "doctor", priority = 1 }))
+                   .Reply("Done.");
+            ColonyAgentSession session = NewSession(maxSteps: 4);
+
+            await session.SendAsync("inspect twice", autonomous: true, maxToolSteps: 1);
+
+            List<TranscriptEntry> tools = session.Transcript.Snapshot()
+                .Where(e => e.Kind == TranscriptKind.Tool)
+                .ToList();
+            Assert.That(tools.Count(e => e.BudgetConsumed), Is.EqualTo(1));
+            Assert.That(tools.Count(e => e.Failed && e.Result.Contains("budget exhausted")), Is.EqualTo(1));
+            Assert.That(_world.Calls.Count(c => c.StartsWith("SetWorkPriority(")), Is.EqualTo(1));
+        }
+
+        [Test]
         public async Task StrippedToolsAreFlaggedOnTheReply()
         {
             _client.ReplyWithToolsStripped("I cannot use tools right now.");
@@ -206,6 +244,22 @@ namespace RimAgent.Tests
             Assert.That(session.Undo.CanUndo, Is.True);
             Assert.That(session.UndoLast(), Does.Contain("(failed)"));
             Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task ContextTooLongAfterAToolDoesNotRetryTheInstruction()
+        {
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
+                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 2 })
+                   .Reply("Done.");
+            ColonyAgentSession session = NewSession();
+
+            Assert.That(await session.SendAsync("set doctor priority"), Is.Null);
+
+            Assert.That(_world.Calls.Count(c => c.StartsWith("SetWorkPriority(")), Is.EqualTo(1));
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
+            Assert.That(_client.CallCount, Is.EqualTo(2), "已有副作用後不可重跑整句指令");
         }
 
         [Test]
@@ -440,6 +494,62 @@ namespace RimAgent.Tests
             Assert.That(_world.Calls.Count(c => c == "SetWorkPriority(101,Doctor,1)"), Is.EqualTo(1));
             Assert.That(_world.Calls, Does.Contain("OrderAttack(102,900)"));
             Assert.That(_client.CallCount, Is.EqualTo(3), "The confirmation must not re-run the model tool loop.");
+        }
+
+        [Test]
+        public async Task NewInstructionDiscardsPreviouslyCapturedCommands()
+        {
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Combat = true;
+            _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("First attack needs confirmation.")
+                   .Reply("Old request discarded.")
+                   .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("Second attack needs confirmation.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("first attack");
+            await session.SendAsync("do nothing instead");
+            await session.SendAsync("second attack");
+            string result = await session.ConfirmAsync();
+
+            Assert.That(result, Is.EqualTo("Executed 1 confirmed command(s)."));
+            Assert.That(_world.Calls.Count(c => c == "OrderAttack(102,900)"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task ClearDiscardsCapturedCommandsBeforeTheNextConfirmation()
+        {
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Combat = true;
+            _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("First attack needs confirmation.")
+                   .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("Second attack needs confirmation.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("first attack");
+            session.Clear();
+            await session.SendAsync("second attack");
+            string result = await session.ConfirmAsync();
+
+            Assert.That(result, Is.EqualTo("Executed 1 confirmed command(s)."));
+            Assert.That(_world.Calls.Count(c => c == "OrderAttack(102,900)"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task AutonomousModeStillRequiresExplicitConfirmationForMcpExecution()
+        {
+            _permissions = new ToolPermissions { Mcp = true };
+            _client.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
+                   .Reply("Waiting for confirmation.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+
+            await session.SendAsync("call the MCP tool");
+
+            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool).Result,
+                Does.StartWith(ToolText.ConfirmationPrefix));
         }
 
         [Test]
