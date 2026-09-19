@@ -58,12 +58,18 @@ namespace RimAgent.Agent
     /// </summary>
     public sealed class AgentTranscript
     {
+        /// <summary>執行期保留上限；超過就整批丟掉最舊的，讓 UI 全量重建的次數維持稀疏（存檔另有 200 則上限）。</summary>
+        public const int MaxEntries = 600;
+        /// <summary>裁切後保留的則數。</summary>
+        public const int TrimTo = 500;
+
         private readonly object _gate = new object();
         private readonly List<TranscriptEntry> _entries = new List<TranscriptEntry>();
         private int _instructionIds;
         private int _version;
+        private int _epoch;
 
-        /// <summary>每次 Add／Clear 遞增；UI 以此判斷是否要重建渲染快取。</summary>
+        /// <summary>每次 Add／Clear 遞增；UI 以此判斷是否要更新渲染快取。</summary>
         public int Version
         {
             get
@@ -71,6 +77,18 @@ namespace RimAgent.Agent
                 lock (_gate)
                 {
                     return _version;
+                }
+            }
+        }
+
+        /// <summary>只在 Clear 或裁掉舊紀錄時遞增：同一 Epoch 內清單只會在尾端增加，UI 可以只渲染新增的部分。</summary>
+        public int Epoch
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _epoch;
                 }
             }
         }
@@ -133,6 +151,11 @@ namespace RimAgent.Agent
             lock (_gate)
             {
                 _entries.Add(entry);
+                if (_entries.Count > MaxEntries)
+                {
+                    _entries.RemoveRange(0, _entries.Count - TrimTo);
+                    _epoch++;
+                }
                 _version++;
             }
         }
@@ -141,6 +164,17 @@ namespace RimAgent.Agent
         {
             lock (_gate)
             {
+                return _entries.ToArray();
+            }
+        }
+
+        /// <summary>一次上鎖取得快照與對應的 Version／Epoch：分開讀會讓中間插進來的裁切把 Epoch 與清單對不上。</summary>
+        public IReadOnlyList<TranscriptEntry> Snapshot(out int version, out int epoch)
+        {
+            lock (_gate)
+            {
+                version = _version;
+                epoch = _epoch;
                 return _entries.ToArray();
             }
         }
@@ -162,6 +196,7 @@ namespace RimAgent.Agent
             {
                 _entries.Clear();
                 _version++;
+                _epoch++;
             }
         }
     }

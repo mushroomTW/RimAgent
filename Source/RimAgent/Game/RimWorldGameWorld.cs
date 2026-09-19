@@ -49,10 +49,36 @@ namespace RimAgent.Game
                 Weather = map.weatherManager.curWeather?.label ?? string.Empty,
                 OutdoorTemperatureC = map.mapTemperature.OutdoorTemp,
                 Wealth = map.wealthWatcher.WealthTotal,
-                // 倒地的敵人不算威脅：留著會讓「襲擊結束」的邊緣永遠不歸零，下一波真襲擊就觸發不了。
-                HostileCount = GetThreats().Count(t => t.Kind != "Fire" && !t.Downed),
+                HostileCount = CountHostiles(map),
                 ColonistsNearMentalBreak = colonists.Count(IsNearMentalBreak)
             };
+        }
+
+        /// <summary>
+        /// 自主排程器每 500 tick 要的四個數字，不建完整快照（GetOverview／GetResources 會為每個威脅與資源配置物件）。
+        /// </summary>
+        internal Agent.AutonomousSignals GetAutonomousSignals()
+        {
+            Map map = Map;
+            List<Pawn> colonists = map.mapPawns.FreeColonistsSpawned;
+            return new Agent.AutonomousSignals
+            {
+                HostileCount = CountHostiles(map),
+                NearMentalBreakCount = colonists.Count(IsNearMentalBreak),
+                FoodNutrition = map.resourceCounter.TotalHumanEdibleNutrition,
+                ColonistCount = colonists.Count
+            };
+        }
+
+        /// <summary>站著的敵對 pawn 數。倒地的不算：留著會讓「襲擊結束」的邊緣永遠不歸零，下一波真襲擊就觸發不了。火也不算。</summary>
+        private static int CountHostiles(Map map)
+        {
+            int count = 0;
+            foreach (Pawn pawn in map.mapPawns.AllPawnsSpawned)
+            {
+                if (!pawn.Dead && !pawn.Downed && pawn.HostileTo(Faction.OfPlayer)) count++;
+            }
+            return count;
         }
 
         public IReadOnlyList<ColonistInfo> GetColonists()
@@ -332,26 +358,43 @@ namespace RimAgent.Game
         public IReadOnlyList<ThingInfo> FindThings(ThingQuery query)
         {
             Map map = Map;
-            IEnumerable<Thing> things = map.listerThings.AllThings.Where(t => t.Spawned && KindOf(t) != null);
-            if (query.Kind != ThingKind.Any) things = things.Where(t => KindOf(t) == query.Kind);
-            if (!string.IsNullOrEmpty(query.DefName))
+            var result = new List<ThingInfo>();
+            bool hasDefName = !string.IsNullOrEmpty(query.DefName);
+            bool hasNeedle = !string.IsNullOrEmpty(query.LabelContains);
+            // 便宜的檢查排前面：座標是整數比較，Label 要走 GenLabel 配字串，全圖數萬個 Thing 逐一算會卡一幀。
+            foreach (Thing t in CandidateThings(map, query.Kind))
             {
-                things = things.Where(t => string.Equals(t.def.defName, query.DefName, StringComparison.OrdinalIgnoreCase));
+                if (result.Count >= query.Limit) break;
+                if (!t.Spawned) continue;
+                if (query.Area.HasValue && !query.Area.Value.Contains(t.Position.x, t.Position.z)) continue;
+                ThingKind? kind = KindOf(t);
+                if (kind == null || (query.Kind != ThingKind.Any && kind != query.Kind)) continue;
+                if (hasDefName && !string.Equals(t.def.defName, query.DefName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (hasNeedle && !MatchesLabel(t, query.LabelContains)) continue;
+                result.Add(ToThing(t, map));
             }
-            if (!string.IsNullOrEmpty(query.LabelContains))
+            return result;
+        }
+
+        /// <summary>
+        /// 依 kind 縮小掃描範圍：pawn 與植物各有現成清單（Plant 群組就是 category == Plant），
+        /// 其餘才掃全圖（物品沒有恰好對應 category == Item 的群組，HaulableEver 會漏掉不可搬運的物品）。
+        /// </summary>
+        private static IEnumerable<Thing> CandidateThings(Map map, ThingKind kind)
+        {
+            switch (kind)
             {
-                string needle = query.LabelContains;
-                things = things.Where(t =>
-                    t.def.defName.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    (t.def.label ?? string.Empty).IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    t.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0);
+                case ThingKind.Pawn: return map.mapPawns.AllPawnsSpawned;
+                case ThingKind.Plant: return map.listerThings.ThingsInGroup(ThingRequestGroup.Plant);
+                default: return map.listerThings.AllThings;
             }
-            if (query.Area.HasValue)
-            {
-                CellRectSpec area = query.Area.Value;
-                things = things.Where(t => area.Contains(t.Position.x, t.Position.z));
-            }
-            return things.Take(query.Limit).Select(t => ToThing(t, map)).ToList();
+        }
+
+        private static bool MatchesLabel(Thing t, string needle)
+        {
+            return t.def.defName.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
+                   || (t.def.label ?? string.Empty).IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
+                   || t.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public IReadOnlyList<ThingInfo> GetSelection()
@@ -1304,16 +1347,22 @@ namespace RimAgent.Game
                 }).ToList() ?? (IReadOnlyList<SkillInfo>)Array.Empty<SkillInfo>(),
                 WorkPriorities = pawn.workSettings == null
                     ? (IReadOnlyList<WorkPriorityInfo>)Array.Empty<WorkPriorityInfo>()
-                    : DefDatabase<WorkTypeDef>.AllDefsListForReading.Where(w => w.visible).Select(w => new WorkPriorityInfo
-                    {
-                        WorkTypeDefName = w.defName,
-                        Label = w.labelShort ?? w.label,
-                        Priority = pawn.WorkTypeIsDisabled(w) ? 0 : pawn.workSettings.GetPriority(w),
-                        Disabled = pawn.WorkTypeIsDisabled(w)
-                    }).ToList(),
+                    : DefDatabase<WorkTypeDef>.AllDefsListForReading.Where(w => w.visible).Select(w => ToWorkPriority(pawn, w)).ToList(),
                 Timetable = pawn.timetable == null
                     ? (IReadOnlyList<string>)Array.Empty<string>()
                     : Enumerable.Range(0, 24).Select(h => pawn.timetable.GetAssignment(h)?.defName ?? string.Empty).ToList()
+            };
+        }
+
+        private static WorkPriorityInfo ToWorkPriority(Pawn pawn, WorkTypeDef w)
+        {
+            bool disabled = pawn.WorkTypeIsDisabled(w);
+            return new WorkPriorityInfo
+            {
+                WorkTypeDefName = w.defName,
+                Label = w.labelShort ?? w.label,
+                Priority = disabled ? 0 : pawn.workSettings.GetPriority(w),
+                Disabled = disabled
             };
         }
 

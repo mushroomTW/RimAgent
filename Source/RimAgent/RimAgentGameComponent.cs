@@ -235,15 +235,7 @@ namespace RimAgent
 
         private AutonomousSignals GatherSignals()
         {
-            ColonyOverview overview = _autoWorld.GetOverview();
-            ResourceSnapshot resources = _autoWorld.GetResources();
-            return new AutonomousSignals
-            {
-                HostileCount = overview.HostileCount,
-                NearMentalBreakCount = overview.ColonistsNearMentalBreak,
-                FoodNutrition = resources.TotalHumanEdibleNutrition,
-                ColonistCount = overview.ColonistCount
-            };
+            return _autoWorld.GetAutonomousSignals();
         }
 
         /// <summary>UI 的停止鍵：取消進行中的自主任務（玩家指令另有自己的 token）。</summary>
@@ -254,9 +246,11 @@ namespace RimAgent
 
         private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config)
         {
-            int before = CountToolEntries(session);
             _autoCts?.Dispose();
             _autoCts = new CancellationTokenSource();
+            // 送出前先算好這句會拿到的編號：busy 旗標保證成功送出的那句取的是下一個號；
+            // 送完才讀 CurrentInstructionId 的話，玩家在旗標釋放的瞬間送指令會讓我們數到別句。
+            int instructionId = session.Transcript.CurrentInstructionId + 1;
             try
             {
                 string instruction = AutonomousPrompts.Build(trigger, _goals, DetectLanguage());
@@ -271,13 +265,9 @@ namespace RimAgent
             {
                 Log.Warning("RimAgent autonomous run failed: " + ex.Message);
             }
-            int used = CountToolEntries(session) - before;
-            _scheduler.RecordRun(tick, used < 0 ? 0 : used, config);
-        }
-
-        private static int CountToolEntries(ColonyAgentSession session)
-        {
-            return session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool);
+            // 只數這一句的工具紀錄：transcript 會裁掉最舊的紀錄，前後相減會失準。
+            int used = session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId);
+            _scheduler.RecordRun(tick, used, config);
         }
 
         private static AutoLanguage DetectLanguage()

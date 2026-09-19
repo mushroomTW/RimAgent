@@ -33,12 +33,18 @@ namespace RimAgent.UI
         private string _input = string.Empty;
         private Vector2 _scroll;
         private int _lastEntryCount = -1;
-        // 渲染快取：Markdown 轉換與 CalcHeight 只在紀錄數或寬度變時重做，不每幀重跑（OnGUI 一幀會跑多次）。
+        // 渲染快取：Markdown 轉換與 CalcHeight 只在紀錄變動或寬度變時重做，不每幀重跑（OnGUI 一幀會跑多次）。
+        // 紀錄加入後不會再改，所以同一 Epoch 內只渲染新增的尾段；Clear／裁掉舊紀錄才全量重建。
         private readonly List<(string Text, Color Color, float Height)> _lines = new List<(string, Color, float)>();
         private float _linesTotal;
         private float _linesWidth = -1f;
         private int _linesEntryCount = -1;
         private int _linesTranscriptVersion = -1;
+        private int _linesTranscriptEpoch = -1;
+        // 分頁視窗跨讀檔存活，新局的 transcript 是另一個物件（Epoch 又從 0 起算），要認物件不能只認數字。
+        private AgentTranscript _linesTranscript;
+        // 戰鬥延遲提醒以指令為單位只顯示一次：跨增量渲染保留已提醒過的指令編號。
+        private readonly HashSet<int> _combatNoted = new HashSet<int>();
         private string _capabilityWarning;
         private CancellationTokenSource _cts;
 
@@ -127,11 +133,21 @@ namespace RimAgent.UI
         private void DrawTranscript(Rect outRect, ColonyAgentSession session)
         {
             float width = outRect.width - 20f;
-            int version = session.Transcript.Version;
-            if (version != _linesTranscriptVersion || Mathf.Abs(width - _linesWidth) > 0.001f)
+            AgentTranscript transcript = session.Transcript;
+            bool sameTranscript = ReferenceEquals(transcript, _linesTranscript);
+            if (!sameTranscript || transcript.Version != _linesTranscriptVersion || Mathf.Abs(width - _linesWidth) > 0.001f)
             {
-                RebuildLines(session.Transcript.Snapshot(), width);
+                // 快照與版本號一次上鎖取得，否則背景執行緒的 Add 夾在中間裁切時 Epoch 會跟清單對不上。
+                IReadOnlyList<TranscriptEntry> entries = transcript.Snapshot(out int version, out int epoch);
+                bool appendOnly = sameTranscript
+                                  && epoch == _linesTranscriptEpoch
+                                  && Mathf.Abs(width - _linesWidth) <= 0.001f
+                                  && entries.Count >= _linesEntryCount;
+                if (appendOnly) AppendLines(entries, _linesEntryCount, width);
+                else RebuildLines(entries, width);
+                _linesTranscript = transcript;
                 _linesTranscriptVersion = version;
+                _linesTranscriptEpoch = epoch;
                 _linesWidth = width;
             }
 
@@ -152,12 +168,19 @@ namespace RimAgent.UI
             }
 
             var viewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height));
+            // 只畫捲動視窗看得到的行：富文字排版即使被裁掉也照算，長對話會每幀白做。
+            // _scroll 可能是還沒被 BeginScrollView 夾住的 MaxValue，這裡自己夾一次。
+            float visibleTop = Mathf.Clamp(_scroll.y, 0f, Mathf.Max(0f, viewRect.height - outRect.height));
+            float visibleBottom = visibleTop + outRect.height;
             Widgets.BeginScrollView(outRect, ref _scroll, viewRect);
             float y = 0f;
             foreach ((string text, Color color, float height) in _lines)
             {
-                GUI.color = color;
-                Widgets.Label(new Rect(0f, y, width, height), text);
+                if (y + height >= visibleTop && y <= visibleBottom)
+                {
+                    GUI.color = color;
+                    Widgets.Label(new Rect(0f, y, width, height), text);
+                }
                 y += height + EntryGap;
             }
             if (working != null)
@@ -173,18 +196,23 @@ namespace RimAgent.UI
         {
             _lines.Clear();
             _linesTotal = 0f;
-            _linesEntryCount = entries.Count;
-            // 戰鬥延遲提醒以指令為單位只顯示一次：記下已經提醒過的指令編號。
-            var combatNoted = new HashSet<int>();
-            foreach (TranscriptEntry entry in entries)
+            _combatNoted.Clear();
+            AppendLines(entries, 0, width);
+        }
+
+        /// <summary>只渲染 <paramref name="from"/> 起的新紀錄，接在既有快取後面。</summary>
+        private void AppendLines(IReadOnlyList<TranscriptEntry> entries, int from, float width)
+        {
+            for (int i = Math.Max(0, from); i < entries.Count; i++)
             {
-                foreach ((string text, Color color) in Render(entry, combatNoted))
+                foreach ((string text, Color color) in Render(entries[i], _combatNoted))
                 {
                     float height = Text.CalcHeight(text, width);
                     _lines.Add((text, color, height));
                     _linesTotal += height + EntryGap;
                 }
             }
+            _linesEntryCount = entries.Count;
         }
 
         private static IEnumerable<(string Text, Color Color)> Render(TranscriptEntry entry, HashSet<int> combatNoted)
