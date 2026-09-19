@@ -510,6 +510,24 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void ReasoningLevelMapsToRunOptions()
+        {
+            ColonyAgentSession session = NewSession();
+
+            RimLLMChatOptions auto = session.BuildRunOptions();
+            Assert.That(auto.Reasoning, Is.Null, "Auto 不設定，交給框架預設");
+            Assert.That(auto.DisableReasoning, Is.False);
+
+            session.Reasoning = ReasoningLevel.Off;
+            Assert.That(session.BuildRunOptions().DisableReasoning, Is.True);
+
+            session.Reasoning = ReasoningLevel.High;
+            RimLLMChatOptions high = session.BuildRunOptions();
+            Assert.That(high.Reasoning?.Effort, Is.EqualTo(ReasoningEffort.High));
+            Assert.That(high.DisableReasoning, Is.False);
+        }
+
+        [Test]
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());

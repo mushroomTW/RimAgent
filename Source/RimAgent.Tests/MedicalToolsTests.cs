@@ -25,10 +25,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void MedicalIsOffByDefault()
+        public void MedicalPermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Medical, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Medical, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Medical, Is.True, "設定頁預設全開");
         }
 
         [Test]

@@ -4,15 +4,15 @@ using System.Text;
 namespace RimAgent.Agent
 {
     /// <summary>
-    /// 每句指令的系統提示詞組裝：核心（硬編碼協議）→內建準則→技能→常駐指令。
-    /// 純字串邏輯；任一層為空就跳過，不留空標題。常駐指令優先序最高。
+    /// 每句指令的系統提示詞組裝：核心（硬編碼協議）→內建準則→技能。
+    /// 純字串邏輯；任一層為空就跳過，不留空標題。
     /// </summary>
     public static class AgentPromptComposer
     {
         /// <summary>技能區的總量上限（字數），超過就省略剩下的並註明。</summary>
         public const int MaxSkillsChars = 8000;
 
-        public static string Compose(string core, string conduct, IReadOnlyList<AgentSkill> skills, string standing)
+        public static string Compose(string core, string conduct, IReadOnlyList<AgentSkill> skills)
         {
             var sb = new StringBuilder(core ?? string.Empty);
             if (!string.IsNullOrWhiteSpace(conduct))
@@ -20,10 +20,6 @@ namespace RimAgent.Agent
                 sb.Append("\n\nStanding conduct:\n").Append(conduct.Trim());
             }
             AppendSkills(sb, skills);
-            if (!string.IsNullOrWhiteSpace(standing))
-            {
-                sb.Append("\n\nPlayer's standing instructions (highest precedence):\n").Append(standing.Trim());
-            }
             return sb.ToString();
         }
 

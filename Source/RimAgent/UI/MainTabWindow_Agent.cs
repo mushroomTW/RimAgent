@@ -22,7 +22,10 @@ namespace RimAgent.UI
         private const float BottomBarHeight = 32f;
         private const float AutoStripHeight = 26f;
         private const float ButtonWidth = 80f;
+        private const float DropdownWidth = 110f;
         private const float EntryGap = 6f;
+        private const float SlashRowHeight = 26f;
+        private const float SlashPopupWidth = 480f;
         private const int MaxResultChars = 600;
 
         private static readonly Color UserColor = new Color(0.65f, 0.85f, 1f);
@@ -47,6 +50,8 @@ namespace RimAgent.UI
         private readonly HashSet<int> _combatNoted = new HashSet<int>();
         private string _capabilityWarning;
         private CancellationTokenSource _cts;
+        // 斜線指令彈出選單目前反白的項目（隨輸入變動時夾回範圍）。
+        private int _slashIndex;
 
         public override Vector2 RequestedTabSize => new Vector2(760f, 580f);
 
@@ -89,8 +94,10 @@ namespace RimAgent.UI
             var autoStrip = new Rect(inRect.x, bottom.y - AutoStripHeight - EntryGap, inRect.width, AutoStripHeight);
             var transcriptRect = new Rect(inRect.x, top, inRect.width, autoStrip.y - top - EntryGap);
             DrawTranscript(transcriptRect, session);
-            DrawAutoStrip(autoStrip, component, session);
+            DrawStatusStrip(autoStrip, component, session);
             DrawBottomBar(bottom, session);
+            // 最後畫，才能蓋在對話紀錄上面。
+            DrawSlashPopup(bottom, session);
         }
 
         private static string ModeLabel(AgentMode mode)
@@ -104,30 +111,63 @@ namespace RimAgent.UI
             }
         }
 
-        /// <summary>模式狀態列：目前模式或自主用量、目標與常駐指令入口。</summary>
-        private static void DrawAutoStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
+        private static string ReasoningLabel(ReasoningLevel level)
         {
-            const float GoalsButtonWidth = 64f;
-            const float StandingButtonWidth = 64f;
-            var standingRect = new Rect(rect.xMax - StandingButtonWidth, rect.y, StandingButtonWidth, rect.height);
-            var buttonRect = new Rect(standingRect.x - GoalsButtonWidth - 4f, rect.y, GoalsButtonWidth, rect.height);
-            var labelRect = new Rect(rect.x, rect.y, buttonRect.x - rect.x - 4f, rect.height);
+            return ("RimAgent.Reasoning." + level).Translate();
+        }
 
-            GUI.color = ToolColor;
-            string status = RimAgentGameComponent.AutonomousEnabled
-                ? "RimAgent.Auto.StatusOn".Translate(component.AutonomousToolsUsed, RimAgentGameComponent.AutonomousBudget).ToString()
-                : "RimAgent.Mode.Status".Translate(ModeLabel(session.Mode)).ToString();
-            Widgets.Label(labelRect, status);
-            GUI.color = Color.white;
+        /// <summary>狀態列：模式與思考強度兩個下拉（寫回 mod 設定），右側顯示自主用量。</summary>
+        private static void DrawStatusStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
+        {
+            RimAgentSettings settings = RimAgentMod.Settings;
+            var modeRect = new Rect(rect.x, rect.y, DropdownWidth, rect.height);
+            var reasoningRect = new Rect(modeRect.xMax + 4f, rect.y, DropdownWidth, rect.height);
 
-            if (Widgets.ButtonText(buttonRect, "RimAgent.Auto.Goals".Translate(), true, false, !session.IsBusy))
+            bool enabled = !session.IsBusy && settings != null;
+            if (Widgets.ButtonText(modeRect, "RimAgent.Mode.Status".Translate(ModeLabel(session.Mode)), true, true, enabled))
             {
-                Find.WindowStack.Add(new Dialog_AutonomousGoals());
+                var options = new List<FloatMenuOption>();
+                foreach (AgentMode mode in (AgentMode[])Enum.GetValues(typeof(AgentMode)))
+                {
+                    options.Add(new FloatMenuOption(ModeLabel(mode), () => SetMode(settings, mode)));
+                }
+                Find.WindowStack.Add(new FloatMenu(options));
             }
-            if (Widgets.ButtonText(standingRect, "RimAgent.Standing.Button".Translate(), true, false, !session.IsBusy))
+            ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
+            if (Widgets.ButtonText(reasoningRect, "RimAgent.Reasoning.Status".Translate(ReasoningLabel(current)), true, true, enabled))
             {
-                Find.WindowStack.Add(new Dialog_StandingInstructions());
+                var options = new List<FloatMenuOption>();
+                foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
+                {
+                    options.Add(new FloatMenuOption(ReasoningLabel(level), () => SetReasoning(settings, level)));
+                }
+                Find.WindowStack.Add(new FloatMenu(options));
             }
+
+            if (RimAgentGameComponent.AutonomousEnabled)
+            {
+                var usageRect = new Rect(reasoningRect.xMax + 8f, rect.y, rect.xMax - reasoningRect.xMax - 8f, rect.height);
+                Text.Anchor = TextAnchor.MiddleRight;
+                GUI.color = ToolColor;
+                Widgets.Label(usageRect, "RimAgent.Auto.StatusOn".Translate(component.AutonomousToolsUsed, RimAgentGameComponent.AutonomousBudget));
+                GUI.color = Color.white;
+                Text.Anchor = TextAnchor.UpperLeft;
+            }
+        }
+
+        // 分頁裡改的設定要自己落盤：ModSettings 只在設定頁關閉時自動寫。
+        private static void SetMode(RimAgentSettings settings, AgentMode mode)
+        {
+            if (settings.mode == mode) return;
+            settings.mode = mode;
+            settings.Write();
+        }
+
+        private static void SetReasoning(RimAgentSettings settings, ReasoningLevel level)
+        {
+            if (settings.reasoning == level) return;
+            settings.reasoning = level;
+            settings.Write();
         }
 
         private void DrawTranscript(Rect outRect, ColonyAgentSession session)
@@ -278,15 +318,42 @@ namespace RimAgent.UI
                 return;
             }
             bool canSend = !session.IsBusy && _capabilityWarning == null;
-            float buttonsTotalWidth = (ButtonWidth + 4f) * 4f;
-            var inputRect = new Rect(rect.x, rect.y, rect.width - buttonsTotalWidth, rect.height);
+            var inputRect = new Rect(rect.x, rect.y, rect.width - ButtonWidth - 4f, rect.height);
+            var buttonRect = new Rect(rect.xMax - ButtonWidth, rect.y, ButtonWidth, rect.height);
 
-            bool enterPressed = canSend &&
+            // 彈出選單開著時方向鍵／Tab／Enter 歸它用，要在 TextField 處理鍵盤前攔下。
+            bool enterPressed = !HandleSlashKeys(session) &&
                                 Event.current.type == EventType.KeyDown &&
                                 (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
             DrawInputField(inputRect);
-            DrawActionButtons(session, rect, canSend, enterPressed);
+            if (DrawSendOrStop(session, buttonRect, canSend, enterPressed) && enterPressed) Event.current.Use();
+        }
+
+        /// <summary>
+        /// 忙碌時同一顆按鈕變「停止」；斜線指令不看 canSend（本機執行，不需要模型）。
+        /// 回傳是否送出了輸入（呼叫端據此吃掉 Enter）。
+        /// </summary>
+        private bool DrawSendOrStop(ColonyAgentSession session, Rect buttonRect, bool canSend, bool enterPressed)
+        {
+            bool isSlash = _input.Length > 0 && _input[0] == '/';
+            if (session.IsBusy)
+            {
+                if (Widgets.ButtonText(buttonRect, "RimAgent.Stop".Translate())) StopRun();
+                if (!enterPressed || !isSlash) return false;
+                Send(session);
+                return true;
+            }
+            bool clicked = Widgets.ButtonText(buttonRect, "RimAgent.Send".Translate(), true, true, canSend || isSlash);
+            if (!(clicked || enterPressed) || !(canSend || isSlash)) return false;
+            Send(session);
+            return true;
+        }
+
+        private void StopRun()
+        {
+            _cts?.Cancel();
+            RimAgentGameComponent.Instance?.StopAutonomousRun();
         }
 
         private void DrawInputField(Rect inputRect)
@@ -295,40 +362,176 @@ namespace RimAgent.UI
             _input = Widgets.TextField(inputRect, _input);
             if (_input.Length == 0 && GUI.GetNameOfFocusedControl() != InputControlName)
             {
+                // 提示文字單行顯示並截斷，避免換行溢出輸入框
+                var placeholderRect = inputRect.ContractedBy(4f, 0f);
                 GUI.color = ToolColor;
-                Widgets.Label(inputRect.ContractedBy(4f, 0f), "RimAgent.Placeholder".Translate());
+                Text.WordWrap = false;
+                Text.Anchor = TextAnchor.MiddleLeft;
+                Widgets.Label(placeholderRect, "RimAgent.Placeholder".Translate().ToString().Truncate(placeholderRect.width));
+                Text.Anchor = TextAnchor.UpperLeft;
+                Text.WordWrap = true;
                 GUI.color = Color.white;
             }
         }
 
-        private void DrawActionButtons(ColonyAgentSession session, Rect barRect, bool canSend, bool enterPressed)
+        /// <summary>
+        /// 彈出選單的鍵盤操作：↑↓ 移動、Tab／Enter 選取。有處理到就 Use 掉並回傳 true，
+        /// 讓後面的 TextField 與送出邏輯不再看到這個按鍵。
+        /// </summary>
+        private bool HandleSlashKeys(ColonyAgentSession session)
         {
-            bool busy = session.IsBusy;
-            bool canUndo = !busy && session.Undo.CanUndo;
-            var clearRect = new Rect(barRect.xMax - ButtonWidth, barRect.y, ButtonWidth, barRect.height);
-            var undoRect = new Rect(clearRect.x - ButtonWidth - 4f, barRect.y, ButtonWidth, barRect.height);
-            var stopRect = new Rect(undoRect.x - ButtonWidth - 4f, barRect.y, ButtonWidth, barRect.height);
-            var sendRect = new Rect(stopRect.x - ButtonWidth - 4f, barRect.y, ButtonWidth, barRect.height);
+            if (Event.current.type != EventType.KeyDown) return false;
+            List<SlashCommand> matches = SlashCommands.Match(_input);
+            if (matches.Count == 0) return false;
+            _slashIndex = Mathf.Clamp(_slashIndex, 0, matches.Count - 1);
+            switch (Event.current.keyCode)
+            {
+                case KeyCode.UpArrow:
+                    _slashIndex = (_slashIndex + matches.Count - 1) % matches.Count;
+                    break;
+                case KeyCode.DownArrow:
+                    _slashIndex = (_slashIndex + 1) % matches.Count;
+                    break;
+                case KeyCode.Return:
+                case KeyCode.KeypadEnter:
+                    // 名稱已打完整（如 /goal）時 Enter 直接送出執行，不再補成「/goal 」。
+                    if (string.Equals(_input, "/" + matches[_slashIndex].Name, StringComparison.OrdinalIgnoreCase)) return false;
+                    AcceptSlash(session, matches[_slashIndex]);
+                    break;
+                case KeyCode.Tab:
+                    AcceptSlash(session, matches[_slashIndex]);
+                    break;
+                default:
+                    return false;
+            }
+            Event.current.Use();
+            return true;
+        }
 
-            if ((Widgets.ButtonText(sendRect, "RimAgent.Send".Translate(), true, true, canSend) || enterPressed) && canSend)
+        /// <summary>選定指令：要參數的補成「/name 」等玩家接著打，不要參數的直接執行。</summary>
+        private void AcceptSlash(ColonyAgentSession session, SlashCommand command)
+        {
+            if (command.TakesArgs)
             {
-                if (enterPressed) Event.current.Use();
-                Send(session);
+                SetInput("/" + command.Name + " ");
+                return;
             }
-            if (Widgets.ButtonText(stopRect, "RimAgent.Stop".Translate(), true, true, busy))
+            _input = string.Empty;
+            RunSlash(session, command, string.Empty);
+        }
+
+        /// <summary>改輸入框內容並把游標移到最後；直接改 _input 的話焦點中的 TextEditor 游標會留在原處。</summary>
+        private void SetInput(string text)
+        {
+            _input = text;
+            if (GUI.GetNameOfFocusedControl() != InputControlName) return;
+            var editor = (TextEditor)GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl);
+            editor.text = text;
+            editor.MoveTextEnd();
+        }
+
+        /// <summary>輸入以 / 開頭且還在打名稱時，在輸入框上方列出符合的指令。</summary>
+        private void DrawSlashPopup(Rect bottom, ColonyAgentSession session)
+        {
+            List<SlashCommand> matches = SlashCommands.Match(_input);
+            if (matches.Count == 0) return;
+            _slashIndex = Mathf.Clamp(_slashIndex, 0, matches.Count - 1);
+
+            float height = matches.Count * SlashRowHeight + 8f;
+            var popup = new Rect(bottom.x, bottom.y - height - 4f, Mathf.Min(SlashPopupWidth, bottom.width), height);
+            Widgets.DrawWindowBackground(popup);
+            Text.Anchor = TextAnchor.MiddleLeft;
+            Text.WordWrap = false;
+            for (int i = 0; i < matches.Count; i++)
             {
-                _cts?.Cancel();
-                RimAgentGameComponent.Instance?.StopAutonomousRun();
+                SlashCommand command = matches[i];
+                var row = new Rect(popup.x + 4f, popup.y + 4f + i * SlashRowHeight, popup.width - 8f, SlashRowHeight);
+                // 滑鼠只點選、不改反白，否則游標停在選單上時 ↑↓ 會被每幀蓋回去。
+                Widgets.DrawHighlightIfMouseover(row);
+                if (i == _slashIndex) Widgets.DrawHighlightSelected(row);
+                string name = "/" + command.Name;
+                float nameWidth = Text.CalcSize(name).x;
+                Widgets.Label(new Rect(row.x + 6f, row.y, nameWidth, row.height), name);
+                var descRect = new Rect(row.x + 6f + nameWidth + 10f, row.y, row.width - nameWidth - 22f, row.height);
+                GUI.color = ToolColor;
+                Widgets.Label(descRect, command.DescriptionKey.Translate().ToString().Truncate(descRect.width));
+                GUI.color = Color.white;
+                if (Widgets.ButtonInvisible(row)) AcceptSlash(session, command);
             }
-            if (Widgets.ButtonText(undoRect, "RimAgent.Undo".Translate(), true, true, canUndo) && canUndo)
+            Text.WordWrap = true;
+            Text.Anchor = TextAnchor.UpperLeft;
+        }
+
+        /// <summary>執行斜線指令，結果以提示寫進對話；未知指令也在對話裡提示。</summary>
+        private void RunSlash(ColonyAgentSession session, SlashCommand command, string args)
+        {
+            if (command == SlashCommands.Stop)
             {
-                session.UndoLast();
+                StopRun();
+                return;
             }
-            if (Widgets.ButtonText(clearRect, "RimAgent.Clear".Translate(), true, true, !busy))
+            if (session.IsBusy)
+            {
+                Notice(session, "RimAgent.Slash.Busy".Translate());
+                return;
+            }
+            if (command == SlashCommands.Undo)
+            {
+                if (session.Undo.CanUndo) session.UndoLast();
+                else Notice(session, "RimAgent.Slash.NothingToUndo".Translate());
+            }
+            else if (command == SlashCommands.Clear)
             {
                 session.Clear();
                 _lastEntryCount = -1;
             }
+            else if (command == SlashCommands.Goal)
+            {
+                RunGoal(session, args);
+            }
+        }
+
+        private static void RunGoal(ColonyAgentSession session, string args)
+        {
+            RimAgentGameComponent component = RimAgentGameComponent.Instance;
+            if (component == null) return;
+            IReadOnlyList<string> goals = component.Goals;
+            switch (SlashCommands.ParseGoal(args, out int index, out string text))
+            {
+                case GoalAction.Add:
+                    if (component.AddGoal(text)) Notice(session, "RimAgent.Goal.Added".Translate(goals.Count, text));
+                    else Notice(session, "RimAgent.Goal.Full".Translate());
+                    break;
+                case GoalAction.Remove:
+                    if (index >= 1 && index <= goals.Count)
+                    {
+                        string removed = goals[index - 1];
+                        component.RemoveGoalAt(index - 1);
+                        Notice(session, "RimAgent.Goal.Removed".Translate(index, removed));
+                    }
+                    else Notice(session, "RimAgent.Goal.NoSuch".Translate(index));
+                    break;
+                default:
+                    Notice(session, goals.Count == 0 ? "RimAgent.Goal.Empty".Translate().ToString() : GoalListText(goals));
+                    break;
+            }
+        }
+
+        private static string GoalListText(IReadOnlyList<string> goals)
+        {
+            var sb = new System.Text.StringBuilder("RimAgent.Goal.ListHeader".Translate());
+            for (int i = 0; i < goals.Count; i++) sb.Append('\n').Append(i + 1).Append(". ").Append(goals[i]);
+            return sb.ToString();
+        }
+
+        private static void Notice(ColonyAgentSession session, string text)
+        {
+            session.Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = text,
+                InstructionId = session.Transcript.CurrentInstructionId
+            });
         }
 
         private void DrawConfirmBar(Rect rect, ColonyAgentSession session)
@@ -361,6 +564,14 @@ namespace RimAgent.UI
             string text = _input.Trim();
             if (text.Length == 0) return;
             _input = string.Empty;
+
+            if (SlashCommands.TryParse(text, out SlashCommand command, out string args))
+            {
+                if (command != null) RunSlash(session, command, args);
+                else Notice(session, "RimAgent.Slash.Unknown".Translate(text));
+                return;
+            }
+            if (_capabilityWarning != null) return;
 
             _cts?.Dispose();
             _cts = new CancellationTokenSource();

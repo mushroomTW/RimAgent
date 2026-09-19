@@ -2,11 +2,9 @@
 <LanguageData>
 
   <!-- Agent 分頁 -->
-  <RimAgent.Placeholder>告訴 Agent 要做什麼，例如「把 Alice 的醫療優先級設成 1」</RimAgent.Placeholder>
+  <RimAgent.Placeholder>告訴 Agent 要做什麼，或輸入 / 使用指令</RimAgent.Placeholder>
   <RimAgent.Send>送出</RimAgent.Send>
   <RimAgent.Stop>停止</RimAgent.Stop>
-  <RimAgent.Clear>清除對話</RimAgent.Clear>
-  <RimAgent.Undo>復原</RimAgent.Undo>
   <RimAgent.Confirm>確認執行</RimAgent.Confirm>
   <RimAgent.ConfirmDiscard>捨棄</RimAgent.ConfirmDiscard>
   <RimAgent.ConfirmNote>上面是預覽，還沒有改動任何東西。</RimAgent.ConfirmNote>
@@ -36,25 +34,25 @@
   <RimAgent.Settings.Work>工作 — 優先級與作息</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>修改工作優先級與每日作息。容易手動改回。</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>建造 — 標記與藍圖</RimAgent.Settings.Build>
-  <RimAgent.Settings.BuildTip>標記開採、砍伐、收成、拆除、搬運，以及放置藍圖。預設關閉。</RimAgent.Settings.BuildTip>
+  <RimAgent.Settings.BuildTip>標記開採、砍伐、收成、拆除、搬運，以及放置藍圖。</RimAgent.Settings.BuildTip>
   <RimAgent.Settings.Combat>戰鬥 — 徵召、移動與攻擊指令</RimAgent.Settings.Combat>
-  <RimAgent.Settings.CombatTip>徵召殖民者並下移動或攻擊指令。模型需要數秒才會回應，只適合佈署與撤退，不適合即時操作。預設關閉。</RimAgent.Settings.CombatTip>
+  <RimAgent.Settings.CombatTip>徵召殖民者並下移動或攻擊指令。模型需要數秒才會回應，只適合佈署與撤退，不適合即時操作。</RimAgent.Settings.CombatTip>
   <RimAgent.Settings.Trade>交易 — 查庫存、買入賣出、組織商隊</RimAgent.Settings.Trade>
-  <RimAgent.Settings.TradeTip>列出軌道商人與來訪商隊在賣什麼，以遊戲交易價格買入賣出一次結清，並組織自己的商隊外出。預設關閉。</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.TradeTip>列出軌道商人與來訪商隊在賣什麼，以遊戲交易價格買入賣出一次結清，並組織自己的商隊外出。</RimAgent.Settings.TradeTip>
   <RimAgent.Settings.Medical>醫療 — 健康與醫療等級</RimAgent.Settings.Medical>
-  <RimAgent.Settings.MedicalTip>查看殖民者健康（傷口、疾病、流血、手術）並調整醫療等級。預設關閉。</RimAgent.Settings.MedicalTip>
+  <RimAgent.Settings.MedicalTip>查看殖民者健康（傷口、疾病、流血、手術）並調整醫療等級。</RimAgent.Settings.MedicalTip>
   <RimAgent.Settings.Prisoner>囚犯 — 互動與釋放</RimAgent.Settings.Prisoner>
-  <RimAgent.Settings.PrisonerTip>列出囚犯並切換互動模式（招募、釋放、處決）；招募與日常照料仍走遊戲獄卒機制。預設關閉。</RimAgent.Settings.PrisonerTip>
+  <RimAgent.Settings.PrisonerTip>列出囚犯並切換互動模式（招募、釋放、處決）；招募與日常照料仍走遊戲獄卒機制。</RimAgent.Settings.PrisonerTip>
   <RimAgent.Settings.Animal>動物 — 馴養、訓練與區域</RimAgent.Settings.Animal>
-  <RimAgent.Settings.AnimalTip>列出動物，標記野生動物馴養，開關訓練項目，指派活動區域。馴養與訓練走遊戲機制。預設關閉。</RimAgent.Settings.AnimalTip>
+  <RimAgent.Settings.AnimalTip>列出動物，標記野生動物馴養，開關訓練項目，指派活動區域。馴養與訓練走遊戲機制。</RimAgent.Settings.AnimalTip>
   <RimAgent.Settings.Zone>區域 — 儲藏區、種植區與篩選</RimAgent.Settings.Zone>
-  <RimAgent.Settings.ZoneTip>列出區域，新增儲藏區與種植區，刪除區域，調整儲藏區允收品項。預設關閉。</RimAgent.Settings.ZoneTip>
+  <RimAgent.Settings.ZoneTip>列出區域，新增儲藏區與種植區，刪除區域，調整儲藏區允收品項。</RimAgent.Settings.ZoneTip>
   <RimAgent.Settings.Production>生產 — 工作台與帳單</RimAgent.Settings.Production>
-  <RimAgent.Settings.ProductionTip>列出工作台與帳單，新增指定次數的帳單，刪除帳單。預設關閉。</RimAgent.Settings.ProductionTip>
+  <RimAgent.Settings.ProductionTip>列出工作台與帳單，新增指定次數的帳單，刪除帳單。</RimAgent.Settings.ProductionTip>
   <RimAgent.Settings.Time>時間 — 暫停與流速</RimAgent.Settings.Time>
-  <RimAgent.Settings.TimeTip>查看目前時間流速，暫停遊戲或切換正常與加速。預設關閉。</RimAgent.Settings.TimeTip>
+  <RimAgent.Settings.TimeTip>查看目前時間流速，暫停遊戲或切換正常與加速。</RimAgent.Settings.TimeTip>
   <RimAgent.Settings.MCP>MCP — 本機伺服器的外部工具</RimAgent.Settings.MCP>
-  <RimAgent.Settings.MCPTip>讓 agent 呼叫 AgentPack/MCP/servers.json 裡設定的本機 MCP 伺服器工具。伺服器以你的使用者權限執行，只開信任的。預設關閉。</RimAgent.Settings.MCPTip>
+  <RimAgent.Settings.MCPTip>讓 agent 呼叫 AgentPack/MCP/servers.json 裡設定的本機 MCP 伺服器工具。伺服器以你的使用者權限執行，只開信任的。</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.MaxSteps>每句指令最多呼叫工具次數：{0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>避免失控迴圈燒掉 API 額度。立即生效，遊戲中調整也有效。</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.ModeHeader>模式 — Agent 可以怎麼行動</RimAgent.Settings.ModeHeader>
@@ -74,18 +72,27 @@
   <RimAgent.Settings.AutoOnFoodShortage>缺糧時反應</RimAgent.Settings.AutoOnFoodShortage>
   <RimAgent.Settings.FrameworkNote>供應商、API 金鑰、模型與備援鏈都在 RimLLM Framework 的設定裡調整。</RimAgent.Settings.FrameworkNote>
 
-  <!-- 自主 -->
-  <RimAgent.Auto.StatusOn>自主開 · 今日已用 {0}/{1} 次</RimAgent.Auto.StatusOn>
+  <!-- 狀態列與斜線指令 -->
+  <RimAgent.Auto.StatusOn>今日已用 {0}/{1} 次</RimAgent.Auto.StatusOn>
   <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
-  <RimAgent.Auto.Goals>目標</RimAgent.Auto.Goals>
-  <RimAgent.Goals.Title>長期目標 — 自主任務會持續推進這些</RimAgent.Goals.Title>
-  <RimAgent.Goals.Empty>還沒有目標。在下面加一個，例如「研發電力」。</RimAgent.Goals.Empty>
-  <RimAgent.Goals.Add>新增</RimAgent.Goals.Add>
-  <RimAgent.Goals.Remove>刪除</RimAgent.Goals.Remove>
-  <RimAgent.Goals.Close>關閉</RimAgent.Goals.Close>
-  <RimAgent.Standing.Button>常駐</RimAgent.Standing.Button>
-  <RimAgent.Standing.Title>常駐指令 — 每次指令都會附上</RimAgent.Standing.Title>
-  <RimAgent.Standing.Save>儲存</RimAgent.Standing.Save>
-  <RimAgent.Standing.Close>關閉</RimAgent.Standing.Close>
+  <RimAgent.Reasoning.Status>推理：{0}</RimAgent.Reasoning.Status>
+  <RimAgent.Reasoning.Auto>自動</RimAgent.Reasoning.Auto>
+  <RimAgent.Reasoning.Off>關閉</RimAgent.Reasoning.Off>
+  <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>
+  <RimAgent.Reasoning.Medium>中</RimAgent.Reasoning.Medium>
+  <RimAgent.Reasoning.High>高</RimAgent.Reasoning.High>
+  <RimAgent.Slash.Goal>長期目標（/goal 列出、/goal &lt;文字&gt; 新增、/goal remove &lt;n&gt; 刪除）</RimAgent.Slash.Goal>
+  <RimAgent.Slash.Undo>復原上一句指令改的工作設定</RimAgent.Slash.Undo>
+  <RimAgent.Slash.Clear>清除對話</RimAgent.Slash.Clear>
+  <RimAgent.Slash.Stop>停止執行中的指令</RimAgent.Slash.Stop>
+  <RimAgent.Slash.Unknown>未知指令：{0}。輸入 / 查看可用指令。</RimAgent.Slash.Unknown>
+  <RimAgent.Slash.Busy>Agent 執行中，請先 /stop 或等它完成。</RimAgent.Slash.Busy>
+  <RimAgent.Slash.NothingToUndo>沒有可復原的操作。</RimAgent.Slash.NothingToUndo>
+  <RimAgent.Goal.ListHeader>長期目標（自主任務會持續推進）：</RimAgent.Goal.ListHeader>
+  <RimAgent.Goal.Empty>還沒有目標。用 /goal &lt;文字&gt; 新增，例如 /goal 研發電力。</RimAgent.Goal.Empty>
+  <RimAgent.Goal.Added>已新增目標 #{0}：{1}</RimAgent.Goal.Added>
+  <RimAgent.Goal.Removed>已刪除目標 #{0}：{1}</RimAgent.Goal.Removed>
+  <RimAgent.Goal.NoSuch>沒有第 {0} 個目標。用 /goal 查看清單。</RimAgent.Goal.NoSuch>
+  <RimAgent.Goal.Full>目標數已達上限，先用 /goal remove &lt;n&gt; 刪掉幾個。</RimAgent.Goal.Full>
 
 </LanguageData>

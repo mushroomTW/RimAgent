@@ -31,13 +31,10 @@ namespace RimAgent
         /// <summary>長期目標上限（條數／每條字數），避免無限塞進指令。</summary>
         private const int MaxGoals = 20;
         private const int MaxGoalChars = 200;
-        /// <summary>常駐指令上限（字數），跟存檔走，每句指令都附上。</summary>
-        public const int MaxStandingChars = 2000;
 
         private ColonyAgentSession _session;
         private List<TranscriptEntryData> _loadedTranscript;
         private List<string> _goals = new List<string>();
-        private string _standingInstructions = string.Empty;
         private AgentPack _pack;
         private McpManager _mcp;
         private bool _mcpWarmedUp;
@@ -71,27 +68,18 @@ namespace RimAgent
                         _ = _mcp.WarmUpAsync();
                     }
                 }
-                // 步數上限即時生效：重設工具迴圈的屬性即可，AF session 的歷史不受影響。
-                else if (RimAgentMod.Settings != null) _session.UpdateMaxSteps(RimAgentMod.Settings.maxSteps);
+                // 步數上限與思考強度即時生效：重設屬性即可，AF session 的歷史不受影響。
+                else if (RimAgentMod.Settings != null)
+                {
+                    _session.UpdateMaxSteps(RimAgentMod.Settings.maxSteps);
+                    _session.Reasoning = RimAgentMod.Settings.reasoning;
+                }
                 return _session;
             }
         }
 
         /// <summary>玩家設的長期目標（跟存檔走）；自主任務會附上並持續推進。</summary>
         public IReadOnlyList<string> Goals => _goals;
-
-        /// <summary>玩家寫的常駐指令（跟存檔走）；每句指令的提示詞都附上，優先序最高。</summary>
-        public string StandingInstructions => _standingInstructions ?? string.Empty;
-
-        /// <summary>寫入常駐指令（超長截斷）；內容沒變回傳 false。</summary>
-        public bool SetStandingInstructions(string text)
-        {
-            string trimmed = (text ?? string.Empty).Trim();
-            if (trimmed.Length > MaxStandingChars) trimmed = trimmed.Substring(0, MaxStandingChars);
-            if (trimmed == StandingInstructions) return false;
-            _standingInstructions = trimmed;
-            return true;
-        }
 
         /// <summary>出貨的 AgentPack 資料夾；測試或缺 mod 資料時為 null。</summary>
         private static string PackRoot
@@ -151,8 +139,6 @@ namespace RimAgent
             Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
             if (_goals == null) _goals = new List<string>();
 
-            Scribe_Values.Look(ref _standingInstructions, "standingInstructions", string.Empty);
-            if (_standingInstructions == null) _standingInstructions = string.Empty;
             if (Scribe.mode == LoadSaveMode.Saving && _mcp != null)
             {
                 // 存檔時順手關掉閒置的 MCP server，不阻塞。
@@ -165,7 +151,6 @@ namespace RimAgent
             _session = null;
             _loadedTranscript = null;
             _goals = new List<string>();
-            _standingInstructions = string.Empty;
             ResetMcp();
             _scheduler.Reset();
         }
@@ -305,21 +290,19 @@ namespace RimAgent
         {
             IChatClient client = RimLLMProvider.CreateChatClient(ColonyAgentSession.ModId);
             RimAgentSettings settings = RimAgentMod.Settings;
-            return new ColonyAgentSession(client, new RimWorldGameWorld(), () => settings.ToPermissions(), settings.maxSteps, () => settings.mode, ComposeInstructions, _mcp);
+            var session = new ColonyAgentSession(client, new RimWorldGameWorld(), () => settings.ToPermissions(), settings.maxSteps, () => settings.mode, ComposeInstructions, _mcp);
+            session.Reasoning = settings.reasoning;
+            return session;
         }
 
-        /// <summary>
-        /// 每句指令的完整提示詞：核心→內建準則→技能→常駐指令。
-        /// 存檔讀進來才有常駐指令；每句現組，改完下一句生效。
-        /// </summary>
+        /// <summary>每句指令的完整提示詞：核心→內建準則→技能。每句現組，AgentPack 重載後下一句生效。</summary>
         private string ComposeInstructions()
         {
             AgentPack pack = _pack;
             return AgentPromptComposer.Compose(
                 AgentSystemPrompt.Text,
                 pack != null ? pack.Conduct : string.Empty,
-                pack != null ? pack.Skills : null,
-                _standingInstructions);
+                pack != null ? pack.Skills : null);
         }
     }
 }

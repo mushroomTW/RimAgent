@@ -98,10 +98,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void TradeIsOffByDefault()
+        public void TradePermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Trade, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Trade, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Trade, Is.True, "設定頁預設全開");
         }
 
         [Test]

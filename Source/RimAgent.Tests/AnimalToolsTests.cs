@@ -27,10 +27,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void AnimalIsOffByDefault()
+        public void AnimalPermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Animal, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Animal, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Animal, Is.True, "設定頁預設全開");
         }
 
         [Test]

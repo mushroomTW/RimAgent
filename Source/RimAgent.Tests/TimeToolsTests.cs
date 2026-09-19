@@ -23,10 +23,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void TimeIsOffByDefault()
+        public void TimePermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Time, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Time, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Time, Is.True, "設定頁預設全開");
         }
 
         [Test]

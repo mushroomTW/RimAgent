@@ -29,10 +29,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void ProductionIsOffByDefault()
+        public void ProductionPermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Production, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Production, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Production, Is.True, "設定頁預設全開");
         }
 
         [Test]

@@ -242,10 +242,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void McpIsOffByDefault()
+        public void McpPermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Mcp, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Mcp, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Mcp, Is.True, "設定頁預設全開");
         }
 
         [Test]

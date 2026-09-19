@@ -85,6 +85,9 @@ namespace RimAgent.Agent
 
         public bool IsBusy => Volatile.Read(ref _busy) == 1;
 
+        /// <summary>模型思考強度；每句指令組請求時讀取，改完下一句生效。由 GameComponent 從設定同步。</summary>
+        public ReasoningLevel Reasoning { get; set; } = ReasoningLevel.Auto;
+
         /// <summary>目前每句指令的工具呼叫上限。設定頁變更後由 GameComponent 經此同步，不必重讀存檔。</summary>
         public int MaxSteps => Volatile.Read(ref _maxSteps);
 
@@ -293,6 +296,7 @@ namespace RimAgent.Agent
                 Temperature = Temperature,
                 MaxOutputTokens = MaxOutputTokens
             };
+            ApplyReasoning(options, Reasoning);
             // Run 層覆寫 agent 層的核心提示詞：常駐指令等改完下一句生效，不必重建會話。
             string instructions = null;
             if (_instructions != null)
@@ -307,6 +311,28 @@ namespace RimAgent.Agent
             }
             if (instructions != null) options.Instructions = instructions;
             return options;
+        }
+
+        /// <summary>Auto 什麼都不設（框架補預設）；Off 走框架的 DisableReasoning；其餘交給 MEAI 的 ReasoningEffort。</summary>
+        private static void ApplyReasoning(RimLLMChatOptions options, ReasoningLevel level)
+        {
+            switch (level)
+            {
+                case ReasoningLevel.Off:
+                    options.DisableReasoning = true;
+                    break;
+                case ReasoningLevel.Low:
+                    options.Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Low };
+                    break;
+                case ReasoningLevel.Medium:
+                    options.Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Medium };
+                    break;
+                case ReasoningLevel.High:
+                    options.Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High };
+                    break;
+                default:
+                    break;
+            }
         }
 
         /// <summary>迴圈中間的 assistant 訊息可能夾雜「讓我看看…」之類的文字；玩家要的是最後那則。</summary>

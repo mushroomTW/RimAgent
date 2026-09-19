@@ -37,10 +37,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void PrisonerIsOffByDefault()
+        public void PrisonerPermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Prisoner, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Prisoner, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Prisoner, Is.True, "設定頁預設全開");
         }
 
         [Test]

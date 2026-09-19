@@ -2,6 +2,17 @@
 
 A RimWorld 1.6 mod that lets you run your colony in natural language. Open the **Agent** tab on the bottom bar and type what you want done — "set Alice's Doctor priority to 1", "mark the steel in the selected area for mining", "draft everyone and move to (25, 30)". The agent reads colony state through tools, plans, executes real game actions, and shows every tool call in an action log.
 
+The tab is a single input line plus **Send** (which turns into **Stop** while the agent works). Two dropdowns above it switch the **mode** and the model's **reasoning effort** (Auto / Off / Low / Medium / High; Auto leaves it to the framework's default) — both are saved in the mod settings. Everything else is a slash command: type `/` to open the command list (↑↓ to move, Tab or Enter to pick):
+
+| Command | What it does |
+| --- | --- |
+| `/goal <text>` | add a long-term goal (autonomous runs work toward these; saved with the game) |
+| `/goal` | list goals in the conversation |
+| `/goal remove <n>` | delete goal `n` |
+| `/undo` | restore the work priorities and schedules changed by the last instruction |
+| `/clear` | clear the conversation |
+| `/stop` | stop the running instruction |
+
 All LLM plumbing (provider, API key, model, fallback chain, budget) comes from **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)**, version **2026.09.12 or later** (the first version with native tool calling). RimAgent adds only per-category tool permissions.
 
 ## What it can do
@@ -10,16 +21,16 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 | --- | --- | --- |
 | Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search, game screenshots | on |
 | Work | work priorities, daily schedules (undoable) | on |
-| Build | mine / cut / harvest / deconstruct / haul designations, blueprints (single or in a line) | off |
-| Combat | draft, move, attack | off |
-| Trade | orbital trader and visiting caravan stock listing, buying and selling in a single deal, forming player caravans | off |
-| Medical | health status, medical care levels, scheduling surgery | off |
-| Prisoner | prisoner listing, interaction modes, release | off |
-| Animal | animal listing, taming, training, allowed areas | off |
-| Zone | zone listing, stockpile and growing zones, storage filters | off |
-| Production | work tables and production bills | off |
-| Time | pause and time flow speed | off |
-| MCP | external tools from local MCP servers | off |
+| Build | mine / cut / harvest / deconstruct / haul designations, blueprints (single or in a line) | on |
+| Combat | draft, move, attack | on |
+| Trade | orbital trader and visiting caravan stock listing, buying and selling in a single deal, forming player caravans | on |
+| Medical | health status, medical care levels, scheduling surgery | on |
+| Prisoner | prisoner listing, interaction modes, release | on |
+| Animal | animal listing, taming, training, allowed areas | on |
+| Zone | zone listing, stockpile and growing zones, storage filters | on |
+| Production | work tables and production bills | on |
+| Time | pause and time flow speed | on |
+| MCP | external tools from local MCP servers | on |
 
 Combat orders reach the game several seconds after you speak — they are for positioning and retreats, not real-time control.
 
@@ -39,15 +50,15 @@ Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every co
 ## Safety
 
 * **Confirm** / **Discard**: a pending preview is executed by re-sending the same instruction with the gate open; a new instruction discards it.
-* **Undo**: restores the previous instruction's work priorities and daily schedules — also for an instruction that failed halfway, so whatever did land can be reverted.
+* **`/undo`**: restores the previous instruction's work priorities and daily schedules — also for an instruction that failed halfway, so whatever did land can be reverted.
 * Guard rails inside the tools: `order_attack` refuses colony members, prisoners and friendly factions; `schedule_surgery` requires an explicit body part for surgeries that target one; `execute_trade` needs a negotiator who can talk and is not incapable of social work, and a powered comms console for orbital traders; `form_caravan` moves the named colonists off the map immediately (no walking to the edge, no supplies packed); zones are validated with the game's own zone designators (fog, map edge, blocking things, fertility).
 * The visible conversation (instructions, replies, action log) is saved with the game; the model's context still resets on load.
 * The combat-latency reminder appears once per instruction, and Markdown in model replies is rendered via RimLLM Framework (bold, italics, headings, links, code).
-* The shipped conduct file (`AgentPack/AGENTS.md`), standing instructions (per-game rules) and skill packs (`AgentPack/Skills/`) are included with every instruction. MCP servers run as local processes with your user privileges — only enable ones you trust.
+* The shipped conduct file (`AgentPack/AGENTS.md`) and skill packs (`AgentPack/Skills/`) are included with every instruction. MCP servers run as local processes with your user privileges — only enable ones you trust.
 
 ## Autonomy (Autonomous mode)
 
-Pick the Autonomous mode in mod settings and the agent starts its own instructions: routine inspections on an interval, plus reactions to raids, colonists near mental break and food shortages. Every run uses the same session (history, permissions), shows in the action log tagged `[auto]`, can be stopped with the **Stop** button, and counts against a daily tool-call budget. Long-term goals are managed per game from the Agent tab (Goals button) and saved with the game.
+Pick the Autonomous mode (mod settings or the mode dropdown in the Agent tab) and the agent starts its own instructions: routine inspections on an interval, plus reactions to raids, colonists near mental break and food shortages. Every run uses the same session (history, permissions), shows in the action log tagged `[auto]`, can be stopped with the **Stop** button or `/stop`, and counts against a daily tool-call budget (shown next to the dropdowns). Long-term goals are managed with `/goal` and saved with the game.
 
 ## How it works
 

@@ -51,7 +51,7 @@ namespace RimAgent.Tests
             }
 
             Assert.That(prepared, Is.GreaterThan(100), "應該有掃到方法");
-            Assert.That(unityNative, Is.LessThan(5), "只有極少數 UI 方法應直接碰 Unity InternalCall");
+            Assert.That(unityNative, Is.LessThan(6), "只有極少數 UI 方法應直接碰 Unity InternalCall（輸入列、斜線選單鍵盤、游標、截圖）");
             Assert.That(failures, Is.Empty, string.Join("\n", failures));
         }
     }

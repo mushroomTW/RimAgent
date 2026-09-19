@@ -25,10 +25,10 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void ZoneIsOffByDefault()
+        public void ZonePermissionOffUntilGrantedButSettingsDefaultOn()
         {
             Assert.That(new ToolPermissions().Zone, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Zone, Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Zone, Is.True, "設定頁預設全開");
         }
 
         [Test]

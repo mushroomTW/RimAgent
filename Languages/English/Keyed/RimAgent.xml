@@ -2,11 +2,9 @@
 <LanguageData>
 
   <!-- Agent tab -->
-  <RimAgent.Placeholder>Tell the agent what to do, e.g. "set Alice's Doctor priority to 1"</RimAgent.Placeholder>
+  <RimAgent.Placeholder>Tell the agent what to do, or type / for commands</RimAgent.Placeholder>
   <RimAgent.Send>Send</RimAgent.Send>
   <RimAgent.Stop>Stop</RimAgent.Stop>
-  <RimAgent.Clear>Clear</RimAgent.Clear>
-  <RimAgent.Undo>Undo</RimAgent.Undo>
   <RimAgent.Confirm>Confirm</RimAgent.Confirm>
   <RimAgent.ConfirmDiscard>Discard</RimAgent.ConfirmDiscard>
   <RimAgent.ConfirmNote>The plan above is a preview — nothing has changed yet.</RimAgent.ConfirmNote>
@@ -36,25 +34,25 @@
   <RimAgent.Settings.Work>Work — priorities and schedules</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>Change work priorities and daily schedules. Easy to undo by hand.</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>Build — designations and blueprints</RimAgent.Settings.Build>
-  <RimAgent.Settings.BuildTip>Mark things for mining, cutting, harvesting, deconstruction and hauling, and place blueprints. Off by default.</RimAgent.Settings.BuildTip>
+  <RimAgent.Settings.BuildTip>Mark things for mining, cutting, harvesting, deconstruction and hauling, and place blueprints.</RimAgent.Settings.BuildTip>
   <RimAgent.Settings.Combat>Combat — draft, move and attack orders</RimAgent.Settings.Combat>
-  <RimAgent.Settings.CombatTip>Draft colonists and give move or attack orders. The model needs several seconds to respond, so this is for positioning and retreats, not real-time control. Off by default.</RimAgent.Settings.CombatTip>
+  <RimAgent.Settings.CombatTip>Draft colonists and give move or attack orders. The model needs several seconds to respond, so this is for positioning and retreats, not real-time control.</RimAgent.Settings.CombatTip>
   <RimAgent.Settings.Trade>Trade — list stock, buy and sell, player caravans</RimAgent.Settings.Trade>
-  <RimAgent.Settings.TradeTip>List what orbital traders and visiting caravans are selling, buy or sell in a single deal with the game's trade prices, and form player caravans. Off by default.</RimAgent.Settings.TradeTip>
+  <RimAgent.Settings.TradeTip>List what orbital traders and visiting caravans are selling, buy or sell in a single deal with the game's trade prices, and form player caravans.</RimAgent.Settings.TradeTip>
   <RimAgent.Settings.Medical>Medical — health and care levels</RimAgent.Settings.Medical>
-  <RimAgent.Settings.MedicalTip>Check colonist health (injuries, diseases, bleeding, operations) and change medical care levels. Off by default.</RimAgent.Settings.MedicalTip>
+  <RimAgent.Settings.MedicalTip>Check colonist health (injuries, diseases, bleeding, operations) and change medical care levels.</RimAgent.Settings.MedicalTip>
   <RimAgent.Settings.Prisoner>Prisoners — interaction and release</RimAgent.Settings.Prisoner>
-  <RimAgent.Settings.PrisonerTip>List prisoners and set their interaction mode (recruit, release, execution); recruitment and daily care still run through the game's warden mechanics. Off by default.</RimAgent.Settings.PrisonerTip>
+  <RimAgent.Settings.PrisonerTip>List prisoners and set their interaction mode (recruit, release, execution); recruitment and daily care still run through the game's warden mechanics.</RimAgent.Settings.PrisonerTip>
   <RimAgent.Settings.Animal>Animals — taming, training and areas</RimAgent.Settings.Animal>
-  <RimAgent.Settings.AnimalTip>List animals, mark wild ones for taming, switch training on and off, and assign allowed areas. Taming and training run through the game's mechanics. Off by default.</RimAgent.Settings.AnimalTip>
+  <RimAgent.Settings.AnimalTip>List animals, mark wild ones for taming, switch training on and off, and assign allowed areas. Taming and training run through the game's mechanics.</RimAgent.Settings.AnimalTip>
   <RimAgent.Settings.Zone>Zones — stockpiles, fields and filters</RimAgent.Settings.Zone>
-  <RimAgent.Settings.ZoneTip>List zones, add stockpile and growing zones, delete zones, and change what stockpiles accept. Off by default.</RimAgent.Settings.ZoneTip>
+  <RimAgent.Settings.ZoneTip>List zones, add stockpile and growing zones, delete zones, and change what stockpiles accept.</RimAgent.Settings.ZoneTip>
   <RimAgent.Settings.Production>Production — work tables and bills</RimAgent.Settings.Production>
-  <RimAgent.Settings.ProductionTip>List work tables and their bills, add bills with a repeat count, and delete bills. Off by default.</RimAgent.Settings.ProductionTip>
+  <RimAgent.Settings.ProductionTip>List work tables and their bills, add bills with a repeat count, and delete bills.</RimAgent.Settings.ProductionTip>
   <RimAgent.Settings.Time>Time — pause and flow speed</RimAgent.Settings.Time>
-  <RimAgent.Settings.TimeTip>Check the current time flow speed, pause the game, or switch between normal and fast speeds. Off by default.</RimAgent.Settings.TimeTip>
+  <RimAgent.Settings.TimeTip>Check the current time flow speed, pause the game, or switch between normal and fast speeds.</RimAgent.Settings.TimeTip>
   <RimAgent.Settings.MCP>MCP — external tools via local servers</RimAgent.Settings.MCP>
-  <RimAgent.Settings.MCPTip>Let the agent call tools from local MCP servers configured in AgentPack/MCP/servers.json. Servers run with your user privileges; only enable ones you trust. Off by default.</RimAgent.Settings.MCPTip>
+  <RimAgent.Settings.MCPTip>Let the agent call tools from local MCP servers configured in AgentPack/MCP/servers.json. Servers run with your user privileges; only enable ones you trust.</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.MaxSteps>Maximum tool calls per instruction: {0}</RimAgent.Settings.MaxSteps>
   <RimAgent.Settings.MaxStepsTip>Stops a runaway loop from spending API credit. Applies immediately, even mid-game.</RimAgent.Settings.MaxStepsTip>
   <RimAgent.Settings.ModeHeader>Mode — how the agent may act</RimAgent.Settings.ModeHeader>
@@ -74,18 +72,27 @@
   <RimAgent.Settings.AutoOnFoodShortage>React to food shortages</RimAgent.Settings.AutoOnFoodShortage>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>
 
-  <!-- Autonomy -->
-  <RimAgent.Auto.StatusOn>Autonomy on · {0}/{1} used today</RimAgent.Auto.StatusOn>
+  <!-- Status strip and slash commands -->
+  <RimAgent.Auto.StatusOn>{0}/{1} used today</RimAgent.Auto.StatusOn>
   <RimAgent.Mode.Status>Mode: {0}</RimAgent.Mode.Status>
-  <RimAgent.Auto.Goals>Goals</RimAgent.Auto.Goals>
-  <RimAgent.Goals.Title>Long-term goals — autonomous runs work toward these</RimAgent.Goals.Title>
-  <RimAgent.Goals.Empty>No goals yet. Add one below, e.g. "research electricity".</RimAgent.Goals.Empty>
-  <RimAgent.Goals.Add>Add</RimAgent.Goals.Add>
-  <RimAgent.Goals.Remove>Delete</RimAgent.Goals.Remove>
-  <RimAgent.Goals.Close>Close</RimAgent.Goals.Close>
-  <RimAgent.Standing.Button>Standing</RimAgent.Standing.Button>
-  <RimAgent.Standing.Title>Standing instructions — included with every instruction</RimAgent.Standing.Title>
-  <RimAgent.Standing.Save>Save</RimAgent.Standing.Save>
-  <RimAgent.Standing.Close>Close</RimAgent.Standing.Close>
+  <RimAgent.Reasoning.Status>Reasoning: {0}</RimAgent.Reasoning.Status>
+  <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>
+  <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>
+  <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>
+  <RimAgent.Reasoning.Medium>Medium</RimAgent.Reasoning.Medium>
+  <RimAgent.Reasoning.High>High</RimAgent.Reasoning.High>
+  <RimAgent.Slash.Goal>Long-term goals: /goal lists, /goal &lt;text&gt; adds, /goal remove &lt;n&gt; deletes</RimAgent.Slash.Goal>
+  <RimAgent.Slash.Undo>Undo the work settings changed by the last instruction</RimAgent.Slash.Undo>
+  <RimAgent.Slash.Clear>Clear the conversation</RimAgent.Slash.Clear>
+  <RimAgent.Slash.Stop>Stop the running instruction</RimAgent.Slash.Stop>
+  <RimAgent.Slash.Unknown>Unknown command: {0}. Type / to see the available commands.</RimAgent.Slash.Unknown>
+  <RimAgent.Slash.Busy>The agent is working; /stop it or wait for it to finish.</RimAgent.Slash.Busy>
+  <RimAgent.Slash.NothingToUndo>Nothing to undo.</RimAgent.Slash.NothingToUndo>
+  <RimAgent.Goal.ListHeader>Long-term goals (autonomous runs work toward these):</RimAgent.Goal.ListHeader>
+  <RimAgent.Goal.Empty>No goals yet. Add one with /goal &lt;text&gt;, e.g. /goal research electricity.</RimAgent.Goal.Empty>
+  <RimAgent.Goal.Added>Added goal #{0}: {1}</RimAgent.Goal.Added>
+  <RimAgent.Goal.Removed>Removed goal #{0}: {1}</RimAgent.Goal.Removed>
+  <RimAgent.Goal.NoSuch>There is no goal #{0}. Use /goal to list them.</RimAgent.Goal.NoSuch>
+  <RimAgent.Goal.Full>Goal limit reached; remove some with /goal remove &lt;n&gt;.</RimAgent.Goal.Full>
 
 </LanguageData>
