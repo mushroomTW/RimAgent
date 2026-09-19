@@ -62,10 +62,20 @@ namespace RimAgent.Game
         public bool Drafted { get; set; }
         /// <summary>醫療等級（MedicalCareCategory 名稱，如 Best）。</summary>
         public string MedicalCare { get; set; } = string.Empty;
+        public string Equipment { get; set; } = string.Empty;
+        public IReadOnlyList<NeedInfo> Needs { get; set; } = Array.Empty<NeedInfo>();
+        public IReadOnlyList<string> Thoughts { get; set; } = Array.Empty<string>();
         public IReadOnlyList<SkillInfo> Skills { get; set; } = Array.Empty<SkillInfo>();
         public IReadOnlyList<WorkPriorityInfo> WorkPriorities { get; set; } = Array.Empty<WorkPriorityInfo>();
         /// <summary>24 個小時各自的 TimeAssignment defName（索引即小時）。</summary>
         public IReadOnlyList<string> Timetable { get; set; } = Array.Empty<string>();
+    }
+
+    /// <summary>殖民者需求的遊戲原始讀數；百分比為 0 到 1。</summary>
+    public sealed class NeedInfo
+    {
+        public string Label { get; set; } = string.Empty;
+        public float Percent { get; set; }
     }
 
     public sealed class ResourceInfo
@@ -80,6 +90,24 @@ namespace RimAgent.Game
     {
         public IReadOnlyList<ResourceInfo> Items { get; set; } = Array.Empty<ResourceInfo>();
         public float TotalHumanEdibleNutrition { get; set; }
+    }
+
+    public sealed class AlertInfo
+    {
+        public string Label { get; set; } = string.Empty;
+        public string Priority { get; set; } = string.Empty;
+    }
+
+    public sealed class LetterInfo
+    {
+        public string Label { get; set; } = string.Empty;
+    }
+
+    public sealed class PowerInfo
+    {
+        public int NetworkCount { get; set; }
+        public float NetWatts { get; set; }
+        public float StoredEnergy { get; set; }
     }
 
     public sealed class ThreatInfo
@@ -333,6 +361,7 @@ namespace RimAgent.Game
         public bool PlayerOwned { get; set; }
         /// <summary>植物是否已可收成。</summary>
         public bool Harvestable { get; set; }
+        public bool Wild { get; set; }
         /// <summary>目前掛在這個物件（或其所在格）上的標記 defName。</summary>
         public IReadOnlyList<string> Designations { get; set; } = Array.Empty<string>();
     }

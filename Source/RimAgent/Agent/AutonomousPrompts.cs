@@ -85,6 +85,12 @@ namespace RimAgent.Agent
             {
                 case AutonomousTrigger.Raid:
                     return "Hostiles are on the map. Deploy the defense with tools: draft colonists, position them safely and attack the threats, then undraft everyone when it is over. Favor safe positioning over chasing.";
+                case AutonomousTrigger.RaidEnded:
+                    return "The raid has ended. Check threats to verify the map is safe, then undraft colonists who are still drafted so they can resume food, rest and normal work.";
+                case AutonomousTrigger.EmergencyMedical:
+                    return "A colonist is downed or bleeding. Inspect health immediately, set appropriate medical care and take the least disruptive action that gets treatment started.";
+                case AutonomousTrigger.Fire:
+                    return "Fire is active. Inspect threats and the affected area, then take only safe, available actions to protect colonists and contain the emergency.";
                 case AutonomousTrigger.MentalBreak:
                     return "A colonist is close to a mental break. Check moods and the causes with tools, and relieve the pressure (schedule, needs, threats, health).";
                 case AutonomousTrigger.FoodShortage:
@@ -100,6 +106,12 @@ namespace RimAgent.Agent
             {
                 case AutonomousTrigger.Raid:
                     return "地圖上有敵對威脅。用工具佈署防禦：徵召殖民者、走位到安全位置、攻擊威脅，結束後記得全體解除徵召。以安全走位為優先，不要追擊。";
+                case AutonomousTrigger.RaidEnded:
+                    return "襲擊已結束。先用工具確認沒有威脅，再解除仍被徵召的殖民者，讓他們恢復進食、休息與工作。";
+                case AutonomousTrigger.EmergencyMedical:
+                    return "有殖民者倒地或流血。立即用工具檢查健康狀況，設定適當醫療等級並採取最少干擾的救治行動。";
+                case AutonomousTrigger.Fire:
+                    return "發生火災。檢查威脅與受影響區域，只採取現有工具能安全執行的行動來保護殖民者並處理緊急狀況。";
                 case AutonomousTrigger.MentalBreak:
                     return "有殖民者接近精神崩潰。用工具查看心情與原因，並緩解壓力（作息、需求、威脅、健康）。";
                 case AutonomousTrigger.FoodShortage:
@@ -115,6 +127,12 @@ namespace RimAgent.Agent
             {
                 case AutonomousTrigger.Raid:
                     return "地图上有敌对威胁。用工具部署防御：征召殖民者、走位到安全位置、攻击威胁，结束后记得全体解除征召。以安全走位为优先，不要追击。";
+                case AutonomousTrigger.RaidEnded:
+                    return "袭击已结束。先用工具确认没有威胁，再解除仍被征召的殖民者，让他们恢复进食、休息与工作。";
+                case AutonomousTrigger.EmergencyMedical:
+                    return "有殖民者倒地或流血。立即用工具检查健康状况，设置适当医疗等级并采取最少干扰的救治行动。";
+                case AutonomousTrigger.Fire:
+                    return "发生火灾。检查威胁与受影响区域，只采取现有工具能安全执行的行动来保护殖民者并处理紧急情况。";
                 case AutonomousTrigger.MentalBreak:
                     return "有殖民者接近精神崩溃。用工具查看心情与原因，并缓解压力（作息、需求、威胁、健康）。";
                 case AutonomousTrigger.FoodShortage:

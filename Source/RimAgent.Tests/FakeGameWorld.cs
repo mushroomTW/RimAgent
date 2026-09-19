@@ -17,6 +17,9 @@ namespace RimAgent.Tests
         public List<TraderInfo> Traders { get; } = new List<TraderInfo>();
         public ColonyOverview Overview { get; set; } = new ColonyOverview { ColonyName = "New Arrivals", ColonistCount = 2, Year = 5500, Season = "Spring", DayOfSeason = 3, Hour = 14, Weather = "Clear", OutdoorTemperatureC = 21.4f, Wealth = 12000f };
         public ResourceSnapshot Resources { get; set; } = new ResourceSnapshot();
+        public List<AlertInfo> Alerts { get; } = new List<AlertInfo>();
+        public List<LetterInfo> RecentLetters { get; } = new List<LetterInfo>();
+        public PowerInfo Power { get; set; } = new PowerInfo();
         public ResearchInfo Research { get; set; } = new ResearchInfo();
         public MapBounds Bounds { get; set; } = new MapBounds { Width = 100, Height = 100 };
         public List<string> Calls { get; } = new List<string>();
@@ -230,6 +233,9 @@ namespace RimAgent.Tests
         public List<ColonistHealthInfo> Health { get; } = new List<ColonistHealthInfo>();
         public IReadOnlyList<ColonistHealthInfo> GetHealth() => Health;
         public ResourceSnapshot GetResources() => Resources;
+        public IReadOnlyList<AlertInfo> GetAlerts() => Alerts;
+        public IReadOnlyList<LetterInfo> GetRecentLetters() => RecentLetters;
+        public PowerInfo GetPower() => Power;
         public IReadOnlyList<ThreatInfo> GetThreats() => Threats;
         public IReadOnlyList<TraderInfo> GetTraders() => Traders;
         public ResearchInfo GetResearch() => Research;

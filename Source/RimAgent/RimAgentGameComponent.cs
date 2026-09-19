@@ -33,12 +33,15 @@ namespace RimAgent
         private const int MaxGoalChars = 200;
 
         private ColonyAgentSession _session;
+        private string _loadedAgentSession;
         private List<TranscriptEntryData> _loadedTranscript;
+        private List<UndoFrame> _loadedUndoFrames;
         private List<string> _goals = new List<string>();
         private AgentPack _pack;
         private McpManager _mcp;
         private bool _mcpWarmedUp;
         private readonly AutonomousScheduler _scheduler = new AutonomousScheduler();
+        private AutonomousSchedulerState _loadedSchedulerState;
         private readonly RimWorldGameWorld _autoWorld = new RimWorldGameWorld();
         private string _lastAutoError;
         private CancellationTokenSource _autoCts;
@@ -60,7 +63,14 @@ namespace RimAgent
                     if (_pack == null) _pack = AgentPackLoader.Load(PackRoot);
                     if (_mcp == null) _mcp = new McpManager(McpConfigPath);
                     _session = CreateSession();
+                    if (!string.IsNullOrWhiteSpace(_loadedAgentSession))
+                    {
+                        _session.RestoreSerializedSession(_loadedAgentSession);
+                        _loadedAgentSession = null;
+                    }
                     RestoreTranscript(_session);
+                    _session.Undo.Restore(_loadedUndoFrames);
+                    _loadedUndoFrames = null;
                     // MCP server 在背景先連好：行程啟動慢，別等玩家第一句才開。
                     if (!_mcpWarmedUp && RimAgentMod.Settings != null && RimAgentMod.Settings.allowMCP)
                     {
@@ -136,8 +146,22 @@ namespace RimAgent
             // Scribe_Collections 只在 LoadingVars 階段填 list（PostLoadInit 對 Deep 清單什麼都不做），要在這裡接住。
             if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedTranscript = data;
 
+            List<UndoFrame> undoFrames = Scribe.mode == LoadSaveMode.Saving && _session != null
+                ? _session.Undo.Snapshot() : _loadedUndoFrames;
+            Scribe_Collections.Look(ref undoFrames, "undoFrames", LookMode.Deep);
+            if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedUndoFrames = undoFrames;
+
+            string agentSession = Scribe.mode == LoadSaveMode.Saving && _session != null
+                ? _session.SerializeForSave() : _loadedAgentSession;
+            Scribe_Values.Look(ref agentSession, "agentSession");
+            if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedAgentSession = agentSession;
+
             Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
             if (_goals == null) _goals = new List<string>();
+
+            AutonomousSchedulerState schedulerState = Scribe.mode == LoadSaveMode.Saving ? _scheduler.CaptureState() : _loadedSchedulerState;
+            Scribe_Deep.Look(ref schedulerState, "autonomousScheduler");
+            if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedSchedulerState = schedulerState;
 
             if (Scribe.mode == LoadSaveMode.Saving && _mcp != null)
             {
@@ -150,6 +174,8 @@ namespace RimAgent
         {
             _session = null;
             _loadedTranscript = null;
+            _loadedUndoFrames = null;
+            _loadedAgentSession = null;
             _goals = new List<string>();
             ResetMcp();
             _scheduler.Reset();
@@ -158,6 +184,8 @@ namespace RimAgent
         public override void LoadedGame()
         {
             _session = null;
+            _scheduler.RestoreState(_loadedSchedulerState);
+            _loadedSchedulerState = null;
             ResetMcp();
         }
 
@@ -214,7 +242,9 @@ namespace RimAgent
                 BudgetPerWindow = settings.autonomousBudgetPerDay,
                 OnRaid = settings.autoOnRaid,
                 OnMentalBreak = settings.autoOnMentalBreak,
-                OnFoodShortage = settings.autoOnFoodShortage
+                OnFoodShortage = settings.autoOnFoodShortage,
+                OnEmergencyMedical = settings.autoOnEmergencyMedical,
+                OnFire = settings.autoOnFire
             };
         }
 

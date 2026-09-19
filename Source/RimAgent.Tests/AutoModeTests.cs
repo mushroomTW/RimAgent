@@ -64,9 +64,7 @@ namespace RimAgent.Tests
         public async Task HighRiskCommandWaitsForConfirmationThenRunsWithoutReclassifying()
         {
             _agentClient.CallTool("execute_trade", new { trader = "PassingShip_1", buys = "spacer component x4", sells = "", negotiator = "Ali" })
-                        .Reply("I need your confirmation to buy 4 spacer components.")
-                        .CallTool("execute_trade", new { trader = "PassingShip_1", buys = "spacer component x4", sells = "", negotiator = "Ali" })
-                        .Reply("Bought.");
+                        .Reply("I need your confirmation to buy 4 spacer components.");
             _classifierClient.Reply("{\"risk\": \"high\", \"reason\": \"spends silver\"}");
             ColonyAgentSession session = NewSession();
 
@@ -81,7 +79,7 @@ namespace RimAgent.Tests
 
             string done = await session.ConfirmAsync();
 
-            Assert.That(done, Is.EqualTo("Bought."));
+            Assert.That(done, Is.EqualTo("Executed 1 confirmed command(s)."));
             Assert.That(_world.Calls, Is.EqualTo(new[] { "ExecuteTrade(PassingShip_1,101)" }));
             Assert.That(_classifierClient.CallCount, Is.EqualTo(1), "確認後的放行重送不再問分類器");
             Assert.That(session.HasPendingConfirmation, Is.False);

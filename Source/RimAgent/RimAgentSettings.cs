@@ -43,6 +43,8 @@ namespace RimAgent
         public bool autoOnRaid = true;
         public bool autoOnMentalBreak = true;
         public bool autoOnFoodShortage = true;
+        public bool autoOnEmergencyMedical = true;
+        public bool autoOnFire = true;
 #pragma warning restore S1104
 
         public override void ExposeData()
@@ -68,6 +70,8 @@ namespace RimAgent
             Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);
             Scribe_Values.Look(ref autoOnMentalBreak, "autoOnMentalBreak", true);
             Scribe_Values.Look(ref autoOnFoodShortage, "autoOnFoodShortage", true);
+            Scribe_Values.Look(ref autoOnEmergencyMedical, "autoOnEmergencyMedical", true);
+            Scribe_Values.Look(ref autoOnFire, "autoOnFire", true);
         }
 
         public ToolPermissions ToPermissions()

@@ -43,7 +43,7 @@ namespace RimAgent.Tools
             }
         }
 
-        [AgentTool("mcp_call_tool", ToolCategory.Mcp, ToolRisk.Safe)]
+        [AgentTool("mcp_call_tool", ToolCategory.Mcp, ToolRisk.Confirm)]
         [Description("Calls one tool on one MCP server. Arguments must be a single JSON object string matching that tool's input schema.")]
         public async Task<string> CallTool(
             [Description("Server name from mcp_status, e.g. \"fetch\".")] string server,

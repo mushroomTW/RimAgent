@@ -1,35 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
   <name>RimAgent</name>
-  <author>綠菇</author>
+  <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.09.19.4</modVersion>
+  <modVersion>2026.09.20.1</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
-  <description><![CDATA[RimAgent — An LLM agent that controls your colony through natural language.
+  <description><![CDATA[RimAgent — an LLM agent for RimWorld colony management.
 
-Open the "Agent" tab on the bottom bar and type what you want done: "set Alice's Doctor priority to 1", "mark the steel ore in the selected area for mining", "draft everyone and move to (25, 30)". The agent reads colony state through tools, plans, executes real game actions, and reports every tool call in an action log.
+Open the Agent tab and give a natural-language instruction. RimAgent reads the colony through explicit tools, performs only requested game actions, and records every call in the action log.
 
-<b>Requires RimLLM Framework</b> (2026.09.12 or later). Provider, API key, model and fallback chain are configured once in the framework's settings; RimAgent only adds per-category tool permissions.
+Requires RimLLM Framework 2026.09.12 or later. Configure providers, API keys, models and fallback chains in RimLLM Framework; RimAgent supplies colony tools and per-category permissions.
 
-<b>Tool categories</b> (each can be toggled in mod settings):
-1. <b>Observe</b> — colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search, game screenshots.
-2. <b>Work</b> — work priorities and schedules (undoable).
-3. <b>Build</b> — mining / cutting / harvesting / deconstruction designations and blueprints. Off by default.
-4. <b>Combat</b> — draft, move and attack orders. Off by default. LLM latency is several seconds, so this is for pre-deployment and retreats, not real-time control.
-5. <b>Trade</b> — orbital trader and visiting caravan stock, single-deal buy/sell at game prices, player caravans. Off by default.
-6. <b>Medical</b> — colonist health, medical care levels, surgery scheduling. Off by default.
-7. <b>Prisoners</b> — listing, interaction modes, release. Off by default.
-8. <b>Animals</b> — listing, taming, training, allowed areas. Off by default.
-9. <b>Zones</b> — stockpile and growing zones, storage filters. Off by default.
-10. <b>Production</b> — work tables and bills. Off by default.
-11. <b>Time</b> — pause and time flow speed. Off by default.
-12. <b>MCP</b> — external tools from local MCP servers (official SDK, stdio). Off by default.
+All tool categories are enabled by default and configurable in mod settings: observation, work, build, combat, trade, medical, prisoners, animals, zones, production, time and MCP. Observation includes colonist wellbeing (needs, thoughts and equipment); work supports batch priorities; build includes hunting designations.
 
-<b>Modes</b>: Ask (read-only), Confirm (irreversible actions such as trades, surgery or attacks wait for your approval — the default), Auto (a second model call judges each action; risky ones wait for approval) and Autonomous (fully delegated, with scheduled and event-driven runs under a daily budget and per-game long-term goals). Work settings can be undone; the visible conversation is saved with the game.
+Modes: Ask is read-only. Confirm (the default) pauses confirm-risk actions for review. Confirm executes the exact previewed tool calls and arguments, without resending the instruction to the model. Auto uses a risk classifier, and Autonomous performs daily-budgeted scheduled and event-driven runs.
 
-The agent never touches game state outside of these tools, and every call is visible in the action log.]]></description>
+Older tool results are compacted automatically. The visible transcript, compacted model session, autonomous scheduler state and work undo history are saved with the game. Autonomous mode aggregates every map and reacts to raids starting or ending, mental-break risk, food shortages, downed or bleeding colonists and fire.
+
+MCP tools run as local processes with your user privileges; MCP execution always requires confirmation.]]></description>
   <modDependencies>
     <li>
       <packageId>GreenMushroom.RimLLMFramework</packageId>

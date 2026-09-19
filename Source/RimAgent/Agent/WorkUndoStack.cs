@@ -1,34 +1,75 @@
 using System.Collections.Generic;
+using System.Linq;
+using Verse;
 
 namespace RimAgent.Agent
 {
     /// <summary>一次工作優先級修改的反操作：改回舊值。</summary>
-    public sealed class UndoWorkPriority
+    public sealed class UndoWorkPriority : IExposable
     {
         public int PawnId { get; set; }
         public string WorkTypeDefName { get; set; } = string.Empty;
         public int OldPriority { get; set; }
+
+        public void ExposeData()
+        {
+            int pawnId = PawnId;
+            string workType = WorkTypeDefName;
+            int oldPriority = OldPriority;
+            Scribe_Values.Look(ref pawnId, "pawnId");
+            Scribe_Values.Look(ref workType, "workTypeDefName");
+            Scribe_Values.Look(ref oldPriority, "oldPriority");
+            PawnId = pawnId;
+            WorkTypeDefName = workType ?? string.Empty;
+            OldPriority = oldPriority;
+        }
     }
 
     /// <summary>一個小時作息修改的反操作：改回舊指派。</summary>
-    public sealed class UndoTimeAssignment
+    public sealed class UndoTimeAssignment : IExposable
     {
         public int PawnId { get; set; }
         public int Hour { get; set; }
         public string OldAssignmentDefName { get; set; } = string.Empty;
+
+        public void ExposeData()
+        {
+            int pawnId = PawnId;
+            int hour = Hour;
+            string assignment = OldAssignmentDefName;
+            Scribe_Values.Look(ref pawnId, "pawnId");
+            Scribe_Values.Look(ref hour, "hour");
+            Scribe_Values.Look(ref assignment, "oldAssignmentDefName");
+            PawnId = pawnId;
+            Hour = hour;
+            OldAssignmentDefName = assignment ?? string.Empty;
+        }
     }
 
     /// <summary>
     /// 一句指令改過的工作設定：送出時開框、工具記錄舊值、結束時整框推進堆疊。
     /// 復原時整框倒著 replay，把每個值寫回去。
     /// </summary>
-    public sealed class UndoFrame
+    public sealed class UndoFrame : IExposable
     {
         public string Label { get; set; } = string.Empty;
-        public List<UndoWorkPriority> Priorities { get; } = new List<UndoWorkPriority>();
-        public List<UndoTimeAssignment> Assignments { get; } = new List<UndoTimeAssignment>();
+        public List<UndoWorkPriority> Priorities { get; set; } = new List<UndoWorkPriority>();
+        public List<UndoTimeAssignment> Assignments { get; set; } = new List<UndoTimeAssignment>();
 
         public bool IsEmpty => Priorities.Count == 0 && Assignments.Count == 0;
+
+        public void ExposeData()
+        {
+            string label = Label;
+            List<UndoWorkPriority> priorities = Priorities;
+            List<UndoTimeAssignment> assignments = Assignments;
+            Scribe_Values.Look(ref label, "label");
+            Scribe_Collections.Look(ref priorities, "priorities", LookMode.Deep);
+            Scribe_Collections.Look(ref assignments, "assignments", LookMode.Deep);
+            Label = label ?? string.Empty;
+            Priorities = priorities ?? new List<UndoWorkPriority>();
+            Assignments = assignments ?? new List<UndoTimeAssignment>();
+        }
     }
 
     /// <summary>
@@ -134,6 +175,43 @@ namespace RimAgent.Agent
                 _frames.Clear();
                 _open = null;
             }
+        }
+
+        public List<UndoFrame> Snapshot()
+        {
+            lock (_gate)
+            {
+                return _frames.Select(Clone).ToList();
+            }
+        }
+
+        public void Restore(IEnumerable<UndoFrame> frames)
+        {
+            lock (_gate)
+            {
+                _frames.Clear();
+                if (frames == null) return;
+                foreach (UndoFrame frame in frames.Where(f => f != null && !f.IsEmpty).Take(MaxFrames))
+                {
+                    _frames.Add(Clone(frame));
+                }
+            }
+        }
+
+        private static UndoFrame Clone(UndoFrame frame)
+        {
+            return new UndoFrame
+            {
+                Label = frame.Label,
+                Priorities = frame.Priorities.Select(p => new UndoWorkPriority
+                {
+                    PawnId = p.PawnId, WorkTypeDefName = p.WorkTypeDefName, OldPriority = p.OldPriority
+                }).ToList(),
+                Assignments = frame.Assignments.Select(a => new UndoTimeAssignment
+                {
+                    PawnId = a.PawnId, Hour = a.Hour, OldAssignmentDefName = a.OldAssignmentDefName
+                }).ToList()
+            };
         }
     }
 }

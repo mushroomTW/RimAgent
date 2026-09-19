@@ -41,10 +41,11 @@ namespace RimAgent.Tools
             new DesignationKind { Name = "cut_plants", ThingKind = ThingKind.Plant, DefName = "CutPlant", OnCell = false, Applies = t => true, Verb = "cutting" },
             new DesignationKind { Name = "harvest", ThingKind = ThingKind.Plant, DefName = "HarvestPlant", OnCell = false, Applies = t => t.Harvestable, Verb = "harvesting" },
             new DesignationKind { Name = "deconstruct", ThingKind = ThingKind.Building, DefName = "Deconstruct", OnCell = false, Applies = t => t.PlayerOwned, Verb = "deconstruction" },
-            new DesignationKind { Name = "haul", ThingKind = ThingKind.Item, DefName = "Haul", OnCell = false, Applies = t => true, Verb = "hauling" }
+            new DesignationKind { Name = "haul", ThingKind = ThingKind.Item, DefName = "Haul", OnCell = false, Applies = t => true, Verb = "hauling" },
+            new DesignationKind { Name = "hunt", ThingKind = ThingKind.Pawn, DefName = "Hunt", OnCell = false, Applies = t => t.Wild, Verb = "hunting" }
         };
 
-        private const string KindList = "mine, cut_plants, harvest, deconstruct or haul";
+        private const string KindList = "mine, cut_plants, harvest, deconstruct, haul or hunt";
 
         [AgentTool("designate_area", ToolCategory.Build, ToolRisk.Confirm)]
         [Description("Marks map objects for colonists to work on: mine (ore/rock), cut_plants, harvest (ripe plants), deconstruct (player buildings) or haul (items). Targets either the player's current selection or a rectangle, optionally filtered by name. Reports how many were marked.")]

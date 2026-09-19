@@ -95,4 +95,6 @@
   <RimAgent.Goal.NoSuch>There is no goal #{0}. Use /goal to list them.</RimAgent.Goal.NoSuch>
   <RimAgent.Goal.Full>Goal limit reached; remove some with /goal remove &lt;n&gt;.</RimAgent.Goal.Full>
 
+  <RimAgent.Settings.AutoOnEmergencyMedical>Respond to downed or bleeding colonists</RimAgent.Settings.AutoOnEmergencyMedical>
+  <RimAgent.Settings.AutoOnFire>Respond to fires</RimAgent.Settings.AutoOnFire>
 </LanguageData>

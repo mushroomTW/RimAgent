@@ -22,6 +22,7 @@ namespace RimAgent.Tests
         private static readonly Dictionary<string, Dictionary<string, object>> ValidArguments = new Dictionary<string, Dictionary<string, object>>
         {
             ["set_work_priority"] = Args(("colonist", "Ali"), ("workType", "doctor"), ("priority", 1)),
+            ["set_work_priorities"] = Args(("assignments", "Ali:doctor=1; Bob:hauling=2")),
             ["set_schedule"] = Args(("colonists", "Ali"), ("startHour", 22), ("endHour", 6), ("assignment", "sleep")),
             ["designate_area"] = Args(("kind", "mine"), ("useSelection", false), ("x1", 0), ("z1", 0), ("x2", 30), ("z2", 30), ("filter", "")),
             ["cancel_designation"] = Args(("kind", "mine"), ("useSelection", false), ("x1", 0), ("z1", 0), ("x2", 30), ("z2", 30)),
@@ -44,7 +45,6 @@ namespace RimAgent.Tests
             ["add_bill"] = Args(("table", "800"), ("recipe", "component"), ("count", 2)),
             ["delete_bill"] = Args(("table", "800"), ("bill", 1)),
             ["set_research"] = Args(("project", "batteries")),
-            ["set_current_map"] = Args(("map", "2")),
             ["set_time_speed"] = Args(("speed", "Fast")),
             ["mcp_call_tool"] = Args(("server", "fetch"), ("tool", "fetch"), ("args", "{}")),
         };

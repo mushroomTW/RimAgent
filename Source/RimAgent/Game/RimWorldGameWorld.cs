@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Linq;
 using RimWorld;
 using RimWorld.Planet;
@@ -59,14 +60,16 @@ namespace RimAgent.Game
         /// </summary>
         internal Agent.AutonomousSignals GetAutonomousSignals()
         {
-            Map map = Map;
-            List<Pawn> colonists = map.mapPawns.FreeColonistsSpawned;
+            List<Map> maps = Find.Maps.ToList();
+            List<Pawn> colonists = maps.SelectMany(m => m.mapPawns.FreeColonistsSpawned).ToList();
             return new Agent.AutonomousSignals
             {
-                HostileCount = CountHostiles(map),
+                HostileCount = maps.Sum(CountHostiles),
                 NearMentalBreakCount = colonists.Count(IsNearMentalBreak),
-                FoodNutrition = map.resourceCounter.TotalHumanEdibleNutrition,
-                ColonistCount = colonists.Count
+                FoodNutrition = maps.Sum(m => m.resourceCounter.TotalHumanEdibleNutrition),
+                ColonistCount = colonists.Count,
+                DownedOrBleedingCount = colonists.Count(p => p.Downed || p.health.hediffSet.hediffs.Any(h => h.BleedRate > 0f)),
+                FireCount = maps.Sum(m => m.listerThings.ThingsOfDef(ThingDefOf.Fire).Count)
             };
         }
 
@@ -147,6 +150,40 @@ namespace RimAgent.Game
                         Category = pair.Key.FirstThingCategory?.label ?? pair.Key.category.ToString()
                     })
                     .ToList()
+            };
+        }
+
+        public IReadOnlyList<AlertInfo> GetAlerts()
+        {
+            // AlertsReadout 的活動清單在 1.6 為私有快取；只讀取遊戲已計算的結果，
+            // 找不到欄位時安全地回傳空清單，避免版本差異中斷 agent。
+            FieldInfo field = typeof(AlertsReadout).GetField("activeAlerts", BindingFlags.Instance | BindingFlags.NonPublic);
+            var alerts = field?.GetValue(Find.Alerts) as IEnumerable<Alert>;
+            if (alerts == null) return Array.Empty<AlertInfo>();
+            return alerts.Where(a => a != null && a.Active).Select(a => new AlertInfo
+            {
+                Label = a.Label.ToString(),
+                Priority = a.Priority.ToString()
+            }).ToList();
+        }
+
+        public IReadOnlyList<LetterInfo> GetRecentLetters()
+        {
+            return Find.LetterStack.LettersListForReading
+                .Where(l => l != null)
+                .Take(20)
+                .Select(l => new LetterInfo { Label = l.Label.ToString() })
+                .ToList();
+        }
+
+        public PowerInfo GetPower()
+        {
+            IReadOnlyList<PowerNet> nets = Map.powerNetManager.AllNetsListForReading;
+            return new PowerInfo
+            {
+                NetworkCount = nets.Count,
+                NetWatts = nets.Sum(n => n.CurrentEnergyGainRate()),
+                StoredEnergy = nets.Sum(n => n.CurrentStoredEnergy())
             };
         }
 
@@ -1337,6 +1374,15 @@ namespace RimAgent.Game
                 CurrentActivity = SafeReport(pawn),
                 Drafted = pawn.Drafted,
                 MedicalCare = pawn.playerSettings != null ? pawn.playerSettings.medCare.ToString() : string.Empty,
+                Equipment = pawn.equipment?.Primary?.LabelCap ?? string.Empty,
+                Needs = pawn.needs?.AllNeeds.Select(n => new NeedInfo
+                {
+                    Label = n.LabelCap,
+                    Percent = n.CurLevelPercentage
+                }).ToList() ?? (IReadOnlyList<NeedInfo>)Array.Empty<NeedInfo>(),
+                Thoughts = pawn.needs?.mood?.thoughts?.memories?.Memories
+                    .Select(t => t.LabelCap).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(12).ToList()
+                    ?? (IReadOnlyList<string>)Array.Empty<string>(),
                 Skills = pawn.skills?.skills.Select(s => new SkillInfo
                 {
                     DefName = s.def.defName,
@@ -1425,6 +1471,7 @@ namespace RimAgent.Game
                 StackCount = thing.stackCount,
                 PlayerOwned = thing.Faction == Faction.OfPlayer,
                 Harvestable = (thing as Plant)?.HarvestableNow ?? false,
+                Wild = thing is Pawn pawn && !pawn.RaceProps.Humanlike && pawn.Faction == null,
                 Designations = designations.Distinct().ToList()
             };
         }
@@ -1443,6 +1490,10 @@ namespace RimAgent.Game
                     return null;
                 case "Haul":
                     return thing.def.EverHaulable ? null : $"{thing.LabelCap} cannot be hauled";
+                case "Hunt":
+                    Pawn pawn = thing as Pawn;
+                    return pawn != null && !pawn.RaceProps.Humanlike && pawn.Faction == null
+                        ? null : $"{thing.LabelCap} is not a huntable wild animal";
                 default:
                     return null;
             }

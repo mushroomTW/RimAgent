@@ -45,20 +45,20 @@ One setting decides how much the agent may do on its own (per-category permissio
 | **Auto** | Every command is previewed first, then a second model call classifies it (`low` / `high`). Low runs immediately, high waits for **Confirm**. Any classifier failure counts as high. Costs one extra request per command. |
 | **Autonomous** | Fully delegated: every command runs without asking, and the scheduler below starts the agent's own runs. You can still type instructions. |
 
-Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every command tool has a preview branch that touches nothing — the test suite checks both for all 46 tools, because Auto mode relies on running a command twice (preview, then execute).
+Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every command tool has a preview branch that touches nothing. The test suite checks both paths for all command tools. Confirm executes the exact captured tool call and arguments from the preview; it never re-sends the instruction to the model, so already-safe actions cannot run twice.
 
 ## Safety
 
-* **Confirm** / **Discard**: a pending preview is executed by re-sending the same instruction with the gate open; a new instruction discards it.
+* **Confirm** / **Discard**: Confirm executes the captured previewed calls with their original arguments; it does not make another LLM request. A new instruction or Discard drops every pending call.
 * **`/undo`**: restores the previous instruction's work priorities and daily schedules — also for an instruction that failed halfway, so whatever did land can be reverted.
 * Guard rails inside the tools: `order_attack` refuses colony members, prisoners and friendly factions; `schedule_surgery` requires an explicit body part for surgeries that target one; `execute_trade` needs a negotiator who can talk and is not incapable of social work, and a powered comms console for orbital traders; `form_caravan` moves the named colonists off the map immediately (no walking to the edge, no supplies packed); zones are validated with the game's own zone designators (fog, map edge, blocking things, fertility).
-* The visible conversation (instructions, replies, action log) is saved with the game; the model's context still resets on load.
+* The visible conversation, compacted model session, autonomous scheduler budget and work undo history are saved with the game. If an older session cannot be deserialized after an upgrade, RimAgent safely starts a fresh model session while retaining the visible transcript.
 * The combat-latency reminder appears once per instruction, and Markdown in model replies is rendered via RimLLM Framework (bold, italics, headings, links, code).
 * The shipped conduct file (`AgentPack/AGENTS.md`) and skill packs (`AgentPack/Skills/`) are included with every instruction. MCP servers run as local processes with your user privileges — only enable ones you trust.
 
 ## Autonomy (Autonomous mode)
 
-Pick the Autonomous mode (mod settings or the mode dropdown in the Agent tab) and the agent starts its own instructions: routine inspections on an interval, plus reactions to raids, colonists near mental break and food shortages. Every run uses the same session (history, permissions), shows in the action log tagged `[auto]`, can be stopped with the **Stop** button or `/stop`, and counts against a daily tool-call budget (shown next to the dropdowns). Long-term goals are managed with `/goal` and saved with the game.
+Pick the Autonomous mode (mod settings or the mode dropdown in the Agent tab) and the agent starts its own instructions: routine inspections on an interval, plus reactions to raid start/end, colonists near mental break, food shortages, downed or bleeding colonists, and fire. Signals aggregate every map in the save. Every run uses the same session (history, permissions), shows in the action log tagged `[auto]`, can be stopped with the **Stop** button or `/stop`, and counts against a daily tool-call budget (shown next to the dropdowns). Long-term goals are managed with `/goal` and saved with the game.
 
 ## How it works
 
@@ -69,7 +69,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-            │                              46 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+            │                              51 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
           │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```

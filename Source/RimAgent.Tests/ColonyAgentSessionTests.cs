@@ -146,7 +146,7 @@ namespace RimAgent.Tests
             ColonyAgentSession session = NewSession();
             await session.SendAsync("do something");
 
-            TranscriptEntry reply = session.Transcript.Snapshot().Last();
+            TranscriptEntry reply = session.Transcript.Snapshot().Last(e => e.Kind == TranscriptKind.Assistant);
             Assert.That(reply.Kind, Is.EqualTo(TranscriptKind.Assistant));
             Assert.That(reply.ToolsStripped, Is.True);
         }
@@ -403,9 +403,7 @@ namespace RimAgent.Tests
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
             _permissions.Combat = true;
             _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
-                   .Reply("I will send Bob to attack the bear.")
-                   .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
-                   .Reply("Done.");
+                   .Reply("I will send Bob to attack the bear.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
             string preview = await session.SendAsync("attack the bear");
@@ -417,9 +415,31 @@ namespace RimAgent.Tests
 
             string done = await session.ConfirmAsync();
 
-            Assert.That(done, Is.EqualTo("Done."));
+            Assert.That(done, Is.EqualTo("Executed 1 confirmed command(s)."));
             Assert.That(_world.Calls, Does.Contain("SetDrafted(102,True)").And.Contain("OrderAttack(102,900)"));
             Assert.That(session.HasPendingConfirmation, Is.False);
+            Assert.That(_client.CallCount, Is.EqualTo(2), "Confirm must not call the model a second time.");
+        }
+
+        [Test]
+        public async Task ConfirmExecutesOnlyTheCapturedCommandAndDoesNotRepeatSafeCommands()
+        {
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Combat = true;
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("I need confirmation before the attack.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("set Ali doctor to 1 and attack the bear");
+            Assert.That(_world.Colonists[0].WorkPriorities.Single(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
+            Assert.That(_world.Calls.Count(c => c == "SetWorkPriority(101,Doctor,1)"), Is.EqualTo(1));
+
+            await session.ConfirmAsync();
+
+            Assert.That(_world.Calls.Count(c => c == "SetWorkPriority(101,Doctor,1)"), Is.EqualTo(1));
+            Assert.That(_world.Calls, Does.Contain("OrderAttack(102,900)"));
+            Assert.That(_client.CallCount, Is.EqualTo(3), "The confirmation must not re-run the model tool loop.");
         }
 
         [Test]
@@ -481,10 +501,11 @@ namespace RimAgent.Tests
 
             foreach (string name in new[] { "execute_trade", "form_caravan", "release_prisoner", "set_prisoner_interaction", "schedule_surgery", "delete_zone", "delete_bill", "place_blueprint", "designate_area", "order_attack" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Confirm), name);
-            foreach (string name in new[] { "set_work_priority", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_current_map", "set_time_speed", "mcp_call_tool" })
+            foreach (string name in new[] { "set_work_priority", "set_work_priorities", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_time_speed" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Safe), name);
-            foreach (string name in new[] { "get_colony_overview", "list_colonists", "find_things", "get_health", "list_prisoners", "list_bills", "get_time_speed", "take_screenshot", "mcp_status", "mcp_list_tools" })
+            foreach (string name in new[] { "set_current_map", "get_colony_overview", "list_colonists", "get_colonist_wellbeing", "list_alerts", "list_recent_letters", "get_power_status", "find_things", "get_health", "list_prisoners", "list_bills", "get_time_speed", "take_screenshot", "mcp_status", "mcp_list_tools" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Query), name);
+            Assert.That(registry.RiskOf("mcp_call_tool"), Is.EqualTo(ToolRisk.Confirm));
         }
 
         [Test]
@@ -531,8 +552,8 @@ namespace RimAgent.Tests
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(46));
-            Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(10));
+            Assert.That(registry.All.Count, Is.EqualTo(51));
+            Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(14));
             Assert.That(registry.Select(new ToolPermissions { Observe = false, Work = false, Build = false, Combat = false }), Is.Empty);
         }
 

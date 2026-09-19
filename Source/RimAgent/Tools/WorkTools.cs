@@ -11,6 +11,14 @@ namespace RimAgent.Tools
     /// <summary>工作優先級與時間表。</summary>
     public sealed class WorkTools
     {
+        private sealed class WorkPriorityChange
+        {
+            public ColonistInfo Colonist;
+            public DefInfo Work;
+            public int Priority;
+            public int Previous;
+        }
+
         private readonly IGameWorld _world;
         private readonly WorkUndoStack _undo;
         private readonly ICommandGate _gate;
@@ -74,6 +82,85 @@ namespace RimAgent.Tools
 
             string suffix = string.IsNullOrEmpty(result.Message) ? string.Empty : " " + result.Message;
             return $"Set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.{suffix}";
+        }
+
+        [AgentTool("set_work_priorities", ToolCategory.Work, ToolRisk.Safe)]
+        [Description("Sets several work priorities atomically after validating every assignment. Format assignments as 'colonist:work=priority; colonist:work=priority', for example 'Ali:Doctor=1; Bob:Hauling=2'.")]
+        public string SetWorkPriorities(
+            [Description("Semicolon-separated assignments in colonist:work=priority format.")] string assignments)
+        {
+            string[] parts = (assignments ?? string.Empty).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return ToolText.Error("assignments is empty. Use colonist:work=priority; colonist:work=priority.");
+
+            var changes = new List<WorkPriorityChange>();
+            foreach (string raw in parts)
+            {
+                string part = raw.Trim();
+                int colon = part.IndexOf(':');
+                int equals = part.LastIndexOf('=');
+                if (colon <= 0 || equals <= colon + 1 || equals == part.Length - 1)
+                {
+                    return ToolText.Error("invalid assignment '" + part + "'. Use colonist:work=priority.");
+                }
+                if (!int.TryParse(part.Substring(equals + 1).Trim(), out int priority) || priority < 0 || priority > 4)
+                {
+                    return ToolText.Error("priority in '" + part + "' must be 0 to 4.");
+                }
+
+                ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(part.Substring(0, colon).Trim(), _world.GetColonists());
+                if (!pawn.Success) return pawn.Error;
+                ResolveResult<DefInfo> work = DefResolver.Resolve(part.Substring(colon + 1, equals - colon - 1).Trim(), _world.WorkTypes, "work type");
+                if (!work.Success) return work.Error;
+                WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
+                    string.Equals(w.WorkTypeDefName, work.Value.DefName, StringComparison.OrdinalIgnoreCase));
+                if (current != null && current.Disabled) return ToolText.Error(pawn.Value.Name + " is incapable of " + work.Value.Label + ".");
+                changes.Add(new WorkPriorityChange
+                {
+                    Colonist = pawn.Value,
+                    Work = work.Value,
+                    Priority = priority,
+                    Previous = current != null ? current.Priority : 3
+                });
+            }
+
+            if (_gate != null && !_gate.AllowCommands())
+            {
+                string preview = "would set " + string.Join(", ", changes.Select(c => c.Colonist.Name + " " + c.Work.Label + "=" + c.Priority)) + ".";
+                string blocked = ToolText.Confirmation(preview);
+                _gate.NoteBlocked(blocked);
+                return blocked;
+            }
+
+            var applied = new List<WorkPriorityChange>();
+            foreach (WorkPriorityChange change in changes)
+            {
+                CommandResult result = _world.SetWorkPriority(change.Colonist.Id, change.Work.DefName, change.Priority);
+                if (!result.Success)
+                {
+                    List<string> rollbackFailures = RollBackWorkPriorities(applied);
+                    string message = change.Colonist.Name + " " + change.Work.Label + ": " + result.Message;
+                    if (rollbackFailures.Count > 0) message += " Rollback failures: " + string.Join("; ", rollbackFailures);
+                    return ToolText.Error("No batch changes were kept. " + message);
+                }
+                applied.Add(change);
+            }
+            foreach (WorkPriorityChange change in applied)
+            {
+                if (_undo != null) _undo.RecordPriority(change.Colonist.Id, change.Work.DefName, change.Previous);
+            }
+            return "Set " + applied.Count + " work priority assignment(s).";
+        }
+
+        private List<string> RollBackWorkPriorities(List<WorkPriorityChange> applied)
+        {
+            var failures = new List<string>();
+            for (int i = applied.Count - 1; i >= 0; i--)
+            {
+                WorkPriorityChange change = applied[i];
+                CommandResult rollback = _world.SetWorkPriority(change.Colonist.Id, change.Work.DefName, change.Previous);
+                if (!rollback.Success) failures.Add(change.Colonist.Name + " " + change.Work.Label + ": " + rollback.Message);
+            }
+            return failures;
         }
 
         [AgentTool("list_work_priorities", ToolCategory.Work, ToolRisk.Query)]

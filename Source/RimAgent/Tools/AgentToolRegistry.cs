@@ -13,16 +13,16 @@ namespace RimAgent.Tools
     {
         public bool Observe { get; set; } = true;
         public bool Work { get; set; } = true;
-        public bool Build { get; set; }
-        public bool Combat { get; set; }
-        public bool Trade { get; set; }
-        public bool Medical { get; set; }
-        public bool Prisoner { get; set; }
-        public bool Animal { get; set; }
-        public bool Zone { get; set; }
-        public bool Production { get; set; }
-        public bool Time { get; set; }
-        public bool Mcp { get; set; }
+        public bool Build { get; set; } = true;
+        public bool Combat { get; set; } = true;
+        public bool Trade { get; set; } = true;
+        public bool Medical { get; set; } = true;
+        public bool Prisoner { get; set; } = true;
+        public bool Animal { get; set; } = true;
+        public bool Zone { get; set; } = true;
+        public bool Production { get; set; } = true;
+        public bool Time { get; set; } = true;
+        public bool Mcp { get; set; } = true;
 
         public bool Allows(ToolCategory category)
         {
@@ -111,6 +111,7 @@ namespace RimAgent.Tools
             return _tools
                 .Where(t => permissions.Allows(t.Category))
                 .Where(t => mode != AgentMode.Ask || t.Risk == ToolRisk.Query)
+                .Where(t => mode != AgentMode.Autonomous || !IsAutonomousForbidden(t.Name))
                 .Select(t => t.Tool)
                 .ToList();
         }
@@ -121,6 +122,13 @@ namespace RimAgent.Tools
             Entry entry = _tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal));
             if (entry == null) throw new ArgumentException($"unknown tool {toolName}", nameof(toolName));
             return entry.Risk;
+        }
+
+        private static bool IsAutonomousForbidden(string name)
+        {
+            return string.Equals(name, "execute_trade", StringComparison.Ordinal)
+                   || string.Equals(name, "form_caravan", StringComparison.Ordinal)
+                   || string.Equals(name, "release_prisoner", StringComparison.Ordinal);
         }
 
         private void Register(object target, AgentTranscript transcript)

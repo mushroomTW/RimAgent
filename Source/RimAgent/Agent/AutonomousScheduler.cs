@@ -1,3 +1,6 @@
+using System;
+using Verse;
+
 namespace RimAgent.Agent
 {
     /// <summary>自主模式一次自主任務的觸發原因。None 代表現在不該跑。</summary>
@@ -6,8 +9,11 @@ namespace RimAgent.Agent
         None,
         Interval,
         Raid,
+        RaidEnded,
         MentalBreak,
-        FoodShortage
+        FoodShortage,
+        EmergencyMedical,
+        Fire
     }
 
     /// <summary>排程器做判斷用的殖民地訊號（呼叫端在主線程收集的純資料）。</summary>
@@ -17,6 +23,8 @@ namespace RimAgent.Agent
         public int NearMentalBreakCount { get; set; }
         public float FoodNutrition { get; set; }
         public int ColonistCount { get; set; }
+        public int DownedOrBleedingCount { get; set; }
+        public int FireCount { get; set; }
     }
 
     /// <summary>排程器設定（單位皆為 tick；2500 tick＝1 遊戲小時，60000 tick＝1 天）。</summary>
@@ -32,6 +40,57 @@ namespace RimAgent.Agent
         public bool OnRaid { get; set; }
         public bool OnMentalBreak { get; set; }
         public bool OnFoodShortage { get; set; }
+        public bool OnEmergencyMedical { get; set; }
+        public bool OnFire { get; set; }
+    }
+
+    /// <summary>存檔用的自主排程器狀態；避免讀檔後重置預算與邊緣偵測。</summary>
+    public sealed class AutonomousSchedulerState : IExposable
+    {
+        public long WindowStartTick { get; set; }
+        public bool WindowOpen { get; set; }
+        public int ToolsUsed { get; set; }
+        public int Runs { get; set; }
+        public long LastRunTick { get; set; }
+        public bool PrevRaid { get; set; }
+        public bool PrevMental { get; set; }
+        public bool PrevFoodOk { get; set; } = true;
+        public bool PrevEmergency { get; set; }
+        public bool PrevFire { get; set; }
+
+        public void ExposeData()
+        {
+            long windowStartTick = WindowStartTick;
+            bool windowOpen = WindowOpen;
+            int toolsUsed = ToolsUsed;
+            int runs = Runs;
+            long lastRunTick = LastRunTick;
+            bool prevRaid = PrevRaid;
+            bool prevMental = PrevMental;
+            bool prevFoodOk = PrevFoodOk;
+            bool prevEmergency = PrevEmergency;
+            bool prevFire = PrevFire;
+            Scribe_Values.Look(ref windowStartTick, "windowStartTick");
+            Scribe_Values.Look(ref windowOpen, "windowOpen");
+            Scribe_Values.Look(ref toolsUsed, "toolsUsed");
+            Scribe_Values.Look(ref runs, "runs");
+            Scribe_Values.Look(ref lastRunTick, "lastRunTick");
+            Scribe_Values.Look(ref prevRaid, "prevRaid");
+            Scribe_Values.Look(ref prevMental, "prevMental");
+            Scribe_Values.Look(ref prevFoodOk, "prevFoodOk", true);
+            Scribe_Values.Look(ref prevEmergency, "prevEmergency");
+            Scribe_Values.Look(ref prevFire, "prevFire");
+            WindowStartTick = windowStartTick;
+            WindowOpen = windowOpen;
+            ToolsUsed = toolsUsed;
+            Runs = runs;
+            LastRunTick = lastRunTick;
+            PrevRaid = prevRaid;
+            PrevMental = prevMental;
+            PrevFoodOk = prevFoodOk;
+            PrevEmergency = prevEmergency;
+            PrevFire = prevFire;
+        }
     }
 
     /// <summary>
@@ -55,6 +114,8 @@ namespace RimAgent.Agent
         private bool _prevRaid;
         private bool _prevMental;
         private bool _prevFoodOk = true;
+        private bool _prevEmergency;
+        private bool _prevFire;
 
         public int ToolsUsed => _toolsUsed;
         public int Runs => _runs;
@@ -70,9 +131,14 @@ namespace RimAgent.Agent
             bool raid = signals.HostileCount > 0;
             bool mental = signals.NearMentalBreakCount > 0;
             bool foodOk = !IsShortage(signals);
+            bool emergency = signals.DownedOrBleedingCount > 0;
+            bool fire = signals.FireCount > 0;
             AutonomousTrigger trigger = AutonomousTrigger.None;
 
             if (config.OnRaid && raid && !_prevRaid) trigger = AutonomousTrigger.Raid;
+            else if (config.OnRaid && !raid && _prevRaid) trigger = AutonomousTrigger.RaidEnded;
+            else if (config.OnEmergencyMedical && emergency && !_prevEmergency) trigger = AutonomousTrigger.EmergencyMedical;
+            else if (config.OnFire && fire && !_prevFire) trigger = AutonomousTrigger.Fire;
             else if (config.OnMentalBreak && mental && !_prevMental) trigger = AutonomousTrigger.MentalBreak;
             else if (config.OnFoodShortage && !foodOk && _prevFoodOk) trigger = AutonomousTrigger.FoodShortage;
             else if (config.IntervalTicks > 0 && tick - _lastRunTick >= config.IntervalTicks) trigger = AutonomousTrigger.Interval;
@@ -80,6 +146,8 @@ namespace RimAgent.Agent
             _prevRaid = raid;
             _prevMental = mental;
             _prevFoodOk = foodOk;
+            _prevEmergency = emergency;
+            _prevFire = fire;
             return trigger;
         }
 
@@ -101,6 +169,33 @@ namespace RimAgent.Agent
             _prevRaid = false;
             _prevMental = false;
             _prevFoodOk = true;
+            _prevEmergency = false;
+            _prevFire = false;
+        }
+
+        public AutonomousSchedulerState CaptureState()
+        {
+            return new AutonomousSchedulerState
+            {
+                WindowStartTick = _windowStartTick, WindowOpen = _windowOpen, ToolsUsed = _toolsUsed, Runs = _runs,
+                LastRunTick = _lastRunTick, PrevRaid = _prevRaid, PrevMental = _prevMental, PrevFoodOk = _prevFoodOk,
+                PrevEmergency = _prevEmergency, PrevFire = _prevFire
+            };
+        }
+
+        public void RestoreState(AutonomousSchedulerState state)
+        {
+            if (state == null) return;
+            _windowStartTick = state.WindowStartTick;
+            _windowOpen = state.WindowOpen;
+            _toolsUsed = Math.Max(0, state.ToolsUsed);
+            _runs = Math.Max(0, state.Runs);
+            _lastRunTick = state.LastRunTick;
+            _prevRaid = state.PrevRaid;
+            _prevMental = state.PrevMental;
+            _prevFoodOk = state.PrevFoodOk;
+            _prevEmergency = state.PrevEmergency;
+            _prevFire = state.PrevFire;
         }
 
         private void ResetWindowIfNeeded(long tick, AutonomousConfig config)

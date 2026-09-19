@@ -21,6 +21,9 @@ namespace RimAgent.Game
         IReadOnlyList<BillInfo> GetBills(int tableId);
         IReadOnlyList<ColonistHealthInfo> GetHealth();
         ResourceSnapshot GetResources();
+        IReadOnlyList<AlertInfo> GetAlerts();
+        IReadOnlyList<LetterInfo> GetRecentLetters();
+        PowerInfo GetPower();
         IReadOnlyList<ThreatInfo> GetThreats();
         ResearchInfo GetResearch();
         /// <summary>目前的遊戲時間流速（含可切換的速度目錄）。</summary>

@@ -18,7 +18,8 @@ namespace RimAgent.Tools
     /// </summary>
     internal sealed class LoggingAIFunction : DelegatingAIFunction
     {
-        private const int MaxArgumentChars = 300;
+        // 稽核與風險分類必須看見完整引數，不能截斷交易清單或銀額。
+        private const int MaxArgumentChars = int.MaxValue;
 
         private readonly AgentTranscript _transcript;
         private readonly ToolCategory _category;
@@ -58,6 +59,11 @@ namespace RimAgent.Tools
                 string text = result?.ToString() ?? string.Empty;
                 entry.Result = text;
                 entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
+                if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
+                {
+                    // 此閉包保留本次工具呼叫的引數，確認時不會再讓模型選工具或改參數。
+                    _gate?.RegisterPendingApproval(token => ExecuteApprovedAsync(arguments, entry, token));
+                }
                 return result;
             }
             catch (Exception ex)
@@ -70,6 +76,29 @@ namespace RimAgent.Tools
             {
                 _gate?.EndInvocation();
                 _transcript.Add(entry);
+            }
+        }
+
+        private async Task<object> ExecuteApprovedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
+        {
+            _gate?.ForceExecute();
+            try
+            {
+                object result = await base.InvokeCoreAsync(arguments, cancellationToken);
+                string text = result?.ToString() ?? string.Empty;
+                entry.Result = text;
+                entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                entry.Result = ex.GetType().Name + ": " + ex.Message;
+                entry.Failed = true;
+                throw;
+            }
+            finally
+            {
+                _gate?.ClearForce();
             }
         }
 

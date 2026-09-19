@@ -53,10 +53,25 @@ namespace RimAgent.Tools
                 if (c.InMentalState) sb.Append(", MENTAL STATE: ").Append(c.MentalStateLabel);
                 sb.Append(", doing: ").Append(string.IsNullOrEmpty(c.CurrentActivity) ? "nothing" : c.CurrentActivity)
                   .Append(", drafted: ").Append(c.Drafted ? "yes" : "no");
+                if (!string.IsNullOrEmpty(c.Equipment)) sb.Append(", equipped: ").Append(c.Equipment);
                 sb.AppendLine();
                 sb.Append("  skills: ").Append(string.Join(", ", c.Skills.Select(ToolText.Skill))).AppendLine();
             }
             return sb.ToString().Trim();
+        }
+
+        [AgentTool("get_colonist_wellbeing", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Shows one colonist's needs, current equipment and active mood thoughts. Use this to understand why mood, hunger, rest or recreation is low instead of guessing.")]
+        public string GetColonistWellbeing([Description("Colonist name, nickname or id.")] string colonist)
+        {
+            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
+            if (!pawn.Success) return pawn.Error;
+            ColonistInfo c = pawn.Value;
+            string needs = c.Needs.Count == 0 ? "none available" : string.Join(", ", c.Needs.Select(n => n.Label + " " + ToolText.Pct(n.Percent)));
+            string thoughts = c.Thoughts.Count == 0 ? "none reported" : string.Join("; ", c.Thoughts);
+            return ToolText.Colonist(c) + " | needs: " + needs +
+                   " | equipment: " + (string.IsNullOrEmpty(c.Equipment) ? "none" : c.Equipment) +
+                   " | thoughts: " + thoughts;
         }
 
         [AgentTool("get_resources", ToolCategory.Observe, ToolRisk.Query)]
@@ -82,6 +97,33 @@ namespace RimAgent.Tools
                   .AppendLine();
             }
             return sb.ToString().Trim();
+        }
+
+        [AgentTool("list_alerts", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Lists the game's currently active colony alerts, such as food, rescue, bedroom and power problems. Use this as the first low-cost autonomous health check.")]
+        public string ListAlerts()
+        {
+            IReadOnlyList<AlertInfo> alerts = _world.GetAlerts();
+            if (alerts.Count == 0) return "No active colony alerts.";
+            return string.Join("\n", alerts.Select(a => "[" + a.Priority + "] " + a.Label));
+        }
+
+        [AgentTool("list_recent_letters", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Lists the most recent in-game event letters. Use it to learn what happened before deciding why the colony's state changed.")]
+        public string ListRecentLetters()
+        {
+            IReadOnlyList<LetterInfo> letters = _world.GetRecentLetters();
+            if (letters.Count == 0) return "No recent event letters.";
+            return string.Join("\n", letters.Select(l => l.Label));
+        }
+
+        [AgentTool("get_power_status", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Reports electrical-network count, total net watts (positive is surplus, negative is deficit) and stored battery energy.")]
+        public string GetPowerStatus()
+        {
+            PowerInfo power = _world.GetPower();
+            return "Power networks: " + power.NetworkCount + " | net watts: " + ToolText.Num(power.NetWatts) +
+                   " | stored battery energy: " + ToolText.Num(power.StoredEnergy);
         }
 
         [AgentTool("list_threats", ToolCategory.Observe, ToolRisk.Query)]
@@ -182,16 +224,13 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("set_current_map", ToolCategory.Observe, ToolRisk.Safe)]
+        [AgentTool("set_current_map", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Switches which map later tools operate on (the same as the player switching to another map). Map switching only changes the viewed map; pawns and items stay where they are.")]
         public string SetCurrentMap(
             [Description("Map id from get_maps, or part of the map name.")] string map)
         {
             ResolveResult<MapInfo> match = ResolveMap(map, _world.GetMaps());
             if (!match.Success) return match.Error;
-
-            string blocked = ToolText.Blocked(_gate, $"would switch the current map to {match.Value.Label} [{match.Value.Id}].");
-            if (blocked != null) return blocked;
 
             CommandResult result = _world.SetCurrentMap(match.Value.Id);
             if (!result.Success) return ToolText.Error(result.Message);
@@ -280,7 +319,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Takes a screenshot of the current game screen and saves it to disk. Returns the saved PNG file path and screen resolution.")]
+        [Description("Takes a screenshot for the player and saves it to disk. This tool returns artifact metadata only; it does not claim that the language model can inspect the image.")]
         public string TakeScreenshot(
             [Description("Optional file name for the screenshot (without directory path or .png extension). If empty, an automatic timestamped name will be used.")] string name = null)
         {

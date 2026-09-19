@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
 using RimAgent.Game;
 using RimAgent.Mcp;
@@ -24,7 +26,10 @@ namespace RimAgent.Agent
     {
         public const string ModId = "greenmushroom.rimagent";
         public const float Temperature = 0.3f;
-        public const int MaxOutputTokens = 2000;
+        // 高推理強度的供應商可能把推理 token 計入輸出上限；保留足夠空間給工具規劃與最終回覆。
+        public const int MaxOutputTokens = 4000;
+        private const int HistoryCompactionMessageThreshold = 60;
+        private const int HistoryCompactionPreservedGroups = 6;
 
         private readonly ChatClientAgent _agent;
         private readonly AgentToolRegistry _registry;
@@ -33,6 +38,7 @@ namespace RimAgent.Agent
         private readonly IGameWorld _world;
         private readonly Func<string> _instructions;
         private AgentSession _session;
+        private string _serializedSession;
         private int _busy;
         private int _maxSteps;
 
@@ -59,12 +65,22 @@ namespace RimAgent.Agent
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
             // 系統提示走 Instructions（AF 正統）；CachedContext 留空，待實測 token 後再決定是否加回。
+#pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
             _agent = new ChatClientAgent(_inner, new ChatClientAgentOptions
             {
                 Name = "ColonyAgent",
                 ChatOptions = new ChatOptions { Instructions = AgentSystemPrompt.Text },
+                // 只折疊較舊的工具輸出，保留最近的對話、使用者意圖與工具呼叫。
+                // 這在一般遊戲過程中避免歷史無限成長，而不改變近期上下文。
+                AIContextProviders = new[]
+                {
+                    new CompactionProvider(new ToolResultCompactionStrategy(
+                        CompactionTriggers.MessagesExceed(HistoryCompactionMessageThreshold),
+                        HistoryCompactionPreservedGroups))
+                },
                 UseProvidedChatClientAsIs = true
             });
+#pragma warning restore MAAI001
         }
 
         public AgentTranscript Transcript { get; }
@@ -149,12 +165,31 @@ namespace RimAgent.Agent
             {
                 if (_session == null)
                 {
-                    _session = await _agent.CreateSessionAsync(cancellationToken).AsTask().ConfigureAwait(false);
+                    _session = RestoreOrCreateSession(cancellationToken);
                 }
 
-                AgentResponse response = await _agent
-                    .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions()), cancellationToken)
-                    .ConfigureAwait(false);
+                AgentResponse response;
+                try
+                {
+                    response = await _agent
+                        .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions()), cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex) when (Classify(ex) == AgentErrorKind.ContextTooLong)
+                {
+                    // 供應商仍可能因 schema、推理 token 或既有舊存檔超出視窗。
+                    // 重建 AF session 後僅重試一次目前指令，避免玩家卡死在每句都失敗的狀態。
+                    _session = await _agent.CreateSessionAsync(cancellationToken).AsTask().ConfigureAwait(false);
+                    Transcript.Add(new TranscriptEntry
+                    {
+                        Kind = TranscriptKind.Notice,
+                        Text = "Conversation context was too long; older model history was cleared and this instruction was retried.",
+                        InstructionId = instructionId
+                    });
+                    response = await _agent
+                        .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions()), cancellationToken)
+                        .ConfigureAwait(false);
+                }
 
                 string reply = FinalAssistantText(response);
                 Transcript.Add(new TranscriptEntry
@@ -164,6 +199,15 @@ namespace RimAgent.Agent
                     InstructionId = instructionId,
                     ToolsStripped = IsToolsStripped(response)
                 });
+                if (IsToolsStripped(response))
+                {
+                    Transcript.Add(new TranscriptEntry
+                    {
+                        Kind = TranscriptKind.Notice,
+                        Text = "The tool-step budget was reached before all planned actions completed. Ask a follow-up instruction to continue.",
+                        InstructionId = instructionId
+                    });
+                }
                 Undo.EndFrame(text);
                 IReadOnlyList<string> blocked = ConfirmGate.TakeBlocked();
                 if (blocked.Count > 0)
@@ -205,6 +249,7 @@ namespace RimAgent.Agent
             // 丟棄 AF session（含歷史）；下一次 SendAsync 重建。復原堆疊跟著清掉：
             // 對話歸零後「上一句」已無所指，留著只會讓人困惑。等待中的確認一併作廢。
             _session = null;
+            _serializedSession = null;
             _pendingConfirmation = null;
             ConfirmGate.ResetBypass();
             Transcript.Clear();
@@ -218,15 +263,34 @@ namespace RimAgent.Agent
         public async Task<string> ConfirmAsync(CancellationToken cancellationToken = default)
         {
             string text = _pendingConfirmation;
-            if (text == null) return null;
-            ConfirmGate.BypassOnce();
+            if (text == null || !ConfirmGate.HasPendingApprovals) return null;
+            if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
+            {
+                throw new InvalidOperationException("RimAgent is still working on the previous instruction.");
+            }
             try
             {
-                return await SendAsync(text, cancellationToken).ConfigureAwait(false);
+                Undo.BeginFrame();
+                int executed = await ConfirmGate.ApprovePendingAsync(cancellationToken).ConfigureAwait(false);
+                Undo.EndFrame(text + " (confirmed)");
+                _pendingConfirmation = null;
+                string summary = $"Executed {executed} confirmed command(s).";
+                Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = summary,
+                    InstructionId = Transcript.CurrentInstructionId
+                });
+                return summary;
+            }
+            catch
+            {
+                Undo.EndFrame(text + " (confirmation failed)");
+                throw;
             }
             finally
             {
-                ConfirmGate.ResetBypass();
+                Volatile.Write(ref _busy, 0);
             }
         }
 
@@ -235,12 +299,60 @@ namespace RimAgent.Agent
         {
             if (_pendingConfirmation == null) return;
             _pendingConfirmation = null;
+            ConfirmGate.DiscardPendingApprovals();
+            ConfirmGate.DiscardPendingApprovals();
             Transcript.Add(new TranscriptEntry
             {
                 Kind = TranscriptKind.Notice,
                 Text = "Pending confirmation discarded.",
                 InstructionId = Transcript.CurrentInstructionId
             });
+        }
+
+        /// <summary>供 GameComponent 在存檔時保存 AF 的模型歷史與工具呼叫內容。</summary>
+        public string SerializeForSave()
+        {
+            if (_session == null || IsBusy) return null;
+            try
+            {
+                JsonElement document = _agent.SerializeSessionAsync(_session, null, CancellationToken.None)
+                    .AsTask().GetAwaiter().GetResult();
+                return document.GetRawText();
+            }
+            catch
+            {
+                // 存檔不能因框架升級或供應商資料不相容而失敗；保留 transcript 作為兜底。
+                return null;
+            }
+        }
+
+        public void RestoreSerializedSession(string serialized)
+        {
+            if (IsBusy) throw new InvalidOperationException("Cannot restore while RimAgent is working.");
+            _serializedSession = string.IsNullOrWhiteSpace(serialized) ? null : serialized;
+            _session = null;
+        }
+
+        private AgentSession RestoreOrCreateSession(CancellationToken cancellationToken)
+        {
+            string serialized = _serializedSession;
+            _serializedSession = null;
+            if (!string.IsNullOrWhiteSpace(serialized))
+            {
+                try
+                {
+                    using (JsonDocument document = JsonDocument.Parse(serialized))
+                    {
+                        return _agent.DeserializeSessionAsync(document.RootElement, null, cancellationToken)
+                            .AsTask().GetAwaiter().GetResult();
+                    }
+                }
+                catch
+                {
+                    // 舊版存檔或 Agent Framework 升級後無法還原時，安全地退回新會話。
+                }
+            }
+            return _agent.CreateSessionAsync(cancellationToken).AsTask().GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -297,7 +409,7 @@ namespace RimAgent.Agent
                 MaxOutputTokens = MaxOutputTokens
             };
             ApplyReasoning(options, Reasoning);
-            // Run 層覆寫 agent 層的核心提示詞：常駐指令等改完下一句生效，不必重建會話。
+            // Run 層覆寫 agent 層的核心提示詞：擴充包內容變更後下一句立即生效，不必重建會話。
             string instructions = null;
             if (_instructions != null)
             {

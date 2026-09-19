@@ -12,7 +12,7 @@ namespace RimAgent.Agent
         public string Body { get; set; } = string.Empty;
     }
 
-    /// <summary>出貨的 agent 擴充包內容：內建行為準則＋技能包（玩家常駐指令另存存檔，不在這裡）。</summary>
+    /// <summary>出貨的 agent 擴充包內容：內建行為準則與技能包。</summary>
     public sealed class AgentPack
     {
         public string Conduct { get; set; } = string.Empty;

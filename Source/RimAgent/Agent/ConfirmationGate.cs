@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using RimAgent.Tools;
 
 namespace RimAgent.Agent
@@ -15,9 +16,15 @@ namespace RimAgent.Agent
     /// </summary>
     public sealed class ConfirmationGate : ICommandGate
     {
+        private sealed class PendingApproval
+        {
+            public Func<CancellationToken, Task<object>> ExecuteAsync;
+        }
+
         private readonly Func<AgentMode> _mode;
         private readonly object _gate = new object();
         private readonly List<string> _blocked = new List<string>();
+        private readonly List<PendingApproval> _pending = new List<PendingApproval>();
         private int _bypass;
         // 不在工具呼叫期間（直接建構工具的測試）時以最保守的 Confirm 看待。
         private ToolRisk _currentRisk = ToolRisk.Confirm;
@@ -30,6 +37,14 @@ namespace RimAgent.Agent
         }
 
         public AgentMode Mode => _mode();
+
+        public bool HasPendingApprovals
+        {
+            get
+            {
+                lock (_gate) return _pending.Count > 0;
+            }
+        }
 
         public bool AllowCommands()
         {
@@ -53,6 +68,45 @@ namespace RimAgent.Agent
             lock (_gate)
             {
                 _blocked.Add(preview ?? string.Empty);
+            }
+        }
+
+        /// <summary>封存預覽過的固定工具呼叫；核准時不會重送自然語句給模型。</summary>
+        internal void RegisterPendingApproval(Func<CancellationToken, Task<object>> executeAsync)
+        {
+            if (executeAsync == null) return;
+            lock (_gate)
+            {
+                _pending.Add(new PendingApproval { ExecuteAsync = executeAsync });
+            }
+        }
+
+        internal async Task<int> ApprovePendingAsync(CancellationToken cancellationToken)
+        {
+            PendingApproval[] approvals;
+            lock (_gate)
+            {
+                approvals = _pending.ToArray();
+                _pending.Clear();
+                _blocked.Clear();
+            }
+
+            int executed = 0;
+            foreach (PendingApproval approval in approvals)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await approval.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+                executed++;
+            }
+            return executed;
+        }
+
+        internal void DiscardPendingApprovals()
+        {
+            lock (_gate)
+            {
+                _pending.Clear();
+                _blocked.Clear();
             }
         }
 

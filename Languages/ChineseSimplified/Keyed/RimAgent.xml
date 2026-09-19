@@ -95,4 +95,6 @@
   <RimAgent.Goal.NoSuch>没有第 {0} 个目标。用 /goal 查看清单。</RimAgent.Goal.NoSuch>
   <RimAgent.Goal.Full>目标数已达上限，先用 /goal remove &lt;n&gt; 删掉几个。</RimAgent.Goal.Full>
 
+  <RimAgent.Settings.AutoOnEmergencyMedical>响应倒地或流血的殖民者</RimAgent.Settings.AutoOnEmergencyMedical>
+  <RimAgent.Settings.AutoOnFire>响应火灾</RimAgent.Settings.AutoOnFire>
 </LanguageData>
