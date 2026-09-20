@@ -45,6 +45,12 @@ namespace RimAgent
         public bool autoOnFoodShortage = true;
         public bool autoOnEmergencyMedical = true;
         public bool autoOnFire = true;
+
+        // 懸浮視窗的位置與大小持久化
+        public float windowRectX = -1f;
+        public float windowRectY = -1f;
+        public float windowRectWidth = 620f;
+        public float windowRectHeight = 460f;
 #pragma warning restore S1104
 
         public override void ExposeData()
@@ -72,6 +78,10 @@ namespace RimAgent
             Scribe_Values.Look(ref autoOnFoodShortage, "autoOnFoodShortage", true);
             Scribe_Values.Look(ref autoOnEmergencyMedical, "autoOnEmergencyMedical", true);
             Scribe_Values.Look(ref autoOnFire, "autoOnFire", true);
+            Scribe_Values.Look(ref windowRectX, "windowRectX", -1f);
+            Scribe_Values.Look(ref windowRectY, "windowRectY", -1f);
+            Scribe_Values.Look(ref windowRectWidth, "windowRectWidth", 620f);
+            Scribe_Values.Look(ref windowRectHeight, "windowRectHeight", 460f);
         }
 
         public ToolPermissions ToPermissions()

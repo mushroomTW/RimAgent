@@ -1,8 +1,8 @@
 # RimAgent
 
-A RimWorld 1.6 mod that lets you run your colony in natural language. Open the **Agent** tab on the bottom bar and type what you want done — "set Alice's Doctor priority to 1", "mark the steel in the selected area for mining", "draft everyone and move to (25, 30)". The agent reads colony state through tools, plans, executes real game actions, and shows every tool call in an action log.
+A RimWorld 1.6 mod that lets you run your colony in natural language. Click the **Agent** button on the bottom bar to open the floating, draggable HUD window ("智核 · 決策紀錄" / Decision Log). Type what you want done — "set Alice's Doctor priority to 1", "mark the steel in the selected area for mining", "draft everyone and move to (25, 30)". The agent reads colony state through tools, plans, executes real game actions, and presents every decision and action in real time without closing the world view.
 
-The tab is a single input line plus **Send** (which turns into **Stop** while the agent works). Two dropdowns above it switch the **mode** and the model's **reasoning effort** (Auto / Off / Low / Medium / High; Auto leaves it to the framework's default) — both are saved in the mod settings. Everything else is a slash command: type `/` to open the command list (↑↓ to move, Tab or Enter to pick):
+The window features a sleek sci-fi dark HUD style with borderlines, movable anywhere on screen with position and size memory. It includes the decision log stream, a single input line, **Send** (which turns into **Stop** while the agent works), and two status dropdowns for **mode** and model **reasoning effort** (Auto / Off / Low / Medium / High). Everything else is a slash command: type `/` to open the command list (↑↓ to move, Tab or Enter to pick):
 
 | Command | What it does |
 | --- | --- |

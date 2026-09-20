@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
 
-  <!-- Agent tab -->
+  <!-- Agent window -->
+  <RimAgent.WindowTitle>RimAgent · Decision Log</RimAgent.WindowTitle>
+  <RimAgent.Tag.EmergencyStop>[Emergency Stop]</RimAgent.Tag.EmergencyStop>
+  <RimAgent.Tag.AutoPause>[Auto Pause]</RimAgent.Tag.AutoPause>
+  <RimAgent.Tag.AutoAction>[Auto Action]</RimAgent.Tag.AutoAction>
+  <RimAgent.Close>Close</RimAgent.Close>
   <RimAgent.Placeholder>Tell the agent what to do, or type / for commands</RimAgent.Placeholder>
   <RimAgent.Send>Send</RimAgent.Send>
   <RimAgent.Stop>Stop</RimAgent.Stop>

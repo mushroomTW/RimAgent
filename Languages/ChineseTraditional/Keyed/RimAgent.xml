@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
 
-  <!-- Agent 分頁 -->
+  <!-- Agent 視窗 -->
+  <RimAgent.WindowTitle>智核 · 決策紀錄</RimAgent.WindowTitle>
+  <RimAgent.Tag.EmergencyStop>[危險急停]</RimAgent.Tag.EmergencyStop>
+  <RimAgent.Tag.AutoPause>[自動暫停]</RimAgent.Tag.AutoPause>
+  <RimAgent.Tag.AutoAction>[自動處理]</RimAgent.Tag.AutoAction>
+  <RimAgent.Close>關閉</RimAgent.Close>
   <RimAgent.Placeholder>告訴 Agent 要做什麼，或輸入 / 使用指令</RimAgent.Placeholder>
   <RimAgent.Send>送出</RimAgent.Send>
   <RimAgent.Stop>停止</RimAgent.Stop>
