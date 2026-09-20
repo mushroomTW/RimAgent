@@ -48,15 +48,15 @@ namespace RimAgent.Tools
         private const string KindList = "mine, cut_plants, harvest, deconstruct, haul or hunt";
 
         [AgentTool("designate_area", ToolCategory.Build, ToolRisk.Confirm)]
-        [Description("Marks map objects for colonists to work on: mine (ore/rock), cut_plants, harvest (ripe plants), deconstruct (player buildings) or haul (items). Targets either the player's current selection or a rectangle, optionally filtered by name. Reports how many were marked.")]
+        [Description("Marks map objects for colonists: mine (ore and rock), cut_plants, harvest (ripe plants only), deconstruct (player-owned buildings only), haul (items) or hunt (wild animals). Targets the player's current selection or a rectangle, optionally filtered by name; reports how many were marked, already marked and not applicable.")]
         public string DesignateArea(
-            [Description("One of: mine, cut_plants, harvest, deconstruct, haul.")] string kind,
-            [Description("true to use whatever the player has selected on the map instead of a rectangle.")] bool useSelection,
+            [Description("mine, cut_plants, harvest, deconstruct, haul or hunt.")] string kind,
+            [Description("true to use the player's current map selection instead of a rectangle.")] bool useSelection,
             [Description("Rectangle corner x (ignored when useSelection is true).")] int x1,
             [Description("Rectangle corner z.")] int z1,
             [Description("Opposite corner x.")] int x2,
             [Description("Opposite corner z.")] int z2,
-            [Description("Only mark objects whose defName or label contains this text, e.g. \"steel\" or \"tree\". Empty string marks everything of that kind.")] string filter)
+            [Description("Mark only objects whose defName or label contains this text, e.g. \"steel\" or \"tree\"; empty marks everything of that kind.")] string filter)
         {
             DesignationKind dk = ParseKind(kind);
             if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
@@ -127,9 +127,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("cancel_designation", ToolCategory.Build, ToolRisk.Safe)]
-        [Description("Removes marks of one kind (mine, cut_plants, harvest, deconstruct, haul) from the player's selection or from a rectangle.")]
+        [Description("Removes marks of one kind from the player's selection or a rectangle.")]
         public string CancelDesignation(
-            [Description("One of: mine, cut_plants, harvest, deconstruct, haul.")] string kind,
+            [Description("mine, cut_plants, harvest, deconstruct, haul or hunt.")] string kind,
             [Description("true to use the player's current map selection instead of a rectangle.")] bool useSelection,
             [Description("Rectangle corner x (ignored when useSelection is true).")] int x1,
             [Description("Rectangle corner z.")] int z1,
@@ -180,15 +180,15 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-        [Description("Places construction blueprints for colonists to build. Can place a line of several blueprints (e.g. a wall) by giving count and direction. Fails with the game's reason when a cell is not buildable.")]
+        [Description("Places blueprints for colonists to build: one building or floor, or a straight line of them (count and direction, e.g. a wall). Reports how many cells the game refused and the first few reasons.")]
         public string PlaceBlueprint(
             [Description("Building or floor name or defName, e.g. \"wall\", \"door\", \"solar generator\", \"bed\".")] string building,
             [Description("x of the first cell.")] int x,
             [Description("z of the first cell.")] int z,
-            [Description("Rotation: 0 north, 1 east, 2 south, 3 west. Use 0 unless orientation matters (doors, beds).")] int rotation,
-            [Description("Material name or defName for buildings made of stuff, e.g. \"wood\", \"steel\", \"granite blocks\". Empty string uses the default material.")] string stuff,
-            [Description("How many blueprints to place in a line, 1-50. Use 1 for a single building.")] int count,
-            [Description("Direction of the line when count > 1: north, east, south or west.")] string direction)
+            [Description("0 north, 1 east, 2 south, 3 west; matters for doors, beds and other oriented buildings, otherwise 0.")] int rotation,
+            [Description("Material name or defName for buildings made of stuff, e.g. \"wood\", \"steel\", \"granite blocks\"; empty uses the default material.")] string stuff,
+            [Description("Blueprints in the line, 1-50; 1 for a single building.")] int count,
+            [Description("Line direction when count > 1: north, east, south or west.")] string direction)
         {
             ResolveResult<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
             if (!def.Success) return def.Error;

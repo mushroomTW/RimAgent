@@ -21,7 +21,7 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 | --- | --- | --- |
 | Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search, game screenshots | on |
 | Work | work priorities, daily schedules (undoable) | on |
-| Build | mine / cut / harvest / deconstruct / haul designations, blueprints (single or in a line) | on |
+| Build | mine / cut / harvest / deconstruct / haul / hunt designations, blueprints (single or in a line) | on |
 | Combat | draft, move, attack | on |
 | Trade | orbital trader and visiting caravan stock listing, buying and selling in a single deal, forming player caravans | on |
 | Medical | health status, medical care levels, scheduling surgery | on |

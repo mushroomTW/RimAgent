@@ -27,7 +27,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_animals", ToolCategory.Animal, ToolRisk.Query)]
-        [Description("Lists the colony's animals: species, name, allowed area and health, plus a count of wild animals on the map. Use this before taming, training or assigning areas.")]
+        [Description("Lists colony animals with id, name, allowed area and health, and counts the wild animals on the map by species. Check it before taming, training or area changes.")]
         public string ListAnimals()
         {
             List<AnimalInfo> animals = _world.GetAnimals().ToList();
@@ -59,9 +59,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("tame_animal", ToolCategory.Animal, ToolRisk.Safe)]
-        [Description("Marks a wild animal for taming: a handler will attempt it when available, using the game's taming mechanics and success chances. Give the animal's id from list_animals.")]
+        [Description("Marks a wild animal for taming; a handler attempts it when available with the game's success chances.")]
         public string TameAnimal(
-            [Description("Wild animal id.")] string animal)
+            [Description("Wild animal's species (e.g. \"muffalo\") or id; when several match, the error lists their ids.")] string animal)
         {
             ResolveResult<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
             if (!target.Success) return target.Error;
@@ -76,7 +76,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("train_animal", ToolCategory.Animal, ToolRisk.Safe)]
-        [Description("Turns one trainable skill on or off for a colony animal, e.g. obedience, release, rescue or haul. Animals that cannot learn it are reported, not forced.")]
+        [Description("Turns one training (obedience, release, rescue or haul) on or off for a colony animal. Animals that cannot learn it are reported.")]
         public string TrainAnimal(
             [Description("Colony animal name or id.")] string animal,
             [Description("Training name, e.g. \"obedience\".")] string training,
@@ -98,7 +98,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_animal_area", ToolCategory.Animal, ToolRisk.Safe)]
-        [Description("Restricts a colony animal to one allowed area, or \"unrestricted\" to let it roam the home region.")]
+        [Description("Restricts a colony animal to one allowed area, or \"unrestricted\" to let it roam.")]
         public string SetAnimalArea(
             [Description("Colony animal name or id.")] string animal,
             [Description("Area name, or \"unrestricted\".")] string area)

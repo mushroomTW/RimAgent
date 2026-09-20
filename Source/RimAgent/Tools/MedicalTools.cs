@@ -27,7 +27,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_medical_care", ToolCategory.Medical, ToolRisk.Safe)]
-        [Description("Sets one colonist's medical care level: how good the medicine doctors may use on them. Higher care consumes better medicine. Reports the previous and new value.")]
+        [Description("Sets the best medicine doctors may use on one colonist. Reports the previous and new level.")]
         public string SetMedicalCare(
             [Description("Colonist name, nickname or id.")] string colonist,
             [Description("Care level: NoCare, NoMeds, HerbalOrWorse, NormalOrWorse or Best.")] string level)
@@ -50,7 +50,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_health", ToolCategory.Medical, ToolRisk.Query)]
-        [Description("Shows colonist health: injuries, diseases, bleeding, missing body parts and pending operations, each with tending status. Use this before scheduling surgery.")]
+        [Description("Shows injuries, diseases, bleeding, missing body parts and pending operations for the given colonists, each with tending status. Check it before schedule_surgery.")]
         public string GetHealth(
             [Description("Colonist names or ids separated by commas, or \"all\" for everyone.")] string colonists)
         {
@@ -121,11 +121,11 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("schedule_surgery", ToolCategory.Medical, ToolRisk.Confirm)]
-        [Description("Schedules an operation on a colonist: adds a medical bill to their bill stack for a doctor to carry out. Use get_health first to see injuries and pick the surgery. Reports the scheduled operation and body part, or the reason it cannot be scheduled (unknown surgery, missing research, unsuitable part, already scheduled).")]
+        [Description("Adds an operation to a colonist's bill stack for a doctor to perform. Reports the scheduled operation and body part, or why it cannot be scheduled (unknown surgery, missing research, unsuitable part, already scheduled).")]
         public string ScheduleSurgery(
             [Description("Colonist name, nickname or id.")] string colonist,
             [Description("Surgery name, e.g. \"remove body part\".")] string surgery,
-            [Description("Body part, e.g. \"left lung\". Required for surgeries that target a part (the tool lists the candidates if you leave it empty); ignored by surgeries that need no part.")] string part)
+            [Description("Body part, e.g. \"left lung\". Required for surgeries that target a part; leave it empty to have the tool list the candidate parts. Ignored by surgeries that need no part.")] string part)
         {
             ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
             if (!pawn.Success) return pawn.Error;

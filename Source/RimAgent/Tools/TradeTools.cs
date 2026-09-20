@@ -29,7 +29,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_orbital_traders", ToolCategory.Trade, ToolRisk.Query)]
-        [Description("Lists the orbital traders around the colony and what each one is selling, with its silver reserve. Orbital traders are trade ships in orbit; do not confuse them with visiting caravans on the ground, which this tool never lists.")]
+        [Description("Lists the trade ships currently in orbit: id, goods for sale and silver reserve. Traders on the ground are a separate list, list_visitor_caravans.")]
         public string ListOrbitalTraders()
         {
             List<TraderInfo> traders = _world.GetTraders()
@@ -44,7 +44,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_visitor_caravans", ToolCategory.Trade, ToolRisk.Query)]
-        [Description("Lists the visiting caravans at the colony and what each one is selling, with its silver reserve. Visiting caravans are traders on the ground; do not confuse them with orbital traders in orbit, which this tool never lists.")]
+        [Description("Lists the trader caravans currently visiting the colony on the ground: id, goods for sale and silver reserve. Ships in orbit are a separate list, list_orbital_traders.")]
         public string ListVisitorCaravans()
         {
             List<TraderInfo> traders = _world.GetTraders()
@@ -59,12 +59,12 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("execute_trade", ToolCategory.Trade, ToolRisk.Confirm)]
-        [Description("Buys from and sells to one trader in a single deal: items and silver change hands at once with the game's trade prices. Ask for the trader's id from list_orbital_traders or list_visitor_caravans first so names and stock are exact. Only items are listed; silver moves automatically as payment.")]
+        [Description("Buys from and sells to one trader in a single deal at the game's prices; goods and silver change hands at once. Take the trader id and exact item names from list_orbital_traders or list_visitor_caravans. Silver settles the deal automatically, so list goods only.")]
         public string ExecuteTrade(
             [Description("Trader id in square brackets from list_orbital_traders or list_visitor_caravans.")] string trader,
-            [Description("What to buy, e.g. \"ultratech medicine x12, spacer component x4\". Empty string buys nothing.")] string buys,
-            [Description("What to sell, e.g. \"steel x100, corn x50\". Empty string sells nothing.")] string sells,
-            [Description("Negotiator name, nickname or id. Empty string uses the colonist with the best social skill.")] string negotiator)
+            [Description("Goods to buy as \"name x count\", comma-separated, e.g. \"medicine x12, component x4\"; empty buys nothing.")] string buys,
+            [Description("Goods to sell as \"name x count\", comma-separated, e.g. \"steel x100, corn x50\"; empty sells nothing.")] string sells,
+            [Description("Negotiator name, nickname or id; empty picks the colonist with the highest Social skill.")] string negotiator)
         {
             ResolveResult<List<ParsedLine>> buyLines = ParseTradeList(buys, "buys");
             if (!buyLines.Success) return buyLines.Error;
@@ -110,7 +110,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("form_caravan", ToolCategory.Trade, ToolRisk.Confirm)]
-        [Description("Forms the named colonists into a caravan that leaves the map toward a compass direction. Members must be named explicitly (\"all\" is refused); drafted members must be undrafted first. Pack animals are not included yet.")]
+        [Description("Sends the named colonists off the map at once as a caravan heading in a compass direction. Name the members one by one (\"all\" is refused) and undraft them first; pack animals are not supported yet.")]
         public string FormCaravan(
             [Description("Colonist names or ids separated by commas, e.g. \"Ali, Bob\".")] string colonists,
             [Description("Compass heading: N, NE, E, SE, S, SW, W or NW.")] string heading)

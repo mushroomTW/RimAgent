@@ -22,7 +22,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_time_speed", ToolCategory.Time, ToolRisk.Query)]
-        [Description("Shows the current game time flow speed: paused, normal, fast or superfast, with the speeds you can switch to.")]
+        [Description("Shows the current time speed (paused, normal, fast or superfast) and the speeds available.")]
         public string GetTimeSpeed()
         {
             TimeSpeedInfo info = _world.GetTimeSpeed();
@@ -32,9 +32,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_time_speed", ToolCategory.Time, ToolRisk.Safe)]
-        [Description("Pauses the game or changes the time flow speed. Pause before giving orders that need a still game, speed up while waiting. Reports the previous and new speed.")]
+        [Description("Pauses the game or changes the time speed. Pause before a batch of orders that needs a still game; speed up while waiting. Reports the previous and new speed.")]
         public string SetTimeSpeed(
-            [Description("Speed: Paused (or 暫停), Normal, Fast or Superfast.")] string speed)
+            [Description("Paused, Normal, Fast or Superfast.")] string speed)
         {
             string want = NormalizeSpeed(speed);
             TimeSpeedInfo before = _world.GetTimeSpeed();

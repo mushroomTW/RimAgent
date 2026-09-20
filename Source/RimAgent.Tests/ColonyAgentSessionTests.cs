@@ -600,7 +600,7 @@ namespace RimAgent.Tests
         {
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Ask, () => "COMPOSED PROMPT");
 
-            Assert.That(session.BuildRunOptions().Instructions, Does.StartWith("COMPOSED PROMPT").And.Contain("Read-only mode"));
+            Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT" + AgentSystemPrompt.AskModeNote));
             Assert.That(NewSession().BuildRunOptions().Instructions, Is.Null, "非詢問模式不動 Instructions");
         }
 

@@ -23,14 +23,14 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("mcp_status", ToolCategory.Mcp, ToolRisk.Query)]
-        [Description("Shows the configured MCP servers and whether each one is disabled, idle or running. Servers come from AgentPack/MCP/servers.json.")]
+        [Description("Shows the MCP servers configured in AgentPack/MCP/servers.json and whether each is disabled, idle or running.")]
         public string Status()
         {
             return _manager.Status();
         }
 
         [AgentTool("mcp_list_tools", ToolCategory.Mcp, ToolRisk.Query)]
-        [Description("Lists the tools offered by every enabled MCP server, with names and descriptions. Call this before mcp_call_tool to learn exact tool names and arguments.")]
+        [Description("Lists the tools of every enabled MCP server with names and descriptions. Call it before mcp_call_tool for the exact tool name.")]
         public async Task<string> ListTools(CancellationToken cancellationToken)
         {
             try
@@ -44,7 +44,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("mcp_call_tool", ToolCategory.Mcp, ToolRisk.Confirm)]
-        [Description("Calls one tool on one MCP server. Arguments must be a single JSON object string matching that tool's input schema.")]
+        [Description("Calls one tool on one MCP server with a JSON object of arguments matching that tool's input schema.")]
         public async Task<string> CallTool(
             [Description("Server name from mcp_status, e.g. \"fetch\".")] string server,
             [Description("Tool name from mcp_list_tools, e.g. \"fetch\".")] string tool,

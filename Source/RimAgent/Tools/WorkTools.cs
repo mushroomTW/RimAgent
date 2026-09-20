@@ -39,11 +39,11 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_work_priority", ToolCategory.Work, ToolRisk.Safe)]
-        [Description("Sets one colonist's priority for one work type. Priority 1 is highest, 4 is lowest, 0 disables that work for the colonist. Reports the previous and new value.")]
+        [Description("Sets one colonist's priority for one work type and reports the previous and new value. For several changes at once use set_work_priorities.")]
         public string SetWorkPriority(
             [Description("Colonist name, nickname or id.")] string colonist,
             [Description("Work type name or defName, e.g. Doctor, Cooking, Mining, Growing, Construction, Hauling, Cleaning, Research.")] string workType,
-            [Description("0 (disabled), or 1 (highest) to 4 (lowest).")] int priority)
+            [Description("0 disables the work for this colonist; otherwise 1 (highest) to 4 (lowest).")] int priority)
         {
             if (priority < 0 || priority > 4)
             {
@@ -85,9 +85,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_work_priorities", ToolCategory.Work, ToolRisk.Safe)]
-        [Description("Sets several work priorities atomically after validating every assignment. Format assignments as 'colonist:work=priority; colonist:work=priority', for example 'Ali:Doctor=1; Bob:Hauling=2'.")]
+        [Description("Sets several work priorities in one call: every assignment is validated first, then all are applied or none.")]
         public string SetWorkPriorities(
-            [Description("Semicolon-separated assignments in colonist:work=priority format.")] string assignments)
+            [Description("Semicolon-separated colonist:work=priority, e.g. \"Ali:Doctor=1; Bob:Hauling=2\". Priority 0 disables, 1 highest, 4 lowest.")] string assignments)
         {
             string[] parts = (assignments ?? string.Empty).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0) return ToolText.Error("assignments is empty. Use colonist:work=priority; colonist:work=priority.");
@@ -164,7 +164,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_work_priorities", ToolCategory.Work, ToolRisk.Query)]
-        [Description("Lists work priorities for one colonist, or for everyone. 0 means the work is disabled for that colonist; 1 is highest, 4 lowest.")]
+        [Description("Lists work priorities for one colonist or everyone: 0 disabled, 1 highest, 4 lowest, \"incapable\" when the colonist cannot do that work.")]
         public string ListWorkPriorities(
             [Description("Colonist name, nickname or id, or \"all\" for everyone.")] string colonist)
         {
@@ -182,11 +182,11 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_schedule", ToolCategory.Work, ToolRisk.Safe)]
-        [Description("Sets what colonists do during a range of hours in their daily schedule. Hours wrap around midnight, e.g. start 22 end 6 covers 22:00 to 05:59.")]
+        [Description("Sets what colonists do during a range of hours of their daily schedule. The range wraps past midnight: start 22, end 6 covers 22:00-05:59.")]
         public string SetSchedule(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
-            [Description("First hour of the range, 0-23 (inclusive).")] int startHour,
-            [Description("Hour the range ends, 0-23 (exclusive). Must differ from startHour.")] int endHour,
+            [Description("First hour, 0-23 (inclusive).")] int startHour,
+            [Description("Hour the range ends, 0-23 (exclusive); must differ from startHour, so a whole day takes two calls.")] int endHour,
             [Description("Assignment: Anything, Work, Joy, Sleep or Meditate.")] string assignment)
         {
             if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23)

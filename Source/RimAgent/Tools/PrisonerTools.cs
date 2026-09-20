@@ -24,7 +24,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_prisoners", ToolCategory.Prisoner, ToolRisk.Query)]
-        [Description("Lists the colony's prisoners: remaining resistance, recruitability, interaction mode and health. Use this before changing how a prisoner is treated.")]
+        [Description("Lists prisoners with id, remaining resistance, recruitability, current interaction mode and health. Check it before set_prisoner_interaction or release_prisoner.")]
         public string ListPrisoners()
         {
             List<PrisonerInfo> prisoners = _world.GetPrisoners().ToList();
@@ -46,7 +46,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_prisoner_interaction", ToolCategory.Prisoner, ToolRisk.Confirm)]
-        [Description("Sets how wardens treat a prisoner: recruit, release, execution and other modes from the game. Recruitment itself still happens through the game's warden chats over time, not instantly.")]
+        [Description("Sets how wardens treat a prisoner: recruit, release, execution and the game's other modes. The outcome then unfolds over time through warden visits; release_prisoner releases at once instead.")]
         public string SetPrisonerInteraction(
             [Description("Prisoner name, nickname or id.")] string prisoner,
             [Description("Interaction mode, e.g. \"recruit\", \"release\" or \"execution\".")] string mode)
@@ -68,7 +68,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("release_prisoner", ToolCategory.Prisoner, ToolRisk.Confirm)]
-        [Description("Releases a prisoner immediately, the same as the game's release action. They leave the colony for good.")]
+        [Description("Releases a prisoner right now, as the game's release action does; they leave the colony for good.")]
         public string ReleasePrisoner(
             [Description("Prisoner name, nickname or id.")] string prisoner)
         {

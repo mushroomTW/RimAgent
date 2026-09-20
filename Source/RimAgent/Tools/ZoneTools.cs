@@ -24,7 +24,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_zones", ToolCategory.Zone, ToolRisk.Query)]
-        [Description("Lists the zones on the map: stockpiles and growing zones with their labels and cell counts. Use this before deleting a zone or changing a stockpile filter.")]
+        [Description("Lists stockpile and growing zones with id, label and cell count. Check it before delete_zone or set_zone_filter.")]
         public string ListZones()
         {
             List<ZoneInfo> zones = _world.GetZones().ToList();
@@ -41,14 +41,14 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("add_zone", ToolCategory.Zone, ToolRisk.Safe)]
-        [Description("Adds a stockpile or growing zone over a map rectangle. Every cell must be inside the map and free of other zones, otherwise nothing is built.")]
+        [Description("Creates a stockpile or growing zone over a rectangle. Every cell must be inside the map and free of other zones, or nothing is created.")]
         public string AddZone(
             [Description("Zone kind: \"stockpile\" or \"growing\".")] string kind,
             [Description("Rectangle corner x.")] int x1,
             [Description("Rectangle corner z.")] int z1,
             [Description("Opposite corner x.")] int x2,
             [Description("Opposite corner z.")] int z2,
-            [Description("Plant to grow, e.g. \"rice\". Empty string keeps the game's default. Growing zones only.")] string plant)
+            [Description("Plant to grow, e.g. \"rice\"; growing zones only. Empty keeps the game's default.")] string plant)
         {
             string canonical = CanonicalKind(kind);
             if (canonical == null) return ToolText.Error($"unknown zone kind \"{kind}\". Use stockpile or growing.");
@@ -76,7 +76,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("delete_zone", ToolCategory.Zone, ToolRisk.Confirm)]
-        [Description("Deletes a zone by its id or label. Stockpiled items stay on the ground.")]
+        [Description("Deletes a zone by id or label. Items in a deleted stockpile stay on the ground.")]
         public string DeleteZone(
             [Description("Zone id in square brackets from list_zones, or its label.")] string zone)
         {
@@ -92,11 +92,11 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_zone_filter", ToolCategory.Zone, ToolRisk.Safe)]
-        [Description("Allows or disallows items in a stockpile zone's storage filter, e.g. allow \"corn, rice\", disallow \"steel\". At least one side must name something.")]
+        [Description("Allows and/or disallows items in a stockpile's storage filter, e.g. allow \"corn, rice\", disallow \"steel\". Name at least one item on either side.")]
         public string SetZoneFilter(
             [Description("Zone id in square brackets from list_zones, or its label.")] string zone,
-            [Description("Items to allow, e.g. \"corn, rice\". Empty string allows nothing new.")] string allow,
-            [Description("Items to disallow, e.g. \"steel\". Empty string disallows nothing.")] string disallow)
+            [Description("Items to allow, comma-separated; empty allows nothing new.")] string allow,
+            [Description("Items to disallow, comma-separated; empty disallows nothing.")] string disallow)
         {
             ResolveResult<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
             if (!target.Success) return target.Error;

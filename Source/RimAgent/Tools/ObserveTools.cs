@@ -25,7 +25,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_colony_overview", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("One-line summary of the colony: population, date and time, weather, outdoor temperature, wealth, hostiles on the map and colonists close to a mental break. Call this first when asked about the general situation.")]
+        [Description("One-line colony summary: population, date and time, weather, outdoor temperature, wealth, hostiles on the map and colonists close to a mental break. Start here for any general question about how the colony is doing.")]
         public string GetColonyOverview()
         {
             ColonyOverview o = _world.GetOverview();
@@ -35,7 +35,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_colonists", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists every colonist with id, name, age, position, health, mood, current activity, draft status and skills (* = minor passion, ** = major passion). Use the id or name in other tools.")]
+        [Description("Lists every colonist: id, name, age, cell, health, mood, current activity, draft status, equipment and skills (* minor passion, ** major passion). Other tools take the id or name.")]
         public string ListColonists()
         {
             IReadOnlyList<ColonistInfo> colonists = _world.GetColonists();
@@ -61,7 +61,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_colonist_wellbeing", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Shows one colonist's needs, current equipment and active mood thoughts. Use this to understand why mood, hunger, rest or recreation is low instead of guessing.")]
+        [Description("Shows one colonist's needs, equipment and active mood thoughts. Reach for it when a colonist's mood, hunger, rest or recreation is low and you need the cause.")]
         public string GetColonistWellbeing([Description("Colonist name, nickname or id.")] string colonist)
         {
             ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
@@ -75,7 +75,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_resources", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists stockpiled resources (counted items on the map) grouped by category, plus total human-edible nutrition. Useful for questions about food, materials, medicine and components.")]
+        [Description("Lists counted resources on the map grouped by category, plus total human-edible nutrition. Answers questions about food, materials, medicine and components.")]
         public string GetResources()
         {
             ResourceSnapshot snapshot = _world.GetResources();
@@ -100,7 +100,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_alerts", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists the game's currently active colony alerts, such as food, rescue, bedroom and power problems. Use this as the first low-cost autonomous health check.")]
+        [Description("Lists the game's active colony alerts (food, rescue, bedroom, power and so on). Cheapest first check on a routine inspection.")]
         public string ListAlerts()
         {
             IReadOnlyList<AlertInfo> alerts = _world.GetAlerts();
@@ -109,7 +109,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_recent_letters", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists the most recent in-game event letters. Use it to learn what happened before deciding why the colony's state changed.")]
+        [Description("Lists the most recent in-game event letters. Explains what happened before the colony's state changed.")]
         public string ListRecentLetters()
         {
             IReadOnlyList<LetterInfo> letters = _world.GetRecentLetters();
@@ -118,7 +118,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_power_status", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Reports electrical-network count, total net watts (positive is surplus, negative is deficit) and stored battery energy.")]
+        [Description("Reports the number of power networks, total net watts (positive surplus, negative deficit) and stored battery energy.")]
         public string GetPowerStatus()
         {
             PowerInfo power = _world.GetPower();
@@ -127,7 +127,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_threats", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists active threats on the map: hostile pawns, manhunting animals, predators and fires, each with id, faction and position.")]
+        [Description("Lists active threats on the map: hostile pawns, manhunting animals, predators and fires, each with id, faction and cell. order_attack takes these ids.")]
         public string ListThreats()
         {
             IReadOnlyList<ThreatInfo> threats = _world.GetThreats();
@@ -147,7 +147,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_research_status", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Shows the current research project with its progress, and the projects that can be started now.")]
+        [Description("Shows the current research project with its progress and the projects available to start now.")]
         public string GetResearchStatus()
         {
             ResearchInfo r = _world.GetResearch();
@@ -176,9 +176,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_research", ToolCategory.Observe, ToolRisk.Safe)]
-        [Description("Switches the colony's active research project. Pass \"none\" (also accepts \"stop\" or empty) to stop the current research without losing its progress. Reports the previous and new project.")]
+        [Description("Switches the active research project; progress on the previous project is kept. Reports the previous and new project.")]
         public string SetResearch(
-            [Description("Research name or defName, e.g. \"Electricity\", or \"none\" (also \"stop\" or empty) to stop the current research.")] string project)
+            [Description("Research name or defName, e.g. \"Electricity\"; \"none\" stops research.")] string project)
         {
             string want = (project ?? string.Empty).Trim();
             ResearchInfo before = _world.GetResearch();
@@ -206,7 +206,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_maps", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists every map in this save with its id, name, tile and colonist count. Tools operate on the current map; use set_current_map first to work on another map.")]
+        [Description("Lists every map in the save: id, name, tile, colonist count and which one is current. All other tools work on the current map; switch with set_current_map.")]
         public string GetMaps()
         {
             IReadOnlyList<MapInfo> maps = _world.GetMaps();
@@ -225,9 +225,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("set_current_map", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Switches which map later tools operate on (the same as the player switching to another map). Map switching only changes the viewed map; pawns and items stay where they are.")]
+        [Description("Makes another map the current one for later tool calls, like the player switching maps. Pawns and items stay where they are.")]
         public string SetCurrentMap(
-            [Description("Map id from get_maps, or part of the map name.")] string map)
+            [Description("Map id from get_maps, or part of its name.")] string map)
         {
             ResolveResult<MapInfo> match = ResolveMap(map, _world.GetMaps());
             if (!match.Success) return match.Error;
@@ -269,15 +269,15 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("find_things", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Finds map objects by kind and optional name, optionally inside a rectangle. Returns id, defName, label, position and existing designations. Use the returned ids and positions in build and combat tools.")]
+        [Description("Finds map objects by kind, optional name and optional rectangle. Returns id, defName, label, cell and existing marks; designate_area, place_blueprint and order_attack take these ids and cells.")]
         public string FindThings(
             [Description("What to look for: any, mineable, plant, building, item or pawn.")] string kind,
             [Description("defName or part of the label to match, e.g. \"steel\" or \"tree\". Empty string matches everything.")] string name,
-            [Description("Rectangle corner x. Pass -1 for all four coordinates to search the whole map.")] int x1,
+            [Description("Rectangle corner x; pass -1 for all four corners to search the whole map.")] int x1,
             [Description("Rectangle corner z.")] int z1,
             [Description("Opposite corner x.")] int x2,
             [Description("Opposite corner z.")] int z2,
-            [Description("Maximum number of results, 1-200. Use 20 unless you need more.")] int limit)
+            [Description("Maximum results, 1-200; 0 means 20.")] int limit)
         {
             if (!TryParseKind(kind, out ThingKind parsedKind))
             {
@@ -319,9 +319,9 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Takes a screenshot for the player and saves it to disk. This tool returns artifact metadata only; it does not claim that the language model can inspect the image.")]
+        [Description("Saves a screenshot of the current game view to disk for the player and returns the file path. The image is for the player; you cannot view it.")]
         public string TakeScreenshot(
-            [Description("Optional file name for the screenshot (without directory path or .png extension). If empty, an automatic timestamped name will be used.")] string name = null)
+            [Description("File name without directory or .png; empty uses a timestamped name.")] string name = null)
         {
             string safeName = ResolveScreenshotName(name);
             ScreenshotInfo info = _world.TakeScreenshot(safeName);

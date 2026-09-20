@@ -23,7 +23,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("draft", ToolCategory.Combat, ToolRisk.Safe)]
-        [Description("Drafts or undrafts colonists. Drafted colonists stop working and follow direct orders; undraft them afterwards so they return to work.")]
+        [Description("Drafts or undrafts colonists. Drafted colonists stop working and take direct orders; undraft them afterwards so they go back to work. Downed colonists are skipped.")]
         public string Draft(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
             [Description("true to draft, false to undraft.")] bool drafted)
@@ -61,7 +61,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("order_move", ToolCategory.Combat, ToolRisk.Safe)]
-        [Description("Orders colonists to walk to a map cell. Colonists are drafted automatically if needed. Remember the model's latency: use this for positioning and retreats, not real-time dodging.")]
+        [Description("Orders colonists to walk to a cell, drafting them first if needed. Use it for positioning and retreats.")]
         public string OrderMove(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
             [Description("Destination x.")] int x,
@@ -101,10 +101,10 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("order_attack", ToolCategory.Combat, ToolRisk.Confirm)]
-        [Description("Orders colonists to attack one hostile target by its id from list_threats. Colonists are drafted automatically if needed. Colony members, prisoners and members of friendly factions are refused; wild animals can be targeted.")]
+        [Description("Orders colonists to attack one target by id, drafting them first if needed. Hostiles come from list_threats, wild animals from find_things; colony members, prisoners and friendly-faction pawns are refused.")]
         public string OrderAttack(
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
-            [Description("Id of the target, e.g. a hostile pawn from list_threats.")] int targetId)
+            [Description("Target id from list_threats or find_things.")] int targetId)
         {
             string targetLabel = ResolveTargetLabel(targetId);
             if (targetLabel == null)

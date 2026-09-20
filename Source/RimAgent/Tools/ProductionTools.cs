@@ -24,7 +24,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_worktables", ToolCategory.Production, ToolRisk.Query)]
-        [Description("Lists the work tables that can take bills, with their ids, positions and bill counts. Use this before listing, adding or deleting bills.")]
+        [Description("Lists work tables that take bills, with id, cell and bill count. Check it before list_bills, add_bill or delete_bill.")]
         public string ListWorktables()
         {
             List<WorkTableInfo> tables = _world.GetWorkTables().ToList();
@@ -42,7 +42,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_bills", ToolCategory.Production, ToolRisk.Query)]
-        [Description("Lists the production bills on one work table with their repeat counts. Bill numbers shift when bills are deleted, so list again right before deleting.")]
+        [Description("Lists the bills on one work table with their numbers and repeat counts. Numbers shift when a bill is deleted, so list again right before delete_bill.")]
         public string ListBills(
             [Description("Work table id in square brackets from list_worktables.")] string table)
         {
@@ -63,7 +63,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("add_bill", ToolCategory.Production, ToolRisk.Safe)]
-        [Description("Adds a production bill to a work table, e.g. make components 5 times. The table must be able to make the recipe; missing research or facilities are reported, not bypassed.")]
+        [Description("Adds a production bill to a work table, e.g. make components 5 times. Missing research or facilities are reported.")]
         public string AddBill(
             [Description("Work table id in square brackets from list_worktables.")] string table,
             [Description("Recipe name, e.g. \"component\" or \"short bow\".")] string recipe,
@@ -85,7 +85,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("delete_bill", ToolCategory.Production, ToolRisk.Confirm)]
-        [Description("Deletes one bill from a work table by its number from list_bills. Materials already gathered stay where they are.")]
+        [Description("Deletes one bill from a work table by its number from list_bills. Gathered materials stay where they are.")]
         public string DeleteBill(
             [Description("Work table id in square brackets from list_worktables.")] string table,
             [Description("Bill number in square brackets from list_bills.")] int bill)

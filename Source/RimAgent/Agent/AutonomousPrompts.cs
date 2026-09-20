@@ -67,13 +67,13 @@ namespace RimAgent.Agent
             switch (language)
             {
                 case AutoLanguage.Traditional:
-                    sb.Append("\n處理完當下自主任務後，若有餘力就順手推進這些目標。");
+                    sb.Append("\n上面的任務處理完後，剩下的步數用來推進這些目標。");
                     break;
                 case AutoLanguage.Simplified:
-                    sb.Append("\n处理完当下自主任务后，若有余力就顺手推进这些目标。");
+                    sb.Append("\n上面的任务处理完后，剩下的步数用来推进这些目标。");
                     break;
                 default:
-                    sb.Append("\nAfter the urgent task, work toward these goals if you have steps left.");
+                    sb.Append("\nOnce the task above is handled, spend any remaining steps on these goals.");
                     break;
             }
             return sb.ToString();
@@ -84,19 +84,19 @@ namespace RimAgent.Agent
             switch (trigger)
             {
                 case AutonomousTrigger.Raid:
-                    return "Hostiles are on the map. Deploy the defense with tools: draft colonists, position them safely and attack the threats, then undraft everyone when it is over. Favor safe positioning over chasing.";
+                    return "Hostiles are on the map. Deploy the defence with tools: draft the colonists who can fight, position them safely and attack the threats. Safe positioning beats chasing. Leave them drafted; a follow-up task fires when the raid ends.";
                 case AutonomousTrigger.RaidEnded:
-                    return "The raid has ended. Check threats to verify the map is safe, then undraft colonists who are still drafted so they can resume food, rest and normal work.";
+                    return "The raid has ended. Check threats with tools; when the map is clear, undraft everyone still drafted so they return to food, rest and work.";
                 case AutonomousTrigger.EmergencyMedical:
-                    return "A colonist is downed or bleeding. Inspect health immediately, set appropriate medical care and take the least disruptive action that gets treatment started.";
+                    return "A colonist is downed or bleeding. Check their health with tools, make sure their medical care level allows treatment, and take the least disruptive action that gets a doctor to them.";
                 case AutonomousTrigger.Fire:
-                    return "Fire is active. Inspect threats and the affected area, then take only safe, available actions to protect colonists and contain the emergency.";
+                    return "Fire is burning on the map. Check threats and the burning area with tools, then use the actions you have to keep colonists out of danger and contain it.";
                 case AutonomousTrigger.MentalBreak:
-                    return "A colonist is close to a mental break. Check moods and the causes with tools, and relieve the pressure (schedule, needs, threats, health).";
+                    return "A colonist is close to a mental break. Check their mood and its causes with tools, then relieve the pressure through schedule, needs, threats or health.";
                 case AutonomousTrigger.FoodShortage:
-                    return "Food reserves are low. Check resources with tools and secure more human-edible nutrition (harvest, hunt, trade, production bills).";
+                    return "Food reserves are low. Check resources with tools, then secure more human-edible nutrition: harvest, hunt, add cooking bills or trade.";
                 default:
-                    return "Routine inspection: check the colony overview, active threats and key resources with tools. Handle anything urgent; if all is well, reply briefly.";
+                    return "Routine inspection: check the colony overview, alerts, threats and key resources with tools. Handle anything urgent; when all is well, reply in one sentence.";
             }
         }
 
@@ -105,19 +105,19 @@ namespace RimAgent.Agent
             switch (trigger)
             {
                 case AutonomousTrigger.Raid:
-                    return "地圖上有敵對威脅。用工具佈署防禦：徵召殖民者、走位到安全位置、攻擊威脅，結束後記得全體解除徵召。以安全走位為優先，不要追擊。";
+                    return "地圖上有敵對威脅。用工具佈署防禦：徵召能作戰的殖民者、走位到安全位置、攻擊威脅。安全走位優於追擊。讓他們保持徵召；襲擊結束時會另起一次任務。";
                 case AutonomousTrigger.RaidEnded:
-                    return "襲擊已結束。先用工具確認沒有威脅，再解除仍被徵召的殖民者，讓他們恢復進食、休息與工作。";
+                    return "襲擊已結束。用工具檢查威脅；地圖淨空後，解除所有仍被徵召的殖民者，讓他們回去進食、休息與工作。";
                 case AutonomousTrigger.EmergencyMedical:
-                    return "有殖民者倒地或流血。立即用工具檢查健康狀況，設定適當醫療等級並採取最少干擾的救治行動。";
+                    return "有殖民者倒地或流血。用工具檢查他的健康，確認醫療等級允許治療，並採取最少干擾的行動讓醫生去救治。";
                 case AutonomousTrigger.Fire:
-                    return "發生火災。檢查威脅與受影響區域，只採取現有工具能安全執行的行動來保護殖民者並處理緊急狀況。";
+                    return "地圖上有火在燒。用工具檢查威脅與起火區域，再用手上的行動讓殖民者遠離危險並控制火勢。";
                 case AutonomousTrigger.MentalBreak:
-                    return "有殖民者接近精神崩潰。用工具查看心情與原因，並緩解壓力（作息、需求、威脅、健康）。";
+                    return "有殖民者接近精神崩潰。用工具查看他的心情與原因，再從作息、需求、威脅或健康著手緩解壓力。";
                 case AutonomousTrigger.FoodShortage:
-                    return "糧食儲備不足。用工具查看資源，並補充更多人可食用的營養（收成、打獵、交易、生產帳單）。";
+                    return "糧食儲備不足。用工具查看資源，再補充更多人可食用的營養：收成、打獵、加烹飪帳單或交易。";
                 default:
-                    return "例行巡檢：用工具查看殖民地概況、威脅與重要資源。有急事就處理；一切正常就簡短回報。";
+                    return "例行巡檢：用工具查看殖民地概況、警報、威脅與重要資源。有急事就處理；一切正常就用一句話回報。";
             }
         }
 
@@ -126,19 +126,19 @@ namespace RimAgent.Agent
             switch (trigger)
             {
                 case AutonomousTrigger.Raid:
-                    return "地图上有敌对威胁。用工具部署防御：征召殖民者、走位到安全位置、攻击威胁，结束后记得全体解除征召。以安全走位为优先，不要追击。";
+                    return "地图上有敌对威胁。用工具部署防御：征召能作战的殖民者、走位到安全位置、攻击威胁。安全走位优于追击。让他们保持征召；袭击结束时会另起一次任务。";
                 case AutonomousTrigger.RaidEnded:
-                    return "袭击已结束。先用工具确认没有威胁，再解除仍被征召的殖民者，让他们恢复进食、休息与工作。";
+                    return "袭击已结束。用工具检查威胁；地图净空后，解除所有仍被征召的殖民者，让他们回去进食、休息与工作。";
                 case AutonomousTrigger.EmergencyMedical:
-                    return "有殖民者倒地或流血。立即用工具检查健康状况，设置适当医疗等级并采取最少干扰的救治行动。";
+                    return "有殖民者倒地或流血。用工具检查他的健康，确认医疗等级允许治疗，并采取最少干扰的行动让医生去救治。";
                 case AutonomousTrigger.Fire:
-                    return "发生火灾。检查威胁与受影响区域，只采取现有工具能安全执行的行动来保护殖民者并处理紧急情况。";
+                    return "地图上有火在烧。用工具检查威胁与起火区域，再用手上的行动让殖民者远离危险并控制火势。";
                 case AutonomousTrigger.MentalBreak:
-                    return "有殖民者接近精神崩溃。用工具查看心情与原因，并缓解压力（作息、需求、威胁、健康）。";
+                    return "有殖民者接近精神崩溃。用工具查看他的心情与原因，再从作息、需求、威胁或健康着手缓解压力。";
                 case AutonomousTrigger.FoodShortage:
-                    return "粮食储备不足。用工具查看资源，并补充更多人可食用的营养（收获、打猎、交易、生产账单）。";
+                    return "粮食储备不足。用工具查看资源，再补充更多人可食用的营养：收获、打猎、加烹饪账单或交易。";
                 default:
-                    return "例行巡检：用工具查看殖民地概况、威胁与重要资源。有急事就处理；一切正常就简短回报。";
+                    return "例行巡检：用工具查看殖民地概况、警报、威胁与重要资源。有急事就处理；一切正常就用一句话回报。";
             }
         }
     }
