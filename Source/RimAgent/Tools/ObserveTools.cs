@@ -321,6 +321,107 @@ namespace RimAgent.Tools
             return Enum.TryParse((kind ?? string.Empty).Trim(), true, out parsed) && Enum.IsDefined(typeof(ThingKind), parsed);
         }
 
+        /// <summary>inspect_area 一次最多看的格數（50x50）；再大就是在掃全圖，該改用 find_things。</summary>
+        internal const int MaxInspectedCells = 2500;
+        private const int MaxObstaclesListed = 10;
+        private const float FertileThreshold = 0.7f;
+
+        [AgentTool("get_cell_info", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Describes one map cell: terrain and fertility, roof, whether it is walkable, the zone it belongs to, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects standing on it. Use it before placing a blueprint or a zone, or to learn how big a room is.")]
+        public string GetCellInfo(
+            [Description("Cell x.")] int x,
+            [Description("Cell z.")] int z)
+        {
+            string outside = TargetResolver.CheckCell(x, z, _world.GetMapBounds());
+            if (outside != null) return outside;
+
+            CellInfo c = _world.GetCell(x, z);
+            var sb = new StringBuilder();
+            sb.Append("Cell ").Append(ToolText.Cell(c.X, c.Z)).Append(": ").Append(c.Terrain).Append(" (").Append(c.TerrainDefName).Append(')')
+              .Append(", fertility ").Append(ToolText.Pct(c.Fertility))
+              .Append(", roof: ").Append(string.IsNullOrEmpty(c.Roof) ? "none" : c.Roof)
+              .Append(c.Walkable ? ", walkable" : ", NOT walkable");
+            if (c.Fogged) sb.Append(", unexplored (fogged)");
+            sb.AppendLine();
+            sb.Append("Zone: ").Append(c.Zone == null ? "none" : $"[{c.Zone.Id}] {c.Zone.Label} ({c.Zone.Kind}, {c.Zone.CellCount} cells)").AppendLine();
+            sb.Append("Room: ").Append(c.Room == null ? "none (cell is filled by a wall or rock)" : Room(c.Room)).AppendLine();
+            sb.Append("Objects on cell: ");
+            if (c.Things.Count == 0) sb.Append("none");
+            else sb.Append(string.Join("; ", c.Things.Select(ToolText.Thing)));
+            return sb.ToString().Trim();
+        }
+
+        private static string Room(RoomInfo r)
+        {
+            return $"#{r.Id} {r.Role}, {r.CellCount} cells, extents {r.Extents}, {ToolText.Num(r.TemperatureC)}°C, " +
+                   (r.Outdoors ? "outdoors" : "indoors");
+        }
+
+        [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Summarises a rectangle of up to 2500 cells (50x50): terrain breakdown, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it. Use it to check whether an area is clear before placing blueprints or a zone; use get_cell_info for one cell.")]
+        public string InspectArea(
+            [Description("Rectangle corner x.")] int x1,
+            [Description("Rectangle corner z.")] int z1,
+            [Description("Opposite corner x.")] int x2,
+            [Description("Opposite corner z.")] int z2)
+        {
+            ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+            if (!rect.Success) return rect.Error;
+            if (rect.Value.CellCount > MaxInspectedCells)
+            {
+                return ToolText.Error($"rectangle {rect.Value} has {rect.Value.CellCount} cells; the limit is {MaxInspectedCells} (50x50). Inspect a smaller area or use find_things.");
+            }
+
+            IReadOnlyList<CellInfo> cells = _world.GetCells(rect.Value);
+            var sb = new StringBuilder();
+            sb.Append("Area ").Append(rect.Value).Append(": ").Append(cells.Count).Append(" cells");
+            sb.Append(" | terrain: ").Append(string.Join(", ", cells
+                .GroupBy(c => c.Terrain)
+                .OrderByDescending(g => g.Count())
+                .Select(g => $"{g.Key} {g.Count()}")));
+            sb.Append(" | fertile (>=").Append(ToolText.Pct(FertileThreshold)).Append("): ").Append(cells.Count(c => c.Fertility >= FertileThreshold));
+            int roofed = cells.Count(c => !string.IsNullOrEmpty(c.Roof));
+            sb.Append(" | roofed: ").Append(roofed);
+            int mountain = cells.Count(c => c.Roof == "overhead mountain");
+            if (mountain > 0) sb.Append(" (overhead mountain ").Append(mountain).Append(')');
+            sb.Append(" | not walkable: ").Append(cells.Count(c => !c.Walkable));
+            int fogged = cells.Count(c => c.Fogged);
+            if (fogged > 0) sb.Append(" | unexplored: ").Append(fogged);
+            sb.AppendLine();
+
+            // 擋路的東西：建築、岩石、植物、物品；殖民者與動物會走開，不算障礙。
+            List<ThingInfo> obstacles = cells.SelectMany(c => c.Things)
+                .Where(t => t.Kind != ThingKind.Pawn)
+                .GroupBy(t => t.Id).Select(g => g.First())
+                .ToList();
+            sb.Append("Obstacles: ");
+            if (obstacles.Count == 0)
+            {
+                sb.Append("none");
+            }
+            else
+            {
+                sb.Append(obstacles.Count).Append(" — ")
+                  .Append(string.Join("; ", obstacles.Take(MaxObstaclesListed).Select(ToolText.Thing)));
+                if (obstacles.Count > MaxObstaclesListed) sb.Append("; and ").Append(obstacles.Count - MaxObstaclesListed).Append(" more");
+            }
+            sb.AppendLine();
+
+            sb.Append("Zones: ");
+            List<IGrouping<int, CellInfo>> zones = cells.Where(c => c.Zone != null).GroupBy(c => c.Zone.Id).ToList();
+            sb.Append(zones.Count == 0
+                ? "none"
+                : string.Join("; ", zones.Select(g => $"[{g.Key}] {g.First().Zone.Label} ({g.First().Zone.Kind}, {g.Count()} cells inside)")));
+            sb.AppendLine();
+
+            sb.Append("Rooms: ");
+            List<IGrouping<int, CellInfo>> rooms = cells.Where(c => c.Room != null).GroupBy(c => c.Room.Id).ToList();
+            sb.Append(rooms.Count == 0
+                ? "none"
+                : string.Join("; ", rooms.Select(g => Room(g.First().Room) + $" ({g.Count()} cells inside)")));
+            return sb.ToString().Trim();
+        }
+
         [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Safe)]
         [Description("Saves a screenshot of the current game view to disk for the player and returns the file path. The image is for the player; you cannot view it.")]
         public string TakeScreenshot(

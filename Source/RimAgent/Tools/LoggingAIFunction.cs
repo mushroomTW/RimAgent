@@ -1,11 +1,13 @@
 extern alias ste;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using RimAgent.Agent;
+using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
@@ -15,13 +17,19 @@ namespace RimAgent.Tools
     /// 並在自動模式下做兩段式執行：先強制預覽拿到「將做的事」，交給分類器判定，
     /// 低風險再強制執行一次，高風險就把預覽當「需確認」回給模型。
     /// 這裡刻意不用 ConfigureAwait(false)：續行要留在主線程，第二段執行才能碰遊戲狀態。
+    ///
+    /// 另外兩道與世界有關的守衛也在這裡，工具本身不必管：
+    /// 遊戲沒在進行（讀檔中、回到主選單）時不碰工具直接回錯誤；
+    /// 工具回傳後把這段期間遊戲記錄的錯誤附在結果後面，模型才知道命令雖然「成功」但遊戲隨即噴錯。
     /// </summary>
     internal sealed class LoggingAIFunction : DelegatingAIFunction
     {
         // 稽核與風險分類必須看見完整引數，不能截斷交易清單或銀額。
         private const int MaxArgumentChars = int.MaxValue;
+        private const int MaxGameErrorsAppended = 5;
 
         private readonly AgentTranscript _transcript;
+        private readonly IGameWorld _world;
         private readonly ToolCategory _category;
         private readonly ToolRisk _risk;
         private readonly ConfirmationGate _gate;
@@ -30,10 +38,11 @@ namespace RimAgent.Tools
         private bool RequiresExplicitConfirmation =>
             string.Equals(Name, "mcp_call_tool", StringComparison.Ordinal);
 
-        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null)
+        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null)
             : base(inner)
         {
             _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
+            _world = world ?? throw new ArgumentNullException(nameof(world));
             _category = category;
             _risk = risk;
             _gate = gate;
@@ -52,6 +61,15 @@ namespace RimAgent.Tools
                 Arguments = FormatArguments(arguments),
                 InstructionId = _transcript.CurrentInstructionId
             };
+
+            string notReady = _world.GetNotReadyReason();
+            if (notReady != null)
+            {
+                entry.Result = ToolText.Error($"the game cannot run tools right now ({notReady}). Tell the player and stop.");
+                entry.Failed = true;
+                _transcript.Add(entry);
+                return entry.Result;
+            }
 
             bool budgetConsumed = false;
             if (_gate != null && !_gate.TryConsumeToolBudget(out budgetConsumed))
@@ -79,7 +97,7 @@ namespace RimAgent.Tools
                 {
                     result = await base.InvokeCoreAsync(arguments, cancellationToken);
                 }
-                string text = result?.ToString() ?? string.Empty;
+                string text = AppendGameErrors(result?.ToString() ?? string.Empty);
                 entry.Result = text;
                 entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
                 if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
@@ -87,11 +105,12 @@ namespace RimAgent.Tools
                     // 此閉包保留本次工具呼叫的引數，確認時不會再讓模型選工具或改參數。
                     _gate?.RegisterPendingApproval(token => ExecuteApprovedAsync(arguments, entry, token));
                 }
-                return result;
+                return text;
             }
             catch (Exception ex)
             {
-                entry.Result = ex.GetType().Name + ": " + ex.Message;
+                // 例外那次期間的遊戲錯誤也算這次的，不能留給下一個工具呼叫背鍋。
+                entry.Result = AppendGameErrors(ex.GetType().Name + ": " + ex.Message);
                 entry.Failed = true;
                 throw;
             }
@@ -108,13 +127,13 @@ namespace RimAgent.Tools
             try
             {
                 object result = await base.InvokeCoreAsync(arguments, cancellationToken);
-                string text = result?.ToString() ?? string.Empty;
+                string text = AppendGameErrors(result?.ToString() ?? string.Empty);
                 _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
-                return result;
+                return text;
             }
             catch (Exception ex)
             {
-                _transcript.UpdateToolResult(entry, ex.GetType().Name + ": " + ex.Message, true);
+                _transcript.UpdateToolResult(entry, AppendGameErrors(ex.GetType().Name + ": " + ex.Message), true);
                 throw;
             }
             finally
@@ -198,6 +217,21 @@ namespace RimAgent.Tools
             {
                 _gate.ClearForce();
             }
+        }
+
+        /// <summary>
+        /// 把這次呼叫期間遊戲記錄的錯誤附在結果後面。工具回「成功」只代表命令送進遊戲了，
+        /// 遊戲隨即噴的錯（例如藍圖放下後的例外）模型否則看不到。預覽也一樣附：它同樣在主線程跑過遊戲程式碼。
+        /// </summary>
+        private string AppendGameErrors(string text)
+        {
+            IReadOnlyList<string> errors = _world.TakeNewGameErrors();
+            if (errors.Count == 0) return text;
+            var sb = new StringBuilder(text);
+            sb.AppendLine().Append("Game errors logged during this call (").Append(errors.Count).Append("):");
+            foreach (string error in errors.Take(MaxGameErrorsAppended)) sb.AppendLine().Append("- ").Append(error);
+            if (errors.Count > MaxGameErrorsAppended) sb.AppendLine().Append("- ... and ").Append(errors.Count - MaxGameErrorsAppended).Append(" more");
+            return sb.ToString();
         }
 
         private static string FormatArguments(AIFunctionArguments arguments)

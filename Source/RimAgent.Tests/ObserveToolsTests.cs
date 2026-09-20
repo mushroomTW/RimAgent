@@ -233,6 +233,64 @@ namespace RimAgent.Tests
             Assert.That(shotResult, Does.StartWith(ToolText.ConfirmationPrefix + "would take screenshot"));
             Assert.That(_world.Calls, Does.Not.Contain("TakeScreenshot(test)"));
         }
+
+        [Test]
+        public void CellInfoShowsTerrainRoofZoneRoomAndObjects()
+        {
+            _world.Cells[(5, 5)] = new CellInfo
+            {
+                X = 5, Z = 5, TerrainDefName = "Gravel", Terrain = "gravel", Fertility = 0.7f, Roof = "overhead mountain", Walkable = false,
+                Zone = new ZoneInfo { Id = 50, Label = "Stockpile 1", Kind = "Stockpile", CellCount = 9 },
+                Room = new RoomInfo { Id = 12, Role = "bedroom", CellCount = 20, Outdoors = false, TemperatureC = 18.5f, Extents = new CellRectSpec(4, 4, 8, 7) },
+                Things = new[] { _world.Things[0] }
+            };
+
+            string text = _tools.GetCellInfo(5, 5);
+
+            Assert.That(text, Does.Contain("Cell (5,5): gravel (Gravel), fertility 70%, roof: overhead mountain, NOT walkable"));
+            Assert.That(text, Does.Contain("Zone: [50] Stockpile 1 (Stockpile, 9 cells)"));
+            Assert.That(text, Does.Contain("Room: #12 bedroom, 20 cells, extents (4,4)-(8,7), 18.5°C, indoors"));
+            Assert.That(text, Does.Contain("Objects on cell: [1] compacted steel (MineableSteel) at (5,5)"));
+        }
+
+        [Test]
+        public void CellInfoDefaultsAndOutOfBounds()
+        {
+            string text = _tools.GetCellInfo(20, 20);
+            Assert.That(text, Does.Contain("soil (Soil), fertility 100%, roof: none, walkable"));
+            Assert.That(text, Does.Contain("Zone: none").And.Contain("outdoors").And.Contain("Objects on cell: none"));
+
+            Assert.That(_tools.GetCellInfo(100, 5), Does.StartWith("Error:"));
+        }
+
+        [Test]
+        public void InspectAreaSummarisesTerrainObstaclesZonesAndRooms()
+        {
+            _world.UnwalkableCells.Add((7, 7));
+            _world.Cells[(7, 7)] = new CellInfo { X = 7, Z = 7, TerrainDefName = "Marsh", Terrain = "marsh", Fertility = 0.5f, Roof = "constructed", Walkable = false, Room = _world.Outdoors };
+            _world.Cells[(8, 8)] = new CellInfo
+            {
+                X = 8, Z = 8, TerrainDefName = "Soil", Terrain = "soil", Fertility = 1f, Walkable = true,
+                Zone = new ZoneInfo { Id = 50, Label = "Stockpile 1", Kind = "Stockpile", CellCount = 9 },
+                Room = new RoomInfo { Id = 12, Role = "bedroom", CellCount = 20, Outdoors = false, TemperatureC = 18f, Extents = new CellRectSpec(8, 8, 12, 12) }
+            };
+
+            string text = _tools.InspectArea(9, 9, 5, 5);
+
+            Assert.That(text, Does.Contain("Area (5,5)-(9,9): 25 cells | terrain: soil 24, marsh 1 | fertile (>=70%): 24 | roofed: 1 | not walkable: 1"));
+            // 兩顆礦石與一棵樹在範圍內；(40,40) 那顆不在。
+            Assert.That(text, Does.Contain("Obstacles: 2 — [1] compacted steel (MineableSteel) at (5,5); [3] oak tree (Plant_TreeOak) at (6,5) harvestable"));
+            Assert.That(text, Does.Contain("Zones: [50] Stockpile 1 (Stockpile, 1 cells inside)"));
+            Assert.That(text, Does.Contain("Rooms: #0 none, 10000 cells").And.Contain("outdoors (24 cells inside)").And.Contain("#12 bedroom").And.Contain("indoors (1 cells inside)"));
+        }
+
+        [Test]
+        public void InspectAreaRejectsOversizedAndOutOfMapRectangles()
+        {
+            Assert.That(_tools.InspectArea(0, 0, 50, 50), Does.StartWith("Error:").And.Contain("2601 cells"));
+            Assert.That(_tools.InspectArea(0, 0, 49, 49), Does.StartWith("Area (0,0)-(49,49): 2500 cells"));
+            Assert.That(_tools.InspectArea(0, 0, 100, 5), Does.StartWith("Error:"));
+        }
     }
 }
 

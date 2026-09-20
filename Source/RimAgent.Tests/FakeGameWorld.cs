@@ -303,6 +303,48 @@ namespace RimAgent.Tests
         public IReadOnlyList<ThingInfo> GetSelection() => Selection;
         public MapBounds GetMapBounds() => Bounds;
 
+        /// <summary>指定格子的地面狀態；沒登記的格子為一般土壤、可走、室外，格上物件取自 Things。</summary>
+        public Dictionary<(int X, int Z), CellInfo> Cells { get; } = new Dictionary<(int, int), CellInfo>();
+
+        /// <summary>沒登記的格子共用的室外房間。</summary>
+        public RoomInfo Outdoors { get; set; } = new RoomInfo { Id = 0, Role = "none", CellCount = 10000, Outdoors = true, TemperatureC = 21.4f, Extents = new CellRectSpec(0, 0, 99, 99) };
+
+        public CellInfo GetCell(int x, int z)
+        {
+            if (Cells.TryGetValue((x, z), out CellInfo cell)) return cell;
+            return new CellInfo
+            {
+                X = x, Z = z, TerrainDefName = "Soil", Terrain = "soil", Fertility = 1f,
+                Walkable = !UnwalkableCells.Contains((x, z)), Room = Outdoors,
+                Things = Things.Where(t => t.X == x && t.Z == z).ToList()
+            };
+        }
+
+        public IReadOnlyList<CellInfo> GetCells(CellRectSpec rect)
+        {
+            var result = new List<CellInfo>();
+            for (int z = rect.MinZ; z <= rect.MaxZ; z++)
+            {
+                for (int x = rect.MinX; x <= rect.MaxX; x++) result.Add(GetCell(x, z));
+            }
+            return result;
+        }
+
+        /// <summary>非 null 時所有工具都會被擋下（模擬讀檔中／回到主選單）。</summary>
+        public string NotReadyReason { get; set; }
+
+        public string GetNotReadyReason() => NotReadyReason;
+
+        /// <summary>下一次 TakeNewGameErrors 會取走的錯誤（測試塞進來模擬遊戲噴錯）。</summary>
+        public List<string> PendingGameErrors { get; } = new List<string>();
+
+        public IReadOnlyList<string> TakeNewGameErrors()
+        {
+            var taken = PendingGameErrors.ToList();
+            PendingGameErrors.Clear();
+            return taken;
+        }
+
         public IReadOnlyList<ThingInfo> FindThings(ThingQuery query)
         {
             IEnumerable<ThingInfo> result = Things;

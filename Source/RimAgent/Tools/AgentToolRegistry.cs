@@ -78,6 +78,7 @@ namespace RimAgent.Tools
         }
 
         private readonly List<Entry> _tools = new List<Entry>();
+        private readonly IGameWorld _world;
         private readonly ConfirmationGate _gate;
         private readonly RiskClassifier _classifier;
 
@@ -94,6 +95,7 @@ namespace RimAgent.Tools
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (transcript == null) throw new ArgumentNullException(nameof(transcript));
+            _world = world;
             _gate = gate;
             _classifier = classifier;
 
@@ -115,6 +117,10 @@ namespace RimAgent.Tools
 
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
         public IReadOnlyList<AITool> All => _allTools ?? (_allTools = _tools.Select(t => t.Tool).ToList());
+
+        /// <summary>全部工具的名稱、類別與風險，依登錄順序（供 README 工具表的一致性測試）。</summary>
+        public IReadOnlyList<AgentToolDescriptor> Descriptors =>
+            _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk)).ToList();
 
         /// <summary>依權限挑選完整工具清單；未指定模式時採確認模式，不套用自主模式的禁止清單。</summary>
         public IList<AITool> Select(ToolPermissions permissions)
@@ -171,9 +177,24 @@ namespace RimAgent.Tools
                     Name = attribute.Name,
                     Category = attribute.Category,
                     Risk = attribute.Risk,
-                    Tool = new LoggingAIFunction(function, transcript, attribute.Category, attribute.Risk, _gate, _classifier)
+                    Tool = new LoggingAIFunction(function, transcript, _world, attribute.Category, attribute.Risk, _gate, _classifier)
                 });
             }
         }
+    }
+
+    /// <summary>一個工具的靜態描述：名稱、類別、風險。</summary>
+    public sealed class AgentToolDescriptor
+    {
+        public AgentToolDescriptor(string name, ToolCategory category, ToolRisk risk)
+        {
+            Name = name;
+            Category = category;
+            Risk = risk;
+        }
+
+        public string Name { get; }
+        public ToolCategory Category { get; }
+        public ToolRisk Risk { get; }
     }
 }

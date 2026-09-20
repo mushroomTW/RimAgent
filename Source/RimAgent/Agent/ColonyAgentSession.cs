@@ -171,6 +171,8 @@ namespace RimAgent.Agent
 
             try
             {
+                // 指令開始前的遊戲錯誤與這句無關，先丟掉；之後每次工具呼叫只回報這段期間新增的。
+                _world.TakeNewGameErrors();
                 if (_session == null)
                 {
                     _session = RestoreOrCreateSession(cancellationToken);
@@ -295,6 +297,7 @@ namespace RimAgent.Agent
             try
             {
                 Undo.BeginFrame();
+                _world.TakeNewGameErrors();
                 int executed = await ConfirmGate.ApprovePendingAsync(cancellationToken).ConfigureAwait(false);
                 Undo.EndFrame(text + " (confirmed)");
                 _pendingConfirmation = null;

@@ -421,6 +421,39 @@ namespace RimAgent.Game
         }
     }
 
+    /// <summary>一格所屬的房間（遊戲的 Room：牆與門圍出的連通區域；室外也是一個房間）。</summary>
+    public sealed class RoomInfo
+    {
+        public int Id { get; set; }
+        /// <summary>遊戲判定的用途（Bedroom、Kitchen、None…）。</summary>
+        public string Role { get; set; } = string.Empty;
+        public int CellCount { get; set; }
+        public bool Outdoors { get; set; }
+        public float TemperatureC { get; set; }
+        /// <summary>房間所有格子的外框（含邊界）。</summary>
+        public CellRectSpec Extents { get; set; }
+    }
+
+    /// <summary>一格地面的狀態：地形、屋頂、可否行走、所屬區域與房間、格上的物件。</summary>
+    public sealed class CellInfo
+    {
+        public int X { get; set; }
+        public int Z { get; set; }
+        public string TerrainDefName { get; set; } = string.Empty;
+        public string Terrain { get; set; } = string.Empty;
+        /// <summary>0 不可種植；1 為一般土壤。</summary>
+        public float Fertility { get; set; }
+        /// <summary>屋頂：空字串無屋頂；constructed／natural（薄岩頂）／overhead mountain（厚岩頂，不可拆）。</summary>
+        public string Roof { get; set; } = string.Empty;
+        public bool Walkable { get; set; }
+        public bool Fogged { get; set; }
+        /// <summary>null 代表不在任何區域內。</summary>
+        public ZoneInfo Zone { get; set; }
+        /// <summary>null 代表格子被牆或岩石填滿，不屬於任何房間。</summary>
+        public RoomInfo Room { get; set; }
+        public IReadOnlyList<ThingInfo> Things { get; set; } = Array.Empty<ThingInfo>();
+    }
+
     public sealed class DefInfo
     {
         public DefInfo()

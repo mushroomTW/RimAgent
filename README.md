@@ -19,7 +19,7 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 
 | Category | Tools | Default |
 | --- | --- | --- |
-| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching (safe command), map object search, game screenshots (safe command) | on |
+| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching (safe command), map object search, cell and area inspection (terrain, roof, rooms, zones, obstacles), game screenshots (safe command) | on |
 | Work | work priorities, daily schedules (undoable) | on |
 | Build | mine / cut / harvest / deconstruct / haul / hunt designations, blueprints (single or in a line) | on |
 | Combat | draft, move, attack | on |
@@ -33,6 +33,68 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 | MCP | external tools from local MCP servers | on |
 
 Combat orders reach the game several seconds after you speak — they are for positioning and retreats, not real-time control.
+
+### Tool reference
+
+Every tool by name, with its category and static risk tag. The block between the markers is checked against the registry by `ReadmeToolTableTests`; when it drifts, the failing test prints the block to paste.
+
+<!-- tool-table:begin -->
+| Tool | Category | Risk |
+| --- | --- | --- |
+| `find_things` | Observe | Query |
+| `get_cell_info` | Observe | Query |
+| `get_colonist_wellbeing` | Observe | Query |
+| `get_colony_overview` | Observe | Query |
+| `get_maps` | Observe | Query |
+| `get_power_status` | Observe | Query |
+| `get_research_status` | Observe | Query |
+| `get_resources` | Observe | Query |
+| `inspect_area` | Observe | Query |
+| `list_alerts` | Observe | Query |
+| `list_colonists` | Observe | Query |
+| `list_recent_letters` | Observe | Query |
+| `list_threats` | Observe | Query |
+| `set_current_map` | Observe | Safe |
+| `set_research` | Observe | Safe |
+| `take_screenshot` | Observe | Safe |
+| `list_work_priorities` | Work | Query |
+| `set_schedule` | Work | Safe |
+| `set_work_priorities` | Work | Safe |
+| `set_work_priority` | Work | Safe |
+| `cancel_designation` | Build | Safe |
+| `designate_area` | Build | Confirm |
+| `place_blueprint` | Build | Confirm |
+| `draft` | Combat | Safe |
+| `order_attack` | Combat | Confirm |
+| `order_move` | Combat | Safe |
+| `execute_trade` | Trade | Confirm |
+| `form_caravan` | Trade | Confirm |
+| `list_orbital_traders` | Trade | Query |
+| `list_visitor_caravans` | Trade | Query |
+| `get_health` | Medical | Query |
+| `schedule_surgery` | Medical | Confirm |
+| `set_medical_care` | Medical | Safe |
+| `list_prisoners` | Prisoner | Query |
+| `release_prisoner` | Prisoner | Confirm |
+| `set_prisoner_interaction` | Prisoner | Confirm |
+| `list_animals` | Animal | Query |
+| `set_animal_area` | Animal | Safe |
+| `tame_animal` | Animal | Safe |
+| `train_animal` | Animal | Safe |
+| `add_zone` | Zone | Safe |
+| `delete_zone` | Zone | Confirm |
+| `list_zones` | Zone | Query |
+| `set_zone_filter` | Zone | Safe |
+| `add_bill` | Production | Safe |
+| `delete_bill` | Production | Confirm |
+| `list_bills` | Production | Query |
+| `list_worktables` | Production | Query |
+| `get_time_speed` | Time | Query |
+| `set_time_speed` | Time | Safe |
+| `mcp_call_tool` | Mcp | Confirm |
+| `mcp_list_tools` | Mcp | Query |
+| `mcp_status` | Mcp | Query |
+<!-- tool-table:end -->
 
 ## Modes
 
@@ -53,6 +115,8 @@ Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every co
 * **Autonomous Blacklist**: When running unattended or in Autonomous mode, the model is strictly forbidden from trading (`execute_trade`), forming caravans (`form_caravan`), releasing prisoners (`release_prisoner`), scheduling surgeries (`schedule_surgery`), and setting prisoner interactions (`set_prisoner_interaction`) to prevent unauthorized harm or loss.
 * **MCP always confirms**: `mcp_call_tool` always waits for explicit player confirmation, including in Auto and Autonomous modes; the risk classifier cannot waive this prompt.
 * **`/undo`**: restores the previous instruction's work priorities and daily schedules — also for an instruction that failed halfway, so whatever did land can be reverted.
+* **Readiness guard**: if no game is being played (main menu, or a save still loading) or there is no current map when a tool call arrives (for example after loading another save mid-instruction), the tool is not run and the model gets an error telling it to stop.
+* **Game error feedback**: errors the game logs (`Log.Error`) while a tool runs are appended to that tool's result (up to five, with a count), so the model learns when a command that "succeeded" made the game throw. Errors logged before the instruction started are discarded; nothing is patched or intercepted.
 * Guard rails inside the tools: `order_attack` refuses colony members, prisoners and friendly factions; `schedule_surgery` requires an explicit body part for surgeries that target one; `execute_trade` needs a negotiator who can talk and is not incapable of social work, and a powered comms console for orbital traders; `form_caravan` moves the named colonists off the map immediately (no walking to the edge, no supplies packed); `set_current_map` and `take_screenshot` are classified as Safe commands, requiring Confirm or Auto/Autonomous mode and blocked in Ask mode; zones are validated with the game's own zone designators (fog, map edge, blocking things, fertility).
 * The visible conversation, compacted model session, autonomous scheduler budget and work undo history are saved with the game. If an older session cannot be deserialized after an upgrade, RimAgent safely starts a fresh model session while retaining the visible transcript.
 * The combat-latency reminder appears once per instruction, and Markdown in model replies is rendered via RimLLM Framework (bold, italics, headings, links, code).
@@ -71,7 +135,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-            │                              51 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+            │                              53 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
           │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```

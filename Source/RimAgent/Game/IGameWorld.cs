@@ -36,6 +36,21 @@ namespace RimAgent.Game
         /// <summary>玩家目前框選的地圖物件。</summary>
         IReadOnlyList<ThingInfo> GetSelection();
         MapBounds GetMapBounds();
+        /// <summary>一格的地面狀態；呼叫者已確認座標在地圖內。</summary>
+        CellInfo GetCell(int x, int z);
+        /// <summary>矩形內每一格的地面狀態（含邊界）；呼叫者已確認矩形在地圖內並限制大小。</summary>
+        IReadOnlyList<CellInfo> GetCells(CellRectSpec rect);
+
+        /// <summary>
+        /// 遊戲目前不能執行工具的原因（沒有進行中的遊戲、讀檔或生成地圖中、沒有當前地圖）；可以執行時回傳 null。
+        /// </summary>
+        string GetNotReadyReason();
+
+        /// <summary>
+        /// 取走自上次呼叫以來遊戲記錄的錯誤（Log.Error）訊息，每則一行；沒有新錯誤回傳空表。
+        /// 只看主線程可見的訊息佇列，不攔截遊戲。
+        /// </summary>
+        IReadOnlyList<string> TakeNewGameErrors();
 
         // Def 目錄：供解析器把玩家／模型給的名稱對到 defName。
         IReadOnlyList<DefInfo> WorkTypes { get; }

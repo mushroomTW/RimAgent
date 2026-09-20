@@ -485,6 +485,134 @@ namespace RimAgent.Game
             return new MapBounds { Width = size.x, Height = size.z };
         }
 
+        public CellInfo GetCell(int x, int z)
+        {
+            return ToCell(new IntVec3(x, 0, z), Map, new Dictionary<int, RoomInfo>());
+        }
+
+        public IReadOnlyList<CellInfo> GetCells(CellRectSpec rect)
+        {
+            Map map = Map;
+            var result = new List<CellInfo>(rect.CellCount);
+            // 同一個房間在矩形裡會出現很多次，RoomInfo 只建一份（外框要走遍房間所有格子）。
+            var rooms = new Dictionary<int, RoomInfo>();
+            for (int z = rect.MinZ; z <= rect.MaxZ; z++)
+            {
+                for (int x = rect.MinX; x <= rect.MaxX; x++)
+                {
+                    result.Add(ToCell(new IntVec3(x, 0, z), map, rooms));
+                }
+            }
+            return result;
+        }
+
+        private static CellInfo ToCell(IntVec3 c, Map map, Dictionary<int, RoomInfo> rooms)
+        {
+            TerrainDef terrain = c.GetTerrain(map);
+            bool fogged = c.Fogged(map);
+            Zone zone = c.GetZone(map);
+            return new CellInfo
+            {
+                X = c.x,
+                Z = c.z,
+                TerrainDefName = terrain.defName,
+                Terrain = terrain.label ?? terrain.defName,
+                Fertility = map.fertilityGrid.FertilityAt(c),
+                Roof = RoofLabel(c.GetRoof(map)),
+                Walkable = c.Walkable(map),
+                Fogged = fogged,
+                Zone = zone != null ? ToZone(zone) : null,
+                Room = ToRoom(c.GetRoom(map), rooms),
+                // 迷霧裡的東西玩家看不到，工具也不透露。藍圖不是 Building（KindOf 會濾掉），
+                // 但它占著格子，規劃建造時得看得到，這裡當建築列出。
+                Things = fogged
+                    ? (IReadOnlyList<ThingInfo>)Array.Empty<ThingInfo>()
+                    : c.GetThingList(map).Where(t => KindOf(t) != null || t is Blueprint).Select(t => ToThing(t, map)).ToList()
+            };
+        }
+
+        private static string RoofLabel(RoofDef roof)
+        {
+            if (roof == null) return string.Empty;
+            if (!roof.isNatural) return "constructed";
+            return roof.isThickRoof ? "overhead mountain" : "natural";
+        }
+
+        private static RoomInfo ToRoom(Room room, Dictionary<int, RoomInfo> cache)
+        {
+            if (room == null) return null;
+            if (cache.TryGetValue(room.ID, out RoomInfo cached)) return cached;
+            CellRect extents = room.ExtentsClose;
+            var info = new RoomInfo
+            {
+                Id = room.ID,
+                Role = room.Role?.label ?? string.Empty,
+                CellCount = room.CellCount,
+                Outdoors = room.PsychologicallyOutdoors,
+                TemperatureC = room.Temperature,
+                Extents = new CellRectSpec(extents.minX, extents.minZ, extents.maxX, extents.maxZ)
+            };
+            cache[room.ID] = info;
+            return info;
+        }
+
+        public string GetNotReadyReason()
+        {
+            // 讀檔期間 ProgramState 會先變成 MapInitializing，這一條已經擋住；不看長事件，
+            // 自動存檔排入的那一幀與背景生成新地圖期間當前地圖都還能碰，擋了只會誤殺指令。
+            if (Current.Game == null || Current.ProgramState != ProgramState.Playing) return "no game is being played";
+            if (Find.CurrentMap == null) return "there is no current map";
+            return null;
+        }
+
+        private LogMessage _lastSeenLog;
+        private int _lastSeenLogRepeats;
+
+        public IReadOnlyList<string> TakeNewGameErrors()
+        {
+            // Log 把連續相同訊息合併成一則並累加 repeats，所以「新錯誤」有兩種：上次看過的那則又重複了，
+            // 以及排在它後面的新訊息。上次那則已被清掉或擠出佇列時，整個佇列都算新的。
+            var errors = new List<string>();
+            // Log 的鎖是私有的，背景執行緒隨時可能 Log.Error；列舉撞上修改就當這次沒有新錯誤，不能讓指令因此失敗。
+            List<LogMessage> messages;
+            try
+            {
+                messages = Log.Messages.ToList();
+            }
+            catch (InvalidOperationException)
+            {
+                return errors;
+            }
+            bool afterLastSeen = _lastSeenLog == null || !messages.Contains(_lastSeenLog);
+            LogMessage last = null;
+            foreach (LogMessage message in messages)
+            {
+                last = message;
+                if (!afterLastSeen)
+                {
+                    if (!ReferenceEquals(message, _lastSeenLog)) continue;
+                    afterLastSeen = true;
+                    if (message.type == LogMessageType.Error && message.repeats > _lastSeenLogRepeats)
+                    {
+                        errors.Add(FormatLogError(message, message.repeats - _lastSeenLogRepeats));
+                    }
+                    continue;
+                }
+                if (message.type == LogMessageType.Error) errors.Add(FormatLogError(message, message.repeats));
+            }
+            _lastSeenLog = last;
+            _lastSeenLogRepeats = last?.repeats ?? 0;
+            return errors;
+        }
+
+        private static string FormatLogError(LogMessage message, int occurrences)
+        {
+            string text = (message.text ?? string.Empty).Trim();
+            int newline = text.IndexOf('\n');
+            if (newline >= 0) text = text.Substring(0, newline);
+            return occurrences > 1 ? $"(x{occurrences}) {text}" : text;
+        }
+
         public IReadOnlyList<DefInfo> WorkTypes =>
             _workTypes ?? (_workTypes = DefDatabase<WorkTypeDef>.AllDefsListForReading
                 .Where(w => w.visible)
@@ -1501,7 +1629,7 @@ namespace RimAgent.Game
                 Id = thing.thingIDNumber,
                 DefName = thing.def.defName,
                 Label = thing.LabelCap,
-                Kind = KindOf(thing) ?? ThingKind.Any,
+                Kind = KindOf(thing) ?? (thing is Blueprint ? ThingKind.Building : ThingKind.Any),
                 X = thing.Position.x,
                 Z = thing.Position.z,
                 StackCount = thing.stackCount,
