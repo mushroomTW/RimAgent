@@ -142,14 +142,19 @@ namespace RimAgent.Tools
             return entry.Risk;
         }
 
+        private static readonly HashSet<string> AutonomousForbiddenToolNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "execute_trade",
+            "form_caravan",
+            "release_prisoner",
+            "schedule_surgery",
+            "set_prisoner_interaction"
+        };
+
         /// <summary>自主模式下黑名單工具（不可委託無人值守執行的高危命令與 MCP 工具）。</summary>
         public static bool IsAutonomousForbidden(string name)
         {
-            return string.Equals(name, "execute_trade", StringComparison.Ordinal)
-                   || string.Equals(name, "form_caravan", StringComparison.Ordinal)
-                   || string.Equals(name, "release_prisoner", StringComparison.Ordinal)
-                   || string.Equals(name, "schedule_surgery", StringComparison.Ordinal)
-                   || string.Equals(name, "set_prisoner_interaction", StringComparison.Ordinal);
+            return !string.IsNullOrEmpty(name) && AutonomousForbiddenToolNames.Contains(name);
         }
 
         private void Register(object target, AgentTranscript transcript)

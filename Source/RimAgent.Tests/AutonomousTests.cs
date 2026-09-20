@@ -161,30 +161,38 @@ namespace RimAgent.Tests
     [TestFixture]
     public class AutonomousForbiddenToolsTests
     {
+        private static readonly string[] ForbiddenTools =
+        {
+            "schedule_surgery",
+            "set_prisoner_interaction",
+            "execute_trade",
+            "form_caravan",
+            "release_prisoner"
+        };
+
         [Test]
         public void AutonomousModeExcludesSurgeryAndPrisonerInteraction()
         {
             var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
             var tools = registry.Select(ToolPermissions.All, AgentMode.Autonomous).OfType<AIFunction>().Select(f => f.Name).ToList();
 
-            Assert.That(tools, Does.Not.Contain("schedule_surgery"));
-            Assert.That(tools, Does.Not.Contain("set_prisoner_interaction"));
-            Assert.That(tools, Does.Not.Contain("execute_trade"));
-            Assert.That(tools, Does.Not.Contain("form_caravan"));
-            Assert.That(tools, Does.Not.Contain("release_prisoner"));
+            foreach (string name in ForbiddenTools)
+            {
+                Assert.That(tools, Does.Not.Contain(name), name);
+            }
             Assert.That(tools, Does.Contain("set_work_priority"));
         }
 
         [Test]
         public void IsAutonomousForbiddenIdentifiesHighRiskTools()
         {
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden("schedule_surgery"), Is.True);
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden("set_prisoner_interaction"), Is.True);
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden("execute_trade"), Is.True);
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden("form_caravan"), Is.True);
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden("release_prisoner"), Is.True);
+            foreach (string name in ForbiddenTools)
+            {
+                Assert.That(AgentToolRegistry.IsAutonomousForbidden(name), Is.True, name);
+            }
             Assert.That(AgentToolRegistry.IsAutonomousForbidden("place_blueprint"), Is.False);
             Assert.That(AgentToolRegistry.IsAutonomousForbidden("get_colony_overview"), Is.False);
+            Assert.That(AgentToolRegistry.IsAutonomousForbidden(null), Is.False);
         }
     }
 }

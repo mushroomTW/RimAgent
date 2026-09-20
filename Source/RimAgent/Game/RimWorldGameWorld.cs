@@ -106,13 +106,7 @@ namespace RimAgent.Game
 
         private static bool HasBleeding(Pawn pawn)
         {
-            List<Hediff> hediffs = pawn.health?.hediffSet?.hediffs;
-            if (hediffs == null) return false;
-            for (int i = 0; i < hediffs.Count; i++)
-            {
-                if (hediffs[i].BleedRate > 0f) return true;
-            }
-            return false;
+            return pawn.health?.hediffSet?.BleedRateTotal > 0f;
         }
 
         /// <summary>站著的敵對 pawn 數。倒地的不算：留著會讓「襲擊結束」的邊緣永遠不歸零，下一波真襲擊就觸發不了。火也不算。</summary>

@@ -19,7 +19,9 @@ namespace RimAgent
 
         public override string SettingsCategory()
         {
-            return "RimAgent.Settings.Category".Translate().Resolve() ?? "RimAgent";
+            return "RimAgent.Settings.Category".CanTranslate()
+                ? "RimAgent.Settings.Category".Translate().Resolve()
+                : "RimAgent";
         }
 
         public override void DoSettingsWindowContents(Rect inRect)
