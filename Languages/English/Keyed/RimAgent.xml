@@ -2,7 +2,7 @@
 <LanguageData>
 
   <!-- Agent window -->
-  <RimAgent.WindowTitle>RimAgent · Decision Log</RimAgent.WindowTitle>
+  <RimAgent.WindowTitle>RimAgent</RimAgent.WindowTitle>
   <RimAgent.Tag.EmergencyStop>[Emergency Stop]</RimAgent.Tag.EmergencyStop>
   <RimAgent.Tag.AutoPause>[Auto Pause]</RimAgent.Tag.AutoPause>
   <RimAgent.Tag.AutoAction>[Auto Action]</RimAgent.Tag.AutoAction>

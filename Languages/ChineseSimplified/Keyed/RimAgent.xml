@@ -2,7 +2,7 @@
 <LanguageData>
 
   <!-- Agent 窗口 -->
-  <RimAgent.WindowTitle>智核 · 决策记录</RimAgent.WindowTitle>
+  <RimAgent.WindowTitle>RimAgent</RimAgent.WindowTitle>
   <RimAgent.Tag.EmergencyStop>[危险急停]</RimAgent.Tag.EmergencyStop>
   <RimAgent.Tag.AutoPause>[自动暂停]</RimAgent.Tag.AutoPause>
   <RimAgent.Tag.AutoAction>[自动处理]</RimAgent.Tag.AutoAction>

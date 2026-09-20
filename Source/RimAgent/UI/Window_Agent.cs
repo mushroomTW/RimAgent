@@ -12,7 +12,7 @@ using Verse;
 namespace RimAgent.UI
 {
     /// <summary>
-    /// 懸浮可移動的 Agent 視窗：暗黑半透明科技 HUD 風格，支援隨意拖曳、自由縮放、位置記憶。
+    /// 懸浮可移動的 Agent 視窗，支援隨意拖曳、自由縮放、位置記憶。
     /// 包含雙色標籤決策日誌串流、模式/思考切換、輸入列與斜線指令。
     /// </summary>
     public class Window_Agent : Window
@@ -170,7 +170,7 @@ namespace RimAgent.UI
 
             ColonyAgentSession session = component.Session;
 
-            // 標題列（智核 · 決策記錄）與關閉鍵
+            // 標題列（RimAgent）與關閉鍵
             var titleRect = new Rect(inRect.x, inRect.y, inRect.width, TitleBarHeight);
             DrawTitleBar(titleRect);
 
