@@ -276,14 +276,13 @@ namespace RimAgent.Agent
             _serializedSession = null;
             _pendingConfirmation = null;
             ConfirmGate.DiscardPendingApprovals();
-            ConfirmGate.ResetBypass();
             Transcript.Clear();
             Undo.Clear();
         }
 
         /// <summary>
-        /// 執行等待中的確認：把上一句原樣重送一次，本輪閘門放行，模型會重新下相同的工具呼叫
-        /// 並真正執行。沒有等待中的確認回傳 null。
+        /// 執行等待中的確認：執行預覽當下捕捉的原工具呼叫與引數，不再重送模型。
+        /// 沒有等待中的確認回傳 null。
         /// </summary>
         public async Task<string> ConfirmAsync(CancellationToken cancellationToken = default)
         {
@@ -351,9 +350,10 @@ namespace RimAgent.Agent
                     .AsTask().GetAwaiter().GetResult();
                 return document.GetRawText();
             }
-            catch
+            catch (Exception ex)
             {
                 // 存檔不能因框架升級或供應商資料不相容而失敗；保留 transcript 作為兜底。
+                Verse.Log.Warning("RimAgent: failed to serialize agent session for save: " + ex.Message);
                 return null;
             }
         }
@@ -379,9 +379,10 @@ namespace RimAgent.Agent
                             .AsTask().GetAwaiter().GetResult();
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     // 舊版存檔或 Agent Framework 升級後無法還原時，安全地退回新會話。
+                    Verse.Log.Warning("RimAgent: failed to restore agent session, starting fresh: " + ex.Message);
                 }
             }
             return _agent.CreateSessionAsync(cancellationToken).AsTask().GetAwaiter().GetResult();

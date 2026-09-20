@@ -19,7 +19,7 @@ All LLM plumbing (provider, API key, model, fallback chain, budget) comes from *
 
 | Category | Tools | Default |
 | --- | --- | --- |
-| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching, map object search, game screenshots | on |
+| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching (safe command), map object search, game screenshots (safe command) | on |
 | Work | work priorities, daily schedules (undoable) | on |
 | Build | mine / cut / harvest / deconstruct / haul / hunt designations, blueprints (single or in a line) | on |
 | Combat | draft, move, attack | on |
@@ -40,19 +40,20 @@ One setting decides how much the agent may do on its own (per-category permissio
 
 | Mode | What happens |
 | --- | --- |
-| **Ask** | Read-only. Only query tools are offered to the model; it inspects and advises. |
+| **Ask** | Read-only. Only query tools are offered to the model; state-changing tools (including map switching and screenshot capture) are omitted so the agent inspects and advises without side effects. |
 | **Confirm** (default) | Tools tagged irreversible — trades, caravans, surgery, prisoner release/interaction, zone and bill deletion, blueprints, designations, attacks — return a preview and wait for **Confirm**; everything else runs directly. |
 | **Auto** | Every command is previewed first, then a second model call classifies it (`low` / `high`). Low runs immediately, high waits for **Confirm**. Any classifier failure counts as high. Costs one extra request per command. |
-| **Autonomous** | Fully delegated: every command runs without asking, and the scheduler below starts the agent's own runs. You can still type instructions. |
+| **Autonomous** | Fully delegated: commands run without manual prompt, and the scheduler below starts the agent's own runs. High-risk actions (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `set_prisoner_interaction`) are blacklisted and excluded from the model, and `mcp_call_tool` always requires manual confirmation. You can still type instructions. |
 
 Every tool carries a static risk tag (`Query` / `Safe` / `Confirm`) and every command tool has a preview branch that touches nothing. The test suite checks both paths for all command tools. Confirm executes the exact captured tool call and arguments from the preview; it never re-sends the instruction to the model, so already-safe actions cannot run twice.
 
 ## Safety
 
 * **Confirm** / **Discard**: Confirm executes the captured previewed calls with their original arguments; it does not make another LLM request. A new instruction or Discard drops every pending call.
+* **Autonomous Blacklist**: When running unattended or in Autonomous mode, the model is strictly forbidden from trading (`execute_trade`), forming caravans (`form_caravan`), releasing prisoners (`release_prisoner`), scheduling surgeries (`schedule_surgery`), and setting prisoner interactions (`set_prisoner_interaction`) to prevent unauthorized harm or loss.
 * **MCP always confirms**: `mcp_call_tool` always waits for explicit player confirmation, including in Auto and Autonomous modes; the risk classifier cannot waive this prompt.
 * **`/undo`**: restores the previous instruction's work priorities and daily schedules — also for an instruction that failed halfway, so whatever did land can be reverted.
-* Guard rails inside the tools: `order_attack` refuses colony members, prisoners and friendly factions; `schedule_surgery` requires an explicit body part for surgeries that target one; `execute_trade` needs a negotiator who can talk and is not incapable of social work, and a powered comms console for orbital traders; `form_caravan` moves the named colonists off the map immediately (no walking to the edge, no supplies packed); zones are validated with the game's own zone designators (fog, map edge, blocking things, fertility).
+* Guard rails inside the tools: `order_attack` refuses colony members, prisoners and friendly factions; `schedule_surgery` requires an explicit body part for surgeries that target one; `execute_trade` needs a negotiator who can talk and is not incapable of social work, and a powered comms console for orbital traders; `form_caravan` moves the named colonists off the map immediately (no walking to the edge, no supplies packed); `set_current_map` and `take_screenshot` are classified as Safe commands, requiring Confirm or Auto/Autonomous mode and blocked in Ask mode; zones are validated with the game's own zone designators (fog, map edge, blocking things, fertility).
 * The visible conversation, compacted model session, autonomous scheduler budget and work undo history are saved with the game. If an older session cannot be deserialized after an upgrade, RimAgent safely starts a fresh model session while retaining the visible transcript.
 * The combat-latency reminder appears once per instruction, and Markdown in model replies is rendered via RimLLM Framework (bold, italics, headings, links, code).
 * The shipped conduct file (`AgentPack/AGENTS.md`) and skill packs (`AgentPack/Skills/`) are included with every instruction. MCP servers run as local processes with your user privileges — only enable ones you trust.

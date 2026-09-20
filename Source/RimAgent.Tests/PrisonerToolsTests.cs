@@ -107,8 +107,15 @@ namespace RimAgent.Tests
         public async Task SetInteractionIsLoggedAsAToolCall()
         {
             var client = new ScriptedChatClient();
+            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\"}");
             client.CallTool("set_prisoner_interaction", new { prisoner = "Rook", mode = "recruit" }).Reply("Done.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Prisoner = true }, 8);
+            var session = new ColonyAgentSession(
+                client,
+                _world,
+                () => new ToolPermissions { Observe = true, Prisoner = true },
+                8,
+                () => AgentMode.Auto,
+                classifierClient: classifier);
 
             await session.SendAsync("開始招募 Rook");
 

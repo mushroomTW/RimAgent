@@ -127,7 +127,7 @@ namespace RimAgent.Tools
                 PawnIds = pawns.Value.Select(c => c.Id).ToList(),
                 Heading = (heading ?? string.Empty).Trim()
             };
-            string blocked = ToolText.Blocked(_gate, $"would form a caravan with {ToolText.Names(pawns.Value)} heading {request.Heading} (they leave the map immediately).");
+            string blocked = ToolText.Blocked(_gate, $"would form a caravan with {ToolText.Names(pawns.Value)} heading {request.Heading} (they leave the map immediately without packing supplies).");
             if (blocked != null) return blocked;
 
             CommandResult result = _world.FormCaravan(request);

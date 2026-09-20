@@ -9,8 +9,8 @@ namespace RimAgent.Agent
     /// <summary>
     /// 命令閘門實作，擁有者是 <see cref="ColonyAgentSession"/>。
     /// 依 <see cref="AgentMode"/> 與目前工具的 <see cref="ToolRisk"/> 決定放行或擋下：
-    /// 確認模式擋 Confirm 級工具（回傳預覽），玩家按確認後放行一次（同一句重送）；
-    /// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再強制執行。
+    /// 確認模式擋 Confirm 級工具（回傳預覽並捕捉原呼叫，玩家按確認後直接執行原呼叫）；
+    /// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再決定執行或等待確認。
     /// 工具的風險由 <see cref="LoggingAIFunction"/> 在每次呼叫前經 <see cref="BeginInvocation"/> 告知；
     /// 工具串行執行（框架禁止並行），所以這裡用單一欄位即可。
     /// </summary>
@@ -25,7 +25,6 @@ namespace RimAgent.Agent
         private readonly object _gate = new object();
         private readonly List<string> _blocked = new List<string>();
         private readonly List<PendingApproval> _pending = new List<PendingApproval>();
-        private int _bypass;
         // 不在工具呼叫期間（直接建構工具的測試）時以最保守的 Confirm 看待。
         private ToolRisk _currentRisk = ToolRisk.Confirm;
         // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
@@ -51,7 +50,6 @@ namespace RimAgent.Agent
         public bool AllowCommands()
         {
             if (_forced.HasValue) return _forced.Value;
-            if (IsBypassing) return true;
             switch (_mode())
             {
                 case AgentMode.Ask:
@@ -161,23 +159,10 @@ namespace RimAgent.Agent
             }
         }
 
-        /// <summary>放行接下來的一次執行（確認鍵用），跑完後 session 會關掉。</summary>
-        public void BypassOnce()
-        {
-            Volatile.Write(ref _bypass, 1);
-        }
-
-        public void ResetBypass()
-        {
-            Volatile.Write(ref _bypass, 0);
-        }
-
-        internal bool IsBypassing => Volatile.Read(ref _bypass) == 1;
-
-        /// <summary>這次工具呼叫是否要先問分類器：自動模式、是命令、且不在確認後的放行重送中。</summary>
+        /// <summary>這次工具呼叫是否要先問分類器：自動模式且是命令。</summary>
         internal bool NeedsClassification(ToolRisk risk)
         {
-            return _mode() == AgentMode.Auto && risk != ToolRisk.Query && !IsBypassing;
+            return _mode() == AgentMode.Auto && risk != ToolRisk.Query;
         }
 
         /// <summary>工具呼叫開始：記下這次工具的靜態風險。</summary>

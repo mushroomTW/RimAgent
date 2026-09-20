@@ -60,17 +60,59 @@ namespace RimAgent.Game
         /// </summary>
         internal Agent.AutonomousSignals GetAutonomousSignals()
         {
-            List<Map> maps = Find.Maps.ToList();
-            List<Pawn> colonists = maps.SelectMany(m => m.mapPawns.FreeColonistsSpawned).ToList();
+            List<Map> maps = Find.Maps;
+            int hostileCount = 0;
+            int nearMentalBreak = 0;
+            float foodNutrition = 0f;
+            int colonistCount = 0;
+            int downedOrBleeding = 0;
+            int fireCount = 0;
+
+            if (maps != null)
+            {
+                for (int m = 0; m < maps.Count; m++)
+                {
+                    Map map = maps[m];
+                    if (map == null) continue;
+
+                    hostileCount += CountHostiles(map);
+                    foodNutrition += map.resourceCounter.TotalHumanEdibleNutrition;
+                    fireCount += map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
+
+                    List<Pawn> freeColonists = map.mapPawns.FreeColonistsSpawned;
+                    if (freeColonists != null)
+                    {
+                        colonistCount += freeColonists.Count;
+                        for (int p = 0; p < freeColonists.Count; p++)
+                        {
+                            Pawn pawn = freeColonists[p];
+                            if (IsNearMentalBreak(pawn)) nearMentalBreak++;
+                            if (pawn.Downed || HasBleeding(pawn)) downedOrBleeding++;
+                        }
+                    }
+                }
+            }
+
             return new Agent.AutonomousSignals
             {
-                HostileCount = maps.Sum(CountHostiles),
-                NearMentalBreakCount = colonists.Count(IsNearMentalBreak),
-                FoodNutrition = maps.Sum(m => m.resourceCounter.TotalHumanEdibleNutrition),
-                ColonistCount = colonists.Count,
-                DownedOrBleedingCount = colonists.Count(p => p.Downed || p.health.hediffSet.hediffs.Any(h => h.BleedRate > 0f)),
-                FireCount = maps.Sum(m => m.listerThings.ThingsOfDef(ThingDefOf.Fire).Count)
+                HostileCount = hostileCount,
+                NearMentalBreakCount = nearMentalBreak,
+                FoodNutrition = foodNutrition,
+                ColonistCount = colonistCount,
+                DownedOrBleedingCount = downedOrBleeding,
+                FireCount = fireCount
             };
+        }
+
+        private static bool HasBleeding(Pawn pawn)
+        {
+            List<Hediff> hediffs = pawn.health?.hediffSet?.hediffs;
+            if (hediffs == null) return false;
+            for (int i = 0; i < hediffs.Count; i++)
+            {
+                if (hediffs[i].BleedRate > 0f) return true;
+            }
+            return false;
         }
 
         /// <summary>站著的敵對 pawn 數。倒地的不算：留著會讓「襲擊結束」的邊緣永遠不歸零，下一波真襲擊就觸發不了。火也不算。</summary>

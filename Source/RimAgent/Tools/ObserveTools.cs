@@ -224,13 +224,16 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("set_current_map", ToolCategory.Observe, ToolRisk.Query)]
+        [AgentTool("set_current_map", ToolCategory.Observe, ToolRisk.Safe)]
         [Description("Makes another map the current one for later tool calls, like the player switching maps. Pawns and items stay where they are.")]
         public string SetCurrentMap(
             [Description("Map id from get_maps, or part of its name.")] string map)
         {
             ResolveResult<MapInfo> match = ResolveMap(map, _world.GetMaps());
             if (!match.Success) return match.Error;
+
+            string blocked = ToolText.Blocked(_gate, $"would switch current map to [{match.Value.Id}] {match.Value.Label}.");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.SetCurrentMap(match.Value.Id);
             if (!result.Success) return ToolText.Error(result.Message);
@@ -318,12 +321,15 @@ namespace RimAgent.Tools
             return Enum.TryParse((kind ?? string.Empty).Trim(), true, out parsed) && Enum.IsDefined(typeof(ThingKind), parsed);
         }
 
-        [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Query)]
+        [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Safe)]
         [Description("Saves a screenshot of the current game view to disk for the player and returns the file path. The image is for the player; you cannot view it.")]
         public string TakeScreenshot(
             [Description("File name without directory or .png; empty uses a timestamped name.")] string name = null)
         {
             string safeName = ResolveScreenshotName(name);
+            string blocked = ToolText.Blocked(_gate, $"would take screenshot to disk as \"{safeName}.png\".");
+            if (blocked != null) return blocked;
+
             ScreenshotInfo info = _world.TakeScreenshot(safeName);
             if (!info.Success)
             {

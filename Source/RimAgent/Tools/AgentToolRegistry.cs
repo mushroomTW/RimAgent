@@ -11,8 +11,8 @@ namespace RimAgent.Tools
     /// <summary>十二類工具各自的開關。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
     public sealed class ToolPermissions
     {
-        public bool Observe { get; set; } = true;
-        public bool Work { get; set; } = true;
+        public bool Observe { get; set; }
+        public bool Work { get; set; }
         public bool Build { get; set; }
         public bool Combat { get; set; }
         public bool Trade { get; set; }
@@ -23,6 +23,24 @@ namespace RimAgent.Tools
         public bool Production { get; set; }
         public bool Time { get; set; }
         public bool Mcp { get; set; }
+
+        /// <summary>所有工具類別權限皆開啟的執行個體。</summary>
+        public static ToolPermissions All => new ToolPermissions
+        {
+            Observe = true,
+            Work = true,
+            Build = true,
+            Combat = true,
+            Trade = true,
+            Medical = true,
+            Prisoner = true,
+            Animal = true,
+            Zone = true,
+            Production = true,
+            Time = true,
+            Mcp = true
+        };
+
 
         public bool Allows(ToolCategory category)
         {
@@ -124,11 +142,14 @@ namespace RimAgent.Tools
             return entry.Risk;
         }
 
-        private static bool IsAutonomousForbidden(string name)
+        /// <summary>自主模式下黑名單工具（不可委託無人值守執行的高危命令與 MCP 工具）。</summary>
+        public static bool IsAutonomousForbidden(string name)
         {
             return string.Equals(name, "execute_trade", StringComparison.Ordinal)
                    || string.Equals(name, "form_caravan", StringComparison.Ordinal)
-                   || string.Equals(name, "release_prisoner", StringComparison.Ordinal);
+                   || string.Equals(name, "release_prisoner", StringComparison.Ordinal)
+                   || string.Equals(name, "schedule_surgery", StringComparison.Ordinal)
+                   || string.Equals(name, "set_prisoner_interaction", StringComparison.Ordinal);
         }
 
         private void Register(object target, AgentTranscript transcript)

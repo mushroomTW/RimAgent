@@ -15,11 +15,10 @@ namespace RimAgent
 {
     /// <summary>
     /// 持有這一場遊戲的 <see cref="ColonyAgentSession"/>。玩家看得到的對話
-    /// （指令、回覆、行動紀錄）寫進存檔，讀檔後仍在；AF session 的模型上下文
-    /// 照舊歸零（等框架提供版本化的 session 序列化再評估），新局時兩者都清空，
-    /// 避免把上一個殖民地的脈絡帶進來。RimWorld 會自動為每個 GameComponent 子類建立實例。
+    /// （指令、回覆、行動紀錄）與序列化後的 AF session 模型上下文皆寫進存檔，讀檔後仍在；
+    /// 新局時兩者都清空，避免把上一個殖民地的脈絡帶進來。RimWorld 會自動為每個 GameComponent 子類建立實例。
     ///
-    /// 自主模式：設定頁選「自主」後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、間隔），
+    /// 自主模式：設定頁選「自主」後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、急診、火災與間隔），
     /// 條件成立就起一次自主任務。自主任務與玩家指令走同一個 session（同歷史、同權限、同閘門），
     /// 差別只在指令文字由排程器產生並附上長期目標；每日工具呼叫總量有上限。
     /// </summary>
@@ -281,6 +280,10 @@ namespace RimAgent
                 // 玩家在同一幀搶先送了指令：這次沒跑，不算一次自主任務、不吃冷卻。
                 return;
             }
+            catch (OperationCanceledException)
+            {
+                // 玩家主動停止自主任務（點擊停止或 /stop）：若尚未消耗任何工具配額，不吃冷卻。
+            }
             catch (Exception ex)
             {
                 Log.Warning("RimAgent autonomous run failed: " + ex.Message);
@@ -288,7 +291,10 @@ namespace RimAgent
             // 只數這一句的工具紀錄：transcript 會裁掉最舊的紀錄，前後相減會失準。
             int used = session.Transcript.Snapshot().Count(e =>
                 e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId && e.BudgetConsumed);
-            _scheduler.RecordRun(tick, used, config);
+            if (used > 0 || _autoCts == null || !_autoCts.IsCancellationRequested)
+            {
+                _scheduler.RecordRun(tick, used, config);
+            }
         }
 
         private static AutoLanguage DetectLanguage()

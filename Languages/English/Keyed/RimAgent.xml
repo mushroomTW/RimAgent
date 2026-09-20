@@ -28,13 +28,14 @@
   <RimAgent.Error.Unknown>Something went wrong: {0}</RimAgent.Error.Unknown>
 
   <!-- Settings -->
+  <RimAgent.Settings.Category>RimAgent</RimAgent.Settings.Category>
   <RimAgent.Settings.PermissionsHeader>What the agent is allowed to do</RimAgent.Settings.PermissionsHeader>
   <RimAgent.Settings.Observe>Observe — read colony state</RimAgent.Settings.Observe>
   <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research (status and switching), maps (listing and switching), map object search and game screenshots.</RimAgent.Settings.ObserveTip>
   <RimAgent.Settings.Work>Work — priorities and schedules</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>Change work priorities and daily schedules. Easy to undo by hand.</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>Build — designations and blueprints</RimAgent.Settings.Build>
-  <RimAgent.Settings.BuildTip>Mark things for mining, cutting, harvesting, deconstruction and hauling, and place blueprints.</RimAgent.Settings.BuildTip>
+  <RimAgent.Settings.BuildTip>Mark things for mining, cutting, harvesting, deconstruction, hauling and hunting, and place blueprints.</RimAgent.Settings.BuildTip>
   <RimAgent.Settings.Combat>Combat — draft, move and attack orders</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>Draft colonists and give move or attack orders. The model needs several seconds to respond, so this is for positioning and retreats, not real-time control.</RimAgent.Settings.CombatTip>
   <RimAgent.Settings.Trade>Trade — list stock, buy and sell, player caravans</RimAgent.Settings.Trade>
@@ -63,7 +64,7 @@
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action; risky ones wait for your Confirm, the rest run directly. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
-  <RimAgent.Settings.Mode.AutonomousDesc>Fully delegated: every action runs without asking, and the agent starts its own runs on the schedule below. You can still give instructions.</RimAgent.Settings.Mode.AutonomousDesc>
+  <RimAgent.Settings.Mode.AutonomousDesc>Fully delegated: permitted commands run directly without asking, protected by high-risk blacklists (trades, caravans, surgery, prisoner release/interaction) and scheduled runs below. MCP always confirms.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
   <RimAgent.Settings.AutoInterval>Routine inspection every: {0} hours</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoBudget>Autonomous tool calls per day: {0}</RimAgent.Settings.AutoBudget>

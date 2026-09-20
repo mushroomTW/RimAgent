@@ -5,9 +5,9 @@ using Verse;
 namespace RimAgent.Agent
 {
     /// <summary>
-    /// 一則對話紀錄的存檔形態。AF session 的模型上下文仍不持久化
-    /// （等框架提供版本化的 session 序列化再評估），這裡只存玩家看得到的對話：
-    /// 指令、回覆與行動紀錄。讀檔後 AF 歷史歸零，但玩家仍看得到之前發生了什麼。
+    /// 一則對話紀錄的存檔形態。這裡保存玩家看得到的對話：指令、回覆與行動紀錄
+    /// （AF session 的模型上下文則由 GameComponent 另外序列化存檔）。
+    /// 讀檔後可見對話完整還原，玩家可瀏覽過去指令與操作歷程。
     /// </summary>
     public sealed class TranscriptEntryData : IExposable
     {

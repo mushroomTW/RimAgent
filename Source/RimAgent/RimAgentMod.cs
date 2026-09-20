@@ -9,6 +9,9 @@ namespace RimAgent
     {
         public static RimAgentSettings Settings { get; private set; }
 
+        private static Vector2 _settingsScrollPosition = Vector2.zero;
+        private static float _settingsHeight = 920f;
+
         public RimAgentMod(ModContentPack content) : base(content)
         {
             Settings = GetSettings<RimAgentSettings>();
@@ -16,13 +19,16 @@ namespace RimAgent
 
         public override string SettingsCategory()
         {
-            return "RimAgent";
+            return "RimAgent.Settings.Category".Translate().Resolve() ?? "RimAgent";
         }
 
         public override void DoSettingsWindowContents(Rect inRect)
         {
+            Rect viewRect = new Rect(0f, 0f, inRect.width - 24f, _settingsHeight);
+            Widgets.BeginScrollView(inRect, ref _settingsScrollPosition, viewRect);
+
             var listing = new Listing_Standard();
-            listing.Begin(inRect);
+            listing.Begin(viewRect);
 
             listing.Label("RimAgent.Settings.PermissionsHeader".Translate());
             listing.GapLine();
@@ -68,6 +74,8 @@ namespace RimAgent
             listing.Label("RimAgent.Settings.FrameworkNote".Translate());
 
             listing.End();
+            _settingsHeight = Mathf.Max(listing.CurHeight + 24f, inRect.height);
+            Widgets.EndScrollView();
         }
 
         /// <summary>模式單選列：標題一行、灰字說明一行，點任一行都選取。</summary>

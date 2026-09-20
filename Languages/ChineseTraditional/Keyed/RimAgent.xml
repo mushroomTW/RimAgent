@@ -28,13 +28,14 @@
   <RimAgent.Error.Unknown>發生錯誤：{0}</RimAgent.Error.Unknown>
 
   <!-- 設定 -->
+  <RimAgent.Settings.Category>RimAgent</RimAgent.Settings.Category>
   <RimAgent.Settings.PermissionsHeader>允許 Agent 做的事</RimAgent.Settings.PermissionsHeader>
   <RimAgent.Settings.Observe>觀察 — 讀取殖民地狀態</RimAgent.Settings.Observe>
   <RimAgent.Settings.ObserveTip>殖民地概況、殖民者、資源、威脅、研究（查詢與切換）、地圖（列出與切換）、地圖物件搜尋與遊戲截圖。</RimAgent.Settings.ObserveTip>
   <RimAgent.Settings.Work>工作 — 優先級與作息</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>修改工作優先級與每日作息。容易手動改回。</RimAgent.Settings.WorkTip>
   <RimAgent.Settings.Build>建造 — 標記與藍圖</RimAgent.Settings.Build>
-  <RimAgent.Settings.BuildTip>標記開採、砍伐、收成、拆除、搬運，以及放置藍圖。</RimAgent.Settings.BuildTip>
+  <RimAgent.Settings.BuildTip>標記開採、砍伐、收成、拆除、搬運與狩獵，以及放置藍圖。</RimAgent.Settings.BuildTip>
   <RimAgent.Settings.Combat>戰鬥 — 徵召、移動與攻擊指令</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>徵召殖民者並下移動或攻擊指令。模型需要數秒才會回應，只適合佈署與撤退，不適合即時操作。</RimAgent.Settings.CombatTip>
   <RimAgent.Settings.Trade>交易 — 查庫存、買入賣出、組織商隊</RimAgent.Settings.Trade>
@@ -63,7 +64,7 @@
   <RimAgent.Settings.Mode.Auto>自動</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>每個操作先由另一次模型呼叫判斷風險：有風險的等你確認，其餘直接執行。每個操作多一次請求。</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
-  <RimAgent.Settings.Mode.AutonomousDesc>完全託管：所有操作不問直接做，並依下方排程自己行動。你仍可下指令。</RimAgent.Settings.Mode.AutonomousDesc>
+  <RimAgent.Settings.Mode.AutonomousDesc>全權委託：許可命令直接執行（排除交易、商隊、手術、囚犯等高危黑名單），並依排程自己行動。MCP 仍強制確認。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行動</RimAgent.Settings.AutonomousHeader>
   <RimAgent.Settings.AutoInterval>例行巡檢間隔：{0} 小時</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoBudget>自主每日工具呼叫上限：{0} 次</RimAgent.Settings.AutoBudget>

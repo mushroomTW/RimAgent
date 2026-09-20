@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using RimAgent.Agent;
 using RimAgent.Game;
 using RimAgent.Tools;
 
@@ -206,5 +207,32 @@ namespace RimAgent.Tests
             string text = _tools.TakeScreenshot("test");
             Assert.That(text, Does.StartWith("Error:").And.Contain("disk full"));
         }
+
+        [Test]
+        public void AskModeExcludesSetCurrentMapAndTakeScreenshot()
+        {
+            var registry = new AgentToolRegistry(_world, new AgentTranscript());
+            var tools = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(System.Linq.Enumerable.OfType<Microsoft.Extensions.AI.AIFunction>(registry.Select(ToolPermissions.All, AgentMode.Ask)), f => f.Name));
+            Assert.That(tools, Does.Not.Contain("set_current_map"));
+            Assert.That(tools, Does.Not.Contain("take_screenshot"));
+            Assert.That(tools, Does.Contain("get_colony_overview"));
+        }
+
+        [Test]
+        public void BlockedGateReturnsPreviewForMapAndScreenshot()
+        {
+            _world.Maps.Add(new MapInfo { Id = 2, Label = "Outpost" });
+            var gate = new ConfirmationGate(() => AgentMode.Ask);
+            var tools = new ObserveTools(_world, gate);
+
+            string mapResult = tools.SetCurrentMap("2");
+            Assert.That(mapResult, Does.StartWith(ToolText.ConfirmationPrefix + "would switch current map to"));
+            Assert.That(_world.CurrentMapId, Is.EqualTo(1));
+
+            string shotResult = tools.TakeScreenshot("test");
+            Assert.That(shotResult, Does.StartWith(ToolText.ConfirmationPrefix + "would take screenshot"));
+            Assert.That(_world.Calls, Does.Not.Contain("TakeScreenshot(test)"));
+        }
     }
 }
+

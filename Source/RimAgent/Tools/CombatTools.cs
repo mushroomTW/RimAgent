@@ -143,7 +143,9 @@ namespace RimAgent.Tools
         {
             ThreatInfo threat = _world.GetThreats().FirstOrDefault(t => t.Id == targetId);
             if (threat != null) return threat.Label;
-            ThingInfo thing = _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = 500 }).FirstOrDefault(t => t.Id == targetId);
+            AnimalInfo animal = _world.GetAnimals().FirstOrDefault(a => a.Id == targetId);
+            if (animal != null) return animal.Name;
+            ThingInfo thing = _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = 200 }).FirstOrDefault(t => t.Id == targetId);
             return thing?.Label;
         }
 
