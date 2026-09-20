@@ -13,7 +13,7 @@ namespace RimAgent.UI
 {
     /// <summary>
     /// 懸浮可移動的 Agent 視窗：暗黑半透明科技 HUD 風格，支援隨意拖曳、自由縮放、位置記憶。
-    /// 包含決策日誌串流、模式/思考切換、輸入列與斜線指令。
+    /// 包含雙色標籤決策日誌串流、模式/思考切換、輸入列與斜線指令。
     /// </summary>
     public class Window_Agent : Window
     {
@@ -34,16 +34,22 @@ namespace RimAgent.UI
         private static readonly Color TitleColor = new Color(0.80f, 0.88f, 0.96f);
         private static readonly Color CloseButHoverColor = new Color(1f, 0.35f, 0.35f, 0.3f);
 
-        private static readonly Color UserColor = new Color(0.70f, 0.86f, 1f);
-        private static readonly Color AssistantColor = new Color(0.92f, 0.94f, 0.97f);
+        // Rich text 標籤色彩 Hex（用於雙色分離排版）
+        private const string EmergencyHex = "FF5959"; // 亮紅橙：[危險急停]
+        private const string PauseHex = "FFC846";     // 金黃：[自動暫停]
+        private const string AutoActionHex = "73CCFF"; // 冷青藍：[自動處理]
+        private const string UserHex = "A8DCFF";       // 淡天藍：玩家指令
+        private const string TextHex = "E6EDF5";       // 柔和淺白：內文敘述
+        private const string SubTextHex = "A0B0C0";    // 淺灰藍：次要細節 / 結果
+        private const string NoticeHex = "FFD670";     // 提示黃
+
+        private static readonly Color ControlBgColor = new Color(0.08f, 0.11f, 0.15f, 0.75f);
+        private static readonly Color ControlBorderColor = new Color(0.45f, 0.52f, 0.60f, 0.65f);
         private static readonly Color ToolActionColor = new Color(0.48f, 0.82f, 1f);
         private static readonly Color ToolTextColor = new Color(0.75f, 0.78f, 0.82f);
         private static readonly Color EmergencyColor = new Color(1f, 0.35f, 0.35f);
         private static readonly Color PauseColor = new Color(1f, 0.80f, 0.28f);
         private static readonly Color NoticeColor = new Color(0.95f, 0.85f, 0.45f);
-
-        private static readonly Color ControlBgColor = new Color(0.08f, 0.11f, 0.15f, 0.75f);
-        private static readonly Color ControlBorderColor = new Color(0.45f, 0.52f, 0.60f, 0.65f);
 
         private string _input = string.Empty;
         private Vector2 _scroll;
@@ -65,16 +71,9 @@ namespace RimAgent.UI
 
         protected override float Margin => 0f;
 
-        public override Vector2 InitialSize
-        {
-            get
-            {
-                RimAgentSettings settings = RimAgentMod.Settings;
-                float w = settings != null && settings.windowRectWidth > 200f ? settings.windowRectWidth : 620f;
-                float h = settings != null && settings.windowRectHeight > 150f ? settings.windowRectHeight : 460f;
-                return new Vector2(w, h);
-            }
-        }
+        public override Vector2 InitialSize => RimAgentMod.Settings != null
+            ? RimAgentMod.Settings.WindowSize
+            : new Vector2(RimAgentSettings.DefaultWindowWidth, RimAgentSettings.DefaultWindowHeight);
 
         public Window_Agent()
         {
@@ -115,20 +114,9 @@ namespace RimAgent.UI
         protected override void SetInitialSizeAndPosition()
         {
             RimAgentSettings settings = RimAgentMod.Settings;
-            float w = settings != null && settings.windowRectWidth > 200f ? settings.windowRectWidth : 620f;
-            float h = settings != null && settings.windowRectHeight > 150f ? settings.windowRectHeight : 460f;
-
-            float x = settings != null ? settings.windowRectX : -1f;
-            float y = settings != null ? settings.windowRectY : -1f;
-
-            // 若尚未儲存或超出螢幕，使用右側預設位置
-            if (x < 0f || y < 0f || x > Verse.UI.screenWidth - 60f || y > Verse.UI.screenHeight - 40f)
-            {
-                x = Mathf.Max(10f, Verse.UI.screenWidth - w - 24f);
-                y = Mathf.Max(40f, Verse.UI.screenHeight - h - 90f);
-            }
-
-            windowRect = new Rect(x, y, w, h);
+            windowRect = settings != null
+                ? settings.GetWindowBounds(Verse.UI.screenWidth, Verse.UI.screenHeight)
+                : new Rect(10f, 40f, RimAgentSettings.DefaultWindowWidth, RimAgentSettings.DefaultWindowHeight);
             _posInitialized = true;
         }
 
@@ -152,42 +140,21 @@ namespace RimAgent.UI
                 windowRect.y = clampedY;
             }
 
-            // 更新設定檔中的尺寸與位置
-            RimAgentSettings settings = RimAgentMod.Settings;
-            if (settings != null)
-            {
-                bool changed = Mathf.Abs(settings.windowRectX - windowRect.x) > 1f ||
-                               Mathf.Abs(settings.windowRectY - windowRect.y) > 1f ||
-                               Mathf.Abs(settings.windowRectWidth - windowRect.width) > 1f ||
-                               Mathf.Abs(settings.windowRectHeight - windowRect.height) > 1f;
-                if (changed)
-                {
-                    settings.windowRectX = windowRect.x;
-                    settings.windowRectY = windowRect.y;
-                    settings.windowRectWidth = windowRect.width;
-                    settings.windowRectHeight = windowRect.height;
-                }
-            }
+            RimAgentMod.Settings?.UpdateBounds(windowRect);
         }
 
         public override void PostClose()
         {
             base.PostClose();
-            // 視窗關閉時持久化保存視窗位置與尺寸
-            RimAgentSettings settings = RimAgentMod.Settings;
-            if (settings != null)
+            if (RimAgentMod.Settings != null)
             {
-                settings.windowRectX = windowRect.x;
-                settings.windowRectY = windowRect.y;
-                settings.windowRectWidth = windowRect.width;
-                settings.windowRectHeight = windowRect.height;
-                settings.Write();
+                RimAgentMod.Settings.UpdateBounds(windowRect);
+                RimAgentMod.Settings.Write();
             }
         }
 
         public override void DoWindowContents(Rect inRect)
         {
-            // 1. 繪製暗黑半透明科技風格背景與細線框
             DrawCustomWindowFrame(inRect);
 
             RimAgentGameComponent component = RimAgentGameComponent.Instance;
@@ -203,7 +170,7 @@ namespace RimAgent.UI
 
             ColonyAgentSession session = component.Session;
 
-            // 2. 標題列（智核 · 決策記錄）與關閉鍵
+            // 標題列（智核 · 決策記錄）與關閉鍵
             var titleRect = new Rect(inRect.x, inRect.y, inRect.width, TitleBarHeight);
             DrawTitleBar(titleRect);
 
@@ -227,25 +194,16 @@ namespace RimAgent.UI
             var autoStrip = new Rect(contentRect.x, bottom.y - AutoStripHeight - EntryGap, contentRect.width, AutoStripHeight);
             var transcriptRect = new Rect(contentRect.x, top, contentRect.width, autoStrip.y - top - EntryGap);
 
-            // 3. 繪製對話日誌
+            // 繪製日誌、狀態條、底部輸入列與斜線選單
             DrawTranscript(transcriptRect, session);
-
-            // 4. 繪製狀態條
             DrawStatusStrip(autoStrip, component, session);
-
-            // 5. 繪製底部輸入列
             DrawBottomBar(bottom, session);
-
-            // 6. 斜線選單（最上層）
             DrawSlashPopup(bottom, session);
         }
 
         private static void DrawCustomWindowFrame(Rect inRect)
         {
-            // 暗黑半透明主背景
             Widgets.DrawBoxSolid(inRect, BgColor);
-
-            // 細緻邊框（線寬 1px）
             DrawThinBox(inRect, BorderColor);
         }
 
@@ -259,21 +217,17 @@ namespace RimAgent.UI
 
         private void DrawTitleBar(Rect titleRect)
         {
-            // 標題列背景（微弱漸層或微亮）
             var bgRect = new Rect(titleRect.x + 1f, titleRect.y + 1f, titleRect.width - 2f, titleRect.height - 1f);
             Widgets.DrawBoxSolid(bgRect, new Color(0.08f, 0.11f, 0.14f, 0.6f));
 
-            // 左側標題文字：「智核 · 決策紀錄」
             var labelRect = new Rect(titleRect.x + 12f, titleRect.y + 4f, titleRect.width - 50f, titleRect.height - 4f);
             Text.Font = GameFont.Small;
             Text.Anchor = TextAnchor.MiddleLeft;
             GUI.color = TitleColor;
-            string titleText = "RimAgent.WindowTitle".Translate();
-            Widgets.Label(labelRect, titleText);
+            Widgets.Label(labelRect, "RimAgent.WindowTitle".Translate());
             GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
 
-            // 右側關閉按鈕（✕）
             var closeRect = new Rect(titleRect.xMax - 26f, titleRect.y + 4f, 20f, 20f);
             if (Mouse.IsOver(closeRect))
             {
@@ -316,7 +270,7 @@ namespace RimAgent.UI
             float workingHeight = 0f;
             if (session.IsBusy)
             {
-                working = "RimAgent.Working".Translate();
+                working = "<color=#" + PauseHex + ">" + "RimAgent.Working".Translate() + "</color>";
                 workingHeight = Text.CalcHeight(working, width);
                 total += workingHeight + EntryGap;
             }
@@ -344,7 +298,7 @@ namespace RimAgent.UI
             }
             if (working != null)
             {
-                GUI.color = NoticeColor;
+                GUI.color = Color.white;
                 Widgets.Label(new Rect(0f, y, width, workingHeight), working);
             }
             GUI.color = Color.white;
@@ -373,6 +327,9 @@ namespace RimAgent.UI
             _linesEntryCount = entries.Count;
         }
 
+        /// <summary>
+        /// 雙色分離渲染條目：採用 Unity Rich Text 標籤，達成「高亮彩色前綴標籤 + 柔和淺白內文」的圖片設計層次。
+        /// </summary>
         private static IEnumerable<(string Text, Color Color)> Render(TranscriptEntry entry, HashSet<int> combatNoted)
         {
             switch (entry.Kind)
@@ -380,12 +337,15 @@ namespace RimAgent.UI
                 case TranscriptKind.User:
                     if (entry.Autonomous)
                     {
-                        string autoPrefix = "RimAgent.Tag.AutoAction".Translate() + " ";
-                        yield return (autoPrefix + entry.Text, ToolActionColor);
+                        string autoTag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.AutoAction".Translate() + "</color> ";
+                        string body = "<color=#" + TextHex + ">" + entry.Text + "</color>";
+                        yield return (autoTag + body, Color.white);
                     }
                     else
                     {
-                        yield return (entry.Text, UserColor);
+                        // 玩家指令：淡天藍色
+                        string userText = "<color=#" + UserHex + ">" + entry.Text + "</color>";
+                        yield return (userText, Color.white);
                     }
                     break;
 
@@ -398,45 +358,71 @@ namespace RimAgent.UI
                     break;
 
                 case TranscriptKind.Error:
-                    string errTag = "RimAgent.Tag.EmergencyStop".Translate() + " ";
-                    yield return (errTag + DescribeError(entry), EmergencyColor);
+                    string errTag = "<color=#" + EmergencyHex + ">" + "RimAgent.Tag.EmergencyStop".Translate() + "</color> ";
+                    string errBody = "<color=#" + EmergencyHex + ">" + DescribeError(entry) + "</color>";
+                    yield return (errTag + errBody, Color.white);
                     break;
 
                 default:
-                    // Notice: 若文字內涵暫停或告警，附上標籤
-                    string noticeTag = (entry.Text.Contains("暫停") || entry.Text.Contains("暂停") || entry.Text.Contains("Pause") || entry.Text.Contains("告警") || entry.Text.Contains("警告"))
-                        ? "RimAgent.Tag.AutoPause".Translate().ToString() + " "
-                        : string.Empty;
-                    yield return (noticeTag + entry.Text, PauseColor);
+                    // Notice 條目：檢驗是否為暫停、告警或提醒
+                    bool isPauseOrAlert = ContainsAny(entry.Text, "暫停", "暂停", "pause", "告警", "警告", "warn", "alert");
+                    string noticeTag = isPauseOrAlert
+                        ? "<color=#" + PauseHex + ">" + "RimAgent.Tag.AutoPause".Translate().ToString() + "</color> "
+                        : "<color=#" + NoticeHex + ">[提示]</color> ";
+                    string noticeBody = "<color=#" + TextHex + ">" + entry.Text + "</color>";
+                    yield return (noticeTag + noticeBody, Color.white);
                     break;
             }
+        }
+
+        private static bool ContainsAny(string text, params string[] keywords)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            for (int i = 0; i < keywords.Length; i++)
+            {
+                if (text.IndexOf(keywords[i], StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            }
+            return false;
         }
 
         private static IEnumerable<(string Text, Color Color)> RenderAssistant(TranscriptEntry entry)
         {
             string reply = RenderReply(entry.Text);
-            yield return (reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply, AssistantColor);
-            if (entry.ToolsStripped) yield return ("RimAgent.ToolsStripped".Translate(), NoticeColor);
+            string replyText = reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply;
+            // 思考與敘述文字：柔和淺白色
+            yield return ("<color=#" + TextHex + ">" + replyText + "</color>", Color.white);
+            if (entry.ToolsStripped)
+            {
+                string stripText = "<color=#" + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + "</color>";
+                yield return (stripText, Color.white);
+            }
         }
 
         private static IEnumerable<(string Text, Color Color)> RenderTool(TranscriptEntry entry, HashSet<int> combatNoted)
         {
-            string tag = "RimAgent.Tag.AutoAction".Translate() + " ";
-            string call = tag + entry.ToolName;
+            // 工具條目精準還原圖片：冷青藍標籤 [自动处理] + 工具名稱與參數 + 次要顏色結果
+            string tag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.AutoAction".Translate() + "</color> ";
+            string call = tag + "<color=#" + TextHex + ">" + entry.ToolName;
             if (!string.IsNullOrEmpty(entry.Arguments))
             {
                 call += "(" + entry.Arguments + ")";
             }
-            if (entry.RiskCheck.Length > 0) call += " [risk: " + entry.RiskCheck + "]";
+            if (entry.RiskCheck.Length > 0)
+            {
+                call += " [risk: " + entry.RiskCheck + "]";
+            }
+            call += "</color>";
 
-            string result = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
-            string text = call + " -> " + result;
+            string resultStr = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
+            string resColorHex = entry.Failed ? EmergencyHex : SubTextHex;
+            string text = call + " <color=#" + resColorHex + ">-> " + resultStr + "</color>";
 
-            yield return (text, entry.Failed ? EmergencyColor : ToolTextColor);
+            yield return (text, Color.white);
 
             if (entry.ToolCategory == ToolCategory.Combat && combatNoted.Add(entry.InstructionId))
             {
-                yield return ("RimAgent.CombatLatencyNote".Translate(), NoticeColor);
+                string combatNote = "<color=#" + NoticeHex + ">" + "RimAgent.CombatLatencyNote".Translate() + "</color>";
+                yield return (combatNote, Color.white);
             }
         }
 
@@ -459,7 +445,7 @@ namespace RimAgent.UI
             var reasoningRect = new Rect(modeRect.xMax + 6f, rect.y, DropdownWidth, rect.height);
 
             bool enabled = !session.IsBusy && settings != null;
-            if (DrawCustomFlatButton(modeRect, "RimAgent.Mode.Status".Translate(ModeLabel(session.Mode)), enabled))
+            if (DrawUnifiedButton(modeRect, "RimAgent.Mode.Status".Translate(ModeLabel(session.Mode)), ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
             {
                 var options = new List<FloatMenuOption>();
                 foreach (AgentMode mode in (AgentMode[])Enum.GetValues(typeof(AgentMode)))
@@ -470,7 +456,7 @@ namespace RimAgent.UI
             }
 
             ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
-            if (DrawCustomFlatButton(reasoningRect, "RimAgent.Reasoning.Status".Translate(ReasoningLabel(current)), enabled))
+            if (DrawUnifiedButton(reasoningRect, "RimAgent.Reasoning.Status".Translate(ReasoningLabel(current)), ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
             {
                 var options = new List<FloatMenuOption>();
                 foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
@@ -491,10 +477,14 @@ namespace RimAgent.UI
             }
         }
 
-        private static bool DrawCustomFlatButton(Rect rect, string label, bool enabled)
+        /// <summary>
+        /// 統一的扁平科技風按鈕繪製，消除重複代碼。
+        /// </summary>
+        private static bool DrawUnifiedButton(Rect rect, string label, Color borderColor, Color textColor, bool enabled, GameFont font = GameFont.Small)
         {
-            Widgets.DrawBoxSolid(rect, ControlBgColor);
-            DrawThinBox(rect, ControlBorderColor);
+            Color bg = enabled ? ControlBgColor : new Color(0.05f, 0.07f, 0.09f, 0.5f);
+            Widgets.DrawBoxSolid(rect, bg);
+            DrawThinBox(rect, enabled ? borderColor : ControlBorderColor);
 
             if (Mouse.IsOver(rect) && enabled)
             {
@@ -502,8 +492,8 @@ namespace RimAgent.UI
             }
 
             Text.Anchor = TextAnchor.MiddleCenter;
-            Text.Font = GameFont.Tiny;
-            GUI.color = enabled ? AssistantColor : new Color(0.5f, 0.5f, 0.5f);
+            Text.Font = font;
+            GUI.color = enabled ? textColor : new Color(0.45f, 0.45f, 0.45f);
             Widgets.Label(rect, label);
             GUI.color = Color.white;
             Text.Font = GameFont.Small;
@@ -570,7 +560,7 @@ namespace RimAgent.UI
             bool isSlash = _input.Length > 0 && _input[0] == '/';
             if (session.IsBusy)
             {
-                if (DrawCustomActionButton(buttonRect, "RimAgent.Stop".Translate(), EmergencyColor, true))
+                if (DrawUnifiedButton(buttonRect, "RimAgent.Stop".Translate(), EmergencyColor, EmergencyColor, true))
                 {
                     StopRun();
                 }
@@ -580,31 +570,10 @@ namespace RimAgent.UI
             }
 
             bool enabled = canSend || isSlash;
-            bool clicked = DrawCustomActionButton(buttonRect, "RimAgent.Send".Translate(), ToolActionColor, enabled);
+            bool clicked = DrawUnifiedButton(buttonRect, "RimAgent.Send".Translate(), ToolActionColor, ToolActionColor, enabled);
             if (!(clicked || enterPressed) || !enabled) return false;
             Send(session);
             return true;
-        }
-
-        private static bool DrawCustomActionButton(Rect rect, string label, Color accentColor, bool enabled)
-        {
-            Color bg = enabled ? ControlBgColor : new Color(0.05f, 0.07f, 0.09f, 0.5f);
-            Widgets.DrawBoxSolid(rect, bg);
-            DrawThinBox(rect, enabled ? accentColor : ControlBorderColor);
-
-            if (Mouse.IsOver(rect) && enabled)
-            {
-                Widgets.DrawHighlight(rect);
-            }
-
-            Text.Anchor = TextAnchor.MiddleCenter;
-            Text.Font = GameFont.Small;
-            GUI.color = enabled ? accentColor : new Color(0.45f, 0.45f, 0.45f);
-            Widgets.Label(rect, label);
-            GUI.color = Color.white;
-            Text.Anchor = TextAnchor.UpperLeft;
-
-            return enabled && Widgets.ButtonInvisible(rect);
         }
 
         private void StopRun()
@@ -798,13 +767,13 @@ namespace RimAgent.UI
             var discardRect = new Rect(confirmRect.xMax + 6f, rect.y, WideButtonWidth, rect.height);
             var noteRect = new Rect(discardRect.xMax + 8f, rect.y, Mathf.Max(0f, rect.xMax - discardRect.xMax - 8f), rect.height);
 
-            if (DrawCustomActionButton(confirmRect, "RimAgent.Confirm".Translate(), PauseColor, true))
+            if (DrawUnifiedButton(confirmRect, "RimAgent.Confirm".Translate(), PauseColor, PauseColor, true))
             {
                 _cts?.Dispose();
                 _cts = new CancellationTokenSource();
                 _ = session.ConfirmAsync(_cts.Token);
             }
-            if (DrawCustomActionButton(discardRect, "RimAgent.ConfirmDiscard".Translate(), EmergencyColor, true))
+            if (DrawUnifiedButton(discardRect, "RimAgent.ConfirmDiscard".Translate(), EmergencyColor, EmergencyColor, true))
             {
                 session.DiscardPendingConfirmation();
             }

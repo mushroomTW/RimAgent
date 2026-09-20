@@ -53,6 +53,46 @@ namespace RimAgent
         public float windowRectHeight = 460f;
 #pragma warning restore S1104
 
+        public const float DefaultWindowWidth = 620f;
+        public const float DefaultWindowHeight = 460f;
+
+        public UnityEngine.Vector2 WindowSize => new UnityEngine.Vector2(
+            windowRectWidth > 200f ? windowRectWidth : DefaultWindowWidth,
+            windowRectHeight > 150f ? windowRectHeight : DefaultWindowHeight);
+
+        public bool HasSavedWindowPosition => windowRectX >= 0f && windowRectY >= 0f;
+
+        public UnityEngine.Rect GetWindowBounds(float screenWidth, float screenHeight)
+        {
+            float w = WindowSize.x;
+            float h = WindowSize.y;
+            float x = windowRectX;
+            float y = windowRectY;
+
+            if (!HasSavedWindowPosition || x > screenWidth - 60f || y > screenHeight - 40f)
+            {
+                x = UnityEngine.Mathf.Max(10f, screenWidth - w - 24f);
+                y = UnityEngine.Mathf.Max(40f, screenHeight - h - 90f);
+            }
+
+            return new UnityEngine.Rect(x, y, w, h);
+        }
+
+        public void UpdateBounds(UnityEngine.Rect rect)
+        {
+            bool changed = UnityEngine.Mathf.Abs(windowRectX - rect.x) > 1f ||
+                           UnityEngine.Mathf.Abs(windowRectY - rect.y) > 1f ||
+                           UnityEngine.Mathf.Abs(windowRectWidth - rect.width) > 1f ||
+                           UnityEngine.Mathf.Abs(windowRectHeight - rect.height) > 1f;
+            if (changed)
+            {
+                windowRectX = rect.x;
+                windowRectY = rect.y;
+                windowRectWidth = rect.width;
+                windowRectHeight = rect.height;
+            }
+        }
+
         public override void ExposeData()
         {
             base.ExposeData();
