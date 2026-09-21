@@ -86,19 +86,38 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task McpExecutionAlwaysWaitsForConfirmationAndSkipsClassifier()
+        public async Task McpExecutionInAutoModeHighRiskWaitsForConfirmation()
         {
             _permissions.Mcp = true;
             _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
                         .Reply("Waiting for confirmation.");
+            _classifierClient.Reply("{\"risk\": \"high\", \"reason\": \"external mcp action\"}");
             ColonyAgentSession session = NewSession();
 
             await session.SendAsync("call the MCP tool");
 
+            Assert.That(_classifierClient.CallCount, Is.EqualTo(1), "Auto 模式下 MCP 由分類器動態判定");
             Assert.That(session.HasPendingConfirmation, Is.True);
-            Assert.That(_classifierClient.CallCount, Is.EqualTo(0));
             Assert.That(session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool).Result,
                 Does.StartWith(ToolText.ConfirmationPrefix));
+        }
+
+        [Test]
+        public async Task McpExecutionInAutoModeLowRiskRunsDirectlyWithoutConfirmation()
+        {
+            _permissions.Mcp = true;
+            _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
+                        .Reply("Done.");
+            _classifierClient.Reply("{\"risk\": \"low\", \"reason\": \"safe query mcp tool\"}");
+            ColonyAgentSession session = NewSession();
+
+            string reply = await session.SendAsync("call the MCP tool");
+
+            Assert.That(reply, Is.EqualTo("Done."));
+            Assert.That(_classifierClient.CallCount, Is.EqualTo(1), "Auto 模式下判定一次");
+            Assert.That(session.HasPendingConfirmation, Is.False);
+            TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+            Assert.That(tool.RiskCheck, Is.EqualTo("low"));
         }
 
         [Test]
@@ -197,5 +216,51 @@ namespace RimAgent.Tests
                 Assert.ThrowsAsync<OperationCanceledException>(() => classifier.ClassifyAsync(new RiskQuestion(), cts.Token));
             }
         }
+
+        [Test]
+        public async Task RiskClassifierUsesConfiguredModelId()
+        {
+            string configuredModel = "openai:gpt-4o-mini";
+            var client = new ScriptedChatClient().Reply("{\"risk\":\"low\"}");
+            var classifier = new RiskClassifier(client, () => configuredModel);
+
+            await classifier.ClassifyAsync(new RiskQuestion { Instruction = "test" }, CancellationToken.None);
+
+            Assert.That(client.ReceivedOptions, Has.Count.EqualTo(1));
+            Assert.That(client.ReceivedOptions[0].ModelId, Is.EqualTo("openai:gpt-4o-mini"));
+
+            // 測試留空時為 null
+            configuredModel = "   ";
+            client.Reply("{\"risk\":\"low\"}");
+            await classifier.ClassifyAsync(new RiskQuestion { Instruction = "test 2" }, CancellationToken.None);
+
+            Assert.That(client.ReceivedOptions, Has.Count.EqualTo(2));
+            Assert.That(client.ReceivedOptions[1].ModelId, Is.Null);
+        }
+
+        [Test]
+        public async Task ColonyAgentSessionPropagatesClassifierModelSetting()
+        {
+            string customModel = "anthropic:claude-3-haiku";
+            var session = new ColonyAgentSession(
+                _agentClient,
+                _world,
+                () => _permissions,
+                8,
+                () => AgentMode.Auto,
+                instructions: null,
+                mcp: null,
+                classifierClient: _classifierClient,
+                classifierModel: () => customModel);
+
+            _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Done.");
+            _classifierClient.Reply("{\"risk\": \"low\", \"reason\": \"safe\"}");
+
+            await session.SendAsync("set Ali's doctor to 1");
+
+            Assert.That(_classifierClient.ReceivedOptions, Has.Count.EqualTo(1));
+            Assert.That(_classifierClient.ReceivedOptions[0].ModelId, Is.EqualTo("anthropic:claude-3-haiku"));
+        }
     }
 }
+

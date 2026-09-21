@@ -132,7 +132,7 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task ConfirmModeBlocksOnlyIrreversibleTools()
+        public async Task ConfirmModeBlocksAllCommands()
         {
             foreach (string name in ValidArguments.Keys)
             {
@@ -142,16 +142,38 @@ namespace RimAgent.Tests
 
                 string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments[name])))?.ToString();
 
-                if (registry.RiskOf(name) == ToolRisk.Confirm)
-                {
-                    Assert.That(text, Does.StartWith(ToolText.ConfirmationPrefix), name);
-                    Assert.That(world.Calls, Is.Empty, name);
-                }
-                else
-                {
-                    Assert.That(text, Does.Not.StartWith(ToolText.ConfirmationPrefix), name + ": " + text);
-                }
+                Assert.That(text, Does.StartWith(ToolText.ConfirmationPrefix), name);
+                Assert.That(world.Calls, Is.Empty, name);
             }
+        }
+
+        [Test]
+        public async Task YoloModeRunsAllPermittedCommandsDirectly()
+        {
+            foreach (string name in ValidArguments.Keys)
+            {
+                if (NotRecordedInWorld.Contains(name)) continue;
+                FakeGameWorld world = NewWorld();
+                var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Yolo));
+                AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == name);
+
+                string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments[name])))?.ToString();
+
+                Assert.That(text, Does.Not.StartWith(ToolText.ErrorPrefix).And.Not.StartWith(ToolText.ConfirmationPrefix), name + ": " + text);
+                Assert.That(world.Calls, Is.Not.Empty, name + " 放行時必須動到世界");
+            }
+        }
+
+        [TestCase(AgentMode.Autonomous, "mcp_call_tool", false)]
+        [TestCase(AgentMode.Yolo, "mcp_call_tool", false)]
+        [TestCase(AgentMode.Confirm, "mcp_call_tool", true)]
+        [TestCase(AgentMode.Auto, "mcp_call_tool", false)]
+        [TestCase(AgentMode.Ask, "mcp_call_tool", false)]
+        [TestCase(AgentMode.Confirm, "set_work_priority", false)]
+        public void RequiresExplicitConfirmationTests(AgentMode mode, string toolName, bool expected)
+        {
+            var gate = new ConfirmationGate(() => mode);
+            Assert.That(gate.RequiresExplicitConfirmation(toolName), Is.EqualTo(expected));
         }
 
         private static Dictionary<string, object> Args(params (string Name, object Value)[] pairs)

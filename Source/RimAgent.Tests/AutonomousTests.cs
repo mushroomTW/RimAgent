@@ -23,6 +23,7 @@ namespace RimAgent.Tests
                 IntervalTicks = 15000,
                 WindowTicks = 60000,
                 BudgetPerWindow = 60,
+                CooldownTicks = AutonomousScheduler.CooldownTicks,
                 OnRaid = true,
                 OnMentalBreak = true,
                 OnFoodShortage = true
@@ -65,6 +66,26 @@ namespace RimAgent.Tests
             var raid = new AutonomousSignals { HostileCount = 3, NearMentalBreakCount = 0, FoodNutrition = 100f, ColonistCount = 3 };
             Assert.That(_scheduler.Evaluate(500, raid, _config), Is.EqualTo(AutonomousTrigger.None));
             Assert.That(_scheduler.Evaluate(2500, raid, _config), Is.EqualTo(AutonomousTrigger.Raid));
+        }
+
+        [Test]
+        public void CooldownDisabledAllowsImmediateRefire()
+        {
+            _config.CooldownTicks = 0; // 關閉冷卻
+            _scheduler.RecordRun(0, 2, _config);
+            var raid = new AutonomousSignals { HostileCount = 3, NearMentalBreakCount = 0, FoodNutrition = 100f, ColonistCount = 3 };
+            Assert.That(_scheduler.Evaluate(10, raid, _config), Is.EqualTo(AutonomousTrigger.Raid), "冷卻設為 0 時立即反應");
+        }
+
+        [Test]
+        public void UnlimitedBudgetNeverExhausts()
+        {
+            _config.UnlimitedBudget = true;
+            _config.BudgetPerWindow = 10;
+            _scheduler.RecordRun(0, 100, _config);
+            Assert.That(_scheduler.RemainingBudget(_config), Is.EqualTo(int.MaxValue));
+            var raid = new AutonomousSignals { HostileCount = 3, NearMentalBreakCount = 0, FoodNutrition = 100f, ColonistCount = 3 };
+            Assert.That(_scheduler.Evaluate(2500, raid, _config), Is.EqualTo(AutonomousTrigger.Raid), "自主模式不設預算上限");
         }
 
         [Test]
@@ -159,9 +180,9 @@ namespace RimAgent.Tests
     }
 
     [TestFixture]
-    public class AutonomousForbiddenToolsTests
+    public class AutonomousToolsTests
     {
-        private static readonly string[] ForbiddenTools =
+        private static readonly string[] HighRiskTools =
         {
             "schedule_surgery",
             "set_prisoner_interaction",
@@ -171,28 +192,16 @@ namespace RimAgent.Tests
         };
 
         [Test]
-        public void AutonomousModeExcludesSurgeryAndPrisonerInteraction()
+        public void AutonomousModeIncludesAllToolsWithoutBlacklist()
         {
             var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
             var tools = registry.Select(ToolPermissions.All, AgentMode.Autonomous).OfType<AIFunction>().Select(f => f.Name).ToList();
 
-            foreach (string name in ForbiddenTools)
+            foreach (string name in HighRiskTools)
             {
-                Assert.That(tools, Does.Not.Contain(name), name);
+                Assert.That(tools, Does.Contain(name), name);
             }
             Assert.That(tools, Does.Contain("set_work_priority"));
-        }
-
-        [Test]
-        public void IsAutonomousForbiddenIdentifiesHighRiskTools()
-        {
-            foreach (string name in ForbiddenTools)
-            {
-                Assert.That(AgentToolRegistry.IsAutonomousForbidden(name), Is.True, name);
-            }
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden("place_blueprint"), Is.False);
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden("get_colony_overview"), Is.False);
-            Assert.That(AgentToolRegistry.IsAutonomousForbidden(null), Is.False);
         }
     }
 }

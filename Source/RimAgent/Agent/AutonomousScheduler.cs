@@ -37,6 +37,10 @@ namespace RimAgent.Agent
         public int WindowTicks { get; set; }
         /// <summary>一個視窗內自主任務最多消耗的工具呼叫次數（每句上限另由 maxSteps 管）。</summary>
         public int BudgetPerWindow { get; set; }
+        /// <summary>是否不設預算上限（自主模式為 true）。</summary>
+        public bool UnlimitedBudget { get; set; }
+        /// <summary>兩次自主任務之間的最短冷卻間隔 ticks，0 代表關閉冷卻。</summary>
+        public int CooldownTicks { get; set; }
         public bool OnRaid { get; set; }
         public bool OnMentalBreak { get; set; }
         public bool OnFoodShortage { get; set; }
@@ -122,6 +126,7 @@ namespace RimAgent.Agent
 
         public int RemainingBudget(AutonomousConfig config)
         {
+            if (config.UnlimitedBudget) return int.MaxValue;
             return Math.Max(0, config.BudgetPerWindow - _toolsUsed);
         }
 
@@ -130,8 +135,8 @@ namespace RimAgent.Agent
         {
             if (!config.Enabled) return AutonomousTrigger.None;
             ResetWindowIfNeeded(tick, config);
-            if (_toolsUsed >= config.BudgetPerWindow) return AutonomousTrigger.None;
-            if (tick - _lastRunTick < CooldownTicks) return AutonomousTrigger.None;
+            if (!config.UnlimitedBudget && _toolsUsed >= config.BudgetPerWindow) return AutonomousTrigger.None;
+            if (config.CooldownTicks > 0 && tick - _lastRunTick < config.CooldownTicks) return AutonomousTrigger.None;
 
             bool raid = signals.HostileCount > 0;
             bool mental = signals.NearMentalBreakCount > 0;

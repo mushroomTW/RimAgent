@@ -56,7 +56,28 @@ namespace RimAgent
             listing.GapLine();
             ModeOption(listing, AgentMode.Ask, "RimAgent.Settings.Mode.Ask", "RimAgent.Settings.Mode.AskDesc");
             ModeOption(listing, AgentMode.Confirm, "RimAgent.Settings.Mode.Confirm", "RimAgent.Settings.Mode.ConfirmDesc");
+            ModeOption(listing, AgentMode.Yolo, "RimAgent.Settings.Mode.Yolo", "RimAgent.Settings.Mode.YoloDesc");
             ModeOption(listing, AgentMode.Auto, "RimAgent.Settings.Mode.Auto", "RimAgent.Settings.Mode.AutoDesc");
+
+            Rect classifierRow = listing.GetRect(28f);
+            float indent = 24f;
+            float labelWidth = 140f;
+            float btnWidth = 80f;
+            float inputWidth = Mathf.Max(60f, classifierRow.width - indent - labelWidth - btnWidth - 12f);
+
+            Rect labelRect = new Rect(classifierRow.x + indent, classifierRow.y + 3f, labelWidth, 24f);
+            Rect inputRect = new Rect(labelRect.xMax + 4f, classifierRow.y, inputWidth, 26f);
+            Rect btnRect = new Rect(inputRect.xMax + 8f, classifierRow.y, btnWidth, 26f);
+
+            Widgets.Label(labelRect, "RimAgent.Settings.ClassifierModel".Translate());
+            Settings.classifierModel = Widgets.TextField(inputRect, Settings.classifierModel ?? string.Empty);
+            if (Widgets.ButtonText(btnRect, "RimAgent.Settings.ClassifierModelDefault".Translate()))
+            {
+                Settings.classifierModel = string.Empty;
+            }
+            TooltipHandler.TipRegion(classifierRow, "RimAgent.Settings.ClassifierModelTip".Translate());
+            listing.Gap(6f);
+
             ModeOption(listing, AgentMode.Autonomous, "RimAgent.Settings.Mode.Autonomous", "RimAgent.Settings.Mode.AutonomousDesc");
 
             listing.Gap();
@@ -64,8 +85,13 @@ namespace RimAgent
             listing.GapLine();
             listing.Label("RimAgent.Settings.AutoInterval".Translate(Settings.autonomousIntervalHours));
             Settings.autonomousIntervalHours = Mathf.RoundToInt(listing.Slider(Settings.autonomousIntervalHours, RimAgentSettings.MinAutoIntervalHours, RimAgentSettings.MaxAutoIntervalHours));
-            listing.Label("RimAgent.Settings.AutoBudget".Translate(Settings.autonomousBudgetPerDay));
-            Settings.autonomousBudgetPerDay = Mathf.RoundToInt(listing.Slider(Settings.autonomousBudgetPerDay, RimAgentSettings.MinAutoBudget, RimAgentSettings.MaxAutoBudget));
+
+            TaggedString cooldownLabel = Settings.autonomousCooldownMinutes == 0
+                ? "RimAgent.Settings.AutoCooldownOff".Translate()
+                : "RimAgent.Settings.AutoCooldown".Translate(Settings.autonomousCooldownMinutes);
+            listing.Label(cooldownLabel, -1f, "RimAgent.Settings.AutoCooldownTip".Translate());
+            Settings.autonomousCooldownMinutes = Mathf.RoundToInt(listing.Slider(Settings.autonomousCooldownMinutes, RimAgentSettings.MinCooldownMinutes, RimAgentSettings.MaxCooldownMinutes));
+
             listing.CheckboxLabeled("RimAgent.Settings.AutoOnRaid".Translate(), ref Settings.autoOnRaid);
             listing.CheckboxLabeled("RimAgent.Settings.AutoOnMentalBreak".Translate(), ref Settings.autoOnMentalBreak);
             listing.CheckboxLabeled("RimAgent.Settings.AutoOnFoodShortage".Translate(), ref Settings.autoOnFoodShortage);

@@ -48,10 +48,12 @@ Answer ""low"" (just do it) when the action is small, reversible and plainly wha
 Reply with exactly one JSON object and nothing else: {""risk"": ""low"" or ""high"", ""reason"": ""one short sentence""}.";
 
         private readonly IChatClient _client;
+        private readonly Func<string> _modelProvider;
 
-        public RiskClassifier(IChatClient client)
+        public RiskClassifier(IChatClient client, Func<string> modelProvider = null)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
+            _modelProvider = modelProvider;
         }
 
         public async Task<RiskVerdict> ClassifyAsync(RiskQuestion question, CancellationToken cancellationToken)
@@ -65,7 +67,13 @@ Reply with exactly one JSON object and nothing else: {""risk"": ""low"" or ""hig
                     new ChatMessage(ChatRole.System, SystemPrompt),
                     new ChatMessage(ChatRole.User, Describe(question))
                 };
-                var options = new ChatOptions { Temperature = Temperature, MaxOutputTokens = MaxOutputTokens };
+                string preferredModel = _modelProvider?.Invoke();
+                var options = new ChatOptions
+                {
+                    Temperature = Temperature,
+                    MaxOutputTokens = MaxOutputTokens,
+                    ModelId = string.IsNullOrWhiteSpace(preferredModel) ? null : preferredModel.Trim()
+                };
                 ChatResponse response = await _client.GetResponseAsync(messages, options, cancellationToken);
                 text = response?.Text ?? string.Empty;
             }

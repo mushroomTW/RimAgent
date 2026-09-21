@@ -36,7 +36,7 @@ namespace RimAgent.Tools
         private readonly RiskClassifier _classifier;
 
         private bool RequiresExplicitConfirmation =>
-            string.Equals(Name, "mcp_call_tool", StringComparison.Ordinal);
+            _gate != null && _gate.RequiresExplicitConfirmation(Name);
 
         public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null)
             : base(inner)

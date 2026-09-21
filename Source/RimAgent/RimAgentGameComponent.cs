@@ -238,7 +238,9 @@ namespace RimAgent
                 Enabled = true,
                 IntervalTicks = settings.autonomousIntervalHours * 2500,
                 WindowTicks = 60000,
-                BudgetPerWindow = settings.autonomousBudgetPerDay,
+                BudgetPerWindow = 0,
+                UnlimitedBudget = true,
+                CooldownTicks = UnityEngine.Mathf.RoundToInt(settings.autonomousCooldownMinutes * (2500f / 60f)),
                 OnRaid = settings.autoOnRaid,
                 OnMentalBreak = settings.autoOnMentalBreak,
                 OnFoodShortage = settings.autoOnFoodShortage,
@@ -269,11 +271,13 @@ namespace RimAgent
             {
                 string instruction = AutonomousPrompts.Build(trigger, _goals, DetectLanguage());
                 int remainingBudget = _scheduler.RemainingBudget(config);
+                int maxSteps = RimAgentMod.Settings?.maxSteps ?? RimAgentSettings.DefaultMaxSteps;
+                int steps = config.UnlimitedBudget ? maxSteps : Math.Min(maxSteps, remainingBudget);
                 await session.SendAsync(
                     instruction,
                     _autoCts.Token,
                     autonomous: true,
-                    maxToolSteps: remainingBudget).ConfigureAwait(false);
+                    maxToolSteps: steps).ConfigureAwait(false);
             }
             catch (InvalidOperationException)
             {
@@ -332,7 +336,16 @@ namespace RimAgent
         {
             IChatClient client = RimLLMProvider.CreateChatClient(ColonyAgentSession.ModId);
             RimAgentSettings settings = RimAgentMod.Settings;
-            var session = new ColonyAgentSession(client, new RimWorldGameWorld(), () => settings.ToPermissions(), settings.maxSteps, () => settings.mode, ComposeInstructions, _mcp);
+            var session = new ColonyAgentSession(
+                client,
+                new RimWorldGameWorld(),
+                () => settings.ToPermissions(),
+                settings.maxSteps,
+                () => settings.mode,
+                ComposeInstructions,
+                _mcp,
+                classifierClient: null,
+                classifierModel: () => settings?.classifierModel);
             session.Reasoning = settings.reasoning;
             return session;
         }

@@ -29,6 +29,8 @@ namespace RimAgent
         public AgentMode mode = AgentMode.Confirm;
         /// <summary>模型思考強度，見 <see cref="ReasoningLevel"/>；Auto 沿用框架預設。</summary>
         public ReasoningLevel reasoning = ReasoningLevel.Auto;
+        /// <summary>Auto 模式風險分類器模型識別碼（留空則沿用框架預設）。</summary>
+        public string classifierModel = string.Empty;
 
         // 自主模式（排程器）的節奏與配額在設定頁，玩家設的長期目標跟著存檔走。
         public const int DefaultAutoIntervalHours = 6;
@@ -37,9 +39,13 @@ namespace RimAgent
         public const int DefaultAutoBudget = 60;
         public const int MinAutoBudget = 10;
         public const int MaxAutoBudget = 300;
+        public const int DefaultCooldownMinutes = 0;
+        public const int MinCooldownMinutes = 0;
+        public const int MaxCooldownMinutes = 60;
 
         public int autonomousIntervalHours = DefaultAutoIntervalHours;
         public int autonomousBudgetPerDay = DefaultAutoBudget;
+        public int autonomousCooldownMinutes = DefaultCooldownMinutes;
         public bool autoOnRaid = true;
         public bool autoOnMentalBreak = true;
         public bool autoOnFoodShortage = true;
@@ -111,8 +117,10 @@ namespace RimAgent
             Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
             Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
+            Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);
             Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);
             Scribe_Values.Look(ref autonomousBudgetPerDay, "autonomousBudgetPerDay", DefaultAutoBudget);
+            Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
             Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);
             Scribe_Values.Look(ref autoOnMentalBreak, "autoOnMentalBreak", true);
             Scribe_Values.Look(ref autoOnFoodShortage, "autoOnFoodShortage", true);

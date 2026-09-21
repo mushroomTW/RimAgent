@@ -65,13 +65,21 @@
   <RimAgent.Settings.Mode.Ask>詢問</RimAgent.Settings.Mode.Ask>
   <RimAgent.Settings.Mode.AskDesc>唯讀。Agent 可以查看殖民地並給建議，但沒有任何會改變遊戲的工具。</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>確認</RimAgent.Settings.Mode.Confirm>
-  <RimAgent.Settings.Mode.ConfirmDesc>不可逆的操作（交易、商隊、手術、釋放、刪除、攻擊）先預覽、等你按確認；其餘直接執行。</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.ConfirmDesc>每個指令都需要確認：任何會改變遊戲的操作先預覽、等你按確認；查詢直接執行。</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
+  <RimAgent.Settings.Mode.YoloDesc>夾在確認與自動之間，無排程器。受黑名單保護（交易、商隊、手術、囚犯等高危工具排除），其餘所有操作與 MCP 工具免確認直接執行。</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>自動</RimAgent.Settings.Mode.Auto>
-  <RimAgent.Settings.Mode.AutoDesc>每個操作先由另一次模型呼叫判斷風險：有風險的等你確認，其餘直接執行。每個操作多一次請求。</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.Mode.AutoDesc>每個操作（包含 MCP 工具）先由另一次模型呼叫判斷風險：有風險的等你確認，其餘直接執行。每個操作多一次請求。</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.ClassifierModel>分類器模型：</RimAgent.Settings.ClassifierModel>
+  <RimAgent.Settings.ClassifierModelTip>自動模式判定風險時使用的模型識別碼（留空則沿用 RimLLM Framework 預設模型）。可填入 ModelName 或 ProviderId:ModelName。</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.ClassifierModelDefault>重設預設</RimAgent.Settings.ClassifierModelDefault>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
-  <RimAgent.Settings.Mode.AutonomousDesc>全權委託：許可命令直接執行（排除交易、商隊、手術、囚犯等高危黑名單），並依排程自己行動。MCP 仍強制確認。</RimAgent.Settings.Mode.AutonomousDesc>
+  <RimAgent.Settings.Mode.AutonomousDesc>後台排程器自主運轉。不限制任何行為（無黑名單限制），不設每日預算上限，MCP 免確認直接執行，依排程與突發事件自動行動。玩家仍可隨時下指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行動</RimAgent.Settings.AutonomousHeader>
   <RimAgent.Settings.AutoInterval>例行巡檢間隔：{0} 小時</RimAgent.Settings.AutoInterval>
+  <RimAgent.Settings.AutoCooldown>自主任務冷卻時間：{0} 分鐘</RimAgent.Settings.AutoCooldown>
+  <RimAgent.Settings.AutoCooldownOff>自主任務冷卻時間：關閉</RimAgent.Settings.AutoCooldownOff>
+  <RimAgent.Settings.AutoCooldownTip>兩次自主任務之間的最短等待時間。設為 0 代表完全關閉冷卻，事件或週期到達立即反應。</RimAgent.Settings.AutoCooldownTip>
   <RimAgent.Settings.AutoBudget>自主每日工具呼叫上限：{0} 次</RimAgent.Settings.AutoBudget>
   <RimAgent.Settings.AutoOnRaid>襲擊時反應</RimAgent.Settings.AutoOnRaid>
   <RimAgent.Settings.AutoOnMentalBreak>殖民者接近崩潰時反應</RimAgent.Settings.AutoOnMentalBreak>
@@ -80,6 +88,7 @@
 
   <!-- 狀態列與斜線指令 -->
   <RimAgent.Auto.StatusOn>今日已用 {0}/{1} 次</RimAgent.Auto.StatusOn>
+  <RimAgent.Auto.StatusUnlimited>今日自主任務已呼叫 {0} 次 (無上限)</RimAgent.Auto.StatusUnlimited>
   <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>推理：{0}</RimAgent.Reasoning.Status>
   <RimAgent.Reasoning.Auto>自動</RimAgent.Reasoning.Auto>

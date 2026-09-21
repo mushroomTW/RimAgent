@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.09.21.1</modVersion>
+  <modVersion>2026.09.21.5</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
@@ -15,11 +15,11 @@ Requires RimLLM Framework 2026.09.12 or later. Configure providers, API keys, mo
 
 All tool categories are enabled by default and configurable in mod settings: observation, work, build, combat, trade, medical, prisoners, animals, zones, production, time and MCP. Observation includes colonist wellbeing (needs, thoughts and equipment); work supports batch priorities; build includes hunting designations.
 
-Modes: Ask is read-only. Confirm (the default) pauses confirm-risk actions for review. Confirm executes the exact previewed tool calls and arguments, without resending the instruction to the model. Auto uses a risk classifier, and Autonomous performs daily-budgeted scheduled and event-driven runs with high-risk blacklist tools excluded (trading, caravans, releasing prisoners, scheduled surgeries, prisoner interactions) and MCP tools requiring manual confirmation.
+Modes: Ask is read-only. Confirm requires confirmation for every command. YOLO (between Confirm and Auto) excludes blacklisted high-risk tools and runs everything else directly without confirmation. Auto uses a two-layer risk classifier. Autonomous operates via background scheduler without blacklist or budget restrictions, with configurable cooldown (default disabled).
 
 Older tool results are compacted automatically. The visible transcript, compacted model session, autonomous scheduler state and work undo history are saved with the game. Autonomous mode aggregates every map and reacts to raids starting or ending, mental-break risk, food shortages, downed or bleeding colonists and fire.
 
-MCP tools run as local processes with your user privileges; MCP execution always requires confirmation.]]></description>
+MCP tools run as local processes with your user privileges; MCP execution requires confirmation in Confirm mode, is dynamically evaluated in Auto mode, and executes directly in YOLO and Autonomous modes.]]></description>
   <modDependencies>
     <li>
       <packageId>GreenMushroom.RimLLMFramework</packageId>

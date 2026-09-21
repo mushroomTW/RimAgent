@@ -65,13 +65,21 @@
   <RimAgent.Settings.Mode.Ask>Ask</RimAgent.Settings.Mode.Ask>
   <RimAgent.Settings.Mode.AskDesc>Read-only. The agent can inspect the colony and advise, but has no tools that change it.</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>Confirm</RimAgent.Settings.Mode.Confirm>
-  <RimAgent.Settings.Mode.ConfirmDesc>Irreversible actions (trades, caravans, surgery, releases, deletions, attacks) are previewed and wait for your Confirm; everything else runs directly.</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.ConfirmDesc>Every command requires confirmation: any state-changing action is previewed and waits for your Confirm; queries run directly.</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
+  <RimAgent.Settings.Mode.YoloDesc>Between Confirm and Auto, no scheduler. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); all other commands and MCP execute directly without confirmation.</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
-  <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action; risky ones wait for your Confirm, the rest run directly. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools); risky ones wait for your Confirm, the rest run directly. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
+  <RimAgent.Settings.ClassifierModelTip>Model ID used by Auto mode for risk classification (leave blank to use RimLLM Framework's default model). Can be ModelName or ProviderId:ModelName.</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.ClassifierModelDefault>Reset</RimAgent.Settings.ClassifierModelDefault>
   <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
-  <RimAgent.Settings.Mode.AutonomousDesc>Fully delegated: permitted commands run directly without asking, protected by high-risk blacklists (trades, caravans, surgery, prisoner release/interaction) and scheduled runs below. MCP always confirms.</RimAgent.Settings.Mode.AutonomousDesc>
+  <RimAgent.Settings.Mode.AutonomousDesc>Background scheduler runs autonomously. No restrictions on any behavior (no blacklist), no daily tool budget limit, MCP executes directly, operating on routine and events. Players can still give instructions anytime.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
   <RimAgent.Settings.AutoInterval>Routine inspection every: {0} hours</RimAgent.Settings.AutoInterval>
+  <RimAgent.Settings.AutoCooldown>Autonomous cooldown: {0} minutes</RimAgent.Settings.AutoCooldown>
+  <RimAgent.Settings.AutoCooldownOff>Autonomous cooldown: Disabled</RimAgent.Settings.AutoCooldownOff>
+  <RimAgent.Settings.AutoCooldownTip>Minimum wait time between two autonomous runs. Set to 0 to completely disable cooldown and react immediately to events and cycles.</RimAgent.Settings.AutoCooldownTip>
   <RimAgent.Settings.AutoBudget>Autonomous tool calls per day: {0}</RimAgent.Settings.AutoBudget>
   <RimAgent.Settings.AutoOnRaid>React to raids</RimAgent.Settings.AutoOnRaid>
   <RimAgent.Settings.AutoOnMentalBreak>React to colonists near mental break</RimAgent.Settings.AutoOnMentalBreak>
@@ -80,6 +88,7 @@
 
   <!-- Status strip and slash commands -->
   <RimAgent.Auto.StatusOn>{0}/{1} used today</RimAgent.Auto.StatusOn>
+  <RimAgent.Auto.StatusUnlimited>{0} tool calls used today (unlimited)</RimAgent.Auto.StatusUnlimited>
   <RimAgent.Mode.Status>Mode: {0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>Reasoning: {0}</RimAgent.Reasoning.Status>
   <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>

@@ -128,27 +128,19 @@ namespace RimAgent.Tools
             return Select(permissions, AgentMode.Confirm);
         }
 
-        /// <summary>依權限與模式挑選：詢問模式只留查詢工具，命令工具連 schema 都不送給模型。</summary>
+        /// <summary>依權限與模式挑選：詢問模式只留查詢工具，YOLO 模式排除黑名單工具，命令工具連 schema 都不送給模型。</summary>
         public IList<AITool> Select(ToolPermissions permissions, AgentMode mode)
         {
             if (permissions == null) throw new ArgumentNullException(nameof(permissions));
             return _tools
                 .Where(t => permissions.Allows(t.Category))
                 .Where(t => mode != AgentMode.Ask || t.Risk == ToolRisk.Query)
-                .Where(t => mode != AgentMode.Autonomous || !IsAutonomousForbidden(t.Name))
+                .Where(t => mode != AgentMode.Yolo || !IsYoloForbidden(t.Name))
                 .Select(t => t.Tool)
                 .ToList();
         }
 
-        /// <summary>工具名稱 → 靜態風險（供測試檢查標記）。</summary>
-        public ToolRisk RiskOf(string toolName)
-        {
-            Entry entry = _tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal));
-            if (entry == null) throw new ArgumentException($"unknown tool {toolName}", nameof(toolName));
-            return entry.Risk;
-        }
-
-        private static readonly HashSet<string> AutonomousForbiddenToolNames = new HashSet<string>(StringComparer.Ordinal)
+        private static readonly HashSet<string> YoloForbiddenToolNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "execute_trade",
             "form_caravan",
@@ -157,10 +149,18 @@ namespace RimAgent.Tools
             "set_prisoner_interaction"
         };
 
-        /// <summary>自主模式下黑名單工具（不可委託無人值守執行的高危命令與 MCP 工具）。</summary>
-        public static bool IsAutonomousForbidden(string name)
+        /// <summary>YOLO 模式下受保護的黑名單工具（不可直接執行的重大高危操作）。</summary>
+        public static bool IsYoloForbidden(string name)
         {
-            return !string.IsNullOrEmpty(name) && AutonomousForbiddenToolNames.Contains(name);
+            return !string.IsNullOrEmpty(name) && YoloForbiddenToolNames.Contains(name);
+        }
+
+        /// <summary>工具名稱 → 靜態風險（供測試檢查標記）。</summary>
+        public ToolRisk RiskOf(string toolName)
+        {
+            Entry entry = _tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal));
+            if (entry == null) throw new ArgumentException($"unknown tool {toolName}", nameof(toolName));
+            return entry.Risk;
         }
 
         private void Register(object target, AgentTranscript transcript)

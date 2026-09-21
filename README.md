@@ -55,8 +55,8 @@ An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (
       <sub>Speak naturally to assign work, place blueprints, order retreats, and manage trade without navigating menus.</sub>
     </td>
     <td align="center" width="33%">
-      <h3>🛡️ Multi-Tier Safety</h3>
-      <sub>Ask (read-only), Confirm (preview irreversible actions), Auto (AI risk classifier), and Autonomous modes.</sub>
+      <h3>🛡️ Five-Tier Safety</h3>
+      <sub>Ask (read-only), Confirm (every command), YOLO (blacklist direct), Auto (risk classifier), and Autonomous.</sub>
     </td>
     <td align="center" width="33%">
       <h3>⏱️ Autonomous Routine</h3>
@@ -70,7 +70,7 @@ An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (
     </td>
     <td align="center" width="33%">
       <h3>🔌 Local MCP Support</h3>
-      <sub>Connect local Model Context Protocol servers to grant the agent external data and tooling with mandatory confirmation.</sub>
+      <sub>Connect local Model Context Protocol servers to grant the agent external data and tooling.</sub>
     </td>
     <td align="center" width="33%">
       <h3>💾 Full Save Persistence</h3>
@@ -86,7 +86,7 @@ An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (
 The RimAgent window can be moved anywhere on screen with position and size memory. It includes:
 
 - **Action Log Stream**: Real-time record of instructions, tool calls, and assistant replies.
-- **Status Dropdowns**: Configure execution **mode** (Ask / Confirm / Auto / Autonomous) and model **reasoning effort** (Auto / Off / Low / Medium / High).
+- **Status Dropdowns**: Configure execution **mode** (Ask / Confirm / YOLO / Auto / Autonomous) and model **reasoning effort** (Auto / Off / Low / Medium / High).
 - **Control Bar**: Input field with **Send** (which switches to **Stop** while the agent is running).
 - **Slash Commands**: Type `/` to open the command completion list (↑↓ to navigate, Tab or Enter to select):
 
@@ -108,9 +108,10 @@ One setting decides how much the agent may do on its own:
 | Mode | Behavior |
 | --- | --- |
 | **Ask** | **Read-only**. Only query tools are offered to the model; state-changing tools (including map switching and screenshots) are omitted so the agent inspects and advises without side effects. |
-| **Confirm** (default) | Irreversible actions (trades, caravans, surgery, prisoner release/interaction, zone and bill deletion, blueprints, designations, attacks) return a preview and pause for player **Confirm**; safe actions run directly. |
-| **Auto** | Every command is previewed first, then a secondary fast model call classifies it (`low` / `high` risk). Low runs immediately, high pauses for **Confirm**. Any classifier failure defaults to high risk. |
-| **Autonomous** | Fully delegated execution: commands run without manual prompts, and the scheduler initiates routine and event-driven runs. High-risk actions (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `set_prisoner_interaction`) are strictly blacklisted from the model, and `mcp_call_tool` always requires manual confirmation. |
+| **Confirm** | **Every command requires confirmation**. Any state-changing action is previewed and pauses for player **Confirm**; safe queries run directly. |
+| **YOLO** | Positioned between Confirm and Auto, **no scheduler**. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); all other permitted commands and MCP execute directly without confirmation. |
+| **Auto** | Every command is previewed first, then a secondary fast model call classifies it (`low` / `high` risk, including MCP tools). Low runs immediately, high pauses for **Confirm**. Any classifier failure defaults to high risk. The classifier model is configurable in mod settings (leave blank to inherit default). |
+| **Autonomous** | **Background scheduler autonomy**: Runs routine inspections and responds to colony emergencies automatically without blacklist restrictions, without a daily tool budget limit, and with direct MCP execution. Cooldown is configurable in settings (default disabled). |
 
 ### Decision & Safety Flow
 
@@ -127,11 +128,13 @@ flowchart TD
 
     CMD[User Instruction / Autonomous Event]:::agent --> MODE{Active Mode}:::check
     MODE -->|Ask| QRY[Query Only · Safe Inspection]:::safe
-    MODE -->|Confirm| PRE[Preview Irreversible · Prompt Confirm]:::check
+    MODE -->|Confirm| PRE[Preview Command · Prompt Confirm]:::check
+    MODE -->|YOLO| YOL[Blacklist Check · Direct Execution]:::check
     MODE -->|Auto| CLF[AI Risk Classifier: Low / High]:::check
-    MODE -->|Autonomous| SCH[Scheduler Budgeted Routine · High-Risk Blacklist]:::alert
+    MODE -->|Autonomous| SCH[Background Scheduler · Unlimited Autonomy]:::alert
     PRE -->|Confirm Clicked| EXEC[Execute Captured Tool Call]:::safe
     PRE -->|Discard / New Input| DROP[Discard Pending Action]:::alert
+    YOL -->|Non-Blacklisted| EXEC
     CLF -->|Low Risk| EXEC
     CLF -->|High Risk| PRE
 ```
@@ -139,8 +142,10 @@ flowchart TD
 ### Safety Guarantees
 
 - **Confirm / Discard**: Clicking **Confirm** executes the exact captured tool call and arguments from the preview; it never re-queries the model, preventing already-safe actions from repeating. A new instruction or clicking Discard drops all pending calls.
-- **Autonomous Blacklist**: When running unattended, the model is strictly forbidden from executing trades (`execute_trade`), forming caravans (`form_caravan`), releasing prisoners (`release_prisoner`), scheduling surgeries (`schedule_surgery`), and setting prisoner interactions (`set_prisoner_interaction`).
-- **MCP Mandatory Confirmation**: `mcp_call_tool` always requires explicit player confirmation across all modes, including Auto and Autonomous modes.
+- **YOLO Mode**: Runs player instructions directly without confirmation while safeguarding high-risk operations via an explicit blacklist.
+- **Autonomous Mode**: Full unattended background operation without blacklist or budget restrictions, with configurable cooldown (default disabled).
+- **MCP Confirmation**: In Confirm mode, `mcp_call_tool` requires explicit player confirmation; in Auto mode, it is dynamically evaluated by the risk classifier; in YOLO and Autonomous modes, it executes directly.
+- **Configurable Risk Classifier**: In Auto mode, the dedicated classifier model can be customized in mod settings (e.g. specifying a fast/cheap model like `gpt-4o-mini` or `gemini-1.5-flash`), or left blank to inherit RimLLM Framework's default model.
 - **Reversible Priorities (`/undo`)**: Restores work priorities and daily schedules modified by the previous instruction, including instructions that failed halfway through.
 - **Readiness Guard**: If no game is being played (main menu or save still loading) or no current map is available, tool execution halts safely and instructs the model to stop.
 - **Game Error Feedback**: Errors logged by the game engine (`Log.Error`) during tool execution are appended to that tool's result (up to 5 errors with count), alerting the model if a command threw an exception.
@@ -165,7 +170,7 @@ Select **Autonomous** mode (in Mod Settings or the mode dropdown) to enable the 
   - Food shortages
   - Downed or bleeding colonists (medical emergency)
   - Active fires on any colony map
-- **Budget Control**: Autonomous runs are constrained by a daily tool-call budget (default: 60 calls/day), visible next to the dropdowns.
+- **Unlimited Budget & Cooldown Control**: Autonomous runs have no daily tool-call budget restriction. A configurable cooldown (0–60 minutes in mod settings, default: disabled) prevents runs from re-triggering too rapidly.
 - **Persistent Goals**: Long-term colony objectives set with `/goal` are attached to every autonomous run and saved with the game.
 
 ---

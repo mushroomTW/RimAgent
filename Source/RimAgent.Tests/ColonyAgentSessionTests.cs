@@ -480,18 +480,18 @@ namespace RimAgent.Tests
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
             _permissions.Combat = true;
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("list_colonists", new { })
                    .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                    .Reply("I need confirmation before the attack.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
-            await session.SendAsync("set Ali doctor to 1 and attack the bear");
-            Assert.That(_world.Colonists[0].WorkPriorities.Single(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
-            Assert.That(_world.Calls.Count(c => c == "SetWorkPriority(101,Doctor,1)"), Is.EqualTo(1));
+            await session.SendAsync("who is here and attack the bear");
+            var toolEntries = session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool).ToList();
+            Assert.That(toolEntries.Any(e => e.Result != null && !e.Result.StartsWith(ToolText.ConfirmationPrefix)), Is.True, "查詢直接執行");
+            Assert.That(_world.Calls, Does.Not.Contain("OrderAttack(102,900)"), "命令需要確認");
 
             await session.ConfirmAsync();
 
-            Assert.That(_world.Calls.Count(c => c == "SetWorkPriority(101,Doctor,1)"), Is.EqualTo(1));
             Assert.That(_world.Calls, Does.Contain("OrderAttack(102,900)"));
             Assert.That(_client.CallCount, Is.EqualTo(3), "The confirmation must not re-run the model tool loop.");
         }
@@ -537,27 +537,55 @@ namespace RimAgent.Tests
             Assert.That(_world.Calls.Count(c => c == "OrderAttack(102,900)"), Is.EqualTo(1));
         }
 
-        [Test]
-        public async Task AutonomousModeStillRequiresExplicitConfirmationForMcpExecution()
+        [TestCase(AgentMode.Autonomous, false)]
+        [TestCase(AgentMode.Confirm, true)]
+        [TestCase(AgentMode.Yolo, false)]
+        public async Task McpExecutionRespectsModeConfirmationPolicy(AgentMode mode, bool expectsConfirmation)
         {
             _permissions = new ToolPermissions { Mcp = true };
             _client.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
-                   .Reply("Waiting for confirmation.");
-            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+                   .Reply(expectsConfirmation ? "Waiting for confirmation." : "Done.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => mode);
 
             await session.SendAsync("call the MCP tool");
 
-            Assert.That(session.HasPendingConfirmation, Is.True);
-            Assert.That(session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool).Result,
-                Does.StartWith(ToolText.ConfirmationPrefix));
+            Assert.That(session.HasPendingConfirmation, Is.EqualTo(expectsConfirmation));
+            string result = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool).Result;
+            if (expectsConfirmation)
+            {
+                Assert.That(result, Does.StartWith(ToolText.ConfirmationPrefix));
+            }
+            else
+            {
+                Assert.That(result, Does.Not.StartWith(ToolText.ConfirmationPrefix));
+            }
         }
 
         [Test]
-        public async Task ConfirmModeRunsSafeToolDirectly()
+        public async Task ConfirmModeRequiresConfirmationForEveryCommand()
+        {
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("Waiting for confirmation.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("set doctor to 1");
+
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.Not.EqualTo(1));
+            Assert.That(session.HasPendingConfirmation, Is.True);
+
+            await session.ConfirmAsync();
+
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
+            Assert.That(session.HasPendingConfirmation, Is.False);
+            Assert.That(session.Undo.CanUndo, Is.True);
+        }
+
+        [Test]
+        public async Task YoloModeRunsPermittedToolDirectly()
         {
             _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
                    .Reply("Done.");
-            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Yolo);
 
             await session.SendAsync("set doctor to 1");
 
@@ -593,6 +621,27 @@ namespace RimAgent.Tests
 
             Assert.That(names, Does.Contain("list_colonists").And.Contain("get_health").And.Contain("mcp_list_tools"));
             Assert.That(names, Does.Not.Contain("set_work_priority").And.Not.Contain("execute_trade").And.Not.Contain("mcp_call_tool"));
+        }
+
+        [Test]
+        public void YoloModeExcludesForbiddenTools()
+        {
+            var session = new ColonyAgentSession(_client, _world, () => new ToolPermissions
+            {
+                Observe = true, Work = true, Build = true, Combat = true, Trade = true, Medical = true,
+                Prisoner = true, Animal = true, Zone = true, Production = true, Time = true, Mcp = true
+            }, 8, () => AgentMode.Yolo);
+
+            List<string> names = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
+
+            Assert.That(names, Does.Not.Contain("execute_trade"));
+            Assert.That(names, Does.Not.Contain("form_caravan"));
+            Assert.That(names, Does.Not.Contain("release_prisoner"));
+            Assert.That(names, Does.Not.Contain("schedule_surgery"));
+            Assert.That(names, Does.Not.Contain("set_prisoner_interaction"));
+            Assert.That(names, Does.Contain("set_work_priority"));
+            Assert.That(names, Does.Contain("order_attack"));
+            Assert.That(names, Does.Contain("mcp_call_tool"));
         }
 
         [Test]

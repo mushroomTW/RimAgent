@@ -55,7 +55,7 @@ namespace RimAgent.Agent
                 case AgentMode.Ask:
                     return false;
                 case AgentMode.Confirm:
-                    return _currentRisk != ToolRisk.Confirm;
+                    return _currentRisk == ToolRisk.Query;
                 default:
                     return true;
             }
@@ -157,6 +157,13 @@ namespace RimAgent.Agent
                 _blocked.Clear();
                 return taken;
             }
+        }
+
+        /// <summary>特定高敏感工具（如本機 MCP 工具）是否需要強制手動確認：僅在確認模式下需強制手動確認。</summary>
+        internal bool RequiresExplicitConfirmation(string toolName)
+        {
+            return string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
+                && _mode() == AgentMode.Confirm;
         }
 
         /// <summary>這次工具呼叫是否要先問分類器：自動模式且是命令。</summary>

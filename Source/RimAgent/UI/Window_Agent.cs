@@ -471,7 +471,7 @@ namespace RimAgent.UI
                 var usageRect = new Rect(reasoningRect.xMax + 8f, rect.y, rect.xMax - reasoningRect.xMax - 8f, rect.height);
                 Text.Anchor = TextAnchor.MiddleRight;
                 GUI.color = ToolTextColor;
-                Widgets.Label(usageRect, "RimAgent.Auto.StatusOn".Translate(component.AutonomousToolsUsed, RimAgentGameComponent.AutonomousBudget));
+                Widgets.Label(usageRect, "RimAgent.Auto.StatusUnlimited".Translate(component.AutonomousToolsUsed));
                 GUI.color = Color.white;
                 Text.Anchor = TextAnchor.UpperLeft;
             }
@@ -508,6 +508,7 @@ namespace RimAgent.UI
             {
                 case AgentMode.Ask: return "RimAgent.Settings.Mode.Ask".Translate();
                 case AgentMode.Confirm: return "RimAgent.Settings.Mode.Confirm".Translate();
+                case AgentMode.Yolo: return "RimAgent.Settings.Mode.Yolo".Translate();
                 case AgentMode.Auto: return "RimAgent.Settings.Mode.Auto".Translate();
                 default: return "RimAgent.Settings.Mode.Autonomous".Translate();
             }
