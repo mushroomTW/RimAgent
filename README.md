@@ -110,7 +110,7 @@ One setting decides how much the agent may do on its own:
 | **Ask** | **Read-only**. Only query tools are offered to the model; state-changing tools (including map switching and screenshots) are omitted so the agent inspects and advises without side effects. |
 | **Confirm** | **Every command requires confirmation**. Any state-changing action is previewed and pauses for player **Confirm**; safe queries run directly. |
 | **YOLO** | Positioned between Confirm and Auto, **no scheduler**. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); all other permitted commands and MCP execute directly without confirmation. |
-| **Auto** | Every command is previewed first, then a secondary fast model call classifies it (`low` / `high` risk, including MCP tools). Low runs immediately, high pauses for **Confirm**. Any classifier failure defaults to high risk. The classifier model is configurable in mod settings (leave blank to inherit default). |
+| **Auto** | Every command is previewed first, then a secondary fast model call judges it on **two axes** (including MCP tools): how risky the action is (`low` / `high`), and whether the player's own instruction asked for it. **Only low-risk actions the player explicitly asked for run immediately**; anything risky — or anything the assistant threw in on its own — pauses for **Confirm**. Any classifier failure defaults to high risk. The classifier model is configurable in mod settings (leave blank to inherit default). |
 | **Autonomous** | **Background scheduler autonomy**: Runs routine inspections and responds to colony emergencies automatically without blacklist restrictions, without a daily tool budget limit, and with direct MCP execution. Cooldown is configurable in settings (default disabled). |
 
 ### Decision & Safety Flow
@@ -130,13 +130,13 @@ flowchart TD
     MODE -->|Ask| QRY[Query Only · Safe Inspection]:::safe
     MODE -->|Confirm| PRE[Preview Command · Prompt Confirm]:::check
     MODE -->|YOLO| YOL[Blacklist Check · Direct Execution]:::check
-    MODE -->|Auto| CLF[AI Risk Classifier: Low / High]:::check
+    MODE -->|Auto| CLF[AI judgement: risk low/high x asked for by player]:::check
     MODE -->|Autonomous| SCH[Background Scheduler · Unlimited Autonomy]:::alert
     PRE -->|Confirm Clicked| EXEC[Execute Captured Tool Call]:::safe
     PRE -->|Discard / New Input| DROP[Discard Pending Action]:::alert
     YOL -->|Non-Blacklisted| EXEC
-    CLF -->|Low Risk| EXEC
-    CLF -->|High Risk| PRE
+    CLF -->|Low risk and asked for| EXEC
+    CLF -->|High risk or not asked for| PRE
 ```
 
 ### Safety Guarantees

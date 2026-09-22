@@ -69,7 +69,7 @@
   <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
   <RimAgent.Settings.Mode.YoloDesc>夹在确认与自动之间，无排程器。受黑名单保护（交易、商队、手术、囚犯等高危工具排除），其余所有操作与 MCP 工具免确认直接执行。</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>自动</RimAgent.Settings.Mode.Auto>
-  <RimAgent.Settings.Mode.AutoDesc>每个操作（包含 MCP 工具）先由另一次模型调用判断风险：有风险的等你确认，其余直接执行。每个操作多一次请求。</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.Mode.AutoDesc>另起一次模型调用判定每个动作（含 MCP 工具）两件事：动作本身的风险，以及你这句话有没有要求它。只有低风险且你要求的才直接执行，其余等你确认。每个动作多一次请求。</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierModel>分类器模型：</RimAgent.Settings.ClassifierModel>
   <RimAgent.Settings.ClassifierModelTip>自动模式判定风险时使用的模型标识符（留空则沿用 RimLLM Framework 默认模型）。可填入 ModelName 或 ProviderId:ModelName。</RimAgent.Settings.ClassifierModelTip>
   <RimAgent.Settings.ClassifierModelDefault>重设默认</RimAgent.Settings.ClassifierModelDefault>

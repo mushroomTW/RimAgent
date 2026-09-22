@@ -96,7 +96,7 @@ namespace RimAgent.Tests
         public async Task ScheduleSurgeryIsLoggedAsAToolCall()
         {
             var client = new ScriptedChatClient();
-            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\"}");
+            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
             client.CallTool("schedule_surgery", new { colonist = "Ali", surgery = "remove body part", part = "left lung" }).Reply("Done.");
             var session = new ColonyAgentSession(
                 client,

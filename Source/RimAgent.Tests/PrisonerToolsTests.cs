@@ -107,7 +107,7 @@ namespace RimAgent.Tests
         public async Task SetInteractionIsLoggedAsAToolCall()
         {
             var client = new ScriptedChatClient();
-            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\"}");
+            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
             client.CallTool("set_prisoner_interaction", new { prisoner = "Rook", mode = "recruit" }).Reply("Done.");
             var session = new ColonyAgentSession(
                 client,

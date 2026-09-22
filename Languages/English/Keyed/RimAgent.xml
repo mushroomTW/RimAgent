@@ -69,7 +69,7 @@
   <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
   <RimAgent.Settings.Mode.YoloDesc>Between Confirm and Auto, no scheduler. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); all other commands and MCP execute directly without confirmation.</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
-  <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools); risky ones wait for your Confirm, the rest run directly. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools) on two axes: how risky it is, and whether your instruction asked for it. Only low-risk actions you asked for run directly; the rest wait for your Confirm. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
   <RimAgent.Settings.ClassifierModelTip>Model ID used by Auto mode for risk classification (leave blank to use RimLLM Framework's default model). Can be ModelName or ProviderId:ModelName.</RimAgent.Settings.ClassifierModelTip>
   <RimAgent.Settings.ClassifierModelDefault>Reset</RimAgent.Settings.ClassifierModelDefault>

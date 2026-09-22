@@ -193,17 +193,22 @@ namespace RimAgent.Tools
                 Preview = ToolOutputLimit.Apply(preview.Substring(ToolText.ConfirmationPrefix.Length))
             }, cancellationToken);
             string riskCheck;
-            if (!verdict.Risky)
+            if (verdict.Failed)
             {
-                riskCheck = "low";
+                riskCheck = "unavailable";
+            }
+            else if (verdict.Risky)
+            {
+                riskCheck = "high";
             }
             else
             {
-                riskCheck = verdict.Failed ? "unavailable" : "high";
+                // 低風險但玩家沒要求：擋下的理由跟「危險」不同，紀錄要分得出來。
+                riskCheck = verdict.Authorized ? "low" : "unrequested";
             }
             entry.RiskCheck = riskCheck;
 
-            if (verdict.Risky)
+            if (verdict.ShouldAsk)
             {
                 _gate.NoteBlocked(preview);
                 return string.IsNullOrEmpty(verdict.Reason) ? preview : preview + " (risk check: " + verdict.Reason + ")";
