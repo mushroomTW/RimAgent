@@ -81,7 +81,7 @@ namespace RimAgent.Tools
             }
             entry.BudgetConsumed = budgetConsumed;
 
-            _gate?.BeginInvocation(_risk);
+            _gate?.BeginInvocation(Name, _risk);
             try
             {
                 object result;
@@ -103,7 +103,7 @@ namespace RimAgent.Tools
                 if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
                 {
                     // 此閉包保留本次工具呼叫的引數，確認時不會再讓模型選工具或改參數。
-                    _gate?.RegisterPendingApproval(token => ExecuteApprovedAsync(arguments, entry, token));
+                    _gate?.RegisterPendingApproval(Name, token => ExecuteApprovedAsync(arguments, entry, token));
                 }
                 return text;
             }
@@ -189,7 +189,7 @@ namespace RimAgent.Tools
                 Instruction = _transcript.CurrentInstructionText,
                 ToolName = Name,
                 Arguments = entry.Arguments,
-                // 分類器也是模型呼叫：預覽過長會直接撞爆它的視窗，這裡照同一個上限縮。
+                // 分類器也是模型呼叫：預覽過長會直接撐爆它的視窗，這裡照同一個上限縮。
                 Preview = ToolOutputLimit.Apply(preview.Substring(ToolText.ConfirmationPrefix.Length))
             }, cancellationToken);
             string riskCheck;

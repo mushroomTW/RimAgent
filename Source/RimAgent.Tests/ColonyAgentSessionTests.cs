@@ -497,6 +497,112 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task ConfirmingWithRememberStopsAskingForThatToolThisSession()
+        {
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("Waiting for confirmation.")
+                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 2 })
+                   .Reply("Done.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("set doctor to 1");
+            string done = await session.ConfirmAsync(rememberForSession: true);
+
+            Assert.That(done, Does.Contain("not ask again"));
+
+            await session.SendAsync("now set doctor to 2");
+
+            Assert.That(session.HasPendingConfirmation, Is.False, "同一個工具本局不再擋");
+            Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task RememberedApprovalsCoverOnlyTheApprovedToolAndAreClearedByClear()
+        {
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Combat = true;
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("Waiting for confirmation.")
+                   .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("The attack still needs confirmation.")
+                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 3 })
+                   .Reply("Waiting again.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("set doctor to 1");
+            await session.ConfirmAsync(rememberForSession: true);
+
+            await session.SendAsync("attack the bear");
+            Assert.That(session.HasPendingConfirmation, Is.True, "別的工具不受影響");
+            Assert.That(_world.Calls, Does.Not.Contain("OrderAttack(102,900)"));
+
+            session.Clear();
+            await session.SendAsync("set doctor to 3");
+
+            Assert.That(session.HasPendingConfirmation, Is.True, "對話重來後「不再問」一併歸零");
+        }
+
+        [Test]
+        public async Task IrreversibleBlacklistedToolsAreNeverRememberedForTheSession()
+        {
+            _permissions.Trade = true;
+            _client.CallTool("form_caravan", new { colonists = "Bob", heading = "N" })
+                   .Reply("Waiting for confirmation.")
+                   .CallTool("form_caravan", new { colonists = "Ali", heading = "S" })
+                   .Reply("Waiting for confirmation again.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("send Bob north");
+            Assert.That(session.ConfirmGate.CanRememberPending, Is.False, "YOLO 黑名單上的工具不提供「不再問」");
+            await session.ConfirmAsync(rememberForSession: true);
+
+            await session.SendAsync("now send Ali south");
+
+            Assert.That(session.HasPendingConfirmation, Is.True);
+        }
+
+        [Test]
+        public async Task ConfirmationThatNeverExecutesDoesNotRememberTheTool()
+        {
+            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                   .Reply("Waiting for confirmation.")
+                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 2 })
+                   .Reply("Waiting again.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("set doctor to 1");
+            using (var cts = new CancellationTokenSource())
+            {
+                cts.Cancel();
+                Assert.That(await session.ConfirmAsync(cts.Token, rememberForSession: true), Is.Null);
+            }
+            Assert.That(_world.Calls, Is.Empty, "取消時一個都不該執行");
+
+            await session.SendAsync("now set doctor to 2");
+
+            Assert.That(session.HasPendingConfirmation, Is.True, "沒真的跑過的工具不該被記成不再問");
+        }
+
+        [Test]
+        public async Task McpExecutionIsNeverRememberedForTheSession()
+        {
+            _permissions = new ToolPermissions { Mcp = true };
+            _client.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
+                   .Reply("Waiting for confirmation.")
+                   .CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
+                   .Reply("Waiting for confirmation again.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("call the MCP tool");
+            Assert.That(session.ConfirmGate.CanRememberPending, Is.False, "MCP 不提供「不再問」");
+            await session.ConfirmAsync(rememberForSession: true);
+
+            await session.SendAsync("call the MCP tool again");
+
+            Assert.That(session.HasPendingConfirmation, Is.True);
+        }
+
+        [Test]
         public async Task NewInstructionDiscardsPreviouslyCapturedCommands()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });

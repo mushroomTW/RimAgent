@@ -764,15 +764,20 @@ namespace RimAgent.UI
         private void DrawConfirmBar(Rect rect, ColonyAgentSession session)
         {
             const float WideButtonWidth = 100f;
+            // 「不再問」只在這批確實記得住時出現（MCP 工具永遠要問），免得按了沒作用。
+            bool canRemember = session.ConfirmGate.CanRememberPending;
             var confirmRect = new Rect(rect.x, rect.y, WideButtonWidth, rect.height);
-            var discardRect = new Rect(confirmRect.xMax + 6f, rect.y, WideButtonWidth, rect.height);
+            var alwaysRect = new Rect(confirmRect.xMax + 6f, rect.y, canRemember ? WideButtonWidth : 0f, rect.height);
+            var discardRect = new Rect((canRemember ? alwaysRect.xMax : confirmRect.xMax) + 6f, rect.y, WideButtonWidth, rect.height);
             var noteRect = new Rect(discardRect.xMax + 8f, rect.y, Mathf.Max(0f, rect.xMax - discardRect.xMax - 8f), rect.height);
 
             if (DrawUnifiedButton(confirmRect, "RimAgent.Confirm".Translate(), PauseColor, PauseColor, true))
             {
-                _cts?.Dispose();
-                _cts = new CancellationTokenSource();
-                _ = session.ConfirmAsync(_cts.Token);
+                Confirm(session, false);
+            }
+            if (canRemember && DrawUnifiedButton(alwaysRect, "RimAgent.ConfirmAlways".Translate(), PauseColor, PauseColor, true))
+            {
+                Confirm(session, true);
             }
             if (DrawUnifiedButton(discardRect, "RimAgent.ConfirmDiscard".Translate(), EmergencyColor, EmergencyColor, true))
             {
@@ -786,6 +791,13 @@ namespace RimAgent.UI
             Text.Anchor = TextAnchor.UpperLeft;
             GUI.color = Color.white;
             Text.Font = GameFont.Small;
+        }
+
+        private void Confirm(ColonyAgentSession session, bool rememberForSession)
+        {
+            _cts?.Dispose();
+            _cts = new CancellationTokenSource();
+            _ = session.ConfirmAsync(_cts.Token, rememberForSession);
         }
 
         private void Send(ColonyAgentSession session)

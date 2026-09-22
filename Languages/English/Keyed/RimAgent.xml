@@ -12,6 +12,7 @@
   <RimAgent.Stop>Stop</RimAgent.Stop>
   <RimAgent.Confirm>Confirm</RimAgent.Confirm>
   <RimAgent.ConfirmDiscard>Discard</RimAgent.ConfirmDiscard>
+  <RimAgent.ConfirmAlways>Always allow</RimAgent.ConfirmAlways>
   <RimAgent.ConfirmNote>The plan above is a preview — nothing has changed yet.</RimAgent.ConfirmNote>
   <RimAgent.Working>Agent is working…</RimAgent.Working>
   <RimAgent.NoGame>Load a colony first.</RimAgent.NoGame>

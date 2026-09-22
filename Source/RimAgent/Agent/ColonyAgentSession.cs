@@ -279,6 +279,7 @@ namespace RimAgent.Agent
             _serializedSession = null;
             _pendingConfirmation = null;
             ConfirmGate.DiscardPendingApprovals();
+            ConfirmGate.ClearSessionApprovals();
             Transcript.Clear();
             Undo.Clear();
         }
@@ -287,7 +288,11 @@ namespace RimAgent.Agent
         /// 執行等待中的確認：執行預覽當下捕捉的原工具呼叫與引數，不再重送模型。
         /// 沒有等待中的確認回傳 null。
         /// </summary>
-        public async Task<string> ConfirmAsync(CancellationToken cancellationToken = default)
+        /// <param name="rememberForSession">
+        /// 把這批工具記成「本局不再問」：之後確認模式下同名工具直接執行，自動模式也不再花一次呼叫問分類器。
+        /// 只記工具名稱，重開遊戲即失效；MCP 工具永遠不記。
+        /// </param>
+        public async Task<string> ConfirmAsync(CancellationToken cancellationToken = default, bool rememberForSession = false)
         {
             string text = _pendingConfirmation;
             if (text == null || !ConfirmGate.HasPendingApprovals) return null;
@@ -299,10 +304,11 @@ namespace RimAgent.Agent
             {
                 Undo.BeginFrame();
                 _world.TakeNewGameErrors();
-                int executed = await ConfirmGate.ApprovePendingAsync(cancellationToken).ConfigureAwait(false);
+                int executed = await ConfirmGate.ApprovePendingAsync(cancellationToken, rememberForSession).ConfigureAwait(false);
                 Undo.EndFrame(text + " (confirmed)");
                 _pendingConfirmation = null;
                 string summary = $"Executed {executed} confirmed command(s).";
+                if (rememberForSession) summary += " Those tools will not ask again this session.";
                 Transcript.Add(new TranscriptEntry
                 {
                     Kind = TranscriptKind.Notice,

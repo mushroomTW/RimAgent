@@ -12,6 +12,7 @@
   <RimAgent.Stop>停止</RimAgent.Stop>
   <RimAgent.Confirm>確認執行</RimAgent.Confirm>
   <RimAgent.ConfirmDiscard>捨棄</RimAgent.ConfirmDiscard>
+  <RimAgent.ConfirmAlways>本局不再問</RimAgent.ConfirmAlways>
   <RimAgent.ConfirmNote>上面是預覽，還沒有改動任何東西。</RimAgent.ConfirmNote>
   <RimAgent.Working>Agent 執行中…</RimAgent.Working>
   <RimAgent.NoGame>請先載入殖民地。</RimAgent.NoGame>

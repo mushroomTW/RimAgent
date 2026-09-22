@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using RimAgent.Tools;
@@ -18,6 +19,7 @@ namespace RimAgent.Agent
     {
         private sealed class PendingApproval
         {
+            public string ToolName;
             public Func<CancellationToken, Task<object>> ExecuteAsync;
         }
 
@@ -25,8 +27,11 @@ namespace RimAgent.Agent
         private readonly object _gate = new object();
         private readonly List<string> _blocked = new List<string>();
         private readonly List<PendingApproval> _pending = new List<PendingApproval>();
+        // 玩家按下「不再問」的工具；只活在這場遊戲的記憶體裡，不進存檔。
+        private readonly HashSet<string> _sessionApproved = new HashSet<string>(StringComparer.Ordinal);
         // 不在工具呼叫期間（直接建構工具的測試）時以最保守的 Confirm 看待。
         private ToolRisk _currentRisk = ToolRisk.Confirm;
+        private string _currentToolName;
         // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
         private bool? _forced;
         // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
@@ -55,7 +60,7 @@ namespace RimAgent.Agent
                 case AgentMode.Ask:
                     return false;
                 case AgentMode.Confirm:
-                    return _currentRisk == ToolRisk.Query;
+                    return _currentRisk == ToolRisk.Query || IsApprovedForSession(_currentToolName);
                 default:
                     return true;
             }
@@ -72,16 +77,17 @@ namespace RimAgent.Agent
         }
 
         /// <summary>封存預覽過的固定工具呼叫；核准時不會重送自然語句給模型。</summary>
-        internal void RegisterPendingApproval(Func<CancellationToken, Task<object>> executeAsync)
+        internal void RegisterPendingApproval(string toolName, Func<CancellationToken, Task<object>> executeAsync)
         {
             if (executeAsync == null) return;
             lock (_gate)
             {
-                _pending.Add(new PendingApproval { ExecuteAsync = executeAsync });
+                _pending.Add(new PendingApproval { ToolName = toolName, ExecuteAsync = executeAsync });
             }
         }
 
-        internal async Task<int> ApprovePendingAsync(CancellationToken cancellationToken)
+        /// <param name="rememberForSession">把這批工具記成「本局不再問」；MCP 工具不記（見 <see cref="CanRememberForSession"/>）。</param>
+        internal async Task<int> ApprovePendingAsync(CancellationToken cancellationToken, bool rememberForSession = false)
         {
             PendingApproval[] approvals;
             lock (_gate)
@@ -97,8 +103,47 @@ namespace RimAgent.Agent
                 cancellationToken.ThrowIfCancellationRequested();
                 await approval.ExecuteAsync(cancellationToken).ConfigureAwait(false);
                 executed++;
+                // 執行成功才記：中途失敗或取消時，沒真的跑過的工具不該被永久放行。
+                if (rememberForSession && CanRememberForSession(approval.ToolName))
+                {
+                    lock (_gate) _sessionApproved.Add(approval.ToolName);
+                }
             }
             return executed;
+        }
+
+        /// <summary>這批待確認裡有沒有可以記成「本局不再問」的工具（沒有就不必顯示那顆按鍵）。</summary>
+        public bool CanRememberPending
+        {
+            get
+            {
+                lock (_gate) return _pending.Any(p => CanRememberForSession(p.ToolName));
+            }
+        }
+
+        /// <summary>
+        /// MCP 以使用者權限執行本機程式，每次的 server／tool／args 都可能不同，
+        /// 記住「工具名稱」等於對之後所有外部呼叫放行，因此永遠不記。
+        /// YOLO 黑名單上的重大不可逆操作同理：那份清單的意思是「絕不免確認執行」，
+        /// 一顆按鍵不該把它整場遊戲關掉。
+        /// </summary>
+        private static bool CanRememberForSession(string toolName)
+        {
+            return !string.IsNullOrEmpty(toolName)
+                && !string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
+                && !AgentToolRegistry.IsYoloForbidden(toolName);
+        }
+
+        internal bool IsApprovedForSession(string toolName)
+        {
+            if (string.IsNullOrEmpty(toolName)) return false;
+            lock (_gate) return _sessionApproved.Contains(toolName);
+        }
+
+        /// <summary>清掉所有「本局不再問」（對話重來時一併歸零）。</summary>
+        public void ClearSessionApprovals()
+        {
+            lock (_gate) _sessionApproved.Clear();
         }
 
         internal void DiscardPendingApprovals()
@@ -166,15 +211,18 @@ namespace RimAgent.Agent
                 && _mode() == AgentMode.Confirm;
         }
 
-        /// <summary>這次工具呼叫是否要先問分類器：自動模式且是命令。</summary>
+        /// <summary>這次工具呼叫是否要先問分類器：自動模式且是命令，且玩家沒說過這個工具不必再問。</summary>
         internal bool NeedsClassification(ToolRisk risk)
         {
-            return _mode() == AgentMode.Auto && risk != ToolRisk.Query;
+            return _mode() == AgentMode.Auto
+                && risk != ToolRisk.Query
+                && !IsApprovedForSession(_currentToolName);
         }
 
-        /// <summary>工具呼叫開始：記下這次工具的靜態風險。</summary>
-        internal void BeginInvocation(ToolRisk risk)
+        /// <summary>工具呼叫開始：記下這次工具的名稱與靜態風險。</summary>
+        internal void BeginInvocation(string toolName, ToolRisk risk)
         {
+            _currentToolName = toolName;
             _currentRisk = risk;
             _forced = null;
         }
@@ -182,6 +230,7 @@ namespace RimAgent.Agent
         /// <summary>工具呼叫結束：回到保守預設。</summary>
         internal void EndInvocation()
         {
+            _currentToolName = null;
             _currentRisk = ToolRisk.Confirm;
             _forced = null;
         }
