@@ -97,7 +97,7 @@ namespace RimAgent.Tools
                 {
                     result = await base.InvokeCoreAsync(arguments, cancellationToken);
                 }
-                string text = AppendGameErrors(result?.ToString() ?? string.Empty);
+                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty));
                 entry.Result = text;
                 entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
                 if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
@@ -127,7 +127,7 @@ namespace RimAgent.Tools
             try
             {
                 object result = await base.InvokeCoreAsync(arguments, cancellationToken);
-                string text = AppendGameErrors(result?.ToString() ?? string.Empty);
+                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty));
                 _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
                 return text;
             }
@@ -189,7 +189,8 @@ namespace RimAgent.Tools
                 Instruction = _transcript.CurrentInstructionText,
                 ToolName = Name,
                 Arguments = entry.Arguments,
-                Preview = preview.Substring(ToolText.ConfirmationPrefix.Length)
+                // 分類器也是模型呼叫：預覽過長會直接撞爆它的視窗，這裡照同一個上限縮。
+                Preview = ToolOutputLimit.Apply(preview.Substring(ToolText.ConfirmationPrefix.Length))
             }, cancellationToken);
             string riskCheck;
             if (!verdict.Risky)
