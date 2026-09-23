@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -28,7 +29,7 @@ namespace RimAgent.Tools
         /// 命令前的閘門檢查：擋下時回傳要交給模型的預覽（已記入閘門），放行時回傳 null。
         /// 呼叫點應在所有參數解析之後、真正動世界之前。
         /// </summary>
-        public static string Blocked(ICommandGate gate, string preview)
+        public static string Blocked(ConfirmationGate gate, string preview)
         {
             if (gate == null || gate.AllowCommands()) return null;
             string blocked = Confirmation(preview);

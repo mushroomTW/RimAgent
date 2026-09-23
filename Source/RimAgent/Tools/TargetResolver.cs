@@ -11,7 +11,13 @@ namespace RimAgent.Tools
         /// <summary>代表「玩家目前框選的東西」的區域關鍵字。</summary>
         public const string SelectionKeyword = "selection";
 
-        private static readonly string[] EveryoneKeywords = { "all", "everyone", "*" };
+        public static readonly string[] EveryoneKeywords = { "all", "everyone", "*" };
+
+        public static bool IsEveryoneKeyword(string input)
+        {
+            string needle = (input ?? string.Empty).Trim();
+            return EveryoneKeywords.Any(k => string.Equals(k, needle, StringComparison.OrdinalIgnoreCase));
+        }
 
         /// <summary>
         /// 以 id、全名、綽號、短名或其前綴指定一位殖民者；大小寫不敏感。
@@ -19,40 +25,20 @@ namespace RimAgent.Tools
         /// </summary>
         public static ResolveResult<ColonistInfo> ResolveColonist(string input, IReadOnlyList<ColonistInfo> colonists)
         {
-            string needle = (input ?? string.Empty).Trim();
-            if (needle.Length == 0)
-            {
-                return ResolveResult<ColonistInfo>.Fail("Error: colonist is empty. Give a name or id.");
-            }
-
-            if (int.TryParse(needle, out int id))
-            {
-                ColonistInfo byId = colonists.FirstOrDefault(c => c.Id == id);
-                return byId != null
-                    ? ResolveResult<ColonistInfo>.Ok(byId)
-                    : ResolveResult<ColonistInfo>.Fail($"Error: no colonist has id {id}. {ListAll(colonists)}");
-            }
-
-            List<ColonistInfo> exact = colonists.Where(c => Names(c).Any(n => Eq(n, needle))).ToList();
-            if (exact.Count == 1) return ResolveResult<ColonistInfo>.Ok(exact[0]);
-            if (exact.Count > 1) return Ambiguous(needle, exact);
-
-            List<ColonistInfo> prefix = colonists.Where(c => Names(c).Any(n => n.StartsWith(needle, StringComparison.OrdinalIgnoreCase))).ToList();
-            if (prefix.Count == 1) return ResolveResult<ColonistInfo>.Ok(prefix[0]);
-            if (prefix.Count > 1) return Ambiguous(needle, prefix);
-
-            List<ColonistInfo> contains = colonists.Where(c => Names(c).Any(n => n.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
-            if (contains.Count == 1) return ResolveResult<ColonistInfo>.Ok(contains[0]);
-            if (contains.Count > 1) return Ambiguous(needle, contains);
-
-            return ResolveResult<ColonistInfo>.Fail($"Error: no colonist matches \"{needle}\". {ListAll(colonists)}");
+            return ResolveEntity(
+                input,
+                colonists,
+                c => c.Id,
+                Names,
+                Describe,
+                "colonist");
         }
 
         /// <summary>逗號分隔的多位殖民者，或 all / everyone / * 代表全部。</summary>
         public static ResolveResult<List<ColonistInfo>> ResolveColonists(string input, IReadOnlyList<ColonistInfo> colonists)
         {
             string needle = (input ?? string.Empty).Trim();
-            if (EveryoneKeywords.Any(k => Eq(k, needle)))
+            if (IsEveryoneKeyword(needle))
             {
                 return colonists.Count > 0
                     ? ResolveResult<List<ColonistInfo>>.Ok(colonists.ToList())
@@ -70,6 +56,72 @@ namespace RimAgent.Tools
             return result.Count > 0
                 ? ResolveResult<List<ColonistInfo>>.Ok(result)
                 : ResolveResult<List<ColonistInfo>>.Fail("Error: colonist is empty. Give names, ids, or \"all\".");
+        }
+
+        /// <summary>通用實體解析：id 精確比對 → 名稱精確比對 → 前綴比對 → 包含比對；撞名或歧義報錯並列候選。</summary>
+        public static ResolveResult<T> ResolveEntity<T>(
+            string input,
+            IReadOnlyList<T> candidates,
+            Func<T, int> getId,
+            Func<T, IEnumerable<string>> getNames,
+            Func<T, string> describe,
+            string kindLabel,
+            string emptyErrorMessage = null,
+            bool checkPrefix = true)
+        {
+            string needle = (input ?? string.Empty).Trim();
+            if (needle.Length == 0)
+            {
+                return ResolveResult<T>.Fail(emptyErrorMessage ?? $"Error: {kindLabel} is empty. Give a name or id.");
+            }
+
+            if (int.TryParse(needle, out int id))
+            {
+                T byId = candidates.FirstOrDefault(c => getId(c) == id);
+                return byId != null
+                    ? ResolveResult<T>.Ok(byId)
+                    : ResolveResult<T>.Fail($"Error: no {kindLabel} has id {id}. {FormatListAll(candidates, describe, kindLabel)}");
+            }
+
+            List<T> exact = candidates.Where(c => getNames(c).Any(n => string.Equals(n, needle, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (exact.Count == 1) return ResolveResult<T>.Ok(exact[0]);
+            if (exact.Count > 1) return FormatAmbiguous(needle, exact, describe, kindLabel);
+
+            if (checkPrefix)
+            {
+                List<T> prefix = candidates.Where(c => getNames(c).Any(n => n != null && n.StartsWith(needle, StringComparison.OrdinalIgnoreCase))).ToList();
+                if (prefix.Count == 1) return ResolveResult<T>.Ok(prefix[0]);
+                if (prefix.Count > 1) return FormatAmbiguous(needle, prefix, describe, kindLabel);
+            }
+
+            List<T> contains = candidates.Where(c => getNames(c).Any(n => n != null && n.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+            if (contains.Count == 1) return ResolveResult<T>.Ok(contains[0]);
+            if (contains.Count > 1) return FormatAmbiguous(needle, contains, describe, kindLabel);
+
+            return ResolveResult<T>.Fail($"Error: no {kindLabel} matches \"{needle}\". {FormatListAll(candidates, describe, kindLabel)}");
+        }
+
+        private static ResolveResult<T> FormatAmbiguous<T>(string needle, List<T> matches, Func<T, string> describe, string kindLabel)
+        {
+            string plural = PluralOf(kindLabel);
+            return ResolveResult<T>.Fail(
+                $"Error: \"{needle}\" matches several {plural}: {string.Join(", ", matches.Select(describe))}. Use the id.");
+        }
+
+        private static string FormatListAll<T>(IReadOnlyList<T> items, Func<T, string> describe, string kindLabel)
+        {
+            string plural = PluralOf(kindLabel);
+            string capPlural = char.ToUpperInvariant(plural[0]) + plural.Substring(1);
+            return items.Count == 0
+                ? $"There are no {plural}."
+                : $"{capPlural}: " + string.Join(", ", items.Select(describe)) + ".";
+        }
+
+        private static string PluralOf(string kindLabel)
+        {
+            if (string.IsNullOrEmpty(kindLabel)) return string.Empty;
+            if (kindLabel.EndsWith("s", StringComparison.OrdinalIgnoreCase)) return kindLabel + "es";
+            return kindLabel + "s";
         }
 
         public static ResolveResult<CellRectSpec> ResolveRect(int x1, int z1, int x2, int z2, MapBounds bounds)
@@ -92,7 +144,7 @@ namespace RimAgent.Tools
 
         public static bool IsSelectionKeyword(string area)
         {
-            return Eq((area ?? string.Empty).Trim(), SelectionKeyword);
+            return string.Equals((area ?? string.Empty).Trim(), SelectionKeyword, StringComparison.OrdinalIgnoreCase);
         }
 
         private static IEnumerable<string> Names(ColonistInfo c)
@@ -102,27 +154,9 @@ namespace RimAgent.Tools
             if (!string.IsNullOrEmpty(c.FullName)) yield return c.FullName;
         }
 
-        private static ResolveResult<ColonistInfo> Ambiguous(string needle, List<ColonistInfo> matches)
-        {
-            return ResolveResult<ColonistInfo>.Fail(
-                $"Error: \"{needle}\" matches several colonists: {string.Join(", ", matches.Select(Describe))}. Use the id.");
-        }
-
-        private static string ListAll(IReadOnlyList<ColonistInfo> colonists)
-        {
-            return colonists.Count == 0
-                ? "There are no colonists."
-                : "Colonists: " + string.Join(", ", colonists.Select(Describe)) + ".";
-        }
-
         private static string Describe(ColonistInfo c)
         {
             return $"[{c.Id}] {c.FullName}";
-        }
-
-        private static bool Eq(string a, string b)
-        {
-            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

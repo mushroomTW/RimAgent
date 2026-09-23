@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -11,13 +12,9 @@ namespace RimAgent.Tools
     public sealed class ZoneTools
     {
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public ZoneTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public ZoneTools(IGameWorld world, ICommandGate gate)
+        public ZoneTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;
@@ -152,49 +149,13 @@ namespace RimAgent.Tools
         /// <summary>區域解析：id 精確命中；label 精確或唯一包含，撞名即報錯。</summary>
         internal static ResolveResult<ZoneInfo> ResolveZone(string input, IReadOnlyList<ZoneInfo> zones)
         {
-            string needle = (input ?? string.Empty).Trim();
-            if (needle.Length == 0)
-            {
-                return ResolveResult<ZoneInfo>.Fail("Error: zone is empty. Give an id or label.");
-            }
-
-            if (int.TryParse(needle, out int id))
-            {
-                ZoneInfo byId = zones.FirstOrDefault(z => z.Id == id);
-                return byId != null
-                    ? ResolveResult<ZoneInfo>.Ok(byId)
-                    : ResolveResult<ZoneInfo>.Fail($"Error: no zone has id {id}. {ListAll(zones)}");
-            }
-
-            List<ZoneInfo> exact = zones.Where(z => string.Equals(z.Label, needle, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (exact.Count == 1) return ResolveResult<ZoneInfo>.Ok(exact[0]);
-            if (exact.Count > 1)
-            {
-                return ResolveResult<ZoneInfo>.Fail(
-                    $"Error: \"{needle}\" matches several zones: {string.Join(", ", exact.Select(Describe))}. Use the id.");
-            }
-
-            List<ZoneInfo> contains = zones.Where(z => z.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-            if (contains.Count == 1) return ResolveResult<ZoneInfo>.Ok(contains[0]);
-            if (contains.Count > 1)
-            {
-                return ResolveResult<ZoneInfo>.Fail(
-                    $"Error: \"{needle}\" matches several zones: {string.Join(", ", contains.Select(Describe))}. Use the id.");
-            }
-
-            return ResolveResult<ZoneInfo>.Fail($"Error: no zone matches \"{needle}\". {ListAll(zones)}");
-        }
-
-        private static string Describe(ZoneInfo z)
-        {
-            return $"[{z.Id}] {z.Label}";
-        }
-
-        private static string ListAll(IReadOnlyList<ZoneInfo> zones)
-        {
-            return zones.Count == 0
-                ? "There are no zones."
-                : "Zones: " + string.Join(", ", zones.Select(Describe)) + ".";
+            return TargetResolver.ResolveEntity(
+                input,
+                zones,
+                z => z.Id,
+                z => new[] { z.Label },
+                z => $"[{z.Id}] {z.Label}",
+                "zone");
         }
     }
 }

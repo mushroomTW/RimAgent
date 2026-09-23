@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -16,13 +17,9 @@ namespace RimAgent.Tools
         internal const int MaxGoodsListed = 80;
 
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public TradeTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public TradeTools(IGameWorld world, ICommandGate gate)
+        public TradeTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;
@@ -115,7 +112,7 @@ namespace RimAgent.Tools
             [Description("Colonist names or ids separated by commas, e.g. \"Ali, Bob\".")] string colonists,
             [Description("Compass heading: N, NE, E, SE, S, SW, W or NW.")] string heading)
         {
-            if (IsEveryoneKeyword(colonists))
+            if (TargetResolver.IsEveryoneKeyword(colonists))
             {
                 return ToolText.Error("name the caravan members explicitly, e.g. \"Ali, Bob\"; \"all\" would send the whole colony away.");
             }
@@ -133,14 +130,6 @@ namespace RimAgent.Tools
             CommandResult result = _world.FormCaravan(request);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
-        }
-
-        private static bool IsEveryoneKeyword(string input)
-        {
-            string needle = (input ?? string.Empty).Trim();
-            return string.Equals(needle, "all", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(needle, "everyone", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(needle, "*", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>品名解析到 defName；銀兩不用列（自動結算），列了直接擋下並說明。</summary>

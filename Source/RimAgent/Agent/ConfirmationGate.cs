@@ -15,7 +15,7 @@ namespace RimAgent.Agent
     /// 工具的風險由 <see cref="LoggingAIFunction"/> 在每次呼叫前經 <see cref="BeginInvocation"/> 告知；
     /// 工具串行執行（框架禁止並行），所以這裡用單一欄位即可。
     /// </summary>
-    public sealed class ConfirmationGate : ICommandGate
+    public sealed class ConfirmationGate
     {
         private sealed class PendingApproval
         {

@@ -31,11 +31,6 @@ namespace RimAgent.Mcp
 
         public string Name => _entry.Name;
 
-        public static IMcpServer Create(McpServerEntry entry)
-        {
-            return new SdkMcpServer(entry);
-        }
-
         public async Task<IList<McpServerTool>> ListToolsAsync(CancellationToken cancellationToken)
         {
             using (CancellationTokenSource timeout = LinkedTimeout(cancellationToken))

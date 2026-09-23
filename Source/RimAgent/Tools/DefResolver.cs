@@ -21,10 +21,10 @@ namespace RimAgent.Tools
                 return ResolveResult<DefInfo>.Fail($"Error: {kindLabel} name is empty.");
             }
 
-            List<DefInfo> exactDef = candidates.Where(c => Eq(c.DefName, needle)).ToList();
+            List<DefInfo> exactDef = candidates.Where(c => string.Equals(c.DefName, needle, StringComparison.OrdinalIgnoreCase)).ToList();
             if (exactDef.Count == 1) return ResolveResult<DefInfo>.Ok(exactDef[0]);
 
-            List<DefInfo> exactLabel = candidates.Where(c => Eq(c.Label, needle)).ToList();
+            List<DefInfo> exactLabel = candidates.Where(c => string.Equals(c.Label, needle, StringComparison.OrdinalIgnoreCase)).ToList();
             if (exactLabel.Count == 1) return ResolveResult<DefInfo>.Ok(exactLabel[0]);
             if (exactLabel.Count > 1) return Ambiguous(needle, exactLabel, kindLabel);
 
@@ -49,11 +49,6 @@ namespace RimAgent.Tools
             string listed = string.Join(", ", matches.Take(MaxListedCandidates).Select(m => $"{m.DefName} ({m.Label})"));
             string more = matches.Count > MaxListedCandidates ? $" and {matches.Count - MaxListedCandidates} more" : string.Empty;
             return ResolveResult<DefInfo>.Fail($"Error: \"{needle}\" matches several {kindLabel}s: {listed}{more}. Use the exact defName.");
-        }
-
-        private static bool Eq(string a, string b)
-        {
-            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool StartsWith(string text, string prefix)

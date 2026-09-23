@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
+using RimAgent.Agent;
 using RimAgent.Mcp;
 
 namespace RimAgent.Tools
@@ -10,13 +11,9 @@ namespace RimAgent.Tools
     public sealed class McpTools
     {
         private readonly McpManager _manager;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public McpTools(McpManager manager) : this(manager, null)
-        {
-        }
-
-        public McpTools(McpManager manager, ICommandGate gate)
+        public McpTools(McpManager manager, ConfirmationGate gate = null)
         {
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
             _gate = gate;

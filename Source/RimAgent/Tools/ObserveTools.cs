@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -12,13 +13,9 @@ namespace RimAgent.Tools
     {
         private const int MaxResearchListed = 30;
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public ObserveTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public ObserveTools(IGameWorld world, ICommandGate gate)
+        public ObserveTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;

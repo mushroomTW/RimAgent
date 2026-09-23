@@ -21,17 +21,9 @@ namespace RimAgent.Tools
 
         private readonly IGameWorld _world;
         private readonly WorkUndoStack _undo;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public WorkTools(IGameWorld world) : this(world, null, null)
-        {
-        }
-
-        public WorkTools(IGameWorld world, WorkUndoStack undo) : this(world, undo, null)
-        {
-        }
-
-        public WorkTools(IGameWorld world, WorkUndoStack undo, ICommandGate gate)
+        public WorkTools(IGameWorld world, WorkUndoStack undo = null, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _undo = undo;
@@ -67,16 +59,10 @@ namespace RimAgent.Tools
             string previous = current != null ? current.Priority.ToString() : "?";
             int oldPriority = current != null ? current.Priority : 3;
 
-            if (_gate != null && !_gate.AllowCommands())
-            {
-                string preview = $"would set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.";
-                string blocked = ToolText.Confirmation(preview);
-                _gate.NoteBlocked(blocked);
-                return blocked;
-            }
+            string blocked = ToolText.Blocked(_gate, $"would set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.");
+            if (blocked != null) return blocked;
 
             CommandResult result = _world.SetWorkPriority(pawn.Value.Id, work.Value.DefName, priority);
-            if (!result.Success) return ToolText.Error(result.Message);
 
             if (_undo != null && current != null) _undo.RecordPriority(pawn.Value.Id, work.Value.DefName, oldPriority);
 
@@ -123,13 +109,8 @@ namespace RimAgent.Tools
                 });
             }
 
-            if (_gate != null && !_gate.AllowCommands())
-            {
-                string preview = "would set " + string.Join(", ", changes.Select(c => c.Colonist.Name + " " + c.Work.Label + "=" + c.Priority)) + ".";
-                string blocked = ToolText.Confirmation(preview);
-                _gate.NoteBlocked(blocked);
-                return blocked;
-            }
+            string blocked = ToolText.Blocked(_gate, "would set " + string.Join(", ", changes.Select(c => c.Colonist.Name + " " + c.Work.Label + "=" + c.Priority)) + ".");
+            if (blocked != null) return blocked;
 
             var applied = new List<WorkPriorityChange>();
             foreach (WorkPriorityChange change in changes)
@@ -207,14 +188,10 @@ namespace RimAgent.Tools
             var hours = new List<int>();
             for (int h = startHour; h != endHour; h = (h + 1) % 24) hours.Add(h);
 
-            if (_gate != null && !_gate.AllowCommands())
-            {
-                string schedulePreview = $"would set hours {startHour}-{(endHour + 23) % 24} " +
-                    $"({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
-                string blockedSchedule = ToolText.Confirmation(schedulePreview);
-                _gate.NoteBlocked(blockedSchedule);
-                return blockedSchedule;
-            }
+            string schedulePreview = $"would set hours {startHour}-{(endHour + 23) % 24} " +
+                $"({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
+            string blockedSchedule = ToolText.Blocked(_gate, schedulePreview);
+            if (blockedSchedule != null) return blockedSchedule;
 
             var failures = new List<string>();
             ApplyScheduleToColonists(pawns.Value, hours, assign.Value, failures);

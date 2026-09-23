@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -11,13 +12,9 @@ namespace RimAgent.Tools
     public sealed class ProductionTools
     {
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public ProductionTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public ProductionTools(IGameWorld world, ICommandGate gate)
+        public ProductionTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;
@@ -105,47 +102,14 @@ namespace RimAgent.Tools
         /// <summary>工作台解析：id 精確命中；名稱精確或唯一包含，撞名即報錯。</summary>
         internal static ResolveResult<WorkTableInfo> ResolveTable(string input, IReadOnlyList<WorkTableInfo> tables)
         {
-            string needle = (input ?? string.Empty).Trim();
-            if (needle.Length == 0)
-            {
-                return ResolveResult<WorkTableInfo>.Fail("Error: work table is empty. Give an id from list_worktables.");
-            }
-
-            if (int.TryParse(needle, out int id))
-            {
-                WorkTableInfo byId = tables.FirstOrDefault(t => t.Id == id);
-                return byId != null
-                    ? ResolveResult<WorkTableInfo>.Ok(byId)
-                    : ResolveResult<WorkTableInfo>.Fail($"Error: no work table has id {id}. {ListAll(tables)}");
-            }
-
-            List<WorkTableInfo> exact = tables.Where(t => string.Equals(t.Label, needle, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (exact.Count == 1) return ResolveResult<WorkTableInfo>.Ok(exact[0]);
-            if (exact.Count > 1) return Ambiguous(needle, exact);
-
-            List<WorkTableInfo> contains = tables.Where(t => t.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-            if (contains.Count == 1) return ResolveResult<WorkTableInfo>.Ok(contains[0]);
-            if (contains.Count > 1) return Ambiguous(needle, contains);
-
-            return ResolveResult<WorkTableInfo>.Fail($"Error: no work table matches \"{needle}\". {ListAll(tables)}");
-        }
-
-        private static ResolveResult<WorkTableInfo> Ambiguous(string needle, List<WorkTableInfo> matches)
-        {
-            return ResolveResult<WorkTableInfo>.Fail(
-                $"Error: \"{needle}\" matches several work tables: {string.Join(", ", matches.Select(Describe))}. Use the id.");
-        }
-
-        private static string Describe(WorkTableInfo t)
-        {
-            return $"[{t.Id}] {t.Label}";
-        }
-
-        private static string ListAll(IReadOnlyList<WorkTableInfo> tables)
-        {
-            return tables.Count == 0
-                ? "There are no work tables."
-                : "Work tables: " + string.Join(", ", tables.Select(Describe)) + ".";
+            return TargetResolver.ResolveEntity(
+                input,
+                tables,
+                t => t.Id,
+                t => new[] { t.Label },
+                t => $"[{t.Id}] {t.Label}",
+                "work table",
+                "Error: work table is empty. Give an id from list_worktables.");
         }
     }
 }

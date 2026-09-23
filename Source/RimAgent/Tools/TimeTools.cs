@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Linq;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -9,13 +10,9 @@ namespace RimAgent.Tools
     public sealed class TimeTools
     {
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public TimeTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public TimeTools(IGameWorld world, ICommandGate gate)
+        public TimeTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;

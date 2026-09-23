@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -12,13 +13,9 @@ namespace RimAgent.Tools
         private const int MaxBlueprintCount = 50;
 
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public BuildTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public BuildTools(IGameWorld world, ICommandGate gate)
+        public BuildTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;
@@ -72,9 +69,7 @@ namespace RimAgent.Tools
                     : $"rectangle ({x1},{z1})-({x2},{z2})";
                 string preview = $"would mark {eligible} object(s) for {dk.Verb} " +
                     $"among {targets.Value.Count} matching object(s) in {where}.";
-                string blocked = ToolText.Confirmation(preview);
-                _gate.NoteBlocked(blocked);
-                return blocked;
+                return ToolText.Blocked(_gate, preview);
             }
 
             return ExecuteDesignateArea(dk, targets.Value);
@@ -146,9 +141,7 @@ namespace RimAgent.Tools
             if (_gate != null && !_gate.AllowCommands())
             {
                 string cancelPreview = $"would remove {markedTargets.Count} {dk.Verb} mark(s).";
-                string cancelBlocked = ToolText.Confirmation(cancelPreview);
-                _gate.NoteBlocked(cancelBlocked);
-                return cancelBlocked;
+                return ToolText.Blocked(_gate, cancelPreview);
             }
 
             int removed = 0;
@@ -256,9 +249,7 @@ namespace RimAgent.Tools
             string linePreview = count > 1 ? $" in a line toward {direction}" : string.Empty;
             string blueprintPreview = $"would place {count} {whatPreview} blueprint(s) " +
                 $"starting at {ToolText.Cell(x, z)}{linePreview}.";
-            string blueprintBlocked = ToolText.Confirmation(blueprintPreview);
-            _gate.NoteBlocked(blueprintBlocked);
-            return blueprintBlocked;
+            return ToolText.Blocked(_gate, blueprintPreview);
         }
 
         private static bool TryGetDirectionDelta(string direction, out int dx, out int dz)

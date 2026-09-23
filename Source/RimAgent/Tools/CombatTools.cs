@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -10,13 +11,9 @@ namespace RimAgent.Tools
     public sealed class CombatTools
     {
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public CombatTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public CombatTools(IGameWorld world, ICommandGate gate)
+        public CombatTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;
@@ -31,14 +28,9 @@ namespace RimAgent.Tools
             ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
-            if (_gate != null && !_gate.AllowCommands())
-            {
-                string verbPreview = drafted ? "draft" : "undraft";
-                string draftPreview = $"would {verbPreview} {ToolText.Names(pawns.Value)} (downed members will be skipped).";
-                string draftBlocked = ToolText.Confirmation(draftPreview);
-                _gate.NoteBlocked(draftBlocked);
-                return draftBlocked;
-            }
+            string verbPreview = drafted ? "draft" : "undraft";
+            string blocked = ToolText.Blocked(_gate, $"would {verbPreview} {ToolText.Names(pawns.Value)} (downed members will be skipped).");
+            if (blocked != null) return blocked;
 
             var done = new List<ColonistInfo>();
             var failures = new List<string>();
@@ -73,13 +65,8 @@ namespace RimAgent.Tools
             ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
-            if (_gate != null && !_gate.AllowCommands())
-            {
-                string movePreview = $"would order {ToolText.Names(pawns.Value)} to move to {ToolText.Cell(x, z)} (drafted first if needed).";
-                string moveBlocked = ToolText.Confirmation(movePreview);
-                _gate.NoteBlocked(moveBlocked);
-                return moveBlocked;
-            }
+            string blocked = ToolText.Blocked(_gate, $"would order {ToolText.Names(pawns.Value)} to move to {ToolText.Cell(x, z)} (drafted first if needed).");
+            if (blocked != null) return blocked;
 
             var moved = new List<ColonistInfo>();
             var draftedNow = new List<ColonistInfo>();
@@ -115,13 +102,8 @@ namespace RimAgent.Tools
             ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
-            if (_gate != null && !_gate.AllowCommands())
-            {
-                string attackPreview = $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed).";
-                string attackBlocked = ToolText.Confirmation(attackPreview);
-                _gate.NoteBlocked(attackBlocked);
-                return attackBlocked;
-            }
+            string attackBlocked = ToolText.Blocked(_gate, $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed).");
+            if (attackBlocked != null) return attackBlocked;
 
             var attacking = new List<ColonistInfo>();
             var failures = new List<string>();

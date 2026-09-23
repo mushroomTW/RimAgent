@@ -26,7 +26,7 @@ namespace RimAgent.Mcp
         private readonly Dictionary<string, DateTime> _lastUsed =
             new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
-        public McpManager(string configPath) : this(configPath, SdkMcpServer.Create)
+        public McpManager(string configPath) : this(configPath, entry => new SdkMcpServer(entry))
         {
         }
 

@@ -24,8 +24,6 @@ namespace RimAgent.Tools
     /// </summary>
     internal sealed class LoggingAIFunction : DelegatingAIFunction
     {
-        // 稽核與風險分類必須看見完整引數，不能截斷交易清單或銀額。
-        private const int MaxArgumentChars = int.MaxValue;
         private const int MaxGameErrorsAppended = 5;
 
         private readonly AgentTranscript _transcript;
@@ -249,11 +247,6 @@ namespace RimAgent.Tools
             {
                 if (sb.Length > 0) sb.Append(", ");
                 sb.Append(pair.Key).Append('=').Append(pair.Value?.ToString() ?? "null");
-            }
-            if (sb.Length > MaxArgumentChars)
-            {
-                sb.Length = MaxArgumentChars;
-                sb.Append('…');
             }
             return sb.ToString();
         }

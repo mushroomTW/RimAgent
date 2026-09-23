@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
@@ -11,13 +12,9 @@ namespace RimAgent.Tools
     public sealed class PrisonerTools
     {
         private readonly IGameWorld _world;
-        private readonly ICommandGate _gate;
+        private readonly ConfirmationGate _gate;
 
-        public PrisonerTools(IGameWorld world) : this(world, null)
-        {
-        }
-
-        public PrisonerTools(IGameWorld world, ICommandGate gate)
+        public PrisonerTools(IGameWorld world, ConfirmationGate gate = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;
@@ -96,33 +93,13 @@ namespace RimAgent.Tools
         /// <summary>囚犯解析：id、全名、綽號、短名或其前綴；大小寫不敏感，歧義即報錯。</summary>
         internal static ResolveResult<PrisonerInfo> ResolvePrisoner(string input, IReadOnlyList<PrisonerInfo> prisoners)
         {
-            string needle = (input ?? string.Empty).Trim();
-            if (needle.Length == 0)
-            {
-                return ResolveResult<PrisonerInfo>.Fail("Error: prisoner is empty. Give a name or id.");
-            }
-
-            if (int.TryParse(needle, out int id))
-            {
-                PrisonerInfo byId = prisoners.FirstOrDefault(p => p.Id == id);
-                return byId != null
-                    ? ResolveResult<PrisonerInfo>.Ok(byId)
-                    : ResolveResult<PrisonerInfo>.Fail($"Error: no prisoner has id {id}. {ListAll(prisoners)}");
-            }
-
-            List<PrisonerInfo> exact = prisoners.Where(p => Names(p).Any(n => Eq(n, needle))).ToList();
-            if (exact.Count == 1) return ResolveResult<PrisonerInfo>.Ok(exact[0]);
-            if (exact.Count > 1) return Ambiguous(needle, exact);
-
-            List<PrisonerInfo> prefix = prisoners.Where(p => Names(p).Any(n => n.StartsWith(needle, StringComparison.OrdinalIgnoreCase))).ToList();
-            if (prefix.Count == 1) return ResolveResult<PrisonerInfo>.Ok(prefix[0]);
-            if (prefix.Count > 1) return Ambiguous(needle, prefix);
-
-            List<PrisonerInfo> contains = prisoners.Where(p => Names(p).Any(n => n.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
-            if (contains.Count == 1) return ResolveResult<PrisonerInfo>.Ok(contains[0]);
-            if (contains.Count > 1) return Ambiguous(needle, contains);
-
-            return ResolveResult<PrisonerInfo>.Fail($"Error: no prisoner matches \"{needle}\". {ListAll(prisoners)}");
+            return TargetResolver.ResolveEntity(
+                input,
+                prisoners,
+                p => p.Id,
+                Names,
+                p => $"[{p.Id}] {p.FullName}",
+                "prisoner");
         }
 
         private static IEnumerable<string> Names(PrisonerInfo p)
@@ -130,24 +107,6 @@ namespace RimAgent.Tools
             if (!string.IsNullOrEmpty(p.Name)) yield return p.Name;
             if (!string.IsNullOrEmpty(p.Nickname)) yield return p.Nickname;
             if (!string.IsNullOrEmpty(p.FullName)) yield return p.FullName;
-        }
-
-        private static ResolveResult<PrisonerInfo> Ambiguous(string needle, List<PrisonerInfo> matches)
-        {
-            return ResolveResult<PrisonerInfo>.Fail(
-                $"Error: \"{needle}\" matches several prisoners: {string.Join(", ", matches.Select(m => $"[{m.Id}] {m.FullName}"))}. Use the id.");
-        }
-
-        private static string ListAll(IReadOnlyList<PrisonerInfo> prisoners)
-        {
-            return prisoners.Count == 0
-                ? "There are no prisoners."
-                : "Prisoners: " + string.Join(", ", prisoners.Select(m => $"[{m.Id}] {m.FullName}")) + ".";
-        }
-
-        private static bool Eq(string a, string b)
-        {
-            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
