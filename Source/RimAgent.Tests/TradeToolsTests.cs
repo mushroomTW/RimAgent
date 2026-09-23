@@ -409,7 +409,8 @@ namespace RimAgent.Tests
                 () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade),
                 8,
                 () => AgentMode.Auto,
-                classifierClient: classifier);
+                classifierClient: classifier,
+                classifierPrompt: () => "test classifier prompt");
 
             string reply = await session.SendAsync("買 2 個太空元件");
 

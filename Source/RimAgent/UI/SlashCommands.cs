@@ -34,9 +34,10 @@ namespace RimAgent.UI
         public static readonly SlashCommand Goal = new SlashCommand("goal", true, "RimAgent.Slash.Goal");
         public static readonly SlashCommand Undo = new SlashCommand("undo", false, "RimAgent.Slash.Undo");
         public static readonly SlashCommand Clear = new SlashCommand("clear", false, "RimAgent.Slash.Clear");
+        public static readonly SlashCommand Compact = new SlashCommand("compact", false, "RimAgent.Slash.Compact");
         public static readonly SlashCommand Stop = new SlashCommand("stop", false, "RimAgent.Slash.Stop");
 
-        public static readonly IReadOnlyList<SlashCommand> All = new[] { Goal, Undo, Clear, Stop };
+        public static readonly IReadOnlyList<SlashCommand> All = new[] { Goal, Undo, Clear, Compact, Stop };
 
         /// <summary>還在打指令名稱（以 / 開頭且尚無空白）：此時顯示彈出選單。</summary>
         public static bool IsTypingName(string input)

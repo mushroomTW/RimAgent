@@ -4,7 +4,7 @@ using System.Text;
 namespace RimAgent.Agent
 {
     /// <summary>
-    /// 每句指令的系統提示詞組裝：核心（硬編碼協議）→內建準則→技能。
+    /// 每句指令的系統提示詞組裝：前情提要→玩家自留地→內建準則→技能。
     /// 純字串邏輯；任一層為空就跳過，不留空標題。
     /// </summary>
     public static class AgentPromptComposer
@@ -12,9 +12,13 @@ namespace RimAgent.Agent
         /// <summary>技能區的總量上限（字數），超過就省略剩下的並註明。</summary>
         public const int MaxSkillsChars = 8000;
 
-        public static string Compose(string core, string conduct, IReadOnlyList<AgentSkill> skills)
+        public static string Compose(string preamble, string playerNotes, string conduct, IReadOnlyList<AgentSkill> skills)
         {
-            var sb = new StringBuilder(core ?? string.Empty);
+            var sb = new StringBuilder(preamble ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(playerNotes))
+            {
+                sb.Append("\n\nPlayer notes:\n").Append(playerNotes.Trim());
+            }
             if (!string.IsNullOrWhiteSpace(conduct))
             {
                 sb.Append("\n\nStanding conduct:\n").Append(conduct.Trim());

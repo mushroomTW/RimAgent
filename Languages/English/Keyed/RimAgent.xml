@@ -100,6 +100,7 @@
   <RimAgent.Slash.Goal>Long-term goals: /goal lists, /goal &lt;text&gt; adds, /goal remove &lt;n&gt; deletes</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>Undo the work settings changed by the last instruction</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>Clear the conversation</RimAgent.Slash.Clear>
+  <RimAgent.Slash.Compact>Compact context (summarize older history)</RimAgent.Slash.Compact>
   <RimAgent.Slash.Stop>Stop the running instruction</RimAgent.Slash.Stop>
   <RimAgent.Slash.Unknown>Unknown command: {0}. Type / to see the available commands.</RimAgent.Slash.Unknown>
   <RimAgent.Slash.Busy>The agent is working; /stop it or wait for it to finish.</RimAgent.Slash.Busy>
@@ -113,4 +114,10 @@
 
   <RimAgent.Settings.AutoOnEmergencyMedical>Respond to downed or bleeding colonists</RimAgent.Settings.AutoOnEmergencyMedical>
   <RimAgent.Settings.AutoOnFire>Respond to fires</RimAgent.Settings.AutoOnFire>
+  <RimAgent.Settings.CompactionHeader>Context compaction</RimAgent.Settings.CompactionHeader>
+  <RimAgent.Settings.AutoCompact>Auto-fold older tool output</RimAgent.Settings.AutoCompact>
+  <RimAgent.Settings.AutoCompactTip>When model history exceeds the threshold, older tool results are folded automatically before each request at no extra model cost. Manual /compact runs a separate LLM summary and is not affected by this switch.</RimAgent.Settings.AutoCompactTip>
+  <RimAgent.Settings.AutoCompactThreshold>Auto-compact threshold: {0} messages</RimAgent.Settings.AutoCompactThreshold>
+  <RimAgent.Settings.AutoCompactThresholdTip>Lower compresses sooner but folds recent context earlier.</RimAgent.Settings.AutoCompactThresholdTip>
+  <RimAgent.Context.Status>Context {0}/{1}</RimAgent.Context.Status>
 </LanguageData>

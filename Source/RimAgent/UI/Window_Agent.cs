@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using RimLLM_Framework;
@@ -27,6 +28,8 @@ namespace RimAgent.UI
         private const float SlashRowHeight = 26f;
         private const float SlashPopupWidth = 460f;
         private const int MaxResultChars = 600;
+        /// <summary>上下文用量到達幾成時標題列計量變黃預警。</summary>
+        private const double ContextWarnFraction = 0.8;
 
         // 圖片風格配色
         private static readonly Color BgColor = new Color(0.04f, 0.06f, 0.08f, 0.88f);
@@ -68,6 +71,10 @@ namespace RimAgent.UI
         private CancellationTokenSource _cts;
         private int _slashIndex;
         private bool _posInitialized;
+        // 發射後不管的請求：async 方法的 throw 變成 faulted Task，同步 try/catch 抓不到，
+        // 這裡在主線程逐幀收割，faulted 才補忙碌提示（Translate 只能在主線程呼叫）。
+        private Task _observedTask;
+        private ColonyAgentSession _observedSession;
 
         protected override float Margin => 0f;
 
@@ -123,6 +130,7 @@ namespace RimAgent.UI
         public override void WindowUpdate()
         {
             base.WindowUpdate();
+            DrainObservedTask();
             if (!_posInitialized) return;
 
             // 確保視窗至少有標題列在螢幕可見區域內
@@ -172,7 +180,7 @@ namespace RimAgent.UI
 
             // 標題列（RimAgent）與關閉鍵
             var titleRect = new Rect(inRect.x, inRect.y, inRect.width, TitleBarHeight);
-            DrawTitleBar(titleRect);
+            DrawTitleBar(titleRect, session);
 
             // 內部內容區（縮進 10px 呼吸空間）
             var contentRect = new Rect(inRect.x + 10f, inRect.y + TitleBarHeight + 2f, inRect.width - 20f, inRect.height - TitleBarHeight - 12f);
@@ -215,7 +223,7 @@ namespace RimAgent.UI
             GUI.color = oldColor;
         }
 
-        private void DrawTitleBar(Rect titleRect)
+        private void DrawTitleBar(Rect titleRect, ColonyAgentSession session)
         {
             var bgRect = new Rect(titleRect.x + 1f, titleRect.y + 1f, titleRect.width - 2f, titleRect.height - 1f);
             Widgets.DrawBoxSolid(bgRect, new Color(0.08f, 0.11f, 0.14f, 0.6f));
@@ -227,6 +235,22 @@ namespace RimAgent.UI
             Widgets.Label(labelRect, "RimAgent.WindowTitle".Translate());
             GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
+
+            // 上下文即時用量（模型歷史訊息數／自動壓縮門檻）：每幀重繪所以是活的，
+            // 接近門檻變黃、達到門檻變紅，提醒該 /compact 或等自動折疊。
+            // 口徑由 session 的 ContextStatus 保證與自動觸發一致，UI 只負責呈現。
+            ColonyAgentSession.ContextStatus status = session.GetContextStatus();
+            Color contextColor = ToolTextColor;
+            if (status.UsageFraction >= 1.0) contextColor = EmergencyColor;
+            else if (status.UsageFraction >= ContextWarnFraction) contextColor = NoticeColor;
+            var contextRect = new Rect(titleRect.xMax - 200f, titleRect.y + 4f, 168f, titleRect.height - 4f);
+            Text.Font = GameFont.Tiny;
+            Text.Anchor = TextAnchor.MiddleRight;
+            GUI.color = contextColor;
+            Widgets.Label(contextRect, "RimAgent.Context.Status".Translate(status.Messages, status.Threshold));
+            GUI.color = Color.white;
+            Text.Anchor = TextAnchor.UpperLeft;
+            Text.Font = GameFont.Small;
 
             var closeRect = new Rect(titleRect.xMax - 26f, titleRect.y + 4f, 20f, 20f);
             if (Mouse.IsOver(closeRect))
@@ -270,7 +294,11 @@ namespace RimAgent.UI
             float workingHeight = 0f;
             if (session.IsBusy)
             {
-                working = "<color=#" + PauseHex + ">" + "RimAgent.Working".Translate() + "</color>";
+                // 執行中的省略號做 . → .. → ... 循環動畫（每 0.5 秒一格）；
+                // 翻譯字尾的 … 先去掉再補動畫點，中英語言檔都不必改。
+                // 用 Environment.TickCount 而不用 Unity Time：BCL 在測試與遊戲內都能 JIT。
+                string workingBase = "RimAgent.Working".Translate().ToString().TrimEnd('…', '.', ' ');
+                working = "<color=#" + PauseHex + ">" + workingBase + WorkingDots() + "</color>";
                 workingHeight = Text.CalcHeight(working, width);
                 total += workingHeight + EntryGap;
             }
@@ -303,6 +331,18 @@ namespace RimAgent.UI
             }
             GUI.color = Color.white;
             Widgets.EndScrollView();
+        }
+
+        /// <summary>執行中動畫：. → .. → ... 循環，每 0.5 秒換一格。</summary>
+        private static string WorkingDots()
+        {
+            // TickCount 會正負迴繞，先取正數再算格子。
+            switch (((System.Environment.TickCount & int.MaxValue) / 500) % 3)
+            {
+                case 1: return "..";
+                case 2: return "...";
+                default: return ".";
+            }
         }
 
         private void RebuildLines(IReadOnlyList<TranscriptEntry> entries, float width)
@@ -712,6 +752,10 @@ namespace RimAgent.UI
                 session.Clear();
                 _lastEntryCount = -1;
             }
+            else if (command == SlashCommands.Compact)
+            {
+                Compact(session);
+            }
             else if (command == SlashCommands.Goal)
             {
                 RunGoal(session, args);
@@ -797,7 +841,37 @@ namespace RimAgent.UI
         {
             _cts?.Dispose();
             _cts = new CancellationTokenSource();
-            _ = session.ConfirmAsync(_cts.Token, rememberForSession);
+            Observe(session, session.ConfirmAsync(_cts.Token, rememberForSession));
+        }
+
+        private void Compact(ColonyAgentSession session)
+        {
+            _cts?.Dispose();
+            _cts = new CancellationTokenSource();
+            Observe(session, session.CompactAsync(_cts.Token));
+        }
+
+        /// <summary>
+        /// 記下發射後不管的請求；它 faulted（通常是同幀被自主任務搶先導致的忙碌衝突）
+        /// 才在主線程補一句忙碌提示。成功完成就靜靜丟掉。
+        /// </summary>
+        private void Observe(ColonyAgentSession session, Task task)
+        {
+            _observedSession = session;
+            _observedTask = task;
+        }
+
+        private void DrainObservedTask()
+        {
+            Task task = _observedTask;
+            if (task == null || !task.IsCompleted) return;
+            _observedTask = null;
+            ColonyAgentSession session = _observedSession;
+            _observedSession = null;
+            if (task.IsFaulted && session != null)
+            {
+                Notice(session, "RimAgent.Slash.Busy".Translate());
+            }
         }
 
         private void Send(ColonyAgentSession session)
@@ -816,7 +890,7 @@ namespace RimAgent.UI
 
             _cts?.Dispose();
             _cts = new CancellationTokenSource();
-            _ = session.SendAsync(text, _cts.Token);
+            Observe(session, session.SendAsync(text, _cts.Token));
         }
 
         private void ProbeCapabilities()

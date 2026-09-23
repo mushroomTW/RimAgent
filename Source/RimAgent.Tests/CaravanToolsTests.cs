@@ -108,7 +108,8 @@ namespace RimAgent.Tests
                 () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade),
                 8,
                 () => AgentMode.Auto,
-                classifierClient: classifier);
+                classifierClient: classifier,
+                classifierPrompt: () => "test classifier prompt");
 
             await session.SendAsync("Ali 跟 Bob 往東北組商隊出發");
 

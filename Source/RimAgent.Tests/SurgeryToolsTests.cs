@@ -104,7 +104,8 @@ namespace RimAgent.Tests
                 () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Medical),
                 8,
                 () => AgentMode.Auto,
-                classifierClient: classifier);
+                classifierClient: classifier,
+                classifierPrompt: () => "test classifier prompt");
 
             await session.SendAsync("Ali 左肺 Gallstone 排手術");
 

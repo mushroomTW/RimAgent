@@ -121,7 +121,7 @@ namespace RimAgent.Tests
             // 底層收到的是基底 ChatOptions（RimLLMChatOptions 的欄位全在 AdditionalProperties，本就穿透）。
             string first = _client.ReceivedOptions[0].Instructions;
             string second = _client.ReceivedOptions[1].Instructions;
-            Assert.That(first, Is.EqualTo(AgentSystemPrompt.Text));
+            Assert.That(first, Is.EqualTo(AgentSystemPrompt.FallbackPreamble));
             Assert.That(second, Is.EqualTo(first));
             Assert.That(_client.ReceivedOptions[0].AdditionalProperties, Is.Null.Or.Empty);
         }
@@ -745,10 +745,18 @@ namespace RimAgent.Tests
         [Test]
         public void AskModeAppendsReadOnlyNoteToInstructions()
         {
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Ask, () => "COMPOSED PROMPT", askNote: () => "ASK NOTE");
+
+            Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT\n\nASK NOTE"));
+            Assert.That(NewSession().BuildRunOptions().Instructions, Is.Null, "非詢問模式不動 Instructions");
+        }
+
+        [Test]
+        public void AskModeWithoutNoteLeavesInstructionsAlone()
+        {
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Ask, () => "COMPOSED PROMPT");
 
-            Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT" + AgentSystemPrompt.AskModeNote));
-            Assert.That(NewSession().BuildRunOptions().Instructions, Is.Null, "非詢問模式不動 Instructions");
+            Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT"), "缺檔就不加註");
         }
 
         [Test]

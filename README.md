@@ -85,9 +85,10 @@ An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (
 
 The RimAgent window can be moved anywhere on screen with position and size memory. It includes:
 
-- **Action Log Stream**: Real-time record of instructions, tool calls, and assistant replies.
+- **Action Log Stream**: Real-time record of instructions, tool calls, and assistant replies. The trailing ellipsis animates (`.` → `..` → `...`) while running.
 - **Status Dropdowns**: Configure execution **mode** (Ask / Confirm / YOLO / Auto / Autonomous) and model **reasoning effort** (Auto / Off / Low / Medium / High).
 - **Control Bar**: Input field with **Send** (which switches to **Stop** while the agent is running).
+- **Title-Bar Context Meter**: Top-right live counter of model-history messages vs. the auto-compact threshold (`Context N/M`); turns yellow near the threshold, red once reached.
 - **Slash Commands**: Type `/` to open the command completion list (↑↓ to navigate, Tab or Enter to select):
 
 | Command | Description |
@@ -97,7 +98,12 @@ The RimAgent window can be moved anywhere on screen with position and size memor
 | `/goal remove <n>` | Delete goal `n` |
 | `/undo` | Restore the work priorities and schedules modified by the last instruction |
 | `/clear` | Clear the visible conversation transcript |
+| `/compact` | Compact context: summarize older model history with one LLM call, keeping only recent turns (visible log kept) |
 | `/stop` | Immediately abort the currently running instruction |
+
+> **Context compaction**: when model history exceeds the threshold (default 60 messages), older tool output is folded automatically before each request at no extra model cost; the switch and threshold live in mod settings. `/compact` triggers a deeper manual summary compression at any time.
+
+> **Prompts are editable**: `Briefing.md`, `Conduct.md`, `AskMode.md`, `RiskClassifier.md`, `Autonomous.en.md` and `Skills/` under `AgentPack/` are plain-text prompts — edit, save, and the next instruction picks them up, no rebuild needed. `AGENTS.md` ships empty and is yours: write anything you want the agent to always honor.
 
 ---
 

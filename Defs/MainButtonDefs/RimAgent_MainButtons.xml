@@ -5,8 +5,8 @@
     <defName>RimAgent</defName>
     <label>agent</label>
     <description>Give the colony orders in natural language and watch the agent carry them out.</description>
-    <buttonWorkerClass>RimAgent.UI.MainButtonWorker_ToggleAgent</buttonWorkerClass>
-    <order>95</order>
+    <workerClass>RimAgent.UI.MainButtonWorker_ToggleAgent</workerClass>
+    <order>75</order>
     <closesWorldView>false</closesWorldView>
   </MainButtonDef>
 

@@ -12,15 +12,35 @@ namespace RimAgent.Agent
         public string Body { get; set; } = string.Empty;
     }
 
-    /// <summary>出貨的 agent 擴充包內容：內建行為準則與技能包。</summary>
+    /// <summary>出貨的 agent 擴充包內容：前情提要、玩家自留地、內建行為準則、Ask 註記、分類器提示詞、自主任務與技能包。</summary>
     public sealed class AgentPack
     {
+        /// <summary>前情提要（Briefing.md）：每次請求的第一層。缺檔時呼叫端用內建 fallback 兜底。</summary>
+        public string Preamble { get; set; } = string.Empty;
+        /// <summary>玩家自留地（AGENTS.md）：出貨是空的，玩家想交代 agent 的事寫這裡，擺在前情提要之後。</summary>
+        public string PlayerNotes { get; set; } = string.Empty;
+        /// <summary>常駐行為準則（Conduct.md）。</summary>
         public string Conduct { get; set; } = string.Empty;
+        /// <summary>詢問模式附加註記（AskMode.md）。</summary>
+        public string AskModeNote { get; set; } = string.Empty;
+        /// <summary>自動模式風險分類器的系統提示詞（RiskClassifier.md）。缺檔時分類器 fail-closed。</summary>
+        public string ClassifierPrompt { get; set; } = string.Empty;
+        /// <summary>自主任務文案（Autonomous.en.md，英文）。缺檔時該輪自主任務跳過。</summary>
+        public AutonomousPack Autonomous { get; set; } = new AutonomousPack();
         public IReadOnlyList<AgentSkill> Skills { get; set; } = Array.Empty<AgentSkill>();
     }
 
+    /// <summary>一個語言的自主任務文案：觸發原因→指令文字，另加長期目標的前後框。</summary>
+    public sealed class AutonomousPack
+    {
+        public IReadOnlyDictionary<string, string> Tasks { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+        public string GoalsHeader { get; set; } = string.Empty;
+        public string GoalsFooter { get; set; } = string.Empty;
+    }
+
     /// <summary>
-    /// 讀 AgentPack/ 資料夾（AGENTS.md＋Skills/*/SKILL.md）。純檔案邏輯，不碰遊戲 API，
+    /// 讀 AgentPack/ 資料夾（Briefing.md、AGENTS.md、Conduct.md、AskMode.md、RiskClassifier.md、
+    /// Autonomous.en.md、Skills/*/SKILL.md）。純檔案邏輯，不碰遊戲 API，
     /// rootDir 可注入，方便測試。缺檔、壞檔一律視為空，不丟例外。
     /// </summary>
     public static class AgentPackLoader
@@ -28,17 +48,25 @@ namespace RimAgent.Agent
         /// <summary>單個技能讀進提示詞的上限（字數），超過截斷並註明。</summary>
         public const int MaxSkillChars = 3000;
 
+        /// <summary>自主任務檔名（只留英文）。</summary>
+        internal const string AutonomousFileName = "Autonomous.en.md";
+
+        /// <summary>自主任務檔的章節名：觸發原因同名＋目標前後框。</summary>
+        internal const string GoalsHeaderSection = "GoalsHeader";
+        internal const string GoalsFooterSection = "GoalsFooter";
+
         public static AgentPack Load(string rootDir)
         {
             var pack = new AgentPack();
             if (string.IsNullOrEmpty(rootDir)) return pack;
             try
             {
-                string conductPath = Path.Combine(rootDir, "AGENTS.md");
-                if (File.Exists(conductPath))
-                {
-                    pack.Conduct = (File.ReadAllText(conductPath) ?? string.Empty).Trim();
-                }
+                pack.Preamble = ReadFile(rootDir, "Briefing.md");
+                pack.PlayerNotes = ReadFile(rootDir, "AGENTS.md");
+                pack.Conduct = ReadFile(rootDir, "Conduct.md");
+                pack.AskModeNote = ReadFile(rootDir, "AskMode.md");
+                pack.ClassifierPrompt = ReadFile(rootDir, "RiskClassifier.md");
+                LoadAutonomous(pack, rootDir);
 
                 string skillsDir = Path.Combine(rootDir, "Skills");
                 if (!Directory.Exists(skillsDir)) return pack;
@@ -60,6 +88,77 @@ namespace RimAgent.Agent
                 // 檔案被鎖或無權限：當作沒有擴充包，遊戲照跑。
             }
             return pack;
+        }
+
+        private static string ReadFile(string rootDir, string fileName)
+        {
+            string path = Path.Combine(rootDir, fileName);
+            if (!File.Exists(path)) return string.Empty;
+            return (File.ReadAllText(path) ?? string.Empty).Trim();
+        }
+
+        private static void LoadAutonomous(AgentPack pack, string rootDir)
+        {
+            string text = ReadFile(rootDir, AutonomousFileName);
+            if (text.Length == 0) return;
+            IDictionary<string, string> sections = ParseSections(text);
+            var lang = new AutonomousPack();
+            var tasks = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, string> section in sections)
+            {
+                if (string.Equals(section.Key, GoalsHeaderSection, StringComparison.Ordinal))
+                {
+                    lang.GoalsHeader = section.Value;
+                }
+                else if (string.Equals(section.Key, GoalsFooterSection, StringComparison.Ordinal))
+                {
+                    lang.GoalsFooter = section.Value;
+                }
+                else if (section.Value.Length > 0)
+                {
+                    tasks[section.Key] = section.Value;
+                }
+            }
+            lang.Tasks = tasks;
+            pack.Autonomous = lang;
+        }
+
+        /// <summary>
+        /// 切 `## 名稱` 章節：第一個標題之前的引言直接丟掉（只給人看，不進提示詞），
+        /// 同名重複以後者為準。key 嚴格比對，寫錯的章節名會被任務查詢略過。
+        /// 每行 Trim 後重組：縮排會被壓平，提示詞檔避免用縮排語法（清單、code block）。
+        /// </summary>
+        internal static IDictionary<string, string> ParseSections(string text)
+        {
+            var sections = new Dictionary<string, string>(StringComparer.Ordinal);
+            string current = null;
+            var body = new System.Text.StringBuilder();
+            foreach (string line in Lines(text))
+            {
+                // Lines 已 Trim（含 \r），標題行即整行比對。
+                if (line.StartsWith("## ", StringComparison.Ordinal))
+                {
+                    FlushSection(sections, ref current, body);
+                    current = line.Substring(3).Trim();
+                    continue;
+                }
+                if (current == null) continue;
+                if (body.Length > 0) body.Append('\n');
+                body.Append(line);
+            }
+            FlushSection(sections, ref current, body);
+            return sections;
+        }
+
+        private static void FlushSection(IDictionary<string, string> sections, ref string current, System.Text.StringBuilder body)
+        {
+            if (current == null) return;
+            if (current.Length > 0 && body.Length > 0)
+            {
+                sections[current] = body.ToString().Trim();
+            }
+            current = null;
+            body.Length = 0;
         }
 
         internal static AgentSkill ParseSkill(string folderName, string text)

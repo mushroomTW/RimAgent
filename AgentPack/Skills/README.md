@@ -1,7 +1,14 @@
-# RimAgent 技能包
+# RimAgent 提示詞版面
 
-這裡的子資料夾各是一個技能包。Agent 每次指令都會把每個
-`<技能>/SKILL.md` 讀進系統提示詞。
+這個資料夾是出貨給模型的提示詞唯一真相來源，改這裡不必重編 dll，下一句指令生效。
+
+- `Briefing.md` — 前情提要：你是 RimWorld 助手、observe-act-report 迴圈、工具結果協議。每次請求的第一層。
+- `AGENTS.md` — 你的自留地：出貨是空的。想交代 agent 的事（玩法偏好、禁區、語氣）寫這裡，讀在前情提要之後、準則之前。
+- `Conduct.md` — 常駐行為準則（最小改動、不可逆先講、模糊先問、殖民地存活優先）。
+- `AskMode.md` — 詢問模式才附加的註記（查詢工具限定，操作改給建議）。
+- `RiskClassifier.md` — 自動模式風險分類器的系統提示詞（兩軸判定＋JSON 回覆契約，別改格式）。
+- `Autonomous.en.md` — 自主任務文案（只留英文），一個觸發一個 `## 章節`（Raid、RaidEnded、EmergencyMedical、Fire、MentalBreak、FoodShortage、Interval），另加 `## GoalsHeader`／`## GoalsFooter` 包長期目標。
+- `Skills/<技能>/SKILL.md` — 自選技能包，格式如下。每次請求全部讀進系統提示詞。
 
 ```markdown
 ---
@@ -19,3 +26,4 @@ description: 一句話說明何時用這個技能
 - 資料夾裡沒有 `SKILL.md` 就等於沒有技能；不認得的檔案一律忽略。
 - 沒有 frontmatter 時以資料夾名為技能名。
 - 出貨預設是空的，把自備的技能包加在這裡。
+- 缺檔、壞檔一律視為空，遊戲照跑：前情提要缺檔時以一行保底代替；分類器缺提示詞時自動模式退化成全部先問。

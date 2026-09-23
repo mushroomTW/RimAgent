@@ -98,6 +98,16 @@ namespace RimAgent
             listing.CheckboxLabeled("RimAgent.Settings.AutoOnFire".Translate(), ref Settings.autoOnFire);
 
             listing.Gap();
+            listing.Label("RimAgent.Settings.CompactionHeader".Translate());
+            listing.GapLine();
+            listing.CheckboxLabeled("RimAgent.Settings.AutoCompact".Translate(), ref Settings.autoCompact, "RimAgent.Settings.AutoCompactTip".Translate());
+            if (Settings.autoCompact)
+            {
+                listing.Label("RimAgent.Settings.AutoCompactThreshold".Translate(Settings.autoCompactThreshold), -1f, "RimAgent.Settings.AutoCompactThresholdTip".Translate());
+                Settings.autoCompactThreshold = Mathf.RoundToInt(listing.Slider(Settings.autoCompactThreshold, RimAgentSettings.MinAutoCompactThreshold, RimAgentSettings.MaxAutoCompactThreshold));
+            }
+
+            listing.Gap();
             listing.Label("RimAgent.Settings.FrameworkNote".Translate());
 
             listing.End();

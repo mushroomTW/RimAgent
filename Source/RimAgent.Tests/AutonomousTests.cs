@@ -150,31 +150,66 @@ namespace RimAgent.Tests
     [TestFixture]
     public class AutonomousPromptsTests
     {
-        [Test]
-        public void PromptsMentionTheTriggerInAllLanguages()
+        private static AutonomousPack Pack()
         {
-            Assert.That(AutonomousPrompts.Build(AutonomousTrigger.Raid, null, AutoLanguage.English), Does.Contain("Hostiles"));
-            Assert.That(AutonomousPrompts.Build(AutonomousTrigger.Raid, null, AutoLanguage.Traditional), Does.Contain("敵對"));
-            Assert.That(AutonomousPrompts.Build(AutonomousTrigger.Raid, null, AutoLanguage.Simplified), Does.Contain("敌对"));
-            Assert.That(AutonomousPrompts.Build(AutonomousTrigger.FoodShortage, null, AutoLanguage.Traditional), Does.Contain("糧食"));
-            Assert.That(AutonomousPrompts.Build(AutonomousTrigger.MentalBreak, null, AutoLanguage.Simplified), Does.Contain("精神崩溃"));
-            Assert.That(AutonomousPrompts.Build(AutonomousTrigger.Interval, null, AutoLanguage.English), Does.Contain("Routine inspection"));
+            return new AutonomousPack
+            {
+                Tasks = new Dictionary<string, string>(System.StringComparer.Ordinal)
+                {
+                    { "Raid", "Hostiles are on the map." },
+                    { "FoodShortage", "Food reserves are low." },
+                    { "MentalBreak", "A colonist is close to a mental break." },
+                    { "Interval", "Routine inspection task." }
+                },
+                GoalsHeader = "The player's long-term goals:",
+                GoalsFooter = "Spend remaining steps on goals."
+            };
+        }
+
+        [Test]
+        public void PromptsMentionTheTrigger()
+        {
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Raid, null), Does.Contain("Hostiles"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.FoodShortage, null), Does.Contain("Food reserves"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.MentalBreak, null), Does.Contain("mental break"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval, null), Does.Contain("Routine inspection"));
+        }
+
+        [Test]
+        public void UnknownTriggerFallsBackToInterval()
+        {
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Fire, null), Does.Contain("Routine inspection"));
+        }
+
+        [Test]
+        public void MissingTaskReturnsNullSoTheRunIsSkipped()
+        {
+            Assert.That(AutonomousPrompts.Build(null, AutonomousTrigger.Raid, null), Is.Null);
+            Assert.That(AutonomousPrompts.Build(new AutonomousPack(), AutonomousTrigger.Raid, null), Is.Null);
+        }
+
+        [Test]
+        public void HasTaskReportsSectionPresence()
+        {
+            Assert.That(AutonomousPrompts.HasTask(Pack(), AutonomousTrigger.Raid), Is.True);
+            Assert.That(AutonomousPrompts.HasTask(Pack(), AutonomousTrigger.Fire), Is.False, "退回 Interval 的情況呼叫端要能察覺");
+            Assert.That(AutonomousPrompts.HasTask(null, AutonomousTrigger.Raid), Is.False);
         }
 
         [Test]
         public void GoalsAreAppendedAndBlankOnesSkipped()
         {
             var goals = new List<string> { "research electricity", "  ", null };
-            string text = AutonomousPrompts.Build(AutonomousTrigger.Interval, goals, AutoLanguage.Traditional);
+            string text = AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval, goals);
 
-            Assert.That(text, Does.Contain("長期目標").And.Contain("research electricity"));
+            Assert.That(text, Does.Contain("long-term goals").And.Contain("research electricity"));
             Assert.That(text, Does.Not.Contain("- \n"));
         }
 
         [Test]
         public void NoGoalsMeansTaskOnly()
         {
-            string text = AutonomousPrompts.Build(AutonomousTrigger.Interval, new List<string>(), AutoLanguage.English);
+            string text = AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval, new List<string>());
             Assert.That(text, Does.Not.Contain("goals:"));
         }
     }

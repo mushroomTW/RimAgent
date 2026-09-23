@@ -39,7 +39,7 @@ namespace RimAgent.Tests
 
         private ColonyAgentSession NewSession()
         {
-            return new ColonyAgentSession(_agentClient, _world, () => _permissions, 8, () => AgentMode.Auto, null, null, _classifierClient);
+            return new ColonyAgentSession(_agentClient, _world, () => _permissions, 8, () => AgentMode.Auto, null, null, _classifierClient, classifierPrompt: () => "test classifier prompt");
         }
 
         [Test]
@@ -257,7 +257,7 @@ namespace RimAgent.Tests
         public void CancellationPropagatesInsteadOfFailingClosed()
         {
             var client = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
-            var classifier = new RiskClassifier(client);
+            var classifier = new RiskClassifier(client, systemPrompt: () => "test classifier prompt");
             using (var cts = new CancellationTokenSource())
             {
                 cts.Cancel();
@@ -266,11 +266,24 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task MissingClassifierPromptFailsClosedWithoutCallingModel()
+        {
+            var client = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
+            var classifier = new RiskClassifier(client, systemPrompt: () => "  ");
+
+            RiskVerdict verdict = await classifier.ClassifyAsync(new RiskQuestion { Instruction = "test" }, CancellationToken.None);
+
+            Assert.That(verdict.Failed, Is.True);
+            Assert.That(verdict.ShouldAsk, Is.True, "缺提示詞時自動模式退化成全部先問");
+            Assert.That(client.CallCount, Is.EqualTo(0), "不燒模型呼叫");
+        }
+
+        [Test]
         public async Task RiskClassifierUsesConfiguredModelId()
         {
             string configuredModel = "openai:gpt-4o-mini";
             var client = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
-            var classifier = new RiskClassifier(client, () => configuredModel);
+            var classifier = new RiskClassifier(client, () => configuredModel, () => "test classifier prompt");
 
             await classifier.ClassifyAsync(new RiskQuestion { Instruction = "test" }, CancellationToken.None);
 
@@ -299,7 +312,8 @@ namespace RimAgent.Tests
                 instructions: null,
                 mcp: null,
                 classifierClient: _classifierClient,
-                classifierModel: () => customModel);
+                classifierModel: () => customModel,
+                classifierPrompt: () => "test classifier prompt");
 
             _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Done.");
             _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"safe\"}");

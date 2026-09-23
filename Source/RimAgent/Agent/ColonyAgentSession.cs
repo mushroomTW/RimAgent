@@ -29,14 +29,20 @@ namespace RimAgent.Agent
         // 高推理強度的供應商可能把推理 token 計入輸出上限；保留足夠空間給工具規劃與最終回覆。
         public const int MaxOutputTokens = 4000;
         private const int HistoryCompactionMessageThreshold = 60;
-        private const int HistoryCompactionPreservedGroups = 6;
+        /// <summary>自動折疊保留的最近組數（免 LLM，只折舊工具輸出）。</summary>
+        private const int AutoFoldPreservedGroups = 6;
+        /// <summary>手動 /compact 保留的最近組數：比自動折疊更積極，壓完只留最近一兩輪。</summary>
+        private const int ManualSummaryPreservedGroups = 4;
 
         private readonly ChatClientAgent _agent;
         private readonly AgentToolRegistry _registry;
         private readonly Func<ToolPermissions> _permissions;
         private readonly IChatClient _inner;
+        /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
+        private readonly IChatClient _summarizer;
         private readonly IGameWorld _world;
         private readonly Func<string> _instructions;
+        private readonly Func<string> _askNote;
         private AgentSession _session;
         private string _serializedSession;
         private int _busy;
@@ -49,8 +55,10 @@ namespace RimAgent.Agent
         /// <param name="mcp">MCP 管理器；null 則用停用的預設管理器。</param>
         /// <param name="classifierClient">自動模式分類器用的 client；null 則與 innerClient 共用（測試可另給假 client）。</param>
         /// <param name="classifierModel">自動模式分類器指定使用的模型識別碼 provider；null 則沿用框架預設。</param>
+        /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/RiskClassifier.md）；null 則分類器 fail-closed。</param>
+        /// <param name="askNote">詢問模式附加註記（AgentPack/AskMode.md）；null 則詢問模式不加註。</param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null)
+        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null)
         {
             if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -61,23 +69,26 @@ namespace RimAgent.Agent
             ConfirmGate = new ConfirmationGate(mode ?? (() => AgentMode.Autonomous));
             _world = world;
             _instructions = instructions;
-            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel));
+            _askNote = askNote;
+            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel, classifierPrompt));
             _inner = innerClient.AsMainThreadFunctionInvokingClient(maxSteps);
+            _summarizer = innerClient;
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
-            // 系統提示走 Instructions（AF 正統）；CachedContext 留空，待實測 token 後再決定是否加回。
+            // 前情提要走 Instructions（AF 正統）；檔遺失時以一行保底代替，不拿空提示詞燒 API。
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
             _agent = new ChatClientAgent(_inner, new ChatClientAgentOptions
             {
                 Name = "ColonyAgent",
-                ChatOptions = new ChatOptions { Instructions = AgentSystemPrompt.Text },
+                ChatOptions = new ChatOptions { Instructions = AgentSystemPrompt.FallbackPreamble },
                 // 只折疊較舊的工具輸出，保留最近的對話、使用者意圖與工具呼叫。
                 // 這在一般遊戲過程中避免歷史無限成長，而不改變近期上下文。
+                // 觸發條件讀即時設定（ShouldAutoCompact），設定頁調整下一句生效，不必重建會話。
                 AIContextProviders = new[]
                 {
                     new CompactionProvider(new ToolResultCompactionStrategy(
-                        CompactionTriggers.MessagesExceed(HistoryCompactionMessageThreshold),
-                        HistoryCompactionPreservedGroups))
+                        ShouldAutoCompact,
+                        AutoFoldPreservedGroups))
                 },
                 UseProvidedChatClientAsIs = true
             });
@@ -107,6 +118,56 @@ namespace RimAgent.Agent
 
         /// <summary>目前每句指令的工具呼叫上限。設定頁變更後由 GameComponent 經此同步，不必重讀存檔。</summary>
         public int MaxSteps => Volatile.Read(ref _maxSteps);
+
+        /// <summary>自動壓縮開關。設定頁變更後由 GameComponent 經 <see cref="SyncAutoCompact"/> 同步，觸發條件每輪讀取即時值。</summary>
+        public bool AutoCompactEnabled { get; set; } = true;
+
+        /// <summary>自動壓縮門檻（模型歷史訊息數）。同上由 GameComponent 同步。</summary>
+        public int AutoCompactThreshold { get; set; } = HistoryCompactionMessageThreshold;
+
+        /// <summary>
+        /// 標題列計量用的快照：實際歷史則數與生效門檻。UI 只讀此結構，不直接碰歷史與設定。
+        /// </summary>
+        public readonly struct ContextStatus
+        {
+            public readonly int Messages;
+            public readonly int Threshold;
+
+            public ContextStatus(int messages, int threshold)
+            {
+                Messages = messages;
+                Threshold = Math.Max(1, threshold);
+            }
+
+            /// <summary>用量比例：1.0 代表到達門檻。與觸發條件同算總則數，口徑一致。</summary>
+            public double UsageFraction => (double)Messages / Threshold;
+        }
+
+        /// <summary>給 GameComponent 的單一同步點：開關與門檻永遠成對更新。</summary>
+        public void SyncAutoCompact(bool enabled, int threshold)
+        {
+            AutoCompactEnabled = enabled;
+            AutoCompactThreshold = threshold;
+        }
+
+        /// <summary>目前上下文狀態（總歷史則數／門檻），供 UI 即時顯示。</summary>
+        public ContextStatus GetContextStatus()
+        {
+            return new ContextStatus(History.Count, AutoCompactThreshold);
+        }
+
+        /// <summary>
+        /// 自動折疊的觸發條件：關閉時永不觸發，開啟時歷史超過門檻即折疊較舊的工具輸出。
+        /// 注意：用總則數（TotalMessageCount，含已折疊的組）而非折疊後剩餘數，
+        /// 與 UI 計量的 <see cref="History"/> 總數同一口徑；黃／紅時機與實際折疊時機才對得上。
+        /// </summary>
+#pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
+        internal bool ShouldAutoCompact(CompactionMessageIndex index)
+        {
+            if (index == null || !AutoCompactEnabled) return false;
+            return index.TotalMessageCount >= Math.Max(1, AutoCompactThreshold);
+        }
+#pragma warning restore MAAI001
 
         /// <summary>
         /// 把設定頁的步數上限同步進工具迴圈（框架的 FunctionInvokingChatClient 持有的是可寫屬性，
@@ -282,6 +343,80 @@ namespace RimAgent.Agent
             ConfirmGate.ClearSessionApprovals();
             Transcript.Clear();
             Undo.Clear();
+        }
+
+        /// <summary>
+        /// 手動壓縮（/compact）：用一次 LLM 摘要把較舊的模型歷史折成一則摘要，只保留最近幾組；
+        /// 可見的對話紀錄（transcript）、復原堆疊與等待中的確認不受影響。忙碌中不可壓縮。
+        /// 沒有歷史可壓、或壓完一則沒少（AF 策略會吞掉摘要失敗並原樣回傳）時寫 Notice 並回傳 null；
+        /// 其他例外記一則 Error。任何情況下歷史都不會丟失。
+        /// 注意：此處不呼叫 Verse 翻譯（背景續行執行緒不安全），訊息維持英文，
+        /// 與 <see cref="ConfirmAsync"/>、<see cref="UndoLast"/> 的 session 層訊息一致。
+        /// </summary>
+        public async Task<string> CompactAsync(CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
+            {
+                throw new InvalidOperationException("RimAgent is still working on the previous instruction.");
+            }
+            try
+            {
+                var provider = _agent.ChatHistoryProvider as InMemoryChatHistoryProvider;
+                List<ChatMessage> before = provider != null && _session != null
+                    ? provider.GetMessages(_session).ToList()
+                    : new List<ChatMessage>();
+                if (before.Count == 0)
+                {
+                    AddNotice("Nothing to compact: model history is empty.");
+                    return null;
+                }
+#pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
+                var strategy = new SummarizationCompactionStrategy(
+                    _summarizer,
+                    CompactionTriggers.Always,
+                    ManualSummaryPreservedGroups,
+                    null,
+                    null);
+                IList<ChatMessage> after = (await CompactionProvider.CompactAsync(strategy, before, null, cancellationToken).ConfigureAwait(false)).ToList();
+#pragma warning restore MAAI001
+                // 摘要只會把多組折成一則，不可能變多；一樣多代表沒折到
+                // （歷史太短，或策略吞掉了摘要失敗），誠實回報而不是謊稱成功。
+                if (after.Count >= before.Count)
+                {
+                    AddNotice($"Already compact: model history has {before.Count} messages, nothing to fold.");
+                    return null;
+                }
+                provider.SetMessages(_session, after.ToList());
+                string summary = $"Context compacted: model history {before.Count} -> {after.Count} messages. Visible log kept.";
+                AddNotice(summary);
+                return summary;
+            }
+            catch (Exception ex)
+            {
+                Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Error,
+                    ErrorKind = Classify(ex),
+                    Text = ex.Message,
+                    InstructionId = Transcript.CurrentInstructionId
+                });
+                return null;
+            }
+            finally
+            {
+                Volatile.Write(ref _busy, 0);
+            }
+        }
+
+        /// <summary>Compact 系 Notice 的單一入口，免得每次重複 new TranscriptEntry。</summary>
+        private void AddNotice(string text)
+        {
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = text,
+                InstructionId = Transcript.CurrentInstructionId
+            });
         }
 
         /// <summary>
@@ -462,7 +597,12 @@ namespace RimAgent.Agent
             if (Mode == AgentMode.Ask)
             {
                 // 詢問模式：命令工具根本不在清單裡，跟模型講清楚免得它道歉說類別被關掉。
-                instructions = (instructions ?? AgentSystemPrompt.Text) + AgentSystemPrompt.AskModeNote;
+                // 註記來自 AgentPack/AskMode.md；缺檔就不加，模式本身的工具限制不受影響。
+                string note = _askNote?.Invoke();
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    instructions = (instructions ?? AgentSystemPrompt.FallbackPreamble) + "\n\n" + note.Trim();
+                }
             }
             if (instructions != null) options.Instructions = instructions;
             return options;

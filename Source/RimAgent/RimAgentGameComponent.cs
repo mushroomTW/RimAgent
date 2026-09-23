@@ -78,11 +78,12 @@ namespace RimAgent
                         _ = _mcp.WarmUpAsync();
                     }
                 }
-                // 步數上限與思考強度即時生效：重設屬性即可，AF session 的歷史不受影響。
+                // 步數上限、思考強度與自動壓縮即時生效：重設屬性即可，AF session 的歷史不受影響。
                 else if (RimAgentMod.Settings != null)
                 {
                     _session.UpdateMaxSteps(RimAgentMod.Settings.maxSteps);
                     _session.Reasoning = RimAgentMod.Settings.reasoning;
+                    _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
                 }
                 return _session;
             }
@@ -258,6 +259,16 @@ namespace RimAgent
             return _autoWorld.GetAutonomousSignals();
         }
 
+        /// <summary>持續性問題只警告一種一次（缺文案之類），免得每 500 tick 洗一次除錯記錄。</summary>
+        private void WarnOnce(string message)
+        {
+            if (_lastAutoError != message)
+            {
+                _lastAutoError = message;
+                Log.Warning(message);
+            }
+        }
+
         /// <summary>UI 的停止鍵：取消進行中的自主任務（玩家指令另有自己的 token）。</summary>
         public void StopAutonomousRun()
         {
@@ -273,7 +284,19 @@ namespace RimAgent
             int instructionId = session.Transcript.CurrentInstructionId + 1;
             try
             {
-                string instruction = AutonomousPrompts.Build(trigger, _goals, DetectLanguage());
+                AutonomousPack pack = _pack != null ? _pack.Autonomous : null;
+                if (pack != null && !AutonomousPrompts.HasTask(pack, trigger) && AutonomousPrompts.HasTask(pack, AutonomousTrigger.Interval))
+                {
+                    // 章節缺失（通常是拼字錯誤）時 Build 會靜默退回 Interval：警告一次讓問題可見。
+                    WarnOnce("RimAgent autonomous task missing section for " + trigger + ", falling back to Interval");
+                }
+                string instruction = AutonomousPrompts.Build(pack, trigger, _goals);
+                if (string.IsNullOrWhiteSpace(instruction))
+                {
+                    // 自主任務文案缺檔：送空話只會燒 API，直接跳過本輪（沿用錯誤節流，只記一種一次）。
+                    WarnOnce("RimAgent autonomous run skipped: Autonomous.en.md is missing or has no task for " + trigger);
+                    return;
+                }
                 int remainingBudget = _scheduler.RemainingBudget(config);
                 int maxSteps = RimAgentMod.Settings?.maxSteps ?? RimAgentSettings.DefaultMaxSteps;
                 int steps = config.UnlimitedBudget ? maxSteps : Math.Min(maxSteps, remainingBudget);
@@ -305,21 +328,6 @@ namespace RimAgent
             }
         }
 
-        private static AutoLanguage DetectLanguage()
-        {
-            try
-            {
-                string folder = LanguageDatabase.activeLanguage?.folderName ?? string.Empty;
-                if (folder.IndexOf("Simplified", StringComparison.OrdinalIgnoreCase) >= 0) return AutoLanguage.Simplified;
-                if (folder.IndexOf("Traditional", StringComparison.OrdinalIgnoreCase) >= 0) return AutoLanguage.Traditional;
-            }
-            catch (Exception)
-            {
-                // 語言偵測失敗就用英文，自主任務本身不受影響。
-            }
-            return AutoLanguage.English;
-        }
-
         /// <summary>讀檔後第一次開分頁時，把存檔裡的對話倒回 transcript，並把指令編號推過舊紀錄。</summary>
         private void RestoreTranscript(ColonyAgentSession session)
         {
@@ -349,17 +357,24 @@ namespace RimAgent
                 ComposeInstructions,
                 _mcp,
                 classifierClient: null,
-                classifierModel: () => settings?.classifierModel);
+                classifierModel: () => settings?.classifierModel,
+                classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
+                askNote: () => _pack != null ? _pack.AskModeNote : string.Empty);
             session.Reasoning = settings.reasoning;
+            session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
             return session;
         }
 
-        /// <summary>每句指令的完整提示詞：核心→內建準則→技能。每句現組，AgentPack 重載後下一句生效。</summary>
+        /// <summary>每句指令的完整提示詞：前情提要→玩家自留地→行為準則→技能。每句現組，AgentPack 變更後下一句生效。</summary>
         private string ComposeInstructions()
         {
             AgentPack pack = _pack;
+            string preamble = pack != null && !string.IsNullOrWhiteSpace(pack.Preamble)
+                ? pack.Preamble
+                : AgentSystemPrompt.FallbackPreamble;
             return AgentPromptComposer.Compose(
-                AgentSystemPrompt.Text,
+                preamble,
+                pack != null ? pack.PlayerNotes : string.Empty,
                 pack != null ? pack.Conduct : string.Empty,
                 pack != null ? pack.Skills : null);
         }

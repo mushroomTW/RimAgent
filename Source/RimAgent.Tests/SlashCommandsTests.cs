@@ -11,7 +11,7 @@ namespace RimAgent.Tests
         [Test]
         public void MatchFiltersByPrefixWhileTypingName()
         {
-            Assert.That(SlashCommands.Match("/").Select(c => c.Name), Is.EqualTo(new[] { "goal", "undo", "clear", "stop" }));
+            Assert.That(SlashCommands.Match("/").Select(c => c.Name), Is.EqualTo(new[] { "goal", "undo", "clear", "compact", "stop" }));
             Assert.That(SlashCommands.Match("/G").Select(c => c.Name), Is.EqualTo(new[] { "goal" }));
             Assert.That(SlashCommands.Match("/xyz"), Is.Empty);
             Assert.That(SlashCommands.Match("/goal "), Is.Empty, "打了空白代表名稱已定，不再彈選單");
@@ -28,6 +28,9 @@ namespace RimAgent.Tests
 
             Assert.That(SlashCommands.TryParse("/UNDO", out command, out _), Is.True);
             Assert.That(command, Is.SameAs(SlashCommands.Undo));
+
+            Assert.That(SlashCommands.TryParse("/compact", out command, out _), Is.True);
+            Assert.That(command, Is.SameAs(SlashCommands.Compact));
 
             Assert.That(SlashCommands.TryParse("/nope 1", out command, out _), Is.True, "未知名稱仍算斜線指令，由 UI 提示");
             Assert.That(command, Is.Null);
