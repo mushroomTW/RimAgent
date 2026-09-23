@@ -100,8 +100,8 @@ namespace RimAgent.Tests
         [Test]
         public void TradePermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Trade, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Trade, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Trade), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Trade), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -109,8 +109,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Trade = true }).OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.True);
-            Assert.That(registry.Select(new ToolPermissions { Trade = false }).OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Trade)).OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.True);
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.False);
         }
 
         [Test]
@@ -119,11 +119,11 @@ namespace RimAgent.Tests
             var world = new FakeGameWorld();
             var client = new ScriptedChatClient();
             client.Reply("ok").Reply("ok");
-            var permissions = new ToolPermissions { Observe = true, Work = true, Trade = false };
+            var permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work);
             var session = new ColonyAgentSession(client, world, () => permissions, 8);
 
             await session.SendAsync("one");
-            permissions.Trade = true;
+            permissions.Set(ToolCategory.Trade, true);
             await session.SendAsync("two");
 
             Assert.That(client.ReceivedOptions[0].Tools.OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.False);
@@ -136,7 +136,7 @@ namespace RimAgent.Tests
             _world.Traders.Add(MakeOrbitalShip());
             var client = new ScriptedChatClient();
             client.CallTool("list_orbital_traders", null).Reply("Two ships in orbit.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Trade = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade), 8);
 
             await session.SendAsync("軌道上有誰在賣東西？");
 
@@ -243,7 +243,7 @@ namespace RimAgent.Tests
             _world.Traders.Add(MakeVisitorCaravan());
             var client = new ScriptedChatClient();
             client.CallTool("list_visitor_caravans", null).Reply("A tribe is visiting.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Trade = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade), 8);
 
             await session.SendAsync("來訪商隊在賣什麼？");
 
@@ -406,7 +406,7 @@ namespace RimAgent.Tests
             var session = new ColonyAgentSession(
                 client,
                 _world,
-                () => new ToolPermissions { Observe = true, Trade = true },
+                () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade),
                 8,
                 () => AgentMode.Auto,
                 classifierClient: classifier);

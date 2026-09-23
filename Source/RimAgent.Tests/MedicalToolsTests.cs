@@ -27,8 +27,8 @@ namespace RimAgent.Tests
         [Test]
         public void MedicalPermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Medical, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Medical, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Medical), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Medical), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -36,8 +36,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Medical = true }).OfType<AIFunction>().Any(t => t.Name == "set_medical_care"), Is.True);
-            Assert.That(registry.Select(new ToolPermissions { Medical = false }).OfType<AIFunction>().Any(t => t.Name == "set_medical_care"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Medical)).OfType<AIFunction>().Any(t => t.Name == "set_medical_care"), Is.True);
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "set_medical_care"), Is.False);
         }
 
         [Test]
@@ -63,7 +63,7 @@ namespace RimAgent.Tests
         {
             var client = new ScriptedChatClient();
             client.CallTool("set_medical_care", new { colonist = "Ali", level = "HerbalOrWorse" }).Reply("Done.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Medical = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Medical), 8);
 
             await session.SendAsync("Ali 只用草藥");
 

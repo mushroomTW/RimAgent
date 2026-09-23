@@ -31,8 +31,8 @@ namespace RimAgent.Tests
         [Test]
         public void ProductionPermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Production, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Production, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Production), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Production), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -40,8 +40,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Production = true }).OfType<AIFunction>().Count(t => t.Name == "list_worktables" || t.Name == "list_bills" || t.Name == "add_bill" || t.Name == "delete_bill"), Is.EqualTo(4));
-            Assert.That(registry.Select(new ToolPermissions { Production = false }).OfType<AIFunction>().Any(t => t.Name == "list_bills"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Production)).OfType<AIFunction>().Count(t => t.Name == "list_worktables" || t.Name == "list_bills" || t.Name == "add_bill" || t.Name == "delete_bill"), Is.EqualTo(4));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_bills"), Is.False);
         }
 
         [Test]
@@ -104,7 +104,7 @@ namespace RimAgent.Tests
         {
             var client = new ScriptedChatClient();
             client.CallTool("add_bill", new { table = "501", recipe = "component", count = 5 }).Reply("Done.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Production = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Production), 8);
 
             await session.SendAsync("做 5 個零件");
 

@@ -244,8 +244,8 @@ namespace RimAgent.Tests
         [Test]
         public void McpPermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Mcp, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Mcp, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Mcp), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Mcp), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -253,8 +253,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Mcp = true }).OfType<AIFunction>().Count(t => t.Name == "mcp_status" || t.Name == "mcp_list_tools" || t.Name == "mcp_call_tool"), Is.EqualTo(3));
-            Assert.That(registry.Select(new ToolPermissions { Mcp = false }).OfType<AIFunction>().Any(t => t.Name == "mcp_status"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Mcp)).OfType<AIFunction>().Count(t => t.Name == "mcp_status" || t.Name == "mcp_list_tools" || t.Name == "mcp_call_tool"), Is.EqualTo(3));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "mcp_status"), Is.False);
         }
 
         [Test]

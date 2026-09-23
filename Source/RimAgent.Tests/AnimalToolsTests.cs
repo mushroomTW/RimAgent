@@ -29,8 +29,8 @@ namespace RimAgent.Tests
         [Test]
         public void AnimalPermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Animal, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Animal, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Animal), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Animal), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -38,8 +38,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Animal = true }).OfType<AIFunction>().Count(t => t.Name == "list_animals" || t.Name == "tame_animal" || t.Name == "train_animal" || t.Name == "set_animal_area"), Is.EqualTo(4));
-            Assert.That(registry.Select(new ToolPermissions { Animal = false }).OfType<AIFunction>().Any(t => t.Name == "list_animals"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Animal)).OfType<AIFunction>().Count(t => t.Name == "list_animals" || t.Name == "tame_animal" || t.Name == "train_animal" || t.Name == "set_animal_area"), Is.EqualTo(4));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_animals"), Is.False);
         }
 
         [Test]
@@ -116,7 +116,7 @@ namespace RimAgent.Tests
         {
             var client = new ScriptedChatClient();
             client.CallTool("train_animal", new { animal = "Rex", training = "haul", enable = true }).Reply("Done.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Animal = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Animal), 8);
 
             await session.SendAsync("讓 Rex 學搬運");
 

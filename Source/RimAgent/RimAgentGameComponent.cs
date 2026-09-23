@@ -8,6 +8,7 @@ using Microsoft.Extensions.AI;
 using RimAgent.Agent;
 using RimAgent.Game;
 using RimAgent.Mcp;
+using RimAgent.Tools;
 using RimLLM_Framework;
 using Verse;
 
@@ -40,7 +41,7 @@ namespace RimAgent
         private McpManager _mcp;
         private bool _mcpWarmedUp;
         private readonly AutonomousScheduler _scheduler = new AutonomousScheduler();
-        private AutonomousSchedulerState _loadedSchedulerState;
+        private AutonomousScheduler _loadedScheduler;
         private readonly RimWorldGameWorld _autoWorld = new RimWorldGameWorld();
         private string _lastAutoError;
         private CancellationTokenSource _autoCts;
@@ -71,7 +72,7 @@ namespace RimAgent
                     _session.Undo.Restore(_loadedUndoFrames);
                     _loadedUndoFrames = null;
                     // MCP server 在背景先連好：行程啟動慢，別等玩家第一句才開。
-                    if (!_mcpWarmedUp && RimAgentMod.Settings != null && RimAgentMod.Settings.allowMCP)
+                    if (!_mcpWarmedUp && RimAgentMod.Settings != null && RimAgentMod.Settings.GetAllow(ToolCategory.Mcp))
                     {
                         _mcpWarmedUp = true;
                         _ = _mcp.WarmUpAsync();
@@ -158,9 +159,9 @@ namespace RimAgent
             Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
             if (_goals == null) _goals = new List<string>();
 
-            AutonomousSchedulerState schedulerState = Scribe.mode == LoadSaveMode.Saving ? _scheduler.CaptureState() : _loadedSchedulerState;
+            AutonomousScheduler schedulerState = Scribe.mode == LoadSaveMode.Saving ? _scheduler : _loadedScheduler;
             Scribe_Deep.Look(ref schedulerState, "autonomousScheduler");
-            if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedSchedulerState = schedulerState;
+            if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedScheduler = schedulerState;
 
             if (Scribe.mode == LoadSaveMode.Saving && _mcp != null)
             {
@@ -183,8 +184,11 @@ namespace RimAgent
         public override void LoadedGame()
         {
             _session = null;
-            _scheduler.RestoreState(_loadedSchedulerState);
-            _loadedSchedulerState = null;
+            if (_loadedScheduler != null)
+            {
+                _loadedScheduler.CopyTo(_scheduler);
+                _loadedScheduler = null;
+            }
             ResetMcp();
         }
 

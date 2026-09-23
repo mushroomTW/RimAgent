@@ -83,9 +83,9 @@ namespace RimAgent.Mcp
                 try
                 {
                     // 首次連線時探測那一趟已經拿到清單，直接用，不多跑一次 list。
-                    Connection connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
-                    IList<McpServerTool> tools = connection.ProbedTools
-                                                 ?? await connection.Server.ListToolsAsync(cancellationToken).ConfigureAwait(false);
+                    Tuple<IMcpServer, IList<McpServerTool>> connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
+                    IList<McpServerTool> tools = connection.Item2
+                                                  ?? await connection.Item1.ListToolsAsync(cancellationToken).ConfigureAwait(false);
                     sb.Append('[').Append(entry.Name).Append("] ").Append(tools.Count).Append(" tool(s):").AppendLine();
                     foreach (McpServerTool tool in tools)
                     {
@@ -115,8 +115,8 @@ namespace RimAgent.Mcp
             if (!entry.Enabled) return Tools.ToolText.Error("MCP server \"" + entry.Name + "\" is disabled.");
             try
             {
-                Connection connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
-                return await connection.Server.CallAsync(tool, argsJson, cancellationToken).ConfigureAwait(false);
+                IMcpServer connected = (await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false)).Item1;
+                return await connected.CallAsync(tool, argsJson, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -197,20 +197,8 @@ namespace RimAgent.Mcp
             }
         }
 
-        /// <summary>已連上的 server；<see cref="ProbedTools"/> 只在這次呼叫真的建了連線時帶著探測到的工具清單。</summary>
-        private readonly struct Connection
-        {
-            public Connection(IMcpServer server, IList<McpServerTool> probedTools)
-            {
-                Server = server;
-                ProbedTools = probedTools;
-            }
-
-            public IMcpServer Server { get; }
-            public IList<McpServerTool> ProbedTools { get; }
-        }
-
-        private async Task<Connection> EnsureConnectedAsync(McpServerEntry entry, CancellationToken cancellationToken)
+        /// <summary>已連上的 server；Item2 只在這次呼叫真的建了連線時帶著探測到的工具清單。</summary>
+        private async Task<Tuple<IMcpServer, IList<McpServerTool>>> EnsureConnectedAsync(McpServerEntry entry, CancellationToken cancellationToken)
         {
             lock (_gate)
             {
@@ -218,7 +206,7 @@ namespace RimAgent.Mcp
                 if (_clients.TryGetValue(entry.Name, out running))
                 {
                     _lastUsed[entry.Name] = DateTime.UtcNow;
-                    return new Connection(running, null);
+                    return Tuple.Create(running, (IList<McpServerTool>)null);
                 }
             }
             // 建構只組參數不連線；真正的握手在第一次 list／call 內發生。
@@ -245,7 +233,7 @@ namespace RimAgent.Mcp
                     }
                     _lastUsed[entry.Name] = DateTime.UtcNow;
                 }
-                return new Connection(server, tools);
+                return Tuple.Create(server, tools);
             }
             catch (Exception)
             {

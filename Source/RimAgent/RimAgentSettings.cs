@@ -12,18 +12,8 @@ namespace RimAgent
         public const int MaxSteps = 20;
 
 #pragma warning disable S1104 // RimWorld ModSettings and Listing_Standard require public fields passed by ref
-        public bool allowObserve = true;
-        public bool allowWork = true;
-        public bool allowBuild = true;
-        public bool allowCombat = true;
-        public bool allowTrade = true;
-        public bool allowMedical = true;
-        public bool allowPrisoner = true;
-        public bool allowAnimal = true;
-        public bool allowZone = true;
-        public bool allowProduction = true;
-        public bool allowTime = true;
-        public bool allowMCP = true;
+        /// <summary>十二類工具開關，Taxi <see cref="ToolCategory"/> 順序存放；Scribe 鍵沿用舊欄位名，舊存檔與舊設定相容。</summary>
+        public bool[] allowByCategory = DefaultAllows();
         public int maxSteps = DefaultMaxSteps;
         /// <summary>執行模式：詢問／確認／自動／自主，見 <see cref="AgentMode"/>。</summary>
         public AgentMode mode = AgentMode.Confirm;
@@ -61,6 +51,41 @@ namespace RimAgent
 
         public const float DefaultWindowWidth = 620f;
         public const float DefaultWindowHeight = 460f;
+
+        private static readonly string[] CategoryKeys =
+        {
+            "allowObserve", "allowWork", "allowBuild", "allowCombat", "allowTrade", "allowMedical",
+            "allowPrisoner", "allowAnimal", "allowZone", "allowProduction", "allowTime", "allowMCP"
+        };
+
+        private static bool[] DefaultAllows()
+        {
+            return new[]
+            {
+                true, true, true, true, true, true,
+                true, true, true, true, true, true
+            };
+        }
+
+        private void EnsureAllows()
+        {
+            if (allowByCategory == null || allowByCategory.Length != CategoryKeys.Length)
+            {
+                allowByCategory = DefaultAllows();
+            }
+        }
+
+        public bool GetAllow(ToolCategory category)
+        {
+            EnsureAllows();
+            return allowByCategory[(int)category];
+        }
+
+        public void SetAllow(ToolCategory category, bool value)
+        {
+            EnsureAllows();
+            allowByCategory[(int)category] = value;
+        }
 
         public UnityEngine.Vector2 WindowSize => new UnityEngine.Vector2(
             windowRectWidth > 200f ? windowRectWidth : DefaultWindowWidth,
@@ -102,18 +127,11 @@ namespace RimAgent
         public override void ExposeData()
         {
             base.ExposeData();
-            Scribe_Values.Look(ref allowObserve, "allowObserve", true);
-            Scribe_Values.Look(ref allowWork, "allowWork", true);
-            Scribe_Values.Look(ref allowBuild, "allowBuild", true);
-            Scribe_Values.Look(ref allowCombat, "allowCombat", true);
-            Scribe_Values.Look(ref allowTrade, "allowTrade", true);
-            Scribe_Values.Look(ref allowMedical, "allowMedical", true);
-            Scribe_Values.Look(ref allowPrisoner, "allowPrisoner", true);
-            Scribe_Values.Look(ref allowAnimal, "allowAnimal", true);
-            Scribe_Values.Look(ref allowZone, "allowZone", true);
-            Scribe_Values.Look(ref allowProduction, "allowProduction", true);
-            Scribe_Values.Look(ref allowTime, "allowTime", true);
-            Scribe_Values.Look(ref allowMCP, "allowMCP", true);
+            EnsureAllows();
+            for (int i = 0; i < CategoryKeys.Length; i++)
+            {
+                Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
+            }
             Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
             Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
@@ -134,21 +152,13 @@ namespace RimAgent
 
         public ToolPermissions ToPermissions()
         {
-            return new ToolPermissions
+            EnsureAllows();
+            var permissions = new ToolPermissions();
+            for (int i = 0; i < CategoryKeys.Length; i++)
             {
-                Observe = allowObserve,
-                Work = allowWork,
-                Build = allowBuild,
-                Combat = allowCombat,
-                Trade = allowTrade,
-                Medical = allowMedical,
-                Prisoner = allowPrisoner,
-                Animal = allowAnimal,
-                Zone = allowZone,
-                Production = allowProduction,
-                Time = allowTime,
-                Mcp = allowMCP
-            };
+                permissions.Set((ToolCategory)i, allowByCategory[i]);
+            }
+            return permissions;
         }
     }
 }

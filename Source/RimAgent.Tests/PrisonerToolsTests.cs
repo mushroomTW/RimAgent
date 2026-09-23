@@ -39,8 +39,8 @@ namespace RimAgent.Tests
         [Test]
         public void PrisonerPermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Prisoner, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Prisoner, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Prisoner), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Prisoner), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -48,8 +48,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Prisoner = true }).OfType<AIFunction>().Count(t => t.Name == "list_prisoners" || t.Name == "set_prisoner_interaction" || t.Name == "release_prisoner"), Is.EqualTo(3));
-            Assert.That(registry.Select(new ToolPermissions { Prisoner = false }).OfType<AIFunction>().Any(t => t.Name == "list_prisoners" || t.Name == "set_prisoner_interaction" || t.Name == "release_prisoner"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Prisoner)).OfType<AIFunction>().Count(t => t.Name == "list_prisoners" || t.Name == "set_prisoner_interaction" || t.Name == "release_prisoner"), Is.EqualTo(3));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_prisoners" || t.Name == "set_prisoner_interaction" || t.Name == "release_prisoner"), Is.False);
         }
 
         [Test]
@@ -112,7 +112,7 @@ namespace RimAgent.Tests
             var session = new ColonyAgentSession(
                 client,
                 _world,
-                () => new ToolPermissions { Observe = true, Prisoner = true },
+                () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Prisoner),
                 8,
                 () => AgentMode.Auto,
                 classifierClient: classifier);

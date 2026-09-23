@@ -48,61 +48,13 @@ namespace RimAgent.Agent
         public bool OnFire { get; set; }
     }
 
-    /// <summary>存檔用的自主排程器狀態；避免讀檔後重置預算與邊緣偵測。</summary>
-    public sealed class AutonomousSchedulerState : IExposable
-    {
-        public long WindowStartTick { get; set; }
-        public bool WindowOpen { get; set; }
-        public int ToolsUsed { get; set; }
-        public int Runs { get; set; }
-        public long LastRunTick { get; set; }
-        public bool PrevRaid { get; set; }
-        public bool PrevMental { get; set; }
-        public bool PrevFoodOk { get; set; } = true;
-        public bool PrevEmergency { get; set; }
-        public bool PrevFire { get; set; }
-
-        public void ExposeData()
-        {
-            long windowStartTick = WindowStartTick;
-            bool windowOpen = WindowOpen;
-            int toolsUsed = ToolsUsed;
-            int runs = Runs;
-            long lastRunTick = LastRunTick;
-            bool prevRaid = PrevRaid;
-            bool prevMental = PrevMental;
-            bool prevFoodOk = PrevFoodOk;
-            bool prevEmergency = PrevEmergency;
-            bool prevFire = PrevFire;
-            Scribe_Values.Look(ref windowStartTick, "windowStartTick");
-            Scribe_Values.Look(ref windowOpen, "windowOpen");
-            Scribe_Values.Look(ref toolsUsed, "toolsUsed");
-            Scribe_Values.Look(ref runs, "runs");
-            Scribe_Values.Look(ref lastRunTick, "lastRunTick");
-            Scribe_Values.Look(ref prevRaid, "prevRaid");
-            Scribe_Values.Look(ref prevMental, "prevMental");
-            Scribe_Values.Look(ref prevFoodOk, "prevFoodOk", true);
-            Scribe_Values.Look(ref prevEmergency, "prevEmergency");
-            Scribe_Values.Look(ref prevFire, "prevFire");
-            WindowStartTick = windowStartTick;
-            WindowOpen = windowOpen;
-            ToolsUsed = toolsUsed;
-            Runs = runs;
-            LastRunTick = lastRunTick;
-            PrevRaid = prevRaid;
-            PrevMental = prevMental;
-            PrevFoodOk = prevFoodOk;
-            PrevEmergency = prevEmergency;
-            PrevFire = prevFire;
-        }
-    }
-
     /// <summary>
     /// 自主排程器：純邏輯，不碰遊戲 API，方便測試。
     /// 語義：事件採邊緣觸發（無→有才跑一次），任何兩次自主任務間至少隔 <see cref="CooldownTicks"/>，
-    /// 一個視窗內的工具呼叫總數不超過預算。觸發優先序：襲擊＞心情＞缺糧＞間隔。
+    /// 一個視窗內的工具呼叫總數不超過預算。
+    /// 存檔鍵與舊版 AutonomousSchedulerState 完全相同，舊存檔直接相容。
     /// </summary>
-    public sealed class AutonomousScheduler
+    public sealed class AutonomousScheduler : IExposable
     {
         /// <summary>兩次自主任務的最短間隔（1 遊戲小時），避免觸發風暴。</summary>
         public const int CooldownTicks = 2500;
@@ -183,29 +135,34 @@ namespace RimAgent.Agent
             _prevFire = false;
         }
 
-        public AutonomousSchedulerState CaptureState()
+        /// <summary>讀檔時把載入的暫存實例倒回正式排程器（正式實例是唯讀欄位，不能直接 Scribe）。</summary>
+        public void CopyTo(AutonomousScheduler other)
         {
-            return new AutonomousSchedulerState
-            {
-                WindowStartTick = _windowStartTick, WindowOpen = _windowOpen, ToolsUsed = _toolsUsed, Runs = _runs,
-                LastRunTick = _lastRunTick, PrevRaid = _prevRaid, PrevMental = _prevMental, PrevFoodOk = _prevFoodOk,
-                PrevEmergency = _prevEmergency, PrevFire = _prevFire
-            };
+            if (other == null) return;
+            other._windowStartTick = _windowStartTick;
+            other._windowOpen = _windowOpen;
+            other._toolsUsed = Math.Max(0, _toolsUsed);
+            other._runs = Math.Max(0, _runs);
+            other._lastRunTick = _lastRunTick;
+            other._prevRaid = _prevRaid;
+            other._prevMental = _prevMental;
+            other._prevFoodOk = _prevFoodOk;
+            other._prevEmergency = _prevEmergency;
+            other._prevFire = _prevFire;
         }
 
-        public void RestoreState(AutonomousSchedulerState state)
+        public void ExposeData()
         {
-            if (state == null) return;
-            _windowStartTick = state.WindowStartTick;
-            _windowOpen = state.WindowOpen;
-            _toolsUsed = Math.Max(0, state.ToolsUsed);
-            _runs = Math.Max(0, state.Runs);
-            _lastRunTick = state.LastRunTick;
-            _prevRaid = state.PrevRaid;
-            _prevMental = state.PrevMental;
-            _prevFoodOk = state.PrevFoodOk;
-            _prevEmergency = state.PrevEmergency;
-            _prevFire = state.PrevFire;
+            Scribe_Values.Look(ref _windowStartTick, "windowStartTick");
+            Scribe_Values.Look(ref _windowOpen, "windowOpen");
+            Scribe_Values.Look(ref _toolsUsed, "toolsUsed");
+            Scribe_Values.Look(ref _runs, "runs");
+            Scribe_Values.Look(ref _lastRunTick, "lastRunTick");
+            Scribe_Values.Look(ref _prevRaid, "prevRaid");
+            Scribe_Values.Look(ref _prevMental, "prevMental");
+            Scribe_Values.Look(ref _prevFoodOk, "prevFoodOk", true);
+            Scribe_Values.Look(ref _prevEmergency, "prevEmergency");
+            Scribe_Values.Look(ref _prevFire, "prevFire");
         }
 
         private void ResetWindowIfNeeded(long tick, AutonomousConfig config)

@@ -90,12 +90,8 @@ namespace RimAgent.Agent
 
         private static void ParseFrontmatter(string front, ref string name, ref string description)
         {
-#pragma warning disable S3878 // net472 mscorlib requires char[] overload at runtime to prevent MissingMethodException
-            foreach (string rawLine in front.Split(new[] { '\n' }))
-#pragma warning restore S3878
+            foreach (string line in Lines(front))
             {
-                // 單字元 TrimEnd(char) 是 Mono 專屬多載，這裡只用 Trim()（本就清掉 \r）。
-                string line = rawLine.Trim();
                 if (line.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
                 {
                     string value = line.Substring(5).Trim();
@@ -108,15 +104,25 @@ namespace RimAgent.Agent
             }
         }
 
-        private static string FirstLine(string text)
+        /// <summary>兩處行迴圈共用的列舉器：切行＋去空白（含 \r）集中一處，S3878 pragma 只留一個。</summary>
+        private static IEnumerable<string> Lines(string text)
         {
 #pragma warning disable S3878 // net472 mscorlib requires char[] overload at runtime to prevent MissingMethodException
-            foreach (string rawLine in text.Split(new[] { '\n' }))
-            {
-                string line = rawLine.Trim().TrimStart(new[] { '#', ' ', '\t' });
-                if (line.Length > 0) return line;
-            }
+            foreach (string rawLine in (text ?? string.Empty).Split(new[] { '\n' }))
 #pragma warning restore S3878
+            {
+                // 單字元 TrimEnd(char) 是 Mono 專屬多載，這裡只用 Trim()（本就清掉 \r）。
+                yield return rawLine.Trim();
+            }
+        }
+
+        private static string FirstLine(string text)
+        {
+            foreach (string line in Lines(text))
+            {
+                string stripped = line.TrimStart(new[] { '#', ' ', '\t' });
+                if (stripped.Length > 0) return stripped;
+            }
             return string.Empty;
         }
     }

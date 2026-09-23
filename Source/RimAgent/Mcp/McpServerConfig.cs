@@ -23,6 +23,21 @@ namespace RimAgent.Mcp
     {
         public const int DefaultTimeoutSeconds = 30;
 
+        private static readonly JsonSerializerOptions DtoOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        /// <summary>servers.json 條目的反序列化形態；缺欄位一律給預設，由呼叫端映射並容錯。</summary>
+        private sealed class ServerDto
+        {
+            public string Name { get; set; }
+            public string Command { get; set; }
+            public List<JsonElement> Args { get; set; }
+            public bool Enabled { get; set; }
+            public int TimeoutSeconds { get; set; }
+        }
+
         public static bool TryLoad(string path, out List<McpServerEntry> servers, out string error)
         {
             servers = new List<McpServerEntry>();
@@ -61,49 +76,32 @@ namespace RimAgent.Mcp
             return true;
         }
 
+        /// <summary>單條反序列化失敗（型別不合等）視同壞條目跳過，不連累整檔。</summary>
         private static McpServerEntry ParseServerEntry(JsonElement element)
         {
-            string name = GetString(element, "name");
-            string command = GetString(element, "command");
+            ServerDto dto;
+            try
+            {
+                dto = JsonSerializer.Deserialize<ServerDto>(element.GetRawText(), DtoOptions);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+            string name = (dto?.Name ?? string.Empty).Trim();
+            string command = (dto?.Command ?? string.Empty).Trim();
             if (name.Length == 0 || command.Length == 0) return null;
 
-            var entry = new McpServerEntry { Name = name, Command = command };
-            if (element.TryGetProperty("args", out JsonElement args) && args.ValueKind == JsonValueKind.Array)
+            var entry = new McpServerEntry { Name = name, Command = command, Enabled = dto.Enabled };
+            if (dto.Args != null)
             {
-                foreach (JsonElement arg in args.EnumerateArray())
+                foreach (JsonElement arg in dto.Args)
                 {
                     if (arg.ValueKind == JsonValueKind.String) entry.Args.Add(arg.GetString() ?? string.Empty);
                 }
             }
-            if (element.TryGetProperty("enabled", out JsonElement enabled)
-                && (enabled.ValueKind == JsonValueKind.True || enabled.ValueKind == JsonValueKind.False))
-            {
-                entry.Enabled = enabled.GetBoolean();
-            }
-            int timeout = GetInt(element, "timeoutSeconds");
-            entry.TimeoutSeconds = timeout > 0 ? timeout : DefaultTimeoutSeconds;
+            entry.TimeoutSeconds = dto.TimeoutSeconds > 0 ? dto.TimeoutSeconds : DefaultTimeoutSeconds;
             return entry;
-        }
-
-        private static string GetString(JsonElement element, string property)
-        {
-            JsonElement value;
-            if (element.TryGetProperty(property, out value) && value.ValueKind == JsonValueKind.String)
-            {
-                return (value.GetString() ?? string.Empty).Trim();
-            }
-            return string.Empty;
-        }
-
-        private static int GetInt(JsonElement element, string property)
-        {
-            JsonElement value;
-            if (element.TryGetProperty(property, out value) && value.ValueKind == JsonValueKind.Number)
-            {
-                int parsed;
-                if (value.TryGetInt32(out parsed)) return parsed;
-            }
-            return 0;
         }
     }
 }

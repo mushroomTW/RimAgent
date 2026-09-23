@@ -29,8 +29,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Medical = true }).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.True);
-            Assert.That(registry.Select(new ToolPermissions { Medical = false }).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Medical)).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.True);
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.False);
         }
 
         [Test]
@@ -101,7 +101,7 @@ namespace RimAgent.Tests
             var session = new ColonyAgentSession(
                 client,
                 _world,
-                () => new ToolPermissions { Observe = true, Medical = true },
+                () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Medical),
                 8,
                 () => AgentMode.Auto,
                 classifierClient: classifier);

@@ -90,7 +90,7 @@ namespace RimAgent.Tests
             SeedAliceHurt();
             var client = new ScriptedChatClient();
             client.CallTool("get_health", new { colonists = "all" }).Reply("One wounded.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Medical = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Medical), 8);
 
             await session.SendAsync("誰受傷了？");
 

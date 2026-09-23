@@ -1,4 +1,6 @@
+using System;
 using RimAgent.Agent;
+using RimAgent.Tools;
 using UnityEngine;
 using Verse;
 
@@ -34,18 +36,15 @@ namespace RimAgent
 
             listing.Label("RimAgent.Settings.PermissionsHeader".Translate());
             listing.GapLine();
-            listing.CheckboxLabeled("RimAgent.Settings.Observe".Translate(), ref Settings.allowObserve, "RimAgent.Settings.ObserveTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Work".Translate(), ref Settings.allowWork, "RimAgent.Settings.WorkTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Build".Translate(), ref Settings.allowBuild, "RimAgent.Settings.BuildTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Combat".Translate(), ref Settings.allowCombat, "RimAgent.Settings.CombatTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Trade".Translate(), ref Settings.allowTrade, "RimAgent.Settings.TradeTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Medical".Translate(), ref Settings.allowMedical, "RimAgent.Settings.MedicalTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Prisoner".Translate(), ref Settings.allowPrisoner, "RimAgent.Settings.PrisonerTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Animal".Translate(), ref Settings.allowAnimal, "RimAgent.Settings.AnimalTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Zone".Translate(), ref Settings.allowZone, "RimAgent.Settings.ZoneTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Production".Translate(), ref Settings.allowProduction, "RimAgent.Settings.ProductionTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.Time".Translate(), ref Settings.allowTime, "RimAgent.Settings.TimeTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.MCP".Translate(), ref Settings.allowMCP, "RimAgent.Settings.MCPTip".Translate());
+            foreach (ToolCategory category in (ToolCategory[])Enum.GetValues(typeof(ToolCategory)))
+            {
+                // 設定鍵以類別英文命名，只有 MCP 全大寫。
+                string suffix = category == ToolCategory.Mcp ? "MCP" : category.ToString();
+                string key = "RimAgent.Settings." + suffix;
+                bool allowed = Settings.GetAllow(category);
+                listing.CheckboxLabeled(key.Translate(), ref allowed, (key + "Tip").Translate());
+                Settings.SetAllow(category, allowed);
+            }
 
             listing.Gap();
             listing.Label("RimAgent.Settings.MaxSteps".Translate(Settings.maxSteps), -1f, "RimAgent.Settings.MaxStepsTip".Translate());

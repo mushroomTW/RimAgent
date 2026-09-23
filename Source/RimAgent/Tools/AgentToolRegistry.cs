@@ -8,58 +8,40 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>十二類工具各自的開關。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
+    /// <summary>十二類工具各自的開關，以 <see cref="ToolCategory"/> 順序存成陣列。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
     public sealed class ToolPermissions
     {
-        public bool Observe { get; set; }
-        public bool Work { get; set; }
-        public bool Build { get; set; }
-        public bool Combat { get; set; }
-        public bool Trade { get; set; }
-        public bool Medical { get; set; }
-        public bool Prisoner { get; set; }
-        public bool Animal { get; set; }
-        public bool Zone { get; set; }
-        public bool Production { get; set; }
-        public bool Time { get; set; }
-        public bool Mcp { get; set; }
+        private static readonly int CategoryCount = Enum.GetValues(typeof(ToolCategory)).Length;
+        private readonly bool[] _flags = new bool[CategoryCount];
 
         /// <summary>所有工具類別權限皆開啟的執行個體。</summary>
-        public static ToolPermissions All => new ToolPermissions
+        public static ToolPermissions All
         {
-            Observe = true,
-            Work = true,
-            Build = true,
-            Combat = true,
-            Trade = true,
-            Medical = true,
-            Prisoner = true,
-            Animal = true,
-            Zone = true,
-            Production = true,
-            Time = true,
-            Mcp = true
-        };
+            get
+            {
+                var permissions = new ToolPermissions();
+                for (int i = 0; i < CategoryCount; i++) permissions._flags[i] = true;
+                return permissions;
+            }
+        }
 
+        /// <summary>只開啟指定類別的執行個體（取代舊的物件初始器寫法）。</summary>
+        public static ToolPermissions For(params ToolCategory[] enabled)
+        {
+            var permissions = new ToolPermissions();
+            if (enabled == null) return permissions;
+            foreach (ToolCategory category in enabled) permissions.Set(category, true);
+            return permissions;
+        }
 
         public bool Allows(ToolCategory category)
         {
-            switch (category)
-            {
-                case ToolCategory.Observe: return Observe;
-                case ToolCategory.Work: return Work;
-                case ToolCategory.Build: return Build;
-                case ToolCategory.Combat: return Combat;
-                case ToolCategory.Trade: return Trade;
-                case ToolCategory.Medical: return Medical;
-                case ToolCategory.Prisoner: return Prisoner;
-                case ToolCategory.Animal: return Animal;
-                case ToolCategory.Zone: return Zone;
-                case ToolCategory.Production: return Production;
-                case ToolCategory.Time: return Time;
-                case ToolCategory.Mcp: return Mcp;
-                default: return false;
-            }
+            return _flags[(int)category];
+        }
+
+        public void Set(ToolCategory category, bool value)
+        {
+            _flags[(int)category] = value;
         }
     }
 

@@ -29,7 +29,7 @@ namespace RimAgent.Tests
             _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
             _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
             _client = new ScriptedChatClient();
-            _permissions = new ToolPermissions { Observe = true, Work = true, Build = false, Combat = false };
+            _permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work);
         }
 
         private ColonyAgentSession NewSession(int maxSteps = 8)
@@ -101,7 +101,7 @@ namespace RimAgent.Tests
             _client.Reply("ok").Reply("ok");
             ColonyAgentSession session = NewSession();
             await session.SendAsync("one");
-            _permissions.Build = true;
+            _permissions.Set(ToolCategory.Build, true);
             await session.SendAsync("two");
 
             Assert.That(_client.ReceivedOptions[0].Tools.OfType<AIFunction>().Any(t => t.Name == "place_blueprint"), Is.False);
@@ -455,7 +455,7 @@ namespace RimAgent.Tests
         public async Task ConfirmModeBlocksIrreversibleToolThenExecutesOnConfirm()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-            _permissions.Combat = true;
+            _permissions.Set(ToolCategory.Combat, true);
             _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                    .Reply("I will send Bob to attack the bear.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
@@ -479,7 +479,7 @@ namespace RimAgent.Tests
         public async Task ConfirmExecutesOnlyTheCapturedCommandAndDoesNotRepeatSafeCommands()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-            _permissions.Combat = true;
+            _permissions.Set(ToolCategory.Combat, true);
             _client.CallTool("list_colonists", new { })
                    .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                    .Reply("I need confirmation before the attack.");
@@ -520,7 +520,7 @@ namespace RimAgent.Tests
         public async Task RememberedApprovalsCoverOnlyTheApprovedToolAndAreClearedByClear()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-            _permissions.Combat = true;
+            _permissions.Set(ToolCategory.Combat, true);
             _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
                    .Reply("Waiting for confirmation.")
                    .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
@@ -545,7 +545,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task IrreversibleBlacklistedToolsAreNeverRememberedForTheSession()
         {
-            _permissions.Trade = true;
+            _permissions.Set(ToolCategory.Trade, true);
             _client.CallTool("form_caravan", new { colonists = "Bob", heading = "N" })
                    .Reply("Waiting for confirmation.")
                    .CallTool("form_caravan", new { colonists = "Ali", heading = "S" })
@@ -586,7 +586,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task McpExecutionIsNeverRememberedForTheSession()
         {
-            _permissions = new ToolPermissions { Mcp = true };
+            _permissions = ToolPermissions.For(ToolCategory.Mcp);
             _client.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
                    .Reply("Waiting for confirmation.")
                    .CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
@@ -606,7 +606,7 @@ namespace RimAgent.Tests
         public async Task NewInstructionDiscardsPreviouslyCapturedCommands()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-            _permissions.Combat = true;
+            _permissions.Set(ToolCategory.Combat, true);
             _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                    .Reply("First attack needs confirmation.")
                    .Reply("Old request discarded.")
@@ -627,7 +627,7 @@ namespace RimAgent.Tests
         public async Task ClearDiscardsCapturedCommandsBeforeTheNextConfirmation()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-            _permissions.Combat = true;
+            _permissions.Set(ToolCategory.Combat, true);
             _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                    .Reply("First attack needs confirmation.")
                    .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
@@ -648,7 +648,7 @@ namespace RimAgent.Tests
         [TestCase(AgentMode.Yolo, false)]
         public async Task McpExecutionRespectsModeConfirmationPolicy(AgentMode mode, bool expectsConfirmation)
         {
-            _permissions = new ToolPermissions { Mcp = true };
+            _permissions = ToolPermissions.For(ToolCategory.Mcp);
             _client.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
                    .Reply(expectsConfirmation ? "Waiting for confirmation." : "Done.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => mode);
@@ -704,7 +704,7 @@ namespace RimAgent.Tests
         public async Task AutonomousModeRunsIrreversibleToolDirectly()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-            _permissions.Combat = true;
+            _permissions.Set(ToolCategory.Combat, true);
             _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 }).Reply("Done.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
 
@@ -717,11 +717,7 @@ namespace RimAgent.Tests
         [Test]
         public void AskModeOffersOnlyQueryTools()
         {
-            var session = new ColonyAgentSession(_client, _world, () => new ToolPermissions
-            {
-                Observe = true, Work = true, Build = true, Combat = true, Trade = true, Medical = true,
-                Prisoner = true, Animal = true, Zone = true, Production = true, Time = true, Mcp = true
-            }, 8, () => AgentMode.Ask);
+            var session = new ColonyAgentSession(_client, _world, () => ToolPermissions.All, 8, () => AgentMode.Ask);
 
             List<string> names = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
 
@@ -732,11 +728,7 @@ namespace RimAgent.Tests
         [Test]
         public void YoloModeExcludesForbiddenTools()
         {
-            var session = new ColonyAgentSession(_client, _world, () => new ToolPermissions
-            {
-                Observe = true, Work = true, Build = true, Combat = true, Trade = true, Medical = true,
-                Prisoner = true, Animal = true, Zone = true, Production = true, Time = true, Mcp = true
-            }, 8, () => AgentMode.Yolo);
+            var session = new ColonyAgentSession(_client, _world, () => ToolPermissions.All, 8, () => AgentMode.Yolo);
 
             List<string> names = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
 
@@ -818,8 +810,10 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
             Assert.That(registry.All.Count, Is.EqualTo(53));
-            Assert.That(registry.Select(new ToolPermissions { Observe = true, Work = false, Build = false, Combat = false }).Count, Is.EqualTo(16));
-            Assert.That(registry.Select(new ToolPermissions { Observe = false, Work = false, Build = false, Combat = false }), Is.Empty);
+            var observeOnly = new ToolPermissions();
+            observeOnly.Set(ToolCategory.Observe, true);
+            Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(16));
+            Assert.That(registry.Select(new ToolPermissions()), Is.Empty);
         }
 
         [Test]

@@ -34,7 +34,7 @@ namespace RimAgent.Tests
             _world.Resources = new ResourceSnapshot { Items = new[] { new ResourceInfo { DefName = "Silver", Label = "silver", Count = 500 } } };
             _agentClient = new ScriptedChatClient();
             _classifierClient = new ScriptedChatClient();
-            _permissions = new ToolPermissions { Observe = true, Work = true, Trade = true };
+            _permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work, ToolCategory.Trade);
         }
 
         private ColonyAgentSession NewSession()
@@ -88,7 +88,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task McpExecutionInAutoModeHighRiskWaitsForConfirmation()
         {
-            _permissions.Mcp = true;
+            _permissions.Set(ToolCategory.Mcp, true);
             _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
                         .Reply("Waiting for confirmation.");
             _classifierClient.Reply("{\"risk\": \"high\", \"authorized\": true, \"reason\": \"external mcp action\"}");
@@ -105,7 +105,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task McpExecutionInAutoModeLowRiskRunsDirectlyWithoutConfirmation()
         {
-            _permissions.Mcp = true;
+            _permissions.Set(ToolCategory.Mcp, true);
             _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
                         .Reply("Done.");
             _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"safe query mcp tool\"}");

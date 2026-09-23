@@ -124,57 +124,19 @@ namespace RimAgent.Tools
         /// <summary>動物解析：id 精確命中；名字／物種可模糊比對，歧義即報錯並列候選。</summary>
         internal static ResolveResult<AnimalInfo> ResolveAnimal(string input, IReadOnlyList<AnimalInfo> animals)
         {
-            string needle = (input ?? string.Empty).Trim();
-            if (needle.Length == 0)
-            {
-                return ResolveResult<AnimalInfo>.Fail("Error: animal is empty. Give a name or id.");
-            }
-
-            if (int.TryParse(needle, out int id))
-            {
-                AnimalInfo byId = animals.FirstOrDefault(a => a.Id == id);
-                return byId != null
-                    ? ResolveResult<AnimalInfo>.Ok(byId)
-                    : ResolveResult<AnimalInfo>.Fail($"Error: no animal has id {id}. {ListAll(animals)}");
-            }
-
-            List<AnimalInfo> exact = animals.Where(a => Names(a).Any(n => Eq(n, needle))).ToList();
-            if (exact.Count == 1) return ResolveResult<AnimalInfo>.Ok(exact[0]);
-            if (exact.Count > 1) return Ambiguous(needle, exact);
-
-            List<AnimalInfo> prefix = animals.Where(a => Names(a).Any(n => n.StartsWith(needle, StringComparison.OrdinalIgnoreCase))).ToList();
-            if (prefix.Count == 1) return ResolveResult<AnimalInfo>.Ok(prefix[0]);
-            if (prefix.Count > 1) return Ambiguous(needle, prefix);
-
-            List<AnimalInfo> contains = animals.Where(a => Names(a).Any(n => n.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
-            if (contains.Count == 1) return ResolveResult<AnimalInfo>.Ok(contains[0]);
-            if (contains.Count > 1) return Ambiguous(needle, contains);
-
-            return ResolveResult<AnimalInfo>.Fail($"Error: no animal matches \"{needle}\". {ListAll(animals)}");
+            return TargetResolver.ResolveEntity(
+                input,
+                animals,
+                a => a.Id,
+                Names,
+                a => $"[{a.Id}] {a.Name}",
+                "animal");
         }
 
         private static IEnumerable<string> Names(AnimalInfo a)
         {
             if (!string.IsNullOrEmpty(a.Name)) yield return a.Name;
             if (!string.IsNullOrEmpty(a.Species)) yield return a.Species;
-        }
-
-        private static ResolveResult<AnimalInfo> Ambiguous(string needle, List<AnimalInfo> matches)
-        {
-            return ResolveResult<AnimalInfo>.Fail(
-                $"Error: \"{needle}\" matches several animals: {string.Join(", ", matches.Select(m => $"[{m.Id}] {m.Name}"))}. Use the id.");
-        }
-
-        private static string ListAll(IReadOnlyList<AnimalInfo> animals)
-        {
-            return animals.Count == 0
-                ? "There are no animals."
-                : "Animals: " + string.Join(", ", animals.Select(m => $"[{m.Id}] {m.Name}")) + ".";
-        }
-
-        private static bool Eq(string a, string b)
-        {
-            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -27,8 +27,8 @@ namespace RimAgent.Tests
         [Test]
         public void ZonePermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Zone, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Zone, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Zone), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Zone), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -36,8 +36,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Zone = true }).OfType<AIFunction>().Count(t => t.Name == "list_zones" || t.Name == "add_zone" || t.Name == "delete_zone" || t.Name == "set_zone_filter"), Is.EqualTo(4));
-            Assert.That(registry.Select(new ToolPermissions { Zone = false }).OfType<AIFunction>().Any(t => t.Name == "list_zones"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Zone)).OfType<AIFunction>().Count(t => t.Name == "list_zones" || t.Name == "add_zone" || t.Name == "delete_zone" || t.Name == "set_zone_filter"), Is.EqualTo(4));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_zones"), Is.False);
         }
 
         [Test]
@@ -125,7 +125,7 @@ namespace RimAgent.Tests
         {
             var client = new ScriptedChatClient();
             client.CallTool("add_zone", new { kind = "growing", x1 = 20, z1 = 20, x2 = 24, z2 = 24, plant = "rice" }).Reply("Done.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Zone = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Zone), 8);
 
             await session.SendAsync("在東邊開一塊 5x5 稻田");
 

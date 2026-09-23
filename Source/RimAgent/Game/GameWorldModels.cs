@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using RimAgent.Tools;
 
 namespace RimAgent.Game
 {
@@ -471,23 +472,20 @@ namespace RimAgent.Game
     }
 
     /// <summary>命令型操作的結果。失敗時 Message 說明原因，供工具轉述給模型。</summary>
-    public sealed class CommandResult
+    public sealed class CommandResult : Result<string>
     {
-        private CommandResult(bool success, string message)
+        private CommandResult(bool success, string message) : base(success, message, message)
         {
-            Success = success;
-            Message = message ?? string.Empty;
         }
 
-        public bool Success { get; }
-        public string Message { get; }
+        public string Message => Value ?? string.Empty;
 
-        public static CommandResult Ok(string message = "")
+        public static new CommandResult Ok(string message = "")
         {
             return new CommandResult(true, message);
         }
 
-        public static CommandResult Fail(string message)
+        public static new CommandResult Fail(string message)
         {
             return new CommandResult(false, message);
         }

@@ -25,8 +25,8 @@ namespace RimAgent.Tests
         [Test]
         public void TimePermissionOffUntilGrantedButSettingsDefaultOn()
         {
-            Assert.That(new ToolPermissions().Time, Is.False);
-            Assert.That(new RimAgentSettings().ToPermissions().Time, Is.True, "設定頁預設全開");
+            Assert.That(new ToolPermissions().Allows(ToolCategory.Time), Is.False);
+            Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Time), Is.True, "設定頁預設全開");
         }
 
         [Test]
@@ -34,8 +34,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(new ToolPermissions { Time = true }).OfType<AIFunction>().Count(t => t.Name == "get_time_speed" || t.Name == "set_time_speed"), Is.EqualTo(2));
-            Assert.That(registry.Select(new ToolPermissions { Time = false }).OfType<AIFunction>().Any(t => t.Name == "get_time_speed"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Time)).OfType<AIFunction>().Count(t => t.Name == "get_time_speed" || t.Name == "set_time_speed"), Is.EqualTo(2));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "get_time_speed"), Is.False);
         }
 
         [Test]
@@ -72,7 +72,7 @@ namespace RimAgent.Tests
         {
             var client = new ScriptedChatClient();
             client.CallTool("set_time_speed", new { speed = "Paused" }).Reply("Done.");
-            var session = new ColonyAgentSession(client, _world, () => new ToolPermissions { Observe = true, Time = true }, 8);
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Time), 8);
 
             await session.SendAsync("先暫停遊戲");
 
