@@ -65,6 +65,22 @@ namespace RimAgent.Tests
             ColonyAgentSession.ContextStatus status = session.GetContextStatus();
             Assert.That(status.Messages, Is.EqualTo(session.History.Count).And.GreaterThan(0));
             Assert.That(status.UsageFraction, Is.EqualTo((double)status.Messages / status.Threshold));
+            Assert.That(status.LastInputTokens, Is.Null, "供應商未回報時不得把訊息數當 token");
+        }
+
+        [Test]
+        public async Task ContextStatusUsesProviderInputTokensAndClearsWithSession()
+        {
+            _client.ReplyWithUsage("ok", 12345).Reply("usage omitted");
+            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+
+            await session.SendAsync("hello");
+
+            Assert.That(session.GetContextStatus().LastInputTokens, Is.EqualTo(12345));
+            await session.SendAsync("again");
+            Assert.That(session.GetContextStatus().LastInputTokens, Is.Null, "下一次未回報用量時不可沿用舊數字");
+            session.Clear();
+            Assert.That(session.GetContextStatus().LastInputTokens, Is.Null);
         }
 
         /// <summary>

@@ -38,6 +38,7 @@ namespace RimAgent.Agent
         private readonly AgentToolRegistry _registry;
         private readonly Func<ToolPermissions> _permissions;
         private readonly IChatClient _inner;
+        private readonly TokenUsageChatClient _tokenUsage;
         /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
         private readonly IChatClient _summarizer;
         private readonly IGameWorld _world;
@@ -47,6 +48,12 @@ namespace RimAgent.Agent
         private string _serializedSession;
         private int _busy;
         private int _maxSteps;
+        private RunLogRecord _activeRunLog;
+        private bool _runLogWarningShown;
+
+        /// <summary>可選的獨立執行紀錄；預設不記錄，由遊戲設定決定。</summary>
+        public Func<bool> RunLoggingEnabled { get; set; }
+        public Action<RunLogRecord> RunLogSink { get; set; }
 
         /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
         /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
@@ -71,7 +78,9 @@ namespace RimAgent.Agent
             _instructions = instructions;
             _askNote = askNote;
             _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel, classifierPrompt));
-            _inner = innerClient.AsMainThreadFunctionInvokingClient(maxSteps);
+            _tokenUsage = new TokenUsageChatClient(innerClient);
+            _tokenUsage.ResponseObserved = response => _activeRunLog?.AddModelResponse(response);
+            _inner = _tokenUsage.AsMainThreadFunctionInvokingClient(maxSteps);
             _summarizer = innerClient;
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
@@ -107,9 +116,31 @@ namespace RimAgent.Agent
         public AgentMode Mode => ConfirmGate.Mode;
 
         private string _pendingConfirmation;
+        private string _pendingGoalObjective;
+        private string _confirmedGoalObjective;
+        private string _goalConfirmationReport;
 
         /// <summary>上一句是否有被擋下的命令在等玩家確認（有則 UI 顯示確認鍵）。</summary>
         public bool HasPendingConfirmation => _pendingConfirmation != null;
+
+        /// <summary>等待中的確認是否由目標執行器提出，供目標指令避免取消玩家自己的命令。</summary>
+        public bool HasPendingGoalConfirmation => _pendingConfirmation != null && _pendingGoalObjective != null;
+
+        /// <summary>查看確認結果但先保留，避免模型請求失敗時遺失。</summary>
+        public string PeekGoalConfirmationReport(string objective)
+        {
+            return _confirmedGoalObjective == objective ? _goalConfirmationReport : null;
+        }
+
+        /// <summary>取走指定目標上一次確認的實際執行結果，供下一輪模型續跑。</summary>
+        public string TakeGoalConfirmationReport(string objective)
+        {
+            if (PeekGoalConfirmationReport(objective) == null) return null;
+            string report = _goalConfirmationReport;
+            _confirmedGoalObjective = null;
+            _goalConfirmationReport = null;
+            return report;
+        }
 
         public bool IsBusy => Volatile.Read(ref _busy) == 1;
 
@@ -132,11 +163,15 @@ namespace RimAgent.Agent
         {
             public readonly int Messages;
             public readonly int Threshold;
+            public readonly bool AutoCompactEnabled;
+            public readonly long? LastInputTokens;
 
-            public ContextStatus(int messages, int threshold)
+            public ContextStatus(int messages, int threshold, bool autoCompactEnabled, long? lastInputTokens)
             {
                 Messages = messages;
                 Threshold = Math.Max(1, threshold);
+                AutoCompactEnabled = autoCompactEnabled;
+                LastInputTokens = lastInputTokens;
             }
 
             /// <summary>用量比例：1.0 代表到達門檻。與觸發條件同算總則數，口徑一致。</summary>
@@ -150,10 +185,10 @@ namespace RimAgent.Agent
             AutoCompactThreshold = threshold;
         }
 
-        /// <summary>目前上下文狀態（總歷史則數／門檻），供 UI 即時顯示。</summary>
+        /// <summary>主模型最近一次回報的輸入 token 與歷史訊息數，供 UI 顯示。</summary>
         public ContextStatus GetContextStatus()
         {
-            return new ContextStatus(History.Count, AutoCompactThreshold);
+            return new ContextStatus(History.Count, AutoCompactThreshold, AutoCompactEnabled, _tokenUsage.LastInputTokens);
         }
 
         /// <summary>
@@ -213,7 +248,9 @@ namespace RimAgent.Agent
             string userText,
             CancellationToken cancellationToken = default,
             bool autonomous = false,
-            int? maxToolSteps = null)
+            int? maxToolSteps = null,
+            bool goalRun = false,
+            string displayText = null)
         {
             if (string.IsNullOrWhiteSpace(userText)) return null;
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
@@ -222,12 +259,26 @@ namespace RimAgent.Agent
             }
 
             string text = userText.Trim();
+            // 新指令取代等待中的確認，先記錄捨棄，再建立新指令的編號。
+            DiscardPendingConfirmation();
             int instructionId = Transcript.BeginInstruction();
-            Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.User, Text = text, InstructionId = instructionId, Autonomous = autonomous });
+            RunLogRecord runLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
+            {
+                Instruction = RunLogRecord.Limit(displayText ?? text),
+                Mode = Mode.ToString(),
+                Source = goalRun ? "goal" : autonomous ? "autonomous" : "player"
+            } : null;
+            _activeRunLog = runLog;
+            string runOutcome = "finished";
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.User,
+                Text = displayText ?? text,
+                InstructionId = instructionId,
+                Autonomous = autonomous,
+                GoalRun = goalRun
+            });
             Undo.BeginFrame();
-            // 新指令取代舊的等待：之前沒按的確認自動作廢，玩家以最新一句為準。
-            _pendingConfirmation = null;
-            ConfirmGate.DiscardPendingApprovals();
             ConfirmGate.BeginToolBudget(maxToolSteps);
             ApplyRunStepLimit(maxToolSteps);
 
@@ -269,10 +320,11 @@ namespace RimAgent.Agent
                 }
 
                 string reply = FinalAssistantText(response);
+                if (goalRun) runOutcome = "goal_reported_" + GoalProgress.ParseStatus(reply).ToString().ToLowerInvariant();
                 Transcript.Add(new TranscriptEntry
                 {
                     Kind = TranscriptKind.Assistant,
-                    Text = reply,
+                    Text = goalRun ? GoalProgress.VisibleReply(reply) : reply,
                     InstructionId = instructionId,
                     ToolsStripped = IsToolsStripped(response)
                 });
@@ -290,6 +342,7 @@ namespace RimAgent.Agent
                 if (blocked.Count > 0)
                 {
                     _pendingConfirmation = text;
+                    _pendingGoalObjective = goalRun ? displayText : null;
                     Transcript.Add(new TranscriptEntry
                     {
                         Kind = TranscriptKind.Notice,
@@ -303,6 +356,7 @@ namespace RimAgent.Agent
             }
             catch (Exception ex)
             {
+                runOutcome = ex is OperationCanceledException ? "cancelled" : "error";
                 // 失敗那句可能只做了一半，但做了的部分仍該能復原；空框會被 EndFrame 丟掉。
                 Undo.EndFrame(text + " (failed)");
                 Transcript.Add(new TranscriptEntry
@@ -316,9 +370,35 @@ namespace RimAgent.Agent
             }
             finally
             {
+                TryWriteRunLog(runLog, instructionId, runOutcome);
+                _activeRunLog = null;
                 ConfirmGate.EndToolBudget();
                 ApplyRunStepLimit(null);
                 Volatile.Write(ref _busy, 0);
+            }
+        }
+
+        private void TryWriteRunLog(RunLogRecord record, int instructionId, string outcome)
+        {
+            if (record == null) return;
+            try
+            {
+                record.FinishedUtc = DateTime.UtcNow;
+                record.CaptureTranscript(Transcript.Snapshot(), instructionId);
+                record.Outcome = outcome;
+                RunLogSink?.Invoke(record);
+            }
+            catch (Exception ex)
+            {
+                // 紀錄失敗不影響遊戲指令，但至少提醒玩家一次。
+                if (_runLogWarningShown) return;
+                _runLogWarningShown = true;
+                Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = "Run log could not be written: " + ex.Message,
+                    InstructionId = instructionId
+                });
             }
         }
 
@@ -338,7 +418,11 @@ namespace RimAgent.Agent
             // 對話歸零後「上一句」已無所指，留著只會讓人困惑。等待中的確認一併作廢。
             _session = null;
             _serializedSession = null;
+            _tokenUsage.Reset();
             _pendingConfirmation = null;
+            _pendingGoalObjective = null;
+            _confirmedGoalObjective = null;
+            _goalConfirmationReport = null;
             ConfirmGate.DiscardPendingApprovals();
             ConfirmGate.ClearSessionApprovals();
             Transcript.Clear();
@@ -387,6 +471,7 @@ namespace RimAgent.Agent
                     return null;
                 }
                 provider.SetMessages(_session, after.ToList());
+                _tokenUsage.Reset();
                 string summary = $"Context compacted: model history {before.Count} -> {after.Count} messages. Visible log kept.";
                 AddNotice(summary);
                 return summary;
@@ -424,7 +509,7 @@ namespace RimAgent.Agent
         /// 沒有等待中的確認回傳 null。
         /// </summary>
         /// <param name="rememberForSession">
-        /// 把這批工具記成「本局不再問」：之後確認模式下同名工具直接執行，自動模式也不再花一次呼叫問分類器。
+        /// 把這批工具記成「本局不再問」：之後確認模式下同名工具直接執行。
         /// 只記工具名稱，重開遊戲即失效；MCP 工具永遠不記。
         /// </param>
         public async Task<string> ConfirmAsync(CancellationToken cancellationToken = default, bool rememberForSession = false)
@@ -435,6 +520,15 @@ namespace RimAgent.Agent
             {
                 throw new InvalidOperationException("RimAgent is still working on the previous instruction.");
             }
+            int instructionId = Transcript.CurrentInstructionId;
+            RunLogRecord confirmLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
+            {
+                Instruction = RunLogRecord.Limit(text),
+                Mode = Mode.ToString(),
+                Source = "confirmation"
+            } : null;
+            string goalObjective = _pendingGoalObjective;
+            string confirmOutcome = "confirmation_failed";
             try
             {
                 Undo.BeginFrame();
@@ -442,20 +536,33 @@ namespace RimAgent.Agent
                 int executed = await ConfirmGate.ApprovePendingAsync(cancellationToken, rememberForSession).ConfigureAwait(false);
                 Undo.EndFrame(text + " (confirmed)");
                 _pendingConfirmation = null;
+                _pendingGoalObjective = null;
                 string summary = $"Executed {executed} confirmed command(s).";
                 if (rememberForSession) summary += " Those tools will not ask again this session.";
+                if (goalObjective != null)
+                {
+                    _confirmedGoalObjective = goalObjective;
+                    _goalConfirmationReport = BuildGoalConfirmationReport(summary, instructionId);
+                }
                 Transcript.Add(new TranscriptEntry
                 {
                     Kind = TranscriptKind.Notice,
                     Text = summary,
                     InstructionId = Transcript.CurrentInstructionId
                 });
+                confirmOutcome = "confirmed";
                 return summary;
             }
             catch (Exception ex)
             {
                 Undo.EndFrame(text + " (confirmation failed)");
                 _pendingConfirmation = null;
+                _pendingGoalObjective = null;
+                if (goalObjective != null)
+                {
+                    _confirmedGoalObjective = goalObjective;
+                    _goalConfirmationReport = BuildGoalConfirmationReport("Confirmation failed: " + ex.Message, instructionId);
+                }
                 Transcript.Add(new TranscriptEntry
                 {
                     Kind = TranscriptKind.Error,
@@ -467,6 +574,7 @@ namespace RimAgent.Agent
             }
             finally
             {
+                TryWriteRunLog(confirmLog, instructionId, confirmOutcome);
                 Volatile.Write(ref _busy, 0);
             }
         }
@@ -475,7 +583,10 @@ namespace RimAgent.Agent
         public void DiscardPendingConfirmation()
         {
             if (_pendingConfirmation == null) return;
+            string instruction = _pendingConfirmation;
+            int instructionId = Transcript.CurrentInstructionId;
             _pendingConfirmation = null;
+            _pendingGoalObjective = null;
             ConfirmGate.DiscardPendingApprovals();
             Transcript.Add(new TranscriptEntry
             {
@@ -483,6 +594,26 @@ namespace RimAgent.Agent
                 Text = "Pending confirmation discarded.",
                 InstructionId = Transcript.CurrentInstructionId
             });
+            RunLogRecord discardLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
+            {
+                Instruction = RunLogRecord.Limit(instruction),
+                Mode = Mode.ToString(),
+                Source = "confirmation"
+            } : null;
+            TryWriteRunLog(discardLog, instructionId, "discarded");
+        }
+
+        private string BuildGoalConfirmationReport(string summary, int instructionId)
+        {
+            var lines = new List<string> { summary };
+            foreach (TranscriptEntry entry in Transcript.Snapshot().Where(e =>
+                e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool))
+            {
+                lines.Add(entry.ToolName + " (" + entry.Arguments + "): " +
+                    (entry.Failed ? "failed: " : string.Empty) + RunLogRecord.Limit(entry.Result));
+            }
+            string report = string.Join("\n", lines);
+            return report.Length <= 4000 ? report : report.Substring(0, 4000) + "…";
         }
 
         /// <summary>供 GameComponent 在存檔時保存 AF 的模型歷史與工具呼叫內容。</summary>

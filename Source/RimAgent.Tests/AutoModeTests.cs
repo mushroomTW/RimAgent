@@ -11,7 +11,7 @@ using RimAgent.Tools;
 
 namespace RimAgent.Tests
 {
-    /// <summary>自動模式：命令先預覽、問分類器，低風險直接做、高風險等確認；分類器出錯一律當高風險。</summary>
+    /// <summary>自動模式：命令先預覽、問分類器，僅核可的低風險命令執行；其餘拒絕且不要求玩家確認。</summary>
     [TestFixture]
     public class AutoModeTests
     {
@@ -61,32 +61,30 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task HighRiskCommandWaitsForConfirmationThenRunsWithoutReclassifying()
+        public async Task HighRiskCommandIsRejectedWithoutPlayerConfirmation()
         {
             _agentClient.CallTool("execute_trade", new { trader = "PassingShip_1", buys = "spacer component x4", sells = "", negotiator = "Ali" })
-                        .Reply("I need your confirmation to buy 4 spacer components.");
+                        .Reply("The safety review rejected this trade because it spends silver.");
             _classifierClient.Reply("{\"risk\": \"high\", \"authorized\": true, \"reason\": \"spends silver\"}");
             ColonyAgentSession session = NewSession();
 
             string reply = await session.SendAsync("buy 4 spacer components");
 
-            Assert.That(reply, Does.Contain("confirmation"));
+            Assert.That(reply, Does.Contain("rejected"));
             Assert.That(_world.Calls, Is.Empty);
-            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.HasPendingConfirmation, Is.False);
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-            Assert.That(tool.Result, Does.StartWith(ToolText.ConfirmationPrefix).And.Contain("risk check: spends silver"));
-
-            string done = await session.ConfirmAsync();
-
-            Assert.That(done, Is.EqualTo("Executed 1 confirmed command(s)."));
-            Assert.That(_world.Calls, Is.EqualTo(new[] { "ExecuteTrade(PassingShip_1,101)" }));
-            Assert.That(_classifierClient.CallCount, Is.EqualTo(1), "確認後的放行重送不再問分類器");
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("spends silver"));
+            Assert.That(session.HasPendingConfirmation, Is.False);
+            Assert.That(await session.ConfirmAsync(), Is.Null);
+            Assert.That(_world.Calls, Is.Empty);
+            Assert.That(_classifierClient.CallCount, Is.EqualTo(1));
             Assert.That(session.HasPendingConfirmation, Is.False);
         }
 
         [Test]
-        public async Task McpExecutionInAutoModeHighRiskWaitsForConfirmation()
+        public async Task McpExecutionInAutoModeHighRiskIsRejected()
         {
             _permissions.Set(ToolCategory.Mcp, true);
             _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
@@ -97,9 +95,9 @@ namespace RimAgent.Tests
             await session.SendAsync("call the MCP tool");
 
             Assert.That(_classifierClient.CallCount, Is.EqualTo(1), "Auto 模式下 MCP 由分類器動態判定");
-            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.HasPendingConfirmation, Is.False);
             Assert.That(session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool).Result,
-                Does.StartWith(ToolText.ConfirmationPrefix));
+                Does.StartWith(ToolText.ErrorPrefix));
         }
 
         [Test]
@@ -121,7 +119,7 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task ClassifierFailureFailsClosed()
+        public async Task ClassifierFailureRejectsWithoutConfirmation()
         {
             _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Waiting.");
             _classifierClient.Throw(new TimeoutException("provider timed out"));
@@ -130,14 +128,14 @@ namespace RimAgent.Tests
             await session.SendAsync("set Ali's doctor to 1");
 
             Assert.That(_world.Calls, Is.Empty);
-            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.HasPendingConfirmation, Is.False);
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.RiskCheck, Is.EqualTo("unavailable"));
-            Assert.That(tool.Result, Does.Contain("risk check unavailable"));
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("risk check unavailable"));
         }
 
         [Test]
-        public async Task UnreadableVerdictFailsClosed()
+        public async Task UnreadableVerdictRejectsWithoutConfirmation()
         {
             _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Waiting.");
             _classifierClient.Reply("Sure, that looks fine to me!");
@@ -146,7 +144,7 @@ namespace RimAgent.Tests
             await session.SendAsync("set Ali's doctor to 1");
 
             Assert.That(_world.Calls, Is.Empty);
-            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.HasPendingConfirmation, Is.False);
         }
 
         [Test]
@@ -213,15 +211,15 @@ namespace RimAgent.Tests
         [TestCase(true, true, true)]
         [TestCase(false, false, true)]
         [TestCase(true, false, true)]
-        public void OnlyLowRiskAuthorizedActionsSkipConfirmation(bool risky, bool authorized, bool shouldAsk)
+        public void OnlyLowRiskAuthorizedActionsPassReview(bool risky, bool authorized, bool shouldAsk)
         {
             var verdict = new RiskVerdict { Risky = risky, Authorized = authorized };
 
-            Assert.That(verdict.ShouldAsk, Is.EqualTo(shouldAsk));
+            Assert.That(verdict.ShouldReject, Is.EqualTo(shouldAsk));
         }
 
         [Test]
-        public async Task LowRiskCommandTheInstructionDidNotAskForWaitsForConfirmation()
+        public async Task LowRiskCommandTheInstructionDidNotAskForIsRejected()
         {
             _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
                         .Reply("Waiting for confirmation.");
@@ -231,9 +229,31 @@ namespace RimAgent.Tests
             await session.SendAsync("what is Bob doing?");
 
             Assert.That(_world.Calls, Is.Empty, "玩家沒要求的動作即使低風險也不能直接做");
-            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.HasPendingConfirmation, Is.False);
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.RiskCheck, Is.EqualTo("unrequested"), "擋下的理由要跟「危險」分得開");
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix));
+        }
+
+        [Test]
+        public async Task UnrequestedPlantCuttingIsRejectedWithoutConfirmation()
+        {
+            _permissions.Set(ToolCategory.Build, true);
+            _world.Things.Add(FakeGameWorld.MakeThing(501, "Plant_Grass", "grass", ThingKind.Plant, 30, 10));
+            _agentClient.CallTool("designate_area", new
+            {
+                kind = "cut_plants", useSelection = false, x1 = 30, z1 = 10, x2 = 45, z2 = 25, filter = ""
+            }).Reply("The safety review rejected the cutting designation.");
+            _classifierClient.Reply("{\"risk\":\"low\",\"authorized\":false,\"reason\":\"the player did not specify this area\"}");
+            ColonyAgentSession session = NewSession();
+
+            await session.SendAsync("prepare the colony");
+
+            Assert.That(_world.Calls, Is.Empty);
+            Assert.That(session.HasPendingConfirmation, Is.False);
+            TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+            Assert.That(tool.RiskCheck, Is.EqualTo("unrequested"));
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("the player did not specify this area"));
         }
 
         [Test]
@@ -274,7 +294,7 @@ namespace RimAgent.Tests
             RiskVerdict verdict = await classifier.ClassifyAsync(new RiskQuestion { Instruction = "test" }, CancellationToken.None);
 
             Assert.That(verdict.Failed, Is.True);
-            Assert.That(verdict.ShouldAsk, Is.True, "缺提示詞時自動模式退化成全部先問");
+            Assert.That(verdict.ShouldReject, Is.True, "缺提示詞時自動模式拒絕命令");
             Assert.That(client.CallCount, Is.EqualTo(0), "不燒模型呼叫");
         }
 
@@ -325,4 +345,3 @@ namespace RimAgent.Tests
         }
     }
 }
-

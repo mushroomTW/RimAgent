@@ -11,7 +11,7 @@ namespace RimAgent.Agent
     /// 命令閘門實作，擁有者是 <see cref="ColonyAgentSession"/>。
     /// 依 <see cref="AgentMode"/> 與目前工具的 <see cref="ToolRisk"/> 決定放行或擋下：
     /// 確認模式擋 Confirm 級工具（回傳預覽並捕捉原呼叫，玩家按確認後直接執行原呼叫）；
-    /// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再決定執行或等待確認。
+    /// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再決定執行或拒絕。
     /// 工具的風險由 <see cref="LoggingAIFunction"/> 在每次呼叫前經 <see cref="BeginInvocation"/> 告知；
     /// 工具串行執行（框架禁止並行），所以這裡用單一欄位即可。
     /// </summary>
@@ -215,8 +215,7 @@ namespace RimAgent.Agent
         internal bool NeedsClassification(ToolRisk risk)
         {
             return _mode() == AgentMode.Auto
-                && risk != ToolRisk.Query
-                && !IsApprovedForSession(_currentToolName);
+                && risk != ToolRisk.Query;
         }
 
         /// <summary>工具呼叫開始：記下這次工具的名稱與靜態風險。</summary>

@@ -21,7 +21,7 @@ namespace RimAgent
     ///
     /// 自主模式：設定頁選「自主」後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、急診、火災與間隔），
     /// 條件成立就起一次自主任務。自主任務與玩家指令走同一個 session（同歷史、同權限、同閘門），
-    /// 差別只在指令文字由排程器產生並附上長期目標；每日工具呼叫總量有上限。
+    /// 差別在指令文字由排程器產生；持續 goal 另由 GameComponentUpdate 續跑。
     /// </summary>
     public class RimAgentGameComponent : GameComponent
     {
@@ -45,6 +45,14 @@ namespace RimAgent
         private readonly RimWorldGameWorld _autoWorld = new RimWorldGameWorld();
         private string _lastAutoError;
         private CancellationTokenSource _autoCts;
+        private CancellationTokenSource _goalCts;
+        private bool _goalRunning;
+        private bool _goalPaused;
+        private int _goalTurns;
+        private int _goalBlockedTurns;
+        private DateTime _goalNextRunAt;
+        private int _goalGeneration;
+        private RunLogWriter _runLogWriter;
 
         // RimAgent.Game 命名空間會遮蔽 Verse.Game，這裡要寫全名。
         public RimAgentGameComponent(Verse.Game game)
@@ -89,8 +97,10 @@ namespace RimAgent
             }
         }
 
-        /// <summary>玩家設的長期目標（跟存檔走）；自主任務會附上並持續推進。</summary>
+        /// <summary>玩家設的持續目標（跟存檔走），由獨立執行流程依序推進。</summary>
         public IReadOnlyList<string> Goals => _goals;
+        public bool GoalPaused => _goalPaused;
+        public bool IsGoalRunning => _goalRunning;
 
         /// <summary>出貨的 AgentPack 資料夾；測試或缺 mod 資料時為 null。</summary>
         private static string PackRoot
@@ -118,12 +128,43 @@ namespace RimAgent
             if (trimmed.Length == 0 || _goals.Count >= MaxGoals) return false;
             if (trimmed.Length > MaxGoalChars) trimmed = trimmed.Substring(0, MaxGoalChars);
             _goals.Add(trimmed);
+            if (_goals.Count == 1)
+            {
+                _goalPaused = false;
+                _goalTurns = 0;
+                _goalBlockedTurns = 0;
+                _goalNextRunAt = DateTime.MinValue;
+            }
             return true;
         }
 
         public void RemoveGoalAt(int index)
         {
-            if (index >= 0 && index < _goals.Count) _goals.RemoveAt(index);
+            if (index < 0 || index >= _goals.Count) return;
+            if (index == 0) _goalCts?.Cancel();
+            _goals.RemoveAt(index);
+            if (index == 0)
+            {
+                _goalPaused = false;
+                _goalTurns = 0;
+                _goalBlockedTurns = 0;
+                _goalNextRunAt = DateTime.MinValue;
+            }
+        }
+
+        public void PauseGoal()
+        {
+            _goalPaused = true;
+            _goalCts?.Cancel();
+        }
+
+        public void ResumeGoal()
+        {
+            if (_goals.Count == 0) return;
+            _goalPaused = false;
+            _goalBlockedTurns = 0;
+            _goalTurns = 0;
+            _goalNextRunAt = DateTime.MinValue;
         }
 
         /// <summary>UI 狀態列用：自主模式是否開啟中。</summary>
@@ -159,6 +200,9 @@ namespace RimAgent
 
             Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
             if (_goals == null) _goals = new List<string>();
+            Scribe_Values.Look(ref _goalPaused, "goalPaused", false);
+            Scribe_Values.Look(ref _goalTurns, "goalTurns", 0);
+            Scribe_Values.Look(ref _goalBlockedTurns, "goalBlockedTurns", 0);
 
             AutonomousScheduler schedulerState = Scribe.mode == LoadSaveMode.Saving ? _scheduler : _loadedScheduler;
             Scribe_Deep.Look(ref schedulerState, "autonomousScheduler");
@@ -178,6 +222,13 @@ namespace RimAgent
             _loadedUndoFrames = null;
             _loadedAgentSession = null;
             _goals = new List<string>();
+            _goalCts?.Cancel();
+            _goalGeneration++;
+            _goalRunning = false;
+            _goalPaused = false;
+            _goalTurns = 0;
+            _goalBlockedTurns = 0;
+            _goalNextRunAt = DateTime.MinValue;
             ResetMcp();
             _scheduler.Reset();
         }
@@ -185,6 +236,10 @@ namespace RimAgent
         public override void LoadedGame()
         {
             _session = null;
+            _goalCts?.Cancel();
+            _goalGeneration++;
+            _goalRunning = false;
+            _goalNextRunAt = DateTime.MinValue;
             if (_loadedScheduler != null)
             {
                 _loadedScheduler.CopyTo(_scheduler);
@@ -203,6 +258,100 @@ namespace RimAgent
             }
             _mcpWarmedUp = false;
             _pack = null;
+        }
+
+        public override void GameComponentUpdate()
+        {
+            base.GameComponentUpdate();
+            TryStartGoal();
+        }
+
+        private void TryStartGoal()
+        {
+            if (_goals.Count == 0 || _goalPaused || _goalRunning || Find.CurrentMap == null
+                || DateTime.UtcNow < _goalNextRunAt) return;
+            try
+            {
+                ColonyAgentSession session = Session;
+                if (session.IsBusy || session.HasPendingConfirmation) return;
+                _goalRunning = true;
+                _ = RunGoalAsync(session, _goals[0], _goalGeneration);
+            }
+            catch (Exception ex)
+            {
+                _goalRunning = false;
+                _goalNextRunAt = DateTime.UtcNow.AddSeconds(30);
+                WarnOnce("RimAgent goal run could not start: " + ex.Message);
+            }
+        }
+
+        private async Task RunGoalAsync(ColonyAgentSession session, string objective, int generation)
+        {
+            var cts = new CancellationTokenSource();
+            _goalCts = cts;
+            try
+            {
+                int instructionId = session.Transcript.CurrentInstructionId + 1;
+                string confirmationReport = session.PeekGoalConfirmationReport(objective);
+                string reply = await session.SendAsync(
+                    GoalProgress.BuildPrompt(objective, confirmationReport), cts.Token,
+                    goalRun: true, displayText: objective);
+                if (reply != null && confirmationReport != null) session.TakeGoalConfirmationReport(objective);
+                if (generation != _goalGeneration || cts.IsCancellationRequested
+                    || _goals.Count == 0 || _goals[0] != objective || _goalPaused) return;
+                bool hasToolEvidence = session.Transcript.Snapshot().Any(e =>
+                    e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool && !e.Failed
+                    && !e.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
+                GoalTurnDecision decision = GoalProgress.AfterTurn(
+                    _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence);
+                _goalTurns = decision.Turns;
+                _goalBlockedTurns = decision.BlockedTurns;
+                if (decision.Complete)
+                {
+                    _goals.RemoveAt(0);
+                    _goalTurns = 0;
+                    _goalBlockedTurns = 0;
+                    session.Transcript.Add(new TranscriptEntry
+                    {
+                        Kind = TranscriptKind.Notice,
+                        Text = "Goal completed and verified: " + objective
+                    });
+                }
+                else if (decision.Pause)
+                {
+                    _goalPaused = true;
+                    session.Transcript.Add(new TranscriptEntry
+                    {
+                        Kind = TranscriptKind.Notice,
+                        Text = "Goal paused after repeated blockers or the turn limit. Use /goal resume to continue: " + objective
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                if (generation != _goalGeneration || cts.IsCancellationRequested) return;
+                _goalBlockedTurns++;
+                if (_goalBlockedTurns >= GoalProgress.MaxConsecutiveBlocks)
+                {
+                    _goalPaused = true;
+                    session.Transcript.Add(new TranscriptEntry
+                    {
+                        Kind = TranscriptKind.Notice,
+                        Text = "Goal paused after repeated errors. Use /goal resume to continue: " + objective
+                    });
+                }
+                WarnOnce("RimAgent goal run failed: " + ex.Message);
+            }
+            finally
+            {
+                if (ReferenceEquals(_goalCts, cts)) _goalCts = null;
+                cts.Dispose();
+                if (generation == _goalGeneration)
+                {
+                    _goalRunning = false;
+                    _goalNextRunAt = DateTime.UtcNow.AddSeconds(1);
+                }
+            }
         }
 
         public override void GameComponentTick()
@@ -290,7 +439,7 @@ namespace RimAgent
                     // 章節缺失（通常是拼字錯誤）時 Build 會靜默退回 Interval：警告一次讓問題可見。
                     WarnOnce("RimAgent autonomous task missing section for " + trigger + ", falling back to Interval");
                 }
-                string instruction = AutonomousPrompts.Build(pack, trigger, _goals);
+                string instruction = AutonomousPrompts.Build(pack, trigger);
                 if (string.IsNullOrWhiteSpace(instruction))
                 {
                     // 自主任務文案缺檔：送空話只會燒 API，直接跳過本輪（沿用錯誤節流，只記一種一次）。
@@ -362,6 +511,16 @@ namespace RimAgent
                 askNote: () => _pack != null ? _pack.AskModeNote : string.Empty);
             session.Reasoning = settings.reasoning;
             session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
+            session.RunLoggingEnabled = () => settings.recordRuns;
+            session.RunLogSink = record =>
+            {
+                if (!settings.recordRuns) return;
+                if (_runLogWriter == null)
+                {
+                    _runLogWriter = new RunLogWriter(Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent"));
+                }
+                _runLogWriter.Append(record);
+            };
             return session;
         }
 

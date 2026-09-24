@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using UnityEngine;
@@ -105,6 +106,17 @@ namespace RimAgent
             {
                 listing.Label("RimAgent.Settings.AutoCompactThreshold".Translate(Settings.autoCompactThreshold), -1f, "RimAgent.Settings.AutoCompactThresholdTip".Translate());
                 Settings.autoCompactThreshold = Mathf.RoundToInt(listing.Slider(Settings.autoCompactThreshold, RimAgentSettings.MinAutoCompactThreshold, RimAgentSettings.MaxAutoCompactThreshold));
+            }
+
+            listing.Gap();
+            listing.Label("RimAgent.Settings.RunLogHeader".Translate());
+            listing.GapLine();
+            listing.CheckboxLabeled("RimAgent.Settings.RecordRuns".Translate(), ref Settings.recordRuns,
+                "RimAgent.Settings.RecordRunsTip".Translate());
+            if (Settings.recordRuns)
+            {
+                string logPath = Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent", "RimAgent-runs.jsonl");
+                listing.Label("RimAgent.Settings.RunLogPath".Translate(logPath));
             }
 
             listing.Gap();

@@ -7,7 +7,7 @@
 - `Conduct.md` — 常駐行為準則（最小改動、不可逆先講、模糊先問、殖民地存活優先）。
 - `AskMode.md` — 詢問模式才附加的註記（查詢工具限定，操作改給建議）。
 - `RiskClassifier.md` — 自動模式風險分類器的系統提示詞（兩軸判定＋JSON 回覆契約，別改格式）。
-- `Autonomous.en.md` — 自主任務文案（只留英文），一個觸發一個 `## 章節`（Raid、RaidEnded、EmergencyMedical、Fire、MentalBreak、FoodShortage、Interval），另加 `## GoalsHeader`／`## GoalsFooter` 包長期目標。
+- `Autonomous.en.md` — 自主任務文案（只留英文），一個觸發一個 `## 章節`（Raid、RaidEnded、EmergencyMedical、Fire、MentalBreak、FoodShortage、Interval）。持續 goal 由獨立流程執行，不再附在這些章節後面。
 - `Skills/<技能>/SKILL.md` — 自選技能包，格式如下。每次請求全部讀進系統提示詞。
 
 ```markdown

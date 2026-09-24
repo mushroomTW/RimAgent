@@ -18,12 +18,14 @@ namespace RimAgent.UI
         }
     }
 
-    /// <summary>目標指令的三種形式：<c>/goal</c> 列出、<c>/goal &lt;文字&gt;</c> 新增、<c>/goal remove &lt;n&gt;</c> 刪除。</summary>
+    /// <summary>目標指令：列出、新增、刪除、暫停與恢復。</summary>
     public enum GoalAction
     {
         List,
         Add,
-        Remove
+        Remove,
+        Pause,
+        Resume
     }
 
     /// <summary>
@@ -87,6 +89,8 @@ namespace RimAgent.UI
             index = 0;
             text = (args ?? string.Empty).Trim();
             if (text.Length == 0) return GoalAction.List;
+            if (string.Equals(text, "pause", StringComparison.OrdinalIgnoreCase)) return GoalAction.Pause;
+            if (string.Equals(text, "resume", StringComparison.OrdinalIgnoreCase)) return GoalAction.Resume;
             // 「remove」沒帶序號也算刪除（index 留 0，UI 回報沒有這個序號），不能誤加成目標。
             if (string.Equals(text, "remove", StringComparison.OrdinalIgnoreCase)) return GoalAction.Remove;
             if (text.StartsWith("remove ", StringComparison.OrdinalIgnoreCase))

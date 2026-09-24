@@ -6,6 +6,18 @@
   <RimAgent.Tag.EmergencyStop>[Emergency Stop]</RimAgent.Tag.EmergencyStop>
   <RimAgent.Tag.AutoPause>[Auto Pause]</RimAgent.Tag.AutoPause>
   <RimAgent.Tag.AutoAction>[Auto Action]</RimAgent.Tag.AutoAction>
+  <RimAgent.Tag.Player>[Player]</RimAgent.Tag.Player>
+  <RimAgent.Tag.Agent>[Agent]</RimAgent.Tag.Agent>
+  <RimAgent.Tag.Tool>[Tool]</RimAgent.Tag.Tool>
+  <RimAgent.Tag.Goal>[Goal]</RimAgent.Tag.Goal>
+  <RimAgent.Tool.Arguments>Arguments:</RimAgent.Tool.Arguments>
+  <RimAgent.Tool.Result>Result:</RimAgent.Tool.Result>
+  <RimAgent.Risk.Low>Low risk</RimAgent.Risk.Low>
+  <RimAgent.Risk.High>High risk</RimAgent.Risk.High>
+  <RimAgent.Risk.Unrequested>Unrequested</RimAgent.Risk.Unrequested>
+  <RimAgent.Risk.Unavailable>Review unavailable</RimAgent.Risk.Unavailable>
+  <RimAgent.Screenshot.Pending>The screenshot has not been written yet, or the file was moved.</RimAgent.Screenshot.Pending>
+  <RimAgent.Window.ResizeTip>Drag the bottom-right corner to resize the window</RimAgent.Window.ResizeTip>
   <RimAgent.Close>Close</RimAgent.Close>
   <RimAgent.Placeholder>Tell the agent what to do, or type / for commands</RimAgent.Placeholder>
   <RimAgent.Send>Send</RimAgent.Send>
@@ -97,7 +109,7 @@
   <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>Medium</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>High</RimAgent.Reasoning.High>
-  <RimAgent.Slash.Goal>Long-term goals: /goal lists, /goal &lt;text&gt; adds, /goal remove &lt;n&gt; deletes</RimAgent.Slash.Goal>
+  <RimAgent.Slash.Goal>Persistent goals: /goal lists, /goal &lt;text&gt; starts, /goal pause/resume</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>Undo the work settings changed by the last instruction</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>Clear the conversation</RimAgent.Slash.Clear>
   <RimAgent.Slash.Compact>Compact context (summarize older history)</RimAgent.Slash.Compact>
@@ -105,9 +117,13 @@
   <RimAgent.Slash.Unknown>Unknown command: {0}. Type / to see the available commands.</RimAgent.Slash.Unknown>
   <RimAgent.Slash.Busy>The agent is working; /stop it or wait for it to finish.</RimAgent.Slash.Busy>
   <RimAgent.Slash.NothingToUndo>Nothing to undo.</RimAgent.Slash.NothingToUndo>
-  <RimAgent.Goal.ListHeader>Long-term goals (autonomous runs work toward these):</RimAgent.Goal.ListHeader>
+  <RimAgent.Goal.ListHeader>Persistent goals (run in order, separate from Autonomous mode):</RimAgent.Goal.ListHeader>
   <RimAgent.Goal.Empty>No goals yet. Add one with /goal &lt;text&gt;, e.g. /goal research electricity.</RimAgent.Goal.Empty>
-  <RimAgent.Goal.Added>Added goal #{0}: {1}</RimAgent.Goal.Added>
+  <RimAgent.Goal.Added>Queued goal #{0}; it will start shortly: {1}</RimAgent.Goal.Added>
+  <RimAgent.Goal.Paused>Goal paused. Use /goal resume to continue.</RimAgent.Goal.Paused>
+  <RimAgent.Goal.Resumed>Goal resumed and will continue.</RimAgent.Goal.Resumed>
+  <RimAgent.Goal.StatePaused>paused</RimAgent.Goal.StatePaused>
+  <RimAgent.Goal.StateActive>active</RimAgent.Goal.StateActive>
   <RimAgent.Goal.Removed>Removed goal #{0}: {1}</RimAgent.Goal.Removed>
   <RimAgent.Goal.NoSuch>There is no goal #{0}. Use /goal to list them.</RimAgent.Goal.NoSuch>
   <RimAgent.Goal.Full>Goal limit reached; remove some with /goal remove &lt;n&gt;.</RimAgent.Goal.Full>
@@ -119,5 +135,13 @@
   <RimAgent.Settings.AutoCompactTip>When model history exceeds the threshold, older tool results are folded automatically before each request at no extra model cost. Manual /compact runs a separate LLM summary and is not affected by this switch.</RimAgent.Settings.AutoCompactTip>
   <RimAgent.Settings.AutoCompactThreshold>Auto-compact threshold: {0} messages</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>Lower compresses sooner but folds recent context earlier.</RimAgent.Settings.AutoCompactThresholdTip>
-  <RimAgent.Context.Status>Context {0}/{1}</RimAgent.Context.Status>
+  <RimAgent.Settings.RunLogHeader>Run history</RimAgent.Settings.RunLogHeader>
+  <RimAgent.Settings.RecordRuns>Record Agent runs (off by default)</RimAgent.Settings.RecordRuns>
+  <RimAgent.Settings.RunLogPath>Log file: {0}</RimAgent.Settings.RunLogPath>
+  <RimAgent.Settings.RecordRunsTip>Writes instructions, model response summaries, tool arguments, and results to a separate JSONL file under RimWorld save data/RimAgent/RimAgent-runs.jsonl. Limited to 500 runs or 16 MiB; older records are removed. The file may contain player input and tool arguments. Internal reasoning that the model does not expose is unavailable.</RimAgent.Settings.RecordRunsTip>
+  <RimAgent.Context.InputTokens>Last input {0} tokens</RimAgent.Context.InputTokens>
+  <RimAgent.Context.Unavailable>Input tokens unavailable</RimAgent.Context.Unavailable>
+  <RimAgent.Context.CompactOn>Model history: {0} messages; auto-fold threshold: {1}.</RimAgent.Context.CompactOn>
+  <RimAgent.Context.CompactOff>Model history: {0} messages; auto-fold is off.</RimAgent.Context.CompactOff>
+  <RimAgent.Context.Tooltip>Input tokens reported for the latest main-model request, not the model's context limit. Unavailable if the provider did not report usage.&#10;{0}</RimAgent.Context.Tooltip>
 </LanguageData>

@@ -77,8 +77,6 @@ namespace RimAgent.Tests
             Assert.That(pack.AskModeNote, Is.Empty);
             Assert.That(pack.ClassifierPrompt, Is.Empty);
             Assert.That(pack.Autonomous.Tasks, Is.Empty);
-            Assert.That(pack.Autonomous.GoalsHeader, Is.Empty);
-            Assert.That(pack.Autonomous.GoalsFooter, Is.Empty);
         }
 
         [Test]
@@ -95,13 +93,11 @@ namespace RimAgent.Tests
         [Test]
         public void LoadsAutonomousInEnglishOnly()
         {
-            File.WriteAllText(Path.Combine(_root, "Autonomous.en.md"), "## Raid\nHostiles.\n## GoalsHeader\nGoals:\n## GoalsFooter\nSpend steps.");
+            File.WriteAllText(Path.Combine(_root, "Autonomous.en.md"), "## Raid\nHostiles.");
 
             AgentPack pack = AgentPackLoader.Load(_root);
 
             Assert.That(pack.Autonomous.Tasks["Raid"], Is.EqualTo("Hostiles."));
-            Assert.That(pack.Autonomous.GoalsHeader, Is.EqualTo("Goals:"));
-            Assert.That(pack.Autonomous.GoalsFooter, Is.EqualTo("Spend steps."));
         }
 
         /// <summary>
@@ -123,8 +119,6 @@ namespace RimAgent.Tests
                 Assert.That(pack.Autonomous.Tasks.ContainsKey(trigger), Is.True, trigger + " 缺章節");
                 Assert.That(pack.Autonomous.Tasks[trigger], Is.Not.Empty, trigger + " 空章節");
             }
-            Assert.That(pack.Autonomous.GoalsHeader, Is.Not.Empty, "缺 GoalsHeader");
-            Assert.That(pack.Autonomous.GoalsFooter, Is.Not.Empty, "缺 GoalsFooter");
         }
 
         [Test]

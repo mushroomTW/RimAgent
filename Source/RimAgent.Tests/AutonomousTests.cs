@@ -160,32 +160,30 @@ namespace RimAgent.Tests
                     { "FoodShortage", "Food reserves are low." },
                     { "MentalBreak", "A colonist is close to a mental break." },
                     { "Interval", "Routine inspection task." }
-                },
-                GoalsHeader = "The player's long-term goals:",
-                GoalsFooter = "Spend remaining steps on goals."
+                }
             };
         }
 
         [Test]
         public void PromptsMentionTheTrigger()
         {
-            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Raid, null), Does.Contain("Hostiles"));
-            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.FoodShortage, null), Does.Contain("Food reserves"));
-            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.MentalBreak, null), Does.Contain("mental break"));
-            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval, null), Does.Contain("Routine inspection"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Raid), Does.Contain("Hostiles"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.FoodShortage), Does.Contain("Food reserves"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.MentalBreak), Does.Contain("mental break"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval), Does.Contain("Routine inspection"));
         }
 
         [Test]
         public void UnknownTriggerFallsBackToInterval()
         {
-            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Fire, null), Does.Contain("Routine inspection"));
+            Assert.That(AutonomousPrompts.Build(Pack(), AutonomousTrigger.Fire), Does.Contain("Routine inspection"));
         }
 
         [Test]
         public void MissingTaskReturnsNullSoTheRunIsSkipped()
         {
-            Assert.That(AutonomousPrompts.Build(null, AutonomousTrigger.Raid, null), Is.Null);
-            Assert.That(AutonomousPrompts.Build(new AutonomousPack(), AutonomousTrigger.Raid, null), Is.Null);
+            Assert.That(AutonomousPrompts.Build(null, AutonomousTrigger.Raid), Is.Null);
+            Assert.That(AutonomousPrompts.Build(new AutonomousPack(), AutonomousTrigger.Raid), Is.Null);
         }
 
         [Test]
@@ -197,19 +195,9 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void GoalsAreAppendedAndBlankOnesSkipped()
+        public void AutonomousPromptContainsOnlyItsOwnTask()
         {
-            var goals = new List<string> { "research electricity", "  ", null };
-            string text = AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval, goals);
-
-            Assert.That(text, Does.Contain("long-term goals").And.Contain("research electricity"));
-            Assert.That(text, Does.Not.Contain("- \n"));
-        }
-
-        [Test]
-        public void NoGoalsMeansTaskOnly()
-        {
-            string text = AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval, new List<string>());
+            string text = AutonomousPrompts.Build(Pack(), AutonomousTrigger.Interval);
             Assert.That(text, Does.Not.Contain("goals:"));
         }
     }
@@ -240,4 +228,3 @@ namespace RimAgent.Tests
         }
     }
 }
-

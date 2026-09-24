@@ -26,17 +26,20 @@ namespace RimAgent.Agent
         /// <summary>分類器本身出錯（網路、逾時、回覆解析不了），不是模型判定。</summary>
         public bool Failed { get; set; }
 
-        /// <summary>只有「低風險且玩家明確要求」才直接做；其餘一律回去問玩家。</summary>
-        public bool ShouldAsk => Failed || Risky || !Authorized;
+        /// <summary>只有「低風險且玩家明確要求」才執行；其餘由自動模式拒絕。</summary>
+        public bool ShouldReject => Failed || Risky || !Authorized;
+
+        /// <summary>供舊版呼叫端相容；自動模式現在拒絕命令，不再詢問玩家。</summary>
+        public bool ShouldAsk => ShouldReject;
     }
 
     /// <summary>
     /// 自動模式的風險分類器：把一次命令的預覽交給模型做一次不帶工具的判定。
     /// 兩軸分開問：動作本身危不危險（low／high），以及玩家這句話有沒有要它做這件事（authorized）。
     /// 只問風險會放掉「順手多做一件小事」——每件都低風險，但玩家沒要求。
-    /// 任何失敗都當高風險，寧可多問玩家一次也不放過。
+    /// 任何失敗都當高風險並拒絕該命令。
     /// 系統提示詞來自 AgentPack/RiskClassifier.md（經建構參數注入）；缺檔不斷言，
-    /// 直接回 fail-closed，讓自動模式退化成「全部先問」而不是亂放行。
+    /// 直接回 fail-closed，讓自動模式拒絕命令。
     /// </summary>
     public sealed class RiskClassifier
     {

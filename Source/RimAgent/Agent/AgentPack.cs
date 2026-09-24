@@ -30,12 +30,10 @@ namespace RimAgent.Agent
         public IReadOnlyList<AgentSkill> Skills { get; set; } = Array.Empty<AgentSkill>();
     }
 
-    /// <summary>一個語言的自主任務文案：觸發原因→指令文字，另加長期目標的前後框。</summary>
+    /// <summary>一個語言的自主任務文案：觸發原因→指令文字。</summary>
     public sealed class AutonomousPack
     {
         public IReadOnlyDictionary<string, string> Tasks { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
-        public string GoalsHeader { get; set; } = string.Empty;
-        public string GoalsFooter { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -50,10 +48,6 @@ namespace RimAgent.Agent
 
         /// <summary>自主任務檔名（只留英文）。</summary>
         internal const string AutonomousFileName = "Autonomous.en.md";
-
-        /// <summary>自主任務檔的章節名：觸發原因同名＋目標前後框。</summary>
-        internal const string GoalsHeaderSection = "GoalsHeader";
-        internal const string GoalsFooterSection = "GoalsFooter";
 
         public static AgentPack Load(string rootDir)
         {
@@ -106,15 +100,7 @@ namespace RimAgent.Agent
             var tasks = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (KeyValuePair<string, string> section in sections)
             {
-                if (string.Equals(section.Key, GoalsHeaderSection, StringComparison.Ordinal))
-                {
-                    lang.GoalsHeader = section.Value;
-                }
-                else if (string.Equals(section.Key, GoalsFooterSection, StringComparison.Ordinal))
-                {
-                    lang.GoalsFooter = section.Value;
-                }
-                else if (section.Value.Length > 0)
+                if (section.Value.Length > 0)
                 {
                     tasks[section.Key] = section.Value;
                 }

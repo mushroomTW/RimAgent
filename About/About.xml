@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.09.23.10</modVersion>
+  <modVersion>2026.09.24.2</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
@@ -15,11 +15,11 @@ Requires RimLLM Framework 2026.09.12 or later. Configure providers, API keys, mo
 
 All tool categories are enabled by default and configurable in mod settings: observation, work, build, combat, trade, medical, prisoners, animals, zones, production, time and MCP. Observation includes colonist wellbeing (needs, thoughts and equipment); work supports batch priorities; build includes hunting designations.
 
-Modes: Ask is read-only. Confirm requires confirmation for every command. YOLO (between Confirm and Auto) excludes blacklisted high-risk tools and runs everything else directly without confirmation. Auto uses a two-layer risk classifier. Autonomous operates via background scheduler without blacklist or budget restrictions, with configurable cooldown (default disabled).
+Modes: Ask is read-only. Confirm requires confirmation for every command. YOLO (between Confirm and Auto) excludes blacklisted high-risk tools and runs everything else directly without confirmation. Auto uses an LLM safety review for every command: only low-risk, requested actions run; rejected actions report a reason without asking the player to confirm. Autonomous operates via background scheduler without blacklist or budget restrictions, with configurable cooldown (default disabled).
 
-Older tool results are compacted automatically. The visible transcript, compacted model session, autonomous scheduler state and work undo history are saved with the game. Autonomous mode aggregates every map and reacts to raids starting or ending, mental-break risk, food shortages, downed or bleeding colonists and fire.
+Older tool results are compacted automatically. The resizable conversation distinguishes player messages, agent replies and tool results, shows inline screenshot previews, and reports provider-supplied input tokens for the latest main-model request when available. Goals run independently of Autonomous mode, continue until verified complete or paused, and obey the current command mode. Optional run-history logging is off by default and stores up to 500 JSONL records or 16 MiB in a separate file. The visible transcript, compacted model session, goal state, autonomous scheduler state and work undo history are saved with the game. Autonomous mode aggregates every map and reacts to raids starting or ending, mental-break risk, food shortages, downed or bleeding colonists and fire.
 
-MCP tools run as local processes with your user privileges; MCP execution requires confirmation in Confirm mode, is dynamically evaluated in Auto mode, and executes directly in YOLO and Autonomous modes.]]></description>
+MCP tools run as local processes with your user privileges; MCP execution requires confirmation in Confirm mode, passes safety review in Auto mode, and executes directly in YOLO and Autonomous modes.]]></description>
   <modDependencies>
     <li>
       <packageId>GreenMushroom.RimLLMFramework</packageId>

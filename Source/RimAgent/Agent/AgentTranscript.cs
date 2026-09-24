@@ -37,6 +37,8 @@ namespace RimAgent.Agent
         public int InstructionId { get; set; }
         /// <summary>User 專用：這句是排程器起的自主任務，不是玩家打的。</summary>
         public bool Autonomous { get; set; }
+        /// <summary>User 專用：這句由獨立 goal 執行器續跑。</summary>
+        public bool GoalRun { get; set; }
 
         // Tool 專用
         public string ToolName { get; set; } = string.Empty;

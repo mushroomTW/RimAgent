@@ -1,6 +1,6 @@
 # Autonomous tasks
 
-One section per trigger (`## <Trigger>`), plus the goals framing. English only.
+One section per trigger (`## <Trigger>`). Goals run through their own continuation flow. English only.
 
 ## Raid
 
@@ -28,12 +28,4 @@ Food reserves are low. Check resources with tools, then secure more human-edible
 
 ## Interval
 
-Routine inspection: check the colony overview, alerts, threats and key resources with tools. Handle anything urgent; when all is well, reply in one sentence.
-
-## GoalsHeader
-
-The player's long-term goals:
-
-## GoalsFooter
-
-Once the task above is handled, spend any remaining steps on these goals.
+Routine inspection: check the colony overview, alerts, threats and key resources with tools. Handle anything urgent; when all is well, reply in one sentence. Long-term goals run through their own continuation flow.

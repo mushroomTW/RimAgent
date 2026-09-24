@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,7 +30,6 @@ namespace RimAgent.UI
         private const float SlashPopupWidth = 460f;
         private const int MaxResultChars = 600;
         /// <summary>上下文用量到達幾成時標題列計量變黃預警。</summary>
-        private const double ContextWarnFraction = 0.8;
 
         // 圖片風格配色
         private static readonly Color BgColor = new Color(0.04f, 0.06f, 0.08f, 0.88f);
@@ -59,7 +59,9 @@ namespace RimAgent.UI
         private int _lastEntryCount = -1;
 
         // 渲染快取
-        private readonly List<(string Text, Color Color, float Height)> _lines = new List<(string, Color, float)>();
+        private readonly List<(string Text, Color Color, float Height, string ImagePath)> _lines = new List<(string, Color, float, string)>();
+        private readonly Dictionary<string, Texture2D> _screenshotTextures = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _screenshotOrder = new List<string>();
         private float _linesTotal;
         private float _linesWidth = -1f;
         private int _linesEntryCount = -1;
@@ -133,6 +135,10 @@ namespace RimAgent.UI
             DrainObservedTask();
             if (!_posInitialized) return;
 
+            // 小於可讀尺寸時保留玩家正在調整的大小，不跳回預設寬高。
+            windowRect.width = Mathf.Max(RimAgentSettings.MinWindowWidth, windowRect.width);
+            windowRect.height = Mathf.Max(RimAgentSettings.MinWindowHeight, windowRect.height);
+
             // 確保視窗至少有標題列在螢幕可見區域內
             float minX = -(windowRect.width - 60f);
             float maxX = Verse.UI.screenWidth - 40f;
@@ -154,6 +160,9 @@ namespace RimAgent.UI
         public override void PostClose()
         {
             base.PostClose();
+            foreach (Texture2D texture in _screenshotTextures.Values) UnityEngine.Object.Destroy(texture);
+            _screenshotTextures.Clear();
+            _screenshotOrder.Clear();
             if (RimAgentMod.Settings != null)
             {
                 RimAgentMod.Settings.UpdateBounds(windowRect);
@@ -207,6 +216,20 @@ namespace RimAgent.UI
             DrawStatusStrip(autoStrip, component, session);
             DrawBottomBar(bottom, session);
             DrawSlashPopup(bottom, session);
+            DrawResizeHint(inRect);
+        }
+
+        private static void DrawResizeHint(Rect inRect)
+        {
+            var grip = new Rect(inRect.xMax - 17f, inRect.yMax - 18f, 14f, 14f);
+            GUI.color = ControlBorderColor;
+            Text.Font = GameFont.Tiny;
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(grip, "◢");
+            Text.Anchor = TextAnchor.UpperLeft;
+            Text.Font = GameFont.Small;
+            GUI.color = Color.white;
+            TooltipHandler.TipRegion(grip, "RimAgent.Window.ResizeTip".Translate());
         }
 
         private static void DrawCustomWindowFrame(Rect inRect)
@@ -228,7 +251,7 @@ namespace RimAgent.UI
             var bgRect = new Rect(titleRect.x + 1f, titleRect.y + 1f, titleRect.width - 2f, titleRect.height - 1f);
             Widgets.DrawBoxSolid(bgRect, new Color(0.08f, 0.11f, 0.14f, 0.6f));
 
-            var labelRect = new Rect(titleRect.x + 12f, titleRect.y + 4f, titleRect.width - 50f, titleRect.height - 4f);
+            var labelRect = new Rect(titleRect.x + 12f, titleRect.y + 4f, titleRect.width - 250f, titleRect.height - 4f);
             Text.Font = GameFont.Small;
             Text.Anchor = TextAnchor.MiddleLeft;
             GUI.color = TitleColor;
@@ -236,18 +259,21 @@ namespace RimAgent.UI
             GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
 
-            // 上下文即時用量（模型歷史訊息數／自動壓縮門檻）：每幀重繪所以是活的，
-            // 接近門檻變黃、達到門檻變紅，提醒該 /compact 或等自動折疊。
-            // 口徑由 session 的 ContextStatus 保證與自動觸發一致，UI 只負責呈現。
+            // 只顯示供應商實際回報的最近一次主模型輸入 token；
+            // 訊息數與折疊門檻放在提示中，避免把訊息數誤標成 token 或視窗容量。
             ColonyAgentSession.ContextStatus status = session.GetContextStatus();
-            Color contextColor = ToolTextColor;
-            if (status.UsageFraction >= 1.0) contextColor = EmergencyColor;
-            else if (status.UsageFraction >= ContextWarnFraction) contextColor = NoticeColor;
-            var contextRect = new Rect(titleRect.xMax - 200f, titleRect.y + 4f, 168f, titleRect.height - 4f);
+            var contextRect = new Rect(titleRect.xMax - 228f, titleRect.y + 4f, 196f, titleRect.height - 4f);
             Text.Font = GameFont.Tiny;
             Text.Anchor = TextAnchor.MiddleRight;
-            GUI.color = contextColor;
-            Widgets.Label(contextRect, "RimAgent.Context.Status".Translate(status.Messages, status.Threshold));
+            GUI.color = status.LastInputTokens.HasValue ? ToolTextColor : ControlBorderColor;
+            string tokenLabel = status.LastInputTokens.HasValue
+                ? "RimAgent.Context.InputTokens".Translate(status.LastInputTokens.Value.ToString("N0"))
+                : "RimAgent.Context.Unavailable".Translate();
+            Widgets.Label(contextRect, tokenLabel);
+            string compact = status.AutoCompactEnabled
+                ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
+                : "RimAgent.Context.CompactOff".Translate(status.Messages);
+            TooltipHandler.TipRegion(contextRect, "RimAgent.Context.Tooltip".Translate(compact));
             GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
             Text.Font = GameFont.Small;
@@ -315,12 +341,17 @@ namespace RimAgent.UI
 
             Widgets.BeginScrollView(outRect, ref _scroll, viewRect);
             float y = 0f;
-            foreach ((string text, Color color, float height) in _lines)
+            foreach ((string text, Color color, float height, string imagePath) in _lines)
             {
                 if (y + height >= visibleTop && y <= visibleBottom)
                 {
-                    GUI.color = color;
-                    Widgets.Label(new Rect(0f, y, width, height), text);
+                    var lineRect = new Rect(0f, y, width, height);
+                    if (imagePath != null) DrawScreenshotPreview(lineRect, imagePath);
+                    else
+                    {
+                        GUI.color = color;
+                        Widgets.Label(lineRect, text);
+                    }
                 }
                 y += height + EntryGap;
             }
@@ -331,6 +362,55 @@ namespace RimAgent.UI
             }
             GUI.color = Color.white;
             Widgets.EndScrollView();
+        }
+
+        private void DrawScreenshotPreview(Rect rect, string path)
+        {
+            Widgets.DrawBoxSolid(rect, ControlBgColor);
+            DrawThinBox(rect, ControlBorderColor);
+            Texture2D texture = GetScreenshotTexture(path);
+            if (texture != null)
+            {
+                GUI.color = Color.white;
+                GUI.DrawTexture(rect.ContractedBy(4f), texture, ScaleMode.ScaleToFit);
+            }
+            else
+            {
+                GUI.color = ToolTextColor;
+                Widgets.Label(rect.ContractedBy(8f), "RimAgent.Screenshot.Pending".Translate());
+            }
+            GUI.color = Color.white;
+        }
+
+        private Texture2D GetScreenshotTexture(string path)
+        {
+            if (_screenshotTextures.TryGetValue(path, out Texture2D cached)) return cached;
+            if (!File.Exists(path)) return null;
+            Texture2D texture = null;
+            try
+            {
+                texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!texture.LoadImage(File.ReadAllBytes(path)))
+                {
+                    UnityEngine.Object.Destroy(texture);
+                    return null;
+                }
+                _screenshotTextures[path] = texture;
+                _screenshotOrder.Add(path);
+                while (_screenshotOrder.Count > 4)
+                {
+                    string oldest = _screenshotOrder[0];
+                    _screenshotOrder.RemoveAt(0);
+                    UnityEngine.Object.Destroy(_screenshotTextures[oldest]);
+                    _screenshotTextures.Remove(oldest);
+                }
+                return texture;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException || ex is UnityException)
+            {
+                if (texture != null) UnityEngine.Object.Destroy(texture);
+                return null;
+            }
         }
 
         /// <summary>執行中動畫：. → .. → ... 循環，每 0.5 秒換一格。</summary>
@@ -360,8 +440,15 @@ namespace RimAgent.UI
                 foreach ((string text, Color color) in Render(entries[i], _combatNoted))
                 {
                     float height = Text.CalcHeight(text, width);
-                    _lines.Add((text, color, height));
+                    _lines.Add((text, color, height, null));
                     _linesTotal += height + EntryGap;
+                }
+                string screenshotPath = TranscriptScreenshot.TryGetPath(entries[i], GenFilePaths.ScreenshotFolderPath);
+                if (screenshotPath != null)
+                {
+                    float imageHeight = Mathf.Clamp(width * 0.5625f, 120f, 320f);
+                    _lines.Add((null, Color.white, imageHeight, screenshotPath));
+                    _linesTotal += imageHeight + EntryGap;
                 }
             }
             _linesEntryCount = entries.Count;
@@ -375,16 +462,21 @@ namespace RimAgent.UI
             switch (entry.Kind)
             {
                 case TranscriptKind.User:
-                    if (entry.Autonomous)
+                    if (entry.GoalRun)
+                    {
+                        string goalTag = "<color=#" + NoticeHex + ">" + "RimAgent.Tag.Goal".Translate() + "</color> ";
+                        yield return (goalTag + "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>", Color.white);
+                    }
+                    else if (entry.Autonomous)
                     {
                         string autoTag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.AutoAction".Translate() + "</color> ";
-                        string body = "<color=#" + TextHex + ">" + entry.Text + "</color>";
+                        string body = "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
                         yield return (autoTag + body, Color.white);
                     }
                     else
                     {
-                        // 玩家指令：淡天藍色
-                        string userText = "<color=#" + UserHex + ">" + entry.Text + "</color>";
+                        string userText = "<color=#" + UserHex + ">" + "RimAgent.Tag.Player".Translate()
+                            + "</color> <color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
                         yield return (userText, Color.white);
                     }
                     break;
@@ -399,7 +491,7 @@ namespace RimAgent.UI
 
                 case TranscriptKind.Error:
                     string errTag = "<color=#" + EmergencyHex + ">" + "RimAgent.Tag.EmergencyStop".Translate() + "</color> ";
-                    string errBody = "<color=#" + EmergencyHex + ">" + DescribeError(entry) + "</color>";
+                    string errBody = "<color=#" + EmergencyHex + ">" + EscapeRichText(DescribeError(entry)) + "</color>";
                     yield return (errTag + errBody, Color.white);
                     break;
 
@@ -409,7 +501,7 @@ namespace RimAgent.UI
                     string noticeTag = isPauseOrAlert
                         ? "<color=#" + PauseHex + ">" + "RimAgent.Tag.AutoPause".Translate().ToString() + "</color> "
                         : "<color=#" + NoticeHex + ">[提示]</color> ";
-                    string noticeBody = "<color=#" + TextHex + ">" + entry.Text + "</color>";
+                    string noticeBody = "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
                     yield return (noticeTag + noticeBody, Color.white);
                     break;
             }
@@ -427,10 +519,10 @@ namespace RimAgent.UI
 
         private static IEnumerable<(string Text, Color Color)> RenderAssistant(TranscriptEntry entry)
         {
-            string reply = RenderReply(entry.Text);
+            string reply = RenderReply(EscapeRichText(entry.Text));
             string replyText = reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply;
-            // 思考與敘述文字：柔和淺白色
-            yield return ("<color=#" + TextHex + ">" + replyText + "</color>", Color.white);
+            string agentTag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.Agent".Translate() + "</color> ";
+            yield return (agentTag + "<color=#" + TextHex + ">" + replyText + "</color>", Color.white);
             if (entry.ToolsStripped)
             {
                 string stripText = "<color=#" + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + "</color>";
@@ -440,30 +532,47 @@ namespace RimAgent.UI
 
         private static IEnumerable<(string Text, Color Color)> RenderTool(TranscriptEntry entry, HashSet<int> combatNoted)
         {
-            // 工具條目精準還原圖片：冷青藍標籤 [自动处理] + 工具名稱與參數 + 次要顏色結果
-            string tag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.AutoAction".Translate() + "</color> ";
-            string call = tag + "<color=#" + TextHex + ">" + entry.ToolName;
-            if (!string.IsNullOrEmpty(entry.Arguments))
-            {
-                call += "(" + entry.Arguments + ")";
-            }
+            string tag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.Tool".Translate() + "</color> ";
+            string call = tag + "<color=#" + TextHex + ">" + EscapeRichText(entry.ToolName) + "</color>";
             if (entry.RiskCheck.Length > 0)
             {
-                call += " [risk: " + entry.RiskCheck + "]";
+                call += " <color=#" + (entry.Failed ? EmergencyHex : NoticeHex) + ">["
+                    + RiskLabel(entry.RiskCheck) + "]</color>";
             }
-            call += "</color>";
+            yield return (call, Color.white);
+            if (!string.IsNullOrEmpty(entry.Arguments))
+            {
+                yield return ("<color=#" + SubTextHex + ">" + "RimAgent.Tool.Arguments".Translate()
+                    + " " + EscapeRichText(entry.Arguments) + "</color>", Color.white);
+            }
 
             string resultStr = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
             string resColorHex = entry.Failed ? EmergencyHex : SubTextHex;
-            string text = call + " <color=#" + resColorHex + ">-> " + resultStr + "</color>";
-
-            yield return (text, Color.white);
+            yield return ("<color=#" + resColorHex + ">" + "RimAgent.Tool.Result".Translate()
+                + " " + EscapeRichText(resultStr) + "</color>", Color.white);
 
             if (entry.ToolCategory == ToolCategory.Combat && combatNoted.Add(entry.InstructionId))
             {
                 string combatNote = "<color=#" + NoticeHex + ">" + "RimAgent.CombatLatencyNote".Translate() + "</color>";
                 yield return (combatNote, Color.white);
             }
+        }
+
+        private static string RiskLabel(string risk)
+        {
+            switch (risk)
+            {
+                case "low": return "RimAgent.Risk.Low".Translate();
+                case "high": return "RimAgent.Risk.High".Translate();
+                case "unrequested": return "RimAgent.Risk.Unrequested".Translate();
+                case "unavailable": return "RimAgent.Risk.Unavailable".Translate();
+                default: return EscapeRichText(risk);
+            }
+        }
+
+        private static string EscapeRichText(string value)
+        {
+            return (value ?? string.Empty).Replace('<', '＜').Replace('>', '＞');
         }
 
         private static string DescribeError(TranscriptEntry entry)
@@ -620,7 +729,9 @@ namespace RimAgent.UI
         private void StopRun()
         {
             _cts?.Cancel();
-            RimAgentGameComponent.Instance?.StopAutonomousRun();
+            RimAgentGameComponent component = RimAgentGameComponent.Instance;
+            component?.StopAutonomousRun();
+            if (component?.IsGoalRunning == true) component.PauseGoal();
         }
 
         private void DrawInputField(Rect inputRect)
@@ -737,6 +848,11 @@ namespace RimAgent.UI
                 StopRun();
                 return;
             }
+            if (command == SlashCommands.Goal)
+            {
+                RunGoal(session, args);
+                return;
+            }
             if (session.IsBusy)
             {
                 Notice(session, "RimAgent.Slash.Busy".Translate());
@@ -756,10 +872,6 @@ namespace RimAgent.UI
             {
                 Compact(session);
             }
-            else if (command == SlashCommands.Goal)
-            {
-                RunGoal(session, args);
-            }
         }
 
         private static void RunGoal(ColonyAgentSession session, string args)
@@ -770,28 +882,44 @@ namespace RimAgent.UI
             switch (SlashCommands.ParseGoal(args, out int index, out string text))
             {
                 case GoalAction.Add:
-                    if (component.AddGoal(text)) Notice(session, "RimAgent.Goal.Added".Translate(goals.Count, text));
+                    int newIndex = goals.Count + 1;
+                    if (component.AddGoal(text)) Notice(session, "RimAgent.Goal.Added".Translate(newIndex, text));
                     else Notice(session, "RimAgent.Goal.Full".Translate());
+                    break;
+                case GoalAction.Pause:
+                    component.PauseGoal();
+                    if (session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
+                    Notice(session, "RimAgent.Goal.Paused".Translate());
+                    break;
+                case GoalAction.Resume:
+                    component.ResumeGoal();
+                    Notice(session, "RimAgent.Goal.Resumed".Translate());
                     break;
                 case GoalAction.Remove:
                     if (index >= 1 && index <= goals.Count)
                     {
                         string removed = goals[index - 1];
                         component.RemoveGoalAt(index - 1);
+                        if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
                         Notice(session, "RimAgent.Goal.Removed".Translate(index, removed));
                     }
                     else Notice(session, "RimAgent.Goal.NoSuch".Translate(index));
                     break;
                 default:
-                    Notice(session, goals.Count == 0 ? "RimAgent.Goal.Empty".Translate().ToString() : GoalListText(goals));
+                    Notice(session, goals.Count == 0 ? "RimAgent.Goal.Empty".Translate().ToString()
+                        : GoalListText(goals, component.GoalPaused));
                     break;
             }
         }
 
-        private static string GoalListText(IReadOnlyList<string> goals)
+        private static string GoalListText(IReadOnlyList<string> goals, bool paused)
         {
             var sb = new System.Text.StringBuilder("RimAgent.Goal.ListHeader".Translate());
-            for (int i = 0; i < goals.Count; i++) sb.Append('\n').Append(i + 1).Append(". ").Append(goals[i]);
+            for (int i = 0; i < goals.Count; i++)
+            {
+                sb.Append('\n').Append(i + 1).Append(". ").Append(goals[i]);
+                if (i == 0) sb.Append(" (").Append((paused ? "RimAgent.Goal.StatePaused" : "RimAgent.Goal.StateActive").Translate()).Append(')');
+            }
             return sb.ToString();
         }
 

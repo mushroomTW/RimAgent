@@ -476,6 +476,44 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task GoalConfirmationProvidesExecutedResultsForNextTurn()
+        {
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Set(ToolCategory.Combat, true);
+            _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("Waiting for confirmation.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("pursue goal", goalRun: true, displayText: "defeat the bear");
+            Assert.That(session.HasPendingGoalConfirmation, Is.True);
+            Assert.That(session.TakeGoalConfirmationReport("defeat the bear"), Is.Null);
+
+            await session.ConfirmAsync();
+
+            Assert.That(session.PeekGoalConfirmationReport("defeat the bear"), Does.Contain("order_attack"));
+            Assert.That(session.PeekGoalConfirmationReport("another goal"), Is.Null);
+            string report = session.TakeGoalConfirmationReport("defeat the bear");
+            Assert.That(report, Does.Contain("order_attack").And.Contain("Bob"));
+            Assert.That(session.TakeGoalConfirmationReport("defeat the bear"), Is.Null);
+        }
+
+        [Test]
+        public async Task PlayerConfirmationIsNotOwnedByGoal()
+        {
+            _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+            _permissions.Set(ToolCategory.Combat, true);
+            _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
+                   .Reply("Waiting for confirmation.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+
+            await session.SendAsync("attack the bear");
+
+            Assert.That(session.HasPendingConfirmation, Is.True);
+            Assert.That(session.HasPendingGoalConfirmation, Is.False);
+            Assert.That(session.TakeGoalConfirmationReport("defeat the bear"), Is.Null);
+        }
+
+        [Test]
         public async Task ConfirmExecutesOnlyTheCapturedCommandAndDoesNotRepeatSafeCommands()
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });

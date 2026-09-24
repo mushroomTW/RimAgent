@@ -22,7 +22,7 @@ namespace RimAgent
         /// <summary>Auto 模式風險分類器模型識別碼（留空則沿用框架預設）。</summary>
         public string classifierModel = string.Empty;
 
-        // 自主模式（排程器）的節奏與配額在設定頁，玩家設的長期目標跟著存檔走。
+        // 自主模式（排程器）的節奏與配額在設定頁；持續目標另由獨立流程執行並跟著存檔走。
         public const int DefaultAutoIntervalHours = 6;
         public const int MinAutoIntervalHours = 1;
         public const int MaxAutoIntervalHours = 24;
@@ -51,6 +51,9 @@ namespace RimAgent
         public bool autoCompact = true;
         public int autoCompactThreshold = DefaultAutoCompactThreshold;
 
+        /// <summary>將指令、模型回應與工具結果寫入有上限的獨立 JSONL 日誌；預設關閉。</summary>
+        public bool recordRuns = false;
+
         // 懸浮視窗的位置與大小持久化
         public float windowRectX = -1f;
         public float windowRectY = -1f;
@@ -60,6 +63,8 @@ namespace RimAgent
 
         public const float DefaultWindowWidth = 620f;
         public const float DefaultWindowHeight = 460f;
+        public const float MinWindowWidth = 360f;
+        public const float MinWindowHeight = 320f;
 
         private static readonly string[] CategoryKeys =
         {
@@ -97,8 +102,8 @@ namespace RimAgent
         }
 
         public UnityEngine.Vector2 WindowSize => new UnityEngine.Vector2(
-            windowRectWidth > 200f ? windowRectWidth : DefaultWindowWidth,
-            windowRectHeight > 150f ? windowRectHeight : DefaultWindowHeight);
+            UnityEngine.Mathf.Max(MinWindowWidth, windowRectWidth),
+            UnityEngine.Mathf.Max(MinWindowHeight, windowRectHeight));
 
         public bool HasSavedWindowPosition => windowRectX >= 0f && windowRectY >= 0f;
 
@@ -155,6 +160,7 @@ namespace RimAgent
             Scribe_Values.Look(ref autoOnFire, "autoOnFire", true);
             Scribe_Values.Look(ref autoCompact, "autoCompact", true);
             Scribe_Values.Look(ref autoCompactThreshold, "autoCompactThreshold", DefaultAutoCompactThreshold);
+            Scribe_Values.Look(ref recordRuns, "recordRuns", false);
             Scribe_Values.Look(ref windowRectX, "windowRectX", -1f);
             Scribe_Values.Look(ref windowRectY, "windowRectY", -1f);
             Scribe_Values.Look(ref windowRectWidth, "windowRectWidth", 620f);

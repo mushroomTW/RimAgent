@@ -15,7 +15,7 @@ namespace RimAgent.Tools
     /// 包住每個工具：被 FunctionInvokingChatClient 叫用時即時寫入行動紀錄（玩家不必等整個迴圈
     /// 結束才看到 agent 在做什麼），在呼叫前後把工具的靜態風險告知閘門，
     /// 並在自動模式下做兩段式執行：先強制預覽拿到「將做的事」，交給分類器判定，
-    /// 低風險再強制執行一次，高風險就把預覽當「需確認」回給模型。
+    /// 分類器核可才強制執行一次；未核可則拒絕該命令並回報原因。
     /// 這裡刻意不用 ConfigureAwait(false)：續行要留在主線程，第二段執行才能碰遊戲狀態。
     ///
     /// 另外兩道與世界有關的守衛也在這裡，工具本身不必管：
@@ -206,10 +206,11 @@ namespace RimAgent.Tools
             }
             entry.RiskCheck = riskCheck;
 
-            if (verdict.ShouldAsk)
+            if (verdict.ShouldReject)
             {
-                _gate.NoteBlocked(preview);
-                return string.IsNullOrEmpty(verdict.Reason) ? preview : preview + " (risk check: " + verdict.Reason + ")";
+                string reason = string.IsNullOrEmpty(verdict.Reason) ? riskCheck : verdict.Reason;
+                return ToolText.Error("safety review rejected " + Name + " (" + riskCheck + "): " + reason
+                    + ". This action cannot be confirmed in Auto mode; do not retry it unchanged.");
             }
 
             _gate.ForceExecute();

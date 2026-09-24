@@ -6,6 +6,18 @@
   <RimAgent.Tag.EmergencyStop>[危險急停]</RimAgent.Tag.EmergencyStop>
   <RimAgent.Tag.AutoPause>[自動暫停]</RimAgent.Tag.AutoPause>
   <RimAgent.Tag.AutoAction>[自動處理]</RimAgent.Tag.AutoAction>
+  <RimAgent.Tag.Player>[玩家]</RimAgent.Tag.Player>
+  <RimAgent.Tag.Agent>[Agent]</RimAgent.Tag.Agent>
+  <RimAgent.Tag.Tool>[工具]</RimAgent.Tag.Tool>
+  <RimAgent.Tag.Goal>[目標]</RimAgent.Tag.Goal>
+  <RimAgent.Tool.Arguments>參數：</RimAgent.Tool.Arguments>
+  <RimAgent.Tool.Result>結果：</RimAgent.Tool.Result>
+  <RimAgent.Risk.Low>低風險</RimAgent.Risk.Low>
+  <RimAgent.Risk.High>高風險</RimAgent.Risk.High>
+  <RimAgent.Risk.Unrequested>未明確要求</RimAgent.Risk.Unrequested>
+  <RimAgent.Risk.Unavailable>審核失敗</RimAgent.Risk.Unavailable>
+  <RimAgent.Screenshot.Pending>截圖尚未寫入磁碟，或檔案已移動。</RimAgent.Screenshot.Pending>
+  <RimAgent.Window.ResizeTip>拖曳右下角調整視窗大小</RimAgent.Window.ResizeTip>
   <RimAgent.Close>關閉</RimAgent.Close>
   <RimAgent.Placeholder>告訴 Agent 要做什麼，或輸入 / 使用指令</RimAgent.Placeholder>
   <RimAgent.Send>送出</RimAgent.Send>
@@ -97,7 +109,7 @@
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>中</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>高</RimAgent.Reasoning.High>
-  <RimAgent.Slash.Goal>長期目標（/goal 列出、/goal &lt;文字&gt; 新增、/goal remove &lt;n&gt; 刪除）</RimAgent.Slash.Goal>
+  <RimAgent.Slash.Goal>持續目標（/goal 列出、/goal &lt;文字&gt; 啟動、/goal pause/resume）</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>復原上一句指令改的工作設定</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>清除對話</RimAgent.Slash.Clear>
   <RimAgent.Slash.Compact>壓縮上下文（摘要折疊較舊的對話）</RimAgent.Slash.Compact>
@@ -105,9 +117,13 @@
   <RimAgent.Slash.Unknown>未知指令：{0}。輸入 / 查看可用指令。</RimAgent.Slash.Unknown>
   <RimAgent.Slash.Busy>Agent 執行中，請先 /stop 或等它完成。</RimAgent.Slash.Busy>
   <RimAgent.Slash.NothingToUndo>沒有可復原的操作。</RimAgent.Slash.NothingToUndo>
-  <RimAgent.Goal.ListHeader>長期目標（自主任務會持續推進）：</RimAgent.Goal.ListHeader>
+  <RimAgent.Goal.ListHeader>持續目標（依序執行，與自主模式分開）：</RimAgent.Goal.ListHeader>
   <RimAgent.Goal.Empty>還沒有目標。用 /goal &lt;文字&gt; 新增，例如 /goal 研發電力。</RimAgent.Goal.Empty>
-  <RimAgent.Goal.Added>已新增目標 #{0}：{1}</RimAgent.Goal.Added>
+  <RimAgent.Goal.Added>已加入目標 #{0}，即將開始或排隊：{1}</RimAgent.Goal.Added>
+  <RimAgent.Goal.Paused>目標已暫停。使用 /goal resume 繼續。</RimAgent.Goal.Paused>
+  <RimAgent.Goal.Resumed>目標已恢復，將繼續執行。</RimAgent.Goal.Resumed>
+  <RimAgent.Goal.StatePaused>已暫停</RimAgent.Goal.StatePaused>
+  <RimAgent.Goal.StateActive>執行中</RimAgent.Goal.StateActive>
   <RimAgent.Goal.Removed>已刪除目標 #{0}：{1}</RimAgent.Goal.Removed>
   <RimAgent.Goal.NoSuch>沒有第 {0} 個目標。用 /goal 查看清單。</RimAgent.Goal.NoSuch>
   <RimAgent.Goal.Full>目標數已達上限，先用 /goal remove &lt;n&gt; 刪掉幾個。</RimAgent.Goal.Full>
@@ -119,5 +135,13 @@
   <RimAgent.Settings.AutoCompactTip>模型歷史超過門檻則數時，每次請求前自動折疊較舊的工具輸出，不多花模型呼叫。手動 /compact 另走一次 LLM 摘要，不受此開關影響。</RimAgent.Settings.AutoCompactTip>
   <RimAgent.Settings.AutoCompactThreshold>自動壓縮門檻：{0} 則</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>設低一點更早壓縮，但也會更早折到近期上下文。</RimAgent.Settings.AutoCompactThresholdTip>
-  <RimAgent.Context.Status>上下文 {0}/{1}</RimAgent.Context.Status>
+  <RimAgent.Settings.RunLogHeader>執行復盤</RimAgent.Settings.RunLogHeader>
+  <RimAgent.Settings.RecordRuns>記錄 Agent 運行過程（預設關閉）</RimAgent.Settings.RecordRuns>
+  <RimAgent.Settings.RunLogPath>紀錄檔：{0}</RimAgent.Settings.RunLogPath>
+  <RimAgent.Settings.RecordRunsTip>將指令、模型回應摘要、工具參數與結果寫入獨立 JSONL：RimWorld 存檔資料夾/RimAgent/RimAgent-runs.jsonl。最多 500 筆或 16 MiB，較舊紀錄會移除。檔案可能包含玩家輸入與工具參數；不包含模型未提供的內部推理。</RimAgent.Settings.RecordRunsTip>
+  <RimAgent.Context.InputTokens>上次輸入 {0} token</RimAgent.Context.InputTokens>
+  <RimAgent.Context.Unavailable>輸入 token 未回報</RimAgent.Context.Unavailable>
+  <RimAgent.Context.CompactOn>模型歷史 {0} 則；自動折疊門檻 {1} 則。</RimAgent.Context.CompactOn>
+  <RimAgent.Context.CompactOff>模型歷史 {0} 則；自動折疊已關閉。</RimAgent.Context.CompactOff>
+  <RimAgent.Context.Tooltip>最近一次主模型請求的輸入 token（供應商回報），不是模型視窗上限；若供應商未提供則顯示未回報。&#10;{0}</RimAgent.Context.Tooltip>
 </LanguageData>

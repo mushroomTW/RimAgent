@@ -60,6 +60,8 @@ namespace RimAgent.Tests
 
             Assert.That(SlashCommands.ParseGoal("remove", out index, out _), Is.EqualTo(GoalAction.Remove), "沒帶序號也不能加成叫 remove 的目標");
             Assert.That(index, Is.EqualTo(0));
+            Assert.That(SlashCommands.ParseGoal("pause", out _, out _), Is.EqualTo(GoalAction.Pause));
+            Assert.That(SlashCommands.ParseGoal("RESUME", out _, out _), Is.EqualTo(GoalAction.Resume));
         }
     }
 }

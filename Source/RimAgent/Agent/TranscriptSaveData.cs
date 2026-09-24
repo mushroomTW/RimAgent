@@ -31,6 +31,7 @@ namespace RimAgent.Agent
         public int errorKind;
         public string riskCheck = string.Empty;
         public bool autonomous;
+        public bool goalRun;
 #pragma warning restore S1104
 
         public void ExposeData()
@@ -48,6 +49,7 @@ namespace RimAgent.Agent
             Scribe_Values.Look(ref errorKind, "error", 0);
             Scribe_Values.Look(ref riskCheck, "risk", string.Empty);
             Scribe_Values.Look(ref autonomous, "autonomous", false);
+            Scribe_Values.Look(ref goalRun, "goalRun", false);
         }
 
         public TranscriptEntry ToEntry()
@@ -66,7 +68,8 @@ namespace RimAgent.Agent
                 ToolsStripped = toolsStripped,
                 ErrorKind = (AgentErrorKind)errorKind,
                 RiskCheck = riskCheck ?? string.Empty,
-                Autonomous = autonomous
+                Autonomous = autonomous,
+                GoalRun = goalRun
             };
         }
 
@@ -93,7 +96,8 @@ namespace RimAgent.Agent
                     toolsStripped = e.ToolsStripped,
                     errorKind = (int)e.ErrorKind,
                     riskCheck = e.RiskCheck ?? string.Empty,
-                    autonomous = e.Autonomous
+                    autonomous = e.Autonomous,
+                    goalRun = e.GoalRun
                 });
             }
             return data;

@@ -30,6 +30,15 @@ namespace RimAgent.Tests
             return this;
         }
 
+        public ScriptedChatClient ReplyWithUsage(string text, long inputTokens)
+        {
+            _script.Add((_, __) => new ChatResponse(new ChatMessage(ChatRole.Assistant, text))
+            {
+                Usage = new UsageDetails { InputTokenCount = inputTokens }
+            });
+            return this;
+        }
+
         /// <summary>回一則要求呼叫工具的 assistant 訊息。</summary>
         public ScriptedChatClient CallTool(string name, object arguments)
         {
