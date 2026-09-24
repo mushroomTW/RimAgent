@@ -132,7 +132,7 @@
   <RimAgent.Settings.AutoOnFire>响应火灾</RimAgent.Settings.AutoOnFire>
   <RimAgent.Settings.CompactionHeader>上下文压缩</RimAgent.Settings.CompactionHeader>
   <RimAgent.Settings.AutoCompact>自动折叠较旧的工具输出</RimAgent.Settings.AutoCompact>
-  <RimAgent.Settings.AutoCompactTip>模型历史超过门槛则数时，每次请求前自动折叠较旧的工具输出，不多花模型调用。手动 /compact 另走一次 LLM 摘要，不受此开关影响。</RimAgent.Settings.AutoCompactTip>
+  <RimAgent.Settings.AutoCompactTip>模型历史超过门槛则数时，每次请求前自动折叠较旧的工具输出，不多花模型调用；历史达门槛两倍时，从最旧的完整对话轮开始舍弃，裁回门槛以内（可见对话记录不受影响）。手动 /compact 另走一次 LLM 摘要，不受此开关影响。</RimAgent.Settings.AutoCompactTip>
   <RimAgent.Settings.AutoCompactThreshold>自动压缩门槛：{0} 则</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>设低一点更早压缩，但也会更早折到近期上下文。</RimAgent.Settings.AutoCompactThresholdTip>
   <RimAgent.Settings.RunLogHeader>执行复盘</RimAgent.Settings.RunLogHeader>

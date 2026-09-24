@@ -35,6 +35,9 @@ namespace RimAgent.Agent
         private const int ManualSummaryPreservedGroups = 4;
 
         private readonly ChatClientAgent _agent;
+#pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
+        private readonly CompactionProvider _compaction;
+#pragma warning restore MAAI001
         private readonly AgentToolRegistry _registry;
         private readonly Func<ToolPermissions> _permissions;
         private readonly IChatClient _inner;
@@ -46,6 +49,9 @@ namespace RimAgent.Agent
         private readonly Func<string> _askNote;
         private AgentSession _session;
         private string _serializedSession;
+        /// <summary>每句指令結束時備妥的存檔內容；存檔直接取用，不在主線程序列化，也不因忙碌而漏存。</summary>
+        private string _saveSnapshot;
+        private bool _snapshotWarningShown;
         private int _busy;
         private int _maxSteps;
         private RunLogRecord _activeRunLog;
@@ -86,19 +92,17 @@ namespace RimAgent.Agent
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
             // 前情提要走 Instructions（AF 正統）；檔遺失時以一行保底代替，不拿空提示詞燒 API。
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
+            // 只折疊送出請求裡較舊的工具輸出，保留最近的對話、使用者意圖與工具呼叫。
+            // 折疊不動 session 內存的歷史；存量上限另由 TrimStoredHistory 管。
+            // 觸發條件讀即時設定（ShouldAutoCompact），設定頁調整下一句生效，不必重建會話。
+            _compaction = new CompactionProvider(new ToolResultCompactionStrategy(
+                ShouldAutoCompact,
+                AutoFoldPreservedGroups));
             _agent = new ChatClientAgent(_inner, new ChatClientAgentOptions
             {
                 Name = "ColonyAgent",
                 ChatOptions = new ChatOptions { Instructions = AgentSystemPrompt.FallbackPreamble },
-                // 只折疊較舊的工具輸出，保留最近的對話、使用者意圖與工具呼叫。
-                // 這在一般遊戲過程中避免歷史無限成長，而不改變近期上下文。
-                // 觸發條件讀即時設定（ShouldAutoCompact），設定頁調整下一句生效，不必重建會話。
-                AIContextProviders = new[]
-                {
-                    new CompactionProvider(new ToolResultCompactionStrategy(
-                        ShouldAutoCompact,
-                        AutoFoldPreservedGroups))
-                },
+                AIContextProviders = new[] { _compaction },
                 UseProvidedChatClientAsIs = true
             });
 #pragma warning restore MAAI001
@@ -374,6 +378,7 @@ namespace RimAgent.Agent
                 _activeRunLog = null;
                 ConfirmGate.EndToolBudget();
                 ApplyRunStepLimit(null);
+                PrepareSaveSnapshot();
                 Volatile.Write(ref _busy, 0);
             }
         }
@@ -418,6 +423,7 @@ namespace RimAgent.Agent
             // 對話歸零後「上一句」已無所指，留著只會讓人困惑。等待中的確認一併作廢。
             _session = null;
             _serializedSession = null;
+            _saveSnapshot = null;
             _tokenUsage.Reset();
             _pendingConfirmation = null;
             _pendingGoalObjective = null;
@@ -489,6 +495,7 @@ namespace RimAgent.Agent
             }
             finally
             {
+                PrepareSaveSnapshot();
                 Volatile.Write(ref _busy, 0);
             }
         }
@@ -616,15 +623,20 @@ namespace RimAgent.Agent
             return report.Length <= 4000 ? report : report.Substring(0, 4000) + "…";
         }
 
-        /// <summary>供 GameComponent 在存檔時保存 AF 的模型歷史與工具呼叫內容。</summary>
+        /// <summary>
+        /// 供 GameComponent 在存檔時保存 AF 的模型歷史與工具呼叫內容。
+        /// 讀檔後還沒送過指令時 AF session 尚未重建，原樣帶回讀進來的內容；
+        /// 其餘情況用上一句指令結束時備妥的快照（忙碌中存檔也拿得到上一句為止的歷史）。
+        /// </summary>
         public string SerializeForSave()
         {
-            if (_session == null || IsBusy) return null;
+            if (_session == null) return _serializedSession;
+            string snapshot = Volatile.Read(ref _saveSnapshot);
+            if (snapshot != null || IsBusy) return snapshot;
+            // 快照失敗過（見 PrepareSaveSnapshot）才走到這裡：存檔當下同步序列化一次。
             try
             {
-                JsonElement document = _agent.SerializeSessionAsync(_session, null, CancellationToken.None)
-                    .AsTask().GetAwaiter().GetResult();
-                return document.GetRawText();
+                return SerializeSession(_session);
             }
             catch (Exception ex)
             {
@@ -638,7 +650,71 @@ namespace RimAgent.Agent
         {
             if (IsBusy) throw new InvalidOperationException("Cannot restore while RimAgent is working.");
             _serializedSession = string.IsNullOrWhiteSpace(serialized) ? null : serialized;
+            // 讀進來的內容先當快照：讀檔後第一句還在跑時存檔，也不會漏掉舊歷史。
+            _saveSnapshot = _serializedSession;
             _session = null;
+        }
+
+        private string SerializeSession(AgentSession session)
+        {
+            JsonElement document = _agent.SerializeSessionAsync(session, null, CancellationToken.None)
+                .AsTask().GetAwaiter().GetResult();
+            return document.GetRawText();
+        }
+
+        /// <summary>
+        /// 指令或 /compact 結束、仍持有忙碌旗標時呼叫（通常在背景續行上，不佔主線程）：
+        /// 裁掉超量的舊歷史、丟掉壓縮器的分組快取，再把 session 序列化成存檔快照。
+        /// 分組快取裡是另一份完整歷史，存進檔案只會讓存檔翻倍；下次請求時壓縮器會從歷史重建。
+        /// </summary>
+        private void PrepareSaveSnapshot()
+        {
+            AgentSession session = _session;
+            if (session == null) return;
+            try
+            {
+                TrimStoredHistory(session);
+#pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
+                foreach (string key in _compaction.StateKeys) session.StateBag.TryRemoveValue(key);
+#pragma warning restore MAAI001
+                Volatile.Write(ref _saveSnapshot, SerializeSession(session));
+            }
+            catch (Exception ex)
+            {
+                // 快照失敗不影響這句指令；清掉舊快照，存檔時改走同步序列化。
+                // 裁歷史失敗時同步序列化可能照樣成功，所以這裡自己記一次，免得存量上限失效卻沒人知道。
+                Volatile.Write(ref _saveSnapshot, null);
+                if (_snapshotWarningShown) return;
+                _snapshotWarningShown = true;
+                Verse.Log.Warning("RimAgent: failed to prepare agent session save snapshot: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 自動壓縮開啟時的存量上限：請求端的折疊只縮送出的內容（且摘要仍含工具輸出全文），
+        /// session 內存的歷史不會變少，會隨遊戲無限成長並拖慢存讀檔。
+        /// 超過門檻兩倍時，從最舊的完整一輪往後裁到門檻以內；只在玩家訊息處下刀，
+        /// 工具呼叫與結果不會被拆開，也不會留下開頭不是玩家訊息的歷史（部分供應商會拒收）。
+        /// 最近一輪本身就超過門檻時只留最近一輪。
+        /// </summary>
+        private void TrimStoredHistory(AgentSession session)
+        {
+            if (!AutoCompactEnabled) return;
+            var provider = _agent.ChatHistoryProvider as InMemoryChatHistoryProvider;
+            if (provider == null) return;
+            List<ChatMessage> messages = provider.GetMessages(session);
+            int threshold = Math.Max(1, AutoCompactThreshold);
+            if (messages.Count <= threshold * 2) return;
+
+            int start = -1;
+            for (int i = 1; i < messages.Count; i++)
+            {
+                if (messages[i].Role != ChatRole.User) continue;
+                start = i;
+                if (messages.Count - i <= threshold) break;
+            }
+            if (start <= 0) return;
+            provider.SetMessages(session, messages.GetRange(start, messages.Count - start));
         }
 
         private AgentSession RestoreOrCreateSession(CancellationToken cancellationToken)

@@ -109,13 +109,17 @@ namespace RimAgent.Game
             return pawn.health?.hediffSet?.BleedRateTotal > 0f;
         }
 
-        /// <summary>站著的敵對 pawn 數。倒地的不算：留著會讓「襲擊結束」的邊緣永遠不歸零，下一波真襲擊就觸發不了。火也不算。</summary>
+        /// <summary>
+        /// 構成實際威脅的敵對 pawn 數，沿用原版判定（攻擊目標快取＋IsActiveThreatTo）。
+        /// 倒地、休眠中的機兵群、迷霧裡、逃跑中的都不算：留著會讓「襲擊結束」的邊緣永遠不歸零，
+        /// 下一波真襲擊就觸發不了。守巢的蟲族照算（蟲災本身就是襲擊）。火與敵方砲塔也不算。
+        /// </summary>
         private static int CountHostiles(Map map)
         {
             int count = 0;
-            foreach (Pawn pawn in map.mapPawns.AllPawnsSpawned)
+            foreach (IAttackTarget target in map.attackTargetsCache.TargetsHostileToColony)
             {
-                if (!pawn.Dead && !pawn.Downed && pawn.HostileTo(Faction.OfPlayer)) count++;
+                if (target.Thing is Pawn && GenHostility.IsActiveThreatTo(target, Faction.OfPlayer, ignoreHives: false)) count++;
             }
             return count;
         }
@@ -189,12 +193,14 @@ namespace RimAgent.Game
             };
         }
 
+        // AlertsReadout 的活動清單在 1.6 為私有快取；只讀取遊戲已計算的結果，
+        // 找不到欄位時安全地回傳空清單，避免版本差異中斷 agent。
+        private static readonly FieldInfo ActiveAlertsField =
+            typeof(AlertsReadout).GetField("activeAlerts", BindingFlags.Instance | BindingFlags.NonPublic);
+
         public IReadOnlyList<AlertInfo> GetAlerts()
         {
-            // AlertsReadout 的活動清單在 1.6 為私有快取；只讀取遊戲已計算的結果，
-            // 找不到欄位時安全地回傳空清單，避免版本差異中斷 agent。
-            FieldInfo field = typeof(AlertsReadout).GetField("activeAlerts", BindingFlags.Instance | BindingFlags.NonPublic);
-            var alerts = field?.GetValue(Find.Alerts) as IEnumerable<Alert>;
+            var alerts = ActiveAlertsField?.GetValue(Find.Alerts) as IEnumerable<Alert>;
             if (alerts == null) return Array.Empty<AlertInfo>();
             return alerts.Where(a => a != null && a.Active).Select(a => new AlertInfo
             {

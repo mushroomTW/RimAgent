@@ -45,6 +45,11 @@ namespace RimAgent
         private readonly RimWorldGameWorld _autoWorld = new RimWorldGameWorld();
         private string _lastAutoError;
         private CancellationTokenSource _autoCts;
+        /// <summary>
+        /// 自主任務從起跑到 RecordRun 記完為止。session 的 busy 旗標在背景執行緒就放開，
+        /// 早於冷卻記錄；只看 busy 的話，中間落下的訊號檢查會拿舊冷卻再起一輪。
+        /// </summary>
+        private volatile bool _autoRunning;
         private CancellationTokenSource _goalCts;
         private bool _goalRunning;
         private bool _goalPaused;
@@ -367,11 +372,12 @@ namespace RimAgent
             {
                 ColonyAgentSession session = Session;
                 // 玩家還在忙（上一句沒做完、或有預覽等確認）就不搶。
-                if (session.IsBusy || session.HasPendingConfirmation) return;
+                if (_autoRunning || session.IsBusy || session.HasPendingConfirmation) return;
                 AutonomousConfig config = ToConfig(settings);
                 AutonomousTrigger trigger = _scheduler.Evaluate(tick, GatherSignals(), config);
                 if (trigger == AutonomousTrigger.None) return;
-                _ = RunAutonomousAsync(session, trigger, tick, config);
+                _autoRunning = true;
+                _ = RunAutonomousGuardedAsync(session, trigger, tick, config);
                 _lastAutoError = null;
             }
             catch (Exception ex)
@@ -424,6 +430,18 @@ namespace RimAgent
             _autoCts?.Cancel();
         }
 
+        private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config)
+        {
+            try
+            {
+                await RunAutonomousAsync(session, trigger, tick, config);
+            }
+            finally
+            {
+                _autoRunning = false;
+            }
+        }
+
         private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config)
         {
             _autoCts?.Dispose();
@@ -449,11 +467,13 @@ namespace RimAgent
                 int remainingBudget = _scheduler.RemainingBudget(config);
                 int maxSteps = RimAgentMod.Settings?.maxSteps ?? RimAgentSettings.DefaultMaxSteps;
                 int steps = config.UnlimitedBudget ? maxSteps : Math.Min(maxSteps, remainingBudget);
+                // 不加 ConfigureAwait(false)：收尾的 RecordRun 要回主線程，
+                // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
                 await session.SendAsync(
                     instruction,
                     _autoCts.Token,
                     autonomous: true,
-                    maxToolSteps: steps).ConfigureAwait(false);
+                    maxToolSteps: steps);
             }
             catch (InvalidOperationException)
             {

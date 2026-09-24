@@ -29,6 +29,14 @@ namespace RimAgent.UI
         private const float SlashRowHeight = 26f;
         private const float SlashPopupWidth = 460f;
         private const int MaxResultChars = 600;
+        /// <summary>截圖預覽快取張數；要大於一個視窗同時看得到的張數，否則會每幀互相擠掉重載。</summary>
+        private const int MaxCachedScreenshots = 12;
+        /// <summary>截圖預覽縮到的最大寬度（像素）；原圖全解析度一張就是數十 MB。</summary>
+        private const int MaxScreenshotWidth = 800;
+        /// <summary>截圖檔還不在（剛拍、寫入中）或讀不了時，隔多久再試（毫秒）。</summary>
+        private const int ScreenshotRetryMs = 1000;
+        /// <summary>視窗寬度要停住多久才重排對話（毫秒）。</summary>
+        private const int ReflowDelayMs = 150;
         /// <summary>上下文用量到達幾成時標題列計量變黃預警。</summary>
 
         // 圖片風格配色
@@ -61,7 +69,25 @@ namespace RimAgent.UI
         // 渲染快取
         private readonly List<(string Text, Color Color, float Height, string ImagePath)> _lines = new List<(string, Color, float, string)>();
         private readonly Dictionary<string, Texture2D> _screenshotTextures = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>最近用到的排在最後；繪製時會把用到的移到最後，淘汰從最前面開始。</summary>
         private readonly List<string> _screenshotOrder = new List<string>();
+        /// <summary>載入失敗的截圖與失敗時的 Environment.TickCount。</summary>
+        private readonly Dictionary<string, int> _screenshotFailedAt = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>繪製時看到、還沒載入的截圖；留到 WindowUpdate 載入（每幀最多一張，不在 OnGUI 裡解碼）。</summary>
+        private string _pendingScreenshot;
+        /// <summary>背景讀檔中的截圖；讀完才在 WindowUpdate 解碼，主線程不等磁碟。</summary>
+        private string _readingScreenshot;
+        private Task<byte[]> _screenshotRead;
+        // 每個 IMGUI 事件都會重畫；帶參數的翻譯字串只在值變了才重組，免得每幀配置一堆字串。
+        private readonly TextCache<long?> _tokenLabel = new TextCache<long?>();
+        private readonly TextCache<AgentMode> _modeLabel = new TextCache<AgentMode>();
+        private readonly TextCache<ReasoningLevel> _reasoningLabel = new TextCache<ReasoningLevel>();
+        private readonly TextCache<int> _autoUsageLabel = new TextCache<int>();
+        private readonly TextCache<int> _workingLabel = new TextCache<int>();
+        private float _workingHeight;
+        private float _workingHeightWidth = -1f;
+        private float _settlingWidth = -1f;
+        private int _settlingSince;
         private float _linesTotal;
         private float _linesWidth = -1f;
         private int _linesEntryCount = -1;
@@ -133,6 +159,7 @@ namespace RimAgent.UI
         {
             base.WindowUpdate();
             DrainObservedTask();
+            LoadPendingScreenshot();
             if (!_posInitialized) return;
 
             // 小於可讀尺寸時保留玩家正在調整的大小，不跳回預設寬高。
@@ -163,6 +190,10 @@ namespace RimAgent.UI
             foreach (Texture2D texture in _screenshotTextures.Values) UnityEngine.Object.Destroy(texture);
             _screenshotTextures.Clear();
             _screenshotOrder.Clear();
+            _screenshotFailedAt.Clear();
+            _pendingScreenshot = null;
+            _readingScreenshot = null;
+            _screenshotRead = null;
             if (RimAgentMod.Settings != null)
             {
                 RimAgentMod.Settings.UpdateBounds(windowRect);
@@ -266,14 +297,18 @@ namespace RimAgent.UI
             Text.Font = GameFont.Tiny;
             Text.Anchor = TextAnchor.MiddleRight;
             GUI.color = status.LastInputTokens.HasValue ? ToolTextColor : ControlBorderColor;
-            string tokenLabel = status.LastInputTokens.HasValue
-                ? "RimAgent.Context.InputTokens".Translate(status.LastInputTokens.Value.ToString("N0"))
-                : "RimAgent.Context.Unavailable".Translate();
+            string tokenLabel = _tokenLabel.Get(status.LastInputTokens, tokens => tokens.HasValue
+                ? "RimAgent.Context.InputTokens".Translate(tokens.Value.ToString("N0")).ToString()
+                : "RimAgent.Context.Unavailable".Translate().ToString());
             Widgets.Label(contextRect, tokenLabel);
-            string compact = status.AutoCompactEnabled
-                ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
-                : "RimAgent.Context.CompactOff".Translate(status.Messages);
-            TooltipHandler.TipRegion(contextRect, "RimAgent.Context.Tooltip".Translate(compact));
+            // 提示字串只在滑鼠停在上面時才組。
+            if (Mouse.IsOver(contextRect))
+            {
+                string compact = status.AutoCompactEnabled
+                    ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
+                    : "RimAgent.Context.CompactOff".Translate(status.Messages);
+                TooltipHandler.TipRegion(contextRect, "RimAgent.Context.Tooltip".Translate(compact));
+            }
             GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
             Text.Font = GameFont.Small;
@@ -300,7 +335,12 @@ namespace RimAgent.UI
             float width = outRect.width - 16f;
             AgentTranscript transcript = session.Transcript;
             bool sameTranscript = ReferenceEquals(transcript, _linesTranscript);
-            if (!sameTranscript || transcript.Version != _linesTranscriptVersion || Mathf.Abs(width - _linesWidth) > 0.001f)
+            bool widthChanged = Mathf.Abs(width - _linesWidth) > 0.001f;
+            // 拖曳縮放時寬度每幀都在變，全量重排（每行 CalcHeight＋markdown）會一路卡到放開；
+            // 寬度穩定 ReflowDelayMs 之後才重排，期間照舊寬度排版（行高才對得上）。有新內容時照常重排，不擋新回覆。
+            bool deferReflow = widthChanged && sameTranscript && transcript.Version == _linesTranscriptVersion
+                               && _linesWidth > 0f && !WidthSettled(width);
+            if (!deferReflow && (!sameTranscript || transcript.Version != _linesTranscriptVersion || widthChanged))
             {
                 IReadOnlyList<TranscriptEntry> entries = transcript.Snapshot(out int version, out int epoch);
                 bool appendOnly = sameTranscript
@@ -315,6 +355,7 @@ namespace RimAgent.UI
                 _linesWidth = width;
             }
 
+            float lineWidth = deferReflow ? _linesWidth : width;
             float total = _linesTotal;
             string working = null;
             float workingHeight = 0f;
@@ -323,9 +364,15 @@ namespace RimAgent.UI
                 // 執行中的省略號做 . → .. → ... 循環動畫（每 0.5 秒一格）；
                 // 翻譯字尾的 … 先去掉再補動畫點，中英語言檔都不必改。
                 // 用 Environment.TickCount 而不用 Unity Time：BCL 在測試與遊戲內都能 JIT。
-                string workingBase = "RimAgent.Working".Translate().ToString().TrimEnd('…', '.', ' ');
-                working = "<color=#" + PauseHex + ">" + workingBase + WorkingDots() + "</color>";
-                workingHeight = Text.CalcHeight(working, width);
+                working = _workingLabel.Get(WorkingPhase(), phase => "<color=#" + PauseHex + ">"
+                    + "RimAgent.Working".Translate().ToString().TrimEnd('…', '.', ' ') + WorkingDots(phase) + "</color>");
+                // 一行字，高度只隨寬度變。
+                if (Mathf.Abs(width - _workingHeightWidth) > 0.001f)
+                {
+                    _workingHeight = Text.CalcHeight(working, width);
+                    _workingHeightWidth = width;
+                }
+                workingHeight = _workingHeight;
                 total += workingHeight + EntryGap;
             }
 
@@ -345,7 +392,7 @@ namespace RimAgent.UI
             {
                 if (y + height >= visibleTop && y <= visibleBottom)
                 {
-                    var lineRect = new Rect(0f, y, width, height);
+                    var lineRect = new Rect(0f, y, lineWidth, height);
                     if (imagePath != null) DrawScreenshotPreview(lineRect, imagePath);
                     else
                     {
@@ -362,6 +409,19 @@ namespace RimAgent.UI
             }
             GUI.color = Color.white;
             Widgets.EndScrollView();
+        }
+
+        /// <summary>寬度是否已經停在同一個值超過 <see cref="ReflowDelayMs"/>（用 TickCount：BCL 在測試與遊戲內都能 JIT）。</summary>
+        private bool WidthSettled(float width)
+        {
+            int now = Environment.TickCount;
+            if (Mathf.Abs(width - _settlingWidth) > 0.001f)
+            {
+                _settlingWidth = width;
+                _settlingSince = now;
+                return false;
+            }
+            return unchecked(now - _settlingSince) >= ReflowDelayMs;
         }
 
         private void DrawScreenshotPreview(Rect rect, string path)
@@ -382,42 +442,139 @@ namespace RimAgent.UI
             GUI.color = Color.white;
         }
 
+        /// <summary>繪製時只查快取；還沒載入的記下來，交給 <see cref="LoadPendingScreenshot"/> 在 WindowUpdate 載入。</summary>
         private Texture2D GetScreenshotTexture(string path)
         {
-            if (_screenshotTextures.TryGetValue(path, out Texture2D cached)) return cached;
-            if (!File.Exists(path)) return null;
-            Texture2D texture = null;
+            if (_screenshotTextures.TryGetValue(path, out Texture2D cached))
+            {
+                // 用到的移到最後：看得到的截圖永遠是最近用過的，淘汰不會輪到它們。
+                // 比較方式要與字典一致（不分大小寫），否則同一張圖會在清單裡重複。
+                int last = _screenshotOrder.Count - 1;
+                if (!string.Equals(_screenshotOrder[last], path, StringComparison.OrdinalIgnoreCase))
+                {
+                    for (int i = 0; i < last; i++)
+                    {
+                        if (!string.Equals(_screenshotOrder[i], path, StringComparison.OrdinalIgnoreCase)) continue;
+                        string key = _screenshotOrder[i];
+                        _screenshotOrder.RemoveAt(i);
+                        _screenshotOrder.Add(key);
+                        break;
+                    }
+                }
+                return cached;
+            }
+            if (!_screenshotFailedAt.TryGetValue(path, out int failedAt)
+                || unchecked(Environment.TickCount - failedAt) >= ScreenshotRetryMs)
+            {
+                _pendingScreenshot = path;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 每幀最多載入一張截圖（在 WindowUpdate，不在 OnGUI 裡解碼）：先在背景讀檔，讀完才在主線程解碼，
+        /// 再用 GPU 逐次減半縮到 <see cref="MaxScreenshotWidth"/>（一次大倍率縮會嚴重鋸齒），
+        /// 只留縮圖且丟掉 CPU 端副本，原圖立即釋放。
+        /// 檔案還不在或讀不了就隔 <see cref="ScreenshotRetryMs"/> 再試，不每幀打磁碟。
+        /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
+        /// </summary>
+        private void LoadPendingScreenshot()
+        {
+            if (_screenshotRead == null)
+            {
+                string pending = _pendingScreenshot;
+                _pendingScreenshot = null;
+                if (pending == null || _screenshotTextures.ContainsKey(pending)) return;
+                _readingScreenshot = pending;
+                _screenshotRead = Task.Run(() => File.Exists(pending) ? File.ReadAllBytes(pending) : null);
+                return;
+            }
+            if (!_screenshotRead.IsCompleted) return;
+            string path = _readingScreenshot;
+            // 讀檔失敗（IO、權限）時 Task 為 faulted，當作讀不到。
+            byte[] bytes = _screenshotRead.Status == TaskStatus.RanToCompletion ? _screenshotRead.Result : null;
+            _screenshotRead = null;
+            _readingScreenshot = null;
+
+            Texture2D preview = null;
+            Texture2D full = null;
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture step = null;
             try
             {
-                texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                if (!texture.LoadImage(File.ReadAllBytes(path)))
+                full = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (bytes != null && full.LoadImage(bytes))
                 {
-                    UnityEngine.Object.Destroy(texture);
-                    return null;
+                    if (full.width <= MaxScreenshotWidth)
+                    {
+                        // 原圖已經夠小：直接用，只丟掉 CPU 端副本。
+                        preview = full;
+                        full = null;
+                        preview.Apply(false, true);
+                    }
+                    else
+                    {
+                        Texture source = full;
+                        int width = full.width;
+                        int height;
+                        do
+                        {
+                            // 每次最多縮一半：雙線性取樣剛好涵蓋 2×2 來源像素，不會跳過細節。
+                            width = Mathf.Max(MaxScreenshotWidth, width / 2);
+                            height = Mathf.Max(1, Mathf.RoundToInt(full.height * (width / (float)full.width)));
+                            RenderTexture next = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                            Graphics.Blit(source, next);
+                            if (step != null) RenderTexture.ReleaseTemporary(step);
+                            step = next;
+                            source = next;
+                        }
+                        while (width > MaxScreenshotWidth);
+                        RenderTexture.active = step;
+                        preview = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                        preview.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
+                        preview.Apply(false, true);
+                    }
                 }
-                _screenshotTextures[path] = texture;
-                _screenshotOrder.Add(path);
-                while (_screenshotOrder.Count > 4)
-                {
-                    string oldest = _screenshotOrder[0];
-                    _screenshotOrder.RemoveAt(0);
-                    UnityEngine.Object.Destroy(_screenshotTextures[oldest]);
-                    _screenshotTextures.Remove(oldest);
-                }
-                return texture;
             }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException || ex is UnityException)
+            catch (Exception ex) when (ex is ArgumentException || ex is UnityException)
             {
-                if (texture != null) UnityEngine.Object.Destroy(texture);
-                return null;
+                if (preview != null) UnityEngine.Object.Destroy(preview);
+                preview = null;
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                if (step != null) RenderTexture.ReleaseTemporary(step);
+                if (full != null) UnityEngine.Object.Destroy(full);
+            }
+
+            if (preview == null)
+            {
+                _screenshotFailedAt[path] = Environment.TickCount;
+                return;
+            }
+            _screenshotFailedAt.Remove(path);
+            _screenshotTextures[path] = preview;
+            _screenshotOrder.Add(path);
+            while (_screenshotOrder.Count > MaxCachedScreenshots)
+            {
+                string oldest = _screenshotOrder[0];
+                _screenshotOrder.RemoveAt(0);
+                UnityEngine.Object.Destroy(_screenshotTextures[oldest]);
+                _screenshotTextures.Remove(oldest);
             }
         }
 
-        /// <summary>執行中動畫：. → .. → ... 循環，每 0.5 秒換一格。</summary>
-        private static string WorkingDots()
+        private static int WorkingPhase()
         {
             // TickCount 會正負迴繞，先取正數再算格子。
-            switch (((System.Environment.TickCount & int.MaxValue) / 500) % 3)
+            return ((System.Environment.TickCount & int.MaxValue) / 500) % 3;
+        }
+
+        /// <summary>執行中動畫：. → .. → ... 循環，每 0.5 秒換一格。</summary>
+        private static string WorkingDots(int phase)
+        {
+            switch (phase)
             {
                 case 1: return "..";
                 case 2: return "...";
@@ -587,14 +744,15 @@ namespace RimAgent.UI
             }
         }
 
-        private static void DrawStatusStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
+        private void DrawStatusStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
         {
             RimAgentSettings settings = RimAgentMod.Settings;
             var modeRect = new Rect(rect.x, rect.y, DropdownWidth, rect.height);
             var reasoningRect = new Rect(modeRect.xMax + 6f, rect.y, DropdownWidth, rect.height);
 
             bool enabled = !session.IsBusy && settings != null;
-            if (DrawUnifiedButton(modeRect, "RimAgent.Mode.Status".Translate(ModeLabel(session.Mode)), ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
+            string modeStatus = _modeLabel.Get(session.Mode, mode => "RimAgent.Mode.Status".Translate(ModeLabel(mode)).ToString());
+            if (DrawUnifiedButton(modeRect, modeStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
             {
                 var options = new List<FloatMenuOption>();
                 foreach (AgentMode mode in (AgentMode[])Enum.GetValues(typeof(AgentMode)))
@@ -605,7 +763,8 @@ namespace RimAgent.UI
             }
 
             ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
-            if (DrawUnifiedButton(reasoningRect, "RimAgent.Reasoning.Status".Translate(ReasoningLabel(current)), ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
+            string reasoningStatus = _reasoningLabel.Get(current, level => "RimAgent.Reasoning.Status".Translate(ReasoningLabel(level)).ToString());
+            if (DrawUnifiedButton(reasoningRect, reasoningStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
             {
                 var options = new List<FloatMenuOption>();
                 foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
@@ -620,7 +779,7 @@ namespace RimAgent.UI
                 var usageRect = new Rect(reasoningRect.xMax + 8f, rect.y, rect.xMax - reasoningRect.xMax - 8f, rect.height);
                 Text.Anchor = TextAnchor.MiddleRight;
                 GUI.color = ToolTextColor;
-                Widgets.Label(usageRect, "RimAgent.Auto.StatusUnlimited".Translate(component.AutonomousToolsUsed));
+                Widgets.Label(usageRect, _autoUsageLabel.Get(component.AutonomousToolsUsed, used => "RimAgent.Auto.StatusUnlimited".Translate(used).ToString()));
                 GUI.color = Color.white;
                 Text.Anchor = TextAnchor.UpperLeft;
             }
@@ -1068,6 +1227,25 @@ namespace RimAgent.UI
             catch (Exception)
             {
                 return text;
+            }
+        }
+
+        /// <summary>記住上一次的輸入值與組好的字串；值沒變就直接回傳，不重新翻譯與格式化。</summary>
+        private sealed class TextCache<TKey>
+        {
+            private bool _hasValue;
+            private TKey _key;
+            private string _text;
+
+            public string Get(TKey key, Func<TKey, string> build)
+            {
+                if (!_hasValue || !EqualityComparer<TKey>.Default.Equals(_key, key))
+                {
+                    _key = key;
+                    _text = build(key);
+                    _hasValue = true;
+                }
+                return _text;
             }
         }
     }

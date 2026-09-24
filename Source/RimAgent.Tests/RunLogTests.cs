@@ -25,9 +25,10 @@ namespace RimAgent.Tests
                     writer.Append(new RunLogRecord { Instruction = "run-" + i });
                 }
 
+                // 第 501 筆觸發裁切：一次裁到 TrimToRuns 筆（含新的那筆），之後兩筆只附加。
                 string[] lines = File.ReadAllLines(writer.FilePath);
-                Assert.That(lines, Has.Length.EqualTo(RunLogWriter.MaxRuns));
-                Assert.That(lines[0], Does.Contain("run-3"));
+                Assert.That(lines, Has.Length.EqualTo(RunLogWriter.TrimToRuns + 2));
+                Assert.That(lines[0], Does.Contain("\"run-" + (RunLogWriter.MaxRuns + 1 - RunLogWriter.TrimToRuns) + "\""));
                 Assert.That(lines.Last(), Does.Contain("run-502"));
                 Assert.That(new FileInfo(writer.FilePath).Length, Is.LessThanOrEqualTo(RunLogWriter.MaxFileBytes));
             }

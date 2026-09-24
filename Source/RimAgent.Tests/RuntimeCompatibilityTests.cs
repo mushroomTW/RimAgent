@@ -16,13 +16,26 @@ namespace RimAgent.Tests
     [TestFixture]
     public class RuntimeCompatibilityTests
     {
+        /// <summary>
+        /// 直接碰 Unity InternalCall 的方法只能在遊戲內驗證，逐一登記：
+        /// 新增這類方法時必須明確列入，不能靠數量門檻混過去。
+        /// </summary>
+        private static readonly HashSet<string> AllowedUnityNative = new HashSet<string>
+        {
+            "RimAgent.UI.Window_Agent.DrawBottomBar",          // 輸入列
+            "RimAgent.UI.Window_Agent.DrawInputField",         // 輸入列
+            "RimAgent.UI.Window_Agent.SetInput",               // 游標
+            "RimAgent.UI.Window_Agent.HandleSlashKeys",        // 斜線選單鍵盤
+            "RimAgent.Game.RimWorldGameWorld.TakeScreenshot",  // 截圖
+            "RimAgent.UI.Window_Agent.LoadPendingScreenshot"   // 截圖預覽縮圖
+        };
+
         [Test]
         public void EveryMethodInRimAgentJitsOnDotNetFramework()
         {
             Assembly assembly = typeof(ColonyAgentSession).Assembly;
             var failures = new List<string>();
             int prepared = 0;
-            int unityNative = 0;
 
             foreach (Type type in assembly.GetTypes())
             {
@@ -40,7 +53,8 @@ namespace RimAgent.Tests
                     {
                         // 直接呼叫 Unity InternalCall（Event.current 等）的方法在真 .NET Framework 上無法 JIT
                         // （「ECall 方法必須封裝在系統模組中」）；那是 Unity 原生實作，只能在遊戲內驗證。
-                        unityNative++;
+                        string name = $"{type.FullName}.{method.Name}";
+                        if (!AllowedUnityNative.Contains(name)) failures.Add(name + ": 未登記的 Unity InternalCall 方法");
                     }
                     catch (Exception ex)
                     {
@@ -51,7 +65,6 @@ namespace RimAgent.Tests
             }
 
             Assert.That(prepared, Is.GreaterThan(100), "應該有掃到方法");
-            Assert.That(unityNative, Is.LessThan(6), "只有極少數 UI 方法應直接碰 Unity InternalCall（輸入列、斜線選單鍵盤、游標、截圖）");
             Assert.That(failures, Is.Empty, string.Join("\n", failures));
         }
     }

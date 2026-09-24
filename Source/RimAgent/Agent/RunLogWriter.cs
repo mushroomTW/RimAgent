@@ -83,12 +83,22 @@ namespace RimAgent.Agent
         public bool Failed { get; set; }
     }
 
-    /// <summary>獨立 JSONL 日誌；最多 500 筆或 16 MiB，先達上限就移除最舊紀錄。</summary>
+    /// <summary>
+    /// 獨立 JSONL 日誌；最多 500 筆或 16 MiB。平常只在檔尾附加一行；
+    /// 會超過上限時才整檔重寫，一次裁到 450 筆／九成大小，之後幾十筆又只需附加。
+    /// </summary>
     public sealed class RunLogWriter
     {
         public const int MaxRuns = 500;
+        /// <summary>超過上限時裁到的筆數：留一段餘裕，免得到頂後每筆都要重寫整個檔案。</summary>
+        public const int TrimToRuns = 450;
         public const int MaxFileBytes = 16 * 1024 * 1024;
+        private const long TrimToBytes = MaxFileBytes / 10 * 9;
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
+
+        private readonly object _gate = new object();
+        /// <summary>檔案目前的筆數；-1 代表還沒數過（第一次寫入時讀檔數一次）。</summary>
+        private int _lineCount = -1;
 
         public RunLogWriter(string folder)
         {
@@ -101,15 +111,42 @@ namespace RimAgent.Agent
         public void Append(RunLogRecord record)
         {
             if (record == null) return;
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
-            var lines = File.Exists(FilePath) ? File.ReadAllLines(FilePath, Utf8).ToList() : new List<string>();
-            lines.Add(JsonSerializer.Serialize(record));
-            int newlineBytes = Utf8.GetByteCount(Environment.NewLine);
-            while (lines.Count > MaxRuns || lines.Sum(line => (long)Utf8.GetByteCount(line) + newlineBytes) > MaxFileBytes)
+            string json = JsonSerializer.Serialize(record);
+            lock (_gate)
             {
-                lines.RemoveAt(0);
+                Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
+                bool exists = File.Exists(FilePath);
+                if (!exists) _lineCount = 0;
+                else if (_lineCount < 0) _lineCount = File.ReadLines(FilePath, Utf8).Count();
+                long size = exists ? new FileInfo(FilePath).Length : 0;
+                string line = json + Environment.NewLine;
+                if (_lineCount < MaxRuns && size + Utf8.GetByteCount(line) <= MaxFileBytes)
+                {
+                    File.AppendAllText(FilePath, line, Utf8);
+                    _lineCount++;
+                    return;
+                }
+                RewriteTrimmed(json);
             }
-            File.WriteAllLines(FilePath, lines, Utf8);
+        }
+
+        /// <summary>從最新往回保留，直到筆數或位元組碰到裁切目標。</summary>
+        private void RewriteTrimmed(string newestJson)
+        {
+            List<string> lines = File.ReadAllLines(FilePath, Utf8).ToList();
+            lines.Add(newestJson);
+            int newlineBytes = Utf8.GetByteCount(Environment.NewLine);
+            long bytes = 0;
+            int keep = 0;
+            for (int i = lines.Count - 1; i >= 0 && keep < TrimToRuns; i--)
+            {
+                long next = bytes + Utf8.GetByteCount(lines[i]) + newlineBytes;
+                if (next > TrimToBytes) break;
+                bytes = next;
+                keep++;
+            }
+            File.WriteAllLines(FilePath, lines.GetRange(lines.Count - keep, keep), Utf8);
+            _lineCount = keep;
         }
     }
 }

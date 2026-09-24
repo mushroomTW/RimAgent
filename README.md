@@ -103,7 +103,7 @@ The RimAgent window can be moved anywhere on screen with position and size memor
 | `/compact` | Compact context: summarize older model history with one LLM call, keeping only recent turns (visible log kept) |
 | `/stop` | Immediately abort the currently running instruction |
 
-> **Context compaction**: when model history exceeds the threshold (default 60 messages), older tool output is folded automatically before each request at no extra model cost; the switch and threshold live in mod settings. `/compact` triggers a deeper manual summary compression at any time.
+> **Context compaction**: when model history exceeds the threshold (default 60 messages), older tool output is folded automatically before each request at no extra model cost. Once stored history reaches twice the threshold, the oldest complete turns are dropped until it is back within the threshold, so saves and loads stay small (the visible log is unaffected). The switch and threshold live in mod settings. `/compact` triggers a deeper manual summary compression at any time.
 
 > **Run history**: Enable **Record Agent runs** in mod settings to write a separate JSONL file at `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It records instructions, model response summaries, tool arguments/results, safety decisions and outcomes. It is off by default and keeps at most 500 runs or 16 MiB, whichever limit comes first.
 

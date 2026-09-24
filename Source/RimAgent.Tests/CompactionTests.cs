@@ -122,6 +122,94 @@ namespace RimAgent.Tests
         }
 #pragma warning restore MAAI001
 
+        /// <summary>
+        /// 存量上限：超過門檻兩倍才裁，裁到門檻以內，且從玩家訊息開始（工具呼叫與結果不被拆開）。
+        /// </summary>
+        [Test]
+        public async Task StoredHistoryIsTrimmedOnUserBoundaryPastTwiceTheThreshold()
+        {
+            for (int i = 0; i < 12; i++)
+            {
+                _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("done " + i);
+            }
+            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            session.AutoCompactThreshold = 10;
+
+            // 每句 4 則（使用者、工具呼叫、工具結果、回覆）：5 句 20 則還不裁。
+            for (int i = 0; i < 5; i++) await session.SendAsync("set doctor " + i);
+            Assert.That(session.History.Count, Is.EqualTo(20));
+
+            await session.SendAsync("set doctor 5");
+
+            IReadOnlyList<ChatMessage> history = session.History;
+            Assert.That(history.Count, Is.LessThanOrEqualTo(10));
+            Assert.That(history[0].Role, Is.EqualTo(ChatRole.User), "裁切只能落在玩家訊息上");
+            Assert.That(history[0].Text, Is.EqualTo("set doctor 4"));
+            Assert.That(history.Last().Text, Is.EqualTo("done 5"));
+        }
+
+        [Test]
+        public async Task StoredHistoryIsKeptWhenAutoCompactIsOff()
+        {
+            for (int i = 0; i < 12; i++) _client.Reply("ok " + i);
+            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            session.SyncAutoCompact(false, 5);
+
+            for (int i = 0; i < 12; i++) await session.SendAsync("instruction " + i);
+
+            Assert.That(session.History.Count, Is.EqualTo(24), "關閉自動壓縮時不動存量歷史");
+        }
+
+        [Test]
+        public async Task SaveSnapshotOmitsCompactionGroupCopy()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("done " + i);
+            }
+            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            session.AutoCompactThreshold = 10;
+            for (int i = 0; i < 4; i++) await session.SendAsync("set doctor " + i);
+
+            string saved = session.SerializeForSave();
+
+            Assert.That(saved, Does.Contain("set doctor 3"));
+            // 壓縮器的狀態鍵預設是策略型別名。
+            Assert.That(saved, Does.Not.Contain("ToolResultCompactionStrategy"), "壓縮器的分組快取是整段歷史的複本，不該進存檔");
+        }
+
+        [Test]
+        public async Task SerializeForSaveKeepsRestoredHistoryBeforeFirstInstruction()
+        {
+            _client.Reply("ok");
+            ColonyAgentSession original = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            await original.SendAsync("remember the granary");
+            string saved = original.SerializeForSave();
+            Assert.That(saved, Does.Contain("remember the granary"));
+
+            ColonyAgentSession loaded = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            loaded.RestoreSerializedSession(saved);
+
+            Assert.That(loaded.SerializeForSave(), Is.EqualTo(saved), "讀檔後還沒送指令就存檔，舊歷史不能丟");
+        }
+
+        [Test]
+        public async Task SerializeForSaveWhileBusyReturnsLastCompletedHistory()
+        {
+            var client = new ReplyThenGateChatClient("first done");
+            ColonyAgentSession session = new ColonyAgentSession(client, _world, () => _permissions, 8);
+            await session.SendAsync("first instruction");
+
+            Task<string> running = session.SendAsync("second instruction");
+            Assert.That(session.IsBusy, Is.True);
+            string saved = session.SerializeForSave();
+
+            Assert.That(saved, Does.Contain("first instruction").And.Contain("first done"), "忙碌中存檔要拿到上一句為止的歷史");
+            client.Release("second done");
+            await running;
+            Assert.That(session.SerializeForSave(), Does.Contain("second done"));
+        }
+
         [Test]
         public async Task CompactWithEmptyHistoryReturnsNullAndNotices()
         {
@@ -211,6 +299,43 @@ namespace RimAgent.Tests
             public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
             {
                 return _gate.Task;
+            }
+
+            public bclasync::System.Collections.Generic.IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+                IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+            {
+                throw new NotSupportedException("RimAgent does not stream.");
+            }
+
+            public object GetService(Type serviceType, object serviceKey = null) => serviceType.IsInstanceOfType(this) ? this : null;
+
+            public void Dispose()
+            {
+            }
+        }
+
+        /// <summary>第一次呼叫立即回覆，之後卡住直到 Release：用來在已有歷史時佔住 busy 旗標。</summary>
+        private sealed class ReplyThenGateChatClient : IChatClient
+        {
+            private readonly string _firstReply;
+            private readonly TaskCompletionSource<ChatResponse> _gate = new TaskCompletionSource<ChatResponse>();
+            private int _calls;
+
+            public ReplyThenGateChatClient(string firstReply)
+            {
+                _firstReply = firstReply;
+            }
+
+            public void Release(string text)
+            {
+                _gate.TrySetResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, text)));
+            }
+
+            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+            {
+                return Interlocked.Increment(ref _calls) == 1
+                    ? Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _firstReply)))
+                    : _gate.Task;
             }
 
             public bclasync::System.Collections.Generic.IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
