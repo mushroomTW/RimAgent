@@ -23,6 +23,8 @@ namespace RimAgent.Game
         ResourceSnapshot GetResources();
         IReadOnlyList<AlertInfo> GetAlerts();
         IReadOnlyList<LetterInfo> GetRecentLetters();
+        /// <summary>等玩家回應的抉擇信件與開著的對話框、確認框（一般通知、死訊與任務邀請不算）。</summary>
+        IReadOnlyList<PendingChoiceInfo> GetPendingChoices();
         PowerInfo GetPower();
         IReadOnlyList<ThreatInfo> GetThreats();
         ResearchInfo GetResearch();
@@ -89,6 +91,29 @@ namespace RimAgent.Game
         CommandResult SetDrafted(int pawnId, bool drafted);
         CommandResult OrderMoveTo(int pawnId, int x, int z);
         CommandResult OrderAttack(int pawnId, int targetId);
+        /// <summary>
+        /// 回應一個抉擇：信件照玩家流程先打開再按選項；option 為 1 起的序號。
+        /// 成功時 Message 為選到的選項文字；對話框可能接著出現下一段（再查 GetPendingChoices）。
+        /// </summary>
+        CommandResult ChooseOption(string choiceId, int option);
+        /// <summary>物件目前看得到的指令按鈕（不含開發者模式按鈕）；找不到或在迷霧裡的物件回傳 null。</summary>
+        IReadOnlyList<GizmoInfo> GetGizmos(int thingId);
+        /// <summary>
+        /// 按一個指令按鈕（依 1 起的序號定位並核對標籤），等同玩家點它。只支援按一下與開關；
+        /// 按了開出選單或其他視窗會關回去並回報失敗，開出對話框或確認框則留著給 ChooseOption 回應。
+        /// 成功時 Message 為開關的新狀態（action 為空字串）。
+        /// </summary>
+        CommandResult UseGizmo(int thingId, int gizmoNumber, string label);
+        /// <summary>
+        /// 對一名殖民者下達一次性的工作命令（job：rescue、capture、tend、strip、equip、enter_casket），檢查照遊戲右鍵選單。
+        /// 成功時 Message 為做什麼（例如把誰送去哪張床、用哪種藥）。
+        /// </summary>
+        CommandResult OrderJob(int pawnId, string job, int targetId);
+        /// <summary>
+        /// 禁用或解禁範圍內（null 為全圖）看得到的可搬運物品與屍體；labelContains 空字串代表不限。
+        /// 成功時 Message 為改動的數量與品項。
+        /// </summary>
+        CommandResult SetForbidden(CellRectSpec? area, string labelContains, bool forbidden);
         /// <summary>一次結清的交易：驗證不過整筆不做，成功時 Message 為交易明細。</summary>
         CommandResult ExecuteTrade(TradeRequest request);
         /// <summary>組織商隊外出：驗證不過不組，成功時 Message 為成團明細。</summary>

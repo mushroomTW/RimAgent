@@ -44,7 +44,7 @@ namespace RimAgent.Tests
             var world = new FakeGameWorld();
             world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
             var client = new ScriptedChatClient()
-                .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                 .ReplyWithUsage("Done.", 1234);
             var session = new ColonyAgentSession(client, world,
                 () => ToolPermissions.For(ToolCategory.Work), 8);
@@ -57,7 +57,7 @@ namespace RimAgent.Tests
             Assert.That(captured, Is.Not.Null);
             Assert.That(captured.ModelSteps, Has.Count.EqualTo(2));
             Assert.That(captured.ModelSteps.Last().InputTokens, Is.EqualTo(1234));
-            Assert.That(captured.TranscriptSteps.Any(e => e.Kind == "Tool" && e.Tool == "set_work_priority"
+            Assert.That(captured.TranscriptSteps.Any(e => e.Kind == "Tool" && e.Tool == "set_work_priorities"
                 && e.Result.Contains("priority")), Is.True);
         }
 
@@ -97,7 +97,7 @@ namespace RimAgent.Tests
             var world = new FakeGameWorld();
             world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
             var client = new ScriptedChatClient()
-                .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                 .Reply("Waiting for confirmation.");
             var session = new ColonyAgentSession(client, world,
                 () => ToolPermissions.For(ToolCategory.Work), 8, () => AgentMode.Confirm);
@@ -121,7 +121,7 @@ namespace RimAgent.Tests
             var world = new FakeGameWorld();
             world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
             var client = new ScriptedChatClient()
-                .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+                .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                 .Reply("Waiting for confirmation.");
             var session = new ColonyAgentSession(client, world,
                 () => ToolPermissions.For(ToolCategory.Work), 8, () => AgentMode.Confirm);

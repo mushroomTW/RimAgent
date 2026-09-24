@@ -7,9 +7,11 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>徵召與戰鬥指令。LLM 有數秒延遲，只適合戰前佈署與撤退。</summary>
+    /// <summary>徵召與戰鬥指令，以及救援、俘虜、包紮等戰後命令。LLM 有數秒延遲，只適合戰前佈署與撤退。</summary>
     public sealed class CombatTools
     {
+        private static readonly string[] Jobs = { "rescue", "capture", "tend", "strip", "equip", "enter_casket" };
+
         private readonly IGameWorld _world;
         private readonly ConfirmationGate _gate;
 
@@ -119,6 +121,26 @@ namespace RimAgent.Tools
             if (attacking.Count == 0) return ToolText.Error($"nobody could attack {targetLabel} [{targetId}]. " + string.Join("; ", failures));
             string summary = $"Ordered {ToolText.Names(attacking)} to attack {targetLabel} [{targetId}].";
             return failures.Count == 0 ? summary : summary + " Skipped: " + string.Join("; ", failures);
+        }
+
+        [AgentTool("order_job", ToolCategory.Combat, ToolRisk.Safe)]
+        [Description("Orders one colonist to do one job now, like the in-game right-click menu: rescue (carry a downed non-hostile pawn to a bed, or help a stranded refugee who joins once helped), capture (carry a downed hostile to a prisoner bed), tend (treat wounds with the best reachable medicine), strip (take the gear off a corpse or downed hostile), equip (pick up a weapon) or enter_casket (climb into an empty cryptosleep casket; ship launch needs its caskets occupied, and the casket's eject gizmo brings them out). Works drafted or not. Targets come from list_threats, find_things or list_colonists.")]
+        public string OrderJob(
+            [Description("Colonist name, nickname or id.")] string colonist,
+            [Description("rescue, capture, tend, strip, equip or enter_casket.")] string job,
+            [Description("Target id from list_threats, find_things or list_colonists.")] int targetId)
+        {
+            string kind = job?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (Array.IndexOf(Jobs, kind) < 0) return ToolText.Error($"unknown job \"{job}\". Use rescue, capture, tend, strip, equip or enter_casket.");
+            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
+            if (!pawn.Success) return pawn.Error;
+
+            string blocked = ToolText.Blocked(_gate, $"would order {pawn.Value.Name} to {kind} [{targetId}].");
+            if (blocked != null) return blocked;
+
+            CommandResult r = _world.OrderJob(pawn.Value.Id, kind, targetId);
+            if (!r.Success) return ToolText.Error($"{pawn.Value.Name} cannot {kind} [{targetId}]: {r.Message}");
+            return $"Ordered {pawn.Value.Name} to {kind} [{targetId}]: {r.Message}.";
         }
 
         private string ResolveTargetLabel(int targetId)

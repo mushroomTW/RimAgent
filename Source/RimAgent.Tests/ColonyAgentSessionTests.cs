@@ -40,7 +40,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task ToolCallIsExecutedAgainstWorldAndLogged()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Reply("Done: Ali's doctor priority is now 1.");
             ColonyAgentSession session = NewSession();
 
@@ -52,9 +52,9 @@ namespace RimAgent.Tests
             IReadOnlyList<TranscriptEntry> transcript = session.Transcript.Snapshot();
             Assert.That(transcript.Select(e => e.Kind), Is.EqualTo(new[] { TranscriptKind.User, TranscriptKind.Tool, TranscriptKind.Assistant }));
             TranscriptEntry tool = transcript[1];
-            Assert.That(tool.ToolName, Is.EqualTo("set_work_priority"));
+            Assert.That(tool.ToolName, Is.EqualTo("set_work_priorities"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Work));
-            Assert.That(tool.Arguments, Does.Contain("colonist=Ali").And.Contain("priority=1"));
+            Assert.That(tool.Arguments, Does.Contain("assignments=Ali:doctor=1"));
             Assert.That(tool.Result, Is.EqualTo("Set Ali's doctor priority 3 -> 1."));
             Assert.That(tool.Failed, Is.False);
 
@@ -69,7 +69,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task ToolErrorTextIsMarkedFailedAndFedBackToModel()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 9 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=9" })
                    .Reply("That priority is invalid.");
             ColonyAgentSession session = NewSession();
 
@@ -90,7 +90,7 @@ namespace RimAgent.Tests
 
             ChatOptions options = _client.ReceivedOptions[0];
             List<string> names = options.Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
-            Assert.That(names, Does.Contain("get_colony_overview").And.Contain("set_work_priority"));
+            Assert.That(names, Does.Contain("get_colony_overview").And.Contain("set_work_priorities"));
             Assert.That(names, Does.Not.Contain("designate_area").And.Not.Contain("draft"));
             Assert.That(options.ToolMode, Is.EqualTo(ChatToolMode.Auto));
         }
@@ -162,8 +162,8 @@ namespace RimAgent.Tests
         public async Task PerRunToolBudgetRejectsExtraCallsFromTheSameModelResponse()
         {
             _client.CallTools(
-                       ("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }),
-                       ("set_work_priority", new { colonist = "Bob", workType = "doctor", priority = 1 }))
+                       ("set_work_priorities", new { assignments = "Ali:doctor=1" }),
+                       ("set_work_priorities", new { assignments = "Bob:doctor=1" }))
                    .Reply("Done.");
             ColonyAgentSession session = NewSession(maxSteps: 4);
 
@@ -234,7 +234,7 @@ namespace RimAgent.Tests
         public async Task FailedTurnKeepsUndoForChangesAlreadyMade()
         {
             // 工具跑完才在最後一輪炸掉：改動已落地，玩家仍該能一鍵復原。
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Throw(new RimLLMException(LLMError.NetworkError, "boom"));
             ColonyAgentSession session = NewSession();
 
@@ -249,9 +249,9 @@ namespace RimAgent.Tests
         [Test]
         public async Task ContextTooLongAfterAToolDoesNotRetryTheInstruction()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 2 })
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=2" })
                    .Reply("Done.");
             ColonyAgentSession session = NewSession();
 
@@ -367,7 +367,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task UndoRestoresWorkPriority()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Reply("Done.");
             ColonyAgentSession session = NewSession();
             await session.SendAsync("set doctor to 1");
@@ -537,9 +537,9 @@ namespace RimAgent.Tests
         [Test]
         public async Task ConfirmingWithRememberStopsAskingForThatToolThisSession()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Reply("Waiting for confirmation.")
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 2 })
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=2" })
                    .Reply("Done.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
@@ -559,11 +559,11 @@ namespace RimAgent.Tests
         {
             _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
             _permissions.Set(ToolCategory.Combat, true);
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Reply("Waiting for confirmation.")
                    .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                    .Reply("The attack still needs confirmation.")
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 3 })
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=3" })
                    .Reply("Waiting again.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
@@ -602,9 +602,9 @@ namespace RimAgent.Tests
         [Test]
         public async Task ConfirmationThatNeverExecutesDoesNotRememberTheTool()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Reply("Waiting for confirmation.")
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 2 })
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=2" })
                    .Reply("Waiting again.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
@@ -708,7 +708,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task ConfirmModeRequiresConfirmationForEveryCommand()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Reply("Waiting for confirmation.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
@@ -727,7 +727,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task YoloModeRunsPermittedToolDirectly()
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                    .Reply("Done.");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Yolo);
 
@@ -760,7 +760,7 @@ namespace RimAgent.Tests
             List<string> names = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
 
             Assert.That(names, Does.Contain("list_colonists").And.Contain("get_health").And.Contain("mcp_list_tools"));
-            Assert.That(names, Does.Not.Contain("set_work_priority").And.Not.Contain("execute_trade").And.Not.Contain("mcp_call_tool"));
+            Assert.That(names, Does.Not.Contain("set_work_priorities").And.Not.Contain("execute_trade").And.Not.Contain("mcp_call_tool"));
         }
 
         [Test]
@@ -775,7 +775,7 @@ namespace RimAgent.Tests
             Assert.That(names, Does.Not.Contain("release_prisoner"));
             Assert.That(names, Does.Not.Contain("schedule_surgery"));
             Assert.That(names, Does.Not.Contain("set_prisoner_interaction"));
-            Assert.That(names, Does.Contain("set_work_priority"));
+            Assert.That(names, Does.Contain("set_work_priorities"));
             Assert.That(names, Does.Contain("order_attack"));
             Assert.That(names, Does.Contain("mcp_call_tool"));
         }
@@ -804,9 +804,9 @@ namespace RimAgent.Tests
 
             foreach (string name in new[] { "execute_trade", "form_caravan", "release_prisoner", "set_prisoner_interaction", "schedule_surgery", "delete_zone", "delete_bill", "place_blueprint", "designate_area", "order_attack" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Confirm), name);
-            foreach (string name in new[] { "set_work_priority", "set_work_priorities", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_time_speed", "set_current_map", "take_screenshot" })
+            foreach (string name in new[] { "set_work_priorities", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_time_speed", "set_current_map", "take_screenshot" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Safe), name);
-            foreach (string name in new[] { "get_colony_overview", "list_colonists", "get_colonist_wellbeing", "list_alerts", "list_recent_letters", "get_power_status", "find_things", "get_health", "list_prisoners", "list_bills", "get_time_speed", "mcp_status", "mcp_list_tools" })
+            foreach (string name in new[] { "get_colony_overview", "list_colonists", "get_colonist_wellbeing", "list_recent_letters", "find_things", "inspect_area", "get_health", "list_prisoners", "list_bills", "list_traders", "mcp_list_tools" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Query), name);
             Assert.That(registry.RiskOf("mcp_call_tool"), Is.EqualTo(ToolRisk.Confirm));
         }
@@ -855,10 +855,10 @@ namespace RimAgent.Tests
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(53));
+            Assert.That(registry.All.Count, Is.EqualTo(51));
             var observeOnly = new ToolPermissions();
             observeOnly.Set(ToolCategory.Observe, true);
-            Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(16));
+            Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(15));
             Assert.That(registry.Select(new ToolPermissions()), Is.Empty);
         }
 

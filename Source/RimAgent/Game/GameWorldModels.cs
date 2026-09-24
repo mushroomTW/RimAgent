@@ -104,6 +104,45 @@ namespace RimAgent.Game
         public string Label { get; set; } = string.Empty;
     }
 
+    /// <summary>等玩家回應的抉擇：還沒處理的抉擇信件，或開著的對話框（id 以 letter-／dialog- 開頭）。</summary>
+    public sealed class PendingChoiceInfo
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+        /// <summary>信件還剩幾 tick 過期；不會過期為 null。</summary>
+        public int? ExpiresInTicks { get; set; }
+        public IReadOnlyList<ChoiceOptionInfo> Options { get; set; } = Array.Empty<ChoiceOptionInfo>();
+    }
+
+    /// <summary>選取物件時畫面下方的指令按鈕（gizmo）。</summary>
+    public sealed class GizmoInfo
+    {
+        /// <summary>action（按一下）、toggle（開關）或 unsupported（要在地圖上選目標或從選單挑）。</summary>
+        public const string ActionKind = "action";
+        public const string ToggleKind = "toggle";
+        public const string UnsupportedKind = "unsupported";
+
+        /// <summary>1 起的序號，照遊戲裡的排列。</summary>
+        public int Number { get; set; }
+        public string Label { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Kind { get; set; } = ActionKind;
+        /// <summary>開關目前是否開著（只對 toggle 有意義）。</summary>
+        public bool On { get; set; }
+        public bool Disabled { get; set; }
+        public string DisabledReason { get; set; } = string.Empty;
+    }
+
+    public sealed class ChoiceOptionInfo
+    {
+        /// <summary>1 起的選項序號（資訊卡連結不列出，序號仍照遊戲裡的位置）。</summary>
+        public int Number { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public bool Disabled { get; set; }
+        public string DisabledReason { get; set; } = string.Empty;
+    }
+
     public sealed class PowerInfo
     {
         public int NetworkCount { get; set; }
@@ -363,6 +402,8 @@ namespace RimAgent.Game
         /// <summary>植物是否已可收成。</summary>
         public bool Harvestable { get; set; }
         public bool Wild { get; set; }
+        /// <summary>殖民者是否被禁止碰它（禁用的物品不會被搬運或使用）。</summary>
+        public bool Forbidden { get; set; }
         /// <summary>目前掛在這個物件（或其所在格）上的標記 defName。</summary>
         public IReadOnlyList<string> Designations { get; set; } = Array.Empty<string>();
     }

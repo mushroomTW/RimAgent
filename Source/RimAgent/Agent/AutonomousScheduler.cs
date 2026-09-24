@@ -13,7 +13,9 @@ namespace RimAgent.Agent
         MentalBreak,
         FoodShortage,
         EmergencyMedical,
-        Fire
+        Fire,
+        /// <summary>出現新的抉擇信件或對話框；由 GameComponent 在 Update 偵測，不經排程器。</summary>
+        Choice
     }
 
     /// <summary>排程器做判斷用的殖民地訊號（呼叫端在主線程收集的純資料）。</summary>

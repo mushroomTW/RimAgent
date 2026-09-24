@@ -99,6 +99,42 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void OrderJobPassesCanonicalJobToWorld()
+        {
+            string text = _tools.OrderJob("Ali", " Capture ", 900);
+
+            Assert.That(text, Is.EqualTo("Ordered Ali to capture [900]: capture [900]."));
+            Assert.That(_world.Calls, Is.EqualTo(new[] { "OrderJob(101,capture,900)" }));
+        }
+
+        [Test]
+        public void OrderJobRefusesUnknownJobAndReportsWorldFailure()
+        {
+            Assert.That(_tools.OrderJob("Ali", "butcher", 900), Does.StartWith("Error:").And.Contain("rescue, capture, tend, strip, equip or enter_casket"));
+            Assert.That(_world.Calls, Is.Empty);
+
+            Assert.That(_tools.OrderJob("Bob", "rescue", 4242), Is.EqualTo("Error: Bob cannot rescue [4242]: target not found on the map"));
+        }
+
+        [Test]
+        public void OrderJobAcceptsEnterCasket()
+        {
+            _world.Things.Add(FakeGameWorld.MakeThing(500, "CryptosleepCasket", "cryptosleep casket", ThingKind.Building, 30, 30, playerOwned: true));
+
+            Assert.That(_tools.OrderJob("Bob", "Enter_Casket", 500), Is.EqualTo("Ordered Bob to enter_casket [500]: enter_casket [500]."));
+            Assert.That(_world.Calls, Is.EqualTo(new[] { "OrderJob(102,enter_casket,500)" }));
+        }
+
+        [Test]
+        public void BlockedOrderJobReturnsPreviewWithoutTouchingWorld()
+        {
+            var gated = new CombatTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
+
+            Assert.That(gated.OrderJob("Bob", "rescue", 103), Does.StartWith("Needs confirmation:").And.Contain("rescue [103]"));
+            Assert.That(_world.Calls, Is.Empty);
+        }
+
+        [Test]
         public void BlockedAttackReturnsPreviewWithoutTouchingWorld()
         {
             var gated = new CombatTools(_world, new ConfirmationGate(() => AgentMode.Confirm));

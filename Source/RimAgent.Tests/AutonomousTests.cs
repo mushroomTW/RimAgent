@@ -224,7 +224,7 @@ namespace RimAgent.Tests
             {
                 Assert.That(tools, Does.Contain(name), name);
             }
-            Assert.That(tools, Does.Contain("set_work_priority"));
+            Assert.That(tools, Does.Contain("set_work_priorities"));
         }
     }
 }

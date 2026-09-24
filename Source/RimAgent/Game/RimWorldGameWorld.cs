@@ -218,6 +218,255 @@ namespace RimAgent.Game
                 .ToList();
         }
 
+        // 抉擇對話框：DiaOption 的文字與觸發、對話框目前的節點與標題都是 protected。
+        // 只讀取、觸發遊戲原生的選項；找不到成員時視為沒有可回應的抉擇，避免版本差異中斷 agent。
+        private static readonly FieldInfo DiaOptionTextField =
+            typeof(DiaOption).GetField("text", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly MethodInfo DiaOptionActivateMethod =
+            typeof(DiaOption).GetMethod("Activate", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo NodeTreeCurNodeField =
+            typeof(Dialog_NodeTree).GetField("curNode", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo NodeTreeTitleField =
+            typeof(Dialog_NodeTree).GetField("title", BindingFlags.Instance | BindingFlags.NonPublic);
+        private const string LetterChoicePrefix = "letter-";
+        private const string DialogChoicePrefix = "dialog-";
+        private const int ChoiceTextLimit = 600;
+        private const string ChoiceNotFound = "no pending choice with that id. Call list_pending_choices for the current ids.";
+
+        public IReadOnlyList<PendingChoiceInfo> GetPendingChoices()
+        {
+            var result = new List<PendingChoiceInfo>();
+            foreach (Dialog_NodeTree dialog in Find.WindowStack.Windows.OfType<Dialog_NodeTree>())
+            {
+                DiaNode node = CurrentNode(dialog);
+                if (node == null) continue;
+                result.Add(new PendingChoiceInfo
+                {
+                    Id = DialogChoicePrefix + dialog.ID,
+                    Title = NodeTreeTitleField?.GetValue(dialog) as string ?? string.Empty,
+                    Text = LimitChoiceText(node.text.Resolve()),
+                    Options = ToChoiceOptions(node.options)
+                });
+            }
+            foreach (Dialog_MessageBox box in Find.WindowStack.Windows.OfType<Dialog_MessageBox>())
+            {
+                result.Add(new PendingChoiceInfo
+                {
+                    Id = DialogChoicePrefix + box.ID,
+                    Title = box.title ?? string.Empty,
+                    Text = LimitChoiceText(box.text.Resolve()),
+                    Options = MessageBoxButtons(box)
+                        .Select(b => new ChoiceOptionInfo { Number = b.Number, Text = b.Text }).ToList()
+                });
+            }
+            int now = Find.TickManager.TicksGame;
+            foreach (ChoiceLetter letter in Find.LetterStack.LettersListForReading.OfType<ChoiceLetter>())
+            {
+                if (!IsDecisionLetter(letter)) continue;
+                result.Add(new PendingChoiceInfo
+                {
+                    Id = LetterChoicePrefix + letter.ID,
+                    Title = letter.Label.Resolve(),
+                    Text = LimitChoiceText(letter.Text.Resolve()),
+                    ExpiresInTicks = letter.TimeoutActive ? letter.disappearAtTick - now : (int?)null,
+                    Options = ToChoiceOptions(letter.Choices.ToList())
+                });
+            }
+            return result;
+        }
+
+        public CommandResult ChooseOption(string choiceId, int option)
+        {
+            string id = choiceId?.Trim() ?? string.Empty;
+            if (TryParseChoiceId(id, DialogChoicePrefix, out int windowId))
+            {
+                Window window = Find.WindowStack.Windows.FirstOrDefault(w => w.ID == windowId);
+                if (window is Dialog_MessageBox box) return PressMessageBoxButton(box, option);
+                return window is Dialog_NodeTree dialog ? ActivateOption(dialog, option, false) : CommandResult.Fail(ChoiceNotFound);
+            }
+            if (TryParseChoiceId(id, LetterChoicePrefix, out int letterId))
+            {
+                ChoiceLetter letter = Find.LetterStack.LettersListForReading.OfType<ChoiceLetter>()
+                    .FirstOrDefault(l => l.ID == letterId && IsDecisionLetter(l));
+                if (letter == null) return CommandResult.Fail(ChoiceNotFound);
+                // 照玩家的流程：打開信件，由遊戲組好對話框並設好每個選項的歸屬，再按選項。
+                var before = new HashSet<Window>(Find.WindowStack.Windows);
+                letter.OpenLetter();
+                Dialog_NodeTree dialog = Find.WindowStack.Windows.OfType<Dialog_NodeTree>().LastOrDefault(w => !before.Contains(w));
+                return dialog == null
+                    ? CommandResult.Fail("the letter did not open a choice dialog")
+                    : ActivateOption(dialog, option, true);
+            }
+            return CommandResult.Fail(ChoiceNotFound);
+        }
+
+        /// <summary>
+        /// 需要玩家做決定的信件。一般通知、死訊只有關閉／跳轉之類的選項；
+        /// 任務邀請要到任務分頁接受，信件本身沒有接受選項。
+        /// </summary>
+        private static bool IsDecisionLetter(ChoiceLetter letter)
+        {
+            return !(letter is StandardLetter || letter is DeathLetter || letter is NewQuestLetter);
+        }
+
+        private static bool TryParseChoiceId(string id, string prefix, out int number)
+        {
+            number = 0;
+            return id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                   && int.TryParse(id.Substring(prefix.Length), out number);
+        }
+
+        private static DiaNode CurrentNode(Dialog_NodeTree dialog)
+        {
+            return NodeTreeCurNodeField?.GetValue(dialog) as DiaNode;
+        }
+
+        private static string LimitChoiceText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            return text.Length <= ChoiceTextLimit ? text : text.Substring(0, ChoiceTextLimit) + "…";
+        }
+
+        private static IReadOnlyList<ChoiceOptionInfo> ToChoiceOptions(IList<DiaOption> options)
+        {
+            var result = new List<ChoiceOptionInfo>();
+            for (int i = 0; i < options.Count; i++)
+            {
+                DiaOption option = options[i];
+                // 資訊卡連結只開說明視窗，不是抉擇。
+                if (option.hyperlink.def != null) continue;
+                result.Add(new ChoiceOptionInfo
+                {
+                    Number = i + 1,
+                    Text = OptionText(option),
+                    Disabled = option.disabled,
+                    DisabledReason = option.disabledReason ?? string.Empty
+                });
+            }
+            return result;
+        }
+
+        private static string OptionText(DiaOption option)
+        {
+            return DiaOptionTextField?.GetValue(option) as string ?? "?";
+        }
+
+        /// <summary>確認框的按鈕：1＝A（通常是確定）、2＝B（通常是取消）、3＝C；沒有的按鈕不列。</summary>
+        private static List<(int Number, string Text, Action Action, bool Close)> MessageBoxButtons(Dialog_MessageBox box)
+        {
+            var buttons = new List<(int, string, Action, bool)> { (1, box.buttonAText ?? "OK", box.buttonAAction, true) };
+            if (box.buttonBText != null) buttons.Add((2, box.buttonBText, box.buttonBAction, true));
+            if (!box.buttonCText.NullOrEmpty()) buttons.Add((3, box.buttonCText, box.buttonCAction, box.buttonCClose));
+            return buttons;
+        }
+
+        /// <summary>照 Dialog_MessageBox 按鈕被點的順序：先跑按鈕動作，再關視窗。</summary>
+        private static CommandResult PressMessageBoxButton(Dialog_MessageBox box, int option)
+        {
+            foreach ((int number, string text, Action action, bool close) in MessageBoxButtons(box))
+            {
+                if (number != option) continue;
+                action?.Invoke();
+                if (close) box.Close();
+                return CommandResult.Ok(text);
+            }
+            return CommandResult.Fail($"option {option} does not exist");
+        }
+
+        private static CommandResult ActivateOption(Dialog_NodeTree dialog, int option, bool closeOnFail)
+        {
+            if (DiaOptionActivateMethod == null)
+            {
+                if (closeOnFail) dialog.Close(false);
+                return CommandResult.Fail("this game version does not expose dialog options");
+            }
+            List<DiaOption> options = CurrentNode(dialog)?.options;
+            DiaOption chosen = options != null && option >= 1 && option <= options.Count ? options[option - 1] : null;
+            string error = null;
+            if (chosen == null) error = $"option {option} does not exist";
+            else if (chosen.hyperlink.def != null) error = $"option {option} only opens an info card";
+            else if (chosen.disabled)
+            {
+                error = $"option {option} is disabled" + (string.IsNullOrEmpty(chosen.disabledReason) ? string.Empty : ": " + chosen.disabledReason);
+            }
+            if (error != null)
+            {
+                // 為了按選項才打開的信件對話框要關回去，不留一個擋住遊戲的視窗。
+                if (closeOnFail) dialog.Close(false);
+                return CommandResult.Fail(error);
+            }
+            string label = OptionText(chosen);
+            DiaOptionActivateMethod.Invoke(chosen, null);
+            return CommandResult.Ok(label);
+        }
+
+        public IReadOnlyList<GizmoInfo> GetGizmos(int thingId)
+        {
+            Thing thing = FindThing(thingId);
+            if (thing == null || thing.Fogged()) return null;
+            List<Command> commands = VisibleCommands(thing);
+            var result = new List<GizmoInfo>(commands.Count);
+            for (int i = 0; i < commands.Count; i++)
+            {
+                Command command = commands[i];
+                result.Add(new GizmoInfo
+                {
+                    Number = i + 1,
+                    Label = CommandLabel(command),
+                    Description = LimitChoiceText(command.Desc),
+                    Kind = command is Command_Toggle ? GizmoInfo.ToggleKind : command is Command_Action ? GizmoInfo.ActionKind : GizmoInfo.UnsupportedKind,
+                    On = (command as Command_Toggle)?.isActive?.Invoke() ?? false,
+                    Disabled = command.Disabled,
+                    DisabledReason = command.disabledReason ?? string.Empty
+                });
+            }
+            return result;
+        }
+
+        public CommandResult UseGizmo(int thingId, int gizmoNumber, string label)
+        {
+            Thing thing = FindThing(thingId);
+            if (thing == null || thing.Fogged()) return CommandResult.Fail("thing not found on the map");
+            List<Command> commands = VisibleCommands(thing);
+            Command command = gizmoNumber >= 1 && gizmoNumber <= commands.Count ? commands[gizmoNumber - 1] : null;
+            if (command == null || !string.Equals(CommandLabel(command), label, StringComparison.OrdinalIgnoreCase))
+                return CommandResult.Fail($"{thing.LabelShort}'s button list changed; call list_gizmos again");
+            if (command.Disabled) return CommandResult.Fail($"\"{label}\" is disabled" + (command.disabledReason.NullOrEmpty() ? string.Empty : ": " + command.disabledReason));
+            // 只支援按一下與開關；其他 Command（Designator、選目標、挑作物之類）要滑鼠在地圖或選單上操作。
+            if (!(command is Command_Action) && !(command is Command_Toggle)) return CommandResult.Fail($"\"{label}\" needs a map target or a menu choice");
+
+            var before = new HashSet<Window>(Find.WindowStack.Windows);
+            command.ProcessInput(null);
+            // 按了開出選單或其他視窗（改名、分頁之類）：代選不了，關回去免得擋住遊戲。
+            // 抉擇對話框與確認框留著，交給 choose_option。
+            List<Window> opened = Find.WindowStack.Windows.Where(w => !before.Contains(w)).ToList();
+            List<Window> unsupported = opened.Where(w => !(w is Dialog_NodeTree) && !(w is Dialog_MessageBox)).ToList();
+            foreach (Window window in unsupported) window.Close(false);
+            if (unsupported.Count > 0)
+            {
+                return CommandResult.Fail($"\"{label}\" opened a {(unsupported[0] is FloatMenu ? "menu" : "window")} to pick from, which is not supported yet; it was closed");
+            }
+            return CommandResult.Ok(command is Command_Toggle toggle ? (toggle.isActive() ? "now on" : "now off") : string.Empty);
+        }
+
+        /// <summary>選取時會畫出來的指令按鈕；純狀態顯示的 gizmo（護盾條之類）與開發者模式按鈕不算。</summary>
+        private static List<Command> VisibleCommands(Thing thing)
+        {
+            return thing.GetGizmos().OfType<Command>()
+                .Where(c => c.Visible && !IsDevLabel(CommandLabel(c)))
+                .ToList();
+        }
+
+        private static string CommandLabel(Command command)
+        {
+            return command.LabelCap ?? string.Empty;
+        }
+
+        private static bool IsDevLabel(string label)
+        {
+            return label.StartsWith("DEV:", StringComparison.OrdinalIgnoreCase) || label.StartsWith("Debug:", StringComparison.OrdinalIgnoreCase);
+        }
+
         public PowerInfo GetPower()
         {
             IReadOnlyList<PowerNet> nets = Map.powerNetManager.AllNetsListForReading;
@@ -1275,6 +1524,189 @@ namespace RimAgent.Game
                 : CommandResult.Fail($"{pawn.LabelShort} refused the attack order");
         }
 
+        public CommandResult OrderJob(int pawnId, string job, int targetId)
+        {
+            Pawn pawn = FindColonist(pawnId);
+            if (pawn == null) return CommandResult.Fail(ColonistNotFound);
+            if (pawn.Downed) return CommandResult.Fail($"{pawn.LabelShort} is downed");
+            if (!pawn.health.capacities.CapableOf(PawnCapacityDefOf.Manipulation)) return CommandResult.Fail($"{pawn.LabelShort} cannot use their hands");
+            Thing target = FindThing(targetId);
+            if (target == null) return CommandResult.Fail("target not found on the map");
+            if (!pawn.CanReach(target, PathEndMode.ClosestTouch, Danger.Deadly)) return CommandResult.Fail($"{pawn.LabelShort} cannot reach {target.LabelShort}");
+
+            switch (job)
+            {
+                case "rescue": return OrderRescue(pawn, target as Pawn);
+                case "capture": return OrderCapture(pawn, target as Pawn);
+                case "tend": return OrderTend(pawn, target as Pawn);
+                case "strip": return OrderStrip(pawn, target);
+                case "equip": return OrderEquip(pawn, target);
+                case "enter_casket": return OrderEnterCasket(pawn, target);
+                default: return CommandResult.Fail($"unknown job \"{job}\"");
+            }
+        }
+
+        // 以下檢查照遊戲的右鍵選單（FloatMenuOptionProvider_*），只拒絕會惹惱派系或需要玩家另外確認的情況。
+        private static CommandResult OrderRescue(Pawn pawn, Pawn patient)
+        {
+            if (patient == null) return CommandResult.Fail("only pawns can be rescued");
+            // 任務地圖上等人救的難民走「提供幫助」，救了就加入。
+            if (patient.mindState.WillJoinColonyIfRescued)
+            {
+                return TakeOrderedJob(pawn, JobMaker.MakeJob(JobDefOf.OfferHelp, patient), $"offering help to {patient.LabelShort}; they join once helped");
+            }
+            if (!patient.Downed) return CommandResult.Fail($"{patient.LabelShort} is not downed");
+            if (patient.Faction != null && patient.Faction.HostileTo(Faction.OfPlayer)) return CommandResult.Fail($"{patient.LabelShort} is hostile; use capture to take them prisoner");
+            if (patient.IsPrisonerOfColony || patient.IsSlaveOfColony) return CommandResult.Fail($"{patient.LabelShort} is the colony's prisoner or slave; wardens and doctors handle them");
+            if (!HealthAIUtility.CanRescueNow(pawn, patient, forced: true)) return CommandResult.Fail($"{pawn.LabelShort} cannot rescue {patient.LabelShort} right now");
+            if (patient.playerSettings?.medCare == MedicalCareCategory.NoCare) return CommandResult.Fail($"{patient.LabelShort}'s medical care is set to no care");
+
+            Building_Bed bed = RestUtility.FindBedFor(patient, pawn, checkSocialProperness: false)
+                               ?? RestUtility.FindBedFor(patient, pawn, checkSocialProperness: false, ignoreOtherReservations: true);
+            if (bed == null) return CommandResult.Fail(patient.RaceProps.Animal ? "no free animal bed" : "no free bed for them; build or free a bed first");
+            Job rescue = JobMaker.MakeJob(JobDefOf.Rescue, patient, bed);
+            rescue.count = 1;
+            return TakeOrderedJob(pawn, rescue, $"carrying {patient.LabelShort} to {bed.LabelShort} at ({bed.Position.x}, {bed.Position.z})");
+        }
+
+        private static CommandResult OrderCapture(Pawn pawn, Pawn prisoner)
+        {
+            if (prisoner == null) return CommandResult.Fail("only pawns can be captured");
+            if (!prisoner.CanBeCaptured()) return CommandResult.Fail($"{prisoner.LabelShort} cannot be captured (they must be downed and not already the colony's)");
+            // 抓非敵對派系的人會惹惱整個派系，那是外交決定，不讓模型一句話就做。
+            if (prisoner.Faction != null && prisoner.Faction != Faction.OfPlayer && !prisoner.Faction.Hidden && !prisoner.Faction.HostileTo(Faction.OfPlayer))
+            {
+                return CommandResult.Fail($"capturing {prisoner.LabelShort} would anger {prisoner.Faction.Name}; refused");
+            }
+            if (!HealthAIUtility.CanRescueNow(pawn, prisoner, forced: true)) return CommandResult.Fail($"{pawn.LabelShort} cannot capture {prisoner.LabelShort} right now");
+
+            Building_Bed bed = RestUtility.FindBedFor(prisoner, pawn, false, false, GuestStatus.Prisoner)
+                               ?? RestUtility.FindBedFor(prisoner, pawn, false, true, GuestStatus.Prisoner);
+            if (bed == null) return CommandResult.Fail("no free prisoner bed; set a bed for prisoners first");
+            Job capture = JobMaker.MakeJob(JobDefOf.Capture, prisoner, bed);
+            capture.count = 1;
+            string note = $"taking {prisoner.LabelShort} to {bed.LabelShort} at ({bed.Position.x}, {bed.Position.z})";
+            if (!prisoner.guest.Recruitable) note += "; they are unrecruitable";
+            return TakeOrderedJob(pawn, capture, note);
+        }
+
+        private static CommandResult OrderTend(Pawn doctor, Pawn patient)
+        {
+            if (patient == null) return CommandResult.Fail("only pawns can be tended");
+            if (doctor.WorkTypeIsDisabled(WorkTypeDefOf.Doctor)) return CommandResult.Fail($"{doctor.LabelShort} is incapable of doctoring");
+            if (!patient.health.HasHediffsNeedingTend()) return CommandResult.Fail($"{patient.LabelShort} does not need tending");
+            bool ours = patient.IsColonist || patient.IsQuestLodger() || patient.IsPrisonerOfColony || patient.IsSlaveOfColony
+                        || (patient.Faction == Faction.OfPlayer && patient.IsAnimal);
+            if (!patient.Downed && (patient.HostileTo(doctor.Faction) || !ours)) return CommandResult.Fail($"{patient.LabelShort} will not accept treatment");
+            if (patient == doctor && doctor.playerSettings != null && !doctor.playerSettings.selfTend) return CommandResult.Fail($"self-tend is disabled for {doctor.LabelShort}");
+            if (patient.InAggroMentalState && !patient.health.hediffSet.HasHediff(HediffDefOf.Scaria)) return CommandResult.Fail($"{patient.LabelShort} is in an aggressive mental state");
+
+            // 找藥與建工作同 WorkGiver_Tend：藥在別人身上（背包、架子）時第三個目標是它的持有者。
+            Thing medicine = HealthAIUtility.FindBestMedicine(doctor, patient);
+            Job tend = medicine == null ? JobMaker.MakeJob(JobDefOf.TendPatient, patient)
+                : medicine.SpawnedParentOrMe != medicine ? JobMaker.MakeJob(JobDefOf.TendPatient, patient, medicine, medicine.SpawnedParentOrMe)
+                : JobMaker.MakeJob(JobDefOf.TendPatient, patient, medicine);
+            tend.count = 1;
+            tend.draftedTend = doctor.Drafted;
+            return TakeOrderedJob(doctor, tend, $"tending {patient.LabelShort} " + (medicine == null ? "without medicine" : "with " + medicine.def.label));
+        }
+
+        private static CommandResult OrderStrip(Pawn pawn, Thing target)
+        {
+            if (!StrippableUtility.CanBeStrippedByColony(target)) return CommandResult.Fail($"{target.LabelShort} cannot be stripped by the colony");
+            if (target is Pawn living && living.HasExtraHomeFaction()) return CommandResult.Fail($"{target.LabelShort} is quest-related");
+            Pawn owner = target as Pawn ?? (target as Corpse)?.InnerPawn;
+            if (owner?.Faction != null && owner.Faction != Faction.OfPlayer && !owner.Faction.HostileTo(Faction.OfPlayer))
+            {
+                return CommandResult.Fail($"stripping {target.LabelShort} would hurt relations with {owner.Faction.Name}; refused");
+            }
+            return TakeOrderedJobUnforbiddingTarget(pawn, JobMaker.MakeJob(JobDefOf.Strip, target), target,
+                $"stripping {target.LabelShort}");
+        }
+
+        private static CommandResult OrderEquip(Pawn pawn, Thing item)
+        {
+            if (pawn.equipment == null || !item.HasComp<CompEquippable>()) return CommandResult.Fail($"{item.LabelShort} is not a weapon or equipment");
+            if (item.def.IsWeapon && pawn.WorkTagIsDisabled(WorkTags.Violent)) return CommandResult.Fail($"{pawn.LabelShort} is incapable of violence");
+            if (item.def.IsRangedWeapon && pawn.WorkTagIsDisabled(WorkTags.Shooting)) return CommandResult.Fail($"{pawn.LabelShort} is incapable of shooting");
+            if (item.IsBurning()) return CommandResult.Fail($"{item.LabelShort} is burning");
+            if (pawn.IsQuestLodger() && !EquipmentUtility.QuestLodgerCanEquip(item, pawn)) return CommandResult.Fail($"{pawn.LabelShort} cannot equip it (quest-related)");
+            if (!EquipmentUtility.CanEquip(item, pawn, out string reason, checkBonded: false)) return CommandResult.Fail(reason);
+            // 靈魂綁定武器在遊戲裡要玩家按確認，不代答。
+            if (EquipmentUtility.AlreadyBondedToWeapon(item, pawn) || !EquipmentUtility.GetPersonaWeaponConfirmationText(item, pawn).NullOrEmpty())
+            {
+                return CommandResult.Fail($"{item.LabelShort} is a persona weapon; bonding needs the player's confirmation in-game");
+            }
+            return TakeOrderedJobUnforbiddingTarget(pawn, JobMaker.MakeJob(JobDefOf.Equip, item), item,
+                $"equipping {item.LabelShort}");
+        }
+
+        private static CommandResult OrderEnterCasket(Pawn pawn, Thing target)
+        {
+            if (!(target is Building_CryptosleepCasket casket)) return CommandResult.Fail($"{target.LabelShort} is not a cryptosleep casket");
+            if (pawn.IsQuestLodger()) return CommandResult.Fail("guests cannot use cryptosleep caskets");
+            if (casket.HasAnyContents) return CommandResult.Fail($"{casket.LabelShort} is already occupied");
+            if (!pawn.CanReach(casket, PathEndMode.InteractionCell, Danger.Deadly)) return CommandResult.Fail($"{pawn.LabelShort} cannot reach {casket.LabelShort}");
+            // 心靈羈絆的伴侶就在附近時，遊戲會跳確認（分開會有負面效果），不代答。
+            if (ModsConfig.BiotechActive
+                && pawn.health.hediffSet.GetFirstHediffOfDef(HediffDefOf.PsychicBond) is Hediff_PsychicBond bond
+                && ThoughtWorker_PsychicBondProximity.NearPsychicBondedPerson(pawn, bond))
+            {
+                return CommandResult.Fail($"entering would separate {pawn.LabelShort} from their psychic bond partner; that needs the player's confirmation in-game");
+            }
+            return TakeOrderedJob(pawn, JobMaker.MakeJob(JobDefOf.EnterCryptosleepCasket, casket),
+                $"entering {casket.LabelShort} at ({casket.Position.x}, {casket.Position.z})");
+        }
+
+        private static CommandResult TakeOrderedJobUnforbiddingTarget(Pawn pawn, Job job, Thing target, string note)
+        {
+            bool wasForbidden = target.IsForbidden(Faction.OfPlayer);
+            target.SetForbidden(false, warnOnFail: false);
+            bool accepted = false;
+            try
+            {
+                CommandResult result = TakeOrderedJob(pawn, job, note);
+                accepted = result.Success;
+                return result;
+            }
+            finally
+            {
+                if (!accepted && wasForbidden) target.SetForbidden(true, warnOnFail: false);
+            }
+        }
+
+        private static CommandResult TakeOrderedJob(Pawn pawn, Job job, string note)
+        {
+            job.playerForced = true;
+            return pawn.jobs.TryTakeOrderedJob(job, JobTag.Misc)
+                ? CommandResult.Ok(note)
+                : CommandResult.Fail($"{pawn.LabelShort} refused the order");
+        }
+
+        public CommandResult SetForbidden(CellRectSpec? area, string labelContains, bool forbidden)
+        {
+            Map map = Map;
+            bool hasNeedle = !string.IsNullOrEmpty(labelContains);
+            var changed = new List<Thing>();
+            // HaulableEver 涵蓋物品與屍體；迷霧裡的東西玩家還看不到，不動。
+            foreach (Thing t in map.listerThings.ThingsInGroup(ThingRequestGroup.HaulableEver).ToList())
+            {
+                if (!t.Spawned || t.Fogged()) continue;
+                if (area.HasValue && !area.Value.Contains(t.Position.x, t.Position.z)) continue;
+                if (t.TryGetComp<CompForbiddable>() == null || t.IsForbidden(Faction.OfPlayer) == forbidden) continue;
+                if (hasNeedle && !MatchesLabel(t, labelContains)) continue;
+                t.SetForbidden(forbidden, warnOnFail: false);
+                changed.Add(t);
+            }
+            if (changed.Count == 0)
+            {
+                string state = forbidden ? "allowed" : "forbidden";
+                return CommandResult.Fail($"no visible item or corpse there is currently {state}" + (hasNeedle ? $" matching \"{labelContains}\"" : string.Empty));
+            }
+            IEnumerable<string> labels = changed.Take(10).Select(t => t.LabelShort);
+            return CommandResult.Ok($"{changed.Count} item(s): {string.Join(", ", labels)}{(changed.Count > 10 ? ", …" : string.Empty)}");
+        }
+
         public CommandResult ExecuteTrade(TradeRequest request)
         {
             CommandResult linesResult = ValidateTradeLines(request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells);
@@ -1642,6 +2074,7 @@ namespace RimAgent.Game
                 PlayerOwned = thing.Faction == Faction.OfPlayer,
                 Harvestable = (thing as Plant)?.HarvestableNow ?? false,
                 Wild = thing is Pawn pawn && !pawn.RaceProps.Humanlike && pawn.Faction == null,
+                Forbidden = thing.IsForbidden(Faction.OfPlayer),
                 Designations = designations.Distinct().ToList()
             };
         }

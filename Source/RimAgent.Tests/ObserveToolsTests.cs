@@ -25,11 +25,16 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void OverviewIsOneLineWithKeyNumbers()
+        public void OverviewHasKeyNumbersPowerAndAlerts()
         {
+            _world.Power = new PowerInfo { NetworkCount = 2, NetWatts = -150f, StoredEnergy = 400f };
+            _world.Alerts.Add(new AlertInfo { Label = "Need rescue", Priority = "Critical" });
+
             string text = _tools.GetColonyOverview();
+
             Assert.That(text, Does.Contain("New Arrivals").And.Contain("Colonists: 2").And.Contain("Spring day 3").And.Contain("21.4°C"));
-            Assert.That(text, Does.Not.Contain("\n"));
+            Assert.That(text, Does.Contain("Power: 2 network(s), net watts -150, stored battery energy 400"));
+            Assert.That(text, Does.Contain("Alerts: [Critical] Need rescue"));
         }
 
         [Test]
@@ -245,7 +250,7 @@ namespace RimAgent.Tests
                 Things = new[] { _world.Things[0] }
             };
 
-            string text = _tools.GetCellInfo(5, 5);
+            string text = _tools.InspectArea(5, 5, 5, 5);
 
             Assert.That(text, Does.Contain("Cell (5,5): gravel (Gravel), fertility 70%, roof: overhead mountain, NOT walkable"));
             Assert.That(text, Does.Contain("Zone: [50] Stockpile 1 (Stockpile, 9 cells)"));
@@ -256,11 +261,11 @@ namespace RimAgent.Tests
         [Test]
         public void CellInfoDefaultsAndOutOfBounds()
         {
-            string text = _tools.GetCellInfo(20, 20);
+            string text = _tools.InspectArea(20, 20, 20, 20);
             Assert.That(text, Does.Contain("soil (Soil), fertility 100%, roof: none, walkable"));
             Assert.That(text, Does.Contain("Zone: none").And.Contain("outdoors").And.Contain("Objects on cell: none"));
 
-            Assert.That(_tools.GetCellInfo(100, 5), Does.StartWith("Error:"));
+            Assert.That(_tools.InspectArea(100, 5, 100, 5), Does.StartWith("Error:"));
         }
 
         [Test]

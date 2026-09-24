@@ -36,7 +36,7 @@ namespace RimAgent.Mcp
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         }
 
-        /// <summary>設定與連線狀態的人類可讀摘要（mcp_status 用）。</summary>
+        /// <summary>設定與連線狀態的人類可讀摘要（mcp_list_tools 用）。</summary>
         public string Status()
         {
             List<McpServerEntry> entries = Entries();

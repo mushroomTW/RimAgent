@@ -25,40 +25,26 @@ namespace RimAgent.Tools
             _gate = gate;
         }
 
-        [AgentTool("list_orbital_traders", ToolCategory.Trade, ToolRisk.Query)]
-        [Description("Lists the trade ships currently in orbit: id, goods for sale and silver reserve. Traders on the ground are a separate list, list_visitor_caravans.")]
-        public string ListOrbitalTraders()
+        [AgentTool("list_traders", ToolCategory.Trade, ToolRisk.Query)]
+        [Description("Lists every trader the colony can deal with right now: trade ships in orbit (need a powered comms console) and trader caravans visiting on the ground, each with id, goods for sale and silver reserve.")]
+        public string ListTraders()
         {
-            List<TraderInfo> traders = _world.GetTraders()
-                .Where(t => string.Equals(t.Kind, TraderInfo.OrbitalKind, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (traders.Count == 0)
+            List<TraderInfo> traders = _world.GetTraders().ToList();
+            List<TraderInfo> orbital = traders.Where(t => string.Equals(t.Kind, TraderInfo.OrbitalKind, StringComparison.OrdinalIgnoreCase)).ToList();
+            List<TraderInfo> visitors = traders.Where(t => string.Equals(t.Kind, TraderInfo.VisitorKind, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (orbital.Count == 0 && visitors.Count == 0)
             {
-                return "There are no orbital traders around the colony right now. " +
-                       "Do not invent one; tell the player there is nothing in orbit to trade with.";
+                return "There are no traders around the colony right now: no orbital traders and no visiting caravans. " +
+                       "Do not invent one; tell the player there is nobody to trade with.";
             }
-            return FormatTraders(traders, "orbital trader");
-        }
-
-        [AgentTool("list_visitor_caravans", ToolCategory.Trade, ToolRisk.Query)]
-        [Description("Lists the trader caravans currently visiting the colony on the ground: id, goods for sale and silver reserve. Ships in orbit are a separate list, list_orbital_traders.")]
-        public string ListVisitorCaravans()
-        {
-            List<TraderInfo> traders = _world.GetTraders()
-                .Where(t => string.Equals(t.Kind, TraderInfo.VisitorKind, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (traders.Count == 0)
-            {
-                return "There are no visiting caravans at the colony right now. " +
-                       "Do not invent one, and do not substitute an orbital trader; tell the player nobody is visiting to trade with.";
-            }
-            return FormatTraders(traders, "visiting caravan");
+            return (orbital.Count > 0 ? FormatTraders(orbital, "orbital trader") : "No orbital traders.") + "\n" +
+                   (visitors.Count > 0 ? FormatTraders(visitors, "visiting caravan") : "No visiting caravans.");
         }
 
         [AgentTool("execute_trade", ToolCategory.Trade, ToolRisk.Confirm)]
-        [Description("Buys from and sells to one trader in a single deal at the game's prices; goods and silver change hands at once. Take the trader id and exact item names from list_orbital_traders or list_visitor_caravans. Silver settles the deal automatically, so list goods only.")]
+        [Description("Buys from and sells to one trader in a single deal at the game's prices; goods and silver change hands at once. Take the trader id and exact item names from list_traders. Silver settles the deal automatically, so list goods only.")]
         public string ExecuteTrade(
-            [Description("Trader id in square brackets from list_orbital_traders or list_visitor_caravans.")] string trader,
+            [Description("Trader id in square brackets from list_traders.")] string trader,
             [Description("Goods to buy as \"name x count\", comma-separated, e.g. \"medicine x12, component x4\"; empty buys nothing.")] string buys,
             [Description("Goods to sell as \"name x count\", comma-separated, e.g. \"steel x100, corn x50\"; empty sells nothing.")] string sells,
             [Description("Negotiator name, nickname or id; empty picks the colonist with the highest Social skill.")] string negotiator)
@@ -76,7 +62,7 @@ namespace RimAgent.Tools
                 .FirstOrDefault(t => string.Equals(t.Id, (trader ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase));
             if (deal == null)
             {
-                return ToolText.Error($"unknown trader \"{trader}\". Use list_orbital_traders or list_visitor_caravans to get a valid id.");
+                return ToolText.Error($"unknown trader \"{trader}\". Use list_traders to get a valid id.");
             }
 
             ResolveResult<ColonistInfo> negotiatorResult = ResolveNegotiator(negotiator);

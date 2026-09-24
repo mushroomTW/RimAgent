@@ -19,31 +19,27 @@ namespace RimAgent.Tools
             _gate = gate;
         }
 
-        [AgentTool("mcp_status", ToolCategory.Mcp, ToolRisk.Query)]
-        [Description("Shows the MCP servers configured in AgentPack/MCP/servers.json and whether each is disabled, idle or running.")]
-        public string Status()
-        {
-            return _manager.Status();
-        }
-
         [AgentTool("mcp_list_tools", ToolCategory.Mcp, ToolRisk.Query)]
-        [Description("Lists the tools of every enabled MCP server with names and descriptions. Call it before mcp_call_tool for the exact tool name.")]
+        [Description("Shows the MCP servers configured in AgentPack/MCP/servers.json with their state (disabled, idle or running), then the tools of every enabled server with names and descriptions. Call it before mcp_call_tool for the exact server and tool name.")]
         public async Task<string> ListTools(CancellationToken cancellationToken)
         {
+            string status = _manager.Status();
             try
             {
-                return await _manager.ListToolsAsync(cancellationToken).ConfigureAwait(false);
+                string tools = await _manager.ListToolsAsync(cancellationToken).ConfigureAwait(false);
+                // 沒有設定任何 server 時清單就是狀態本身，不重複印。
+                return tools == status ? status : status + "\n\n" + tools;
             }
             catch (Exception ex)
             {
-                return ToolText.Error("MCP list failed: " + ex.Message);
+                return status + "\n\n" + ToolText.Error("MCP list failed: " + ex.Message);
             }
         }
 
         [AgentTool("mcp_call_tool", ToolCategory.Mcp, ToolRisk.Confirm)]
         [Description("Calls one tool on one MCP server with a JSON object of arguments matching that tool's input schema.")]
         public async Task<string> CallTool(
-            [Description("Server name from mcp_status, e.g. \"fetch\".")] string server,
+            [Description("Server name from mcp_list_tools, e.g. \"fetch\".")] string server,
             [Description("Tool name from mcp_list_tools, e.g. \"fetch\".")] string tool,
             [Description("Tool arguments as a JSON object string, e.g. \"{\\\"url\\\": \\\"https://example.com\\\"}\".")] string args,
             CancellationToken cancellationToken)

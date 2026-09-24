@@ -23,7 +23,7 @@ namespace RimAgent.Tests
         [Test]
         public void SetPriorityChangesWorldAndReportsOldAndNew()
         {
-            string text = _tools.SetWorkPriority("Ali", "doctor", 1);
+            string text = _tools.SetWorkPriorities("Ali:doctor=1");
             Assert.That(text, Is.EqualTo("Set Ali's doctor priority 3 -> 1."));
             Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
             Assert.That(_world.Calls, Does.Contain("SetWorkPriority(101,Doctor,1)"));
@@ -32,7 +32,7 @@ namespace RimAgent.Tests
         [Test]
         public void PriorityOutOfRangeIsRejectedWithoutTouchingWorld()
         {
-            Assert.That(_tools.SetWorkPriority("Ali", "doctor", 5), Does.StartWith("Error:").And.Contain("0"));
+            Assert.That(_tools.SetWorkPriorities("Ali:doctor=5"), Does.StartWith("Error:").And.Contain("0"));
             Assert.That(_world.Calls, Is.Empty);
         }
 
@@ -40,7 +40,7 @@ namespace RimAgent.Tests
         public void IncapableWorkIsRefused()
         {
             _world.Colonists[1].WorkPriorities.First(w => w.WorkTypeDefName == "Growing").Disabled = true;
-            string text = _tools.SetWorkPriority("Bob", "grow", 2);
+            string text = _tools.SetWorkPriorities("Bob:grow=2");
             Assert.That(text, Does.StartWith("Error:").And.Contain("incapable"));
             Assert.That(_world.Calls, Is.Empty);
         }
@@ -48,13 +48,13 @@ namespace RimAgent.Tests
         [Test]
         public void UnknownColonistListsCandidates()
         {
-            Assert.That(_tools.SetWorkPriority("Zed", "doctor", 1), Does.StartWith("Error:").And.Contain("[101]").And.Contain("[102]"));
+            Assert.That(_tools.SetWorkPriorities("Zed:doctor=1"), Does.StartWith("Error:").And.Contain("[101]").And.Contain("[102]"));
         }
 
         [Test]
         public void UnknownWorkTypeIsAnError()
         {
-            Assert.That(_tools.SetWorkPriority("Ali", "piloting", 1), Does.StartWith("Error:").And.Contain("work type"));
+            Assert.That(_tools.SetWorkPriorities("Ali:piloting=1"), Does.StartWith("Error:").And.Contain("work type"));
         }
 
         [Test]
@@ -95,7 +95,7 @@ namespace RimAgent.Tests
         {
             var gated = new WorkTools(_world, null, new ConfirmationGate(() => AgentMode.Confirm));
 
-            string text = gated.SetWorkPriority("Ali", "doctor", 1);
+            string text = gated.SetWorkPriorities("Ali:doctor=1");
 
             Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("Ali's doctor priority 3 -> 1"));
             Assert.That(_world.Calls, Is.Empty);

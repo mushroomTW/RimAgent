@@ -19,6 +19,11 @@ namespace RimAgent.Tests
         public ResourceSnapshot Resources { get; set; } = new ResourceSnapshot();
         public List<AlertInfo> Alerts { get; } = new List<AlertInfo>();
         public List<LetterInfo> RecentLetters { get; } = new List<LetterInfo>();
+        public List<PendingChoiceInfo> PendingChoices { get; } = new List<PendingChoiceInfo>();
+        /// <summary>物件 id → 指令按鈕；沒登記但存在的物件視為沒有按鈕。</summary>
+        public Dictionary<int, List<GizmoInfo>> Gizmos { get; } = new Dictionary<int, List<GizmoInfo>>();
+        /// <summary>下一次 ChooseOption 或按下 action 按鈕成功後接著出現的對話框（模擬多段對話與確認框）。</summary>
+        public PendingChoiceInfo FollowUpDialog { get; set; }
         public PowerInfo Power { get; set; } = new PowerInfo();
         public ResearchInfo Research { get; set; } = new ResearchInfo();
         public MapBounds Bounds { get; set; } = new MapBounds { Width = 100, Height = 100 };
@@ -235,6 +240,7 @@ namespace RimAgent.Tests
         public ResourceSnapshot GetResources() => Resources;
         public IReadOnlyList<AlertInfo> GetAlerts() => Alerts;
         public IReadOnlyList<LetterInfo> GetRecentLetters() => RecentLetters;
+        public IReadOnlyList<PendingChoiceInfo> GetPendingChoices() => PendingChoices;
         public PowerInfo GetPower() => Power;
         public IReadOnlyList<ThreatInfo> GetThreats() => Threats;
         public IReadOnlyList<TraderInfo> GetTraders() => Traders;
@@ -438,6 +444,68 @@ namespace RimAgent.Tests
             Calls.Add($"OrderMoveTo({pawnId},{x},{z})");
             if (UnwalkableCells.Contains((x, z))) return CommandResult.Fail("cell is not walkable");
             return Colonists.Any(c => c.Id == pawnId) ? CommandResult.Ok() : CommandResult.Fail("pawn not found");
+        }
+
+        public CommandResult ChooseOption(string choiceId, int option)
+        {
+            Calls.Add($"ChooseOption({choiceId},{option})");
+            PendingChoiceInfo choice = PendingChoices.FirstOrDefault(c => c.Id == choiceId);
+            ChoiceOptionInfo picked = choice?.Options.FirstOrDefault(o => o.Number == option);
+            if (picked == null) return CommandResult.Fail("choice not found");
+            PendingChoices.Remove(choice);
+            if (FollowUpDialog != null)
+            {
+                PendingChoices.Add(FollowUpDialog);
+                FollowUpDialog = null;
+            }
+            return CommandResult.Ok(picked.Text);
+        }
+
+        public IReadOnlyList<GizmoInfo> GetGizmos(int thingId)
+        {
+            if (Gizmos.TryGetValue(thingId, out List<GizmoInfo> gizmos)) return gizmos;
+            return Things.Any(t => t.Id == thingId) ? new List<GizmoInfo>() : null;
+        }
+
+        public CommandResult UseGizmo(int thingId, int gizmoNumber, string label)
+        {
+            Calls.Add($"UseGizmo({thingId},{gizmoNumber},{label})");
+            GizmoInfo gizmo = GetGizmos(thingId)?.FirstOrDefault(g => g.Number == gizmoNumber);
+            if (gizmo != null && !string.Equals(gizmo.Label, label, StringComparison.OrdinalIgnoreCase))
+                return CommandResult.Fail("button list changed");
+            if (gizmo == null) return CommandResult.Fail("no such button");
+            if (gizmo.Kind == GizmoInfo.ToggleKind)
+            {
+                gizmo.On = !gizmo.On;
+                return CommandResult.Ok(gizmo.On ? "now on" : "now off");
+            }
+            if (FollowUpDialog != null)
+            {
+                PendingChoices.Add(FollowUpDialog);
+                FollowUpDialog = null;
+            }
+            return CommandResult.Ok();
+        }
+
+        public CommandResult OrderJob(int pawnId, string job, int targetId)
+        {
+            Calls.Add($"OrderJob({pawnId},{job},{targetId})");
+            if (Colonists.All(c => c.Id != pawnId)) return CommandResult.Fail("pawn not found");
+            bool targetExists = Threats.Any(t => t.Id == targetId) || Things.Any(t => t.Id == targetId) || Colonists.Any(c => c.Id == targetId);
+            return targetExists ? CommandResult.Ok($"{job} [{targetId}]") : CommandResult.Fail("target not found on the map");
+        }
+
+        public CommandResult SetForbidden(CellRectSpec? area, string labelContains, bool forbidden)
+        {
+            Calls.Add($"SetForbidden({area?.ToString() ?? "map"},{labelContains},{forbidden})");
+            List<ThingInfo> changed = Things
+                .Where(t => (t.Kind == ThingKind.Item) && t.Forbidden != forbidden)
+                .Where(t => !area.HasValue || area.Value.Contains(t.X, t.Z))
+                .Where(t => string.IsNullOrEmpty(labelContains) || t.Label.IndexOf(labelContains, StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+            if (changed.Count == 0) return CommandResult.Fail("no visible item or corpse there");
+            foreach (ThingInfo t in changed) t.Forbidden = forbidden;
+            return CommandResult.Ok($"{changed.Count} item(s): {string.Join(", ", changed.Select(t => t.Label))}");
         }
 
         public CommandResult OrderAttack(int pawnId, int targetId)

@@ -10,7 +10,8 @@ namespace RimAgent.Tools
     /// <summary>標記（開採／砍伐／收成／拆除／搬運）與藍圖放置。</summary>
     public sealed class BuildTools
     {
-        private const int MaxBlueprintCount = 50;
+        /// <summary>一次最多放的藍圖格數（20x20）；再大就分批，免得一句話鋪滿半張地圖。</summary>
+        private const int MaxBlueprintCells = 400;
 
         private readonly IGameWorld _world;
         private readonly ConfirmationGate _gate;
@@ -160,28 +161,17 @@ namespace RimAgent.Tools
             return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
         }
 
-        private sealed class BlueprintLineSpec
-        {
-            public string DefName { get; set; }
-            public string StuffDefName { get; set; }
-            public int X { get; set; }
-            public int Z { get; set; }
-            public int Dx { get; set; }
-            public int Dz { get; set; }
-            public int Count { get; set; }
-            public int Rotation { get; set; }
-        }
-
         [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-        [Description("Places blueprints for colonists to build: one building or floor, or a straight line of them (count and direction, e.g. a wall). Reports how many cells the game refused and the first few reasons.")]
+        [Description("Places blueprints for colonists to build. shape single places one building or floor at (x, z); line places a straight row from (x, z) to (x2, z2); fill covers every cell of the rectangle (floors, ship structural beams); outline places only its border (the walls of a room; put a door on the wall line afterwards). line, fill and outline suit 1x1 things; place larger buildings one at a time. Up to 400 cells per call. Reports how many cells the game refused and the first few reasons.")]
         public string PlaceBlueprint(
-            [Description("Building or floor name or defName, e.g. \"wall\", \"door\", \"solar generator\", \"bed\".")] string building,
-            [Description("x of the first cell.")] int x,
-            [Description("z of the first cell.")] int z,
+            [Description("Building or floor name or defName, e.g. \"wall\", \"door\", \"solar generator\", \"ship structural beam\".")] string building,
+            [Description("single, line, fill or outline.")] string shape,
+            [Description("x of the cell, line start or rectangle corner.")] int x,
+            [Description("z of the cell, line start or rectangle corner.")] int z,
+            [Description("x of the line end or opposite corner; ignored for single.")] int x2,
+            [Description("z of the line end or opposite corner; ignored for single.")] int z2,
             [Description("0 north, 1 east, 2 south, 3 west; matters for doors, beds and other oriented buildings, otherwise 0.")] int rotation,
-            [Description("Material name or defName for buildings made of stuff, e.g. \"wood\", \"steel\", \"granite blocks\"; empty uses the default material.")] string stuff,
-            [Description("Blueprints in the line, 1-50; 1 for a single building.")] int count,
-            [Description("Line direction when count > 1: north, east, south or west.")] string direction)
+            [Description("Material name or defName for buildings made of stuff, e.g. \"wood\", \"steel\", \"granite blocks\"; empty uses the default material.")] string stuff)
         {
             ResolveResult<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
             if (!def.Success) return def.Error;
@@ -190,36 +180,113 @@ namespace RimAgent.Tools
             if (!stuffResult.Success) return stuffResult.Error;
             string stuffDefName = stuffResult.Value;
 
-            string validationError = ValidatePlacementArgs(rotation, count, direction, out int dx, out int dz);
-            if (validationError != null) return validationError;
-
-            if (_gate != null && !_gate.AllowCommands())
-            {
-                return CheckBlueprintPreview(def.Value.Label, stuffDefName, count, direction, x, z);
-            }
-
-            var failures = new List<string>();
-            var spec = new BlueprintLineSpec
-            {
-                DefName = def.Value.DefName,
-                StuffDefName = stuffDefName,
-                X = x,
-                Z = z,
-                Dx = dx,
-                Dz = dz,
-                Count = count,
-                Rotation = rotation
-            };
-            int placed = PlaceBlueprintLine(spec, _world.GetMapBounds(), failures);
+            if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
+            ResolveResult<List<(int X, int Z)>> cells = ShapeCells(shape, x, z, x2, z2);
+            if (!cells.Success) return cells.Error;
 
             string what = def.Value.Label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
+            string where = cells.Value.Count == 1
+                ? $"at {ToolText.Cell(x, z)}"
+                : $"from {ToolText.Cell(x, z)} to {ToolText.Cell(x2, z2)} ({shape.Trim().ToLowerInvariant()})";
+            string blocked = ToolText.Blocked(_gate, $"would place {cells.Value.Count} {what} blueprint(s) {where}.");
+            if (blocked != null) return blocked;
+
+            MapBounds bounds = _world.GetMapBounds();
+            var failures = new List<string>();
+            int placed = 0;
+            foreach ((int cx, int cz) in cells.Value)
+            {
+                if (TargetResolver.CheckCell(cx, cz, bounds) != null)
+                {
+                    failures.Add($"{ToolText.Cell(cx, cz)}: outside the map");
+                    continue;
+                }
+                CommandResult r = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName);
+                if (r.Success) placed++;
+                else failures.Add($"{ToolText.Cell(cx, cz)}: {r.Message}");
+            }
+
             if (placed == 0)
             {
                 return ToolText.Error($"could not place any {what} blueprint. " + string.Join("; ", failures.Take(5)));
             }
-
-            string summary = $"Placed {placed} {what} blueprint(s) starting at {ToolText.Cell(x, z)}.";
+            string summary = $"Placed {placed} {what} blueprint(s) {where}.";
             return failures.Count == 0 ? summary : summary + $" {failures.Count} failed: " + string.Join("; ", failures.Take(5));
+        }
+
+        /// <summary>形狀展開成格子；line 照模型給的起點走向終點，fill／outline 由下往上逐列。</summary>
+        private static ResolveResult<List<(int X, int Z)>> ShapeCells(string shape, int x, int z, int x2, int z2)
+        {
+            var cells = new List<(int X, int Z)>();
+            string kind = shape?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (kind == "single")
+            {
+                cells.Add((x, z));
+                return ResolveResult<List<(int X, int Z)>>.Ok(cells);
+            }
+            if (kind != "line" && kind != "fill" && kind != "outline")
+            {
+                return ResolveResult<List<(int X, int Z)>>.Fail(ToolText.Error($"unknown shape \"{shape}\". Use single, line, fill or outline."));
+            }
+            if (kind == "line" && x != x2 && z != z2)
+            {
+                return ResolveResult<List<(int X, int Z)>>.Fail(ToolText.Error("a line must be straight: keep x or z the same at both ends."));
+            }
+            int minX = Math.Min(x, x2), maxX = Math.Max(x, x2), minZ = Math.Min(z, z2), maxZ = Math.Max(z, z2);
+            long width = maxX - minX + 1L, height = maxZ - minZ + 1L;
+            long count = kind == "outline" && width > 2 && height > 2 ? 2 * (width + height) - 4 : width * height;
+            if (count > MaxBlueprintCells)
+            {
+                return ResolveResult<List<(int X, int Z)>>.Fail(ToolText.Error($"that {kind} covers {count} cells; the limit is {MaxBlueprintCells} per call. Split it into smaller pieces."));
+            }
+
+            if (kind == "line")
+            {
+                int dx = Math.Sign(x2 - x), dz = Math.Sign(z2 - z);
+                for (int i = 0; i < count; i++) cells.Add((x + dx * i, z + dz * i));
+                return ResolveResult<List<(int X, int Z)>>.Ok(cells);
+            }
+            for (int cz = minZ; cz <= maxZ; cz++)
+            {
+                for (int cx = minX; cx <= maxX; cx++)
+                {
+                    bool border = cx == minX || cx == maxX || cz == minZ || cz == maxZ;
+                    if (kind == "fill" || border) cells.Add((cx, cz));
+                }
+            }
+            return ResolveResult<List<(int X, int Z)>>.Ok(cells);
+        }
+
+        [AgentTool("set_forbidden", ToolCategory.Build, ToolRisk.Safe)]
+        [Description("Forbids or allows the visible items and corpses in a rectangle or the whole map. Raiders' gear and other loot often start forbidden, so haulers ignore them until allowed. find_things marks forbidden items.")]
+        public string SetForbidden(
+            [Description("false to allow (unforbid), true to forbid.")] bool forbidden,
+            [Description("Rectangle corner x; pass -1 for all four corners to cover the whole map.")] int x1,
+            [Description("Rectangle corner z.")] int z1,
+            [Description("Opposite corner x.")] int x2,
+            [Description("Opposite corner z.")] int z2,
+            [Description("Only items whose defName or label contains this text, e.g. \"steel\" or \"corpse\". Empty string matches everything.")] string filter)
+        {
+            CellRectSpec? area = null;
+            bool wholeMap = x1 == -1 && z1 == -1 && x2 == -1 && z2 == -1;
+            if (!wholeMap)
+            {
+                if (x1 < 0 || z1 < 0 || x2 < 0 || z2 < 0)
+                    return ToolText.Error("pass -1 for all four corners to cover the whole map; otherwise use valid map coordinates.");
+                ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+                if (!rect.Success) return rect.Error;
+                area = rect.Value;
+            }
+            string where = area.HasValue ? $"in {ToolText.Cell(x1, z1)}-{ToolText.Cell(x2, z2)}" : "on the whole map";
+            string what = string.IsNullOrWhiteSpace(filter) ? "items and corpses" : $"items matching \"{filter.Trim()}\"";
+            string verb = forbidden ? "forbid" : "allow";
+
+            string blocked = ToolText.Blocked(_gate, $"would {verb} visible {what} {where}.");
+            if (blocked != null) return blocked;
+
+            CommandResult r = _world.SetForbidden(area, filter?.Trim() ?? string.Empty, forbidden);
+            if (!r.Success) return ToolText.Error(r.Message);
+            return (forbidden ? "Forbade " : "Allowed ") + r.Message + ".";
         }
 
         private ResolveResult<string> ResolveStuffDefName(string stuff)
@@ -228,63 +295,6 @@ namespace RimAgent.Tools
             ResolveResult<DefInfo> stuffDef = DefResolver.Resolve(stuff, _world.Stuffs, "material");
             if (!stuffDef.Success) return ResolveResult<string>.Fail(stuffDef.Error);
             return ResolveResult<string>.Ok(stuffDef.Value.DefName);
-        }
-
-        private static string ValidatePlacementArgs(int rotation, int count, string direction, out int dx, out int dz)
-        {
-            dx = 0;
-            dz = 0;
-            if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
-            if (count < 1 || count > MaxBlueprintCount) return ToolText.Error($"count must be between 1 and {MaxBlueprintCount}.");
-            if (count > 1 && !TryGetDirectionDelta(direction, out dx, out dz))
-            {
-                return ToolText.Error($"direction \"{direction}\" is not north, east, south or west.");
-            }
-            return null;
-        }
-
-        private string CheckBlueprintPreview(string label, string stuffDefName, int count, string direction, int x, int z)
-        {
-            string whatPreview = label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
-            string linePreview = count > 1 ? $" in a line toward {direction}" : string.Empty;
-            string blueprintPreview = $"would place {count} {whatPreview} blueprint(s) " +
-                $"starting at {ToolText.Cell(x, z)}{linePreview}.";
-            return ToolText.Blocked(_gate, blueprintPreview);
-        }
-
-        private static bool TryGetDirectionDelta(string direction, out int dx, out int dz)
-        {
-            dx = 0;
-            dz = 0;
-            switch ((direction ?? string.Empty).Trim().ToLowerInvariant())
-            {
-                case "north": dz = 1; return true;
-                case "south": dz = -1; return true;
-                case "east": dx = 1; return true;
-                case "west": dx = -1; return true;
-                default: return false;
-            }
-        }
-
-        private int PlaceBlueprintLine(BlueprintLineSpec spec, MapBounds bounds, List<string> failures)
-        {
-            int placed = 0;
-            for (int i = 0; i < spec.Count; i++)
-            {
-                int cx = spec.X + spec.Dx * i;
-                int cz = spec.Z + spec.Dz * i;
-                string outOfBounds = TargetResolver.CheckCell(cx, cz, bounds);
-                if (outOfBounds != null)
-                {
-                    failures.Add($"{ToolText.Cell(cx, cz)}: outside the map");
-                    continue;
-                }
-
-                CommandResult r = _world.TryPlaceBlueprint(spec.DefName, cx, cz, spec.Rotation, spec.StuffDefName);
-                if (r.Success) placed++;
-                else failures.Add($"{ToolText.Cell(cx, cz)}: {r.Message}");
-            }
-            return placed;
         }
 
         private static DesignationKind ParseKind(string kind)

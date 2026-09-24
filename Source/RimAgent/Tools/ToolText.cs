@@ -59,6 +59,7 @@ namespace RimAgent.Tools
             if (t.StackCount > 1) sb.Append(" x").Append(t.StackCount);
             if (t.Kind == ThingKind.Plant && t.Harvestable) sb.Append(" harvestable");
             if (t.Kind == ThingKind.Building) sb.Append(t.PlayerOwned ? " player-owned" : " not player-owned");
+            if (t.Forbidden) sb.Append(" forbidden");
             if (t.Designations.Count > 0) sb.Append(" [marked: ").Append(string.Join(", ", t.Designations)).Append(']');
             return sb.ToString();
         }

@@ -8,7 +8,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>生產：工作台查詢、帳單增刪。材料篩選沿用遊戲預設，不另調。</summary>
+    /// <summary>生產：工作台與帳單查詢、帳單增刪。材料篩選沿用遊戲預設，不另調。</summary>
     public sealed class ProductionTools
     {
         private readonly IGameWorld _world;
@@ -20,29 +20,12 @@ namespace RimAgent.Tools
             _gate = gate;
         }
 
-        [AgentTool("list_worktables", ToolCategory.Production, ToolRisk.Query)]
-        [Description("Lists work tables that take bills, with id, cell and bill count. Check it before list_bills, add_bill or delete_bill.")]
-        public string ListWorktables()
-        {
-            List<WorkTableInfo> tables = _world.GetWorkTables().ToList();
-            if (tables.Count == 0) return "There are no work tables in the colony.";
-
-            var sb = new StringBuilder();
-            sb.Append(tables.Count == 1 ? "1 work table:" : tables.Count + " work tables:").AppendLine();
-            foreach (WorkTableInfo t in tables)
-            {
-                sb.Append("[").Append(t.Id).Append("] ").Append(t.Label);
-                sb.Append(" at (").Append(t.X).Append(",").Append(t.Z).Append(')');
-                sb.Append(", ").Append(t.BillCount).Append(t.BillCount == 1 ? " bill" : " bills").AppendLine();
-            }
-            return sb.ToString().Trim();
-        }
-
         [AgentTool("list_bills", ToolCategory.Production, ToolRisk.Query)]
-        [Description("Lists the bills on one work table with their numbers and repeat counts. Numbers shift when a bill is deleted, so list again right before delete_bill.")]
+        [Description("Lists the work tables that take bills (id, cell) with their numbered bills and repeat counts; give a table to show just that one. Bill numbers shift when a bill is deleted, so list again right before delete_bill.")]
         public string ListBills(
-            [Description("Work table id in square brackets from list_worktables.")] string table)
+            [Description("Work table id or name; empty lists every work table.")] string table)
         {
+            if (string.IsNullOrWhiteSpace(table)) return ListAllBills();
             ResolveResult<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
             if (!target.Success) return target.Error;
 
@@ -59,10 +42,36 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
+        private string ListAllBills()
+        {
+            List<WorkTableInfo> tables = _world.GetWorkTables().ToList();
+            if (tables.Count == 0) return "There are no work tables in the colony.";
+
+            var sb = new StringBuilder();
+            sb.Append(tables.Count == 1 ? "1 work table:" : tables.Count + " work tables:").AppendLine();
+            foreach (WorkTableInfo t in tables)
+            {
+                sb.Append("[").Append(t.Id).Append("] ").Append(t.Label);
+                sb.Append(" at (").Append(t.X).Append(",").Append(t.Z).Append(')');
+                List<BillInfo> bills = _world.GetBills(t.Id).ToList();
+                if (bills.Count == 0)
+                {
+                    sb.Append(", no bills").AppendLine();
+                    continue;
+                }
+                sb.Append(':').AppendLine();
+                foreach (BillInfo b in bills)
+                {
+                    sb.Append("  [").Append(b.Index).Append("] ").Append(b.Label).Append(" (").Append(b.Repeat).Append(')').AppendLine();
+                }
+            }
+            return sb.ToString().Trim();
+        }
+
         [AgentTool("add_bill", ToolCategory.Production, ToolRisk.Safe)]
         [Description("Adds a production bill to a work table, e.g. make components 5 times. Missing research or facilities are reported.")]
         public string AddBill(
-            [Description("Work table id in square brackets from list_worktables.")] string table,
+            [Description("Work table id in square brackets from list_bills.")] string table,
             [Description("Recipe name, e.g. \"component\" or \"short bow\".")] string recipe,
             [Description("How many times to make it (at least 1).")] int count)
         {
@@ -84,7 +93,7 @@ namespace RimAgent.Tools
         [AgentTool("delete_bill", ToolCategory.Production, ToolRisk.Confirm)]
         [Description("Deletes one bill from a work table by its number from list_bills. Gathered materials stay where they are.")]
         public string DeleteBill(
-            [Description("Work table id in square brackets from list_worktables.")] string table,
+            [Description("Work table id in square brackets from list_bills.")] string table,
             [Description("Bill number in square brackets from list_bills.")] int bill)
         {
             ResolveResult<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
@@ -109,7 +118,7 @@ namespace RimAgent.Tools
                 t => new[] { t.Label },
                 t => $"[{t.Id}] {t.Label}",
                 "work table",
-                "Error: work table is empty. Give an id from list_worktables.");
+                "Error: work table is empty. Give an id from list_bills.");
         }
     }
 }

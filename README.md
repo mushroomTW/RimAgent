@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (RimAgent), 53 colony management tools, multi-tier risk validation, and autonomous routine management.
+An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (RimAgent), 51 colony management tools, multi-tier risk validation, and autonomous routine management.
 
-**RimWorld 1.6** &nbsp;·&nbsp; **53 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.6** &nbsp;·&nbsp; **51 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -65,7 +65,7 @@ An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (
   </tr>
   <tr>
     <td align="center" width="33%">
-      <h3>📊 53 Colony Tools</h3>
+      <h3>📊 51 Colony Tools</h3>
       <sub>Covers observation, work priorities, construction, combat, trading, medical care, animals, prisoners, and zones.</sub>
     </td>
     <td align="center" width="33%">
@@ -160,7 +160,7 @@ flowchart TD
 - **Reversible Priorities (`/undo`)**: Restores work priorities and daily schedules modified by the previous instruction, including instructions that failed halfway through.
 - **Readiness Guard**: If no game is being played (main menu or save still loading) or no current map is available, tool execution halts safely and instructs the model to stop.
 - **Game Error Feedback**: Errors logged by the game engine (`Log.Error`) during tool execution are appended to that tool's result (up to 5 errors with count), alerting the model if a command threw an exception.
-- **In-Tool Guard Rails**: `order_attack` refuses colony members, prisoners, and friendly factions; `schedule_surgery` requires an explicit body part; `execute_trade` requires a conscious, socially capable negotiator and a powered comms console for orbital traders; `form_caravan` departs immediately without packing delays; zones validate against terrain, map boundaries, and fertility.
+- **In-Tool Guard Rails**: `order_attack` refuses colony members, prisoners, and friendly factions; `order_job` refuses captures and strips that would anger a non-hostile faction and leaves persona-weapon bonding to the player; `set_forbidden` only touches items and corpses outside the fog; `use_gizmo` only presses action and toggle buttons, hides developer-mode buttons, and closes any menu or window it cannot operate instead of leaving it open; `schedule_surgery` requires an explicit body part; `execute_trade` requires a conscious, socially capable negotiator and a powered comms console for orbital traders; `form_caravan` departs immediately without packing delays; zones validate against terrain, map boundaries, and fertility.
 
 > [!WARNING]
 > Combat orders reach the game several seconds after speaking due to LLM round-trip latency. They are designed for strategic positioning, rally points, and tactical retreats, not split-second micro-control.
@@ -181,6 +181,7 @@ Select **Autonomous** mode (in Mod Settings or the mode dropdown) to enable the 
   - Food shortages
   - Downed or bleeding colonists (medical emergency)
   - Active fires on any colony map
+  - New choice letters or dialogs (a wanderer asking to join, refugees, ransom demands). Checked every 2 real-time seconds, even while a dialog pauses the game; each choice triggers once
 - **Unlimited Budget & Cooldown Control**: Autonomous runs have no daily tool-call budget restriction. A configurable cooldown (0–60 minutes in mod settings, default: disabled) prevents runs from re-triggering too rapidly.
 - **Persistent Goals**: `/goal` runs independently of Autonomous mode. The first queued objective starts shortly after creation, is repeated in each continuation after context compaction, and continues until verified complete. It waits for confirmations required by the current mode and passes confirmed execution results into the next continuation. Goal pause/removal only discards confirmations raised by that goal. Three blocked/error turns or 60 turns pause it for review; `/goal resume` restarts it. Goals are saved with the game.
 
@@ -190,10 +191,10 @@ Select **Autonomous** mode (in Mod Settings or the mode dropdown) to enable the 
 
 | Category | Tools | Default |
 | --- | --- | --- |
-| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching (safe command), map object search, cell and area inspection (terrain, roof, rooms, zones, obstacles), game screenshots (safe command) | on |
+| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching (safe command), map object search, cell and area inspection (terrain, roof, rooms, zones, obstacles), game screenshots (safe command), pending choice letters, dialogs and confirmation boxes and answering them (confirm command) | on |
 | Work | work priorities, daily schedules (undoable) | on |
-| Build | mine / cut / harvest / deconstruct / haul / hunt designations, blueprints (single or in a line) | on |
-| Combat | draft, move, attack | on |
+| Build | mine / cut / harvest / deconstruct / haul / hunt designations, blueprints (single, line, filled rectangle or rectangle outline, up to 400 cells per call), forbidding and allowing items, command buttons (gizmos) such as ship reactor startup and ship launch (pressing is a confirm command) | on |
+| Combat | draft, move, attack, one-off jobs (rescue, capture, tend, strip, equip, enter a cryptosleep casket) | on |
 | Trade | orbital trader and visiting caravan stock listing, buying and selling in a single deal, forming player caravans | on |
 | Medical | health status, medical care levels, scheduling surgery | on |
 | Prisoner | prisoner listing, interaction modes, release | on |
@@ -210,17 +211,16 @@ Every tool by name, with its category and static risk tag. The block between the
 <!-- tool-table:begin -->
 | Tool | Category | Risk |
 | --- | --- | --- |
+| `choose_option` | Observe | Confirm |
 | `find_things` | Observe | Query |
-| `get_cell_info` | Observe | Query |
 | `get_colonist_wellbeing` | Observe | Query |
 | `get_colony_overview` | Observe | Query |
 | `get_maps` | Observe | Query |
-| `get_power_status` | Observe | Query |
 | `get_research_status` | Observe | Query |
 | `get_resources` | Observe | Query |
 | `inspect_area` | Observe | Query |
-| `list_alerts` | Observe | Query |
 | `list_colonists` | Observe | Query |
+| `list_pending_choices` | Observe | Query |
 | `list_recent_letters` | Observe | Query |
 | `list_threats` | Observe | Query |
 | `set_current_map` | Observe | Safe |
@@ -229,17 +229,19 @@ Every tool by name, with its category and static risk tag. The block between the
 | `list_work_priorities` | Work | Query |
 | `set_schedule` | Work | Safe |
 | `set_work_priorities` | Work | Safe |
-| `set_work_priority` | Work | Safe |
 | `cancel_designation` | Build | Safe |
 | `designate_area` | Build | Confirm |
+| `list_gizmos` | Build | Query |
 | `place_blueprint` | Build | Confirm |
+| `set_forbidden` | Build | Safe |
+| `use_gizmo` | Build | Confirm |
 | `draft` | Combat | Safe |
 | `order_attack` | Combat | Confirm |
+| `order_job` | Combat | Safe |
 | `order_move` | Combat | Safe |
 | `execute_trade` | Trade | Confirm |
 | `form_caravan` | Trade | Confirm |
-| `list_orbital_traders` | Trade | Query |
-| `list_visitor_caravans` | Trade | Query |
+| `list_traders` | Trade | Query |
 | `get_health` | Medical | Query |
 | `schedule_surgery` | Medical | Confirm |
 | `set_medical_care` | Medical | Safe |
@@ -257,12 +259,9 @@ Every tool by name, with its category and static risk tag. The block between the
 | `add_bill` | Production | Safe |
 | `delete_bill` | Production | Confirm |
 | `list_bills` | Production | Query |
-| `list_worktables` | Production | Query |
-| `get_time_speed` | Time | Query |
 | `set_time_speed` | Time | Safe |
 | `mcp_call_tool` | Mcp | Confirm |
 | `mcp_list_tools` | Mcp | Query |
-| `mcp_status` | Mcp | Query |
 <!-- tool-table:end -->
 
 ---
@@ -276,7 +275,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-         │                              53 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+         │                              51 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
          │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```

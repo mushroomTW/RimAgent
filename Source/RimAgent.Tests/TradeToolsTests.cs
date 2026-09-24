@@ -109,8 +109,8 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Trade)).OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.True);
-            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Trade)).OfType<AIFunction>().Any(t => t.Name == "list_traders"), Is.True);
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_traders"), Is.False);
         }
 
         [Test]
@@ -126,8 +126,8 @@ namespace RimAgent.Tests
             permissions.Set(ToolCategory.Trade, true);
             await session.SendAsync("two");
 
-            Assert.That(client.ReceivedOptions[0].Tools.OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.False);
-            Assert.That(client.ReceivedOptions[1].Tools.OfType<AIFunction>().Any(t => t.Name == "list_orbital_traders"), Is.True);
+            Assert.That(client.ReceivedOptions[0].Tools.OfType<AIFunction>().Any(t => t.Name == "list_traders"), Is.False);
+            Assert.That(client.ReceivedOptions[1].Tools.OfType<AIFunction>().Any(t => t.Name == "list_traders"), Is.True);
         }
 
         [Test]
@@ -135,7 +135,7 @@ namespace RimAgent.Tests
         {
             _world.Traders.Add(MakeOrbitalShip());
             var client = new ScriptedChatClient();
-            client.CallTool("list_orbital_traders", null).Reply("Two ships in orbit.");
+            client.CallTool("list_traders", null).Reply("Two ships in orbit.");
             var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade), 8);
 
             await session.SendAsync("軌道上有誰在賣東西？");
@@ -143,7 +143,7 @@ namespace RimAgent.Tests
             IReadOnlyList<TranscriptEntry> transcript = session.Transcript.Snapshot();
             Assert.That(transcript.Count(e => e.Kind == TranscriptKind.Tool), Is.EqualTo(1));
             TranscriptEntry tool = transcript.Single(e => e.Kind == TranscriptKind.Tool);
-            Assert.That(tool.ToolName, Is.EqualTo("list_orbital_traders"));
+            Assert.That(tool.ToolName, Is.EqualTo("list_traders"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
             Assert.That(tool.Result, Does.Contain("Starweaver"));
         }
@@ -153,34 +153,17 @@ namespace RimAgent.Tests
         {
             _world.Traders.Add(MakeOrbitalShip());
 
-            string text = _tools.ListOrbitalTraders();
+            string text = _tools.ListTraders();
 
-            Assert.That(text, Does.Contain("Starweaver").And.Contain("Outlanders").And.Contain("1200"));
+            Assert.That(text, Does.Contain("1 orbital trader:").And.Contain("Starweaver").And.Contain("Outlanders").And.Contain("1200"));
             Assert.That(text, Does.Contain("spacer component (ComponentSpacer) x8").And.Contain("ultratech medicine (MedicineUltratech) x12"));
+            Assert.That(text, Does.Contain("No visiting caravans."));
         }
 
         [Test]
-        public void NoOrbitalTraderIsReportedExplicitly()
+        public void NoTraderIsReportedExplicitly()
         {
-            Assert.That(_tools.ListOrbitalTraders(), Does.Contain("no orbital traders").IgnoreCase);
-        }
-
-        [Test]
-        public void VisitorCaravanIsNeverSubstitutedForAnOrbitalTrader()
-        {
-            _world.Traders.Add(new TraderInfo
-            {
-                Kind = TraderInfo.VisitorKind,
-                Name = "來訪商隊",
-                Faction = "Outlanders",
-                Silver = 500,
-                Goods = new[] { new TradeGoodsInfo { DefName = "Steel", Label = "steel", Count = 100 } }
-            });
-
-            string text = _tools.ListOrbitalTraders();
-
-            Assert.That(text, Does.Contain("no orbital traders").IgnoreCase);
-            Assert.That(text, Does.Not.Contain("steel"));
+            Assert.That(_tools.ListTraders(), Does.Contain("no orbital traders and no visiting caravans").And.Contain("Do not invent one"));
         }
 
         [Test]
@@ -191,7 +174,7 @@ namespace RimAgent.Tests
                 .ToList();
             _world.Traders.Add(new TraderInfo { Kind = TraderInfo.OrbitalKind, Name = "Bulk freighter", Goods = goods });
 
-            string text = _tools.ListOrbitalTraders();
+            string text = _tools.ListTraders();
 
             Assert.That(text, Does.Contain("and 5 more"));
         }
@@ -201,66 +184,42 @@ namespace RimAgent.Tests
         {
             _world.Traders.Add(MakeVisitorCaravan());
 
-            string text = _tools.ListVisitorCaravans();
+            string text = _tools.ListTraders();
 
-            Assert.That(text, Does.Contain("visiting caravan").And.Contain("Rook").And.Contain("Tribe").And.Contain("350"));
+            Assert.That(text, Does.Contain("No orbital traders.").And.Contain("1 visiting caravan:").And.Contain("Rook").And.Contain("Tribe").And.Contain("350"));
             Assert.That(text, Does.Contain("steel (Steel) x100").And.Contain("herbal medicine (HerbalMedicine) x20"));
         }
 
         [Test]
-        public void NoVisitorCaravanIsReportedExplicitly()
-        {
-            Assert.That(_tools.ListVisitorCaravans(), Does.Contain("no visiting caravans").IgnoreCase);
-        }
-
-        [Test]
-        public void OrbitalTraderIsNeverSubstitutedForAVisitor()
-        {
-            _world.Traders.Add(MakeOrbitalShip());
-
-            string text = _tools.ListVisitorCaravans();
-
-            Assert.That(text, Does.Contain("no visiting caravans").IgnoreCase);
-            Assert.That(text, Does.Not.Contain("Starweaver").And.Not.Contain("spacer component"));
-        }
-
-        [Test]
-        public void BothKindsCoexistWithoutLeakingIntoEachOther()
+        public void BothKindsAreListedUnderTheirOwnHeadingWithIds()
         {
             _world.Traders.Add(MakeOrbitalShip());
             _world.Traders.Add(MakeVisitorCaravan());
 
-            string orbital = _tools.ListOrbitalTraders();
-            string visitor = _tools.ListVisitorCaravans();
+            string text = _tools.ListTraders();
+            int orbital = text.IndexOf("1 orbital trader:", System.StringComparison.Ordinal);
+            int visitor = text.IndexOf("1 visiting caravan:", System.StringComparison.Ordinal);
 
-            Assert.That(orbital, Does.Contain("1 orbital trader").And.Contain("Starweaver").And.Not.Contain("Rook"));
-            Assert.That(visitor, Does.Contain("1 visiting caravan").And.Contain("Rook").And.Not.Contain("Starweaver"));
+            Assert.That(orbital, Is.GreaterThanOrEqualTo(0));
+            Assert.That(visitor, Is.GreaterThan(orbital));
+            Assert.That(text.Substring(orbital, visitor - orbital), Does.Contain("[PassingShip_1] Starweaver").And.Not.Contain("Rook"));
+            Assert.That(text.Substring(visitor), Does.Contain("[Thing_2] Rook").And.Not.Contain("Starweaver"));
         }
 
         [Test]
-        public async Task VisitorQueryIsLoggedAsAToolCall()
+        public async Task TraderQueryIsLoggedAsAToolCall()
         {
             _world.Traders.Add(MakeVisitorCaravan());
             var client = new ScriptedChatClient();
-            client.CallTool("list_visitor_caravans", null).Reply("A tribe is visiting.");
+            client.CallTool("list_traders", null).Reply("A tribe is visiting.");
             var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade), 8);
 
             await session.SendAsync("來訪商隊在賣什麼？");
 
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
-            Assert.That(tool.ToolName, Is.EqualTo("list_visitor_caravans"));
+            Assert.That(tool.ToolName, Is.EqualTo("list_traders"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
             Assert.That(tool.Result, Does.Contain("Rook"));
-        }
-
-        [Test]
-        public void TraderListShowsIdsForLaterDeals()
-        {
-            _world.Traders.Add(MakeOrbitalShip());
-            _world.Traders.Add(MakeVisitorCaravan());
-
-            Assert.That(_tools.ListOrbitalTraders(), Does.Contain("[PassingShip_1]"));
-            Assert.That(_tools.ListVisitorCaravans(), Does.Contain("[Thing_2]"));
         }
 
         [Test]

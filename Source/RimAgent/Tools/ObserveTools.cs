@@ -22,13 +22,18 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_colony_overview", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("One-line colony summary: population, date and time, weather, outdoor temperature, wealth, hostiles on the map and colonists close to a mental break. Start here for any general question about how the colony is doing.")]
+        [Description("Colony summary: population, date and time, time speed, weather, outdoor temperature, wealth, hostiles on the map, colonists close to a mental break, power (networks, net watts, stored battery energy) and the game's active alerts (food, rescue, bedroom, power and so on). Start here for any general question and on every routine inspection.")]
         public string GetColonyOverview()
         {
             ColonyOverview o = _world.GetOverview();
+            string speed = TimeTools.SpeedLabel(_world.GetTimeSpeed().Current, _world.TimeSpeeds);
+            PowerInfo power = _world.GetPower();
+            IReadOnlyList<AlertInfo> alerts = _world.GetAlerts();
             return $"Colony: {o.ColonyName} | Colonists: {o.ColonistCount} | Date: year {o.Year}, {o.Season} day {o.DayOfSeason}, {o.Hour:00}:00" +
-                   $" | Weather: {o.Weather} | Outdoor temp: {ToolText.Num(o.OutdoorTemperatureC)}°C | Wealth: {ToolText.Num(o.Wealth)}" +
-                   $" | Hostiles on map: {o.HostileCount} | Colonists near mental break: {o.ColonistsNearMentalBreak}";
+                   $" | Time speed: {speed} | Weather: {o.Weather} | Outdoor temp: {ToolText.Num(o.OutdoorTemperatureC)}°C | Wealth: {ToolText.Num(o.Wealth)}" +
+                   $" | Hostiles on map: {o.HostileCount} | Colonists near mental break: {o.ColonistsNearMentalBreak}\n" +
+                   $"Power: {power.NetworkCount} network(s), net watts {ToolText.Num(power.NetWatts)}, stored battery energy {ToolText.Num(power.StoredEnergy)}\n" +
+                   "Alerts: " + (alerts.Count == 0 ? "none" : string.Join("; ", alerts.Select(a => "[" + a.Priority + "] " + a.Label)));
         }
 
         [AgentTool("list_colonists", ToolCategory.Observe, ToolRisk.Query)]
@@ -96,15 +101,6 @@ namespace RimAgent.Tools
             return sb.ToString().Trim();
         }
 
-        [AgentTool("list_alerts", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists the game's active colony alerts (food, rescue, bedroom, power and so on). Cheapest first check on a routine inspection.")]
-        public string ListAlerts()
-        {
-            IReadOnlyList<AlertInfo> alerts = _world.GetAlerts();
-            if (alerts.Count == 0) return "No active colony alerts.";
-            return string.Join("\n", alerts.Select(a => "[" + a.Priority + "] " + a.Label));
-        }
-
         [AgentTool("list_recent_letters", ToolCategory.Observe, ToolRisk.Query)]
         [Description("Lists the most recent in-game event letters. Explains what happened before the colony's state changed.")]
         public string ListRecentLetters()
@@ -112,15 +108,6 @@ namespace RimAgent.Tools
             IReadOnlyList<LetterInfo> letters = _world.GetRecentLetters();
             if (letters.Count == 0) return "No recent event letters.";
             return string.Join("\n", letters.Select(l => l.Label));
-        }
-
-        [AgentTool("get_power_status", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Reports the number of power networks, total net watts (positive surplus, negative deficit) and stored battery energy.")]
-        public string GetPowerStatus()
-        {
-            PowerInfo power = _world.GetPower();
-            return "Power networks: " + power.NetworkCount + " | net watts: " + ToolText.Num(power.NetWatts) +
-                   " | stored battery energy: " + ToolText.Num(power.StoredEnergy);
         }
 
         [AgentTool("list_threats", ToolCategory.Observe, ToolRisk.Query)]
@@ -323,11 +310,8 @@ namespace RimAgent.Tools
         private const int MaxObstaclesListed = 10;
         private const float FertileThreshold = 0.7f;
 
-        [AgentTool("get_cell_info", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Describes one map cell: terrain and fertility, roof, whether it is walkable, the zone it belongs to, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects standing on it. Use it before placing a blueprint or a zone, or to learn how big a room is.")]
-        public string GetCellInfo(
-            [Description("Cell x.")] int x,
-            [Description("Cell z.")] int z)
+        /// <summary>單格明細：inspect_area 兩個角落同一格時用。</summary>
+        private string DescribeCell(int x, int z)
         {
             string outside = TargetResolver.CheckCell(x, z, _world.GetMapBounds());
             if (outside != null) return outside;
@@ -355,13 +339,14 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Summarises a rectangle of up to 2500 cells (50x50): terrain breakdown, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it. Use it to check whether an area is clear before placing blueprints or a zone; use get_cell_info for one cell.")]
+        [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 2500 cells (50x50) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
         public string InspectArea(
             [Description("Rectangle corner x.")] int x1,
             [Description("Rectangle corner z.")] int z1,
             [Description("Opposite corner x.")] int x2,
             [Description("Opposite corner z.")] int z2)
         {
+            if (x1 == x2 && z1 == z2) return DescribeCell(x1, z1);
             ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
             if (!rect.Success) return rect.Error;
             if (rect.Value.CellCount > MaxInspectedCells)

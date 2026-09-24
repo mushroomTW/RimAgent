@@ -17,6 +17,13 @@ namespace RimAgent.Tools
             public DefInfo Work;
             public int Priority;
             public int Previous;
+            /// <summary>回報用的舊值；遊戲沒給這項工作的資料時是 "?"。</summary>
+            public string PreviousLabel;
+
+            public string Describe()
+            {
+                return $"{Colonist.Name}'s {Work.Label} priority {PreviousLabel} -> {Priority}";
+            }
         }
 
         private readonly IGameWorld _world;
@@ -30,48 +37,8 @@ namespace RimAgent.Tools
             _gate = gate;
         }
 
-        [AgentTool("set_work_priority", ToolCategory.Work, ToolRisk.Safe)]
-        [Description("Sets one colonist's priority for one work type and reports the previous and new value. For several changes at once use set_work_priorities.")]
-        public string SetWorkPriority(
-            [Description("Colonist name, nickname or id.")] string colonist,
-            [Description("Work type name or defName, e.g. Doctor, Cooking, Mining, Growing, Construction, Hauling, Cleaning, Research.")] string workType,
-            [Description("0 disables the work for this colonist; otherwise 1 (highest) to 4 (lowest).")] int priority)
-        {
-            if (priority < 0 || priority > 4)
-            {
-                return ToolText.Error($"priority {priority} is out of range. Use 0 (disabled) or 1 (highest) to 4 (lowest).");
-            }
-
-            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
-            if (!pawn.Success) return pawn.Error;
-
-            ResolveResult<DefInfo> work = DefResolver.Resolve(workType, _world.WorkTypes, "work type");
-            if (!work.Success) return work.Error;
-
-            WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
-                string.Equals(w.WorkTypeDefName, work.Value.DefName, StringComparison.OrdinalIgnoreCase));
-            if (current != null && current.Disabled)
-            {
-                return ToolText.Error($"{pawn.Value.Name} is incapable of {work.Value.Label} and cannot be assigned to it.");
-            }
-
-            // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
-            string previous = current != null ? current.Priority.ToString() : "?";
-            int oldPriority = current != null ? current.Priority : 3;
-
-            string blocked = ToolText.Blocked(_gate, $"would set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.");
-            if (blocked != null) return blocked;
-
-            CommandResult result = _world.SetWorkPriority(pawn.Value.Id, work.Value.DefName, priority);
-
-            if (_undo != null && current != null) _undo.RecordPriority(pawn.Value.Id, work.Value.DefName, oldPriority);
-
-            string suffix = string.IsNullOrEmpty(result.Message) ? string.Empty : " " + result.Message;
-            return $"Set {pawn.Value.Name}'s {work.Value.Label} priority {previous} -> {priority}.{suffix}";
-        }
-
         [AgentTool("set_work_priorities", ToolCategory.Work, ToolRisk.Safe)]
-        [Description("Sets several work priorities in one call: every assignment is validated first, then all are applied or none.")]
+        [Description("Sets one or more colonists' work priorities in one call and reports each previous and new value. Every assignment is validated first, then all are applied or none.")]
         public string SetWorkPriorities(
             [Description("Semicolon-separated colonist:work=priority, e.g. \"Ali:Doctor=1; Bob:Hauling=2\". Priority 0 disables, 1 highest, 4 lowest.")] string assignments)
         {
@@ -90,7 +57,7 @@ namespace RimAgent.Tools
                 }
                 if (!int.TryParse(part.Substring(equals + 1).Trim(), out int priority) || priority < 0 || priority > 4)
                 {
-                    return ToolText.Error("priority in '" + part + "' must be 0 to 4.");
+                    return ToolText.Error("priority in '" + part + "' is out of range. Use 0 (disabled) or 1 (highest) to 4 (lowest).");
                 }
 
                 ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(part.Substring(0, colon).Trim(), _world.GetColonists());
@@ -99,23 +66,30 @@ namespace RimAgent.Tools
                 if (!work.Success) return work.Error;
                 WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
                     string.Equals(w.WorkTypeDefName, work.Value.DefName, StringComparison.OrdinalIgnoreCase));
-                if (current != null && current.Disabled) return ToolText.Error(pawn.Value.Name + " is incapable of " + work.Value.Label + ".");
+                if (current != null && current.Disabled)
+                {
+                    return ToolText.Error(pawn.Value.Name + " is incapable of " + work.Value.Label + " and cannot be assigned to it.");
+                }
                 changes.Add(new WorkPriorityChange
                 {
                     Colonist = pawn.Value,
                     Work = work.Value,
                     Priority = priority,
-                    Previous = current != null ? current.Priority : 3
+                    // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
+                    Previous = current != null ? current.Priority : 3,
+                    PreviousLabel = current != null ? current.Priority.ToString() : "?"
                 });
             }
 
-            string blocked = ToolText.Blocked(_gate, "would set " + string.Join(", ", changes.Select(c => c.Colonist.Name + " " + c.Work.Label + "=" + c.Priority)) + ".");
+            string blocked = ToolText.Blocked(_gate, "would set " + string.Join("; ", changes.Select(c => c.Describe())) + ".");
             if (blocked != null) return blocked;
 
             var applied = new List<WorkPriorityChange>();
+            var notes = new List<string>();
             foreach (WorkPriorityChange change in changes)
             {
                 CommandResult result = _world.SetWorkPriority(change.Colonist.Id, change.Work.DefName, change.Priority);
+                if (result.Success && !string.IsNullOrEmpty(result.Message)) notes.Add(result.Message);
                 if (!result.Success)
                 {
                     List<string> rollbackFailures = RollBackWorkPriorities(applied);
@@ -129,7 +103,8 @@ namespace RimAgent.Tools
             {
                 if (_undo != null) _undo.RecordPriority(change.Colonist.Id, change.Work.DefName, change.Previous);
             }
-            return "Set " + applied.Count + " work priority assignment(s).";
+            string suffix = notes.Count == 0 ? string.Empty : " " + string.Join(" ", notes);
+            return "Set " + string.Join("; ", applied.Select(c => c.Describe())) + "." + suffix;
         }
 
         private List<string> RollBackWorkPriorities(List<WorkPriorityChange> applied)

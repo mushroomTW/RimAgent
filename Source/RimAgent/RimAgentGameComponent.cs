@@ -50,6 +50,10 @@ namespace RimAgent
         /// 早於冷卻記錄；只看 busy 的話，中間落下的訊號檢查會拿舊冷卻再起一輪。
         /// </summary>
         private volatile bool _autoRunning;
+        /// <summary>見過的抉擇 id：只在出現新抉擇時起一輪，模型沒處理掉的不會每幾秒重觸發、白燒 API。</summary>
+        private readonly HashSet<string> _seenChoices = new HashSet<string>();
+        private DateTime _nextChoiceCheckAt;
+        private const double ChoiceCheckSeconds = 2;
         private CancellationTokenSource _goalCts;
         private bool _goalRunning;
         private bool _goalPaused;
@@ -268,7 +272,38 @@ namespace RimAgent
         public override void GameComponentUpdate()
         {
             base.GameComponentUpdate();
+            // 抉擇先於持續目標：暫停遊戲的對話框不處理，目標也推進不了。
+            TryStartChoiceRun();
             TryStartGoal();
+        }
+
+        /// <summary>
+        /// 自主模式下出現新的抉擇信件或對話框就起一輪自主任務。放在 Update 而不是 Tick：
+        /// 對話框會暫停遊戲，暫停時 GameComponentTick 不跑，只看 tick 會一路卡到玩家回來。
+        /// 也不走排程器的冷卻：暫停中 tick 不前進，冷卻永遠等不完。
+        /// </summary>
+        private void TryStartChoiceRun()
+        {
+            RimAgentSettings settings = RimAgentMod.Settings;
+            if (settings == null || settings.mode != AgentMode.Autonomous || DateTime.UtcNow < _nextChoiceCheckAt) return;
+            _nextChoiceCheckAt = DateTime.UtcNow.AddSeconds(ChoiceCheckSeconds);
+            if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
+            try
+            {
+                ColonyAgentSession session = Session;
+                if (session.IsBusy || session.HasPendingConfirmation) return;
+                IReadOnlyList<PendingChoiceInfo> choices = _autoWorld.GetPendingChoices();
+                bool fresh = false;
+                foreach (PendingChoiceInfo choice in choices) fresh |= _seenChoices.Add(choice.Id);
+                _seenChoices.RemoveWhere(id => choices.All(c => c.Id != id));
+                if (!fresh) return;
+                _autoRunning = true;
+                _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Choice, Find.TickManager.TicksGame, ToConfig(settings));
+            }
+            catch (Exception ex)
+            {
+                WarnOnce("RimAgent choice check failed: " + ex.Message);
+            }
         }
 
         private void TryStartGoal()

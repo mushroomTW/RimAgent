@@ -8,7 +8,7 @@ Hostiles are on the map. Deploy the defence with tools: draft the colonists who 
 
 ## RaidEnded
 
-The raid has ended. Check threats with tools; when the map is clear, undraft everyone still drafted so they return to food, rest and work.
+The raid has ended. Check threats with tools; when the map is clear, undraft everyone still drafted so they return to food, rest and work. Then clean up with order_job: rescue downed colonists, capture downed raiders worth recruiting (a prisoner bed is needed), and allow the raiders' dropped gear with set_forbidden so it gets hauled.
 
 ## EmergencyMedical
 
@@ -25,6 +25,10 @@ A colonist is close to a mental break. Check their mood and its causes with tool
 ## FoodShortage
 
 Food reserves are low. Check resources with tools, then secure more human-edible nutrition: harvest, hunt, add cooking bills or trade.
+
+## Choice
+
+An event is waiting for the colony's decision and may be pausing the game. List pending choices with tools and answer each one with choose_option. Weigh the colony's long-term survival: new colonists are valuable, but check the risks the text mentions (pursuers, hostile factions, costs). Postpone only when a decision truly needs more information.
 
 ## Interval
 

@@ -10,9 +10,9 @@
 
 **以自然語言管理你的 RimWorld 殖民地。**
 
-專為 RimWorld 1.6 設計的遊戲內 AI 助手模組，具備可自由拖曳的懸浮視窗（RimAgent）、53 項殖民地管理工具、多層級風險把關機制，以及自主巡檢營運能力。
+專為 RimWorld 1.6 設計的遊戲內 AI 助手模組，具備可自由拖曳的懸浮視窗（RimAgent）、51 項殖民地管理工具、多層級風險把關機制，以及自主巡檢營運能力。
 
-**RimWorld 1.6** &nbsp;·&nbsp; **53 項工具** &nbsp;·&nbsp; **自動／自主模式** &nbsp;·&nbsp; **支援 MCP 擴充**
+**RimWorld 1.6** &nbsp;·&nbsp; **51 項工具** &nbsp;·&nbsp; **自動／自主模式** &nbsp;·&nbsp; **支援 MCP 擴充**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#先決條件)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -65,7 +65,7 @@
   </tr>
   <tr>
     <td align="center" width="33%">
-      <h3>📊 53 項殖民地工具</h3>
+      <h3>📊 51 項殖民地工具</h3>
       <sub>涵蓋狀態觀察、工作排程、建造標記、戰鬥指令、商業交易、醫療照護、動物馴養與區域管理。</sub>
     </td>
     <td align="center" width="33%">
@@ -156,7 +156,7 @@ flowchart TD
 - **工作優先級復原 (`/undo`)**：可一鍵將上一句指令變更的工作優先度與每日作息還原為舊值；即使指令中途失敗，已生效的部分亦能安全復原。
 - **就緒狀態防護**：若遊戲處於主選單、存檔讀取中，或工具呼叫時無有效當前地圖，工具將拒絕執行並告知模型終止操作。
 - **遊戲錯誤回流**：工具執行期間 RimWorld 核心所記錄的錯誤日誌（`Log.Error`，至多 5 則）會附加回傳於工具結果中，讓模型明確知悉執行失敗的內部原因。
-- **工具內建防呆邊界**：`order_attack` 拒絕攻擊友方派系、殖民者與囚犯；`schedule_surgery` 要求指定確切身體部位；`execute_trade` 檢查交涉者社交能力與通訊台電力；`form_caravan` 採立即離圖機制；儲存與種植區建立前經由原生設計器驗證地勢與肥沃度。
+- **工具內建防呆邊界**：`order_attack` 拒絕攻擊友方派系、殖民者與囚犯；`order_job` 拒絕會惹惱非敵對派系的俘虜與剝除，靈魂綁定武器留給玩家確認；`set_forbidden` 只動迷霧外的物品與屍體；`use_gizmo` 只按「按一下」與開關型按鈕、不顯示開發者模式按鈕，開出操作不了的選單或視窗會關回去而不留著；`schedule_surgery` 要求指定確切身體部位；`execute_trade` 檢查交涉者社交能力與通訊台電力；`form_caravan` 採立即離圖機制；儲存與種植區建立前經由原生設計器驗證地勢與肥沃度。
 
 > [!WARNING]
 > 戰鬥指令受限於 LLM 往返處理時間，通常有數秒延遲。僅適用於戰略集結、防線佈置與撤退，不適合作為即時戰術微操。
@@ -177,6 +177,7 @@ flowchart TD
   - 糧食庫存告急
   - 殖民者倒地或失血急診
   - 任何地圖上的火災威脅
+  - 新的抉擇信件或對話框（流浪者求加入、難民求助、勒索贖金等）。每 2 秒（現實時間）檢查一次，對話框暫停遊戲時照樣檢查；每個抉擇只觸發一次
 - **無預算限制與冷卻設定**：自主模式運轉不設每日工具預算上限，且支援自主任務冷卻時間設定（可在模組設定調整 0～60 分鐘，預設關閉），避免短時間內過度頻繁觸發。
 - **長期目標推進**：玩家透過 `/goal` 設定的長期期望會附帶於每次自主任務的提示詞中，隨存檔共同保存並持續落實。
 
@@ -186,10 +187,10 @@ flowchart TD
 
 | 類別 | 工具功能 | 預設狀態 |
 | --- | --- | --- |
-| 觀察 | 殖民地概況、殖民者、資源清單、威脅掃描、研究狀態與專案切換、地圖列出與切換、物件搜尋、格子與區域檢查（地形、屋頂、房間、區域、障礙物）、遊戲截圖 | 開啟 |
+| 觀察 | 殖民地概況、殖民者、資源清單、威脅掃描、研究狀態與專案切換、地圖列出與切換、物件搜尋、格子與區域檢查（地形、屋頂、房間、區域、障礙物）、遊戲截圖、待回應的抉擇信件、對話框與確認框及回應（需確認的命令） | 開啟 |
 | 工作 | 工作優先度指派、每日作息時間表設定（支援復原） | 開啟 |
-| 建造 | 開採／砍伐／收割／拆除／搬運／狩獵標記、單點或連線建築藍圖規劃 | 開啟 |
-| 戰鬥 | 徵召、戰術移動、指定攻擊 | 開啟 |
+| 建造 | 開採／砍伐／收割／拆除／搬運／狩獵標記、建築藍圖規劃（單格、直線、填滿矩形或矩形外框，一次最多 400 格）、物品禁用與解禁、指令按鈕（gizmo，例如飛船反應爐啟動與發射；按下為需確認的命令） | 開啟 |
+| 戰鬥 | 徵召、戰術移動、指定攻擊、一次性工作命令（救援、俘虜、包紮、剝除、裝備、進入冷凍休眠艙） | 開啟 |
 | 交易 | 軌道商人與來訪商隊貨物查詢、一鍵買入與賣出結清、指派籌組外出商隊 | 開啟 |
 | 醫療 | 殖民者健康狀態、用藥上限設定、手術排程 | 開啟 |
 | 囚犯 | 囚犯清單、互動方針調整、直接釋放 | 開啟 |
@@ -206,17 +207,16 @@ flowchart TD
 <!-- tool-table:begin -->
 | Tool | Category | Risk |
 | --- | --- | --- |
+| `choose_option` | Observe | Confirm |
 | `find_things` | Observe | Query |
-| `get_cell_info` | Observe | Query |
 | `get_colonist_wellbeing` | Observe | Query |
 | `get_colony_overview` | Observe | Query |
 | `get_maps` | Observe | Query |
-| `get_power_status` | Observe | Query |
 | `get_research_status` | Observe | Query |
 | `get_resources` | Observe | Query |
 | `inspect_area` | Observe | Query |
-| `list_alerts` | Observe | Query |
 | `list_colonists` | Observe | Query |
+| `list_pending_choices` | Observe | Query |
 | `list_recent_letters` | Observe | Query |
 | `list_threats` | Observe | Query |
 | `set_current_map` | Observe | Safe |
@@ -225,17 +225,19 @@ flowchart TD
 | `list_work_priorities` | Work | Query |
 | `set_schedule` | Work | Safe |
 | `set_work_priorities` | Work | Safe |
-| `set_work_priority` | Work | Safe |
 | `cancel_designation` | Build | Safe |
 | `designate_area` | Build | Confirm |
+| `list_gizmos` | Build | Query |
 | `place_blueprint` | Build | Confirm |
+| `set_forbidden` | Build | Safe |
+| `use_gizmo` | Build | Confirm |
 | `draft` | Combat | Safe |
 | `order_attack` | Combat | Confirm |
+| `order_job` | Combat | Safe |
 | `order_move` | Combat | Safe |
 | `execute_trade` | Trade | Confirm |
 | `form_caravan` | Trade | Confirm |
-| `list_orbital_traders` | Trade | Query |
-| `list_visitor_caravans` | Trade | Query |
+| `list_traders` | Trade | Query |
 | `get_health` | Medical | Query |
 | `schedule_surgery` | Medical | Confirm |
 | `set_medical_care` | Medical | Safe |
@@ -253,12 +255,9 @@ flowchart TD
 | `add_bill` | Production | Safe |
 | `delete_bill` | Production | Confirm |
 | `list_bills` | Production | Query |
-| `list_worktables` | Production | Query |
-| `get_time_speed` | Time | Query |
 | `set_time_speed` | Time | Safe |
 | `mcp_call_tool` | Mcp | Confirm |
 | `mcp_list_tools` | Mcp | Query |
-| `mcp_status` | Mcp | Query |
 <!-- tool-table:end -->
 
 ---
@@ -272,7 +271,7 @@ player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Ag
          │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
          │                                    │ tool calls
          │                                    ▼
-         │                              53 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
+         │                              51 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
          │
          └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
 ```

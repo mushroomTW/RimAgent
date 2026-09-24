@@ -21,15 +21,18 @@ namespace RimAgent.Tests
         /// <summary>每個命令工具的一組有效參數；新增命令工具而沒登記，測試會指出。</summary>
         private static readonly Dictionary<string, Dictionary<string, object>> ValidArguments = new Dictionary<string, Dictionary<string, object>>
         {
-            ["set_work_priority"] = Args(("colonist", "Ali"), ("workType", "doctor"), ("priority", 1)),
             ["set_work_priorities"] = Args(("assignments", "Ali:doctor=1; Bob:hauling=2")),
             ["set_schedule"] = Args(("colonists", "Ali"), ("startHour", 22), ("endHour", 6), ("assignment", "sleep")),
             ["designate_area"] = Args(("kind", "mine"), ("useSelection", false), ("x1", 0), ("z1", 0), ("x2", 30), ("z2", 30), ("filter", "")),
             ["cancel_designation"] = Args(("kind", "mine"), ("useSelection", false), ("x1", 0), ("z1", 0), ("x2", 30), ("z2", 30)),
-            ["place_blueprint"] = Args(("building", "wall"), ("x", 5), ("z", 5), ("rotation", 0), ("stuff", "wood"), ("count", 1), ("direction", "")),
+            ["place_blueprint"] = Args(("building", "wall"), ("shape", "single"), ("x", 5), ("z", 5), ("x2", 5), ("z2", 5), ("rotation", 0), ("stuff", "wood")),
             ["draft"] = Args(("colonists", "Ali"), ("drafted", true)),
             ["order_move"] = Args(("colonists", "Ali"), ("x", 12), ("z", 12)),
             ["order_attack"] = Args(("colonists", "Ali"), ("targetId", 900)),
+            ["order_job"] = Args(("colonist", "Ali"), ("job", "capture"), ("targetId", 900)),
+            ["set_forbidden"] = Args(("forbidden", false), ("x1", -1), ("z1", -1), ("x2", -1), ("z2", -1), ("filter", "")),
+            ["choose_option"] = Args(("choiceId", "letter-12"), ("option", 1)),
+            ["use_gizmo"] = Args(("thingId", 300), ("gizmo", "Launch ship")),
             ["execute_trade"] = Args(("trader", "PassingShip_1"), ("buys", "spacer component x1"), ("sells", ""), ("negotiator", "Ali")),
             ["form_caravan"] = Args(("colonists", "Bob"), ("heading", "N")),
             ["set_medical_care"] = Args(("colonist", "Ali"), ("level", "best")),
@@ -83,6 +86,15 @@ namespace RimAgent.Tests
             _world.TableBills[800] = new List<BillInfo> { new BillInfo { Index = 1, Label = "Make component", Repeat = "2x" } };
             _world.Research = new ResearchInfo { Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } } };
             _world.Maps.Add(new MapInfo { Id = 2, Label = "Outpost", Tile = 999, ColonistCount = 0 });
+            _world.Things.Add(FakeGameWorld.MakeThing(302, "Gun_Revolver", "revolver", ThingKind.Item, 12, 12));
+            _world.Things[2].Forbidden = true;
+            _world.Gizmos[300] = new List<GizmoInfo> { new GizmoInfo { Number = 1, Label = "Launch ship" } };
+            _world.PendingChoices.Add(new PendingChoiceInfo
+            {
+                Id = "letter-12",
+                Title = "Wanderer joins",
+                Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Accept" } }
+            });
             return _world;
         }
 
@@ -169,7 +181,7 @@ namespace RimAgent.Tests
         [TestCase(AgentMode.Confirm, "mcp_call_tool", true)]
         [TestCase(AgentMode.Auto, "mcp_call_tool", false)]
         [TestCase(AgentMode.Ask, "mcp_call_tool", false)]
-        [TestCase(AgentMode.Confirm, "set_work_priority", false)]
+        [TestCase(AgentMode.Confirm, "set_work_priorities", false)]
         public void RequiresExplicitConfirmationTests(AgentMode mode, string toolName, bool expected)
         {
             var gate = new ConfirmationGate(() => mode);

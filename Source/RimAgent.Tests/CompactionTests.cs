@@ -90,10 +90,10 @@ namespace RimAgent.Tests
         [Test]
         public async Task AutoFoldAppliesOnlyWhenEnabled([Values(true, false)] bool enabled)
         {
-            _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("done 1")
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 2 }).Reply("done 2")
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 3 }).Reply("done 3")
-                   .CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("done 4")
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done 1")
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=2" }).Reply("done 2")
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=3" }).Reply("done 3")
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done 4")
                    .Reply("hello back");
             ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
             session.AutoCompactEnabled = enabled;
@@ -130,7 +130,7 @@ namespace RimAgent.Tests
         {
             for (int i = 0; i < 12; i++)
             {
-                _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("done " + i);
+                _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
             }
             ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
             session.AutoCompactThreshold = 10;
@@ -165,7 +165,7 @@ namespace RimAgent.Tests
         {
             for (int i = 0; i < 8; i++)
             {
-                _client.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("done " + i);
+                _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
             }
             ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
             session.AutoCompactThreshold = 10;

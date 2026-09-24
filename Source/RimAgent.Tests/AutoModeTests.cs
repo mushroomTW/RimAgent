@@ -45,7 +45,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task LowRiskCommandRunsOnceWithoutConfirmation()
         {
-            _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Done.");
+            _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Done.");
             _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"small reversible change\"}");
             ColonyAgentSession session = NewSession();
 
@@ -121,7 +121,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task ClassifierFailureRejectsWithoutConfirmation()
         {
-            _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Waiting.");
+            _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Waiting.");
             _classifierClient.Throw(new TimeoutException("provider timed out"));
             ColonyAgentSession session = NewSession();
 
@@ -137,7 +137,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task UnreadableVerdictRejectsWithoutConfirmation()
         {
-            _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Waiting.");
+            _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Waiting.");
             _classifierClient.Reply("Sure, that looks fine to me!");
             ColonyAgentSession session = NewSession();
 
@@ -151,7 +151,7 @@ namespace RimAgent.Tests
         public async Task QueriesAndInvalidCommandsSkipTheClassifier()
         {
             _agentClient.CallTool("list_colonists", new { })
-                        .CallTool("set_work_priority", new { colonist = "Nobody", workType = "doctor", priority = 1 })
+                        .CallTool("set_work_priorities", new { assignments = "Nobody:doctor=1" })
                         .Reply("No such colonist.");
             ColonyAgentSession session = NewSession();
 
@@ -166,7 +166,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task ClassifierSeesInstructionArgumentsAndPreview()
         {
-            _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Done.");
+            _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Done.");
             _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true}");
             ColonyAgentSession session = NewSession();
 
@@ -175,7 +175,7 @@ namespace RimAgent.Tests
             IList<ChatMessage> sent = _classifierClient.ReceivedMessages.Single();
             Assert.That(sent[0].Role, Is.EqualTo(ChatRole.System));
             string question = sent[1].Text;
-            Assert.That(question, Does.Contain("make Ali the main doctor").And.Contain("set_work_priority").And.Contain("priority=1").And.Contain("would set Ali's doctor priority 3 -> 1"));
+            Assert.That(question, Does.Contain("make Ali the main doctor").And.Contain("set_work_priorities").And.Contain("Ali:doctor=1").And.Contain("would set Ali's doctor priority 3 -> 1"));
             Assert.That(question, Does.Not.Contain(ToolText.ConfirmationPrefix));
             ChatOptions options = _classifierClient.ReceivedOptions.Single();
             Assert.That(options.Tools, Is.Null.Or.Empty, "分類器不帶工具");
@@ -221,7 +221,7 @@ namespace RimAgent.Tests
         [Test]
         public async Task LowRiskCommandTheInstructionDidNotAskForIsRejected()
         {
-            _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 })
+            _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                         .Reply("Waiting for confirmation.");
             _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": false, \"reason\": \"the player only asked about Bob\"}");
             ColonyAgentSession session = NewSession();
@@ -335,7 +335,7 @@ namespace RimAgent.Tests
                 classifierModel: () => customModel,
                 classifierPrompt: () => "test classifier prompt");
 
-            _agentClient.CallTool("set_work_priority", new { colonist = "Ali", workType = "doctor", priority = 1 }).Reply("Done.");
+            _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Done.");
             _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"safe\"}");
 
             await session.SendAsync("set Ali's doctor to 1");

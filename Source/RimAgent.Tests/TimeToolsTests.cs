@@ -34,16 +34,16 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Time)).OfType<AIFunction>().Count(t => t.Name == "get_time_speed" || t.Name == "set_time_speed"), Is.EqualTo(2));
-            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "get_time_speed"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Time)).OfType<AIFunction>().Count(t => t.Name == "set_time_speed"), Is.EqualTo(1));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "set_time_speed"), Is.False);
         }
 
         [Test]
-        public void GetTimeSpeedReportsCurrentAndAvailable()
+        public void OverviewReportsCurrentTimeSpeed()
         {
-            string text = _tools.GetTimeSpeed();
+            string text = new ObserveTools(_world).GetColonyOverview();
 
-            Assert.That(text, Does.Contain("Normal").And.Contain("Paused").And.Contain("Superfast"));
+            Assert.That(text, Does.Contain("Time speed: ").And.Contain("(Normal)"));
         }
 
         [TestCase("Paused", "Paused")]

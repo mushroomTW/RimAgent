@@ -40,17 +40,17 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Production)).OfType<AIFunction>().Count(t => t.Name == "list_worktables" || t.Name == "list_bills" || t.Name == "add_bill" || t.Name == "delete_bill"), Is.EqualTo(4));
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Production)).OfType<AIFunction>().Count(t => t.Name == "list_bills" || t.Name == "add_bill" || t.Name == "delete_bill"), Is.EqualTo(3));
             Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "list_bills"), Is.False);
         }
 
         [Test]
-        public void ListsWorktablesWithBillCounts()
+        public void ListsEveryWorktableWithItsBillsWhenNoTableIsGiven()
         {
-            string text = _tools.ListWorktables();
+            string text = _tools.ListBills("");
 
-            Assert.That(text, Does.Contain("2 work tables").And.Contain("[501] Fueled smithy").And.Contain("(30,40)").And.Contain("0 bills"));
-            Assert.That(text, Does.Contain("[502] Butcher table").And.Contain("1 bill"));
+            Assert.That(text, Does.Contain("2 work tables").And.Contain("[501] Fueled smithy at (30,40), no bills"));
+            Assert.That(text, Does.Contain("[502] Butcher table").And.Contain("  [1] Butcher creature (2x)"));
         }
 
         [Test]

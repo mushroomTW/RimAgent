@@ -113,7 +113,7 @@ namespace RimAgent.Tests
             Assert.That(pack.Conduct, Does.Contain("Minimal change"));
             Assert.That(pack.AskModeNote, Does.Contain("Ask mode"));
             Assert.That(pack.ClassifierPrompt, Does.Contain("\"risk\""));
-            string[] triggers = { "Raid", "RaidEnded", "EmergencyMedical", "Fire", "MentalBreak", "FoodShortage", "Interval" };
+            string[] triggers = { "Raid", "RaidEnded", "EmergencyMedical", "Fire", "MentalBreak", "FoodShortage", "Choice", "Interval" };
             foreach (string trigger in triggers)
             {
                 Assert.That(pack.Autonomous.Tasks.ContainsKey(trigger), Is.True, trigger + " 缺章節");

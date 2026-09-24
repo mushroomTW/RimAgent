@@ -253,16 +253,19 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Mcp)).OfType<AIFunction>().Count(t => t.Name == "mcp_status" || t.Name == "mcp_list_tools" || t.Name == "mcp_call_tool"), Is.EqualTo(3));
-            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "mcp_status"), Is.False);
+            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Mcp)).OfType<AIFunction>().Count(t => t.Name == "mcp_list_tools" || t.Name == "mcp_call_tool"), Is.EqualTo(2));
+            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "mcp_list_tools"), Is.False);
         }
 
         [Test]
-        public void StatusWithoutConfigExplains()
+        public async Task ListWithoutConfigExplains()
         {
             var tools = new McpTools(new McpManager(null));
 
-            Assert.That(tools.Status(), Does.Contain("missing servers.json"));
+            string text = await tools.ListTools(CancellationToken.None);
+
+            Assert.That(text, Does.Contain("missing servers.json"));
+            Assert.That(text.IndexOf("missing servers.json", System.StringComparison.Ordinal), Is.EqualTo(text.LastIndexOf("missing servers.json", System.StringComparison.Ordinal)), "沒有設定時狀態只印一次");
         }
     }
 }

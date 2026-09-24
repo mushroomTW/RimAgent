@@ -6,7 +6,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>時間流速：查詢目前速度，切換暫停與加速。</summary>
+    /// <summary>時間流速：切換暫停與加速（目前速度在殖民地概況裡）。</summary>
     public sealed class TimeTools
     {
         private readonly IGameWorld _world;
@@ -16,16 +16,6 @@ namespace RimAgent.Tools
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _gate = gate;
-        }
-
-        [AgentTool("get_time_speed", ToolCategory.Time, ToolRisk.Query)]
-        [Description("Shows the current time speed (paused, normal, fast or superfast) and the speeds available.")]
-        public string GetTimeSpeed()
-        {
-            TimeSpeedInfo info = _world.GetTimeSpeed();
-            string current = SpeedLabel(info.Current, _world.TimeSpeeds);
-            string available = string.Join(", ", _world.TimeSpeeds.Select(s => $"{s.Label} ({s.DefName})"));
-            return $"Current time speed: {current}. Available: {available}.";
         }
 
         [AgentTool("set_time_speed", ToolCategory.Time, ToolRisk.Safe)]
@@ -79,7 +69,7 @@ namespace RimAgent.Tools
             return needle;
         }
 
-        private static string SpeedLabel(string defName, System.Collections.Generic.IReadOnlyList<DefInfo> speeds)
+        internal static string SpeedLabel(string defName, System.Collections.Generic.IReadOnlyList<DefInfo> speeds)
         {
             DefInfo match = speeds.FirstOrDefault(s => string.Equals(s.DefName, defName, StringComparison.OrdinalIgnoreCase));
             return match != null ? $"{match.Label} ({match.DefName})" : defName;
