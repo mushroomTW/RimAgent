@@ -496,7 +496,7 @@ namespace RimAgent
                 if (string.IsNullOrWhiteSpace(instruction))
                 {
                     // 自主任務文案缺檔：送空話只會燒 API，直接跳過本輪（沿用錯誤節流，只記一種一次）。
-                    WarnOnce("RimAgent autonomous run skipped: Autonomous.en.md is missing or has no task for " + trigger);
+                    WarnOnce("RimAgent autonomous run skipped: Prompts/Autonomous.en.md is missing or has no task for " + trigger);
                     return;
                 }
                 int remainingBudget = _scheduler.RemainingBudget(config);

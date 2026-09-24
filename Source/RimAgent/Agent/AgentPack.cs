@@ -37,8 +37,8 @@ namespace RimAgent.Agent
     }
 
     /// <summary>
-    /// 讀 AgentPack/ 資料夾（Briefing.md、AGENTS.md、Conduct.md、AskMode.md、RiskClassifier.md、
-    /// Autonomous.en.md、Skills/*/SKILL.md）。純檔案邏輯，不碰遊戲 API，
+    /// 讀 AgentPack/ 資料夾（Prompts/ 下的內建提示詞、根目錄的 AGENTS.md、Skills/*/SKILL.md）。
+    /// 純檔案邏輯，不碰遊戲 API，
     /// rootDir 可注入，方便測試。缺檔、壞檔一律視為空，不丟例外。
     /// </summary>
     public static class AgentPackLoader
@@ -48,6 +48,7 @@ namespace RimAgent.Agent
 
         /// <summary>自主任務檔名（只留英文）。</summary>
         internal const string AutonomousFileName = "Autonomous.en.md";
+        private const string PromptsFolderName = "Prompts";
 
         public static AgentPack Load(string rootDir)
         {
@@ -55,12 +56,13 @@ namespace RimAgent.Agent
             if (string.IsNullOrEmpty(rootDir)) return pack;
             try
             {
-                pack.Preamble = ReadFile(rootDir, "Briefing.md");
+                string promptsDir = Path.Combine(rootDir, PromptsFolderName);
+                pack.Preamble = ReadFile(promptsDir, "Briefing.md");
                 pack.PlayerNotes = ReadFile(rootDir, "AGENTS.md");
-                pack.Conduct = ReadFile(rootDir, "Conduct.md");
-                pack.AskModeNote = ReadFile(rootDir, "AskMode.md");
-                pack.ClassifierPrompt = ReadFile(rootDir, "RiskClassifier.md");
-                LoadAutonomous(pack, rootDir);
+                pack.Conduct = ReadFile(promptsDir, "Conduct.md");
+                pack.AskModeNote = ReadFile(promptsDir, "AskMode.md");
+                pack.ClassifierPrompt = ReadFile(promptsDir, "RiskClassifier.md");
+                LoadAutonomous(pack, promptsDir);
 
                 string skillsDir = Path.Combine(rootDir, "Skills");
                 if (!Directory.Exists(skillsDir)) return pack;
@@ -91,9 +93,9 @@ namespace RimAgent.Agent
             return (File.ReadAllText(path) ?? string.Empty).Trim();
         }
 
-        private static void LoadAutonomous(AgentPack pack, string rootDir)
+        private static void LoadAutonomous(AgentPack pack, string promptsDir)
         {
-            string text = ReadFile(rootDir, AutonomousFileName);
+            string text = ReadFile(promptsDir, AutonomousFileName);
             if (text.Length == 0) return;
             IDictionary<string, string> sections = ParseSections(text);
             var lang = new AutonomousPack();

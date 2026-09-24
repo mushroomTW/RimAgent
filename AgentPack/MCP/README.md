@@ -1,10 +1,8 @@
-# RimAgent 的 MCP 伺服器
+# RimAgent MCP servers
 
-RimAgent 以 MCP 用戶端身分經 stdio 連線（官方 ModelContextProtocol
-SDK）：把下面的命令起成本機行程，工具經 `mcp_list_tools` /
-`mcp_call_tool` 交給 agent（`Mcp` 工具類別，預設開啟，但每次執行都必須由玩家確認）。
+RimAgent connects as an MCP client over stdio using the official ModelContextProtocol SDK. It starts the configured command as a local process and exposes its tools to the agent through `mcp_list_tools` and `mcp_call_tool`. The `Mcp` category is enabled by default. Listing tools is a query; calling an MCP tool uses the Confirm risk tier and may require player approval, depending on the current mode.
 
-出貨不帶任何 server。要加的話，在本檔旁邊建 `servers.json`：
+No servers are shipped with the mod. To add one, create `servers.json` next to this README:
 
 ```json
 {
@@ -20,7 +18,7 @@ SDK）：把下面的命令起成本機行程，工具經 `mcp_list_tools` /
 }
 ```
 
-- Server 第一次被用到時才連線；`servers.json` 每場遊戲讀取一次，修改後需重新載入遊戲。
-- 只裝信任的 server：server 以你的使用者權限執行，看得到 agent 傳給它的參數。
-- `timeoutSeconds` 管單次呼叫（預設 30 秒）。卡住的 server 行程會被砍掉並回報，不會吊死遊戲。
-- 閒置逾 10 分鐘的 server，下次使用或存檔時關掉。
+- A server connects only when first used. RimAgent reads `servers.json` once per game session, so reload the game after changing it.
+- Install only servers you trust. They run with your user account's permissions and can see the arguments the agent sends to them.
+- `timeoutSeconds` limits each call (default: 30 seconds). RimAgent stops an unresponsive server process and reports the failure instead of leaving the game stuck.
+- A server idle for more than 10 minutes is closed on its next use or when the game is saved.

@@ -38,7 +38,7 @@ namespace RimAgent.Agent
     /// 兩軸分開問：動作本身危不危險（low／high），以及玩家這句話有沒有要它做這件事（authorized）。
     /// 只問風險會放掉「順手多做一件小事」——每件都低風險，但玩家沒要求。
     /// 任何失敗都當高風險並拒絕該命令。
-    /// 系統提示詞來自 AgentPack/RiskClassifier.md（經建構參數注入）；缺檔不斷言，
+    /// 系統提示詞來自 AgentPack/Prompts/RiskClassifier.md（經建構參數注入）；缺檔不斷言，
     /// 直接回 fail-closed，讓自動模式拒絕命令。
     /// </summary>
     public sealed class RiskClassifier

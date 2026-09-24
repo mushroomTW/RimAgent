@@ -11,12 +11,15 @@ namespace RimAgent.Tests
     public class AgentPackTests
     {
         private string _root;
+        private string _prompts;
 
         [SetUp]
         public void SetUp()
         {
             _root = Path.Combine(Path.GetTempPath(), "RimAgentPack_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
+            _prompts = Path.Combine(_root, "Prompts");
+            Directory.CreateDirectory(_prompts);
         }
 
         [TearDown]
@@ -43,11 +46,11 @@ namespace RimAgent.Tests
         [Test]
         public void LoadsConductAndSkills()
         {
-            File.WriteAllText(Path.Combine(_root, "Briefing.md"), "  You are RimAgent.  ");
+            File.WriteAllText(Path.Combine(_prompts, "Briefing.md"), "  You are RimAgent.  ");
             File.WriteAllText(Path.Combine(_root, "AGENTS.md"), "  Play tall, not wide.  ");
-            File.WriteAllText(Path.Combine(_root, "Conduct.md"), "  Be brief.  ");
-            File.WriteAllText(Path.Combine(_root, "AskMode.md"), "  Ask note.  ");
-            File.WriteAllText(Path.Combine(_root, "RiskClassifier.md"), "  Judge risk.  ");
+            File.WriteAllText(Path.Combine(_prompts, "Conduct.md"), "  Be brief.  ");
+            File.WriteAllText(Path.Combine(_prompts, "AskMode.md"), "  Ask note.  ");
+            File.WriteAllText(Path.Combine(_prompts, "RiskClassifier.md"), "  Judge risk.  ");
             string dir = Path.Combine(_root, "Skills", "raid-defense");
             Directory.CreateDirectory(dir);
             File.WriteAllText(Path.Combine(dir, "SKILL.md"),
@@ -93,7 +96,7 @@ namespace RimAgent.Tests
         [Test]
         public void LoadsAutonomousInEnglishOnly()
         {
-            File.WriteAllText(Path.Combine(_root, "Autonomous.en.md"), "## Raid\nHostiles.");
+            File.WriteAllText(Path.Combine(_prompts, "Autonomous.en.md"), "## Raid\nHostiles.");
 
             AgentPack pack = AgentPackLoader.Load(_root);
 
@@ -106,7 +109,13 @@ namespace RimAgent.Tests
         [Test]
         public void ShippedPromptFilesAreComplete()
         {
-            AgentPack pack = AgentPackLoader.Load(FindAgentPack());
+            string root = FindAgentPack();
+            foreach (string file in new[] { "Briefing.md", "Conduct.md", "AskMode.md", "RiskClassifier.md", "Autonomous.en.md" })
+            {
+                Assert.That(File.Exists(Path.Combine(root, "Prompts", file)), Is.True, file + " 未放在 Prompts/");
+                Assert.That(File.Exists(Path.Combine(root, file)), Is.False, file + " 不應留在 AgentPack/ 根目錄");
+            }
+            AgentPack pack = AgentPackLoader.Load(root);
 
             Assert.That(pack.Preamble, Does.Contain("You are RimAgent"));
             Assert.That(pack.PlayerNotes, Is.Empty, "AGENTS.md 留給玩家自己設計，出貨必須是空的");
@@ -171,7 +180,7 @@ namespace RimAgent.Tests
             Assert.That(text, Is.EqualTo("CORE"));
         }
 
-        /// <summary>沿測試執行目錄往上找到出貨的 AgentPack（仿 ReadmeToolTableTests.FindReadme）。</summary>
+        /// <summary>沿測試執行目錄往上找到出貨的 AgentPack。</summary>
         private static string FindAgentPack()
         {
             for (var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); dir != null; dir = dir.Parent)

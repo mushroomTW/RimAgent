@@ -102,7 +102,7 @@ namespace RimAgent.Tools
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
         public IReadOnlyList<AITool> All => _allTools ?? (_allTools = _tools.Select(t => t.Tool).ToList());
 
-        /// <summary>全部工具的名稱、類別與風險，依登錄順序（供 README 工具表的一致性測試）。</summary>
+        /// <summary>全部工具的名稱、類別與風險，依登錄順序（供測試與診斷）。</summary>
         public IReadOnlyList<AgentToolDescriptor> Descriptors =>
             _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk)).ToList();
 

@@ -2,7 +2,7 @@ namespace RimAgent.Agent
 {
     /// <summary>
     /// 自主任務的指令文字；goal 由獨立流程續跑，不混入事件排程。
-    /// 文案住在 AgentPack/Autonomous.en.md（`## 觸發原因` 章節，只留英文），
+    /// 文案住在 AgentPack/Prompts/Autonomous.en.md（`## 觸發原因` 章節，只留英文），
     /// 這裡只剩組裝；單元測試不進遊戲，Translate 在此無效，所以走檔案而非語言檔。
     /// 任務找不到（缺檔或缺章節）回傳 null：呼叫端跳過本輪，而不是送一句空話燒 API。
     /// </summary>

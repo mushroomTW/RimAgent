@@ -10,7 +10,7 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (RimAgent), 51 colony management tools, multi-tier risk validation, and autonomous routine management.
+An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 51 tools, with control over when actions require approval.
 
 **RimWorld 1.6** &nbsp;·&nbsp; **51 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
@@ -19,6 +19,10 @@ An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (
 [![.NET Framework 4.7.2](https://img.shields.io/badge/.NET_Framework-4.7.2-512bd4.svg?style=flat)](#building)
 
 </div>
+
+---
+
+**Jump to:** [Quick start](#getting-started) · [Modes](#modes--safety) · [Autonomy](#autonomy-autonomous-mode) · [Tools](#what-it-can-do) · [Build and tests](#building)
 
 ---
 
@@ -35,66 +39,36 @@ An in-game AI agent mod for RimWorld 1.6 featuring a draggable floating window (
 
 ### Quick Start
 
-1. Subscribe to and enable both **RimLLM Framework** and **RimAgent** in your RimWorld mod manager.
-2. In RimWorld's **Mod Settings &gt; RimLLM Framework**, configure your preferred LLM provider (OpenAI, Anthropic Claude, Google Gemini, Ollama, etc.) and enter your API key.
-3. Load or start a game. Click the **Agent** button (with the RimAgent icon) on the bottom navigation bar to open the floating window (RimAgent).
-4. Type what you want done into the prompt line, for example:
-   - `"set Alice's Doctor priority to 1"`
-   - `"mark the steel in the selected area for mining"`
-   - `"draft everyone and move to (25, 30)"`
-5. Press **Send** (or Enter). The agent inspects colony state through tools, plans actions, and executes real game commands in real time without closing the world view.
+1. Install and enable **RimLLM Framework** and **RimAgent**, with RimAgent later in the mod load order.
+2. In **Mod Settings > RimLLM Framework**, configure a supported model provider and its credentials.
+3. Load a game and click **Agent** on the bottom bar. Choose **Ask** to inspect without changing the game, or **Confirm** to preview every command before it runs.
+4. Enter a request such as `How is the colony doing?`, `Set Alice's Doctor priority to 1`, or `Draft everyone and move to (25, 30)`, then press **Send** or Enter.
+
+The agent uses tools to inspect the current map and carry out permitted actions. In Confirm mode, review each command preview before approving it.
 
 ---
 
 ## Highlights
 
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <h3>🧠 Natural Language</h3>
-      <sub>Speak naturally to assign work, place blueprints, order retreats, and manage trade without navigating menus.</sub>
-    </td>
-    <td align="center" width="33%">
-      <h3>🛡️ Five-Tier Safety</h3>
-      <sub>Ask (read-only), Confirm (every command), YOLO (blacklist direct), Auto (safety review), and Autonomous.</sub>
-    </td>
-    <td align="center" width="33%">
-      <h3>⏱️ Autonomous Routine</h3>
-      <sub>Scheduled periodic inspections and instant triggers for raids, mental break alerts, food shortages, injuries, and fire.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="33%">
-      <h3>📊 51 Colony Tools</h3>
-      <sub>Covers observation, work priorities, construction, combat, trading, medical care, animals, prisoners, and zones.</sub>
-    </td>
-    <td align="center" width="33%">
-      <h3>🔌 Local MCP Support</h3>
-      <sub>Connect local Model Context Protocol servers to grant the agent external data and tooling.</sub>
-    </td>
-    <td align="center" width="33%">
-      <h3>💾 Full Save Persistence</h3>
-      <sub>Visible transcript, compacted model session, scheduler state, and <code>/undo</code> history are saved with your game.</sub>
-    </td>
-  </tr>
-</table>
+- **51 colony tools:** inspect the map, assign work, plan construction, issue combat and medical orders, trade, and manage animals, prisoners, and zones.
+- **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
+- **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
+- **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills, or connect trusted local MCP servers.
+- **Saved progress:** the transcript, model history, scheduler, goals, and `/undo` state persist with the game.
 
 ---
 
 ## Window Interface & Slash Commands
 
-The RimAgent window can be moved anywhere on screen with position and size memory. It includes:
+Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- **Action Log Stream**: Real-time record with distinct Player, Agent, and Tool labels. Tool arguments, safety-review status, and results appear on separate lines. Screenshots taken by the agent show an inline preview beneath the tool result. The trailing ellipsis animates (`.` → `..` → `...`) while running.
-- **Status Dropdowns**: Configure execution **mode** (Ask / Confirm / YOLO / Auto / Autonomous) and model **reasoning effort** (Auto / Off / Low / Medium / High).
-- **Control Bar**: Input field with **Send** (which switches to **Stop** while the agent is running).
-- **Title-Bar Token Readout**: Shows the actual input tokens reported for the most recent main-model request. It says unavailable when the provider omits usage data. Hover for model-history message count and the auto-fold threshold; the token count is not a model context-window limit.
-- **Resizable Window**: Drag the lower-right corner to resize the conversation, including screenshot previews. Size and position are saved between sessions.
-- **Slash Commands**: Type `/` to open the command completion list (↑↓ to navigate, Tab or Enter to select):
+- Select the execution **mode** and model **reasoning effort** from the dropdowns. **Send** changes to **Stop** while a request is running.
+- The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
+- Type `/` for slash-command completion (↑↓ to navigate, Tab or Enter to select):
 
 | Command | Description |
 | --- | --- |
-| `/goal <text>` | Queue a persistent goal; it starts immediately and continues across turns in any Agent mode, using that mode's command policy |
+| `/goal <text>` | Queue a persistent goal that starts shortly after creation and follows the current mode's command policy |
 | `/goal` | List queued goals and the active goal's status |
 | `/goal remove <n>` | Delete goal `n` |
 | `/goal pause` / `/goal resume` | Pause or resume persistent goal execution |
@@ -103,11 +77,11 @@ The RimAgent window can be moved anywhere on screen with position and size memor
 | `/compact` | Compact context: summarize older model history with one LLM call, keeping only recent turns (visible log kept) |
 | `/stop` | Immediately abort the currently running instruction |
 
-> **Context compaction**: when model history exceeds the threshold (default 60 messages), older tool output is folded automatically before each request at no extra model cost. Once stored history reaches twice the threshold, the oldest complete turns are dropped until it is back within the threshold, so saves and loads stay small (the visible log is unaffected). The switch and threshold live in mod settings. `/compact` triggers a deeper manual summary compression at any time.
+> **Context compaction:** When model history exceeds the configured threshold (default 60 messages), older tool output is folded before a request without an extra model call. At twice the threshold, the oldest complete turns are removed from stored model history; the visible transcript remains. `/compact` requests a deeper, model-generated summary.
 
-> **Run history**: Enable **Record Agent runs** in mod settings to write a separate JSONL file at `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It records instructions, model response summaries, tool arguments/results, safety decisions and outcomes. It is off by default and keeps at most 500 runs or 16 MiB, whichever limit comes first.
+> **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB.
 
-> **Prompts are editable**: `Briefing.md`, `Conduct.md`, `AskMode.md`, `RiskClassifier.md`, `Autonomous.en.md` and `Skills/` under `AgentPack/` are plain-text prompts — edit, save, and the next instruction picks them up, no rebuild needed. `AGENTS.md` ships empty and is yours: write anything you want the agent to always honor.
+> **Prompts are editable:** `AgentPack/Prompts/` contains the built-in prompts, `AgentPack/Skills/` holds optional skills, and `AgentPack/AGENTS.md` ships empty for your own instructions. Reload the save or start a new game after editing; no rebuild is needed. See [skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
 
 ---
 
@@ -117,50 +91,17 @@ One setting decides how much the agent may do on its own:
 
 | Mode | Behavior |
 | --- | --- |
-| **Ask** | **Read-only**. Only query tools are offered to the model; state-changing tools (including map switching and screenshots) are omitted so the agent inspects and advises without side effects. |
-| **Confirm** | **Every command requires confirmation**. Any state-changing action is previewed and pauses for player **Confirm**; safe queries run directly. |
-| **YOLO** | Positioned between Confirm and Auto, **no scheduler**. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); all other permitted commands and MCP execute directly without confirmation. |
-| **Auto** | Every command is previewed first, then a secondary model reviews it on **two axes** (including MCP tools): risk (`low` / `high`) and whether the player's instruction asked for it. **Only low-risk, authorized actions execute**. High-risk or unrequested actions are rejected with a reason, without a player confirmation prompt. Classifier failures also reject the action. The classifier model is configurable in mod settings (leave blank to inherit default). |
-| **Autonomous** | **Background scheduler autonomy**: Runs routine inspections and responds to colony emergencies automatically without blacklist restrictions, without a daily tool budget limit, and with direct MCP execution. Cooldown is configurable in settings (default disabled). |
+| **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
+| **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
+| **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery. No background scheduler. |
+| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. The classifier model is configurable in mod settings. |
+| **Autonomous** | Adds scheduled inspections and event responses. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
 
-### Decision & Safety Flow
+### Confirmation details
 
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {
-  "primaryColor": "#0c1e30", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8",
-  "lineColor": "#64748b", "secondaryColor": "#081320", "tertiaryColor": "#1e293b",
-  "fontFamily": "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"}}}%%
-flowchart TD
-    classDef safe fill:#062d24,stroke:#10b981,color:#a7f3d0,stroke-width:2px
-    classDef check fill:#2d2406,stroke:#f59e0b,color:#fef3c7,stroke-width:2px
-    classDef alert fill:#3b1111,stroke:#ef4444,color:#fecaca,stroke-width:2px
-    classDef agent fill:#0c1e30,stroke:#38bdf8,color:#e2e8f0,stroke-width:2px
-
-    CMD[User Instruction / Autonomous Event]:::agent --> MODE{Active Mode}:::check
-    MODE -->|Ask| QRY[Query Only · Safe Inspection]:::safe
-    MODE -->|Confirm| PRE[Preview Command · Prompt Confirm]:::check
-    MODE -->|YOLO| YOL[Blacklist Check · Direct Execution]:::check
-    MODE -->|Auto| CLF[AI judgement: risk low/high x asked for by player]:::check
-    MODE -->|Autonomous| SCH[Background Scheduler · Unlimited Autonomy]:::alert
-    PRE -->|Confirm Clicked| EXEC[Execute Captured Tool Call]:::safe
-    PRE -->|Discard / New Input| DROP[Discard Pending Action]:::alert
-    YOL -->|Non-Blacklisted| EXEC
-    CLF -->|Low risk and asked for| EXEC
-    CLF -->|High risk, not asked for, or review unavailable| REJ[Reject Action · Explain Reason]:::alert
-```
-
-### Safety Guarantees
-
-- **Confirm / Discard**: Clicking **Confirm** executes the exact captured tool call and arguments from the preview; it never re-queries the model, preventing already-safe actions from repeating. A new instruction or clicking Discard drops all pending calls.
-- **YOLO Mode**: Runs player instructions directly without confirmation while safeguarding high-risk operations via an explicit blacklist.
-- **Autonomous Mode**: Full unattended background operation without blacklist or budget restrictions, with configurable cooldown (default disabled).
-- **Always allow (this session)**: In Confirm mode, the confirm bar offers **Always allow** for eligible tools. It remembers tool names only, is never written to the save, and is reset by `/clear` or a restart. Auto mode reviews every command independently, even if that tool was previously allowed in Confirm mode. `mcp_call_tool` and the blacklisted high-risk tools (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `set_prisoner_interaction`) never offer Always allow.
-- **MCP Confirmation**: In Confirm mode, `mcp_call_tool` requires explicit player confirmation; in Auto mode, the classifier either permits or rejects it without a confirmation prompt; in YOLO and Autonomous modes, it executes directly.
-- **Configurable Risk Classifier**: In Auto mode, the dedicated classifier model can be customized in mod settings (e.g. specifying a fast/cheap model like `gpt-4o-mini` or `gemini-1.5-flash`), or left blank to inherit RimLLM Framework's default model.
-- **Reversible Priorities (`/undo`)**: Restores work priorities and daily schedules modified by the previous instruction, including instructions that failed halfway through.
-- **Readiness Guard**: If no game is being played (main menu or save still loading) or no current map is available, tool execution halts safely and instructs the model to stop.
-- **Game Error Feedback**: Errors logged by the game engine (`Log.Error`) during tool execution are appended to that tool's result (up to 5 errors with count), alerting the model if a command threw an exception.
-- **In-Tool Guard Rails**: `order_attack` refuses colony members, prisoners, and friendly factions; `order_job` refuses captures and strips that would anger a non-hostile faction and leaves persona-weapon bonding to the player; `set_forbidden` only touches items and corpses outside the fog; `use_gizmo` only presses action and toggle buttons, hides developer-mode buttons, and closes any menu or window it cannot operate instead of leaving it open; `schedule_surgery` requires an explicit body part; `execute_trade` requires a conscious, socially capable negotiator and a powered comms console for orbital traders; `form_caravan` departs immediately without packing delays; zones validate against terrain, map boundaries, and fertility.
+- **Confirm / Discard:** Confirm executes the captured tool call and arguments without asking the model again. Discard or a new instruction clears pending calls.
+- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool` or the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `set_prisoner_interaction`). Auto still reviews every command.
+- **MCP calls:** `mcp_call_tool` needs explicit approval in Confirm mode, passes through the classifier in Auto mode, and runs directly in YOLO or Autonomous mode.
 
 > [!WARNING]
 > Combat orders reach the game several seconds after speaking due to LLM round-trip latency. They are designed for strategic positioning, rally points, and tactical retreats, not split-second micro-control.
@@ -172,120 +113,48 @@ flowchart TD
 
 ## Autonomy (Autonomous Mode)
 
-Select **Autonomous** mode (in Mod Settings or the mode dropdown) to enable the agent to run unattended background operations:
+Select **Autonomous** in mod settings or the mode dropdown to let the agent act in the background:
 
-- **Periodic Inspection**: Routine colony checks run on a configurable interval (default: 6 in-game hours).
-- **Event-Driven Reactive Runs**: Instant edge-triggered responses to:
-  - Raid beginnings and ends
-  - Colonists nearing mental breaks
-  - Food shortages
-  - Downed or bleeding colonists (medical emergency)
-  - Active fires on any colony map
-  - New choice letters or dialogs (a wanderer asking to join, refugees, ransom demands). Checked every 2 real-time seconds, even while a dialog pauses the game; each choice triggers once
-- **Unlimited Budget & Cooldown Control**: Autonomous runs have no daily tool-call budget restriction. A configurable cooldown (0–60 minutes in mod settings, default: disabled) prevents runs from re-triggering too rapidly.
-- **Persistent Goals**: `/goal` runs independently of Autonomous mode. The first queued objective starts shortly after creation, is repeated in each continuation after context compaction, and continues until verified complete. It waits for confirmations required by the current mode and passes confirmed execution results into the next continuation. Goal pause/removal only discards confirmations raised by that goal. Three blocked/error turns or 60 turns pause it for review; `/goal resume` restarts it. Goals are saved with the game.
+- **Scheduled checks:** Inspect the colony at a configurable interval (default: every 6 in-game hours).
+- **Event responses:** React to raids beginning or ending, impending mental breaks, food shortages, downed or bleeding colonists, and fires. New choice letters and dialogs are checked every 2 real-time seconds, including while a dialog pauses the game; each choice triggers once.
+- **Budget and cooldown:** No daily tool-call limit. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
+- **Persistent goals:** `/goal` runs independently in any mode and follows that mode's approval policy. Goals are saved with the game; after three blocked/error turns or 60 turns, a goal pauses for review until `/goal resume`.
 
 ---
 
 ## What It Can Do
 
-| Category | Tools | Default |
-| --- | --- | --- |
-| Observe | colony overview, colonists, resources, threats, research status and switching, map listing and switching (safe command), map object search, cell and area inspection (terrain, roof, rooms, zones, obstacles), game screenshots (safe command), pending choice letters, dialogs and confirmation boxes and answering them (confirm command) | on |
-| Work | work priorities, daily schedules (undoable) | on |
-| Build | mine / cut / harvest / deconstruct / haul / hunt designations, blueprints (single, line, filled rectangle or rectangle outline, up to 400 cells per call), forbidding and allowing items, command buttons (gizmos) such as ship reactor startup and ship launch (pressing is a confirm command) | on |
-| Combat | draft, move, attack, one-off jobs (rescue, capture, tend, strip, equip, enter a cryptosleep casket) | on |
-| Trade | orbital trader and visiting caravan stock listing, buying and selling in a single deal, forming player caravans | on |
-| Medical | health status, medical care levels, scheduling surgery | on |
-| Prisoner | prisoner listing, interaction modes, release | on |
-| Animal | animal listing, taming, training, allowed areas | on |
-| Zone | zone listing, stockpile and growing zones, storage filters | on |
-| Production | work tables and production bills | on |
-| Time | pause and time flow speed | on |
-| MCP | external tools from local MCP servers | on |
+All 12 categories are enabled by default and can be switched off individually in mod settings. The selected mode determines how their commands run.
 
-### Tool Reference
-
-Every tool by name, with its category and static risk tag. The block between the markers is verified against the registry by `ReadmeToolTableTests`:
-
-<!-- tool-table:begin -->
-| Tool | Category | Risk |
-| --- | --- | --- |
-| `choose_option` | Observe | Confirm |
-| `find_things` | Observe | Query |
-| `get_colonist_wellbeing` | Observe | Query |
-| `get_colony_overview` | Observe | Query |
-| `get_maps` | Observe | Query |
-| `get_research_status` | Observe | Query |
-| `get_resources` | Observe | Query |
-| `inspect_area` | Observe | Query |
-| `list_colonists` | Observe | Query |
-| `list_pending_choices` | Observe | Query |
-| `list_recent_letters` | Observe | Query |
-| `list_threats` | Observe | Query |
-| `set_current_map` | Observe | Safe |
-| `set_research` | Observe | Safe |
-| `take_screenshot` | Observe | Safe |
-| `list_work_priorities` | Work | Query |
-| `set_schedule` | Work | Safe |
-| `set_work_priorities` | Work | Safe |
-| `cancel_designation` | Build | Safe |
-| `designate_area` | Build | Confirm |
-| `list_gizmos` | Build | Query |
-| `place_blueprint` | Build | Confirm |
-| `set_forbidden` | Build | Safe |
-| `use_gizmo` | Build | Confirm |
-| `draft` | Combat | Safe |
-| `order_attack` | Combat | Confirm |
-| `order_job` | Combat | Safe |
-| `order_move` | Combat | Safe |
-| `execute_trade` | Trade | Confirm |
-| `form_caravan` | Trade | Confirm |
-| `list_traders` | Trade | Query |
-| `get_health` | Medical | Query |
-| `schedule_surgery` | Medical | Confirm |
-| `set_medical_care` | Medical | Safe |
-| `list_prisoners` | Prisoner | Query |
-| `release_prisoner` | Prisoner | Confirm |
-| `set_prisoner_interaction` | Prisoner | Confirm |
-| `list_animals` | Animal | Query |
-| `set_animal_area` | Animal | Safe |
-| `tame_animal` | Animal | Safe |
-| `train_animal` | Animal | Safe |
-| `add_zone` | Zone | Safe |
-| `delete_zone` | Zone | Confirm |
-| `list_zones` | Zone | Query |
-| `set_zone_filter` | Zone | Safe |
-| `add_bill` | Production | Safe |
-| `delete_bill` | Production | Confirm |
-| `list_bills` | Production | Query |
-| `set_time_speed` | Time | Safe |
-| `mcp_call_tool` | Mcp | Confirm |
-| `mcp_list_tools` | Mcp | Query |
-<!-- tool-table:end -->
+| Category | Examples |
+| --- | --- |
+| Observe | Colony status, resources, threats, research, maps, objects, areas, screenshots, and pending choices |
+| Work | Work priorities and daily schedules (undoable) |
+| Build | Designations, blueprints (single, line, fill, or outline; up to 400 cells), forbidden items, and gizmo buttons |
+| Combat | Draft, move, attack, rescue, capture, tend, strip, equip, and enter cryptosleep caskets |
+| Trade | Orbital and visiting traders, buy/sell transactions, and caravans |
+| Medical | Health, medicine levels, and surgery |
+| Prisoner | Prisoner status, interaction modes, and release |
+| Animal | Animals, taming, training, and allowed areas |
+| Zone | Stockpiles, growing zones, and storage filters |
+| Production | Work tables and bills |
+| Time | Pause and game speed |
+| MCP | Tools from configured local MCP servers |
 
 ---
 
 ## How It Works
 
 ```text
-player text ──► ColonyAgentSession ──► ChatClientAgent (Microsoft Agent Framework)
-         │                                    │ single GetResponseAsync, history in AF session
-         │                                    ▼
-         │                              FunctionInvokingChatClient (MEAI, via RimLLM Framework's main-thread wrapper)
-         │                                    │ tool calls
-         │                                    ▼
-         │                              51 tools (AIFunctionFactory) ──► IGameWorld ──► RimWorldGameWorld ──► Verse / RimWorld API
-         │
-         └─► system prompt via ChatOptions.Instructions (CachedContext left empty, pending token measurement)
+Player request → ColonyAgentSession → RimLLM Framework model → colony tools → IGameWorld → RimWorld
 ```
 
-Two architectural seams keep RimAgent testable without running RimWorld:
+The model receives tools selected for the current mode and category permissions. Two interfaces keep most behavior testable without starting RimWorld:
 
-- **`IChatClient`**: The agent accepts any `Microsoft.Extensions.AI` chat client. Unit tests run with scripted fakes without network or LLM tokens.
-- **`IGameWorld`**: Tools interact only with plain data transfer objects and interfaces. Unit tests execute against an in-memory fake world. `RimWorldGameWorld` is a thin adapter verified in-game.
+- **`IChatClient`** lets tests use scripted model responses without network calls.
+- **`IGameWorld`** lets tool tests use an in-memory world; `RimWorldGameWorld` connects those tools to the game.
 
-UI strings (`Languages/` Keyed) and the Agent main-button label (`Languages/` DefInjected) are localized in English, Traditional Chinese, and Simplified Chinese.
+UI text and the Agent main-button label are localized in English, Traditional Chinese, and Simplified Chinese.
 
 ---
 
@@ -310,7 +179,7 @@ RimWorld scans assemblies on startup with `Assembly.GetTypes()` and `GetFields()
 dotnet test "Source/RimAgent.Tests/RimAgent.Tests.csproj"
 ```
 
-The test suite runs with NUnit on .NET Framework 4.7.2 with zero game dependencies. All tool executions, preview branches, transcript persistence, risk classifications, and documentation tool tables are validated automatically.
+The NUnit suite runs on .NET Framework 4.7.2 without launching RimWorld. It covers tool behavior, confirmation previews, save/load state, risk classification, and the tool count shown in both READMEs.
 
 ---
 

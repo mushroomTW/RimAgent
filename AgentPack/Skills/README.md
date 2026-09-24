@@ -1,29 +1,29 @@
-# RimAgent 提示詞版面
+# RimAgent prompt layout
 
-這個資料夾是出貨給模型的提示詞唯一真相來源，改這裡不必重編 dll，下一句指令生效。
+Built-in prompts live in `AgentPack/Prompts/`, player instructions in `AgentPack/AGENTS.md`, and optional skills in `AgentPack/Skills/`. Reload the save or start a new game after editing; no DLL rebuild is needed.
 
-- `Briefing.md` — 前情提要：你是 RimWorld 助手、observe-act-report 迴圈、工具結果協議。每次請求的第一層。
-- `AGENTS.md` — 你的自留地：出貨是空的。想交代 agent 的事（玩法偏好、禁區、語氣）寫這裡，讀在前情提要之後、準則之前。
-- `Conduct.md` — 常駐行為準則（最小改動、不可逆先講、模糊先問、殖民地存活優先）。
-- `AskMode.md` — 詢問模式才附加的註記（查詢工具限定，操作改給建議）。
-- `RiskClassifier.md` — 自動模式風險分類器的系統提示詞（兩軸判定＋JSON 回覆契約，別改格式）。
-- `Autonomous.en.md` — 自主任務文案（只留英文），一個觸發一個 `## 章節`（Raid、RaidEnded、EmergencyMedical、Fire、MentalBreak、FoodShortage、Interval）。持續 goal 由獨立流程執行，不再附在這些章節後面。
-- `Skills/<技能>/SKILL.md` — 自選技能包，格式如下。每次請求全部讀進系統提示詞。
+- `Prompts/Briefing.md` — The preamble: the agent's RimWorld role, the observe-act-report loop, and the tool result protocol. This is the first layer of each request.
+- `AGENTS.md` — Your own instructions. It ships empty. Put gameplay preferences, restrictions, or tone here; the agent reads it after the preamble and before the conduct rules.
+- `Prompts/Conduct.md` — Persistent conduct rules, including minimal changes, explaining irreversible actions, clarifying ambiguity, and prioritizing colony survival.
+- `Prompts/AskMode.md` — The note added in Ask mode: use query tools only and give advice instead of taking actions.
+- `Prompts/RiskClassifier.md` — The system prompt for risk classification in Auto mode. It defines the two-axis decision and JSON response contract; keep that format intact.
+- `Prompts/Autonomous.en.md` — Autonomous task instructions in English. Each trigger has a `##` section: Raid, RaidEnded, EmergencyMedical, Fire, MentalBreak, FoodShortage, Choice, or Interval. Persistent goals run through a separate flow.
+- `Skills/<skill>/SKILL.md` — An optional skill pack. All installed skills are read into the system prompt for each request. Use this format:
 
 ```markdown
 ---
 name: my-skill
-description: 一句話說明何時用這個技能
+description: A sentence explaining when to use this skill
 ---
 
 # My skill
 
-技能生效時 agent 遵守的作法。
-寫短一點：單包超過 3000 字會截斷，
-全部技能合計上限 8000 字。
+Instructions the agent follows when this skill applies.
+Keep it concise: a skill is truncated after 3,000 characters,
+and all skills together have an 8,000-character limit.
 ```
 
-- 資料夾裡沒有 `SKILL.md` 就等於沒有技能；不認得的檔案一律忽略。
-- 沒有 frontmatter 時以資料夾名為技能名。
-- 出貨預設是空的，把自備的技能包加在這裡。
-- 缺檔、壞檔一律視為空，遊戲照跑：前情提要缺檔時以一行保底代替；分類器缺提示詞時自動模式退化成全部先問。
+- A folder without `SKILL.md` is not a skill. Unrecognized files are ignored.
+- Without frontmatter, the folder name becomes the skill name.
+- The shipped `Skills/` folder has no skills; add your own here.
+- Missing or unreadable prompt files are treated as empty. The game continues: a missing preamble uses a one-line fallback, and a missing classifier prompt makes Auto mode ask before every action.

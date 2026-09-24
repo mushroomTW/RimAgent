@@ -68,8 +68,8 @@ namespace RimAgent.Agent
         /// <param name="mcp">MCP 管理器；null 則用停用的預設管理器。</param>
         /// <param name="classifierClient">自動模式分類器用的 client；null 則與 innerClient 共用（測試可另給假 client）。</param>
         /// <param name="classifierModel">自動模式分類器指定使用的模型識別碼 provider；null 則沿用框架預設。</param>
-        /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/RiskClassifier.md）；null 則分類器 fail-closed。</param>
-        /// <param name="askNote">詢問模式附加註記（AgentPack/AskMode.md）；null 則詢問模式不加註。</param>
+        /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
+        /// <param name="askNote">詢問模式附加註記（AgentPack/Prompts/AskMode.md）；null 則詢問模式不加註。</param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
         public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null)
         {
@@ -804,7 +804,7 @@ namespace RimAgent.Agent
             if (Mode == AgentMode.Ask)
             {
                 // 詢問模式：命令工具根本不在清單裡，跟模型講清楚免得它道歉說類別被關掉。
-                // 註記來自 AgentPack/AskMode.md；缺檔就不加，模式本身的工具限制不受影響。
+                // 註記來自 AgentPack/Prompts/AskMode.md；缺檔就不加，模式本身的工具限制不受影響。
                 string note = _askNote?.Invoke();
                 if (!string.IsNullOrWhiteSpace(note))
                 {
