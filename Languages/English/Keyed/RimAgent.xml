@@ -51,6 +51,8 @@
   <!-- Settings -->
   <RimAgent.Settings.Category>RimAgent</RimAgent.Settings.Category>
   <RimAgent.Settings.PermissionsHeader>What the agent is allowed to do</RimAgent.Settings.PermissionsHeader>
+  <RimAgent.Settings.AllowAll>Allow all</RimAgent.Settings.AllowAll>
+  <RimAgent.Settings.DenyAll>Deny all</RimAgent.Settings.DenyAll>
   <RimAgent.Settings.Observe>Observe — read colony state</RimAgent.Settings.Observe>
   <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research (status and switching), maps (listing and switching), map object search and game screenshots.</RimAgent.Settings.ObserveTip>
   <RimAgent.Settings.Work>Work — priorities and schedules</RimAgent.Settings.Work>
@@ -83,6 +85,7 @@
   <RimAgent.Settings.Mode.YoloDesc>Between Confirm and Auto, no scheduler. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); all other commands and MCP execute directly without confirmation.</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools) on two axes: how risky it is, and whether your instruction asked for it. Only low-risk actions you asked for run directly; the rest wait for your Confirm. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
+  <RimAgent.Settings.ClassifierHeader>Auto mode — safety review</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
   <RimAgent.Settings.ClassifierModelTip>Model ID used by Auto mode for risk classification (leave blank to use RimLLM Framework's default model). Can be ModelName or ProviderId:ModelName.</RimAgent.Settings.ClassifierModelTip>
   <RimAgent.Settings.ClassifierModelDefault>Reset</RimAgent.Settings.ClassifierModelDefault>
@@ -93,7 +96,6 @@
   <RimAgent.Settings.AutoCooldown>Autonomous cooldown: {0} minutes</RimAgent.Settings.AutoCooldown>
   <RimAgent.Settings.AutoCooldownOff>Autonomous cooldown: Disabled</RimAgent.Settings.AutoCooldownOff>
   <RimAgent.Settings.AutoCooldownTip>Minimum wait time between two autonomous runs. Set to 0 to completely disable cooldown and react immediately to events and cycles.</RimAgent.Settings.AutoCooldownTip>
-  <RimAgent.Settings.AutoBudget>Autonomous tool calls per day: {0}</RimAgent.Settings.AutoBudget>
   <RimAgent.Settings.AutoOnRaid>React to raids</RimAgent.Settings.AutoOnRaid>
   <RimAgent.Settings.AutoOnMentalBreak>React to colonists near mental break</RimAgent.Settings.AutoOnMentalBreak>
   <RimAgent.Settings.AutoOnFoodShortage>React to food shortages</RimAgent.Settings.AutoOnFoodShortage>
@@ -130,6 +132,11 @@
 
   <RimAgent.Settings.AutoOnEmergencyMedical>Respond to downed or bleeding colonists</RimAgent.Settings.AutoOnEmergencyMedical>
   <RimAgent.Settings.AutoOnFire>Respond to fires</RimAgent.Settings.AutoOnFire>
+  <RimAgent.Settings.AutoOnRaidTip>Runs once when enemies actively threatening the colony appear on any map, and once more after they are all gone.</RimAgent.Settings.AutoOnRaidTip>
+  <RimAgent.Settings.AutoOnMentalBreakTip>Runs when any colonist's mood drops below their minor mental break threshold.</RimAgent.Settings.AutoOnMentalBreakTip>
+  <RimAgent.Settings.AutoOnFoodShortageTip>Runs when total human-edible nutrition falls below 4 per colonist (about 2.5 days of food).</RimAgent.Settings.AutoOnFoodShortageTip>
+  <RimAgent.Settings.AutoOnEmergencyMedicalTip>Runs when any colonist is downed or bleeding.</RimAgent.Settings.AutoOnEmergencyMedicalTip>
+  <RimAgent.Settings.AutoOnFireTip>Runs when fire appears on any map.</RimAgent.Settings.AutoOnFireTip>
   <RimAgent.Settings.CompactionHeader>Context compaction</RimAgent.Settings.CompactionHeader>
   <RimAgent.Settings.AutoCompact>Auto-fold older tool output</RimAgent.Settings.AutoCompact>
   <RimAgent.Settings.AutoCompactTip>When model history exceeds the threshold, older tool results are folded automatically before each request at no extra model cost; once history reaches twice the threshold, the oldest complete turns are dropped until it is back within the threshold (the visible log is kept). Manual /compact runs a separate LLM summary and is not affected by this switch.</RimAgent.Settings.AutoCompactTip>
@@ -138,6 +145,8 @@
   <RimAgent.Settings.RunLogHeader>Run history</RimAgent.Settings.RunLogHeader>
   <RimAgent.Settings.RecordRuns>Record Agent runs (off by default)</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>Log file: {0}</RimAgent.Settings.RunLogPath>
+  <RimAgent.Settings.OpenLogFolder>Open folder</RimAgent.Settings.OpenLogFolder>
+  <RimAgent.Settings.OpenLogFolderFailed>Could not open the log folder: {0}</RimAgent.Settings.OpenLogFolderFailed>
   <RimAgent.Settings.RecordRunsTip>Writes instructions, model response summaries, tool arguments, and results to a separate JSONL file under RimWorld save data/RimAgent/RimAgent-runs.jsonl. Limited to 500 runs or 16 MiB; older records are removed. The file may contain player input and tool arguments. Internal reasoning that the model does not expose is unavailable.</RimAgent.Settings.RecordRunsTip>
   <RimAgent.Context.InputTokens>Last input {0} tokens</RimAgent.Context.InputTokens>
   <RimAgent.Context.Unavailable>Input tokens unavailable</RimAgent.Context.Unavailable>

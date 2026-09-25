@@ -181,10 +181,8 @@ namespace RimAgent
         /// <summary>UI 狀態列用：自主模式是否開啟中。</summary>
         public static bool AutonomousEnabled => RimAgentMod.Settings != null && RimAgentMod.Settings.mode == AgentMode.Autonomous;
 
-        /// <summary>今日自主任務已消耗的工具呼叫次數／上限。</summary>
+        /// <summary>今日自主任務已消耗的工具呼叫次數。</summary>
         public int AutonomousToolsUsed => _scheduler.ToolsUsed;
-
-        public static int AutonomousBudget => RimAgentMod.Settings != null ? RimAgentMod.Settings.autonomousBudgetPerDay : 0;
 
         public override void ExposeData()
         {
@@ -435,8 +433,6 @@ namespace RimAgent
                 Enabled = true,
                 IntervalTicks = settings.autonomousIntervalHours * 2500,
                 WindowTicks = 60000,
-                BudgetPerWindow = 0,
-                UnlimitedBudget = true,
                 CooldownTicks = UnityEngine.Mathf.RoundToInt(settings.autonomousCooldownMinutes * (2500f / 60f)),
                 OnRaid = settings.autoOnRaid,
                 OnMentalBreak = settings.autoOnMentalBreak,
@@ -501,15 +497,13 @@ namespace RimAgent
                     WarnOnce("RimAgent autonomous run skipped: Prompts/Autonomous.en.md is missing or has no task for " + trigger);
                     return;
                 }
-                int remainingBudget = _scheduler.RemainingBudget(config);
-                int steps = config.UnlimitedBudget ? AutonomousRunMaxSteps : Math.Min(AutonomousRunMaxSteps, remainingBudget);
                 // 不加 ConfigureAwait(false)：收尾的 RecordRun 要回主線程，
                 // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
                 await session.SendAsync(
                     instruction,
                     _autoCts.Token,
                     autonomous: true,
-                    maxToolSteps: steps);
+                    maxToolSteps: AutonomousRunMaxSteps);
             }
             catch (InvalidOperationException)
             {

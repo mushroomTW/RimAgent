@@ -82,7 +82,7 @@ Drag the window to move it or its lower-right corner to resize it. RimAgent reme
 
 > **Context compaction:** When model history exceeds the configured threshold (default 60 messages), older tool output is folded before a request without an extra model call. At twice the threshold, the oldest complete turns are removed from stored model history; the visible transcript remains. `/compact` requests a deeper, model-generated summary.
 
-> **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB.
+> **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB; the settings page can open the log folder directly.
 
 > **Prompts are editable:** `AgentPack/Prompts/` contains the built-in prompts, `AgentPack/Skills/` holds optional skills, and `AgentPack/AGENTS.md` ships empty for your own instructions. Reload the save or start a new game after editing; no rebuild is needed. See [skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
 
@@ -127,7 +127,7 @@ Select **Autonomous** from the Agent window's mode dropdown to let the agent act
 
 ## What It Can Do
 
-All 12 categories are enabled by default and can be switched off individually in mod settings. The selected mode determines how their commands run.
+All 12 categories are enabled by default and can be switched off individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
 
 | Category | Examples |
 | --- | --- |

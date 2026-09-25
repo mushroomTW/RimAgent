@@ -21,15 +21,11 @@ namespace RimAgent
         public const int DefaultAutoIntervalHours = 6;
         public const int MinAutoIntervalHours = 1;
         public const int MaxAutoIntervalHours = 24;
-        public const int DefaultAutoBudget = 60;
-        public const int MinAutoBudget = 10;
-        public const int MaxAutoBudget = 300;
         public const int DefaultCooldownMinutes = 0;
         public const int MinCooldownMinutes = 0;
         public const int MaxCooldownMinutes = 60;
 
         public int autonomousIntervalHours = DefaultAutoIntervalHours;
-        public int autonomousBudgetPerDay = DefaultAutoBudget;
         public int autonomousCooldownMinutes = DefaultCooldownMinutes;
         public bool autoOnRaid = true;
         public bool autoOnMentalBreak = true;
@@ -145,7 +141,6 @@ namespace RimAgent
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
             Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);
             Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);
-            Scribe_Values.Look(ref autonomousBudgetPerDay, "autonomousBudgetPerDay", DefaultAutoBudget);
             Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
             Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);
             Scribe_Values.Look(ref autoOnMentalBreak, "autoOnMentalBreak", true);

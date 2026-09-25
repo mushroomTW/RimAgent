@@ -22,7 +22,6 @@ namespace RimAgent.Tests
                 Enabled = true,
                 IntervalTicks = 15000,
                 WindowTicks = 60000,
-                BudgetPerWindow = 60,
                 CooldownTicks = AutonomousScheduler.CooldownTicks,
                 OnRaid = true,
                 OnMentalBreak = true,
@@ -78,14 +77,22 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void UnlimitedBudgetNeverExhausts()
+        public void HeavyToolUseNeverBlocksTriggers()
         {
-            _config.UnlimitedBudget = true;
-            _config.BudgetPerWindow = 10;
             _scheduler.RecordRun(0, 100, _config);
-            Assert.That(_scheduler.RemainingBudget(_config), Is.EqualTo(int.MaxValue));
             var raid = new AutonomousSignals { HostileCount = 3, NearMentalBreakCount = 0, FoodNutrition = 100f, ColonistCount = 3 };
-            Assert.That(_scheduler.Evaluate(2500, raid, _config), Is.EqualTo(AutonomousTrigger.Raid), "自主模式不設預算上限");
+            Assert.That(_scheduler.Evaluate(2500, raid, _config), Is.EqualTo(AutonomousTrigger.Raid), "自主模式不設每日預算上限");
+        }
+
+        [Test]
+        public void SimultaneousEventsFireOneAfterAnother()
+        {
+            _config.OnFire = true;
+            var raidAndFire = new AutonomousSignals { HostileCount = 3, FoodNutrition = 100f, ColonistCount = 3, FireCount = 2 };
+            Assert.That(_scheduler.Evaluate(0, raidAndFire, _config), Is.EqualTo(AutonomousTrigger.Raid));
+            // 火災與襲擊同一次檢查出現：沒輪到的火災留到下次，不被吃掉。
+            Assert.That(_scheduler.Evaluate(500, raidAndFire, _config), Is.EqualTo(AutonomousTrigger.Fire));
+            Assert.That(_scheduler.Evaluate(1000, raidAndFire, _config), Is.EqualTo(AutonomousTrigger.None));
         }
 
         [Test]
@@ -114,26 +121,14 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void BudgetExhaustedBlocksEverythingUntilWindowResets()
+        public void ToolsUsedResetsWhenWindowRolls()
         {
             _scheduler.RecordRun(0, 60, _config);
-            var raid = new AutonomousSignals { HostileCount = 2, NearMentalBreakCount = 0, FoodNutrition = 100f, ColonistCount = 3 };
-            Assert.That(_scheduler.Evaluate(3000, raid, _config), Is.EqualTo(AutonomousTrigger.None));
             Assert.That(_scheduler.ToolsUsed, Is.EqualTo(60));
 
-            // 視窗過了就重置。
-            Assert.That(_scheduler.Evaluate(61000, raid, _config), Is.EqualTo(AutonomousTrigger.Raid));
+            // 視窗過了就重置當日用量。
+            _scheduler.Evaluate(61000, Calm(), _config);
             Assert.That(_scheduler.ToolsUsed, Is.EqualTo(0));
-        }
-
-        [Test]
-        public void RemainingBudgetNeverDropsBelowZero()
-        {
-            _scheduler.RecordRun(0, 59, _config);
-            Assert.That(_scheduler.RemainingBudget(_config), Is.EqualTo(1));
-
-            _scheduler.RecordRun(3000, 8, _config);
-            Assert.That(_scheduler.RemainingBudget(_config), Is.Zero);
         }
 
         [Test]

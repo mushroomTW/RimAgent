@@ -35,12 +35,8 @@ namespace RimAgent.Agent
         public bool Enabled { get; set; }
         /// <summary>例行巡檢間隔；0 代表關掉間隔觸發，只留事件觸發。</summary>
         public int IntervalTicks { get; set; }
-        /// <summary>預算視窗長度（一天）。</summary>
+        /// <summary>工具呼叫統計視窗長度（一天）。</summary>
         public int WindowTicks { get; set; }
-        /// <summary>一個視窗內自主任務最多消耗的工具呼叫次數（每句上限另由 maxSteps 管）。</summary>
-        public int BudgetPerWindow { get; set; }
-        /// <summary>是否不設預算上限（自主模式為 true）。</summary>
-        public bool UnlimitedBudget { get; set; }
         /// <summary>兩次自主任務之間的最短冷卻間隔 ticks，0 代表關閉冷卻。</summary>
         public int CooldownTicks { get; set; }
         public bool OnRaid { get; set; }
@@ -52,8 +48,8 @@ namespace RimAgent.Agent
 
     /// <summary>
     /// 自主排程器：純邏輯，不碰遊戲 API，方便測試。
-    /// 語義：事件採邊緣觸發（無→有才跑一次），任何兩次自主任務間至少隔 <see cref="CooldownTicks"/>，
-    /// 一個視窗內的工具呼叫總數不超過預算。
+    /// 語義：事件採邊緣觸發（無→有才跑一次），任何兩次自主任務間至少隔 <see cref="CooldownTicks"/>；
+    /// 同時發生的事件依優先序逐次觸發，不互相吃掉。每輪工具呼叫上限由呼叫端控制，這裡只統計當日用量。
     /// 存檔鍵與舊版 AutonomousSchedulerState 完全相同，舊存檔直接相容。
     /// </summary>
     public sealed class AutonomousScheduler : IExposable
@@ -78,18 +74,11 @@ namespace RimAgent.Agent
         public int ToolsUsed => _toolsUsed;
         public int Runs => _runs;
 
-        public int RemainingBudget(AutonomousConfig config)
-        {
-            if (config.UnlimitedBudget) return int.MaxValue;
-            return Math.Max(0, config.BudgetPerWindow - _toolsUsed);
-        }
-
         /// <summary>現在是否該起一次自主任務；回傳觸發原因或 None。</summary>
         public AutonomousTrigger Evaluate(long tick, AutonomousSignals signals, AutonomousConfig config)
         {
             if (!config.Enabled) return AutonomousTrigger.None;
             ResetWindowIfNeeded(tick, config);
-            if (!config.UnlimitedBudget && _toolsUsed >= config.BudgetPerWindow) return AutonomousTrigger.None;
             if (config.CooldownTicks > 0 && tick - _lastRunTick < config.CooldownTicks) return AutonomousTrigger.None;
 
             bool raid = signals.HostileCount > 0;
@@ -107,11 +96,12 @@ namespace RimAgent.Agent
             else if (config.OnFoodShortage && !foodOk && _prevFoodOk) trigger = AutonomousTrigger.FoodShortage;
             else if (config.IntervalTicks > 0 && tick - _lastRunTick >= config.IntervalTicks) trigger = AutonomousTrigger.Interval;
 
-            _prevRaid = raid;
-            _prevMental = mental;
-            _prevFoodOk = foodOk;
-            _prevEmergency = emergency;
-            _prevFire = fire;
+            // 一次只起一個任務：沒輪到的邊緣先不記下，下次檢查再觸發，不被優先序較高的事件吃掉。
+            if (!(config.OnRaid && raid != _prevRaid) || trigger == AutonomousTrigger.Raid || trigger == AutonomousTrigger.RaidEnded) _prevRaid = raid;
+            if (!(config.OnEmergencyMedical && emergency && !_prevEmergency) || trigger == AutonomousTrigger.EmergencyMedical) _prevEmergency = emergency;
+            if (!(config.OnFire && fire && !_prevFire) || trigger == AutonomousTrigger.Fire) _prevFire = fire;
+            if (!(config.OnMentalBreak && mental && !_prevMental) || trigger == AutonomousTrigger.MentalBreak) _prevMental = mental;
+            if (!(config.OnFoodShortage && !foodOk && _prevFoodOk) || trigger == AutonomousTrigger.FoodShortage) _prevFoodOk = foodOk;
             return trigger;
         }
 
