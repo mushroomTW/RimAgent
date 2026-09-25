@@ -8,6 +8,7 @@
     <iconPath>UI/Buttons/MainButtons/RimAgent</iconPath>
     <workerClass>RimAgent.UI.MainButtonWorker_ToggleAgent</workerClass>
     <order>75</order>
+    <minimized>true</minimized>
     <closesWorldView>false</closesWorldView>
   </MainButtonDef>
 

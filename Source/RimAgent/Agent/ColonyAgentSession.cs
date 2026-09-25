@@ -151,7 +151,7 @@ namespace RimAgent.Agent
         /// <summary>模型思考強度；每句指令組請求時讀取，改完下一句生效。由 GameComponent 從設定同步。</summary>
         public ReasoningLevel Reasoning { get; set; } = ReasoningLevel.Auto;
 
-        /// <summary>目前每句指令的工具呼叫上限。設定頁變更後由 GameComponent 經此同步，不必重讀存檔。</summary>
+        /// <summary>工具迴圈的迭代上限；正式遊戲傳入 int.MaxValue，僅測試或單輪預算另行縮小。</summary>
         public int MaxSteps => Volatile.Read(ref _maxSteps);
 
         /// <summary>自動壓縮開關。設定頁變更後由 GameComponent 經 <see cref="SyncAutoCompact"/> 同步，觸發條件每輪讀取即時值。</summary>
@@ -209,8 +209,8 @@ namespace RimAgent.Agent
 #pragma warning restore MAAI001
 
         /// <summary>
-        /// 把設定頁的步數上限同步進工具迴圈（框架的 FunctionInvokingChatClient 持有的是可寫屬性，
-        /// 重設它即可，AF session 的歷史不受影響）。值相同時不做事，每幀呼叫也無妨。
+        /// 更新工具迴圈的迭代上限，供有明確單輪預算的呼叫端使用。
+        /// 重設框架屬性不影響 AF session 的歷史。
         /// </summary>
         public void UpdateMaxSteps(int maxSteps)
         {

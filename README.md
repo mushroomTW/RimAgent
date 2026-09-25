@@ -41,7 +41,7 @@ An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in na
 
 1. Install and enable **RimLLM Framework** and **RimAgent**, with RimAgent later in the mod load order.
 2. In **Mod Settings > RimLLM Framework**, configure a supported model provider and its credentials.
-3. Load a game and click **Agent** on the bottom bar. Choose **Ask** to inspect without changing the game, or **Confirm** to preview every command before it runs.
+3. Load a game and click the compact **Agent** icon on the bottom bar. Choose **Ask** to inspect without changing the game, or **Confirm** to preview every command before it runs.
 4. Enter a request such as `How is the colony doing?`, `Set Alice's Doctor priority to 1`, or `Draft everyone and move to (25, 30)`, then press **Send** or Enter.
 
 The agent uses tools to inspect the current map and carry out permitted actions. In Confirm mode, review each command preview before approving it.
@@ -62,8 +62,11 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- Select the execution **mode** and model **reasoning effort** from the dropdowns. **Send** changes to **Stop** while a request is running.
+- Select the execution **mode** and model **reasoning effort** from the Agent window dropdowns; hover a mode to see what it does and its risks. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
+- Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default.
+- The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
+- With the input box focused, ↑↓ recall previously sent input.
 - Type `/` for slash-command completion (↑↓ to navigate, Tab or Enter to select):
 
 | Command | Description |
@@ -113,11 +116,11 @@ One setting decides how much the agent may do on its own:
 
 ## Autonomy (Autonomous Mode)
 
-Select **Autonomous** in mod settings or the mode dropdown to let the agent act in the background:
+Select **Autonomous** from the Agent window's mode dropdown to let the agent act in the background:
 
 - **Scheduled checks:** Inspect the colony at a configurable interval (default: every 6 in-game hours).
 - **Event responses:** React to raids beginning or ending, impending mental breaks, food shortages, downed or bleeding colonists, and fires. New choice letters and dialogs are checked every 2 real-time seconds, including while a dialog pauses the game; each choice triggers once.
-- **Budget and cooldown:** No daily tool-call limit. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
+- **Budget and cooldown:** No daily tool-call limit, but each autonomous run is capped at 20 tool calls to stop background loops. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
 - **Persistent goals:** `/goal` runs independently in any mode and follows that mode's approval policy. Goals are saved with the game; after three blocked/error turns or 60 turns, a goal pauses for review until `/goal resume`.
 
 ---

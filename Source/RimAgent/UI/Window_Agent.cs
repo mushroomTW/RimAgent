@@ -26,6 +26,18 @@ namespace RimAgent.UI
         private const float ButtonWidth = 72f;
         private const float DropdownWidth = 110f;
         private const float EntryGap = 6f;
+        /// <summary>每回合（一句 User 紀錄）開頭多留的間距，分隔線畫在正中間。</summary>
+        private const float TurnGap = 14f;
+        /// <summary>玩家氣泡最寬佔對話區的比例。</summary>
+        private const float BubbleMaxRatio = 0.8f;
+        private const float BubblePadX = 8f;
+        private const float BubblePadY = 4f;
+        /// <summary>捲動位置離底部多近仍算「停在底部」，新內容來時自動跟隨。</summary>
+        private const float StickToBottomSlack = 4f;
+        private const float JumpButtonWidth = 130f;
+        private const float JumpButtonHeight = 22f;
+        /// <summary>輸入歷史保留筆數。</summary>
+        private const int MaxInputHistory = 50;
         private const float SlashRowHeight = 26f;
         private const float SlashPopupWidth = 460f;
         private const int MaxResultChars = 600;
@@ -49,7 +61,6 @@ namespace RimAgent.UI
         private const string EmergencyHex = "FF5959"; // 亮紅橙：[危險急停]
         private const string PauseHex = "FFC846";     // 金黃：[自動暫停]
         private const string AutoActionHex = "73CCFF"; // 冷青藍：[自動處理]
-        private const string UserHex = "A8DCFF";       // 淡天藍：玩家指令
         private const string TextHex = "E6EDF5";       // 柔和淺白：內文敘述
         private const string SubTextHex = "A0B0C0";    // 淺灰藍：次要細節 / 結果
         private const string NoticeHex = "FFD670";     // 提示黃
@@ -61,13 +72,57 @@ namespace RimAgent.UI
         private static readonly Color EmergencyColor = new Color(1f, 0.35f, 0.35f);
         private static readonly Color PauseColor = new Color(1f, 0.80f, 0.28f);
         private static readonly Color NoticeColor = new Color(0.95f, 0.85f, 0.45f);
+        private static readonly Color BubbleColor = new Color(0.16f, 0.30f, 0.44f, 0.55f);
+        private static readonly Color BubbleBorderColor = new Color(0.66f, 0.86f, 1f, 0.45f);
+        private static readonly Color DividerColor = new Color(0.45f, 0.52f, 0.60f, 0.30f);
+
+        private enum LineKind
+        {
+            Text,
+            /// <summary>玩家親自輸入的話：靠右、包在氣泡裡。</summary>
+            PlayerBubble,
+            /// <summary>工具呼叫摘要列：點一下展開或收合參數與結果。</summary>
+            ToolHeader,
+            /// <summary>每句指令一次的戰鬥延遲提醒；畫法同 Text，重排該筆時要讓它重新出現。</summary>
+            CombatNote,
+            Screenshot
+        }
+
+        private struct TranscriptLine
+        {
+            public LineKind Kind;
+            public string Text;
+            public float Height;
+            /// <summary>PlayerBubble 專用：氣泡外框寬度。</summary>
+            public float BubbleWidth;
+            /// <summary>Screenshot 專用。</summary>
+            public string ImagePath;
+            /// <summary>這行屬於哪筆紀錄；ToolHeader 點擊時靠它找出同一筆的所有行，只重排那一筆。</summary>
+            public TranscriptEntry Entry;
+            /// <summary>回合開頭：上方多留 <see cref="TurnGap"/> 並畫分隔線。</summary>
+            public bool TurnStart;
+        }
+
+        /// <summary>整局共用、關掉視窗也保留；最新的在最後。</summary>
+        private static readonly List<string> InputHistory = new List<string>();
 
         private string _input = string.Empty;
         private Vector2 _scroll;
-        private int _lastEntryCount = -1;
+        /// <summary>上一次繪製時的最大捲動量；捲動位置在它附近就算停在底部。</summary>
+        private float _lastMaxScroll;
+        /// <summary>下一次繪製強制捲到底（送出指令、清除對話後）。</summary>
+        private bool _scrollToBottom = true;
+        /// <summary>最後一次停在底部時的逐字稿 Version（單調遞增，裁切舊紀錄也不會倒退）；之後變了就顯示「有新訊息」。</summary>
+        private int _seenVersion;
+        /// <summary>正在瀏覽的歷史索引；-1 代表沒在瀏覽。</summary>
+        private int _historyIndex = -1;
+        /// <summary>開始瀏覽歷史前輸入框裡的草稿，↓ 回到底時還原。</summary>
+        private string _historyDraft = string.Empty;
+        /// <summary>玩家親手設定過的工具展開狀態（true＝展開）；以參考比對，沒設定的走預設。</summary>
+        private readonly Dictionary<TranscriptEntry, bool> _toolExpanded = new Dictionary<TranscriptEntry, bool>();
 
         // 渲染快取
-        private readonly List<(string Text, Color Color, float Height, string ImagePath)> _lines = new List<(string, Color, float, string)>();
+        private readonly List<TranscriptLine> _lines = new List<TranscriptLine>();
         private readonly Dictionary<string, Texture2D> _screenshotTextures = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
         /// <summary>最近用到的排在最後；繪製時會把用到的移到最後，淘汰從最前面開始。</summary>
         private readonly List<string> _screenshotOrder = new List<string>();
@@ -84,6 +139,8 @@ namespace RimAgent.UI
         private readonly TextCache<ReasoningLevel> _reasoningLabel = new TextCache<ReasoningLevel>();
         private readonly TextCache<int> _autoUsageLabel = new TextCache<int>();
         private readonly TextCache<int> _workingLabel = new TextCache<int>();
+        private readonly TextCache<bool> _jumpLabel = new TextCache<bool>();
+        private string _toolToggleTip;
         private float _workingHeight;
         private float _workingHeightWidth = -1f;
         private float _settlingWidth = -1f;
@@ -376,39 +433,94 @@ namespace RimAgent.UI
                 total += workingHeight + EntryGap;
             }
 
-            if (_linesEntryCount != _lastEntryCount)
-            {
-                _lastEntryCount = _linesEntryCount;
-                _scroll.y = float.MaxValue;
-            }
-
+            // 只有原本就停在底部（或剛送出指令）才跟著新內容捲到底；往上翻舊紀錄時不被拉回去。
+            // 設成確切的最大值而非 float.MaxValue：捲軸狀態會記住這個值，太大時滾輪往上的位移會被吃掉。
             var viewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height));
-            float visibleTop = Mathf.Clamp(_scroll.y, 0f, Mathf.Max(0f, viewRect.height - outRect.height));
+            float maxScroll = viewRect.height - outRect.height;
+            if (_scrollToBottom || _scroll.y >= _lastMaxScroll - StickToBottomSlack)
+            {
+                _scroll.y = maxScroll;
+                _scrollToBottom = false;
+                _seenVersion = _linesTranscriptVersion;
+            }
+            _lastMaxScroll = maxScroll;
+            float visibleTop = Mathf.Clamp(_scroll.y, 0f, maxScroll);
             float visibleBottom = visibleTop + outRect.height;
+
+            bool showJump = _scroll.y < maxScroll - StickToBottomSlack;
+            var jumpRect = new Rect(outRect.center.x - JumpButtonWidth / 2f, outRect.yMax - JumpButtonHeight - 6f, JumpButtonWidth, JumpButtonHeight);
+            // 捲動區內的座標系不同，先在外面判斷滑鼠是否壓在跳底按鈕上，免得同一下點擊也展開底下的工具列。
+            bool mouseOnJump = showJump && Mouse.IsOver(jumpRect);
 
             Widgets.BeginScrollView(outRect, ref _scroll, viewRect);
             float y = 0f;
-            foreach ((string text, Color color, float height, string imagePath) in _lines)
+            TranscriptEntry clickedTool = null;
+            foreach (TranscriptLine line in _lines)
             {
-                if (y + height >= visibleTop && y <= visibleBottom)
+                if (line.TurnStart)
                 {
-                    var lineRect = new Rect(0f, y, lineWidth, height);
-                    if (imagePath != null) DrawScreenshotPreview(lineRect, imagePath);
-                    else
+                    if (y + TurnGap >= visibleTop && y <= visibleBottom)
                     {
-                        GUI.color = color;
-                        Widgets.Label(lineRect, text);
+                        Widgets.DrawBoxSolid(new Rect(0f, y + TurnGap / 2f, lineWidth, 1f), DividerColor);
+                    }
+                    y += TurnGap;
+                }
+                if (y + line.Height >= visibleTop && y <= visibleBottom)
+                {
+                    var lineRect = new Rect(0f, y, lineWidth, line.Height);
+                    switch (line.Kind)
+                    {
+                        case LineKind.Screenshot:
+                            DrawScreenshotPreview(lineRect, line.ImagePath);
+                            break;
+                        case LineKind.PlayerBubble:
+                            // 縮窄視窗、延後重排期間 lineWidth 仍是舊寬度；氣泡貼齊目前可見的右緣，不被推出畫面。
+                            float bubbleRight = Mathf.Min(lineRect.xMax, width);
+                            var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
+                            Widgets.DrawBoxSolid(bubble, BubbleColor);
+                            DrawThinBox(bubble, BubbleBorderColor);
+                            Widgets.Label(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text);
+                            break;
+                        case LineKind.ToolHeader:
+                            if (!mouseOnJump)
+                            {
+                                if (Mouse.IsOver(lineRect))
+                                {
+                                    Widgets.DrawHighlight(lineRect);
+                                    if (_toolToggleTip == null) _toolToggleTip = "RimAgent.Tool.ToggleTip".Translate();
+                                    TooltipHandler.TipRegion(lineRect, _toolToggleTip);
+                                }
+                                if (Widgets.ButtonInvisible(lineRect)) clickedTool = line.Entry;
+                            }
+                            Widgets.Label(lineRect, line.Text);
+                            break;
+                        default:
+                            Widgets.Label(lineRect, line.Text);
+                            break;
                     }
                 }
-                y += height + EntryGap;
+                y += line.Height + EntryGap;
             }
             if (working != null)
             {
-                GUI.color = Color.white;
                 Widgets.Label(new Rect(0f, y, width, workingHeight), working);
             }
             GUI.color = Color.white;
             Widgets.EndScrollView();
+
+            if (clickedTool != null)
+            {
+                _toolExpanded[clickedTool] = !IsToolExpanded(clickedTool);
+                RelayoutEntry(clickedTool);
+            }
+
+            if (showJump)
+            {
+                bool unseen = _linesTranscriptVersion != _seenVersion;
+                string jumpLabel = _jumpLabel.Get(unseen, u => (u ? "RimAgent.Scroll.NewMessages" : "RimAgent.Scroll.Latest").Translate().ToString());
+                Color jumpColor = unseen ? NoticeColor : TitleColor;
+                if (DrawUnifiedButton(jumpRect, jumpLabel, jumpColor, jumpColor, true, GameFont.Tiny)) _scrollToBottom = true;
+            }
         }
 
         /// <summary>寬度是否已經停在同一個值超過 <see cref="ReflowDelayMs"/>（用 TickCount：BCL 在測試與遊戲內都能 JIT）。</summary>
@@ -587,34 +699,110 @@ namespace RimAgent.UI
             _lines.Clear();
             _linesTotal = 0f;
             _combatNoted.Clear();
+            PruneToolExpanded(entries);
             AppendLines(entries, 0, width);
+        }
+
+        /// <summary>丟掉已經不在逐字稿裡（/clear、裁掉舊紀錄、換存檔）的展開狀態，免得一直抓著舊紀錄。</summary>
+        private void PruneToolExpanded(IReadOnlyList<TranscriptEntry> entries)
+        {
+            if (_toolExpanded.Count == 0) return;
+            var live = new HashSet<TranscriptEntry>(entries);
+            var stale = new List<TranscriptEntry>();
+            foreach (TranscriptEntry entry in _toolExpanded.Keys)
+            {
+                if (!live.Contains(entry)) stale.Add(entry);
+            }
+            foreach (TranscriptEntry entry in stale) _toolExpanded.Remove(entry);
         }
 
         private void AppendLines(IReadOnlyList<TranscriptEntry> entries, int from, float width)
         {
             for (int i = Math.Max(0, from); i < entries.Count; i++)
             {
-                foreach ((string text, Color color) in Render(entries[i], _combatNoted))
-                {
-                    float height = Text.CalcHeight(text, width);
-                    _lines.Add((text, color, height, null));
-                    _linesTotal += height + EntryGap;
-                }
-                string screenshotPath = TranscriptScreenshot.TryGetPath(entries[i], GenFilePaths.ScreenshotFolderPath);
-                if (screenshotPath != null)
-                {
-                    float imageHeight = Mathf.Clamp(width * 0.5625f, 120f, 320f);
-                    _lines.Add((null, Color.white, imageHeight, screenshotPath));
-                    _linesTotal += imageHeight + EntryGap;
-                }
+                TranscriptEntry entry = entries[i];
+                // 每句 User 紀錄開啟新回合；第一行上面不畫分隔線。
+                bool turnStart = entry.Kind == TranscriptKind.User && _lines.Count > 0;
+                _linesTotal += BuildEntryLines(entry, width, turnStart, _lines);
             }
             _linesEntryCount = entries.Count;
+        }
+
+        /// <summary>把一筆紀錄排成若干行加到 <paramref name="into"/>，回傳佔用的總高度（含間距）。</summary>
+        private float BuildEntryLines(TranscriptEntry entry, float width, bool turnStart, List<TranscriptLine> into)
+        {
+            float total = 0f;
+            foreach ((string text, LineKind kind) in Render(entry, IsToolExpanded(entry), _combatNoted))
+            {
+                var line = new TranscriptLine { Kind = kind, Text = text, Entry = entry, TurnStart = turnStart };
+                if (kind == LineKind.PlayerBubble)
+                {
+                    // 短句貼齊字寬，長句到上限就換行。CalcSize 不換行，量到的是最長一行的寬度。
+                    float maxInner = width * BubbleMaxRatio - BubblePadX * 2f;
+                    float inner = Mathf.Min(Mathf.Ceil(Text.CalcSize(text).x) + 1f, maxInner);
+                    line.BubbleWidth = inner + BubblePadX * 2f;
+                    line.Height = Text.CalcHeight(text, inner) + BubblePadY * 2f;
+                }
+                else
+                {
+                    line.Height = Text.CalcHeight(text, width);
+                }
+                into.Add(line);
+                total += line.Height + EntryGap + (turnStart ? TurnGap : 0f);
+                turnStart = false;
+            }
+            string screenshotPath = TranscriptScreenshot.TryGetPath(entry, GenFilePaths.ScreenshotFolderPath);
+            if (screenshotPath != null)
+            {
+                float imageHeight = Mathf.Clamp(width * 0.5625f, 120f, 320f);
+                into.Add(new TranscriptLine { Kind = LineKind.Screenshot, Height = imageHeight, ImagePath = screenshotPath, Entry = entry });
+                total += imageHeight + EntryGap;
+            }
+            return total;
+        }
+
+        /// <summary>只重排一筆紀錄的行（展開／收合工具時），不必整份逐字稿重算 CalcHeight 與 markdown。</summary>
+        private void RelayoutEntry(TranscriptEntry entry)
+        {
+            int start = -1;
+            for (int i = 0; i < _lines.Count; i++)
+            {
+                if (ReferenceEquals(_lines[i].Entry, entry)) { start = i; break; }
+            }
+            if (start < 0) return;
+
+            int end = start;
+            float oldHeight = 0f;
+            bool hadCombatNote = false;
+            while (end < _lines.Count && ReferenceEquals(_lines[end].Entry, entry))
+            {
+                TranscriptLine old = _lines[end];
+                oldHeight += old.Height + EntryGap + (old.TurnStart ? TurnGap : 0f);
+                hadCombatNote |= old.Kind == LineKind.CombatNote;
+                end++;
+            }
+            // 這一筆原本就是該句指令顯示戰鬥提醒的那筆：先讓出去，重排時才會再出現。
+            if (hadCombatNote) _combatNoted.Remove(entry.InstructionId);
+
+            var fresh = new List<TranscriptLine>();
+            float newHeight = BuildEntryLines(entry, _linesWidth, _lines[start].TurnStart, fresh);
+            _lines.RemoveRange(start, end - start);
+            _lines.InsertRange(start, fresh);
+            _linesTotal += newHeight - oldHeight;
+        }
+
+        /// <summary>工具紀錄預設收合，只有等待確認的預覽預設展開（玩家要看得到確認的是什麼）；玩家親手設定過的照玩家的。</summary>
+        private bool IsToolExpanded(TranscriptEntry entry)
+        {
+            if (entry.Kind != TranscriptKind.Tool) return false;
+            if (_toolExpanded.TryGetValue(entry, out bool expanded)) return expanded;
+            return entry.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
         }
 
         /// <summary>
         /// 雙色分離渲染條目：採用 Unity Rich Text 標籤，達成「高亮彩色前綴標籤 + 柔和淺白內文」的圖片設計層次。
         /// </summary>
-        private static IEnumerable<(string Text, Color Color)> Render(TranscriptEntry entry, HashSet<int> combatNoted)
+        private static IEnumerable<(string Text, LineKind Kind)> Render(TranscriptEntry entry, bool toolExpanded, HashSet<int> combatNoted)
         {
             switch (entry.Kind)
             {
@@ -622,34 +810,33 @@ namespace RimAgent.UI
                     if (entry.GoalRun)
                     {
                         string goalTag = "<color=#" + NoticeHex + ">" + "RimAgent.Tag.Goal".Translate() + "</color> ";
-                        yield return (goalTag + "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>", Color.white);
+                        yield return (goalTag + "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>", LineKind.Text);
                     }
                     else if (entry.Autonomous)
                     {
                         string autoTag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.AutoAction".Translate() + "</color> ";
                         string body = "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
-                        yield return (autoTag + body, Color.white);
+                        yield return (autoTag + body, LineKind.Text);
                     }
                     else
                     {
-                        string userText = "<color=#" + UserHex + ">" + "RimAgent.Tag.Player".Translate()
-                            + "</color> <color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
-                        yield return (userText, Color.white);
+                        // 靠右的氣泡本身就標明是玩家說的，不再加標籤。
+                        yield return ("<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>", LineKind.PlayerBubble);
                     }
                     break;
 
                 case TranscriptKind.Assistant:
-                    foreach (var line in RenderAssistant(entry)) yield return line;
+                    foreach (var line in RenderAssistant(entry)) yield return (line, LineKind.Text);
                     break;
 
                 case TranscriptKind.Tool:
-                    foreach (var line in RenderTool(entry, combatNoted)) yield return line;
+                    foreach (var line in RenderTool(entry, toolExpanded, combatNoted)) yield return line;
                     break;
 
                 case TranscriptKind.Error:
                     string errTag = "<color=#" + EmergencyHex + ">" + "RimAgent.Tag.EmergencyStop".Translate() + "</color> ";
                     string errBody = "<color=#" + EmergencyHex + ">" + EscapeRichText(DescribeError(entry)) + "</color>";
-                    yield return (errTag + errBody, Color.white);
+                    yield return (errTag + errBody, LineKind.Text);
                     break;
 
                 default:
@@ -657,9 +844,9 @@ namespace RimAgent.UI
                     bool isPauseOrAlert = ContainsAny(entry.Text, "暫停", "暂停", "pause", "告警", "警告", "warn", "alert");
                     string noticeTag = isPauseOrAlert
                         ? "<color=#" + PauseHex + ">" + "RimAgent.Tag.AutoPause".Translate().ToString() + "</color> "
-                        : "<color=#" + NoticeHex + ">[提示]</color> ";
+                        : "<color=#" + NoticeHex + ">" + "RimAgent.Tag.Notice".Translate().ToString() + "</color> ";
                     string noticeBody = "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
-                    yield return (noticeTag + noticeBody, Color.white);
+                    yield return (noticeTag + noticeBody, LineKind.Text);
                     break;
             }
         }
@@ -674,44 +861,48 @@ namespace RimAgent.UI
             return false;
         }
 
-        private static IEnumerable<(string Text, Color Color)> RenderAssistant(TranscriptEntry entry)
+        private static IEnumerable<string> RenderAssistant(TranscriptEntry entry)
         {
             string reply = RenderReply(EscapeRichText(entry.Text));
             string replyText = reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply;
             string agentTag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.Agent".Translate() + "</color> ";
-            yield return (agentTag + "<color=#" + TextHex + ">" + replyText + "</color>", Color.white);
+            yield return agentTag + "<color=#" + TextHex + ">" + replyText + "</color>";
             if (entry.ToolsStripped)
             {
-                string stripText = "<color=#" + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + "</color>";
-                yield return (stripText, Color.white);
+                yield return "<color=#" + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + "</color>";
             }
         }
 
-        private static IEnumerable<(string Text, Color Color)> RenderTool(TranscriptEntry entry, HashSet<int> combatNoted)
+        /// <summary>摘要列（▸／▾、工具名、風險判定；失敗時工具名轉紅）一定顯示，參數與結果只在展開時顯示。</summary>
+        private static IEnumerable<(string Text, LineKind Kind)> RenderTool(TranscriptEntry entry, bool expanded, HashSet<int> combatNoted)
         {
+            string arrow = "<color=#" + SubTextHex + ">" + (expanded ? "▾" : "▸") + "</color> ";
             string tag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.Tool".Translate() + "</color> ";
-            string call = tag + "<color=#" + TextHex + ">" + EscapeRichText(entry.ToolName) + "</color>";
+            string call = arrow + tag + "<color=#" + (entry.Failed ? EmergencyHex : TextHex) + ">" + EscapeRichText(entry.ToolName) + "</color>";
             if (entry.RiskCheck.Length > 0)
             {
                 call += " <color=#" + (entry.Failed ? EmergencyHex : NoticeHex) + ">["
                     + RiskLabel(entry.RiskCheck) + "]</color>";
             }
-            yield return (call, Color.white);
-            if (!string.IsNullOrEmpty(entry.Arguments))
+            yield return (call, LineKind.ToolHeader);
+            if (expanded)
             {
-                yield return ("<color=#" + SubTextHex + ">" + "RimAgent.Tool.Arguments".Translate()
-                    + " " + EscapeRichText(entry.Arguments) + "</color>", Color.white);
-            }
+                if (!string.IsNullOrEmpty(entry.Arguments))
+                {
+                    yield return ("<color=#" + SubTextHex + ">" + "RimAgent.Tool.Arguments".Translate()
+                        + " " + EscapeRichText(entry.Arguments) + "</color>", LineKind.Text);
+                }
 
-            string resultStr = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
-            string resColorHex = entry.Failed ? EmergencyHex : SubTextHex;
-            yield return ("<color=#" + resColorHex + ">" + "RimAgent.Tool.Result".Translate()
-                + " " + EscapeRichText(resultStr) + "</color>", Color.white);
+                string resultStr = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
+                string resColorHex = entry.Failed ? EmergencyHex : SubTextHex;
+                yield return ("<color=#" + resColorHex + ">" + "RimAgent.Tool.Result".Translate()
+                    + " " + EscapeRichText(resultStr) + "</color>", LineKind.Text);
+            }
 
             if (entry.ToolCategory == ToolCategory.Combat && combatNoted.Add(entry.InstructionId))
             {
                 string combatNote = "<color=#" + NoticeHex + ">" + "RimAgent.CombatLatencyNote".Translate() + "</color>";
-                yield return (combatNote, Color.white);
+                yield return (combatNote, LineKind.CombatNote);
             }
         }
 
@@ -757,10 +948,15 @@ namespace RimAgent.UI
                 var options = new List<FloatMenuOption>();
                 foreach (AgentMode mode in (AgentMode[])Enum.GetValues(typeof(AgentMode)))
                 {
-                    options.Add(new FloatMenuOption(ModeLabel(mode), () => SetMode(settings, mode)));
+                    options.Add(new FloatMenuOption(ModeLabel(mode), () => SetMode(settings, mode))
+                    {
+                        tooltip = new TipSignal(ModeDescription(mode))
+                    });
                 }
                 Find.WindowStack.Add(new FloatMenu(options));
             }
+            // 提示字串只在滑鼠停在上面時才組。
+            if (Mouse.IsOver(modeRect)) TooltipHandler.TipRegion(modeRect, ModeDescription(session.Mode));
 
             ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
             string reasoningStatus = _reasoningLabel.Get(current, level => "RimAgent.Reasoning.Status".Translate(ReasoningLabel(level)).ToString());
@@ -822,6 +1018,19 @@ namespace RimAgent.UI
             }
         }
 
+        /// <summary>模式說明（含 YOLO／自主的風險提醒）；設定頁不再列模式，改在下拉選單與按鈕的提示顯示。</summary>
+        private static string ModeDescription(AgentMode mode)
+        {
+            switch (mode)
+            {
+                case AgentMode.Ask: return "RimAgent.Settings.Mode.AskDesc".Translate();
+                case AgentMode.Confirm: return "RimAgent.Settings.Mode.ConfirmDesc".Translate();
+                case AgentMode.Yolo: return "RimAgent.Settings.Mode.YoloDesc".Translate();
+                case AgentMode.Auto: return "RimAgent.Settings.Mode.AutoDesc".Translate();
+                default: return "RimAgent.Settings.Mode.AutonomousDesc".Translate();
+            }
+        }
+
         private static string ReasoningLabel(ReasoningLevel level)
         {
             return ("RimAgent.Reasoning." + level).Translate();
@@ -853,7 +1062,7 @@ namespace RimAgent.UI
             var inputRect = new Rect(rect.x, rect.y, rect.width - ButtonWidth - 6f, rect.height);
             var buttonRect = new Rect(rect.xMax - ButtonWidth, rect.y, ButtonWidth, rect.height);
 
-            bool enterPressed = !HandleSlashKeys(session) &&
+            bool enterPressed = !HandleHistoryKeys() && !HandleSlashKeys(session) &&
                                 Event.current.type == EventType.KeyDown &&
                                 (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
@@ -900,7 +1109,10 @@ namespace RimAgent.UI
 
             GUI.SetNextControlName(InputControlName);
             var innerInputRect = inputRect.ContractedBy(4f, 2f);
+            string before = _input;
             _input = Widgets.TextField(innerInputRect, _input);
+            // 玩家自己改了內容就不算在瀏覽歷史：↓ 不會拿舊草稿蓋掉新字，打 / 也讓方向鍵回到斜線選單。
+            if (_input != before) _historyIndex = -1;
 
             if (_input.Length == 0 && GUI.GetNameOfFocusedControl() != InputControlName)
             {
@@ -912,6 +1124,55 @@ namespace RimAgent.UI
                 Text.WordWrap = true;
                 GUI.color = Color.white;
             }
+        }
+
+        /// <summary>
+        /// 輸入框有焦點時 ↑／↓ 瀏覽送出過的輸入，↓ 走到底還原原本的草稿。
+        /// 斜線選單開著時讓給選單；但已經在瀏覽歷史時（叫回的是斜線指令也一樣）繼續瀏覽。
+        /// </summary>
+        private bool HandleHistoryKeys()
+        {
+            if (Event.current.type != EventType.KeyDown || InputHistory.Count == 0) return false;
+            KeyCode key = Event.current.keyCode;
+            if (key != KeyCode.UpArrow && key != KeyCode.DownArrow) return false;
+            if (GUI.GetNameOfFocusedControl() != InputControlName) return false;
+            if (_historyIndex < 0 && SlashCommands.Match(_input).Count > 0) return false;
+
+            if (key == KeyCode.UpArrow)
+            {
+                if (_historyIndex < 0)
+                {
+                    _historyDraft = _input;
+                    _historyIndex = InputHistory.Count - 1;
+                }
+                else if (_historyIndex > 0)
+                {
+                    _historyIndex--;
+                }
+                SetInput(InputHistory[_historyIndex]);
+            }
+            else if (_historyIndex >= 0)
+            {
+                _historyIndex++;
+                if (_historyIndex >= InputHistory.Count)
+                {
+                    _historyIndex = -1;
+                    SetInput(_historyDraft);
+                }
+                else
+                {
+                    SetInput(InputHistory[_historyIndex]);
+                }
+            }
+            Event.current.Use();
+            return true;
+        }
+
+        private static void RememberInput(string text)
+        {
+            if (InputHistory.Count > 0 && InputHistory[InputHistory.Count - 1] == text) return;
+            InputHistory.Add(text);
+            if (InputHistory.Count > MaxInputHistory) InputHistory.RemoveAt(0);
         }
 
         private bool HandleSlashKeys(ColonyAgentSession session)
@@ -1025,7 +1286,7 @@ namespace RimAgent.UI
             else if (command == SlashCommands.Clear)
             {
                 session.Clear();
-                _lastEntryCount = -1;
+                _scrollToBottom = true;
             }
             else if (command == SlashCommands.Compact)
             {
@@ -1166,6 +1427,9 @@ namespace RimAgent.UI
             string text = _input.Trim();
             if (text.Length == 0) return;
             _input = string.Empty;
+            RememberInput(text);
+            _historyIndex = -1;
+            _scrollToBottom = true;
 
             if (SlashCommands.TryParse(text, out SlashCommand command, out string args))
             {

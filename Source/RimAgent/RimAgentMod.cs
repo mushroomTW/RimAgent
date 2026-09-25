@@ -7,7 +7,7 @@ using Verse;
 
 namespace RimAgent
 {
-    /// <summary>Mod 進入點與設定頁。LLM 相關設定全在 RimLLM Framework，這裡只有工具權限、執行模式與步數上限。</summary>
+    /// <summary>Mod 進入點與設定頁。執行模式由 Agent 視窗切換。</summary>
     public class RimAgentMod : Mod
     {
         public static RimAgentSettings Settings { get; private set; }
@@ -48,19 +48,8 @@ namespace RimAgent
             }
 
             listing.Gap();
-            listing.Label("RimAgent.Settings.MaxSteps".Translate(Settings.maxSteps), -1f, "RimAgent.Settings.MaxStepsTip".Translate());
-            Settings.maxSteps = Mathf.RoundToInt(listing.Slider(Settings.maxSteps, RimAgentSettings.MinSteps, RimAgentSettings.MaxSteps));
-
-            listing.Gap();
-            listing.Label("RimAgent.Settings.ModeHeader".Translate());
-            listing.GapLine();
-            ModeOption(listing, AgentMode.Ask, "RimAgent.Settings.Mode.Ask", "RimAgent.Settings.Mode.AskDesc");
-            ModeOption(listing, AgentMode.Confirm, "RimAgent.Settings.Mode.Confirm", "RimAgent.Settings.Mode.ConfirmDesc");
-            ModeOption(listing, AgentMode.Yolo, "RimAgent.Settings.Mode.Yolo", "RimAgent.Settings.Mode.YoloDesc");
-            ModeOption(listing, AgentMode.Auto, "RimAgent.Settings.Mode.Auto", "RimAgent.Settings.Mode.AutoDesc");
-
             Rect classifierRow = listing.GetRect(28f);
-            float indent = 24f;
+            float indent = 0f;
             float labelWidth = 140f;
             float btnWidth = 80f;
             float inputWidth = Mathf.Max(60f, classifierRow.width - indent - labelWidth - btnWidth - 12f);
@@ -77,8 +66,6 @@ namespace RimAgent
             }
             TooltipHandler.TipRegion(classifierRow, "RimAgent.Settings.ClassifierModelTip".Translate());
             listing.Gap(6f);
-
-            ModeOption(listing, AgentMode.Autonomous, "RimAgent.Settings.Mode.Autonomous", "RimAgent.Settings.Mode.AutonomousDesc");
 
             listing.Gap();
             listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
@@ -127,19 +114,5 @@ namespace RimAgent
             Widgets.EndScrollView();
         }
 
-        /// <summary>模式單選列：標題一行、灰字說明一行，點任一行都選取。</summary>
-        private static void ModeOption(Listing_Standard listing, AgentMode mode, string titleKey, string descKey)
-        {
-            if (listing.RadioButton(titleKey.Translate(), Settings.mode == mode))
-            {
-                Settings.mode = mode;
-            }
-            Text.Font = GameFont.Tiny;
-            GUI.color = new Color(0.7f, 0.7f, 0.7f);
-            listing.Label(descKey.Translate());
-            GUI.color = Color.white;
-            Text.Font = GameFont.Small;
-            listing.Gap(4f);
-        }
     }
 }

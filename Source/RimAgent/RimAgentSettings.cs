@@ -4,17 +4,12 @@ using Verse;
 
 namespace RimAgent
 {
-    /// <summary>玩家可調的設定：執行模式、十二類工具的開關與單句指令的步數上限。</summary>
+    /// <summary>玩家可調的設定：十二類工具權限、執行模式與背景排程選項。</summary>
     public class RimAgentSettings : ModSettings
     {
-        public const int DefaultMaxSteps = 8;
-        public const int MinSteps = 1;
-        public const int MaxSteps = 20;
-
 #pragma warning disable S1104 // RimWorld ModSettings and Listing_Standard require public fields passed by ref
         /// <summary>十二類工具開關，Taxi <see cref="ToolCategory"/> 順序存放；Scribe 鍵沿用舊欄位名，舊存檔與舊設定相容。</summary>
         public bool[] allowByCategory = DefaultAllows();
-        public int maxSteps = DefaultMaxSteps;
         /// <summary>執行模式：詢問／確認／自動／自主，見 <see cref="AgentMode"/>。</summary>
         public AgentMode mode = AgentMode.Confirm;
         /// <summary>模型思考強度，見 <see cref="ReasoningLevel"/>；Auto 沿用框架預設。</summary>
@@ -146,7 +141,6 @@ namespace RimAgent
             {
                 Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
             }
-            Scribe_Values.Look(ref maxSteps, "maxSteps", DefaultMaxSteps);
             Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
             Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);

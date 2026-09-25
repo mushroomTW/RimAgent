@@ -127,6 +127,22 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task UnlimitedStepConfigurationAllowsMoreThanFormerLimit()
+        {
+            for (int i = 0; i < 21; i++)
+            {
+                _client.CallTool("get_colony_overview", null);
+            }
+            _client.Reply("完成");
+            ColonyAgentSession session = NewSession(maxSteps: int.MaxValue);
+
+            string reply = await session.SendAsync("連續查詢");
+
+            Assert.That(reply, Is.EqualTo("完成"));
+            Assert.That(session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool), Is.EqualTo(21));
+        }
+
+        [Test]
         public async Task MaxStepsBoundsARunawayLoop()
         {
             _client.CallTool("get_colony_overview", null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具

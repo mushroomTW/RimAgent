@@ -26,6 +26,7 @@ namespace RimAgent.Tests
             "RimAgent.UI.Window_Agent.DrawInputField",         // 輸入列
             "RimAgent.UI.Window_Agent.SetInput",               // 游標
             "RimAgent.UI.Window_Agent.HandleSlashKeys",        // 斜線選單鍵盤
+            "RimAgent.UI.Window_Agent.HandleHistoryKeys",      // 輸入歷史鍵盤
             "RimAgent.Game.RimWorldGameWorld.TakeScreenshot",  // 截圖
             "RimAgent.UI.Window_Agent.LoadPendingScreenshot"   // 截圖預覽縮圖
         };

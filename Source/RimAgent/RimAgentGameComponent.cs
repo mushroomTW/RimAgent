@@ -28,6 +28,9 @@ namespace RimAgent
         /// <summary>訊號檢查間隔（500 tick ≈ 遊戲內 12 分鐘），避免每幀掃全圖。</summary>
         private const int SignalCheckIntervalTicks = 500;
 
+        /// <summary>每輪自主任務的工具呼叫上限：背景執行沒人盯著，模型打轉時靠它止血。</summary>
+        private const int AutonomousRunMaxSteps = 20;
+
         /// <summary>長期目標上限（條數／每條字數），避免無限塞進指令。</summary>
         private const int MaxGoals = 20;
         private const int MaxGoalChars = 200;
@@ -95,10 +98,9 @@ namespace RimAgent
                         _ = _mcp.WarmUpAsync();
                     }
                 }
-                // 步數上限、思考強度與自動壓縮即時生效：重設屬性即可，AF session 的歷史不受影響。
+                // 思考強度與自動壓縮即時生效，AF session 的歷史不受影響。
                 else if (RimAgentMod.Settings != null)
                 {
-                    _session.UpdateMaxSteps(RimAgentMod.Settings.maxSteps);
                     _session.Reasoning = RimAgentMod.Settings.reasoning;
                     _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
                 }
@@ -500,8 +502,7 @@ namespace RimAgent
                     return;
                 }
                 int remainingBudget = _scheduler.RemainingBudget(config);
-                int maxSteps = RimAgentMod.Settings?.maxSteps ?? RimAgentSettings.DefaultMaxSteps;
-                int steps = config.UnlimitedBudget ? maxSteps : Math.Min(maxSteps, remainingBudget);
+                int steps = config.UnlimitedBudget ? AutonomousRunMaxSteps : Math.Min(AutonomousRunMaxSteps, remainingBudget);
                 // 不加 ConfigureAwait(false)：收尾的 RecordRun 要回主線程，
                 // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
                 await session.SendAsync(
@@ -556,7 +557,7 @@ namespace RimAgent
                 client,
                 new RimWorldGameWorld(),
                 () => settings.ToPermissions(),
-                settings.maxSteps,
+                int.MaxValue,
                 () => settings.mode,
                 ComposeInstructions,
                 _mcp,

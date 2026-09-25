@@ -6,12 +6,15 @@
   <RimAgent.Tag.EmergencyStop>[危险急停]</RimAgent.Tag.EmergencyStop>
   <RimAgent.Tag.AutoPause>[自动暂停]</RimAgent.Tag.AutoPause>
   <RimAgent.Tag.AutoAction>[自动处理]</RimAgent.Tag.AutoAction>
-  <RimAgent.Tag.Player>[玩家]</RimAgent.Tag.Player>
+  <RimAgent.Tag.Notice>[提示]</RimAgent.Tag.Notice>
   <RimAgent.Tag.Agent>[Agent]</RimAgent.Tag.Agent>
   <RimAgent.Tag.Tool>[工具]</RimAgent.Tag.Tool>
   <RimAgent.Tag.Goal>[目标]</RimAgent.Tag.Goal>
   <RimAgent.Tool.Arguments>参数：</RimAgent.Tool.Arguments>
   <RimAgent.Tool.Result>结果：</RimAgent.Tool.Result>
+  <RimAgent.Tool.ToggleTip>点一下显示或隐藏参数与结果。</RimAgent.Tool.ToggleTip>
+  <RimAgent.Scroll.Latest>↓ 回到最新</RimAgent.Scroll.Latest>
+  <RimAgent.Scroll.NewMessages>↓ 有新消息</RimAgent.Scroll.NewMessages>
   <RimAgent.Risk.Low>低风险</RimAgent.Risk.Low>
   <RimAgent.Risk.High>高风险</RimAgent.Risk.High>
   <RimAgent.Risk.Unrequested>未明确要求</RimAgent.Risk.Unrequested>
@@ -72,9 +75,6 @@
   <RimAgent.Settings.TimeTip>查看当前时间流速，暂停游戏或切换正常与加速。</RimAgent.Settings.TimeTip>
   <RimAgent.Settings.MCP>MCP — 本地服务器的外部工具</RimAgent.Settings.MCP>
   <RimAgent.Settings.MCPTip>让 agent 调用 AgentPack/MCP/servers.json 里设定的本地 MCP 服务器工具。服务器以你的用户权限执行，只开信任的。</RimAgent.Settings.MCPTip>
-  <RimAgent.Settings.MaxSteps>每句指令最多调用工具次数：{0}</RimAgent.Settings.MaxSteps>
-  <RimAgent.Settings.MaxStepsTip>避免失控循环烧掉 API 额度。立即生效，游戏中调整也有效。</RimAgent.Settings.MaxStepsTip>
-  <RimAgent.Settings.ModeHeader>模式 — Agent 可以怎么行动</RimAgent.Settings.ModeHeader>
   <RimAgent.Settings.Mode.Ask>询问</RimAgent.Settings.Mode.Ask>
   <RimAgent.Settings.Mode.AskDesc>只读。Agent 可以查看殖民地并给建议，但没有任何会改变游戏的工具。</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>确认</RimAgent.Settings.Mode.Confirm>
