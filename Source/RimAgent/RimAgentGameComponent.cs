@@ -98,10 +98,11 @@ namespace RimAgent
                         _ = _mcp.WarmUpAsync();
                     }
                 }
-                // 思考強度與自動壓縮即時生效，AF session 的歷史不受影響。
+                // 模型、思考強度與自動壓縮即時生效，AF session 的歷史不受影響。
                 else if (RimAgentMod.Settings != null)
                 {
                     _session.Reasoning = RimAgentMod.Settings.reasoning;
+                    _session.PreferredModel = RimAgentMod.Settings.agentModel;
                     _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
                 }
                 return _session;
@@ -560,6 +561,7 @@ namespace RimAgent
                 classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
                 askNote: () => _pack != null ? _pack.AskModeNote : string.Empty);
             session.Reasoning = settings.reasoning;
+            session.PreferredModel = settings.agentModel;
             session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
             session.RunLoggingEnabled = () => settings.recordRuns;
             session.RunLogSink = record =>

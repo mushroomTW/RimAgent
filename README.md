@@ -62,7 +62,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- Select the execution **mode** and model **reasoning effort** from the Agent window dropdowns; hover a mode to see what it does and its risks. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
+- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Default** follows the fallback chain. The Auto-mode classifier and `/compact` summaries keep their own model. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
 - Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default.
 - The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.

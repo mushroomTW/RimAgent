@@ -106,6 +106,10 @@
   <RimAgent.Auto.StatusUnlimited>{0} tool calls used today (unlimited)</RimAgent.Auto.StatusUnlimited>
   <RimAgent.Mode.Status>Mode: {0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>Reasoning: {0}</RimAgent.Reasoning.Status>
+  <RimAgent.Model.Status>Model: {0}</RimAgent.Model.Status>
+  <RimAgent.Model.Default>Default</RimAgent.Model.Default>
+  <RimAgent.Model.DefaultTip>Use the RimLLM Framework fallback chain.</RimAgent.Model.DefaultTip>
+  <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>

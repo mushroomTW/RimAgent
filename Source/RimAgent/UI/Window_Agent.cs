@@ -25,6 +25,8 @@ namespace RimAgent.UI
         private const float AutoStripHeight = 24f;
         private const float ButtonWidth = 72f;
         private const float DropdownWidth = 110f;
+        /// <summary>模型名稱較長，按鈕放寬；視窗窄時縮到剩餘寬度。</summary>
+        private const float ModelDropdownWidth = 170f;
         private const float EntryGap = 6f;
         /// <summary>每回合（一句 User 紀錄）開頭多留的間距，分隔線畫在正中間。</summary>
         private const float TurnGap = 14f;
@@ -137,6 +139,8 @@ namespace RimAgent.UI
         private readonly TextCache<long?> _tokenLabel = new TextCache<long?>();
         private readonly TextCache<AgentMode> _modeLabel = new TextCache<AgentMode>();
         private readonly TextCache<ReasoningLevel> _reasoningLabel = new TextCache<ReasoningLevel>();
+        private TextCache<string> _modelLabel = new TextCache<string>();
+        private float _modelLabelWidth = -1f;
         private readonly TextCache<int> _autoUsageLabel = new TextCache<int>();
         private readonly TextCache<int> _workingLabel = new TextCache<int>();
         private readonly TextCache<bool> _jumpLabel = new TextCache<bool>();
@@ -970,9 +974,46 @@ namespace RimAgent.UI
                 Find.WindowStack.Add(new FloatMenu(options));
             }
 
-            if (RimAgentGameComponent.AutonomousEnabled)
+            var modelRect = new Rect(reasoningRect.xMax + 6f, rect.y, Mathf.Clamp(rect.xMax - reasoningRect.xMax - 6f, 0f, ModelDropdownWidth), rect.height);
+            string model = settings != null ? settings.agentModel ?? string.Empty : string.Empty;
+            if (Mathf.Abs(modelRect.width - _modelLabelWidth) >= 0.5f)
             {
-                var usageRect = new Rect(reasoningRect.xMax + 8f, rect.y, rect.xMax - reasoningRect.xMax - 8f, rect.height);
+                _modelLabelWidth = modelRect.width;
+                _modelLabel = new TextCache<string>();
+            }
+            string modelStatus = _modelLabel.Get(model, m =>
+            {
+                Text.Font = GameFont.Tiny;
+                string label = "RimAgent.Model.Status".Translate(ModelShortName(m)).ToString().Truncate(_modelLabelWidth - 8f);
+                Text.Font = GameFont.Small;
+                return label;
+            });
+            if (DrawUnifiedButton(modelRect, modelStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
+            {
+                var options = new List<FloatMenuOption>
+                {
+                    new FloatMenuOption("RimAgent.Model.Default".Translate(), () => SetModel(settings, string.Empty))
+                    {
+                        tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
+                    }
+                };
+                foreach (string entry in ConfiguredModels())
+                {
+                    options.Add(new FloatMenuOption(entry, () => SetModel(settings, entry)));
+                }
+                Find.WindowStack.Add(new FloatMenu(options));
+            }
+            if (Mouse.IsOver(modelRect))
+            {
+                TooltipHandler.TipRegion(modelRect, string.IsNullOrWhiteSpace(model)
+                    ? "RimAgent.Model.DefaultTip".Translate()
+                    : "RimAgent.Model.Tip".Translate(model.Trim()));
+            }
+
+            // 視窗窄到模型按鈕吃滿時，用量字樣就不畫。
+            if (RimAgentGameComponent.AutonomousEnabled && rect.xMax - modelRect.xMax > 8f)
+            {
+                var usageRect = new Rect(modelRect.xMax + 8f, rect.y, rect.xMax - modelRect.xMax - 8f, rect.height);
                 Text.Anchor = TextAnchor.MiddleRight;
                 GUI.color = ToolTextColor;
                 Widgets.Label(usageRect, _autoUsageLabel.Get(component.AutonomousToolsUsed, used => "RimAgent.Auto.StatusUnlimited".Translate(used).ToString()));
@@ -1048,6 +1089,49 @@ namespace RimAgent.UI
             if (settings == null || settings.reasoning == level) return;
             settings.reasoning = level;
             settings.Write();
+        }
+
+        /// <summary>換模型後重新檢查工具呼叫能力：指定的模型可能不在備援鏈上。</summary>
+        private void SetModel(RimAgentSettings settings, string model)
+        {
+            if (settings == null || string.Equals(settings.agentModel, model, StringComparison.Ordinal)) return;
+            settings.agentModel = model;
+            settings.Write();
+            ProbeCapabilities();
+        }
+
+        /// <summary>按鈕上只顯示模型名；"供應商:模型" 取冒號後，純供應商條目（用該供應商預設模型）顯示供應商名。</summary>
+        private static string ModelShortName(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return "RimAgent.Model.Default".Translate();
+            string trimmed = model.Trim();
+            int colon = trimmed.IndexOf(':');
+            return colon > 0 && colon < trimmed.Length - 1 ? trimmed.Substring(colon + 1) : trimmed;
+        }
+
+        /// <summary>
+        /// 可切換的模型＝玩家在 RimLLM Framework 備援鏈上設好的條目（已有金鑰與供應商設定）。
+        /// 框架未初始化或版本太舊（沒有 GetFallbackChain）就只剩「預設」。
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static List<string> ConfiguredModels()
+        {
+            var models = new List<string>();
+            try
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string entry in RimLLMProvider.GetFallbackChain())
+                {
+                    if (string.IsNullOrWhiteSpace(entry)) continue;
+                    string trimmed = entry.Trim();
+                    if (seen.Add(trimmed)) models.Add(trimmed);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is MissingMethodException)
+            {
+                // 不讓下拉選單拋例外打斷繪製，沿用預設即可。
+            }
+            return models;
         }
 
         private void DrawBottomBar(Rect rect, ColonyAgentSession session)
@@ -1467,7 +1551,8 @@ namespace RimAgent.UI
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static bool CheckFunctionCalling()
         {
-            return RimLLMProvider.GetEffectiveCapabilities().SupportsFunctionCalling;
+            string model = RimAgentMod.Settings?.agentModel;
+            return RimLLMProvider.GetEffectiveCapabilities(string.IsNullOrWhiteSpace(model) ? null : model.Trim()).SupportsFunctionCalling;
         }
 
         private static bool? _markdownAvailable;

@@ -14,6 +14,8 @@ namespace RimAgent
         public AgentMode mode = AgentMode.Confirm;
         /// <summary>模型思考強度，見 <see cref="ReasoningLevel"/>；Auto 沿用框架預設。</summary>
         public ReasoningLevel reasoning = ReasoningLevel.Auto;
+        /// <summary>Agent 優先使用的模型（"供應商:模型"，在 Agent 視窗切換）；留空則沿用框架備援鏈。</summary>
+        public string agentModel = string.Empty;
         /// <summary>Auto 模式風險分類器模型識別碼（留空則沿用框架預設）。</summary>
         public string classifierModel = string.Empty;
 
@@ -139,6 +141,7 @@ namespace RimAgent
             }
             Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
+            Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
             Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);
             Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);
             Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);

@@ -151,6 +151,12 @@ namespace RimAgent.Agent
         /// <summary>模型思考強度；每句指令組請求時讀取，改完下一句生效。由 GameComponent 從設定同步。</summary>
         public ReasoningLevel Reasoning { get; set; } = ReasoningLevel.Auto;
 
+        /// <summary>
+        /// 優先使用的模型（"供應商:模型"）；空白代表交給框架備援鏈。每句指令組請求時讀取，由 GameComponent 從設定同步。
+        /// 只影響玩家指令與自主任務，風險分類器與 /compact 摘要仍各走自己的設定。
+        /// </summary>
+        public string PreferredModel { get; set; }
+
         /// <summary>工具迴圈的迭代上限；正式遊戲傳入 int.MaxValue，僅測試或單輪預算另行縮小。</summary>
         public int MaxSteps => Volatile.Read(ref _maxSteps);
 
@@ -794,6 +800,8 @@ namespace RimAgent.Agent
                 MaxOutputTokens = MaxOutputTokens
             };
             ApplyReasoning(options, Reasoning);
+            string model = PreferredModel;
+            if (!string.IsNullOrWhiteSpace(model)) options.ModelId = model.Trim();
             // Run 層覆寫 agent 層的核心提示詞：擴充包內容變更後下一句立即生效，不必重建會話。
             string instructions = null;
             if (_instructions != null)

@@ -106,6 +106,10 @@
   <RimAgent.Auto.StatusUnlimited>今日自主任務已呼叫 {0} 次 (無上限)</RimAgent.Auto.StatusUnlimited>
   <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>推理：{0}</RimAgent.Reasoning.Status>
+  <RimAgent.Model.Status>模型：{0}</RimAgent.Model.Status>
+  <RimAgent.Model.Default>預設</RimAgent.Model.Default>
+  <RimAgent.Model.DefaultTip>依 RimLLM Framework 的備援鏈選擇模型。</RimAgent.Model.DefaultTip>
+  <RimAgent.Model.Tip>優先使用：{0}&#10;失敗時由框架依備援鏈改用其他模型。</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>自動</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>關閉</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>

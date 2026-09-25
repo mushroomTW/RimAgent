@@ -842,6 +842,19 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void PreferredModelBecomesRequestModelId()
+        {
+            ColonyAgentSession session = NewSession();
+            Assert.That(session.BuildRunOptions().ModelId, Is.Null, "未指定時交給框架備援鏈");
+
+            session.PreferredModel = " OpenRouter:deepseek/deepseek-chat ";
+            Assert.That(session.BuildRunOptions().ModelId, Is.EqualTo("OpenRouter:deepseek/deepseek-chat"));
+
+            session.PreferredModel = "  ";
+            Assert.That(session.BuildRunOptions().ModelId, Is.Null);
+        }
+
+        [Test]
         public void DefaultSessionLeavesRunInstructionsUnset()
         {
             ColonyAgentSession session = NewSession();

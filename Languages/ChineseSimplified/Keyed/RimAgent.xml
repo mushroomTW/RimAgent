@@ -106,6 +106,10 @@
   <RimAgent.Auto.StatusUnlimited>今日自主任务已调用 {0} 次 (无上限)</RimAgent.Auto.StatusUnlimited>
   <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>推理：{0}</RimAgent.Reasoning.Status>
+  <RimAgent.Model.Status>模型：{0}</RimAgent.Model.Status>
+  <RimAgent.Model.Default>默认</RimAgent.Model.Default>
+  <RimAgent.Model.DefaultTip>按 RimLLM Framework 的备援链选择模型。</RimAgent.Model.DefaultTip>
+  <RimAgent.Model.Tip>优先使用：{0}&#10;失败时由框架按备援链改用其他模型。</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>自动</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>关闭</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>
