@@ -97,7 +97,7 @@ One setting decides how much the agent may do on its own:
 | **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
 | **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
 | **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery. No background scheduler. |
-| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. The classifier model is configurable in mod settings. |
+| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Pick the classifier model from the fallback-chain dropdown in mod settings. |
 | **Autonomous** | Adds scheduled inspections and event responses. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
 
 ### Confirmation details

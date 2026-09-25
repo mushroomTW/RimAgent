@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using RimAgent.Agent;
 using RimAgent.Tools;
+using RimAgent.UI;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -56,20 +58,33 @@ namespace RimAgent
             listing.GapLine();
             Rect classifierRow = listing.GetRect(28f);
             float labelWidth = 140f;
-            float btnWidth = 80f;
-            float inputWidth = Mathf.Max(60f, classifierRow.width - labelWidth - btnWidth - 12f);
-
             Rect labelRect = new Rect(classifierRow.x, classifierRow.y + 3f, labelWidth, 24f);
-            Rect inputRect = new Rect(labelRect.xMax + 4f, classifierRow.y, inputWidth, 26f);
-            Rect btnRect = new Rect(inputRect.xMax + 8f, classifierRow.y, btnWidth, 26f);
+            Rect dropdownRect = new Rect(labelRect.xMax + 4f, classifierRow.y, classifierRow.xMax - labelRect.xMax - 4f, 26f);
 
             Widgets.Label(labelRect, "RimAgent.Settings.ClassifierModel".Translate());
-            Settings.classifierModel = Widgets.TextField(inputRect, Settings.classifierModel ?? string.Empty);
-            if (Widgets.ButtonText(btnRect, "RimAgent.Settings.ClassifierModelDefault".Translate()))
+            string classifier = string.IsNullOrWhiteSpace(Settings.classifierModel)
+                ? "RimAgent.Model.Default".Translate().ToString()
+                : Settings.classifierModel.Trim();
+            if (Widgets.ButtonText(dropdownRect, classifier.Truncate(dropdownRect.width - 12f)))
             {
-                Settings.classifierModel = string.Empty;
+                // 選項與 Agent 視窗的模型選單相同：預設（依框架備援鏈）＋備援鏈上的條目。
+                var options = new List<FloatMenuOption>
+                {
+                    new FloatMenuOption("RimAgent.Model.Default".Translate(), () => Settings.classifierModel = string.Empty)
+                    {
+                        tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
+                    }
+                };
+                foreach (string entry in Window_Agent.ConfiguredModels())
+                {
+                    options.Add(new FloatMenuOption(entry, () => Settings.classifierModel = entry));
+                }
+                Find.WindowStack.Add(new FloatMenu(options));
             }
-            TooltipHandler.TipRegion(classifierRow, "RimAgent.Settings.ClassifierModelTip".Translate());
+            if (Mouse.IsOver(classifierRow))
+            {
+                TooltipHandler.TipRegion(classifierRow, "RimAgent.Settings.ClassifierModelTip".Translate());
+            }
             listing.Gap(6f);
 
             listing.Gap();

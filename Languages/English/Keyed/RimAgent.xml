@@ -87,8 +87,7 @@
   <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools) on two axes: how risky it is, and whether your instruction asked for it. Only low-risk actions you asked for run directly; the rest wait for your Confirm. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierHeader>Auto mode — safety review</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
-  <RimAgent.Settings.ClassifierModelTip>Model ID used by Auto mode for risk classification (leave blank to use RimLLM Framework's default model). Can be ModelName or ProviderId:ModelName.</RimAgent.Settings.ClassifierModelTip>
-  <RimAgent.Settings.ClassifierModelDefault>Reset</RimAgent.Settings.ClassifierModelDefault>
+  <RimAgent.Settings.ClassifierModelTip>Model used by Auto mode for risk classification. Choose from the entries in your RimLLM Framework fallback chain; Default follows the fallback chain.</RimAgent.Settings.ClassifierModelTip>
   <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>Background scheduler runs autonomously. No restrictions on any behavior (no blacklist), no daily tool budget limit, MCP executes directly, operating on routine and events. Players can still give instructions anytime.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>

@@ -1111,10 +1111,10 @@ namespace RimAgent.UI
 
         /// <summary>
         /// 可切換的模型＝玩家在 RimLLM Framework 備援鏈上設好的條目（已有金鑰與供應商設定）。
-        /// 框架未初始化或版本太舊（沒有 GetFallbackChain）就只剩「預設」。
+        /// 框架未初始化或版本太舊（沒有 GetFallbackChain）就只剩「預設」。設定頁的分類器模型選單也用這份清單。
         /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static List<string> ConfiguredModels()
+        internal static List<string> ConfiguredModels()
         {
             var models = new List<string>();
             try

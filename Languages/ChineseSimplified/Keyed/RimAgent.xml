@@ -87,8 +87,7 @@
   <RimAgent.Settings.Mode.AutoDesc>另起一次模型调用判定每个动作（含 MCP 工具）两件事：动作本身的风险，以及你这句话有没有要求它。只有低风险且你要求的才直接执行，其余等你确认。每个动作多一次请求。</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierHeader>自动模式 — 安全审查</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>分类器模型：</RimAgent.Settings.ClassifierModel>
-  <RimAgent.Settings.ClassifierModelTip>自动模式判定风险时使用的模型标识符（留空则沿用 RimLLM Framework 默认模型）。可填入 ModelName 或 ProviderId:ModelName。</RimAgent.Settings.ClassifierModelTip>
-  <RimAgent.Settings.ClassifierModelDefault>重设默认</RimAgent.Settings.ClassifierModelDefault>
+  <RimAgent.Settings.ClassifierModelTip>自动模式判定风险时使用的模型，可从 RimLLM Framework 备援链上的条目挑选；选“默认”则按备援链。</RimAgent.Settings.ClassifierModelTip>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>后台排程器自主运转。不限制任何行为（无黑名单限制），不设每日预算上限，MCP 免确认直接执行，按排程与突发事件自动行动。玩家仍可随时下达指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行动</RimAgent.Settings.AutonomousHeader>
