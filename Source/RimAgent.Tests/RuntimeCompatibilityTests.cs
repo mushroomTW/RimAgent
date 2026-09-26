@@ -27,6 +27,9 @@ namespace RimAgent.Tests
             "RimAgent.UI.Window_Agent.SetInput",               // 游標
             "RimAgent.UI.Window_Agent.HandleSlashKeys",        // 斜線選單鍵盤
             "RimAgent.UI.Window_Agent.HandleHistoryKeys",      // 輸入歷史鍵盤
+            "RimAgent.UI.Window_Agent.DrawSelectableLine",     // 對話框選層
+            "RimAgent.UI.Window_Agent.GetSelectableStyle",     // 對話框選層樣式
+            "RimAgent.UI.Window_Agent.CopyToolHeaderOnRightClick", // 工具列右鍵複製
             "RimAgent.RimAgentMod.OpenFolder",                 // 設定頁開啟紀錄資料夾
             "RimAgent.Game.RimWorldGameWorld.TakeScreenshot",  // 截圖
             "RimAgent.UI.Window_Agent.LoadPendingScreenshot"   // 截圖預覽縮圖

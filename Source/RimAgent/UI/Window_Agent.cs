@@ -95,6 +95,8 @@ namespace RimAgent.UI
         {
             public LineKind Kind;
             public string Text;
+            /// <summary>去標籤純文字：透明框選層用，複製時拿不到顏色標籤。</summary>
+            public string PlainText;
             public float Height;
             /// <summary>PlayerBubble 專用：氣泡外框寬度。</summary>
             public float BubbleWidth;
@@ -488,11 +490,12 @@ namespace RimAgent.UI
                             // Unity 內建圓角：borderWidth 0 是實心填滿，1 是外框。
                             GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleColor, 0f, BubbleRadius);
                             GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleBorderColor, 1f, BubbleRadius);
-                            Widgets.Label(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text);
+                            DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
                             break;
                         case LineKind.ToolHeader:
                             if (!mouseOnJump)
                             {
+                                CopyToolHeaderOnRightClick(lineRect, line.PlainText);
                                 if (Mouse.IsOver(lineRect))
                                 {
                                     Widgets.DrawHighlight(lineRect);
@@ -504,7 +507,7 @@ namespace RimAgent.UI
                             Widgets.Label(lineRect, line.Text);
                             break;
                         default:
-                            Widgets.Label(lineRect, line.Text);
+                            DrawSelectableLine(lineRect, line.Text, line.PlainText);
                             break;
                     }
                 }
@@ -543,6 +546,58 @@ namespace RimAgent.UI
                 return false;
             }
             return unchecked(now - _settlingSince) >= ReflowDelayMs;
+        }
+
+        /// <summary>框選層樣式快取（按字體）：平時文字透明、只看到底下的彩色 Label；取得焦點才顯示純文字，複製不到顏色標籤。</summary>
+        private static readonly Dictionary<GameFont, GUIStyle> SelectableStyles = new Dictionary<GameFont, GUIStyle>();
+
+        /// <summary>
+        /// Labels 不能框選，TextArea 會把顏色標籤一起複製；所以彩色 Label 照常顯示，
+        /// 上面再疊一層同字體同排版、文字平時透明的 TextArea 專門給滑鼠拖選＋Ctrl+C。
+        /// 底色沿用 Label（透明），捲動、行高、換行都與量測時一致。
+        /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
+        /// </summary>
+        private static void DrawSelectableLine(Rect rect, string richText, string plainText)
+        {
+            Widgets.Label(rect, richText);
+            GUI.TextArea(rect, plainText ?? string.Empty, GetSelectableStyle());
+        }
+
+        private static GUIStyle GetSelectableStyle()
+        {
+            GameFont font = Text.Font;
+            if (!SelectableStyles.TryGetValue(font, out GUIStyle style) || style == null)
+            {
+                style = new GUIStyle(Text.CurFontStyle)
+                {
+                    richText = false,
+                    wordWrap = true
+                };
+                Color plain = new Color(0.90f, 0.93f, 0.96f);
+                // GUIStyleState 是參考型別，收進陣列迴圈賦值仍會寫回樣式本體。
+                foreach (GUIStyleState state in new[] { style.normal, style.hover, style.onNormal, style.onHover })
+                {
+                    state.textColor = Color.clear;
+                }
+                foreach (GUIStyleState state in new[] { style.active, style.focused, style.onActive, style.onFocused })
+                {
+                    state.textColor = plain;
+                }
+                SelectableStyles[font] = style;
+            }
+            return style;
+        }
+
+        /// <summary>
+        /// 工具摘要列沒有框選層（左鍵要留給展開／收合）：右鍵直接複製該列純文字。
+        /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
+        /// </summary>
+        private static void CopyToolHeaderOnRightClick(Rect rect, string plainText)
+        {
+            if (Event.current.type != EventType.MouseDown || Event.current.button != 1) return;
+            if (!Mouse.IsOver(rect)) return;
+            GUIUtility.systemCopyBuffer = plainText ?? string.Empty;
+            Event.current.Use();
         }
 
         private void DrawScreenshotPreview(Rect rect, string path)
@@ -744,6 +799,7 @@ namespace RimAgent.UI
             foreach ((string text, LineKind kind) in Render(entry, IsToolExpanded(entry), _combatNoted))
             {
                 var line = new TranscriptLine { Kind = kind, Text = text, Entry = entry, TurnStart = turnStart };
+                line.PlainText = text.StripTags();
                 if (kind == LineKind.PlayerBubble)
                 {
                     // 短句貼齊字寬，長句到上限就換行。CalcSize 不換行，量到的是最長一行的寬度。
@@ -1620,7 +1676,8 @@ namespace RimAgent.UI
             if (_markdownAvailable == false) return text;
             try
             {
-                string rich = RimLLM_Framework.Mod.RimLLMMarkdown.ToRichText(text);
+                // 先把 $...$／$$...$$ 數學轉成易讀純文字：框架的 Markdig 管線沒有數學擴充。
+                string rich = RimLLM_Framework.Mod.RimLLMMarkdown.ToRichText(LatexMath.ConvertMath(text));
                 _markdownAvailable = true;
                 return rich ?? text;
             }

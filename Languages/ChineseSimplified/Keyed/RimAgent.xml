@@ -12,7 +12,7 @@
   <RimAgent.Tag.Goal>[目标]</RimAgent.Tag.Goal>
   <RimAgent.Tool.Arguments>参数：</RimAgent.Tool.Arguments>
   <RimAgent.Tool.Result>结果：</RimAgent.Tool.Result>
-  <RimAgent.Tool.ToggleTip>点一下显示或隐藏参数与结果。</RimAgent.Tool.ToggleTip>
+  <RimAgent.Tool.ToggleTip>点一下显示或隐藏参数与结果；对话文字可直接拖选复制，工具行可按右键复制。</RimAgent.Tool.ToggleTip>
   <RimAgent.Scroll.Latest>↓ 回到最新</RimAgent.Scroll.Latest>
   <RimAgent.Scroll.NewMessages>↓ 有新消息</RimAgent.Scroll.NewMessages>
   <RimAgent.Risk.Low>低风险</RimAgent.Risk.Low>

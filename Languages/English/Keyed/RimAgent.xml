@@ -12,7 +12,7 @@
   <RimAgent.Tag.Goal>[Goal]</RimAgent.Tag.Goal>
   <RimAgent.Tool.Arguments>Arguments:</RimAgent.Tool.Arguments>
   <RimAgent.Tool.Result>Result:</RimAgent.Tool.Result>
-  <RimAgent.Tool.ToggleTip>Click to show or hide the arguments and result.</RimAgent.Tool.ToggleTip>
+  <RimAgent.Tool.ToggleTip>Click to show or hide the arguments and result. Drag the conversation text to select it, right-click a tool row to copy it.</RimAgent.Tool.ToggleTip>
   <RimAgent.Scroll.Latest>↓ Jump to latest</RimAgent.Scroll.Latest>
   <RimAgent.Scroll.NewMessages>↓ New messages</RimAgent.Scroll.NewMessages>
   <RimAgent.Risk.Low>Low risk</RimAgent.Risk.Low>

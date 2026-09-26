@@ -64,7 +64,7 @@ Drag the window to move it or its lower-right corner to resize it. RimAgent reme
 
 - Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Default** follows the fallback chain. The Auto-mode classifier and `/compact` summaries keep their own model. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
-- Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default.
+- Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default. Drag across any message to select and copy its text; right-click a tool row to copy it. LaTeX math (`$...$`) is shown as plain readable text.
 - The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
 - With the input box focused, ↑↓ recall previously sent input.
 - Type `/` for slash-command completion (↑↓ to navigate, Tab or Enter to select):
