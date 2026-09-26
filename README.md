@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 59 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 60 tools, with control over when actions require approval.
 
-**RimWorld 1.6** &nbsp;·&nbsp; **59 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.6** &nbsp;·&nbsp; **60 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,7 +50,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **59 tools:** inspect the colony, issue orders, search the web, and manage saved memories.
+- **60 tools:** inspect the colony, issue orders, search the web, and manage saved memories.
 - **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills, or connect trusted local MCP servers.
@@ -62,7 +62,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Default** follows the fallback chain. The Auto-mode classifier and `/compact` summaries keep their own model. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
+- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. The Auto-mode classifier keeps its own model from mod settings; `/compact` summaries use the agent model. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
 - Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default. Drag across any message to select and copy its text; right-click a tool row to copy it. LaTeX math (`$...$`) is shown as plain readable text.
 - The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
@@ -87,7 +87,7 @@ Drag the window to move it or its lower-right corner to resize it. RimAgent reme
 
 > **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB; the settings page can open the log folder directly.
 
-> **Prompts are editable:** `AgentPack/Prompts/` contains the built-in prompts, `AgentPack/Skills/` holds optional skills, and `AgentPack/AGENTS.md` ships empty for your own instructions. Reload the save or start a new game after editing; no rebuild is needed. See [skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
+> **Prompts are editable:** `AgentPack/Prompts/` contains the built-in prompts, `AgentPack/Skills/` holds optional skills, and `AgentPack/AGENTS.md` ships empty for your own instructions. Reload the save or start a new game after editing; no rebuild is needed. The agent only receives a skill index each turn; full skill texts load on demand through `read_skill`. See [skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
 
 ---
 
@@ -100,7 +100,7 @@ One setting decides how much the agent may do on its own:
 | **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
 | **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
 | **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery. No background scheduler. |
-| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Pick the classifier model from the fallback-chain dropdown in mod settings. |
+| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model from the fallback-chain dropdown in mod settings. |
 | **Autonomous** | Adds scheduled inspections and event responses. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
 
 ### Confirmation details
@@ -135,7 +135,7 @@ All 14 categories are enabled by default and can be switched off individually in
 
 | Category | Examples |
 | --- | --- |
-| Observe | Colony status, resources, threats, research, maps, objects, areas, screenshots, and pending choices |
+| Observe | Colony status, resources, threats, research, maps, objects, areas, screenshots, skill texts, and pending choices |
 | Work | Work priorities and daily schedules (undoable) |
 | Build | Designations, blueprints (single, line, fill, or outline; up to 400 cells), forbidden items, and gizmo buttons |
 | Combat | Draft, move, attack, rescue, capture, tend, strip, equip, and enter cryptosleep caskets |

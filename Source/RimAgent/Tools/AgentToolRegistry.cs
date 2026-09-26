@@ -73,7 +73,7 @@ namespace RimAgent.Tools
         {
         }
 
-        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null)
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (transcript == null) throw new ArgumentNullException(nameof(transcript));
@@ -98,6 +98,7 @@ namespace RimAgent.Tools
             Register(new WebSearchTools(useLocalSearch: useLocalSearch, searxngUrl: searxngUrl, gate: gate), transcript);
             foreach (AIFunction function in MemoryTools.Create(memory ?? new AgentMemoryStore(), gate))
                 Add(function, ToolCategory.Memory, MemoryTools.RiskOf(function.Name), transcript);
+            if (skills != null) Register(new SkillTools(skills), transcript);
         }
 
         private IReadOnlyList<AITool> _allTools;
@@ -140,6 +141,12 @@ namespace RimAgent.Tools
         public static bool IsYoloForbidden(string name)
         {
             return !string.IsNullOrEmpty(name) && YoloForbiddenToolNames.Contains(name);
+        }
+
+        /// <summary>新的一句指令開始時清空分類器的句內判定快取（查詢快取由閘門的額度計數一併清空）。</summary>
+        internal void ClearClassifierCache()
+        {
+            if (_classifier != null) _classifier.ClearCache();
         }
 
         /// <summary>工具名稱 → 靜態風險（供測試檢查標記）。</summary>

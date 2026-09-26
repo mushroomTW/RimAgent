@@ -22,7 +22,7 @@ namespace RimAgent.Tools
 
     /// <summary>
     /// 工具的靜態風險，依可逆性分級。詢問模式只留 Query；確認模式擋 Confirm；
-    /// 自動模式由分類器逐次判斷（不看此標記）。
+    /// 自動模式由分類器逐次判斷（不看此標記），黑名單工具除外（直接拒絕，不問分類器）。
     /// </summary>
     public enum ToolRisk
     {

@@ -18,6 +18,9 @@ namespace RimAgent.Tools
     /// 分類器核可才強制執行一次；未核可則拒絕該命令並回報原因。
     /// 這裡刻意不用 ConfigureAwait(false)：續行要留在主線程，第二段執行才能碰遊戲狀態。
     ///
+    /// 同一輪多個查詢可由框架一起送出：每個呼叫的暫存狀態只用區域變數與 AsyncLocal，
+    /// 共用狀態（閘門、快取、行動紀錄）各自上鎖，因此並行查詢安全；命令仍由閘門逐次把關。
+    ///
     /// 另外兩道與世界有關的守衛也在這裡，工具本身不必管：
     /// 遊戲沒在進行（讀檔中、回到主選單）時不碰工具直接回錯誤；
     /// 工具回傳後把這段期間遊戲記錄的錯誤附在結果後面，模型才知道命令雖然「成功」但遊戲隨即噴錯。
@@ -70,6 +73,18 @@ namespace RimAgent.Tools
                 return entry.Result;
             }
 
+            // 同一句內重複的唯讀查詢：直接回快取，不碰世界也不扣自主額度；
+            // 行動紀錄照記，讓玩家看得到模型確實又問了一次。
+            if (_risk == ToolRisk.Query && _gate != null &&
+                _gate.TryGetCachedQuery(Name, entry.Arguments, out string cached))
+            {
+                entry.Result = AppendGameErrors(cached);
+                entry.Failed = entry.Result.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
+                entry.BudgetConsumed = false;
+                _transcript.Add(entry);
+                return entry.Result;
+            }
+
             bool budgetConsumed = false;
             if (_gate != null && !_gate.TryConsumeToolBudget(out budgetConsumed))
             {
@@ -96,9 +111,19 @@ namespace RimAgent.Tools
                 {
                     result = await base.InvokeCoreAsync(arguments, cancellationToken);
                 }
-                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty));
+                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty, out bool hasFreshGameErrors));
                 entry.Result = text;
                 entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
+                bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
+                // 命令動過世界（成功、失敗或部分生效皆可能）：同句的查詢快取全部作廢；
+                // 預覽不碰世界，不必失效。
+                if (_risk != ToolRisk.Query && !isPreview) _gate?.InvalidateQueryCache();
+                // 成功的查詢才進快取：錯誤可能隨同句後續命令改變而消失，
+                // 夾帶遊戲錯誤的結果也不記，免得下一次命中回傳過期的錯誤。
+                if (_risk == ToolRisk.Query && !entry.Failed && !hasFreshGameErrors && !isPreview)
+                {
+                    _gate?.StoreCachedQuery(Name, entry.Arguments, text);
+                }
                 if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
                 {
                     // 此閉包保留本次工具呼叫的引數，確認時不會再讓模型選工具或改參數。
@@ -109,6 +134,8 @@ namespace RimAgent.Tools
             catch (Exception ex)
             {
                 // 例外那次期間的遊戲錯誤也算這次的，不能留給下一個工具呼叫背鍋。
+                // 命令可能部分生效，同句的查詢快取一併作廢。
+                if (_risk != ToolRisk.Query) _gate?.InvalidateQueryCache();
                 entry.Result = AppendGameErrors(ex.GetType().Name + ": " + ex.Message);
                 entry.Failed = true;
                 throw;
@@ -128,11 +155,14 @@ namespace RimAgent.Tools
             {
                 object result = await base.InvokeCoreAsync(arguments, cancellationToken);
                 string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty));
+                // 確認執行是真正的世界寫入：同句的查詢快取作廢。
+                _gate?.InvalidateQueryCache();
                 _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
                 return text;
             }
             catch (Exception ex)
             {
+                _gate?.InvalidateQueryCache();
                 _transcript.UpdateToolResult(entry, AppendGameErrors(ex.GetType().Name + ": " + ex.Message), true);
                 throw;
             }
@@ -166,9 +196,17 @@ namespace RimAgent.Tools
             return preview;
         }
 
-        /// <summary>自動模式：預覽 → 分類 → 執行或擋下。工具的預覽分支不碰世界，靠 CommandGateTests 鎖住。</summary>
+        /// <summary>自動模式：黑名單直接擋、預覽 → 分類 → 執行或擋下。工具的預覽分支不碰世界，靠 CommandGateTests 鎖住。</summary>
         private async Task<object> InvokeClassifiedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
         {
+            // 高危黑名單在自動模式永遠是高風險：直接拒絕，不必再燒一次分類器模型。
+            if (AgentToolRegistry.IsYoloForbidden(Name))
+            {
+                entry.RiskCheck = "high";
+                return ToolText.Error("safety review rejected " + Name + " (high): " +
+                    "this tool is on the high-risk blacklist and never runs in Auto mode. " +
+                    "Do not retry it unchanged.");
+            }
             object previewResult;
             _gate.ForcePreview();
             try
@@ -232,7 +270,18 @@ namespace RimAgent.Tools
         /// </summary>
         private string AppendGameErrors(string text)
         {
+            return AppendGameErrors(text, out _);
+        }
+
+        private string AppendGameErrors(string text, out bool hasFreshGameErrors)
+        {
             IReadOnlyList<string> errors = _world.TakeNewGameErrors();
+            hasFreshGameErrors = errors.Count > 0;
+            return FormatWithGameErrors(text, errors);
+        }
+
+        private static string FormatWithGameErrors(string text, IReadOnlyList<string> errors)
+        {
             if (errors.Count == 0) return text;
             var sb = new StringBuilder(text);
             sb.AppendLine().Append("Game errors logged during this call (").Append(errors.Count).Append("):");

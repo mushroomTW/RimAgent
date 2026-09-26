@@ -560,7 +560,12 @@ namespace RimAgent.UI
         private static void DrawSelectableLine(Rect rect, string richText, string plainText)
         {
             Widgets.Label(rect, richText);
+            // 唯讀框選層不需要文字游標：焦點在它身上時 Unity 會畫一條閃爍豎線（如氣泡尾端的游標），
+            // 把全域游標色暫時設透明即可隱藏；選取反白不受影響，畫完立刻還原，後面畫的輸入框游標正常。
+            Color oldCursor = GUI.skin.settings.cursorColor;
+            GUI.skin.settings.cursorColor = Color.clear;
             GUI.TextArea(rect, plainText ?? string.Empty, GetSelectableStyle());
+            GUI.skin.settings.cursorColor = oldCursor;
         }
 
         private static GUIStyle GetSelectableStyle()

@@ -95,7 +95,9 @@
   <RimAgent.Settings.Mode.AutoDesc>另起一次模型调用判定每个动作（含 MCP 工具）两件事：动作本身的风险，以及你这句话有没有要求它。只有低风险且你要求的才直接执行，其余等你确认。每个动作多一次请求。</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierHeader>自动模式 — 安全审查</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>分类器模型：</RimAgent.Settings.ClassifierModel>
-  <RimAgent.Settings.ClassifierModelTip>自动模式判定风险时使用的模型，可从 RimLLM Framework 备援链上的条目挑选；选“默认”则按备援链。</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.ClassifierModelTip>自动模式判定风险时使用的模型，可从 RimLLM Framework 备援链上的条目挑选；选“Fallback”则按备援链。</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.AutonomousModel>自主任务模型：</RimAgent.Settings.AutonomousModel>
+  <RimAgent.Settings.AutonomousModelTip>后台自主任务使用的模型；选“Fallback”则沿用 Agent 模型，建议选用小而便宜的模型。</RimAgent.Settings.AutonomousModelTip>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>后台排程器自主运转。不限制任何行为（无黑名单限制），不设每日预算上限，MCP 免确认直接执行，按排程与突发事件自动行动。玩家仍可随时下达指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行动</RimAgent.Settings.AutonomousHeader>
@@ -114,7 +116,7 @@
   <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>推理：{0}</RimAgent.Reasoning.Status>
   <RimAgent.Model.Status>模型：{0}</RimAgent.Model.Status>
-  <RimAgent.Model.Default>默认</RimAgent.Model.Default>
+  <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>按 RimLLM Framework 的备援链选择模型。</RimAgent.Model.DefaultTip>
   <RimAgent.Model.Tip>优先使用：{0}&#10;失败时由框架按备援链改用其他模型。</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>自动</RimAgent.Reasoning.Auto>

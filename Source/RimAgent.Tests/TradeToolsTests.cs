@@ -354,7 +354,7 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task ExecuteTradeIsLoggedWithReceipt()
+        public async Task ExecuteTradeIsRejectedWithoutClassifierInAuto()
         {
             SeedColonyStock();
             _world.Traders.Add(MakeOrbitalShip());
@@ -377,7 +377,10 @@ namespace RimAgent.Tests
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.ToolName, Is.EqualTo("execute_trade"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
-            Assert.That(tool.Result, Does.Contain("bought spacer component (ComponentSpacer) x2").And.Contain("Colony silver"));
+            Assert.That(tool.RiskCheck, Is.EqualTo("high"));
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
+            Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+            Assert.That(session.HasPendingConfirmation, Is.False);
         }
     }
 }

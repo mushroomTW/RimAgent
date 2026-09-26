@@ -95,7 +95,9 @@
   <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools) on two axes: how risky it is, and whether your instruction asked for it. Only low-risk actions you asked for run directly; the rest wait for your Confirm. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierHeader>Auto mode — safety review</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
-  <RimAgent.Settings.ClassifierModelTip>Model used by Auto mode for risk classification. Choose from the entries in your RimLLM Framework fallback chain; Default follows the fallback chain.</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.ClassifierModelTip>Model used by Auto mode for risk classification. Choose from the entries in your RimLLM Framework fallback chain; Fallback follows the fallback chain.</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.AutonomousModel>Autonomous model:</RimAgent.Settings.AutonomousModel>
+  <RimAgent.Settings.AutonomousModelTip>Model used for background autonomous runs. Fallback follows the agent model; a small, cheap model saves cost.</RimAgent.Settings.AutonomousModelTip>
   <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>Background scheduler runs autonomously. No restrictions on any behavior (no blacklist), no daily tool budget limit, MCP executes directly, operating on routine and events. Players can still give instructions anytime.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
@@ -114,7 +116,7 @@
   <RimAgent.Mode.Status>Mode: {0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>Reasoning: {0}</RimAgent.Reasoning.Status>
   <RimAgent.Model.Status>Model: {0}</RimAgent.Model.Status>
-  <RimAgent.Model.Default>Default</RimAgent.Model.Default>
+  <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>Use the RimLLM Framework fallback chain.</RimAgent.Model.DefaultTip>
   <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>

@@ -73,7 +73,7 @@ namespace RimAgent.Agent
         /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
         /// <param name="askNote">詢問模式附加註記（AgentPack/Prompts/AskMode.md）；null 則詢問模式不加註。</param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null)
+        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null)
         {
             if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -86,7 +86,7 @@ namespace RimAgent.Agent
             _memory = memory ?? new AgentMemoryStore();
             _instructions = instructions;
             _askNote = askNote;
-            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel, classifierPrompt), _memory, useLocalSearch, searxngUrl);
+            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel, classifierPrompt), _memory, useLocalSearch, searxngUrl, skillsProvider);
             _tokenUsage = new TokenUsageChatClient(innerClient);
             _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
             _tokenUsage.ResponseObserved = response => _activeRunLog?.AddModelResponse(response);
@@ -160,6 +160,12 @@ namespace RimAgent.Agent
         /// 只影響玩家指令與自主任務，風險分類器與 /compact 摘要仍各走自己的設定。
         /// </summary>
         public string PreferredModel { get; set; }
+
+        /// <summary>
+        /// 自主任務專用模型；空白則沿用 <see cref="PreferredModel"/>。
+        /// 背景巡檢不需要最強模型，另設便宜模型可省費用。
+        /// </summary>
+        public string AutonomousModel { get; set; }
 
         /// <summary>工具迴圈的迭代上限；正式遊戲傳入 int.MaxValue，僅測試或單輪預算另行縮小。</summary>
         public int MaxSteps => Volatile.Read(ref _maxSteps);
@@ -289,7 +295,8 @@ namespace RimAgent.Agent
             bool autonomous = false,
             int? maxToolSteps = null,
             bool goalRun = false,
-            string displayText = null)
+            string displayText = null,
+            ReasoningLevel? reasoningOverride = null)
         {
             if (string.IsNullOrWhiteSpace(userText)) return null;
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
@@ -300,6 +307,8 @@ namespace RimAgent.Agent
             string text = userText.Trim();
             // 新指令取代等待中的確認，先記錄捨棄，再建立新指令的編號。
             DiscardPendingConfirmation();
+            // 句內快取（分類器判定、查詢結果）不跨指令，下一句重來。
+            ResetInstructionCaches();
             int instructionId = Transcript.BeginInstruction();
             RunLogRecord runLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
             {
@@ -331,10 +340,12 @@ namespace RimAgent.Agent
                 }
 
                 AgentResponse response;
+                // 自主任務可用獨立的便宜模型；玩家指令與目標沿用會話的偏好模型。
+                string modelOverride = autonomous ? AutonomousModel : null;
                 try
                 {
                     response = await _agent
-                        .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions()), cancellationToken)
+                        .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions(reasoningOverride, modelOverride)), cancellationToken)
                         .ConfigureAwait(false);
                 }
                 catch (Exception ex) when (Classify(ex) == AgentErrorKind.ContextTooLong)
@@ -354,7 +365,7 @@ namespace RimAgent.Agent
                         InstructionId = instructionId
                     });
                     response = await _agent
-                        .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions()), cancellationToken)
+                        .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions(reasoningOverride, modelOverride)), cancellationToken)
                         .ConfigureAwait(false);
                 }
 
@@ -466,8 +477,16 @@ namespace RimAgent.Agent
             _goalConfirmationReport = null;
             ConfirmGate.DiscardPendingApprovals();
             ConfirmGate.ClearSessionApprovals();
+            ResetInstructionCaches();
             Transcript.Clear();
             Undo.Clear();
+        }
+
+        /// <summary>句內快取失效的單一入口：分類器判定與查詢結果都不跨指令或跨對話。</summary>
+        private void ResetInstructionCaches()
+        {
+            _registry.ClearClassifierCache();
+            ConfirmGate.ClearQueryCache();
         }
 
         /// <summary>
@@ -826,7 +845,7 @@ namespace RimAgent.Agent
             return names.TryGetValue(pawnId, out string name) ? name : ("[" + pawnId + "]");
         }
 
-        internal RimLLMChatOptions BuildRunOptions()
+        internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride = null, string modelOverride = null)
         {
             ToolPermissions permissions = _permissions();
             var options = new RimLLMChatOptions
@@ -836,8 +855,8 @@ namespace RimAgent.Agent
                 Temperature = Temperature,
                 MaxOutputTokens = MaxOutputTokens
             };
-            ApplyReasoning(options, Reasoning);
-            string model = PreferredModel;
+            ApplyReasoning(options, reasoningOverride ?? Reasoning);
+            string model = !string.IsNullOrWhiteSpace(modelOverride) ? modelOverride : PreferredModel;
             if (!string.IsNullOrWhiteSpace(model)) options.ModelId = model.Trim();
             // Run 層覆寫 agent 層的核心提示詞：擴充包內容變更後下一句立即生效，不必重建會話。
             string instructions = null;

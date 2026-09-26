@@ -93,7 +93,7 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task ScheduleSurgeryIsLoggedAsAToolCall()
+        public async Task ScheduleSurgeryIsRejectedWithoutClassifierInAuto()
         {
             var client = new ScriptedChatClient();
             var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
@@ -112,7 +112,10 @@ namespace RimAgent.Tests
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.ToolName, Is.EqualTo("schedule_surgery"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Medical));
-            Assert.That(tool.Result, Does.Contain("Ali").And.Contain("left lung"));
+            Assert.That(tool.RiskCheck, Is.EqualTo("high"));
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
+            Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+            Assert.That(session.HasPendingConfirmation, Is.False);
         }
     }
 }

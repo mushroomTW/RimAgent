@@ -29,7 +29,7 @@ namespace RimAgent
         private static float _permissionLabelWidth = -1f;
 
         private static Vector2 _settingsScrollPosition = Vector2.zero;
-        private static float _settingsHeight = 920f;
+        private static float _settingsHeight = 960f;
 
         public RimAgentMod(ModContentPack content) : base(content)
         {
@@ -67,36 +67,13 @@ namespace RimAgent
             listing.Gap();
             listing.Label("RimAgent.Settings.ClassifierHeader".Translate());
             listing.GapLine();
-            Rect classifierRow = listing.GetRect(28f);
-            float labelWidth = 140f;
-            Rect labelRect = new Rect(classifierRow.x, classifierRow.y + 3f, labelWidth, 24f);
-            Rect dropdownRect = new Rect(labelRect.xMax + 4f, classifierRow.y, classifierRow.xMax - labelRect.xMax - 4f, 26f);
-
-            Widgets.Label(labelRect, "RimAgent.Settings.ClassifierModel".Translate());
-            string classifier = string.IsNullOrWhiteSpace(Settings.classifierModel)
-                ? "RimAgent.Model.Default".Translate().ToString()
-                : Settings.classifierModel.Trim();
-            if (Widgets.ButtonText(dropdownRect, classifier.Truncate(dropdownRect.width - 12f)))
-            {
-                // 選項與 Agent 視窗的模型選單相同：預設（依框架備援鏈）＋備援鏈上的條目。
-                var options = new List<FloatMenuOption>
-                {
-                    new FloatMenuOption("RimAgent.Model.Default".Translate(), () => Settings.classifierModel = string.Empty)
-                    {
-                        tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
-                    }
-                };
-                foreach (string entry in Window_Agent.ConfiguredModels())
-                {
-                    options.Add(new FloatMenuOption(entry, () => Settings.classifierModel = entry));
-                }
-                Find.WindowStack.Add(new FloatMenu(options));
-            }
-            if (Mouse.IsOver(classifierRow))
-            {
-                TooltipHandler.TipRegion(classifierRow, "RimAgent.Settings.ClassifierModelTip".Translate());
-            }
-            listing.Gap(6f);
+            // 三組模型下拉（分類器／自主／摘要）共用同一列形狀：Fallback＋備援鏈條目。
+            DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel",
+                () => Settings.classifierModel, v => Settings.classifierModel = v,
+                "RimAgent.Settings.ClassifierModelTip");
+            DrawModelDropdown(listing, "RimAgent.Settings.AutonomousModel",
+                () => Settings.autonomousModel, v => Settings.autonomousModel = v,
+                "RimAgent.Settings.AutonomousModelTip");
 
             listing.Gap();
             listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
@@ -195,6 +172,44 @@ namespace RimAgent
                 }
                 Settings.SetAllow(category, allowed);
             }
+        }
+
+        /// <summary>
+        /// 模型下拉列（分類器／自主共用）：Fallback＋備援鏈條目。
+        /// 選項與 Agent 視窗的模型選單相同。
+        /// </summary>
+        private static void DrawModelDropdown(Listing_Standard listing, string labelKey, Func<string> current, Action<string> set, string tipKey)
+        {
+            Rect row = listing.GetRect(28f);
+            const float labelWidth = 140f;
+            var labelRect = new Rect(row.x, row.y + 3f, labelWidth, 24f);
+            var dropdownRect = new Rect(labelRect.xMax + 4f, row.y, row.xMax - labelRect.xMax - 4f, 26f);
+
+            Widgets.Label(labelRect, labelKey.Translate());
+            string shown = string.IsNullOrWhiteSpace(current())
+                ? "RimAgent.Model.Default".Translate().ToString()
+                : current().Trim();
+            if (Widgets.ButtonText(dropdownRect, shown.Truncate(dropdownRect.width - 12f)))
+            {
+                var options = new List<FloatMenuOption>
+                {
+                    new FloatMenuOption("RimAgent.Model.Default".Translate(), () => set(string.Empty))
+                    {
+                        tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
+                    }
+                };
+                foreach (string entry in Window_Agent.ConfiguredModels())
+                {
+                    string captured = entry;
+                    options.Add(new FloatMenuOption(captured, () => set(captured)));
+                }
+                Find.WindowStack.Add(new FloatMenu(options));
+            }
+            if (Mouse.IsOver(row))
+            {
+                TooltipHandler.TipRegion(row, tipKey.Translate());
+            }
+            listing.Gap(6f);
         }
 
         /// <summary>

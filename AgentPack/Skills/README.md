@@ -8,7 +8,7 @@ Built-in prompts live in `AgentPack/Prompts/`, player instructions in `AgentPack
 - `Prompts/AskMode.md` — The note added in Ask mode: use query tools only and give advice instead of taking actions.
 - `Prompts/RiskClassifier.md` — The system prompt for risk classification in Auto mode. It defines the two-axis decision and JSON response contract; keep that format intact.
 - `Prompts/Autonomous.en.md` — Autonomous task instructions in English. Each trigger has a `##` section: Raid, RaidEnded, EmergencyMedical, Fire, MentalBreak, FoodShortage, Choice, or Interval. Persistent goals run through a separate flow.
-- `Skills/<skill>/SKILL.md` — An optional skill pack. All installed skills are read into the system prompt for each request. Use this format:
+- `Skills/<skill>/SKILL.md` — An optional skill pack. Each request carries only a skill index (names and descriptions); the agent loads a full skill text on demand with `read_skill`. Use this format:
 
 ```markdown
 ---

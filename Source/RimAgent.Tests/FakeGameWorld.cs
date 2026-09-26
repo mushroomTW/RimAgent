@@ -226,7 +226,14 @@ namespace RimAgent.Tests
         }
 
         public ColonyOverview GetOverview() => Overview;
-        public IReadOnlyList<ColonistInfo> GetColonists() => Colonists;
+        public IReadOnlyList<ColonistInfo> GetColonists()
+        {
+            ColonistQueryCount++;
+            return Colonists;
+        }
+
+        /// <summary>本局 GetColonists 被呼叫次數：驗證同一句內重複查詢只碰一次世界。</summary>
+        public int ColonistQueryCount { get; private set; }
         public IReadOnlyList<PrisonerInfo> GetPrisoners() => Prisoners;
         public IReadOnlyList<AnimalInfo> GetAnimals() => Animals;
         public IReadOnlyList<ZoneInfo> GetZones() => Zones;

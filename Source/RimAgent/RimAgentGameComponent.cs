@@ -120,6 +120,7 @@ namespace RimAgent
                 {
                     _session.Reasoning = RimAgentMod.Settings.reasoning;
                     _session.PreferredModel = RimAgentMod.Settings.agentModel;
+                    _session.AutonomousModel = RimAgentMod.Settings.autonomousModel;
                     _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
                 }
                 return _session;
@@ -633,7 +634,8 @@ namespace RimAgent
                     instruction,
                     _autoCts.Token,
                     autonomous: true,
-                    maxToolSteps: AutonomousRunMaxSteps);
+                    maxToolSteps: AutonomousRunMaxSteps,
+                    reasoningOverride: ReasoningLevel.Low);
             }
             catch (InvalidOperationException)
             {
@@ -691,9 +693,11 @@ namespace RimAgent
                 askNote: () => _pack != null ? _pack.AskModeNote : string.Empty,
                 memory: _memoryStore,
                 useLocalSearch: () => settings.useLocalSearch,
-                searxngUrl: () => settings.searxngUrl);
+                searxngUrl: () => settings.searxngUrl,
+                skillsProvider: () => _pack != null ? _pack.Skills : null);
             session.Reasoning = settings.reasoning;
             session.PreferredModel = settings.agentModel;
+            session.AutonomousModel = settings.autonomousModel;
             session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
             session.RunLoggingEnabled = () => settings.recordRuns;
             session.RunLogSink = record =>
@@ -708,14 +712,14 @@ namespace RimAgent
             return session;
         }
 
-        /// <summary>每句指令的完整提示詞：前情提要→玩家自留地→行為準則→技能。每句現組，AgentPack 變更後下一句生效。</summary>
+        /// <summary>每句指令的完整提示詞：前情提要→玩家自留地→行為準則→技能索引（全文按需讀）。每句現組，AgentPack 變更後下一句生效。</summary>
         private string ComposeInstructions()
         {
             AgentPack pack = _pack;
             string preamble = pack != null && !string.IsNullOrWhiteSpace(pack.Preamble)
                 ? pack.Preamble
                 : AgentSystemPrompt.FallbackPreamble;
-            return AgentPromptComposer.Compose(
+            return AgentPromptComposer.ComposeWithSkillIndex(
                 preamble,
                 pack != null ? pack.PlayerNotes : string.Empty,
                 pack != null ? pack.Conduct : string.Empty,

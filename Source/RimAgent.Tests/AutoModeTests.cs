@@ -75,11 +75,11 @@ namespace RimAgent.Tests
             Assert.That(session.HasPendingConfirmation, Is.False);
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("spends silver"));
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
             Assert.That(session.HasPendingConfirmation, Is.False);
             Assert.That(await session.ConfirmAsync(), Is.Null);
             Assert.That(_world.Calls, Is.Empty);
-            Assert.That(_classifierClient.CallCount, Is.EqualTo(1));
+            Assert.That(_classifierClient.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
             Assert.That(session.HasPendingConfirmation, Is.False);
         }
 

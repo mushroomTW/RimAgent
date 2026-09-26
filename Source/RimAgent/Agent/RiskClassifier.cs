@@ -49,6 +49,8 @@ namespace RimAgent.Agent
         private readonly IChatClient _client;
         private readonly Func<string> _modelProvider;
         private readonly Func<string> _systemPrompt;
+        /// <summary>同一句指令內的判定快取：模型重試相同命令時不再燒一次模型呼叫。</summary>
+        private readonly InstructionCache<RiskVerdict> _verdictCache = new InstructionCache<RiskVerdict>();
 
         public RiskClassifier(IChatClient client, Func<string> modelProvider = null, Func<string> systemPrompt = null)
         {
@@ -65,6 +67,11 @@ namespace RimAgent.Agent
             {
                 return new RiskVerdict { Risky = true, Failed = true, Reason = "risk check unavailable: classifier prompt is missing" };
             }
+            // 鍵只用「玩家原話＋工具＋參數」：這兩軸（動作危不危險、玩家有沒有要求）由此決定，
+            // 預覽裡的新舊數值是同一動作的當下快照，不影響判定；失敗與無法解析的 verdict 不進快取。
+            string cacheKey = (question.Instruction ?? string.Empty) + "\n" +
+                (question.ToolName ?? string.Empty) + "\n" + (question.Arguments ?? string.Empty);
+            if (_verdictCache.TryGet(cacheKey, out RiskVerdict cached)) return cached;
             string text;
             try
             {
@@ -93,7 +100,16 @@ namespace RimAgent.Agent
             }
 
             RiskVerdict verdict = Parse(text);
-            return verdict ?? new RiskVerdict { Risky = true, Failed = true, Reason = "risk check returned an unreadable answer" };
+            if (verdict == null)
+                return new RiskVerdict { Risky = true, Failed = true, Reason = "risk check returned an unreadable answer" };
+            if (!verdict.Failed) _verdictCache.Store(cacheKey, verdict);
+            return verdict;
+        }
+
+        /// <summary>新的一句指令開始時清空：判定只在同一句內重用，不跨指令。</summary>
+        internal void ClearCache()
+        {
+            _verdictCache.Clear();
         }
 
         /// <summary>

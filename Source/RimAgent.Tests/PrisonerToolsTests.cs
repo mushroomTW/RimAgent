@@ -104,7 +104,7 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task SetInteractionIsLoggedAsAToolCall()
+        public async Task SetInteractionIsRejectedWithoutClassifierInAuto()
         {
             var client = new ScriptedChatClient();
             var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
@@ -123,7 +123,10 @@ namespace RimAgent.Tests
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.ToolName, Is.EqualTo("set_prisoner_interaction"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Prisoner));
-            Assert.That(tool.Result, Does.Contain("Rook").And.Contain("recruit"));
+            Assert.That(tool.RiskCheck, Is.EqualTo("high"));
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
+            Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+            Assert.That(session.HasPendingConfirmation, Is.False);
         }
     }
 }

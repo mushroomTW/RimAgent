@@ -13,7 +13,8 @@ namespace RimAgent.Agent
     /// 確認模式擋 Confirm 級工具（回傳預覽並捕捉原呼叫，玩家按確認後直接執行原呼叫）；
     /// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再決定執行或拒絕。
     /// 工具的風險由 <see cref="LoggingAIFunction"/> 在每次呼叫前經 <see cref="BeginInvocation"/> 告知；
-    /// 工具串行執行（框架禁止並行），所以這裡用單一欄位即可。
+    /// 同一輪的多個查詢可並行執行，每條非同步流程各有一份呼叫狀態（AsyncLocal），
+    /// 共用狀態（待確認、額度、查詢快取）各自上鎖。
     /// </summary>
     public sealed class ConfirmationGate
     {
@@ -42,6 +43,8 @@ namespace RimAgent.Agent
         private int _lastApprovalExecutedCount;
         // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
         private int _remainingToolCalls = -1;
+        /// <summary>同一句指令內的查詢結果快取：同樣的唯讀查詢只碰一次世界，之後直接回快取。</summary>
+        private readonly InstructionCache<string> _queryCache = new InstructionCache<string>();
 
         public ConfirmationGate(Func<AgentMode> mode)
         {
@@ -180,6 +183,8 @@ namespace RimAgent.Agent
             lock (_gate)
             {
                 _remainingToolCalls = maximumCalls.HasValue ? Math.Max(0, maximumCalls.Value) : -1;
+                // 新的一句指令：查詢快取與分類器快取（由呼叫端另行清空）都不跨指令。
+                _queryCache.Clear();
             }
         }
 
@@ -222,6 +227,42 @@ namespace RimAgent.Agent
                 _blocked.Clear();
                 return taken;
             }
+        }
+
+        /// <summary>同一句內重複的唯讀查詢是否已有快取；有則呼叫端直接回傳，不碰世界也不扣額度。</summary>
+        internal bool TryGetCachedQuery(string toolName, string arguments, out string result)
+        {
+            return _queryCache.TryGet(QueryCacheKey(toolName, arguments), out result);
+        }
+
+        /// <summary>
+        /// 記下一次成功的查詢結果：錯誤與確認預覽不記（世界可能在同句後續命令中改變，
+        /// 下一次重查才看得到最新狀態）；超過上限就不再記，避免無限成長。
+        /// </summary>
+        internal void StoreCachedQuery(string toolName, string arguments, string result)
+        {
+            if (string.IsNullOrEmpty(result)) return;
+            _queryCache.Store(QueryCacheKey(toolName, arguments), result);
+        }
+
+        /// <summary>
+        /// 同一句內執行了命令（成功、失敗或部分生效皆可能改變世界）：丟掉已記的查詢結果，
+        /// 之後重查才看得到最新狀態。預覽不碰世界，不必失效。
+        /// </summary>
+        internal void InvalidateQueryCache()
+        {
+            _queryCache.Clear();
+        }
+
+        /// <summary>對話重來或新局時清空查詢快取（平時由每句的額度計數一併清空）。</summary>
+        internal void ClearQueryCache()
+        {
+            _queryCache.Clear();
+        }
+
+        private static string QueryCacheKey(string toolName, string arguments)
+        {
+            return (toolName ?? string.Empty) + "\n" + (arguments ?? string.Empty);
         }
 
         /// <summary>特定高敏感工具（如本機 MCP 工具）是否需要強制手動確認：僅在確認模式下需強制手動確認。</summary>

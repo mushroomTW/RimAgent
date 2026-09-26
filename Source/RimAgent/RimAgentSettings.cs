@@ -18,6 +18,8 @@ namespace RimAgent
         public string agentModel = string.Empty;
         /// <summary>Auto 模式風險分類器模型識別碼（留空則沿用框架預設）。</summary>
         public string classifierModel = string.Empty;
+        /// <summary>自主任務專用模型（留空則沿用 Agent 模型設定）。</summary>
+        public string autonomousModel = string.Empty;
         /// <summary>選用本機 SearXNG；預設改用免設定的 Parallel 匿名搜尋。</summary>
         public bool useLocalSearch = false;
         public string searxngUrl = "http://127.0.0.1:8888";
@@ -148,6 +150,7 @@ namespace RimAgent
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
             Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
             Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);
+            Scribe_Values.Look(ref autonomousModel, "autonomousModel", string.Empty);
             Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
             Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
             Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);

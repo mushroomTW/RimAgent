@@ -97,7 +97,7 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public async Task FormCaravanIsLoggedAsAToolCall()
+        public async Task FormCaravanIsRejectedWithoutClassifierInAuto()
         {
             var client = new ScriptedChatClient();
             var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
@@ -116,7 +116,11 @@ namespace RimAgent.Tests
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
             Assert.That(tool.ToolName, Is.EqualTo("form_caravan"));
             Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
-            Assert.That(tool.Result, Does.Contain("Ali, Bob").And.Contain("north-east"));
+            Assert.That(tool.RiskCheck, Is.EqualTo("high"));
+            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
+            Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+            Assert.That(_world.Calls, Is.Empty);
+            Assert.That(session.HasPendingConfirmation, Is.False);
         }
     }
 }
