@@ -50,6 +50,7 @@ namespace RimAgent
         private List<TranscriptEntryData> _loadedTranscript;
         private List<UndoFrame> _loadedUndoFrames;
         private List<string> _goals = new List<string>();
+        private AgentMemoryStore _memoryStore = new AgentMemoryStore();
         private AgentPack _pack;
         private McpManager _mcp;
         private bool _mcpWarmedUp;
@@ -287,6 +288,15 @@ namespace RimAgent
 
             Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
             if (_goals == null) _goals = new List<string>();
+            List<AgentMemoryEntry> memories = Scribe.mode == LoadSaveMode.Saving
+                ? _memoryStore.Snapshot() : null;
+            Scribe_Collections.Look(ref memories, "agentMemories", LookMode.Deep);
+            if (Scribe.mode == LoadSaveMode.LoadingVars)
+            {
+                _memoryStore = new AgentMemoryStore(memories);
+                if (_memoryStore.DroppedOnLoad > 0)
+                    Log.Warning("RimAgent discarded " + _memoryStore.DroppedOnLoad + " saved memory file(s) that exceed the current limits.");
+            }
             Scribe_Values.Look(ref _goalPaused, "goalPaused", false);
             Scribe_Values.Look(ref _goalTurns, "goalTurns", 0);
             Scribe_Values.Look(ref _goalBlockedTurns, "goalBlockedTurns", 0);
@@ -315,6 +325,7 @@ namespace RimAgent
             _loadedUndoFrames = null;
             _loadedAgentSession = null;
             _goals = new List<string>();
+            _memoryStore = new AgentMemoryStore();
             _goalCts?.Cancel();
             _goalGeneration++;
             _goalRunning = false;
@@ -431,7 +442,9 @@ namespace RimAgent
                     || _goals.Count == 0 || _goals[0] != objective || _goalPaused) return;
                 IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
                 bool hasToolEvidence = GoalProgress.HasVerificationEvidence(entries, instructionId);
+                // 記憶與網頁搜尋不碰殖民地，不算推進目標；否則每輪讀 preferences.md 就能躲過閒置暫停。
                 bool usedTool = entries.Any(e => e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool
+                    && e.ToolCategory != ToolCategory.Memory && e.ToolCategory != ToolCategory.Web
                     && !e.Failed && !(e.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
                 GoalTurnDecision decision = GoalProgress.AfterTurn(
                     _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence,
@@ -675,7 +688,10 @@ namespace RimAgent
                 classifierClient: null,
                 classifierModel: () => settings?.classifierModel,
                 classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
-                askNote: () => _pack != null ? _pack.AskModeNote : string.Empty);
+                askNote: () => _pack != null ? _pack.AskModeNote : string.Empty,
+                memory: _memoryStore,
+                useLocalSearch: () => settings.useLocalSearch,
+                searxngUrl: () => settings.searxngUrl);
             session.Reasoning = settings.reasoning;
             session.PreferredModel = settings.agentModel;
             session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);

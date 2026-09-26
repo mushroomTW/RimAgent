@@ -18,6 +18,9 @@ namespace RimAgent
         public string agentModel = string.Empty;
         /// <summary>Auto 模式風險分類器模型識別碼（留空則沿用框架預設）。</summary>
         public string classifierModel = string.Empty;
+        /// <summary>選用本機 SearXNG；預設改用免設定的 Parallel 匿名搜尋。</summary>
+        public bool useLocalSearch = false;
+        public string searxngUrl = "http://127.0.0.1:8888";
 
         // 自主模式（排程器）的節奏與配額在設定頁；持續目標另由獨立流程執行並跟著存檔走。
         public const int DefaultAutoIntervalHours = 6;
@@ -62,7 +65,8 @@ namespace RimAgent
         private static readonly string[] CategoryKeys =
         {
             "allowObserve", "allowWork", "allowBuild", "allowCombat", "allowTrade", "allowMedical",
-            "allowPrisoner", "allowAnimal", "allowZone", "allowProduction", "allowTime", "allowMCP"
+            "allowPrisoner", "allowAnimal", "allowZone", "allowProduction", "allowTime", "allowMCP",
+            "allowWeb", "allowMemory"
         };
 
         private static bool[] DefaultAllows()
@@ -70,7 +74,8 @@ namespace RimAgent
             return new[]
             {
                 true, true, true, true, true, true,
-                true, true, true, true, true, true
+                true, true, true, true, true, true,
+                true, true
             };
         }
 
@@ -143,6 +148,8 @@ namespace RimAgent
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
             Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
             Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);
+            Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
+            Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
             Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);
             Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
             Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);

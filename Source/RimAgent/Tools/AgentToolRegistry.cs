@@ -73,7 +73,7 @@ namespace RimAgent.Tools
         {
         }
 
-        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null)
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (transcript == null) throw new ArgumentNullException(nameof(transcript));
@@ -95,6 +95,9 @@ namespace RimAgent.Tools
             Register(new ProductionTools(world, gate), transcript);
             Register(new TimeTools(world, gate), transcript);
             Register(new McpTools(mcp ?? new Mcp.McpManager(null), gate), transcript);
+            Register(new WebSearchTools(useLocalSearch: useLocalSearch, searxngUrl: searxngUrl, gate: gate), transcript);
+            foreach (AIFunction function in MemoryTools.Create(memory ?? new AgentMemoryStore(), gate))
+                Add(function, ToolCategory.Memory, MemoryTools.RiskOf(function.Name), transcript);
         }
 
         private IReadOnlyList<AITool> _allTools;
@@ -156,14 +159,19 @@ namespace RimAgent.Tools
 
                 // 說明交給 AIFunctionFactory 從 [Description] 讀取（description 傳 null）。
                 AIFunction function = AIFunctionFactory.Create(method, target, attribute.Name, null, null);
-                _tools.Add(new Entry
-                {
-                    Name = attribute.Name,
-                    Category = attribute.Category,
-                    Risk = attribute.Risk,
-                    Tool = new LoggingAIFunction(function, transcript, _world, attribute.Category, attribute.Risk, _gate, _classifier)
-                });
+                Add(function, attribute.Category, attribute.Risk, transcript);
             }
+        }
+
+        private void Add(AIFunction function, ToolCategory category, ToolRisk risk, AgentTranscript transcript)
+        {
+            _tools.Add(new Entry
+            {
+                Name = function.Name,
+                Category = category,
+                Risk = risk,
+                Tool = new LoggingAIFunction(function, transcript, _world, category, risk, _gate, _classifier)
+            });
         }
     }
 

@@ -77,6 +77,14 @@
   <RimAgent.Settings.TimeTip>Check the current time flow speed, pause the game, or switch between normal and fast speeds.</RimAgent.Settings.TimeTip>
   <RimAgent.Settings.MCP>MCP — external tools via local servers</RimAgent.Settings.MCP>
   <RimAgent.Settings.MCPTip>Let the agent call tools from local MCP servers configured in AgentPack/MCP/servers.json. Servers run with your user privileges; only enable ones you trust.</RimAgent.Settings.MCPTip>
+  <RimAgent.Settings.Web>Web — search public websites</RimAgent.Settings.Web>
+  <RimAgent.Settings.WebTip>Allow live web search through Parallel Search MCP by default, or a local SearXNG server when selected below. Neither needs an API key.</RimAgent.Settings.WebTip>
+  <RimAgent.Settings.WebSearchHeader>Web search source</RimAgent.Settings.WebSearchHeader>
+  <RimAgent.Settings.UseLocalSearch>Use local SearXNG instead of Parallel</RimAgent.Settings.UseLocalSearch>
+  <RimAgent.Settings.UseLocalSearchTip>Requires a running SearXNG server with JSON output enabled. Leave off to use Parallel's anonymous free tier without local setup.</RimAgent.Settings.UseLocalSearchTip>
+  <RimAgent.Settings.SearxngUrl>SearXNG server URL</RimAgent.Settings.SearxngUrl>
+  <RimAgent.Settings.Memory>Memory — save facts per game</RimAgent.Settings.Memory>
+  <RimAgent.Settings.MemoryTip>Allow the agent to read, write, edit and delete up to 30 memory files in this game's save file.</RimAgent.Settings.MemoryTip>
   <RimAgent.Settings.Mode.Ask>Ask</RimAgent.Settings.Mode.Ask>
   <RimAgent.Settings.Mode.AskDesc>Read-only. The agent can inspect the colony and advise, but has no tools that change it.</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>Confirm</RimAgent.Settings.Mode.Confirm>

@@ -54,6 +54,17 @@ namespace RimAgent
             DrawPermissions(listing);
 
             listing.Gap();
+            listing.Label("RimAgent.Settings.WebSearchHeader".Translate());
+            listing.GapLine();
+            listing.CheckboxLabeled("RimAgent.Settings.UseLocalSearch".Translate(), ref Settings.useLocalSearch,
+                "RimAgent.Settings.UseLocalSearchTip".Translate());
+            if (Settings.useLocalSearch)
+            {
+                listing.Label("RimAgent.Settings.SearxngUrl".Translate());
+                Settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), Settings.searxngUrl ?? string.Empty);
+            }
+
+            listing.Gap();
             listing.Label("RimAgent.Settings.ClassifierHeader".Translate());
             listing.GapLine();
             Rect classifierRow = listing.GetRect(28f);
@@ -146,7 +157,7 @@ namespace RimAgent
             Widgets.EndScrollView();
         }
 
-        /// <summary>十二類工具權限：標題列右側一鍵全開／全關，勾選框排成兩欄（先填滿左欄再換右欄）。</summary>
+        /// <summary>十四類工具權限：標題列右側一鍵全開／全關，勾選框排成兩欄（先填滿左欄再換右欄）。</summary>
         private static void DrawPermissions(Listing_Standard listing)
         {
             ToolCategory[] categories = Categories;

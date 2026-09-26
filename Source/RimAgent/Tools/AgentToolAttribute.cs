@@ -15,7 +15,9 @@ namespace RimAgent.Tools
         Zone,
         Production,
         Time,
-        Mcp
+        Mcp,
+        Web,
+        Memory
     }
 
     /// <summary>

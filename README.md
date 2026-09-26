@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 51 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 59 tools, with control over when actions require approval.
 
-**RimWorld 1.6** &nbsp;·&nbsp; **51 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.6** &nbsp;·&nbsp; **59 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,11 +50,11 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **51 colony tools:** inspect the map, assign work, plan construction, issue combat and medical orders, trade, and manage animals, prisoners, and zones.
+- **59 tools:** inspect the colony, issue orders, search the web, and manage saved memories.
 - **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills, or connect trusted local MCP servers.
-- **Saved progress:** the transcript, model history, scheduler, goals, and `/undo` state persist with the game.
+- **Saved progress:** the transcript, model history, scheduler, goals, memories, and `/undo` state persist with the game.
 
 ---
 
@@ -131,7 +131,7 @@ Select **Autonomous** from the Agent window's mode dropdown to let the agent act
 
 ## What It Can Do
 
-All 12 categories are enabled by default and can be switched off individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
+All 14 categories are enabled by default and can be switched off individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
 
 | Category | Examples |
 | --- | --- |
@@ -147,6 +147,12 @@ All 12 categories are enabled by default and can be switched off individually in
 | Production | Work tables and bills |
 | Time | Pause and game speed |
 | MCP | Tools from configured local MCP servers |
+| Web | `web_search` uses Parallel Search MCP anonymously by default; a local SearXNG server is optional |
+| Memory | `file_memory_*` tools read, list, search, write, edit and delete up to 30 memory files in each game save |
+
+Web search connects directly to [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) by default, without an API key or local server. Anonymous requests have lower rate limits; search queries are sent to Parallel. To use a local source instead, enable **Use local SearXNG** in RimAgent settings and enter its URL (`http://127.0.0.1:8888` by default). The server must be running with JSON output enabled; [free-web-search](https://github.com/vksco/free-web-search) provides one setup. Local searches request Google, DuckDuckGo and Qwant engines and exclude Bing results. Results are external text and should be checked before use. Because queries leave the game, web search follows the current mode's command policy and is unavailable in Ask mode.
+
+Memory uses the Agent Framework's `FileMemoryProvider`. Each memory is a short file stored in the game save; a new game starts empty, and loading an older save restores its memories. Every instruction receives an index of file names and descriptions, and the agent reads a file when it is relevant. Standing preferences are kept in `preferences.md`. Files are limited to 30 per save and 4,000 characters each; names are limited to 60 characters, and descriptions are flattened to one line of up to 200 characters. Reading, listing and searching are queries; writing, editing and deleting follow the current mode's command policy, so Ask mode can only read memories.
 
 ---
 

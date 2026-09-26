@@ -77,6 +77,14 @@
   <RimAgent.Settings.TimeTip>查看目前時間流速，暫停遊戲或切換正常與加速。</RimAgent.Settings.TimeTip>
   <RimAgent.Settings.MCP>MCP — 本機伺服器的外部工具</RimAgent.Settings.MCP>
   <RimAgent.Settings.MCPTip>讓 agent 呼叫 AgentPack/MCP/servers.json 裡設定的本機 MCP 伺服器工具。伺服器以你的使用者權限執行，只開信任的。</RimAgent.Settings.MCPTip>
+  <RimAgent.Settings.Web>網路 — 搜尋公開網站</RimAgent.Settings.Web>
+  <RimAgent.Settings.WebTip>預設透過 Parallel Search MCP 搜尋；也可在下方改用本機 SearXNG。兩者都不需 API 金鑰。</RimAgent.Settings.WebTip>
+  <RimAgent.Settings.WebSearchHeader>網路搜尋來源</RimAgent.Settings.WebSearchHeader>
+  <RimAgent.Settings.UseLocalSearch>改用本機 SearXNG</RimAgent.Settings.UseLocalSearch>
+  <RimAgent.Settings.UseLocalSearchTip>需先啟動已開啟 JSON 輸出的 SearXNG 服務。保持關閉即可免本機設定，使用 Parallel 匿名免費方案。</RimAgent.Settings.UseLocalSearchTip>
+  <RimAgent.Settings.SearxngUrl>SearXNG 服務網址</RimAgent.Settings.SearxngUrl>
+  <RimAgent.Settings.Memory>記憶 — 依存檔保存資訊</RimAgent.Settings.Memory>
+  <RimAgent.Settings.MemoryTip>允許 Agent 在本存檔中讀取、寫入、編輯與刪除最多 30 個記憶檔。</RimAgent.Settings.MemoryTip>
   <RimAgent.Settings.Mode.Ask>詢問</RimAgent.Settings.Mode.Ask>
   <RimAgent.Settings.Mode.AskDesc>唯讀。Agent 可以查看殖民地並給建議，但沒有任何會改變遊戲的工具。</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>確認</RimAgent.Settings.Mode.Confirm>

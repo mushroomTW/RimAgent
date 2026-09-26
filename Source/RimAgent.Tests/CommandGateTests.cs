@@ -54,10 +54,18 @@ namespace RimAgent.Tests
             ["set_current_map"] = Args(("map", "2")),
             ["take_screenshot"] = Args(("name", "test_shot")),
             ["mcp_call_tool"] = Args(("server", "fetch"), ("tool", "fetch"), ("args", "{}")),
+            ["file_memory_write"] = Args(("fileName", "base.md"), ("content", "Near river"), ("description", "Base notes")),
+            ["file_memory_delete"] = Args(("fileName", "base.md")),
+            ["file_memory_replace"] = Args(("fileName", "base.md"), ("oldString", "river"), ("newString", "lake"), ("replaceAll", false)),
+            ["file_memory_replace_lines"] = Args(("fileName", "base.md"), ("edits", "[]")),
+            ["web_search"] = Args(("query", "RimWorld wiki")),
         };
 
         /// <summary>不經 IGameWorld 的命令（放行時不會留下 Calls）。</summary>
-        private static readonly HashSet<string> NotRecordedInWorld = new HashSet<string> { "mcp_call_tool" };
+        private static readonly HashSet<string> NotRecordedInWorld = new HashSet<string>
+        {
+            "mcp_call_tool", "file_memory_write", "file_memory_delete", "file_memory_replace", "file_memory_replace_lines", "web_search"
+        };
 
         [SetUp]
         public void SetUp()
