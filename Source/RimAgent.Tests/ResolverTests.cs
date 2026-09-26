@@ -52,6 +52,18 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void ModDefWithoutLabelDoesNotBreakContainsMatching()
+        {
+            // 模組 def 常不填 label（Def.label 預設 null）；走到包含比對時不能因此丟例外。
+            var defs = new[] { new DefInfo("ModX_Thing", null), new DefInfo("WindTurbine", "wind turbine") };
+
+            Result<DefInfo> r = DefResolver.Resolve("turbine", defs, "buildable");
+
+            Assert.That(r.Success, Is.True);
+            Assert.That(r.Value.DefName, Is.EqualTo("WindTurbine"));
+        }
+
+        [Test]
         public void InputContainingLabelMatches()
         {
             // 玩家說「木牆」時模型可能傳 "wooden wall"：輸入包含 label "wall"。

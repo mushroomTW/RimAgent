@@ -71,8 +71,8 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> AnimalAreas { get; }
         /// <summary>儲藏篩選可開關的品項目錄（物品類 ThingDef）。</summary>
         IReadOnlyList<DefInfo> StorageFilterables { get; }
-        /// <summary>可生產配方目錄（有產出物的 RecipeDef，不含手術）。</summary>
-        IReadOnlyList<DefInfo> BillRecipes { get; }
+        /// <summary>這張工作台可做的配方（有產出物的 RecipeDef，不含手術）；找不到工作台回傳空清單。</summary>
+        IReadOnlyList<DefInfo> GetTableRecipes(int tableId);
         /// <summary>可排程的手術目錄（worker 為手術的 RecipeDef）。</summary>
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
         /// <summary>尚未完成的研發目錄（供 set_research 把名稱對到 defName）。</summary>

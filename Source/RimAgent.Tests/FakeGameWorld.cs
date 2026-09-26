@@ -186,11 +186,21 @@ namespace RimAgent.Tests
         /// <summary>各工作台的帳單（正式端讀 BillStack）。</summary>
         public Dictionary<int, List<BillInfo>> TableBills { get; } = new Dictionary<int, List<BillInfo>>();
 
+        /// <summary>沒在 <see cref="TableRecipes"/> 指定的工作台都能做的預設配方。</summary>
         public IReadOnlyList<DefInfo> BillRecipes { get; set; } = new[]
         {
             new DefInfo("MakeComponent", "component"), new DefInfo("MakeShortBow", "short bow"),
             new DefInfo("ButcherCreature", "butcher creature")
         };
+
+        /// <summary>個別工作台自己的配方（正式端讀 def.AllRecipes）。</summary>
+        public Dictionary<int, IReadOnlyList<DefInfo>> TableRecipes { get; } = new Dictionary<int, IReadOnlyList<DefInfo>>();
+
+        public IReadOnlyList<DefInfo> GetTableRecipes(int tableId)
+        {
+            if (WorkTables.All(t => t.Id != tableId)) return Array.Empty<DefInfo>();
+            return TableRecipes.TryGetValue(tableId, out IReadOnlyList<DefInfo> recipes) ? recipes : BillRecipes;
+        }
 
         public static ColonistInfo MakeColonist(int id, string first, string nick, string last, int x = 10, int z = 10)
         {
@@ -712,7 +722,7 @@ namespace RimAgent.Tests
             Calls.Add($"AddBill({tableId},{recipeDefName},{count})");
             WorkTableInfo table = WorkTables.FirstOrDefault(t => t.Id == tableId);
             if (table == null) return CommandResult.Fail($"no work table has id {tableId}");
-            DefInfo recipe = BillRecipes.FirstOrDefault(d => string.Equals(d.DefName, recipeDefName, StringComparison.OrdinalIgnoreCase));
+            DefInfo recipe = GetTableRecipes(tableId).FirstOrDefault(d => string.Equals(d.DefName, recipeDefName, StringComparison.OrdinalIgnoreCase));
             if (recipe == null) return CommandResult.Fail($"unknown bill recipe {recipeDefName}");
             if (count < 1) return CommandResult.Fail($"count must be at least 1, not {count}");
             if (!TableBills.TryGetValue(tableId, out List<BillInfo> bills))

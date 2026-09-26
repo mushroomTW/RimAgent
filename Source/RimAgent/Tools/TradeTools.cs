@@ -16,6 +16,8 @@ namespace RimAgent.Tools
         /// <summary>單一商人最多列出的品項數，超過則截斷並註明（省 token）。</summary>
         internal const int MaxGoodsListed = 80;
 
+        private const string SilverDefName = "Silver";
+
         private readonly IGameWorld _world;
         private readonly ConfirmationGate _gate;
 
@@ -69,9 +71,13 @@ namespace RimAgent.Tools
             if (!negotiatorResult.Success) return negotiatorResult.Error;
             ColonistInfo pawn = negotiatorResult.Value;
 
-            Result<List<TradeLine>> resolvedBuys = ResolveLines(buyLines.Value);
+            // 買入只在這位商人的貨品裡找：模組包的全遊戲物品目錄太大，常撞名或對到商人沒賣的東西。
+            // 銀兩留在候選裡，列了才會得到「銀兩自動結算」的說明。
+            var offered = new HashSet<string>(deal.Goods.Select(g => g.DefName), StringComparer.OrdinalIgnoreCase) { SilverDefName };
+            Result<List<TradeLine>> resolvedBuys = ResolveLines(buyLines.Value, _world.TradeGoods.Where(d => offered.Contains(d.DefName)).ToList(),
+                $" Only the goods {deal.Name} [{deal.Id}] sells were searched.");
             if (!resolvedBuys.Success) return resolvedBuys.Error;
-            Result<List<TradeLine>> resolvedSells = ResolveLines(sellLines.Value);
+            Result<List<TradeLine>> resolvedSells = ResolveLines(sellLines.Value, _world.TradeGoods, string.Empty);
             if (!resolvedSells.Success) return resolvedSells.Error;
             var request = new TradeRequest
             {
@@ -119,14 +125,14 @@ namespace RimAgent.Tools
         }
 
         /// <summary>品名解析到 defName；銀兩不用列（自動結算），列了直接擋下並說明。</summary>
-        private Result<List<TradeLine>> ResolveLines(List<ParsedLine> parsed)
+        private static Result<List<TradeLine>> ResolveLines(List<ParsedLine> parsed, IReadOnlyList<DefInfo> candidates, string missHint)
         {
             var lines = new List<TradeLine>();
             foreach (ParsedLine p in parsed)
             {
-                Result<DefInfo> def = DefResolver.Resolve(p.Item, _world.TradeGoods, "trade goods");
-                if (!def.Success) return Result<List<TradeLine>>.Fail(def.Error);
-                if (string.Equals(def.Value.DefName, "Silver", StringComparison.OrdinalIgnoreCase))
+                Result<DefInfo> def = DefResolver.Resolve(p.Item, candidates, "trade goods");
+                if (!def.Success) return Result<List<TradeLine>>.Fail(def.Error + missHint);
+                if (string.Equals(def.Value.DefName, SilverDefName, StringComparison.OrdinalIgnoreCase))
                 {
                     return Result<List<TradeLine>>.Fail(ToolText.Error("silver moves automatically as payment; do not list it in buys or sells."));
                 }

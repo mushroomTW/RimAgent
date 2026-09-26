@@ -37,6 +37,13 @@ namespace RimAgent.Tools
             return blocked;
         }
 
+        /// <summary>殖民者有段落因其他模組出錯而讀不到時的註記；讓模型知道那些欄位是空的而不是「沒有」。沒有則回傳空字串。</summary>
+        public static string Unreadable(ColonistInfo c)
+        {
+            if (c.UnreadableParts.Count == 0) return string.Empty;
+            return $" [could not read {string.Join(", ", c.UnreadableParts)}: another mod threw an error; do not treat them as empty]";
+        }
+
         public static string Pct(float fraction)
         {
             return ((int)(fraction * 100f)).ToString(CultureInfo.InvariantCulture) + "%";

@@ -78,8 +78,8 @@ namespace RimAgent.Tools
             Result<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
             if (!target.Success) return target.Error;
 
-            Result<DefInfo> def = DefResolver.Resolve(recipe, _world.BillRecipes, "bill recipe");
-            if (!def.Success) return def.Error;
+            Result<DefInfo> def = DefResolver.Resolve(recipe, _world.GetTableRecipes(target.Value.Id), "bill recipe");
+            if (!def.Success) return def.Error + $" Only the recipes of {target.Value.Label} [{target.Value.Id}] were searched.";
             if (count < 1) return ToolText.Error($"count must be at least 1, not {count}.");
 
             string blocked = ToolText.Blocked(_gate, $"would add bill {def.Value.Label} x{count} on {target.Value.Label} [{target.Value.Id}].");

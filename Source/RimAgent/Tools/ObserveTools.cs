@@ -56,7 +56,7 @@ namespace RimAgent.Tools
                 sb.Append(", doing: ").Append(string.IsNullOrEmpty(c.CurrentActivity) ? "nothing" : c.CurrentActivity)
                   .Append(", drafted: ").Append(c.Drafted ? "yes" : "no");
                 if (!string.IsNullOrEmpty(c.Equipment)) sb.Append(", equipped: ").Append(c.Equipment);
-                sb.AppendLine();
+                sb.Append(ToolText.Unreadable(c)).AppendLine();
                 sb.Append("  skills: ").Append(string.Join(", ", c.Skills.Select(ToolText.Skill))).AppendLine();
             }
             return sb.ToString().Trim();
@@ -73,7 +73,7 @@ namespace RimAgent.Tools
             string thoughts = c.Thoughts.Count == 0 ? "none reported" : string.Join("; ", c.Thoughts);
             return ToolText.Colonist(c) + " | needs: " + needs +
                    " | equipment: " + (string.IsNullOrEmpty(c.Equipment) ? "none" : c.Equipment) +
-                   " | thoughts: " + thoughts;
+                   " | thoughts: " + thoughts + ToolText.Unreadable(c);
         }
 
         [AgentTool("get_resources", ToolCategory.Observe, ToolRisk.Query)]

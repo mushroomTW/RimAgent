@@ -31,7 +31,6 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _prisonerInteractionModes;
         private IReadOnlyList<DefInfo> _animalTraining;
         private IReadOnlyList<DefInfo> _storageFilterables;
-        private IReadOnlyList<DefInfo> _billRecipes;
 
         private static Map Map => Find.CurrentMap;
 
@@ -82,6 +81,8 @@ namespace RimAgent.Game
                     Map map = maps[m];
                     if (map == null) continue;
 
+                    // 地圖層的讀數不包 try：讀一半就把食物、電力當 0 會造成假警報，寧可整次作廢。
+                    // 會跑到其他模組程式的攻擊目標已在 CountHostiles 裡逐個隔離。
                     hostileCount += CountHostiles(map);
                     foodNutrition += map.resourceCounter.TotalHumanEdibleNutrition;
                     fireCount += map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
@@ -89,19 +90,35 @@ namespace RimAgent.Game
 
                     List<Pawn> freeColonists = map.mapPawns.FreeColonistsSpawned;
                     if (freeColonists == null) continue;
-                    colonistCount += freeColonists.Count;
                     for (int p = 0; p < freeColonists.Count; p++)
                     {
                         Pawn pawn = freeColonists[p];
-                        // 兩個心情門檻不疊加：快崩潰的算崩潰事件，不然同一件事報兩次。
-                        if (IsNearMentalBreak(pawn)) nearMentalBreak++;
-                        else if (IsLowMood(pawn)) lowMood++;
-                        if (pawn.Downed || HasBleeding(pawn)) downedOrBleeding++;
-                        if (IsInDangerousTemperature(pawn)) coldColonists++;
-
-                        Building_Bed bed = pawn.ownership?.OwnedBed;
-                        if (bed == null) bedless++;
-                        else if (IsOutdoors(bed.GetRoom())) outdoorsBed++;
+                        // 每 500 tick 跑一次，外層抓到例外就整次作廢：其他模組的 pawn 一丟例外自主模式就停擺。
+                        // 逐個隔離，全部讀完才一起計入，壞掉的那一位整個不算，不留半套計數。
+                        bool nearBreak, low, downed, cold, noBed, bedOutdoors;
+                        try
+                        {
+                            // 兩個心情門檻不疊加：快崩潰的算崩潰事件，不然同一件事報兩次。
+                            nearBreak = IsNearMentalBreak(pawn);
+                            low = !nearBreak && IsLowMood(pawn);
+                            downed = pawn.Downed || HasBleeding(pawn);
+                            cold = IsInDangerousTemperature(pawn);
+                            Building_Bed bed = pawn.ownership?.OwnedBed;
+                            noBed = bed == null;
+                            bedOutdoors = !noBed && IsOutdoors(bed.GetRoom());
+                        }
+                        catch (Exception ex)
+                        {
+                            WarnModError(pawn, "autonomous signals", ex);
+                            continue;
+                        }
+                        colonistCount++;
+                        if (nearBreak) nearMentalBreak++;
+                        if (low) lowMood++;
+                        if (downed) downedOrBleeding++;
+                        if (cold) coldColonists++;
+                        if (noBed) bedless++;
+                        if (bedOutdoors) outdoorsBed++;
                     }
                 }
             }
@@ -179,7 +196,16 @@ namespace RimAgent.Game
             int count = 0;
             foreach (IAttackTarget target in map.attackTargetsCache.TargetsHostileToColony)
             {
-                if (target.Thing is Pawn && GenHostility.IsActiveThreatTo(target, Faction.OfPlayer, ignoreHives: false)) count++;
+                if (!(target.Thing is Pawn pawn)) continue;
+                // IsActiveThreatTo 會跑到模組 pawn 的 Lord／心智狀態；一個丟例外只跳過它，其餘照數。
+                try
+                {
+                    if (GenHostility.IsActiveThreatTo(target, Faction.OfPlayer, ignoreHives: false)) count++;
+                }
+                catch (Exception ex)
+                {
+                    WarnModError(pawn, "threat status", ex);
+                }
             }
             return count;
         }
@@ -199,24 +225,18 @@ namespace RimAgent.Game
             var conditions = new List<HealthConditionInfo>();
             foreach (Hediff hediff in pawn.health.hediffSet.hediffs)
             {
-                string kind = ResolveConditionKind(hediff);
-                bool tended = false, needsTending = false;
-                if (hediff.def.tendable)
+                // 模組 hediff 的標籤、流血率等可能丟例外：退回 defName，不讓整份健康報告失敗，也不藏掉這個狀況。
+                HealthConditionInfo condition;
+                try
                 {
-                    HediffComp_TendDuration tend = (hediff as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>();
-                    tended = tend != null && tend.IsTended;
-                    needsTending = !tended && hediff.TendableNow(false);
+                    condition = ToCondition(hediff);
                 }
-                conditions.Add(new HealthConditionInfo
+                catch (Exception ex)
                 {
-                    Label = hediff.LabelCap,
-                    Part = hediff.Part != null ? hediff.Part.LabelCap : string.Empty,
-                    Severity = hediff.Severity,
-                    Kind = kind,
-                    Bleeding = hediff.BleedRate > 0f,
-                    Tended = tended,
-                    NeedsTending = needsTending
-                });
+                    WarnModError(pawn, "health condition " + hediff.def?.defName, ex);
+                    condition = FallbackCondition(hediff);
+                }
+                conditions.Add(condition);
             }
             List<SurgeryBillInfo> surgeries = pawn.BillStack.Bills.OfType<Bill_Medical>().Select(b => new SurgeryBillInfo
             {
@@ -225,6 +245,59 @@ namespace RimAgent.Game
                 Suspended = b.suspended
             }).ToList();
             return new ColonistHealthInfo { PawnId = pawn.thingIDNumber, Conditions = conditions, PendingSurgeries = surgeries };
+        }
+
+        private static HealthConditionInfo ToCondition(Hediff hediff)
+        {
+            bool tended = false, needsTending = false;
+            if (hediff.def.tendable)
+            {
+                HediffComp_TendDuration tend = (hediff as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>();
+                tended = tend != null && tend.IsTended;
+                needsTending = !tended && hediff.TendableNow(false);
+            }
+            return new HealthConditionInfo
+            {
+                Label = hediff.LabelCap,
+                Part = hediff.Part != null ? hediff.Part.LabelCap : string.Empty,
+                Severity = hediff.Severity,
+                Kind = ResolveConditionKind(hediff),
+                Bleeding = hediff.BleedRate > 0f,
+                Tended = tended,
+                NeedsTending = needsTending
+            };
+        }
+
+        /// <summary>
+        /// 讀不到完整資料的狀況。標籤壞了不代表沒在流血：流血與待處置各自再讀一次，
+        /// 再讀不到就往「需要處理」報，寧可多治一次也不讓殖民者流血至死。
+        /// </summary>
+        private static HealthConditionInfo FallbackCondition(Hediff hediff)
+        {
+            bool bleeding, needsTending;
+            try
+            {
+                bleeding = hediff.BleedRate > 0f;
+            }
+            catch (Exception)
+            {
+                bleeding = hediff.def?.injuryProps?.bleedRate > 0f;
+            }
+            try
+            {
+                needsTending = hediff.TendableNow(false);
+            }
+            catch (Exception)
+            {
+                needsTending = hediff.def?.tendable == true;
+            }
+            return new HealthConditionInfo
+            {
+                Label = hediff.def?.defName ?? "unknown condition",
+                Kind = ResolveConditionKind(hediff),
+                Bleeding = bleeding,
+                NeedsTending = needsTending
+            };
         }
 
         private static string ResolveConditionKind(Hediff hediff)
@@ -564,11 +637,17 @@ namespace RimAgent.Game
             return threats;
         }
 
+        /// <summary>
+        /// 依 RaceProps 分類，不以「不是類人就是動物」推定：機兵、Anomaly 實體與模組的機器人／異種族都不是動物。
+        /// 不用 RaceProps.Animal（要求血肉之軀），模組的非血肉野獸也照動物報。
+        /// </summary>
         private static string ResolveThreatKind(Pawn pawn)
         {
-            if (pawn.RaceProps.Humanlike) return "HostilePawn";
-            if (pawn.InMentalState) return "Manhunter";
-            return "HostileAnimal";
+            RaceProperties race = pawn.RaceProps;
+            if (race.IsMechanoid) return "Mechanoid";
+            if (race.IsAnomalyEntity) return "Entity";
+            if (race.ToolUser) return "HostilePawn";
+            return pawn.InMentalState ? "Manhunter" : "HostileAnimal";
         }
 
         public IReadOnlyList<TraderInfo> GetTraders()
@@ -1373,11 +1452,19 @@ namespace RimAgent.Game
             return production.repeatMode?.label ?? string.Empty;
         }
 
-        public IReadOnlyList<DefInfo> BillRecipes =>
-            _billRecipes ?? (_billRecipes = DefDatabase<RecipeDef>.AllDefsListForReading
+        /// <summary>
+        /// 只列這張台自己的配方：模組包常有好幾個配方產出同一物品、分屬不同工作台，
+        /// 對全遊戲配方解析會撞名或挑到這張台做不了的那一個。
+        /// </summary>
+        public IReadOnlyList<DefInfo> GetTableRecipes(int tableId)
+        {
+            var table = FindBillGiver(tableId) as Thing;
+            if (table == null) return Array.Empty<DefInfo>();
+            return table.def.AllRecipes
                 .Where(r => r.ProducedThingDef != null && (r.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass)))
                 .Select(r => new DefInfo(r.defName, r.ProducedThingDef.label))
-                .ToList());
+                .ToList();
+        }
 
         public CommandResult AddBill(int tableId, string recipeDefName, int count)
         {
@@ -2017,6 +2104,7 @@ namespace RimAgent.Game
             string nick = triple?.Nick ?? string.Empty;
             string first = triple?.First ?? pawn.Name?.ToStringShort ?? pawn.LabelShort;
             bool hasDistinctNick = !string.IsNullOrEmpty(nick) && nick != first;
+            var unreadable = new List<string>();
 
             return new ColonistInfo
             {
@@ -2036,30 +2124,61 @@ namespace RimAgent.Game
                 CurrentActivity = SafeReport(pawn),
                 Drafted = pawn.Drafted,
                 MedicalCare = pawn.playerSettings != null ? pawn.playerSettings.medCare.ToString() : string.Empty,
-                Equipment = pawn.equipment?.Primary?.LabelCap ?? string.Empty,
-                Needs = pawn.needs?.AllNeeds.Select(n => new NeedInfo
+                // 以下各段會跑到其他模組的程式（武器、需求、想法、技能、工作類型），各自隔離：
+                // 一段丟例外只讓那段變空，殖民者仍列得出來、叫得動。
+                Equipment = ReadOrDefault(pawn, unreadable, "equipment", () => pawn.equipment?.Primary?.LabelCap ?? string.Empty, string.Empty),
+                Needs = ReadOrDefault(pawn, unreadable, "needs", () => pawn.needs?.AllNeeds.Select(n => new NeedInfo
                 {
                     Label = n.LabelCap,
                     Percent = n.CurLevelPercentage
-                }).ToList() ?? (IReadOnlyList<NeedInfo>)Array.Empty<NeedInfo>(),
-                Thoughts = pawn.needs?.mood?.thoughts?.memories?.Memories
+                }).ToList() ?? (IReadOnlyList<NeedInfo>)Array.Empty<NeedInfo>(), Array.Empty<NeedInfo>()),
+                Thoughts = ReadOrDefault(pawn, unreadable, "thoughts", () => pawn.needs?.mood?.thoughts?.memories?.Memories
                     .Select(t => t.LabelCap).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(12).ToList()
-                    ?? (IReadOnlyList<string>)Array.Empty<string>(),
-                Skills = pawn.skills?.skills.Select(s => new SkillInfo
+                    ?? (IReadOnlyList<string>)Array.Empty<string>(), Array.Empty<string>()),
+                Skills = ReadOrDefault(pawn, unreadable, "skills", () => pawn.skills?.skills.Select(s => new SkillInfo
                 {
                     DefName = s.def.defName,
                     Label = s.def.label,
                     Level = s.Level,
                     Passion = (int)s.passion,
                     Disabled = s.TotallyDisabled
-                }).ToList() ?? (IReadOnlyList<SkillInfo>)Array.Empty<SkillInfo>(),
+                }).ToList() ?? (IReadOnlyList<SkillInfo>)Array.Empty<SkillInfo>(), Array.Empty<SkillInfo>()),
                 WorkPriorities = pawn.workSettings == null
                     ? (IReadOnlyList<WorkPriorityInfo>)Array.Empty<WorkPriorityInfo>()
-                    : DefDatabase<WorkTypeDef>.AllDefsListForReading.Where(w => w.visible).Select(w => ToWorkPriority(pawn, w)).ToList(),
+                    : ReadOrDefault<IReadOnlyList<WorkPriorityInfo>>(pawn, unreadable, ColonistInfo.WorkPrioritiesPart, () => DefDatabase<WorkTypeDef>.AllDefsListForReading.Where(w => w.visible).Select(w => ToWorkPriority(pawn, w)).ToList(),
+                        Array.Empty<WorkPriorityInfo>()),
                 Timetable = pawn.timetable == null
                     ? (IReadOnlyList<string>)Array.Empty<string>()
-                    : Enumerable.Range(0, 24).Select(h => pawn.timetable.GetAssignment(h)?.defName ?? string.Empty).ToList()
+                    : Enumerable.Range(0, 24).Select(h => pawn.timetable.GetAssignment(h)?.defName ?? string.Empty).ToList(),
+                // 初始設定式依序求值，放最後才收得到上面每一段的失敗。
+                UnreadableParts = unreadable
             };
+        }
+
+        /// <summary>
+        /// 讀一段可能跑到其他模組程式的資料；丟例外就回傳預設值、把段名記進 <paramref name="unreadable"/>
+        /// （工具據此告訴模型「讀不到」而非「沒有」），並對這個 pawn 的這一段只警告一次。
+        /// </summary>
+        private static T ReadOrDefault<T>(Pawn pawn, List<string> unreadable, string part, Func<T> read, T fallback)
+        {
+            try
+            {
+                return read();
+            }
+            catch (Exception ex)
+            {
+                WarnModError(pawn, part, ex);
+                unreadable.Add(part);
+                return fallback;
+            }
+        }
+
+        private static void WarnModError(Pawn pawn, string part, Exception ex)
+        {
+            // ThingID 只是 defName + 編號，不會再跑進出錯的模組程式。
+            string who = pawn?.ThingID ?? "a pawn";
+            Log.WarningOnce($"RimAgent: could not read {part} of {who}, most likely because of another mod; skipped it. {ex}",
+                ("RimAgent:" + part + ":" + who).GetHashCode());
         }
 
         private static WorkPriorityInfo ToWorkPriority(Pawn pawn, WorkTypeDef w)
@@ -2133,7 +2252,7 @@ namespace RimAgent.Game
                 StackCount = thing.stackCount,
                 PlayerOwned = thing.Faction == Faction.OfPlayer,
                 Harvestable = (thing as Plant)?.HarvestableNow ?? false,
-                Wild = thing is Pawn pawn && !pawn.RaceProps.Humanlike && pawn.Faction == null,
+                Wild = thing is Pawn pawn && IsWildAnimal(pawn),
                 Forbidden = thing.IsForbidden(Faction.OfPlayer),
                 Designations = designations.Distinct().ToList()
             };
@@ -2154,12 +2273,20 @@ namespace RimAgent.Game
                 case "Haul":
                     return thing.def.EverHaulable ? null : $"{thing.LabelCap} cannot be hauled";
                 case "Hunt":
-                    Pawn pawn = thing as Pawn;
-                    return pawn != null && !pawn.RaceProps.Humanlike && pawn.Faction == null
+                    return thing is Pawn pawn && IsWildAnimal(pawn)
                         ? null : $"{thing.LabelCap} is not a huntable wild animal";
                 default:
                     return null;
             }
+        }
+
+        /// <summary>
+        /// 無派系的動物。用 RaceProps.Animal 而非「不是類人」，無派系的實體、模組機械生物不算可狩獵；
+        /// 與原版 Designator_Hunt（AnimalOrWildMan）一致，非血肉野獸原版也不能狩獵。
+        /// </summary>
+        private static bool IsWildAnimal(Pawn pawn)
+        {
+            return pawn.RaceProps.Animal && pawn.Faction == null;
         }
 
         private static Pawn FindColonist(int id)

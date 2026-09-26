@@ -62,6 +62,11 @@ namespace RimAgent.Tools
 
                 Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(part.Substring(0, colon).Trim(), _world.GetColonists());
                 if (!pawn.Success) return pawn.Error;
+                // 讀不到目前的優先級就記不了原值，/undo 與失敗回滾會寫回錯的數字，寧可不改。
+                if (pawn.Value.UnreadableParts.Contains(ColonistInfo.WorkPrioritiesPart))
+                {
+                    return ToolText.Error($"{pawn.Value.Name}'s current work priorities could not be read because another mod threw an error; not changing them.");
+                }
                 Result<DefInfo> work = DefResolver.Resolve(part.Substring(colon + 1, equals - colon - 1).Trim(), _world.WorkTypes, "work type");
                 if (!work.Success) return work.Error;
                 WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
@@ -132,6 +137,7 @@ namespace RimAgent.Tools
             {
                 sb.Append(ToolText.Colonist(c)).Append(": ")
                   .Append(string.Join(", ", c.WorkPriorities.Select(w => w.Disabled ? $"{w.Label}=incapable" : $"{w.Label}={w.Priority}")))
+                  .Append(ToolText.Unreadable(c))
                   .AppendLine();
             }
             return sb.ToString().Trim();

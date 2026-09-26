@@ -241,6 +241,31 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void BuyNameIsResolvedAmongTheTradersGoods()
+        {
+            // 全遊戲目錄裡 "component" 有多個候選（模組包更多）；商人只賣其中一種時直接對到它。
+            _world.TradeGoods = _world.TradeGoods.Concat(new[] { new DefInfo("ComponentIndustrial", "component") }).ToArray();
+            SeedColonyStock();
+            TraderInfo ship = MakeOrbitalShip();
+            _world.Traders.Add(ship);
+
+            string text = _tools.ExecuteTrade("PassingShip_1", "component x2", string.Empty, "Ali");
+
+            Assert.That(text, Does.Contain("bought spacer component (ComponentSpacer) x2"));
+        }
+
+        [Test]
+        public void BuyingSomethingTheTraderDoesNotSellNamesTheTrader()
+        {
+            SeedColonyStock();
+            _world.Traders.Add(MakeOrbitalShip());
+
+            string text = _tools.ExecuteTrade("PassingShip_1", "corn x5", string.Empty, "Ali");
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("Starweaver"));
+        }
+
+        [Test]
         public void SellSucceedsAndMovesItemsAndSilver()
         {
             SeedColonyStock();

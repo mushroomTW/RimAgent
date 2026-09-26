@@ -36,7 +36,8 @@ namespace RimAgent.Tools
 
             List<DefInfo> contains = candidates
                 .Where(c => Contains(c.DefName, needle) || Contains(c.Label, needle) ||
-                            (c.Label.Length > 0 && Contains(needle, c.Label)))
+                            // 模組 def 常不填 label（Def.label 預設 null）。
+                            (!string.IsNullOrEmpty(c.Label) && Contains(needle, c.Label)))
                 .ToList();
             if (contains.Count == 1) return Result<DefInfo>.Ok(contains[0]);
             if (contains.Count > 1) return Ambiguous(needle, contains, kindLabel);

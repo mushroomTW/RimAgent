@@ -70,6 +70,10 @@ namespace RimAgent.Game
         public IReadOnlyList<WorkPriorityInfo> WorkPriorities { get; set; } = Array.Empty<WorkPriorityInfo>();
         /// <summary>24 個小時各自的 TimeAssignment defName（索引即小時）。</summary>
         public IReadOnlyList<string> Timetable { get; set; } = Array.Empty<string>();
+        /// <summary>因其他模組丟例外而讀不到的段落（如 <see cref="WorkPrioritiesPart"/>）；這些欄位是空的，不代表「沒有」。</summary>
+        public IReadOnlyList<string> UnreadableParts { get; set; } = Array.Empty<string>();
+
+        public const string WorkPrioritiesPart = "work priorities";
     }
 
     /// <summary>殖民者需求的遊戲原始讀數；百分比為 0 到 1。</summary>
@@ -154,7 +158,7 @@ namespace RimAgent.Game
     {
         public int Id { get; set; }
         public string Label { get; set; } = string.Empty;
-        /// <summary>HostilePawn / Manhunter / Predator / Fire。</summary>
+        /// <summary>HostilePawn / HostileAnimal / Manhunter / Mechanoid / Entity / Fire。</summary>
         public string Kind { get; set; } = string.Empty;
         public string Faction { get; set; } = string.Empty;
         public int X { get; set; }

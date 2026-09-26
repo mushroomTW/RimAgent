@@ -46,6 +46,16 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void UnreadablePartsAreFlaggedInsteadOfLookingEmpty()
+        {
+            _world.Colonists[1].UnreadableParts = new[] { "skills", "needs" };
+
+            Assert.That(_tools.ListColonists(), Does.Contain("could not read skills, needs"));
+            Assert.That(_tools.GetColonistWellbeing("Bob"), Does.Contain("could not read skills, needs"));
+            Assert.That(_tools.GetColonistWellbeing("Ali"), Does.Not.Contain("could not read"));
+        }
+
+        [Test]
         public void ResourcesGroupedByCategoryWithNutrition()
         {
             _world.Resources = new ResourceSnapshot
