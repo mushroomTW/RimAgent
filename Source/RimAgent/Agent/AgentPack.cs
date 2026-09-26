@@ -30,9 +30,14 @@ namespace RimAgent.Agent
         public IReadOnlyList<AgentSkill> Skills { get; set; } = Array.Empty<AgentSkill>();
     }
 
-    /// <summary>一個語言的自主任務文案：觸發原因→指令文字。</summary>
+    /// <summary>一個語言的自主任務文案：共用通則＋觸發原因→指令文字。</summary>
     public sealed class AutonomousPack
     {
+        /// <summary>
+        /// 第一個 <c>## </c> 章節之前的通則，會接在每個任務前面。
+        /// 寫作時要假設模型看得到：共用規則（要產出、不要只回報）放這裡比每章節重複寫好。
+        /// </summary>
+        public string Preamble { get; set; } = string.Empty;
         public IReadOnlyDictionary<string, string> Tasks { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
     }
 
@@ -97,8 +102,9 @@ namespace RimAgent.Agent
         {
             string text = ReadFile(promptsDir, AutonomousFileName);
             if (text.Length == 0) return;
-            IDictionary<string, string> sections = ParseSections(text);
-            var lang = new AutonomousPack();
+            string preamble;
+            IDictionary<string, string> sections = ParseSections(text, out preamble);
+            var lang = new AutonomousPack { Preamble = preamble };
             var tasks = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (KeyValuePair<string, string> section in sections)
             {
@@ -112,13 +118,15 @@ namespace RimAgent.Agent
         }
 
         /// <summary>
-        /// 切 `## 名稱` 章節：第一個標題之前的引言直接丟掉（只給人看，不進提示詞），
+        /// 切 `## 名稱` 章節；第一個標題之前的是共用通則（<paramref name="preamble"/>），
+        /// 不是章節但要送給模型，所以另外回傳而不是丟掉。
         /// 同名重複以後者為準。key 嚴格比對，寫錯的章節名會被任務查詢略過。
         /// 每行 Trim 後重組：縮排會被壓平，提示詞檔避免用縮排語法（清單、code block）。
         /// </summary>
-        internal static IDictionary<string, string> ParseSections(string text)
+        internal static IDictionary<string, string> ParseSections(string text, out string preamble)
         {
             var sections = new Dictionary<string, string>(StringComparer.Ordinal);
+            var intro = new System.Text.StringBuilder();
             string current = null;
             var body = new System.Text.StringBuilder();
             foreach (string line in Lines(text))
@@ -130,11 +138,19 @@ namespace RimAgent.Agent
                     current = line.Substring(3).Trim();
                     continue;
                 }
-                if (current == null) continue;
+                // 註解留給編輯提示詞的人看，不該餵給模型。
+                if (line.StartsWith("<!--", StringComparison.Ordinal)) continue;
+                if (current == null)
+                {
+                    if (intro.Length > 0) intro.Append('\n');
+                    intro.Append(line);
+                    continue;
+                }
                 if (body.Length > 0) body.Append('\n');
                 body.Append(line);
             }
             FlushSection(sections, ref current, body);
+            preamble = intro.ToString();
             return sections;
         }
 

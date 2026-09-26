@@ -56,7 +56,9 @@ namespace RimAgent.Game
         }
 
         /// <summary>
-        /// 自主排程器每 500 tick 要的四個數字，不建完整快照（GetOverview／GetResources 會為每個威脅與資源配置物件）。
+        /// 自主排程器每 500 tick 要的數字，不建完整快照（GetOverview／GetResources 會為每個威脅與資源配置物件）。
+        /// 除了應急訊號，也收「基地狀況」（受寒、沒床、露宿、停電、心情、停研），
+        /// 讓排程器自己看出需要保養，不必為了問一句「沒事嗎」而燒一次模型呼叫。
         /// </summary>
         internal Agent.AutonomousSignals GetAutonomousSignals()
         {
@@ -67,6 +69,11 @@ namespace RimAgent.Game
             int colonistCount = 0;
             int downedOrBleeding = 0;
             int fireCount = 0;
+            int coldColonists = 0;
+            int bedless = 0;
+            int outdoorsBed = 0;
+            int lowMood = 0;
+            bool anyPower = false;
 
             if (maps != null)
             {
@@ -78,17 +85,23 @@ namespace RimAgent.Game
                     hostileCount += CountHostiles(map);
                     foodNutrition += map.resourceCounter.TotalHumanEdibleNutrition;
                     fireCount += map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
+                    if (!anyPower && HasWorkingPower(map)) anyPower = true;
 
                     List<Pawn> freeColonists = map.mapPawns.FreeColonistsSpawned;
-                    if (freeColonists != null)
+                    if (freeColonists == null) continue;
+                    colonistCount += freeColonists.Count;
+                    for (int p = 0; p < freeColonists.Count; p++)
                     {
-                        colonistCount += freeColonists.Count;
-                        for (int p = 0; p < freeColonists.Count; p++)
-                        {
-                            Pawn pawn = freeColonists[p];
-                            if (IsNearMentalBreak(pawn)) nearMentalBreak++;
-                            if (pawn.Downed || HasBleeding(pawn)) downedOrBleeding++;
-                        }
+                        Pawn pawn = freeColonists[p];
+                        // 兩個心情門檻不疊加：快崩潰的算崩潰事件，不然同一件事報兩次。
+                        if (IsNearMentalBreak(pawn)) nearMentalBreak++;
+                        else if (IsLowMood(pawn)) lowMood++;
+                        if (pawn.Downed || HasBleeding(pawn)) downedOrBleeding++;
+                        if (IsInDangerousTemperature(pawn)) coldColonists++;
+
+                        Building_Bed bed = pawn.ownership?.OwnedBed;
+                        if (bed == null) bedless++;
+                        else if (IsOutdoors(bed.GetRoom())) outdoorsBed++;
                     }
                 }
             }
@@ -100,13 +113,60 @@ namespace RimAgent.Game
                 FoodNutrition = foodNutrition,
                 ColonistCount = colonistCount,
                 DownedOrBleedingCount = downedOrBleeding,
-                FireCount = fireCount
+                FireCount = fireCount,
+                ColdColonistCount = coldColonists,
+                BedlessCount = bedless,
+                OutdoorsBedCount = outdoorsBed,
+                LowMoodCount = lowMood,
+                // 1.6 的 ResearchManager 同時只有一個 currentProj，沒有 activeProjects 清單。
+                HasActiveResearch = Find.ResearchManager != null && Find.ResearchManager.GetProject() != null,
+                AnyWorkingPower = anyPower
             };
         }
 
         private static bool HasBleeding(Pawn pawn)
         {
             return pawn.health?.hediffSet?.BleedRateTotal > 0f;
+        }
+
+        /// <summary>
+        /// 會發展成低溫症：環境溫度已落在安全範圍外。沿用原版 ThinkNode_ConditionalDangerousTemperature
+        /// 的判法（1.6 沒有溫度需求，只有低溫症 hediff），比等 hediff 真的結痂早一步。
+        /// </summary>
+        private static bool IsInDangerousTemperature(Pawn pawn)
+        {
+            if (pawn.health?.hediffSet == null) return false;
+            return !pawn.SafeTemperatureRange().Includes(pawn.AmbientTemperature);
+        }
+
+        /// <summary>露宿：房間不存在或遊戲自己就判定為「戶外」。原版會因此讓殖民者 BedroomTantrum。</summary>
+        private static bool IsOutdoors(Room room)
+        {
+            return room == null || room.PsychologicallyOutdoors;
+        }
+
+        /// <summary>心情已低到影響生產，但還沒到 <see cref="IsNearMentalBreak"/> 的程度。</summary>
+        private static bool IsLowMood(Pawn pawn)
+        {
+            Need_Mood mood = pawn.needs?.mood;
+            return mood != null && mood.CurLevel < Agent.AutonomousScheduler.LowMoodThreshold;
+        }
+
+        /// <summary>有東西真的通電在跑（不只是接了發電機）。</summary>
+        private static bool HasWorkingPower(Map map)
+        {
+            PowerNetManager manager = map.powerNetManager;
+            if (manager == null) return false;
+            IReadOnlyList<PowerNet> nets = manager.AllNetsListForReading;
+            for (int i = 0; i < nets.Count; i++)
+            {
+                List<CompPowerTrader> comps = nets[i].powerComps;
+                for (int c = 0; c < comps.Count; c++)
+                {
+                    if (comps[c].PowerOn) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>

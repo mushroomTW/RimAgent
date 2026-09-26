@@ -29,9 +29,9 @@ namespace RimAgent
     /// （指令、回覆、行動紀錄）與序列化後的 AF session 模型上下文皆寫進存檔，讀檔後仍在；
     /// 新局時兩者都清空，避免把上一個殖民地的脈絡帶進來。RimWorld 會自動為每個 GameComponent 子類建立實例。
     ///
-    /// 自主模式：設定頁選「自主」後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、急診、火災與間隔），
-    /// 條件成立就起一次自主任務。自主任務與玩家指令走同一個 session（同歷史、同權限、同閘門），
-    /// 差別在指令文字由排程器產生；持續 goal 另由 GameComponentUpdate 續跑。
+    /// 自主模式：設定頁選「自主」後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、急診、火災與基地狀況），
+    /// 嚴重度變高就起一次自主任務，條件沒解決會退避重試三次。自主任務與玩家指令走同一個 session
+    /// （同歷史、同權限、同閘門），差別在指令文字由排程器產生；持續 goal 另由 GameComponentUpdate 續跑。
     /// </summary>
     public class RimAgentGameComponent : GameComponent
     {
@@ -56,6 +56,7 @@ namespace RimAgent
         private bool _mcpWarmedUp;
         private readonly AutonomousScheduler _scheduler = new AutonomousScheduler();
         private AutonomousScheduler _loadedScheduler;
+        private List<AutonomousWatch> _schedulerWatch = new List<AutonomousWatch>();
         private readonly RimWorldGameWorld _autoWorld = new RimWorldGameWorld();
         private string _lastAutoError;
         private CancellationTokenSource _autoCts;
@@ -120,7 +121,6 @@ namespace RimAgent
                 {
                     _session.Reasoning = RimAgentMod.Settings.reasoning;
                     _session.PreferredModel = RimAgentMod.Settings.agentModel;
-                    _session.AutonomousModel = RimAgentMod.Settings.autonomousModel;
                     _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
                 }
                 return _session;
@@ -308,6 +308,9 @@ namespace RimAgent
             Scribe_Values.Look(ref _lastCompletedGoal, "lastCompletedGoal");
             Scribe_Values.Look(ref _goalPauseReason, "goalPauseReason", GoalPauseReason.None);
 
+            // 重試表住在唯讀陣列裡，Scribe 過不了：存檔前攤平成清單，讀檔後灌回排程器。
+            if (Scribe.mode == LoadSaveMode.Saving) _schedulerWatch = _scheduler.CaptureWatch().ToList();
+            Scribe_Collections.Look(ref _schedulerWatch, "autonomousWatch", LookMode.Deep);
             AutonomousScheduler schedulerState = Scribe.mode == LoadSaveMode.Saving ? _scheduler : _loadedScheduler;
             Scribe_Deep.Look(ref schedulerState, "autonomousScheduler");
             if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedScheduler = schedulerState;
@@ -342,6 +345,7 @@ namespace RimAgent
             _goalNextRunAt = DateTime.MinValue;
             ResetMcp();
             _scheduler.Reset();
+            _schedulerWatch = new List<AutonomousWatch>();
         }
 
         public override void LoadedGame()
@@ -353,9 +357,13 @@ namespace RimAgent
             _goalNextRunAt = DateTime.MinValue;
             if (_loadedScheduler != null)
             {
+                // 順序要緊：CopyTo 會整片覆蓋 _watch，所以另外 Scribe 的重試表必須套在它之後，
+                // 否則剛灌進去的層級與重試次數會被清掉。
                 _loadedScheduler.CopyTo(_scheduler);
+                _scheduler.ApplyWatch(_schedulerWatch);
                 _loadedScheduler = null;
             }
+            _schedulerWatch = new List<AutonomousWatch>();
             ResetMcp();
         }
 
@@ -541,6 +549,7 @@ namespace RimAgent
                 if (_autoRunning || session.IsBusy || session.HasPendingConfirmation) return;
                 AutonomousConfig config = ToConfig(settings);
                 AutonomousTrigger trigger = _scheduler.Evaluate(tick, GatherSignals(), config);
+                ReportGiveUps(session);
                 if (trigger == AutonomousTrigger.None) return;
                 _autoRunning = true;
                 _ = RunAutonomousGuardedAsync(session, trigger, tick, config);
@@ -557,19 +566,62 @@ namespace RimAgent
             }
         }
 
+        /// <summary>
+        /// 重試用完而放棄的條件要讓玩家知道，否則會以為 agent 還在處理。
+        /// 條件沒解除前不再重試；解除後排程器會重新計次。
+        /// </summary>
+        private void ReportGiveUps(ColonyAgentSession session)
+        {
+            IReadOnlyList<AutonomousTrigger> giveUps = _scheduler.TakeGiveUps();
+            for (int i = 0; i < giveUps.Count; i++)
+            {
+                WarnOnce("RimAgent autonomous task gave up after " + AutonomousScheduler.MaxAttempts + " attempts: " + giveUps[i]);
+                session.Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = "Autonomous task stopped retrying after " + AutonomousScheduler.MaxAttempts +
+                           " attempts: " + DescribeGiveUp(giveUps[i]) +
+                           ". It will pick this up again once the situation clears."
+                });
+            }
+        }
+
+        /// <summary>放棄通知裡的人話名稱；與自主任務提示詞同一套說法。</summary>
+        private static string DescribeGiveUp(AutonomousTrigger trigger)
+        {
+            switch (trigger)
+            {
+                case AutonomousTrigger.Fire: return "the fire";
+                case AutonomousTrigger.EmergencyMedical: return "the downed or bleeding colonist";
+                case AutonomousTrigger.MentalBreak: return "the colonist near a mental break";
+                case AutonomousTrigger.FoodShortage: return "the food shortage";
+                case AutonomousTrigger.Cold: return "the dangerous temperatures";
+                case AutonomousTrigger.BedShortage: return "the colonists without beds";
+                case AutonomousTrigger.OutdoorsBed: return "the beds outdoors";
+                case AutonomousTrigger.PowerOutage: return "the power outage";
+                case AutonomousTrigger.Research: return "the missing research project";
+                case AutonomousTrigger.LowMood: return "the low moods";
+                case AutonomousTrigger.Raid: return "the ongoing raid";
+                case AutonomousTrigger.RaidEnded: return "the raid cleanup";
+                default: return trigger.ToString();
+            }
+        }
+
         private AutonomousConfig ToConfig(RimAgentSettings settings)
         {
             return new AutonomousConfig
             {
                 Enabled = true,
-                IntervalTicks = settings.autonomousIntervalHours * 2500,
+                // 定期巡檢的節奏是設計決定，不隨設定變。
+                IntervalTicks = AutonomousScheduler.HeartbeatTicks,
                 WindowTicks = 60000,
                 CooldownTicks = UnityEngine.Mathf.RoundToInt(settings.autonomousCooldownMinutes * (2500f / 60f)),
                 OnRaid = settings.autoOnRaid,
                 OnMentalBreak = settings.autoOnMentalBreak,
                 OnFoodShortage = settings.autoOnFoodShortage,
                 OnEmergencyMedical = settings.autoOnEmergencyMedical,
-                OnFire = settings.autoOnFire
+                OnFire = settings.autoOnFire,
+                OnUpkeep = settings.autoOnUpkeep
             };
         }
 
@@ -688,7 +740,7 @@ namespace RimAgent
                 ComposeInstructions,
                 _mcp,
                 classifierClient: null,
-                classifierModel: () => settings?.classifierModel,
+                classifierModel: () => settings?.ResolveClassifierModel(),
                 classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
                 askNote: () => _pack != null ? _pack.AskModeNote : string.Empty,
                 memory: _memoryStore,
@@ -697,7 +749,6 @@ namespace RimAgent
                 skillsProvider: () => _pack != null ? _pack.Skills : null);
             session.Reasoning = settings.reasoning;
             session.PreferredModel = settings.agentModel;
-            session.AutonomousModel = settings.autonomousModel;
             session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
             session.RunLoggingEnabled = () => settings.recordRuns;
             session.RunLogSink = record =>

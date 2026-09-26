@@ -96,18 +96,16 @@
   <RimAgent.Settings.ClassifierHeader>Auto mode — safety review</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
   <RimAgent.Settings.ClassifierModelTip>Model used by Auto mode for risk classification. Choose from the entries in your RimLLM Framework fallback chain; Fallback follows the fallback chain.</RimAgent.Settings.ClassifierModelTip>
-  <RimAgent.Settings.AutonomousModel>Autonomous model:</RimAgent.Settings.AutonomousModel>
-  <RimAgent.Settings.AutonomousModelTip>Model used for background autonomous runs. Fallback follows the agent model; a small, cheap model saves cost.</RimAgent.Settings.AutonomousModelTip>
   <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>Background scheduler runs autonomously. No restrictions on any behavior (no blacklist), no daily tool budget limit, MCP executes directly, operating on routine and events. Players can still give instructions anytime.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
-  <RimAgent.Settings.AutoInterval>Routine inspection every: {0} hours</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoCooldown>Autonomous cooldown: {0} minutes</RimAgent.Settings.AutoCooldown>
   <RimAgent.Settings.AutoCooldownOff>Autonomous cooldown: Disabled</RimAgent.Settings.AutoCooldownOff>
   <RimAgent.Settings.AutoCooldownTip>Minimum wait time between two autonomous runs. Set to 0 to completely disable cooldown and react immediately to events and cycles.</RimAgent.Settings.AutoCooldownTip>
   <RimAgent.Settings.AutoOnRaid>React to raids</RimAgent.Settings.AutoOnRaid>
   <RimAgent.Settings.AutoOnMentalBreak>React to colonists near mental break</RimAgent.Settings.AutoOnMentalBreak>
   <RimAgent.Settings.AutoOnFoodShortage>React to food shortages</RimAgent.Settings.AutoOnFoodShortage>
+  <RimAgent.Settings.AutoOnUpkeep>React to base upkeep problems</RimAgent.Settings.AutoOnUpkeep>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>
 
   <!-- Status strip and slash commands -->
@@ -118,6 +116,8 @@
   <RimAgent.Model.Status>Model: {0}</RimAgent.Model.Status>
   <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>Use the RimLLM Framework fallback chain.</RimAgent.Model.DefaultTip>
+  <RimAgent.Model.FollowAgent>Default (agent's current model)</RimAgent.Model.FollowAgent>
+  <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, the classifier follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
   <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>
@@ -160,7 +160,8 @@
   <RimAgent.Settings.AutoOnFire>Respond to fires</RimAgent.Settings.AutoOnFire>
   <RimAgent.Settings.AutoOnRaidTip>Runs once when enemies actively threatening the colony appear on any map, and once more after they are all gone.</RimAgent.Settings.AutoOnRaidTip>
   <RimAgent.Settings.AutoOnMentalBreakTip>Runs when any colonist's mood drops below their minor mental break threshold.</RimAgent.Settings.AutoOnMentalBreakTip>
-  <RimAgent.Settings.AutoOnFoodShortageTip>Runs when total human-edible nutrition falls below 4 per colonist (about 2.5 days of food).</RimAgent.Settings.AutoOnFoodShortageTip>
+  <RimAgent.Settings.AutoOnFoodShortageTip>Runs when total human-edible nutrition falls below 4 per colonist (about 2.5 days of food). It also runs as food keeps dropping, not only at the first crossing.</RimAgent.Settings.AutoOnFoodShortageTip>
+  <RimAgent.Settings.AutoOnUpkeepTip>Runs when the colony is slowly going bad rather than in danger: dangerous temperatures, colonists with no bed, beds outdoors, nothing running on power, no research project, or moods low but nobody breaking yet. Turning this off leaves the colony reacting only to emergencies.</RimAgent.Settings.AutoOnUpkeepTip>
   <RimAgent.Settings.AutoOnEmergencyMedicalTip>Runs when any colonist is downed or bleeding.</RimAgent.Settings.AutoOnEmergencyMedicalTip>
   <RimAgent.Settings.AutoOnFireTip>Runs when fire appears on any map.</RimAgent.Settings.AutoOnFireTip>
   <RimAgent.Settings.CompactionHeader>Context compaction</RimAgent.Settings.CompactionHeader>

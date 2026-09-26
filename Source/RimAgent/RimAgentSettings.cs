@@ -1,3 +1,4 @@
+using System;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using Verse;
@@ -16,35 +17,52 @@ namespace RimAgent
         public ReasoningLevel reasoning = ReasoningLevel.Auto;
         /// <summary>Agent 優先使用的模型（"供應商:模型"，在 Agent 視窗切換）；留空則沿用框架備援鏈。</summary>
         public string agentModel = string.Empty;
-        /// <summary>Auto 模式風險分類器模型識別碼（留空則沿用框架預設）。</summary>
+        /// <summary>
+        /// Auto 模式風險分類器模型識別碼，有三態：空白＝沿用框架備援鏈、
+        /// <see cref="FollowAgentModel"/>＝跟著 Agent 視窗當前模型、其餘＝指定模型。
+        /// 用非空 sentinel 而不是 null：Scribe 讀不到 null 會回填預設值，
+        /// 玩家選了「跟隨」存檔後會靜靜變回 Fallback。
+        /// </summary>
         public string classifierModel = string.Empty;
-        /// <summary>自主任務專用模型（留空則沿用 Agent 模型設定）。</summary>
-        public string autonomousModel = string.Empty;
+
+        /// <summary>分類器模型的「跟隨 Agent」值。不含冒號，真實模型識別碼都是「供應商:模型」，撞不到。</summary>
+        public const string FollowAgentModel = "=agent";
+
+        /// <summary>分類器實際該用的模型識別碼；空白表示交給框架備援鏈。</summary>
+        public string ResolveClassifierModel()
+        {
+            string value = (classifierModel ?? string.Empty).Trim();
+            if (value.Length == 0) return string.Empty;
+            if (!string.Equals(value, FollowAgentModel, StringComparison.Ordinal)) return value;
+            // Agent 自己也選了 Fallback 時回空字串，兩邊就一致地走備援鏈。
+            return (agentModel ?? string.Empty).Trim();
+        }
         /// <summary>選用本機 SearXNG；預設改用免設定的 Parallel 匿名搜尋。</summary>
         public bool useLocalSearch = false;
         public string searxngUrl = "http://127.0.0.1:8888";
 
         // 自主模式（排程器）的節奏與配額在設定頁；持續目標另由獨立流程執行並跟著存檔走。
-        public const int DefaultAutoIntervalHours = 6;
-        public const int MinAutoIntervalHours = 1;
-        public const int MaxAutoIntervalHours = 24;
+        // 定期巡檢的節奏刻意不在這裡（見 AutonomousScheduler.HeartbeatTicks）：那是 agent 的運轉節奏，
+        // 開放給玩家調只會變成一個看不出在做什麼的旋鈕，按到底就是關掉主動巡視。
         public const int DefaultCooldownMinutes = 0;
         public const int MinCooldownMinutes = 0;
         public const int MaxCooldownMinutes = 60;
 
-        public int autonomousIntervalHours = DefaultAutoIntervalHours;
         public int autonomousCooldownMinutes = DefaultCooldownMinutes;
         public bool autoOnRaid = true;
         public bool autoOnMentalBreak = true;
         public bool autoOnFoodShortage = true;
         public bool autoOnEmergencyMedical = true;
         public bool autoOnFire = true;
+        /// <summary>基地狀況開關（受寒、沒床、露宿、停電、停研、心情低落），預設開。</summary>
+        public bool autoOnUpkeep = true;
 
         // 上下文壓縮：依模型視窗的百分比自動折疊較舊工具輸出（不多花模型呼叫）；
         // 手動 /compact 另走一次 LLM 摘要，不受此開關影響。
         public const int DefaultAutoCompactThreshold = 90;
         public const int MinAutoCompactThreshold = 30;
-        public const int MaxAutoCompactThreshold = 90;
+        // 上限 95：留一點輸出空間給模型，100% 會讓它在回應途中就撞到視窗天花板。
+        public const int MaxAutoCompactThreshold = 95;
 
         public bool autoCompact = true;
         public int autoCompactThreshold = DefaultAutoCompactThreshold;
@@ -150,16 +168,15 @@ namespace RimAgent
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
             Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
             Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);
-            Scribe_Values.Look(ref autonomousModel, "autonomousModel", string.Empty);
             Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
             Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
-            Scribe_Values.Look(ref autonomousIntervalHours, "autonomousIntervalHours", DefaultAutoIntervalHours);
             Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
             Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);
             Scribe_Values.Look(ref autoOnMentalBreak, "autoOnMentalBreak", true);
             Scribe_Values.Look(ref autoOnFoodShortage, "autoOnFoodShortage", true);
             Scribe_Values.Look(ref autoOnEmergencyMedical, "autoOnEmergencyMedical", true);
             Scribe_Values.Look(ref autoOnFire, "autoOnFire", true);
+            Scribe_Values.Look(ref autoOnUpkeep, "autoOnUpkeep", true);
             Scribe_Values.Look(ref autoCompact, "autoCompact", true);
             Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
             Scribe_Values.Look(ref recordRuns, "recordRuns", false);

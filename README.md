@@ -62,7 +62,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. The Auto-mode classifier keeps its own model from mod settings; `/compact` summaries use the agent model. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
+- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. The Auto-mode classifier follows the agent's current model by default, or can be pinned to its own model or Fallback in mod settings; `/compact` summaries use the agent model. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
 - Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default. Drag across any message to select and copy its text; right-click a tool row to copy it. LaTeX math (`$...$`) is shown as plain readable text.
 - The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
@@ -83,7 +83,7 @@ Drag the window to move it or its lower-right corner to resize it. RimAgent reme
 | `/compact` | Compact context: summarize older model history with one LLM call, keeping only recent turns (visible log kept) |
 | `/stop` | Immediately abort the currently running instruction |
 
-> **Context compaction:** Before a request, Agent Framework estimates history tokens. At the configured share of the model context limit supplied by RimLLM Framework (90% by default, with output tokens reserved), older tool output is folded without another model call. Auto-fold is unavailable if the model limit is unknown. Stored history is separately trimmed after 120 messages to about 60; the visible transcript remains. `/compact` requests a deeper, model-generated summary.
+> **Context compaction:** Before a request, Agent Framework estimates history tokens. At the configured share of the model context limit supplied by RimLLM Framework (30–95%, 90% by default, with output tokens reserved), older tool output is folded without another model call. Auto-fold is unavailable if the model limit is unknown. Stored history is separately trimmed after 120 messages to about 60; the visible transcript remains. `/compact` requests a deeper, model-generated summary.
 
 > **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB; the settings page can open the log folder directly.
 
@@ -100,8 +100,8 @@ One setting decides how much the agent may do on its own:
 | **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
 | **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
 | **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery. No background scheduler. |
-| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model from the fallback-chain dropdown in mod settings. |
-| **Autonomous** | Adds scheduled inspections and event responses. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
+| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model in mod settings: it follows the agent's current model by default, or you can pin a fallback-chain entry or Fallback. |
+| **Autonomous** | Adds emergency responses, base upkeep, and a fixed-cadence scheduled check. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
 
 ### Confirmation details
 
@@ -122,8 +122,10 @@ One setting decides how much the agent may do on its own:
 
 Select **Autonomous** from the Agent window's mode dropdown to let the agent act in the background:
 
-- **Scheduled checks:** Inspect the colony at a configurable interval (default: every 6 in-game hours).
 - **Event responses:** React to raids beginning or ending, impending mental breaks, food shortages, downed or bleeding colonists, and fires. New choice letters and dialogs are checked every 2 real-time seconds, including while a dialog pauses the game; each choice triggers once.
+- **Base upkeep:** On by default. The agent acts when temperatures become dangerous, a colonist has no bed, beds are outdoors, nothing is running on power, no research project is running, or moods are low but nobody is breaking yet. None of these kill anyone or raise an alert, but left alone they compound into the emergencies above. Turn the whole group off in mod settings.
+- **Retries while unresolved:** A condition that persists is retried with backoff (1 in-game hour, then 2), for three attempts. If it is still unresolved the conversation reports that the agent gave up, and it starts fresh only once the situation clears. Older versions asked once and then ignored a fire that kept burning.
+- **Scheduled checks:** When nothing is wrong, push one thing forward every 6 in-game hours (a construction project, a research lead, a crop field, an order). The cadence is fixed and deliberately not configurable: it is the agent's operating rhythm, not a noise preference.
 - **Budget and cooldown:** No daily tool-call limit, but each autonomous run is capped at 20 tool calls to stop background loops. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
 - **Persistent goals:** `/goal` runs independently in any mode and follows that mode's approval policy. Goals can contain up to 4,000 characters; longer objectives are rejected instead of truncated. Goals, status, and progress are saved with the game. Completion requires a successful query after the last change. The goal pauses after the same blocker repeats for three turns, three turns pass without a successful tool action, repeated errors, or 60 turns in one run; `/goal resume` starts a fresh run. Editing does not undo a manual pause.
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.AI;
@@ -50,12 +51,196 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void RaidFiresOnceOnRisingEdge()
+        public void RaidFiresOnRisingEdgeAndRetriesWhileItLasts()
         {
             var raid = new AutonomousSignals { HostileCount = 3, NearMentalBreakCount = 0, FoodNutrition = 100f, ColonistCount = 3 };
             Assert.That(_scheduler.Evaluate(0, raid, _config), Is.EqualTo(AutonomousTrigger.Raid));
-            // 同樣訊號再來一次：邊緣已過，不重複開火。
+            // 敵人還在：退避沒到不重複開火。
             Assert.That(_scheduler.Evaluate(500, raid, _config), Is.EqualTo(AutonomousTrigger.None));
+            // 退避到就再問一次——舊版在這裡就放棄了。
+            Assert.That(_scheduler.Evaluate(2500, raid, _config), Is.EqualTo(AutonomousTrigger.Raid));
+        }
+
+        [Test]
+        public void UnresolvedConditionRetriesThenGivesUpOnce()
+        {
+            _config.OnFire = true;
+            var fire = new AutonomousSignals { HostileCount = 0, FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            Assert.That(_scheduler.Evaluate(0, fire, _config), Is.EqualTo(AutonomousTrigger.Fire));
+            Assert.That(_scheduler.Evaluate(1000, fire, _config), Is.EqualTo(AutonomousTrigger.None), "退避未到");
+            Assert.That(_scheduler.Evaluate(2500, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "第一次重試");
+            Assert.That(_scheduler.Evaluate(3000, fire, _config), Is.EqualTo(AutonomousTrigger.None), "退避未到");
+            Assert.That(_scheduler.Evaluate(7500, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "第二次重試（退避加倍）");
+            Assert.That(_scheduler.Evaluate(7500, fire, _config), Is.EqualTo(AutonomousTrigger.None));
+
+            IReadOnlyList<AutonomousTrigger> giveUps = _scheduler.TakeGiveUps();
+            Assert.That(giveUps, Is.EqualTo(new[] { AutonomousTrigger.Fire }), "用完次數要回報，讓玩家知道 agent 放棄了");
+            Assert.That(_scheduler.TakeGiveUps(), Is.Empty, "同一次放棄只回報一次");
+            // 定期巡檢照常觸發（那是設計裡的保底），但火不再被重試。
+            Assert.That(_scheduler.Evaluate(100000, fire, _config), Is.Not.EqualTo(AutonomousTrigger.Fire), "放棄後不再重試");
+        }
+
+        [Test]
+        public void ClearingTheConditionRearmsForTheNextOccurrence()
+        {
+            _config.OnFire = true;
+            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            var calm = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3 };
+            Assert.That(_scheduler.Evaluate(0, fire, _config), Is.EqualTo(AutonomousTrigger.Fire));
+            for (int t = 1000; t <= 9000; t += 500) _scheduler.Evaluate(t, fire, _config);
+            Assert.That(_scheduler.TakeGiveUps(), Is.Not.Empty, "先耗盡次數");
+
+            Assert.That(_scheduler.Evaluate(9500, calm, _config), Is.EqualTo(AutonomousTrigger.None), "火滅了");
+            Assert.That(_scheduler.Evaluate(10000, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "重新起火要能再觸發");
+        }
+
+        [Test]
+        public void FoodWarningTierFiresBeforeStarvation()
+        {
+            // 人均 10：警戒線 8 以下才算偏緊，10 不算。
+            Assert.That(_scheduler.Evaluate(0, Calm(), _config), Is.EqualTo(AutonomousTrigger.None));
+            var tight = new AutonomousSignals { FoodNutrition = 3 * 7f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+            Assert.That(_scheduler.Evaluate(500, tight, _config), Is.EqualTo(AutonomousTrigger.FoodShortage), "偏緊就叫醒，不等餓死");
+            // 繼續惡化到危急要再叫一次。
+            var starving = new AutonomousSignals { FoodNutrition = 3 * 2f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+            Assert.That(_scheduler.Evaluate(1000, starving, _config), Is.EqualTo(AutonomousTrigger.FoodShortage), "分級變差要立刻再叫");
+            // 補回來了就恢復正常，下次再缺才重新算。
+            Assert.That(_scheduler.Evaluate(1500, Calm(), _config), Is.EqualTo(AutonomousTrigger.None));
+            Assert.That(_scheduler.Evaluate(2000, tight, _config), Is.EqualTo(AutonomousTrigger.FoodShortage));
+        }
+
+        [Test]
+        public void UpkeepConditionsFireAndShareOneSwitch()
+        {
+            _config.OnUpkeep = true;
+            _config.OnFire = true;
+            _config.OnEmergencyMedical = true;
+            var cases = new[]
+            {
+                Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, ColdColonistCount = 1 }, AutonomousTrigger.Cold),
+                Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, BedlessCount = 2 }, AutonomousTrigger.BedShortage),
+                Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, OutdoorsBedCount = 1 }, AutonomousTrigger.OutdoorsBed),
+                // 停電與停研互斥不了：沒電就會停研，先給它通電，兩者各測一次。
+                Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, HasActiveResearch = true }, AutonomousTrigger.PowerOutage),
+                Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AnyWorkingPower = true }, AutonomousTrigger.Research),
+                Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AnyWorkingPower = true, HasActiveResearch = true, LowMoodCount = 2 }, AutonomousTrigger.LowMood)
+            };
+            foreach (var c in cases)
+            {
+                _scheduler.Reset();
+                Assert.That(_scheduler.Evaluate(0, c.Item1, _config), Is.EqualTo(c.Item2));
+            }
+        }
+
+        [Test]
+        public void UpkeepSwitchOffSilencesBaseConditions()
+        {
+            _config.OnUpkeep = false;
+            // 沒有通電、沒在研究、又受寒又沒床：全都不該叫。
+            var bad = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, ColdColonistCount = 2, BedlessCount = 2 };
+            Assert.That(_scheduler.Evaluate(0, bad, _config), Is.EqualTo(AutonomousTrigger.None));
+            Assert.That(_scheduler.Evaluate(20000, bad, _config), Is.EqualTo(AutonomousTrigger.Interval), "只剩定期巡視");
+        }
+
+        /// <summary>
+        /// 開關關掉時要清空重試狀態。否則玩家把開關關掉再開、條件又還沒恢復時，
+        /// 會直接吃到「次數用完」的舊狀態，之後再也沒人處理也沒有第二次回報。
+        /// </summary>
+        [Test]
+        public void TurningASwitchOffThenOnStartsAFreshCount()
+        {
+            _config.OnUpkeep = true;
+            var cold = new AutonomousSignals
+            {
+                FoodNutrition = 100f, ColonistCount = 3,
+                AnyWorkingPower = true, HasActiveResearch = true, ColdColonistCount = 1
+            };
+            // 耗盡三次並放棄。
+            Assert.That(_scheduler.Evaluate(0, cold, _config), Is.EqualTo(AutonomousTrigger.Cold));
+            Assert.That(_scheduler.Evaluate(2500, cold, _config), Is.EqualTo(AutonomousTrigger.Cold));
+            Assert.That(_scheduler.Evaluate(7500, cold, _config), Is.EqualTo(AutonomousTrigger.Cold));
+            _scheduler.Evaluate(8000, cold, _config);
+            Assert.That(_scheduler.TakeGiveUps(), Is.EqualTo(new[] { AutonomousTrigger.Cold }));
+
+            // 玩家關掉再開；受寒還沒解決。
+            _config.OnUpkeep = false;
+            _scheduler.Evaluate(9000, cold, _config);
+            _config.OnUpkeep = true;
+            _scheduler.Evaluate(10000, cold, _config);
+
+            Assert.That(_scheduler.Evaluate(20000, cold, _config), Is.EqualTo(AutonomousTrigger.Cold),
+                "重新開啟後要從頭算次數");
+        }
+
+        [Test]
+        public void TurningRaidOffThenOnForgetsTheOldBackoff()
+        {
+            var raid = new AutonomousSignals { HostileCount = 2, FoodNutrition = 100f, ColonistCount = 3 };
+            Assert.That(_scheduler.Evaluate(0, raid, _config), Is.EqualTo(AutonomousTrigger.Raid));
+
+            _config.OnRaid = false;
+            _scheduler.Evaluate(1000, raid, _config);
+            _config.OnRaid = true;
+
+            Assert.That(_scheduler.Evaluate(1100, raid, _config), Is.Not.EqualTo(AutonomousTrigger.None),
+                "重開後的襲擊要能再觸發，不吃舊的退避");
+        }
+
+        [Test]
+        public void HeartbeatIsAFixedConstantNotPlayerConfigurable()
+        {
+            Assert.That(AutonomousScheduler.HeartbeatTicks, Is.EqualTo(15000));
+        }
+
+        [Test]
+        public void RetryStateSurvivesSaveAndReload()
+        {
+            _config.OnFire = true;
+            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            Assert.That(_scheduler.Evaluate(0, fire, _config), Is.EqualTo(AutonomousTrigger.Fire));
+            Assert.That(_scheduler.Evaluate(2500, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "已用掉兩次");
+
+            // 走一次存檔／讀檔的純邏輯（實際 Scribe 由 GameComponent 串接）。
+            IReadOnlyList<AutonomousWatch> saved = _scheduler.CaptureWatch();
+            Assert.That(saved, Has.Count.EqualTo(1), "只用過一個條件");
+            var reloaded = new AutonomousScheduler();
+            reloaded.ApplyWatch(saved);
+
+            // 讀檔後不該從零開始算次數：兩次的用量得接續，第三次一樣會放棄。
+            Assert.That(reloaded.Evaluate(2600, fire, _config), Is.EqualTo(AutonomousTrigger.None), "退避未到");
+            Assert.That(reloaded.Evaluate(7500, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "最後一次嘗試");
+            Assert.That(reloaded.Evaluate(9000, fire, _config), Is.EqualTo(AutonomousTrigger.None));
+            Assert.That(reloaded.TakeGiveUps(), Is.EqualTo(new[] { AutonomousTrigger.Fire }));
+        }
+
+        [Test]
+        public void ApplyWatchMustRunAfterCopyTo()
+        {
+            // CopyTo 會整片覆蓋 _watch：呼叫端若照相反順序套用，讀檔後重試狀態會被清掉。
+            _config.OnFire = true;
+            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            _scheduler.Evaluate(0, fire, _config);
+            _scheduler.Evaluate(2500, fire, _config);
+            IReadOnlyList<AutonomousWatch> saved = _scheduler.CaptureWatch();
+
+            // 模擬 GameComponent.LoadedGame 的順序。
+            var reloaded = new AutonomousScheduler();
+            var loaded = new AutonomousScheduler();
+            loaded.CopyTo(reloaded);
+            reloaded.ApplyWatch(saved);
+
+            Assert.That(reloaded.Evaluate(7500, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "接續第三次嘗試");
+        }
+
+        [Test]
+        public void OldSaveWithoutWatchTableStartsFresh()
+        {
+            _config.OnFire = true;
+            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            var reloaded = new AutonomousScheduler();
+            reloaded.ApplyWatch(new List<AutonomousWatch>());
+
+            Assert.That(reloaded.Evaluate(20000, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "舊存檔照常能觸發");
         }
 
         [Test]

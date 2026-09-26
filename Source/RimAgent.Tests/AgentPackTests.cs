@@ -83,14 +83,46 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void ParseSectionsDropsIntroAndKeepsTasks()
+        public void ParseSectionsKeepsIntroAsPreambleAndSkipsComments()
         {
+            string intro;
             IDictionary<string, string> sections = AgentPackLoader.ParseSections(
-                "Intro for humans only.\n## Raid\nHostiles.\n\nStay safe.\n## Raid\nOverride.\n## GoalsHeader\nGoals:");
+                "<!-- file note -->\nShared rule.\n## Raid\nHostiles.\n\n<!-- note -->\nStay safe.\n## Raid\nOverride.\n## GoalsHeader\nGoals:",
+                out intro);
 
             Assert.That(sections["Raid"], Is.EqualTo("Override."), "同名重複以後者為準");
             Assert.That(sections["GoalsHeader"], Is.EqualTo("Goals:"));
             Assert.That(sections, Has.Count.EqualTo(2), "引言不成章節");
+            Assert.That(intro, Is.EqualTo("Shared rule."), "註解不進提示詞");
+        }
+
+        /// <summary>
+        /// 共用通則放在第一個章節之前，而 Build 必須把它送出去。
+        /// 少了這段，寫在檔頭的規則會被靜靜丟掉，模型永遠看不到。
+        /// </summary>
+        [Test]
+        public void SharedPreambleReachesTheModel()
+        {
+            File.WriteAllText(Path.Combine(_prompts, "Autonomous.en.md"),
+                "# Autonomous tasks\n\nSHARED_RULE\n\n## Interval\n\nINTERVAL_BODY\n");
+
+            AgentPack pack = AgentPackLoader.Load(_root);
+            string text = AutonomousPrompts.Build(pack.Autonomous, AutonomousTrigger.Interval);
+
+            Assert.That(pack.Autonomous.Preamble, Does.Contain("SHARED_RULE"));
+            Assert.That(text, Does.Contain("SHARED_RULE"), "共用通則要跟著每個任務送出去");
+            Assert.That(text, Does.Contain("INTERVAL_BODY"));
+        }
+
+        [Test]
+        public void MissingPreambleStillYieldsTheTaskBody()
+        {
+            File.WriteAllText(Path.Combine(_prompts, "Autonomous.en.md"), "## Interval\n\nOnly the body.\n");
+
+            AgentPack pack = AgentPackLoader.Load(_root);
+
+            Assert.That(pack.Autonomous.Preamble, Is.Empty);
+            Assert.That(AutonomousPrompts.Build(pack.Autonomous, AutonomousTrigger.Interval), Is.EqualTo("Only the body."));
         }
 
         [Test]
@@ -122,12 +154,19 @@ namespace RimAgent.Tests
             Assert.That(pack.Conduct, Does.Contain("Minimal change"));
             Assert.That(pack.AskModeNote, Does.Contain("Ask mode"));
             Assert.That(pack.ClassifierPrompt, Does.Contain("\"risk\""));
-            string[] triggers = { "Raid", "RaidEnded", "EmergencyMedical", "Fire", "MentalBreak", "FoodShortage", "Choice", "Interval" };
-            foreach (string trigger in triggers)
+            // 從 enum 推導，不寫死清單：新增觸發卻忘了寫章節時，這裡會直接紅掉。
+            // （少了章節不會壞掉，只會靜靜退回 Interval —— 正是最難發現的那種 bug。）
+            foreach (AutonomousTrigger trigger in (AutonomousTrigger[])Enum.GetValues(typeof(AutonomousTrigger)))
             {
-                Assert.That(pack.Autonomous.Tasks.ContainsKey(trigger), Is.True, trigger + " 缺章節");
-                Assert.That(pack.Autonomous.Tasks[trigger], Is.Not.Empty, trigger + " 空章節");
+                if (trigger == AutonomousTrigger.None) continue;
+                string name = trigger.ToString();
+                Assert.That(pack.Autonomous.Tasks.ContainsKey(name), Is.True, name + " 缺章節");
+                Assert.That(pack.Autonomous.Tasks[name], Is.Not.Empty, name + " 空章節");
             }
+            // 共用通則同樣不能空：它決定「沒緊急狀況時要不要產出」，空了等於集體退化成分享。
+            Assert.That(pack.Autonomous.Preamble, Is.Not.Empty, "Autonomous.en.md 缺少共用通則（第一個 ## 之前）");
+            Assert.That(AutonomousPrompts.Build(pack.Autonomous, AutonomousTrigger.Interval),
+                Does.StartWith(pack.Autonomous.Preamble.Trim()), "共用通則要真的接在任務前面");
         }
 
         [Test]

@@ -67,19 +67,15 @@ namespace RimAgent
             listing.Gap();
             listing.Label("RimAgent.Settings.ClassifierHeader".Translate());
             listing.GapLine();
-            // 三組模型下拉（分類器／自主／摘要）共用同一列形狀：Fallback＋備援鏈條目。
+            // 模型下拉列共用同一形狀：Fallback＋備援鏈條目；分類器多一項「跟隨 Agent 模型」。
             DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel",
                 () => Settings.classifierModel, v => Settings.classifierModel = v,
-                "RimAgent.Settings.ClassifierModelTip");
-            DrawModelDropdown(listing, "RimAgent.Settings.AutonomousModel",
-                () => Settings.autonomousModel, v => Settings.autonomousModel = v,
-                "RimAgent.Settings.AutonomousModelTip");
+                "RimAgent.Settings.ClassifierModelTip",
+                RimAgentSettings.FollowAgentModel, "RimAgent.Model.FollowAgent");
 
             listing.Gap();
             listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
             listing.GapLine();
-            listing.Label("RimAgent.Settings.AutoInterval".Translate(Settings.autonomousIntervalHours));
-            Settings.autonomousIntervalHours = Mathf.RoundToInt(listing.Slider(Settings.autonomousIntervalHours, RimAgentSettings.MinAutoIntervalHours, RimAgentSettings.MaxAutoIntervalHours));
 
             TaggedString cooldownLabel = Settings.autonomousCooldownMinutes == 0
                 ? "RimAgent.Settings.AutoCooldownOff".Translate()
@@ -92,6 +88,7 @@ namespace RimAgent
             listing.CheckboxLabeled("RimAgent.Settings.AutoOnFoodShortage".Translate(), ref Settings.autoOnFoodShortage, "RimAgent.Settings.AutoOnFoodShortageTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.AutoOnEmergencyMedical".Translate(), ref Settings.autoOnEmergencyMedical, "RimAgent.Settings.AutoOnEmergencyMedicalTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.AutoOnFire".Translate(), ref Settings.autoOnFire, "RimAgent.Settings.AutoOnFireTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.AutoOnUpkeep".Translate(), ref Settings.autoOnUpkeep, "RimAgent.Settings.AutoOnUpkeepTip".Translate());
 
             listing.Gap();
             listing.Label("RimAgent.Settings.CompactionHeader".Translate());
@@ -175,10 +172,14 @@ namespace RimAgent
         }
 
         /// <summary>
-        /// 模型下拉列（分類器／自主共用）：Fallback＋備援鏈條目。
+        /// 模型下拉列：Fallback＋備援鏈條目，備援鏈之後可再插一個「跟隨 Agent 模型」。
         /// 選項與 Agent 視窗的模型選單相同。
         /// </summary>
-        private static void DrawModelDropdown(Listing_Standard listing, string labelKey, Func<string> current, Action<string> set, string tipKey)
+        /// <param name="followValue">「跟隨 Agent 模型」的設定值；null 表示不提供這個選項。</param>
+        /// <param name="followLabelKey">該選項的譯文鍵；提示沿用同一鍵加 "Tip"。</param>
+        private static void DrawModelDropdown(
+            Listing_Standard listing, string labelKey, Func<string> current, Action<string> set, string tipKey,
+            string followValue = null, string followLabelKey = null)
         {
             Rect row = listing.GetRect(28f);
             const float labelWidth = 140f;
@@ -186,9 +187,11 @@ namespace RimAgent
             var dropdownRect = new Rect(labelRect.xMax + 4f, row.y, row.xMax - labelRect.xMax - 4f, 26f);
 
             Widgets.Label(labelRect, labelKey.Translate());
-            string shown = string.IsNullOrWhiteSpace(current())
+            string value = (current() ?? string.Empty).Trim();
+            bool following = followValue != null && string.Equals(value, followValue, StringComparison.Ordinal);
+            string shown = value.Length == 0
                 ? "RimAgent.Model.Default".Translate().ToString()
-                : current().Trim();
+                : following ? followLabelKey.Translate().ToString() : value;
             if (Widgets.ButtonText(dropdownRect, shown.Truncate(dropdownRect.width - 12f)))
             {
                 var options = new List<FloatMenuOption>
@@ -198,6 +201,14 @@ namespace RimAgent
                         tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
                     }
                 };
+                if (followValue != null)
+                {
+                    string captured = followValue;
+                    options.Add(new FloatMenuOption(followLabelKey.Translate(), () => set(captured))
+                    {
+                        tooltip = new TipSignal(followLabelKey + "Tip".Translate())
+                    });
+                }
                 foreach (string entry in Window_Agent.ConfiguredModels())
                 {
                     string captured = entry;
@@ -207,7 +218,7 @@ namespace RimAgent
             }
             if (Mouse.IsOver(row))
             {
-                TooltipHandler.TipRegion(row, tipKey.Translate());
+                TooltipHandler.TipRegion(row, following ? followLabelKey + "Tip".Translate() : tipKey.Translate());
             }
             listing.Gap(6f);
         }

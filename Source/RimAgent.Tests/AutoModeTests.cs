@@ -343,5 +343,60 @@ namespace RimAgent.Tests
             Assert.That(_classifierClient.ReceivedOptions, Has.Count.EqualTo(1));
             Assert.That(_classifierClient.ReceivedOptions[0].ModelId, Is.EqualTo("anthropic:claude-3-haiku"));
         }
+
+        /// <summary>
+        /// 分類器模型是三態：空白走備援鏈、sentinel 跟著 Agent 模型、其餘照設定。
+        /// 解析集中在一處，換模型時不必再記得兩邊各改一次。
+        /// </summary>
+        [Test]
+        public void ClassifierModelResolvesToThreeStates()
+        {
+            var settings = new RimAgentSettings();
+
+            settings.classifierModel = string.Empty;
+            settings.agentModel = "openai:gpt-5";
+            Assert.That(settings.ResolveClassifierModel(), Is.EqualTo(string.Empty), "留空走框架備援鏈");
+
+            settings.classifierModel = "anthropic:claude-3-haiku";
+            Assert.That(settings.ResolveClassifierModel(), Is.EqualTo("anthropic:claude-3-haiku"));
+
+            settings.classifierModel = " " + RimAgentSettings.FollowAgentModel + " ";
+            Assert.That(settings.ResolveClassifierModel(), Is.EqualTo("openai:gpt-5"), "跟隨 Agent 當前模型，空白也要容忍");
+
+            // Agent 自己是 Fallback 時，兩邊一致地走備援鏈。
+            settings.agentModel = string.Empty;
+            Assert.That(settings.ResolveClassifierModel(), Is.EqualTo(string.Empty));
+        }
+
+        /// <summary>換 Agent 模型後，跟隨中的分類器要立刻換過來（每次判定都重讀）。</summary>
+        [Test]
+        public void FollowingClassifierTracksTheAgentModel()
+        {
+            var settings = new RimAgentSettings
+            {
+                classifierModel = RimAgentSettings.FollowAgentModel,
+                agentModel = "openai:gpt-5"
+            };
+
+            Assert.That(settings.ResolveClassifierModel(), Is.EqualTo("openai:gpt-5"));
+            settings.agentModel = "google:gemini-3.5-flash-lite";
+            Assert.That(settings.ResolveClassifierModel(), Is.EqualTo("google:gemini-3.5-flash-lite"));
+        }
+
+        /// <summary>設定存檔走的是字串，sentinel 必須是非空值，否則讀回來會被預設值蓋掉。</summary>
+        [Test]
+        public void FollowAgentSentinelIsNotEmpty()
+        {
+            Assert.That(RimAgentSettings.FollowAgentModel, Is.Not.Empty);
+            Assert.That(RimAgentSettings.FollowAgentModel, Does.Not.Contain(":"), "真實模型識別碼都含冒號，sentinel 不能含");
+        }
+
+        [Test]
+        public void AutoCompactThresholdDefaultAndCeiling()
+        {
+            Assert.That(RimAgentSettings.DefaultAutoCompactThreshold, Is.EqualTo(90), "預設維持 90%");
+            Assert.That(RimAgentSettings.MaxAutoCompactThreshold, Is.EqualTo(95), "上限拉到 95%");
+            Assert.That(RimAgentSettings.MinAutoCompactThreshold, Is.LessThan(RimAgentSettings.DefaultAutoCompactThreshold));
+        }
     }
 }

@@ -12,7 +12,7 @@ using RimLLM_Framework;
 
 namespace RimAgent.Tests
 {
-    /// <summary>模型呼叫優化：分類器句內快取、查詢結果快取、分任務 reasoning、摘要釘便宜模型、技能按需讀取。</summary>
+    /// <summary>模型呼叫優化：分類器句內快取、查詢結果快取、分任務 reasoning、自主與玩家共用同一模型、技能按需讀取。</summary>
     [TestFixture]
     public class ModelCallOptimizationTests
     {
@@ -266,20 +266,23 @@ namespace RimAgent.Tests
                 .Count(e => e.Kind == TranscriptKind.Tool && e.ToolName == "list_colonists"), Is.EqualTo(2));
         }
 
+        /// <summary>自主任務不另選模型：與玩家指令走同一個 Agent 模型。</summary>
         [Test]
-        public void AutonomousModelOverrideAppliesToRunOptions()
+        public async Task AutonomousRunUsesAgentModelLikePlayerRun()
         {
+            _client.Reply("巡檢完成。").Reply("巡檢完成。");
             var session = new ColonyAgentSession(_client, _world, () => _permissions, 8)
             {
-                PreferredModel = "flagship:model",
-                AutonomousModel = "cheap:model"
+                PreferredModel = "flagship:model"
             };
 
-            RimLLMChatOptions autonomous = session.BuildRunOptions(ReasoningLevel.Low, session.AutonomousModel);
-            RimLLMChatOptions player = session.BuildRunOptions();
+            await session.SendAsync("例行巡檢");
+            await session.SendAsync("例行巡檢", autonomous: true);
 
-            Assert.That(autonomous.ModelId, Is.EqualTo("cheap:model"));
-            Assert.That(player.ModelId, Is.EqualTo("flagship:model"));
+            Assert.That(_client.ReceivedOptions, Has.Count.EqualTo(2));
+            Assert.That(_client.ReceivedOptions[0].ModelId, Is.EqualTo("flagship:model"));
+            Assert.That(_client.ReceivedOptions[1].ModelId, Is.EqualTo("flagship:model"),
+                "自主旗標不換模型");
         }
     }
 }

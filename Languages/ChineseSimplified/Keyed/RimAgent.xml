@@ -96,8 +96,6 @@
   <RimAgent.Settings.ClassifierHeader>自动模式 — 安全审查</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>分类器模型：</RimAgent.Settings.ClassifierModel>
   <RimAgent.Settings.ClassifierModelTip>自动模式判定风险时使用的模型，可从 RimLLM Framework 备援链上的条目挑选；选“Fallback”则按备援链。</RimAgent.Settings.ClassifierModelTip>
-  <RimAgent.Settings.AutonomousModel>自主任务模型：</RimAgent.Settings.AutonomousModel>
-  <RimAgent.Settings.AutonomousModelTip>后台自主任务使用的模型；选“Fallback”则沿用 Agent 模型，建议选用小而便宜的模型。</RimAgent.Settings.AutonomousModelTip>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>后台排程器自主运转。不限制任何行为（无黑名单限制），不设每日预算上限，MCP 免确认直接执行，按排程与突发事件自动行动。玩家仍可随时下达指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行动</RimAgent.Settings.AutonomousHeader>
@@ -108,6 +106,7 @@
   <RimAgent.Settings.AutoOnRaid>袭击时反应</RimAgent.Settings.AutoOnRaid>
   <RimAgent.Settings.AutoOnMentalBreak>殖民者接近崩溃时反应</RimAgent.Settings.AutoOnMentalBreak>
   <RimAgent.Settings.AutoOnFoodShortage>缺粮时反应</RimAgent.Settings.AutoOnFoodShortage>
+  <RimAgent.Settings.AutoOnUpkeep>响应基地状况问题</RimAgent.Settings.AutoOnUpkeep>
   <RimAgent.Settings.FrameworkNote>供应商、API 密钥、模型与备援链都在 RimLLM Framework 的设置里调整。</RimAgent.Settings.FrameworkNote>
 
   <!-- 状态栏与斜线指令 -->
@@ -118,6 +117,8 @@
   <RimAgent.Model.Status>模型：{0}</RimAgent.Model.Status>
   <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>按 RimLLM Framework 的备援链选择模型。</RimAgent.Model.DefaultTip>
+  <RimAgent.Model.FollowAgent>默认（Agent 当前模型）</RimAgent.Model.FollowAgent>
+  <RimAgent.Model.FollowAgentTip>跟着 Agent 窗口当前选的模型走；在那边换模型，这里会自动跟上，不必分开设置。Agent 窗口是 Fallback 时，分类器也走备援链。</RimAgent.Model.FollowAgentTip>
   <RimAgent.Model.Tip>优先使用：{0}&#10;失败时由框架按备援链改用其他模型。</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>自动</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>关闭</RimAgent.Reasoning.Off>
@@ -160,7 +161,8 @@
   <RimAgent.Settings.AutoOnFire>响应火灾</RimAgent.Settings.AutoOnFire>
   <RimAgent.Settings.AutoOnRaidTip>任一地图出现会主动威胁殖民地的敌人时触发一次，敌人全部消失后再触发一次收尾。</RimAgent.Settings.AutoOnRaidTip>
   <RimAgent.Settings.AutoOnMentalBreakTip>任一殖民者的心情低于轻微精神崩溃阈值时触发。</RimAgent.Settings.AutoOnMentalBreakTip>
-  <RimAgent.Settings.AutoOnFoodShortageTip>人类可食用物资的总营养低于每位殖民者 4 点（约 2.5 天份）时触发。</RimAgent.Settings.AutoOnFoodShortageTip>
+  <RimAgent.Settings.AutoOnFoodShortageTip>人类可食用物资的总营养低于每位殖民者 4 点（约 2.5 天份）时触发；之后继续下滑也会再触发，不只第一次跨过门槛。</RimAgent.Settings.AutoOnFoodShortageTip>
+  <RimAgent.Settings.AutoOnUpkeepTip>在基地慢慢变糟、但还不到危急时触发：温度危险、有人没分到床、床露宿、没有东西在通电、没有进行中的研究、心情低落但还没崩溃。关掉的话，基地只会因应急事件反应。</RimAgent.Settings.AutoOnUpkeepTip>
   <RimAgent.Settings.AutoOnEmergencyMedicalTip>有殖民者倒地或正在流血时触发。</RimAgent.Settings.AutoOnEmergencyMedicalTip>
   <RimAgent.Settings.AutoOnFireTip>任一地图出现火焰时触发。</RimAgent.Settings.AutoOnFireTip>
   <RimAgent.Settings.CompactionHeader>上下文压缩</RimAgent.Settings.CompactionHeader>
