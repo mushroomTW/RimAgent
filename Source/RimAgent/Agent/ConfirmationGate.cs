@@ -23,6 +23,13 @@ namespace RimAgent.Agent
             public Func<CancellationToken, Task<object>> ExecuteAsync;
         }
 
+        private sealed class InvocationState
+        {
+            public string ToolName;
+            public ToolRisk Risk;
+            public bool? Forced;
+        }
+
         private readonly Func<AgentMode> _mode;
         private readonly object _gate = new object();
         private readonly List<string> _blocked = new List<string>();
@@ -30,10 +37,9 @@ namespace RimAgent.Agent
         // 玩家按下「不再問」的工具；只活在這場遊戲的記憶體裡，不進存檔。
         private readonly HashSet<string> _sessionApproved = new HashSet<string>(StringComparer.Ordinal);
         // 不在工具呼叫期間（直接建構工具的測試）時以最保守的 Confirm 看待。
-        private ToolRisk _currentRisk = ToolRisk.Confirm;
-        private string _currentToolName;
+        private readonly AsyncLocal<InvocationState> _invocation = new AsyncLocal<InvocationState>();
         // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
-        private bool? _forced;
+        private int _lastApprovalExecutedCount;
         // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
         private int _remainingToolCalls = -1;
 
@@ -52,15 +58,26 @@ namespace RimAgent.Agent
             }
         }
 
+        internal int PendingApprovalCount
+        {
+            get { lock (_gate) return _pending.Count; }
+        }
+
+        internal int LastApprovalExecutedCount
+        {
+            get { lock (_gate) return _lastApprovalExecutedCount; }
+        }
+
         public bool AllowCommands()
         {
-            if (_forced.HasValue) return _forced.Value;
+            InvocationState invocation = _invocation.Value;
+            if (invocation?.Forced.HasValue == true) return invocation.Forced.Value;
             switch (_mode())
             {
                 case AgentMode.Ask:
                     return false;
                 case AgentMode.Confirm:
-                    return _currentRisk == ToolRisk.Query || IsApprovedForSession(_currentToolName);
+                    return invocation?.Risk == ToolRisk.Query || IsApprovedForSession(invocation?.ToolName);
                 default:
                     return true;
             }
@@ -69,7 +86,7 @@ namespace RimAgent.Agent
         public void NoteBlocked(string preview)
         {
             // 強制預覽那一段只是為了拿預覽文字給分類器看，還沒決定要不要擋，先不記。
-            if (_forced == false) return;
+            if (_invocation.Value?.Forced == false) return;
             lock (_gate)
             {
                 _blocked.Add(preview ?? string.Empty);
@@ -89,27 +106,30 @@ namespace RimAgent.Agent
         /// <param name="rememberForSession">把這批工具記成「本局不再問」；MCP 工具不記（見 <see cref="CanRememberForSession"/>）。</param>
         internal async Task<int> ApprovePendingAsync(CancellationToken cancellationToken, bool rememberForSession = false)
         {
-            PendingApproval[] approvals;
-            lock (_gate)
-            {
-                approvals = _pending.ToArray();
-                _pending.Clear();
-                _blocked.Clear();
-            }
-
-            int executed = 0;
-            foreach (PendingApproval approval in approvals)
+            lock (_gate) _lastApprovalExecutedCount = 0;
+            while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                PendingApproval approval;
+                lock (_gate)
+                {
+                    if (_pending.Count == 0)
+                    {
+                        _blocked.Clear();
+                        return _lastApprovalExecutedCount;
+                    }
+                    // 開始執行前移除目前項目；失敗時無法保證它沒有部分生效，因此不可自動重試。
+                    approval = _pending[0];
+                    _pending.RemoveAt(0);
+                }
                 await approval.ExecuteAsync(cancellationToken).ConfigureAwait(false);
-                executed++;
+                lock (_gate) _lastApprovalExecutedCount++;
                 // 執行成功才記：中途失敗或取消時，沒真的跑過的工具不該被永久放行。
                 if (rememberForSession && CanRememberForSession(approval.ToolName))
                 {
                     lock (_gate) _sessionApproved.Add(approval.ToolName);
                 }
             }
-            return executed;
         }
 
         /// <summary>這批待確認裡有沒有可以記成「本局不再問」的工具（沒有就不必顯示那顆按鍵）。</summary>
@@ -221,32 +241,28 @@ namespace RimAgent.Agent
         /// <summary>工具呼叫開始：記下這次工具的名稱與靜態風險。</summary>
         internal void BeginInvocation(string toolName, ToolRisk risk)
         {
-            _currentToolName = toolName;
-            _currentRisk = risk;
-            _forced = null;
+            _invocation.Value = new InvocationState { ToolName = toolName, Risk = risk };
         }
 
         /// <summary>工具呼叫結束：回到保守預設。</summary>
         internal void EndInvocation()
         {
-            _currentToolName = null;
-            _currentRisk = ToolRisk.Confirm;
-            _forced = null;
+            _invocation.Value = null;
         }
 
         internal void ForcePreview()
         {
-            _forced = false;
+            if (_invocation.Value != null) _invocation.Value.Forced = false;
         }
 
         internal void ForceExecute()
         {
-            _forced = true;
+            if (_invocation.Value != null) _invocation.Value.Forced = true;
         }
 
         internal void ClearForce()
         {
-            _forced = null;
+            if (_invocation.Value != null) _invocation.Value.Forced = null;
         }
     }
 }

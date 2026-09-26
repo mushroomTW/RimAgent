@@ -596,18 +596,25 @@ namespace RimAgent.Agent
             catch (Exception ex)
             {
                 Undo.EndFrame(text + " (confirmation failed)");
-                _pendingConfirmation = null;
-                _pendingGoalObjective = null;
+                int remaining = ConfirmGate.PendingApprovalCount;
+                int executed = ConfirmGate.LastApprovalExecutedCount;
+                if (remaining == 0)
+                {
+                    _pendingConfirmation = null;
+                    _pendingGoalObjective = null;
+                }
+                string failure = $"Confirmation stopped after {executed} command(s); {remaining} command(s) still await confirmation. " +
+                    "The failed command will not be retried automatically. " + ex.Message;
                 if (goalObjective != null)
                 {
                     _confirmedGoalObjective = goalObjective;
-                    _goalConfirmationReport = BuildGoalConfirmationReport("Confirmation failed: " + ex.Message, instructionId);
+                    _goalConfirmationReport = BuildGoalConfirmationReport(failure, instructionId);
                 }
                 Transcript.Add(new TranscriptEntry
                 {
                     Kind = TranscriptKind.Error,
                     ErrorKind = Classify(ex),
-                    Text = ex.Message,
+                    Text = failure,
                     InstructionId = Transcript.CurrentInstructionId
                 });
                 return null;

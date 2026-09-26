@@ -14,6 +14,16 @@ using Verse;
 
 namespace RimAgent
 {
+    public enum GoalPauseReason
+    {
+        None,
+        User,
+        Blocked,
+        TurnLimit,
+        NoProgress,
+        Error
+    }
+
     /// <summary>
     /// 持有這一場遊戲的 <see cref="ColonyAgentSession"/>。玩家看得到的對話
     /// （指令、回覆、行動紀錄）與序列化後的 AF session 模型上下文皆寫進存檔，讀檔後仍在；
@@ -33,7 +43,7 @@ namespace RimAgent
 
         /// <summary>長期目標上限（條數／每條字數），避免無限塞進指令。</summary>
         private const int MaxGoals = 20;
-        private const int MaxGoalChars = 200;
+        public const int MaxGoalChars = 4000;
 
         private ColonyAgentSession _session;
         private string _loadedAgentSession;
@@ -62,6 +72,12 @@ namespace RimAgent
         private bool _goalPaused;
         private int _goalTurns;
         private int _goalBlockedTurns;
+        private int _goalIdleTurns;
+        private string _goalBlockerKey;
+        private string _goalLastProgress;
+        private string _lastCompletedGoal;
+        private GoalPauseReason _goalPauseReason;
+        private bool _goalNeedsVerification;
         private DateTime _goalNextRunAt;
         private int _goalGeneration;
         private RunLogWriter _runLogWriter;
@@ -113,6 +129,12 @@ namespace RimAgent
         public IReadOnlyList<string> Goals => _goals;
         public bool GoalPaused => _goalPaused;
         public bool IsGoalRunning => _goalRunning;
+        public GoalPauseReason CurrentGoalPauseReason => _goalPauseReason;
+        public int GoalTurns => _goalTurns;
+        public int GoalBlockedTurns => _goalBlockedTurns;
+        public int GoalIdleTurns => _goalIdleTurns;
+        public string GoalLastProgress => _goalLastProgress;
+        public string LastCompletedGoal => _lastCompletedGoal;
 
         /// <summary>出貨的 AgentPack 資料夾；測試或缺 mod 資料時為 null。</summary>
         private static string PackRoot
@@ -137,14 +159,18 @@ namespace RimAgent
         public bool AddGoal(string goal)
         {
             string trimmed = (goal ?? string.Empty).Trim();
-            if (trimmed.Length == 0 || _goals.Count >= MaxGoals) return false;
-            if (trimmed.Length > MaxGoalChars) trimmed = trimmed.Substring(0, MaxGoalChars);
+            if (trimmed.Length == 0 || trimmed.Length > MaxGoalChars || _goals.Count >= MaxGoals) return false;
             _goals.Add(trimmed);
             if (_goals.Count == 1)
             {
                 _goalPaused = false;
                 _goalTurns = 0;
                 _goalBlockedTurns = 0;
+                _goalIdleTurns = 0;
+                _goalBlockerKey = null;
+                _goalNeedsVerification = false;
+                _goalLastProgress = null;
+                _goalPauseReason = GoalPauseReason.None;
                 _goalNextRunAt = DateTime.MinValue;
             }
             return true;
@@ -160,13 +186,60 @@ namespace RimAgent
                 _goalPaused = false;
                 _goalTurns = 0;
                 _goalBlockedTurns = 0;
+                _goalIdleTurns = 0;
+                _goalBlockerKey = null;
+                _goalNeedsVerification = false;
+                _goalLastProgress = null;
+                _goalPauseReason = GoalPauseReason.None;
                 _goalNextRunAt = DateTime.MinValue;
             }
         }
 
+        public bool EditGoalAt(int index, string objective)
+        {
+            string trimmed = (objective ?? string.Empty).Trim();
+            if (index < 0 || index >= _goals.Count || trimmed.Length == 0 || trimmed.Length > MaxGoalChars) return false;
+            if (index == 0) _goalCts?.Cancel();
+            _goals[index] = trimmed;
+            if (index == 0)
+            {
+                _goalTurns = 0;
+                _goalBlockedTurns = 0;
+                _goalIdleTurns = 0;
+                _goalBlockerKey = null;
+                _goalNeedsVerification = false;
+                _goalLastProgress = null;
+                _goalNextRunAt = DateTime.MinValue;
+                if (_goalPauseReason != GoalPauseReason.User)
+                {
+                    _goalPaused = false;
+                    _goalPauseReason = GoalPauseReason.None;
+                }
+            }
+            return true;
+        }
+
+        public void ClearGoals()
+        {
+            _goalCts?.Cancel();
+            _goals.Clear();
+            _goalPaused = false;
+            _goalPauseReason = GoalPauseReason.None;
+            _goalTurns = 0;
+            _goalBlockedTurns = 0;
+            _goalIdleTurns = 0;
+            _goalBlockerKey = null;
+            _goalNeedsVerification = false;
+            _goalLastProgress = null;
+            _lastCompletedGoal = null;
+            _goalNextRunAt = DateTime.MinValue;
+        }
+
         public void PauseGoal()
         {
+            if (_goals.Count == 0) return;
             _goalPaused = true;
+            _goalPauseReason = GoalPauseReason.User;
             _goalCts?.Cancel();
         }
 
@@ -174,7 +247,11 @@ namespace RimAgent
         {
             if (_goals.Count == 0) return;
             _goalPaused = false;
+            _goalPauseReason = GoalPauseReason.None;
             _goalBlockedTurns = 0;
+            _goalIdleTurns = 0;
+            _goalBlockerKey = null;
+            _goalNeedsVerification = false;
             _goalTurns = 0;
             _goalNextRunAt = DateTime.MinValue;
         }
@@ -213,6 +290,12 @@ namespace RimAgent
             Scribe_Values.Look(ref _goalPaused, "goalPaused", false);
             Scribe_Values.Look(ref _goalTurns, "goalTurns", 0);
             Scribe_Values.Look(ref _goalBlockedTurns, "goalBlockedTurns", 0);
+            Scribe_Values.Look(ref _goalIdleTurns, "goalIdleTurns", 0);
+            Scribe_Values.Look(ref _goalNeedsVerification, "goalNeedsVerification", false);
+            Scribe_Values.Look(ref _goalBlockerKey, "goalBlockerKey");
+            Scribe_Values.Look(ref _goalLastProgress, "goalLastProgress");
+            Scribe_Values.Look(ref _lastCompletedGoal, "lastCompletedGoal");
+            Scribe_Values.Look(ref _goalPauseReason, "goalPauseReason", GoalPauseReason.None);
 
             AutonomousScheduler schedulerState = Scribe.mode == LoadSaveMode.Saving ? _scheduler : _loadedScheduler;
             Scribe_Deep.Look(ref schedulerState, "autonomousScheduler");
@@ -238,6 +321,12 @@ namespace RimAgent
             _goalPaused = false;
             _goalTurns = 0;
             _goalBlockedTurns = 0;
+            _goalIdleTurns = 0;
+            _goalBlockerKey = null;
+            _goalNeedsVerification = false;
+            _goalLastProgress = null;
+            _lastCompletedGoal = null;
+            _goalPauseReason = GoalPauseReason.None;
             _goalNextRunAt = DateTime.MinValue;
             ResetMcp();
             _scheduler.Reset();
@@ -335,23 +424,39 @@ namespace RimAgent
                 int instructionId = session.Transcript.CurrentInstructionId + 1;
                 string confirmationReport = session.PeekGoalConfirmationReport(objective);
                 string reply = await session.SendAsync(
-                    GoalProgress.BuildPrompt(objective, confirmationReport), cts.Token,
+                    GoalProgress.BuildPrompt(objective, confirmationReport, _goalNeedsVerification), cts.Token,
                     goalRun: true, displayText: objective);
                 if (reply != null && confirmationReport != null) session.TakeGoalConfirmationReport(objective);
                 if (generation != _goalGeneration || cts.IsCancellationRequested
                     || _goals.Count == 0 || _goals[0] != objective || _goalPaused) return;
-                bool hasToolEvidence = session.Transcript.Snapshot().Any(e =>
-                    e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool && !e.Failed
-                    && !e.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
+                IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
+                bool hasToolEvidence = GoalProgress.HasVerificationEvidence(entries, instructionId);
+                bool usedTool = entries.Any(e => e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool
+                    && !e.Failed && !(e.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
                 GoalTurnDecision decision = GoalProgress.AfterTurn(
-                    _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence);
+                    _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence,
+                    _goalBlockerKey, _goalIdleTurns, usedTool);
                 _goalTurns = decision.Turns;
                 _goalBlockedTurns = decision.BlockedTurns;
+                _goalIdleTurns = decision.IdleTurns;
+                _goalBlockerKey = decision.BlockerKey;
+                _goalNeedsVerification = reply != null && GoalProgress.ParseStatus(reply) == GoalTurnStatus.Complete
+                    && !decision.Complete;
+                if (reply != null && !session.HasPendingConfirmation)
+                {
+                    _goalLastProgress = TranscriptEntryData.Truncate(GoalProgress.VisibleReply(reply));
+                }
                 if (decision.Complete)
                 {
+                    _lastCompletedGoal = objective;
                     _goals.RemoveAt(0);
                     _goalTurns = 0;
                     _goalBlockedTurns = 0;
+                    _goalIdleTurns = 0;
+                    _goalBlockerKey = null;
+                    _goalNeedsVerification = false;
+                    _goalLastProgress = null;
+                    _goalPauseReason = GoalPauseReason.None;
                     session.Transcript.Add(new TranscriptEntry
                     {
                         Kind = TranscriptKind.Notice,
@@ -361,20 +466,31 @@ namespace RimAgent
                 else if (decision.Pause)
                 {
                     _goalPaused = true;
+                    _goalPauseReason = decision.Blocked ? reply == null ? GoalPauseReason.Error : GoalPauseReason.Blocked
+                        : decision.NoProgress ? GoalPauseReason.NoProgress : GoalPauseReason.TurnLimit;
                     session.Transcript.Add(new TranscriptEntry
                     {
                         Kind = TranscriptKind.Notice,
-                        Text = "Goal paused after repeated blockers or the turn limit. Use /goal resume to continue: " + objective
+                        Text = decision.Blocked
+                            ? reply == null
+                                ? "Goal paused after repeated errors. Use /goal resume to continue: " + objective
+                                : "Goal blocked by the same condition for three turns. Use /goal resume after it changes: " + objective
+                            : decision.NoProgress
+                                ? "Goal paused after three turns without a successful tool action. Use /goal resume to continue: " + objective
+                                : "Goal paused at the turn limit. Use /goal resume to continue: " + objective
                     });
                 }
             }
             catch (Exception ex)
             {
                 if (generation != _goalGeneration || cts.IsCancellationRequested) return;
-                _goalBlockedTurns++;
+                _goalBlockedTurns = _goalBlockerKey == "model-error" ? _goalBlockedTurns + 1 : 1;
+                _goalBlockerKey = "model-error";
+                _goalIdleTurns = 0;
                 if (_goalBlockedTurns >= GoalProgress.MaxConsecutiveBlocks)
                 {
                     _goalPaused = true;
+                    _goalPauseReason = GoalPauseReason.Error;
                     session.Transcript.Add(new TranscriptEntry
                     {
                         Kind = TranscriptKind.Notice,

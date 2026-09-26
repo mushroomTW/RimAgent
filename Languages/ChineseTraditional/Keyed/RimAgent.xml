@@ -114,7 +114,7 @@
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>中</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>高</RimAgent.Reasoning.High>
-  <RimAgent.Slash.Goal>持續目標（/goal 列出、/goal &lt;文字&gt; 啟動、/goal pause/resume）</RimAgent.Slash.Goal>
+  <RimAgent.Slash.Goal>持續目標（列出、新增、修改、清空、暫停與恢復）</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>復原上一句指令改的工作設定</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>清除對話</RimAgent.Slash.Clear>
   <RimAgent.Slash.Compact>壓縮上下文（摘要折疊較舊的對話）</RimAgent.Slash.Compact>
@@ -129,6 +129,19 @@
   <RimAgent.Goal.Resumed>目標已恢復，將繼續執行。</RimAgent.Goal.Resumed>
   <RimAgent.Goal.StatePaused>已暫停</RimAgent.Goal.StatePaused>
   <RimAgent.Goal.StateActive>執行中</RimAgent.Goal.StateActive>
+  <RimAgent.Goal.StateBlocked>受阻</RimAgent.Goal.StateBlocked>
+  <RimAgent.Goal.StateTurnLimit>已達回合上限</RimAgent.Goal.StateTurnLimit>
+  <RimAgent.Goal.StateNoProgress>連續空轉</RimAgent.Goal.StateNoProgress>
+  <RimAgent.Goal.StateError>連續出錯</RimAgent.Goal.StateError>
+  <RimAgent.Goal.Turns>目前已執行 {0}/{1} 輪；同一阻礙連續 {2} 輪；無有效工具行動連續 {3} 輪。</RimAgent.Goal.Turns>
+  <RimAgent.Goal.Progress>最近進展：{0}</RimAgent.Goal.Progress>
+  <RimAgent.Goal.LastCompleted>最近完成：{0}</RimAgent.Goal.LastCompleted>
+  <RimAgent.Goal.Edited>已更新目標 #{0}：{1}</RimAgent.Goal.Edited>
+  <RimAgent.Goal.Show>目標 #{0}：{1}</RimAgent.Goal.Show>
+  <RimAgent.Goal.ShowUsage>用法：/goal show &lt;序號&gt;。</RimAgent.Goal.ShowUsage>
+  <RimAgent.Goal.EditUsage>用法：/goal edit &lt;序號&gt; &lt;新目標&gt;。</RimAgent.Goal.EditUsage>
+  <RimAgent.Goal.Cleared>已清空所有目標。</RimAgent.Goal.Cleared>
+  <RimAgent.Goal.TooLong>目標最多 {0} 字，請縮短後再送出。</RimAgent.Goal.TooLong>
   <RimAgent.Goal.Removed>已刪除目標 #{0}：{1}</RimAgent.Goal.Removed>
   <RimAgent.Goal.NoSuch>沒有第 {0} 個目標。用 /goal 查看清單。</RimAgent.Goal.NoSuch>
   <RimAgent.Goal.Full>目標數已達上限，先用 /goal remove &lt;n&gt; 刪掉幾個。</RimAgent.Goal.Full>

@@ -114,7 +114,7 @@
   <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>Medium</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>High</RimAgent.Reasoning.High>
-  <RimAgent.Slash.Goal>Persistent goals: /goal lists, /goal &lt;text&gt; starts, /goal pause/resume</RimAgent.Slash.Goal>
+  <RimAgent.Slash.Goal>Persistent goals: list, add, edit, clear, pause, resume</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>Undo the work settings changed by the last instruction</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>Clear the conversation</RimAgent.Slash.Clear>
   <RimAgent.Slash.Compact>Compact context (summarize older history)</RimAgent.Slash.Compact>
@@ -129,6 +129,19 @@
   <RimAgent.Goal.Resumed>Goal resumed and will continue.</RimAgent.Goal.Resumed>
   <RimAgent.Goal.StatePaused>paused</RimAgent.Goal.StatePaused>
   <RimAgent.Goal.StateActive>active</RimAgent.Goal.StateActive>
+  <RimAgent.Goal.StateBlocked>blocked</RimAgent.Goal.StateBlocked>
+  <RimAgent.Goal.StateTurnLimit>turn limit reached</RimAgent.Goal.StateTurnLimit>
+  <RimAgent.Goal.StateNoProgress>no progress</RimAgent.Goal.StateNoProgress>
+  <RimAgent.Goal.StateError>repeated errors</RimAgent.Goal.StateError>
+  <RimAgent.Goal.Turns>Current run: {0}/{1} turns; same blocker: {2}; no successful tool action: {3}.</RimAgent.Goal.Turns>
+  <RimAgent.Goal.Progress>Latest progress: {0}</RimAgent.Goal.Progress>
+  <RimAgent.Goal.LastCompleted>Last completed: {0}</RimAgent.Goal.LastCompleted>
+  <RimAgent.Goal.Edited>Updated goal #{0}: {1}</RimAgent.Goal.Edited>
+  <RimAgent.Goal.Show>Goal #{0}: {1}</RimAgent.Goal.Show>
+  <RimAgent.Goal.ShowUsage>Usage: /goal show &lt;number&gt;.</RimAgent.Goal.ShowUsage>
+  <RimAgent.Goal.EditUsage>Usage: /goal edit &lt;number&gt; &lt;new objective&gt;.</RimAgent.Goal.EditUsage>
+  <RimAgent.Goal.Cleared>Cleared all goals.</RimAgent.Goal.Cleared>
+  <RimAgent.Goal.TooLong>Goals are limited to {0} characters. Shorten the objective and try again.</RimAgent.Goal.TooLong>
   <RimAgent.Goal.Removed>Removed goal #{0}: {1}</RimAgent.Goal.Removed>
   <RimAgent.Goal.NoSuch>There is no goal #{0}. Use /goal to list them.</RimAgent.Goal.NoSuch>
   <RimAgent.Goal.Full>Goal limit reached; remove some with /goal remove &lt;n&gt;.</RimAgent.Goal.Full>

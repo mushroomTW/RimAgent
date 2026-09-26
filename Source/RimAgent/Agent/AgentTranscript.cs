@@ -43,6 +43,7 @@ namespace RimAgent.Agent
         // Tool 專用
         public string ToolName { get; set; } = string.Empty;
         public ToolCategory ToolCategory { get; set; }
+        public ToolRisk ToolRisk { get; set; }
         public string Arguments { get; set; } = string.Empty;
         public string Result { get; set; } = string.Empty;
         public bool Failed { get; set; }

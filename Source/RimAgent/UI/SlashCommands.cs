@@ -18,12 +18,15 @@ namespace RimAgent.UI
         }
     }
 
-    /// <summary>目標指令：列出、新增、刪除、暫停與恢復。</summary>
+    /// <summary>目標指令：列出、新增、修改、刪除、清空、暫停與恢復。</summary>
     public enum GoalAction
     {
         List,
         Add,
         Remove,
+        Edit,
+        Show,
+        Clear,
         Pause,
         Resume
     }
@@ -91,6 +94,22 @@ namespace RimAgent.UI
             if (text.Length == 0) return GoalAction.List;
             if (string.Equals(text, "pause", StringComparison.OrdinalIgnoreCase)) return GoalAction.Pause;
             if (string.Equals(text, "resume", StringComparison.OrdinalIgnoreCase)) return GoalAction.Resume;
+            if (string.Equals(text, "clear", StringComparison.OrdinalIgnoreCase)) return GoalAction.Clear;
+            if (string.Equals(text, "show", StringComparison.OrdinalIgnoreCase)) return GoalAction.Show;
+            if (text.StartsWith("show ", StringComparison.OrdinalIgnoreCase))
+            {
+                int.TryParse(text.Substring(5).Trim(), out index);
+                return GoalAction.Show;
+            }
+            if (string.Equals(text, "edit", StringComparison.OrdinalIgnoreCase)) return GoalAction.Edit;
+            if (text.StartsWith("edit ", StringComparison.OrdinalIgnoreCase))
+            {
+                string rest = text.Substring(5).Trim();
+                int separator = rest.IndexOf(' ');
+                int.TryParse(separator < 0 ? rest : rest.Substring(0, separator), out index);
+                text = separator < 0 ? string.Empty : rest.Substring(separator + 1).Trim();
+                return GoalAction.Edit;
+            }
             // 「remove」沒帶序號也算刪除（index 留 0，UI 回報沒有這個序號），不能誤加成目標。
             if (string.Equals(text, "remove", StringComparison.OrdinalIgnoreCase)) return GoalAction.Remove;
             if (text.StartsWith("remove ", StringComparison.OrdinalIgnoreCase))

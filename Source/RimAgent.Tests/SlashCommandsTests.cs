@@ -62,6 +62,14 @@ namespace RimAgent.Tests
             Assert.That(index, Is.EqualTo(0));
             Assert.That(SlashCommands.ParseGoal("pause", out _, out _), Is.EqualTo(GoalAction.Pause));
             Assert.That(SlashCommands.ParseGoal("RESUME", out _, out _), Is.EqualTo(GoalAction.Resume));
+            Assert.That(SlashCommands.ParseGoal("clear", out _, out _), Is.EqualTo(GoalAction.Clear));
+            Assert.That(SlashCommands.ParseGoal("show 2", out index, out _), Is.EqualTo(GoalAction.Show));
+            Assert.That(index, Is.EqualTo(2));
+            Assert.That(SlashCommands.ParseGoal("edit 2 build a hospital", out index, out text), Is.EqualTo(GoalAction.Edit));
+            Assert.That(index, Is.EqualTo(2));
+            Assert.That(text, Is.EqualTo("build a hospital"));
+            Assert.That(SlashCommands.ParseGoal("edit", out index, out _), Is.EqualTo(GoalAction.Edit));
+            Assert.That(index, Is.Zero);
         }
     }
 }

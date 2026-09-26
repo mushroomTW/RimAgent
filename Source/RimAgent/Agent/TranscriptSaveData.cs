@@ -23,6 +23,7 @@ namespace RimAgent.Agent
         public int instructionId;
         public string toolName = string.Empty;
         public int toolCategory;
+        public int toolRisk;
         public string arguments = string.Empty;
         public string result = string.Empty;
         public bool failed;
@@ -41,6 +42,7 @@ namespace RimAgent.Agent
             Scribe_Values.Look(ref instructionId, "instruction", 0);
             Scribe_Values.Look(ref toolName, "tool", string.Empty);
             Scribe_Values.Look(ref toolCategory, "category", 0);
+            Scribe_Values.Look(ref toolRisk, "toolRisk", 0);
             Scribe_Values.Look(ref arguments, "args", string.Empty);
             Scribe_Values.Look(ref result, "result", string.Empty);
             Scribe_Values.Look(ref failed, "failed", false);
@@ -61,6 +63,7 @@ namespace RimAgent.Agent
                 InstructionId = instructionId,
                 ToolName = toolName ?? string.Empty,
                 ToolCategory = (ToolCategory)toolCategory,
+                ToolRisk = (ToolRisk)toolRisk,
                 Arguments = arguments ?? string.Empty,
                 Result = result ?? string.Empty,
                 Failed = failed,
@@ -89,6 +92,7 @@ namespace RimAgent.Agent
                     instructionId = e.InstructionId,
                     toolName = e.ToolName ?? string.Empty,
                     toolCategory = (int)e.ToolCategory,
+                    toolRisk = (int)e.ToolRisk,
                     arguments = Truncate(e.Arguments),
                     result = Truncate(e.Result),
                     failed = e.Failed,

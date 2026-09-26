@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
@@ -186,6 +188,44 @@ namespace RimAgent.Tests
         {
             var gate = new ConfirmationGate(() => mode);
             Assert.That(gate.RequiresExplicitConfirmation(toolName), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public async Task FailedApprovalKeepsLaterCommandsPending()
+        {
+            var gate = new ConfirmationGate(() => AgentMode.Confirm);
+            int laterCalls = 0;
+            gate.RegisterPendingApproval("first", _ => Task.FromResult<object>(null));
+            gate.RegisterPendingApproval("failed", _ => throw new InvalidOperationException("failed"));
+            gate.RegisterPendingApproval("later", _ => { laterCalls++; return Task.FromResult<object>(null); });
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await gate.ApprovePendingAsync(CancellationToken.None));
+            Assert.That(gate.HasPendingApprovals, Is.True);
+            Assert.That(await gate.ApprovePendingAsync(CancellationToken.None), Is.EqualTo(1));
+            Assert.That(laterCalls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task ParallelInvocationsKeepTheirOwnConfirmationState()
+        {
+            var gate = new ConfirmationGate(() => AgentMode.Confirm);
+            var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task<bool> first = Task.Run(async () =>
+            {
+                gate.BeginInvocation("command", ToolRisk.Confirm);
+                entered.SetResult(true);
+                await release.Task;
+                bool allowed = gate.AllowCommands();
+                gate.EndInvocation();
+                return allowed;
+            });
+            await entered.Task;
+            gate.BeginInvocation("query", ToolRisk.Query);
+            Assert.That(gate.AllowCommands(), Is.True);
+            release.SetResult(true);
+            Assert.That(await first, Is.False);
+            gate.EndInvocation();
         }
 
         private static Dictionary<string, object> Args(params (string Name, object Value)[] pairs)

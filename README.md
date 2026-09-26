@@ -72,8 +72,11 @@ Drag the window to move it or its lower-right corner to resize it. RimAgent reme
 | Command | Description |
 | --- | --- |
 | `/goal <text>` | Queue a persistent goal that starts shortly after creation and follows the current mode's command policy |
-| `/goal` | List queued goals and the active goal's status |
+| `/goal` | Show queued goals, status, turn counts, latest progress, and the last completed goal |
+| `/goal show <n>` | Show the full text of goal `n` |
+| `/goal edit <n> <text>` | Edit goal `n`; editing the active goal resets its progress while preserving a manual pause |
 | `/goal remove <n>` | Delete goal `n` |
+| `/goal clear` | Clear all goals and the last completed record |
 | `/goal pause` / `/goal resume` | Pause or resume persistent goal execution |
 | `/undo` | Restore the work priorities and schedules modified by the last instruction |
 | `/clear` | Clear the visible conversation transcript |
@@ -103,6 +106,7 @@ One setting decides how much the agent may do on its own:
 ### Confirmation details
 
 - **Confirm / Discard:** Confirm executes the captured tool call and arguments without asking the model again. Discard or a new instruction clears pending calls.
+- If a confirmed command fails, later commands remain pending for another confirmation. The failed command is removed because it may have partially taken effect; the log shows how many commands completed and remain.
 - **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool` or the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `set_prisoner_interaction`). Auto still reviews every command.
 - **MCP calls:** `mcp_call_tool` needs explicit approval in Confirm mode, passes through the classifier in Auto mode, and runs directly in YOLO or Autonomous mode.
 
@@ -121,7 +125,7 @@ Select **Autonomous** from the Agent window's mode dropdown to let the agent act
 - **Scheduled checks:** Inspect the colony at a configurable interval (default: every 6 in-game hours).
 - **Event responses:** React to raids beginning or ending, impending mental breaks, food shortages, downed or bleeding colonists, and fires. New choice letters and dialogs are checked every 2 real-time seconds, including while a dialog pauses the game; each choice triggers once.
 - **Budget and cooldown:** No daily tool-call limit, but each autonomous run is capped at 20 tool calls to stop background loops. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
-- **Persistent goals:** `/goal` runs independently in any mode and follows that mode's approval policy. Goals are saved with the game; after three blocked/error turns or 60 turns, a goal pauses for review until `/goal resume`.
+- **Persistent goals:** `/goal` runs independently in any mode and follows that mode's approval policy. Goals can contain up to 4,000 characters; longer objectives are rejected instead of truncated. Goals, status, and progress are saved with the game. Completion requires a successful query after the last change. The goal pauses after the same blocker repeats for three turns, three turns pass without a successful tool action, repeated errors, or 60 turns in one run; `/goal resume` starts a fresh run. Editing does not undo a manual pause.
 
 ---
 

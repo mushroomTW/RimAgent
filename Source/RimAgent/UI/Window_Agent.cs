@@ -1392,17 +1392,44 @@ namespace RimAgent.UI
             {
                 case GoalAction.Add:
                     int newIndex = goals.Count + 1;
-                    if (component.AddGoal(text)) Notice(session, "RimAgent.Goal.Added".Translate(newIndex, text));
+                    if (text.Length > RimAgentGameComponent.MaxGoalChars)
+                        Notice(session, "RimAgent.Goal.TooLong".Translate(RimAgentGameComponent.MaxGoalChars));
+                    else if (component.AddGoal(text)) Notice(session, "RimAgent.Goal.Added".Translate(newIndex, text));
                     else Notice(session, "RimAgent.Goal.Full".Translate());
                     break;
                 case GoalAction.Pause:
+                    if (goals.Count == 0) { Notice(session, "RimAgent.Goal.Empty".Translate()); break; }
                     component.PauseGoal();
                     if (session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
                     Notice(session, "RimAgent.Goal.Paused".Translate());
                     break;
                 case GoalAction.Resume:
+                    if (goals.Count == 0) { Notice(session, "RimAgent.Goal.Empty".Translate()); break; }
                     component.ResumeGoal();
                     Notice(session, "RimAgent.Goal.Resumed".Translate());
+                    break;
+                case GoalAction.Edit:
+                    if (index < 1 || index > goals.Count || text.Length == 0)
+                        Notice(session, "RimAgent.Goal.EditUsage".Translate());
+                    else if (text.Length > RimAgentGameComponent.MaxGoalChars)
+                        Notice(session, "RimAgent.Goal.TooLong".Translate(RimAgentGameComponent.MaxGoalChars));
+                    else if (component.EditGoalAt(index - 1, text))
+                    {
+                        if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
+                        Notice(session, "RimAgent.Goal.Edited".Translate(index, text));
+                    }
+                    break;
+                case GoalAction.Clear:
+                    if (goals.Count == 0 && string.IsNullOrEmpty(component.LastCompletedGoal))
+                    { Notice(session, "RimAgent.Goal.Empty".Translate()); break; }
+                    component.ClearGoals();
+                    if (session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
+                    Notice(session, "RimAgent.Goal.Cleared".Translate());
+                    break;
+                case GoalAction.Show:
+                    Notice(session, index >= 1 && index <= goals.Count
+                        ? "RimAgent.Goal.Show".Translate(index, goals[index - 1]).ToString()
+                        : "RimAgent.Goal.ShowUsage".Translate().ToString());
                     break;
                 case GoalAction.Remove:
                     if (index >= 1 && index <= goals.Count)
@@ -1415,19 +1442,43 @@ namespace RimAgent.UI
                     else Notice(session, "RimAgent.Goal.NoSuch".Translate(index));
                     break;
                 default:
-                    Notice(session, goals.Count == 0 ? "RimAgent.Goal.Empty".Translate().ToString()
-                        : GoalListText(goals, component.GoalPaused));
+                    Notice(session, GoalListText(component));
                     break;
             }
         }
 
-        private static string GoalListText(IReadOnlyList<string> goals, bool paused)
+        private static string GoalListText(RimAgentGameComponent component)
         {
+            IReadOnlyList<string> goals = component.Goals;
+            if (goals.Count == 0)
+            {
+                string empty = "RimAgent.Goal.Empty".Translate();
+                return string.IsNullOrEmpty(component.LastCompletedGoal) ? empty
+                    : empty + "\n" + "RimAgent.Goal.LastCompleted".Translate(component.LastCompletedGoal).ToString();
+            }
             var sb = new System.Text.StringBuilder("RimAgent.Goal.ListHeader".Translate());
             for (int i = 0; i < goals.Count; i++)
             {
-                sb.Append('\n').Append(i + 1).Append(". ").Append(goals[i]);
-                if (i == 0) sb.Append(" (").Append((paused ? "RimAgent.Goal.StatePaused" : "RimAgent.Goal.StateActive").Translate()).Append(')');
+                string title = goals[i].Replace('\r', ' ').Replace('\n', ' ');
+                if (title.Length > 180) title = title.Substring(0, 180) + "…";
+                sb.Append('\n').Append(i + 1).Append(". ").Append(title);
+                if (i == 0)
+                {
+                    string state = component.CurrentGoalPauseReason == GoalPauseReason.Blocked ? "RimAgent.Goal.StateBlocked"
+                        : component.CurrentGoalPauseReason == GoalPauseReason.TurnLimit ? "RimAgent.Goal.StateTurnLimit"
+                        : component.CurrentGoalPauseReason == GoalPauseReason.NoProgress ? "RimAgent.Goal.StateNoProgress"
+                        : component.CurrentGoalPauseReason == GoalPauseReason.Error ? "RimAgent.Goal.StateError"
+                        : component.GoalPaused ? "RimAgent.Goal.StatePaused" : "RimAgent.Goal.StateActive";
+                    sb.Append(" (").Append(state.Translate()).Append(')');
+                }
+            }
+            sb.Append('\n').Append("RimAgent.Goal.Turns".Translate(component.GoalTurns, GoalProgress.MaxTurns,
+                component.GoalBlockedTurns, component.GoalIdleTurns));
+            if (!string.IsNullOrWhiteSpace(component.GoalLastProgress))
+            {
+                string progress = component.GoalLastProgress.Replace('\r', ' ').Replace('\n', ' ');
+                if (progress.Length > 240) progress = progress.Substring(0, 240) + "…";
+                sb.Append('\n').Append("RimAgent.Goal.Progress".Translate(progress));
             }
             return sb.ToString();
         }

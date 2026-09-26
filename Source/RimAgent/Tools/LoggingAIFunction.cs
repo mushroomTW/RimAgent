@@ -56,6 +56,7 @@ namespace RimAgent.Tools
                 Kind = TranscriptKind.Tool,
                 ToolName = Name,
                 ToolCategory = _category,
+                ToolRisk = _risk,
                 Arguments = FormatArguments(arguments),
                 InstructionId = _transcript.CurrentInstructionId
             };
@@ -121,6 +122,7 @@ namespace RimAgent.Tools
 
         private async Task<object> ExecuteApprovedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
         {
+            _gate?.BeginInvocation(Name, _risk);
             _gate?.ForceExecute();
             try
             {
@@ -136,7 +138,7 @@ namespace RimAgent.Tools
             }
             finally
             {
-                _gate?.ClearForce();
+                _gate?.EndInvocation();
             }
         }
 
