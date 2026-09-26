@@ -143,8 +143,8 @@
   <RimAgent.Settings.CompactionHeader>上下文壓縮</RimAgent.Settings.CompactionHeader>
   <RimAgent.Settings.AutoCompact>自動折疊較舊的工具輸出</RimAgent.Settings.AutoCompact>
   <RimAgent.Settings.AutoCompactTip>模型歷史超過門檻則數時，每次請求前自動折疊較舊的工具輸出，不多花模型呼叫；歷史達門檻兩倍時，從最舊的完整對話輪開始捨棄，裁回門檻以內（可見對話紀錄不受影響）。手動 /compact 另走一次 LLM 摘要，不受此開關影響。</RimAgent.Settings.AutoCompactTip>
-  <RimAgent.Settings.AutoCompactThreshold>自動壓縮門檻：{0} 則</RimAgent.Settings.AutoCompactThreshold>
-  <RimAgent.Settings.AutoCompactThresholdTip>設低一點更早壓縮，但也會更早折到近期上下文。</RimAgent.Settings.AutoCompactThresholdTip>
+  <RimAgent.Settings.AutoCompactThreshold>自動壓縮門檻：上下文視窗的 {0}%</RimAgent.Settings.AutoCompactThreshold>
+  <RimAgent.Settings.AutoCompactThresholdTip>依框架提供的模型視窗上限與歷史 token 估算值觸發；上限未知時不自動折疊。</RimAgent.Settings.AutoCompactThresholdTip>
   <RimAgent.Settings.RunLogHeader>執行復盤</RimAgent.Settings.RunLogHeader>
   <RimAgent.Settings.RecordRuns>記錄 Agent 運行過程（預設關閉）</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>紀錄檔：{0}</RimAgent.Settings.RunLogPath>
@@ -153,7 +153,9 @@
   <RimAgent.Settings.RecordRunsTip>將指令、模型回應摘要、工具參數與結果寫入獨立 JSONL：RimWorld 存檔資料夾/RimAgent/RimAgent-runs.jsonl。最多 500 筆或 16 MiB，較舊紀錄會移除。檔案可能包含玩家輸入與工具參數；不包含模型未提供的內部推理。</RimAgent.Settings.RecordRunsTip>
   <RimAgent.Context.InputTokens>上次輸入 {0} token</RimAgent.Context.InputTokens>
   <RimAgent.Context.Unavailable>輸入 token 未回報</RimAgent.Context.Unavailable>
-  <RimAgent.Context.CompactOn>模型歷史 {0} 則；自動折疊門檻 {1} 則。</RimAgent.Context.CompactOn>
+  <RimAgent.Context.CompactOn>模型歷史 {0} 則；自動折疊門檻為模型視窗的 {1}%。</RimAgent.Context.CompactOn>
   <RimAgent.Context.CompactOff>模型歷史 {0} 則；自動折疊已關閉。</RimAgent.Context.CompactOff>
-  <RimAgent.Context.Tooltip>最近一次主模型請求的輸入 token（供應商回報），不是模型視窗上限；若供應商未提供則顯示未回報。&#10;{0}</RimAgent.Context.Tooltip>
+  <RimAgent.Context.WindowKnown>模型上下文上限：{0} token。</RimAgent.Context.WindowKnown>
+  <RimAgent.Context.WindowUnknown>模型上下文上限：未知。</RimAgent.Context.WindowUnknown>
+  <RimAgent.Context.Tooltip>最近一次主模型請求的輸入 token 由供應商回報；未提供時顯示未回報。&#10;{0}&#10;{1}</RimAgent.Context.Tooltip>
 </LanguageData>

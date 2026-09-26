@@ -28,7 +28,7 @@ namespace RimAgent.Agent
         public const float Temperature = 0.3f;
         // 高推理強度的供應商可能把推理 token 計入輸出上限；保留足夠空間給工具規劃與最終回覆。
         public const int MaxOutputTokens = 4000;
-        private const int HistoryCompactionMessageThreshold = 60;
+        private const int StoredHistoryMessageLimit = 60;
         /// <summary>自動折疊保留的最近組數（免 LLM，只折舊工具輸出）。</summary>
         private const int AutoFoldPreservedGroups = 6;
         /// <summary>手動 /compact 保留的最近組數：比自動折疊更積極，壓完只留最近一兩輪。</summary>
@@ -42,6 +42,7 @@ namespace RimAgent.Agent
         private readonly Func<ToolPermissions> _permissions;
         private readonly IChatClient _inner;
         private readonly TokenUsageChatClient _tokenUsage;
+        private readonly Func<string, int?> _contextWindowLookup;
         /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
         private readonly IChatClient _summarizer;
         private readonly IGameWorld _world;
@@ -71,7 +72,7 @@ namespace RimAgent.Agent
         /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
         /// <param name="askNote">詢問模式附加註記（AgentPack/Prompts/AskMode.md）；null 則詢問模式不加註。</param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null)
+        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null)
         {
             if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -85,6 +86,7 @@ namespace RimAgent.Agent
             _askNote = askNote;
             _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel, classifierPrompt));
             _tokenUsage = new TokenUsageChatClient(innerClient);
+            _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
             _tokenUsage.ResponseObserved = response => _activeRunLog?.AddModelResponse(response);
             _inner = _tokenUsage.AsMainThreadFunctionInvokingClient(maxSteps);
             _summarizer = innerClient;
@@ -163,29 +165,32 @@ namespace RimAgent.Agent
         /// <summary>自動壓縮開關。設定頁變更後由 GameComponent 經 <see cref="SyncAutoCompact"/> 同步，觸發條件每輪讀取即時值。</summary>
         public bool AutoCompactEnabled { get; set; } = true;
 
-        /// <summary>自動壓縮門檻（模型歷史訊息數）。同上由 GameComponent 同步。</summary>
-        public int AutoCompactThreshold { get; set; } = HistoryCompactionMessageThreshold;
+        /// <summary>自動壓縮門檻，為模型上下文上限的百分比。</summary>
+        public int AutoCompactThreshold { get; set; } = 90;
 
         /// <summary>
-        /// 標題列計量用的快照：實際歷史則數與生效門檻。UI 只讀此結構，不直接碰歷史與設定。
+        /// 標題列計量用的快照：歷史則數、視窗上限與設定百分比。UI 不直接碰歷史與設定。
         /// </summary>
         public readonly struct ContextStatus
         {
             public readonly int Messages;
             public readonly int Threshold;
+            public readonly int? ContextWindow;
             public readonly bool AutoCompactEnabled;
             public readonly long? LastInputTokens;
 
-            public ContextStatus(int messages, int threshold, bool autoCompactEnabled, long? lastInputTokens)
+            public ContextStatus(int messages, int threshold, bool autoCompactEnabled, long? lastInputTokens, int? contextWindow)
             {
                 Messages = messages;
                 Threshold = Math.Max(1, threshold);
                 AutoCompactEnabled = autoCompactEnabled;
                 LastInputTokens = lastInputTokens;
+                ContextWindow = contextWindow;
             }
 
-            /// <summary>用量比例：1.0 代表到達門檻。與觸發條件同算總則數，口徑一致。</summary>
-            public double UsageFraction => (double)Messages / Threshold;
+            /// <summary>最近一次供應商回報用量占模型視窗的比例；任一數值未知時無法計算。</summary>
+            public double? UsageFraction => LastInputTokens.HasValue && ContextWindow.HasValue
+                ? (double)LastInputTokens.Value / ContextWindow.Value : (double?)null;
         }
 
         /// <summary>給 GameComponent 的單一同步點：開關與門檻永遠成對更新。</summary>
@@ -195,22 +200,44 @@ namespace RimAgent.Agent
             AutoCompactThreshold = threshold;
         }
 
-        /// <summary>主模型最近一次回報的輸入 token 與歷史訊息數，供 UI 顯示。</summary>
+        /// <summary>主模型最近一次回報的輸入 token、歷史則數及框架提供的視窗上限，供 UI 顯示。</summary>
         public ContextStatus GetContextStatus()
         {
-            return new ContextStatus(History.Count, AutoCompactThreshold, AutoCompactEnabled, _tokenUsage.LastInputTokens);
+            return new ContextStatus(History.Count, AutoCompactThreshold, AutoCompactEnabled,
+                _tokenUsage.LastInputTokens, GetContextWindow());
         }
 
         /// <summary>
-        /// 自動折疊的觸發條件：關閉時永不觸發，開啟時歷史超過門檻即折疊較舊的工具輸出。
-        /// 注意：用總則數（TotalMessageCount，含已折疊的組）而非折疊後剩餘數，
-        /// 與 UI 計量的 <see cref="History"/> 總數同一口徑；黃／紅時機與實際折疊時機才對得上。
+        /// 以 AF 估算的模型歷史 token 數觸發；保留輸出空間，避免等到視窗滿才折疊。
+        /// 框架查不到模型視窗時不猜上限，仍可用 /compact 手動摘要。
         /// </summary>
 #pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
         internal bool ShouldAutoCompact(CompactionMessageIndex index)
         {
             if (index == null || !AutoCompactEnabled) return false;
-            return index.TotalMessageCount >= Math.Max(1, AutoCompactThreshold);
+            int? window = GetContextWindow();
+            if (!window.HasValue) return false;
+            long budget = Math.Min((long)window.Value * Math.Max(1, AutoCompactThreshold) / 100,
+                (long)window.Value - MaxOutputTokens);
+            return budget > 0 && index.TotalTokenCount >= budget;
+        }
+
+        private int? GetContextWindow()
+        {
+            try
+            {
+                string model = PreferredModel;
+                if (string.IsNullOrWhiteSpace(model))
+                {
+                    model = RimLLMProvider.GetFallbackChain().FirstOrDefault();
+                }
+                return _contextWindowLookup(model?.Trim());
+            }
+            catch (InvalidOperationException)
+            {
+                // 框架尚未初始化時，視窗上限暫不可用。
+                return null;
+            }
         }
 #pragma warning restore MAAI001
 
@@ -709,7 +736,7 @@ namespace RimAgent.Agent
             var provider = _agent.ChatHistoryProvider as InMemoryChatHistoryProvider;
             if (provider == null) return;
             List<ChatMessage> messages = provider.GetMessages(session);
-            int threshold = Math.Max(1, AutoCompactThreshold);
+            int threshold = StoredHistoryMessageLimit;
             if (messages.Count <= threshold * 2) return;
 
             int start = -1;

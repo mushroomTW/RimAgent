@@ -143,8 +143,8 @@
   <RimAgent.Settings.CompactionHeader>Context compaction</RimAgent.Settings.CompactionHeader>
   <RimAgent.Settings.AutoCompact>Auto-fold older tool output</RimAgent.Settings.AutoCompact>
   <RimAgent.Settings.AutoCompactTip>When model history exceeds the threshold, older tool results are folded automatically before each request at no extra model cost; once history reaches twice the threshold, the oldest complete turns are dropped until it is back within the threshold (the visible log is kept). Manual /compact runs a separate LLM summary and is not affected by this switch.</RimAgent.Settings.AutoCompactTip>
-  <RimAgent.Settings.AutoCompactThreshold>Auto-compact threshold: {0} messages</RimAgent.Settings.AutoCompactThreshold>
-  <RimAgent.Settings.AutoCompactThresholdTip>Lower compresses sooner but folds recent context earlier.</RimAgent.Settings.AutoCompactThresholdTip>
+  <RimAgent.Settings.AutoCompactThreshold>Auto-compact threshold: {0}% of context window</RimAgent.Settings.AutoCompactThreshold>
+  <RimAgent.Settings.AutoCompactThresholdTip>Uses the framework's model context limit and estimated history tokens. Auto-fold is unavailable when the limit is unknown.</RimAgent.Settings.AutoCompactThresholdTip>
   <RimAgent.Settings.RunLogHeader>Run history</RimAgent.Settings.RunLogHeader>
   <RimAgent.Settings.RecordRuns>Record Agent runs (off by default)</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>Log file: {0}</RimAgent.Settings.RunLogPath>
@@ -153,7 +153,9 @@
   <RimAgent.Settings.RecordRunsTip>Writes instructions, model response summaries, tool arguments, and results to a separate JSONL file under RimWorld save data/RimAgent/RimAgent-runs.jsonl. Limited to 500 runs or 16 MiB; older records are removed. The file may contain player input and tool arguments. Internal reasoning that the model does not expose is unavailable.</RimAgent.Settings.RecordRunsTip>
   <RimAgent.Context.InputTokens>Last input {0} tokens</RimAgent.Context.InputTokens>
   <RimAgent.Context.Unavailable>Input tokens unavailable</RimAgent.Context.Unavailable>
-  <RimAgent.Context.CompactOn>Model history: {0} messages; auto-fold threshold: {1}.</RimAgent.Context.CompactOn>
+  <RimAgent.Context.CompactOn>Model history: {0} messages; auto-fold threshold: {1}% of context window.</RimAgent.Context.CompactOn>
   <RimAgent.Context.CompactOff>Model history: {0} messages; auto-fold is off.</RimAgent.Context.CompactOff>
-  <RimAgent.Context.Tooltip>Input tokens reported for the latest main-model request, not the model's context limit. Unavailable if the provider did not report usage.&#10;{0}</RimAgent.Context.Tooltip>
+  <RimAgent.Context.WindowKnown>Model context limit: {0} tokens.</RimAgent.Context.WindowKnown>
+  <RimAgent.Context.WindowUnknown>Model context limit: unknown.</RimAgent.Context.WindowUnknown>
+  <RimAgent.Context.Tooltip>Input tokens for the latest main-model request are reported by the provider; unavailable if not reported.&#10;{0}&#10;{1}</RimAgent.Context.Tooltip>
 </LanguageData>

@@ -143,8 +143,8 @@
   <RimAgent.Settings.CompactionHeader>上下文压缩</RimAgent.Settings.CompactionHeader>
   <RimAgent.Settings.AutoCompact>自动折叠较旧的工具输出</RimAgent.Settings.AutoCompact>
   <RimAgent.Settings.AutoCompactTip>模型历史超过门槛则数时，每次请求前自动折叠较旧的工具输出，不多花模型调用；历史达门槛两倍时，从最旧的完整对话轮开始舍弃，裁回门槛以内（可见对话记录不受影响）。手动 /compact 另走一次 LLM 摘要，不受此开关影响。</RimAgent.Settings.AutoCompactTip>
-  <RimAgent.Settings.AutoCompactThreshold>自动压缩门槛：{0} 则</RimAgent.Settings.AutoCompactThreshold>
-  <RimAgent.Settings.AutoCompactThresholdTip>设低一点更早压缩，但也会更早折到近期上下文。</RimAgent.Settings.AutoCompactThresholdTip>
+  <RimAgent.Settings.AutoCompactThreshold>自动压缩门槛：上下文窗口的 {0}%</RimAgent.Settings.AutoCompactThreshold>
+  <RimAgent.Settings.AutoCompactThresholdTip>根据框架提供的模型窗口上限与历史 token 估算值触发；上限未知时不自动折叠。</RimAgent.Settings.AutoCompactThresholdTip>
   <RimAgent.Settings.RunLogHeader>执行复盘</RimAgent.Settings.RunLogHeader>
   <RimAgent.Settings.RecordRuns>记录 Agent 运行过程（默认关闭）</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>日志文件：{0}</RimAgent.Settings.RunLogPath>
@@ -153,7 +153,9 @@
   <RimAgent.Settings.RecordRunsTip>将指令、模型回复摘要、工具参数与结果写入独立 JSONL：RimWorld 存档文件夹/RimAgent/RimAgent-runs.jsonl。最多 500 条或 16 MiB，较旧记录会移除。文件可能包含玩家输入与工具参数；不包含模型未提供的内部推理。</RimAgent.Settings.RecordRunsTip>
   <RimAgent.Context.InputTokens>上次输入 {0} token</RimAgent.Context.InputTokens>
   <RimAgent.Context.Unavailable>输入 token 未报告</RimAgent.Context.Unavailable>
-  <RimAgent.Context.CompactOn>模型历史 {0} 条；自动折叠门槛 {1} 条。</RimAgent.Context.CompactOn>
+  <RimAgent.Context.CompactOn>模型历史 {0} 条；自动折叠门槛为模型窗口的 {1}%。</RimAgent.Context.CompactOn>
   <RimAgent.Context.CompactOff>模型历史 {0} 条；自动折叠已关闭。</RimAgent.Context.CompactOff>
-  <RimAgent.Context.Tooltip>最近一次主模型请求的输入 token（供应商报告），不是模型窗口上限；若供应商未提供则显示未报告。&#10;{0}</RimAgent.Context.Tooltip>
+  <RimAgent.Context.WindowKnown>模型上下文上限：{0} token。</RimAgent.Context.WindowKnown>
+  <RimAgent.Context.WindowUnknown>模型上下文上限：未知。</RimAgent.Context.WindowUnknown>
+  <RimAgent.Context.Tooltip>最近一次主模型请求的输入 token 由供应商报告；未提供时显示未报告。&#10;{0}&#10;{1}</RimAgent.Context.Tooltip>
 </LanguageData>

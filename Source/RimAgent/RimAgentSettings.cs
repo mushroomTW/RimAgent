@@ -35,11 +35,11 @@ namespace RimAgent
         public bool autoOnEmergencyMedical = true;
         public bool autoOnFire = true;
 
-        // 上下文壓縮：自動折疊較舊的工具輸出（免費，不多花模型呼叫）；
+        // 上下文壓縮：依模型視窗的百分比自動折疊較舊工具輸出（不多花模型呼叫）；
         // 手動 /compact 另走一次 LLM 摘要，不受此開關影響。
-        public const int DefaultAutoCompactThreshold = 60;
-        public const int MinAutoCompactThreshold = 20;
-        public const int MaxAutoCompactThreshold = 200;
+        public const int DefaultAutoCompactThreshold = 90;
+        public const int MinAutoCompactThreshold = 30;
+        public const int MaxAutoCompactThreshold = 90;
 
         public bool autoCompact = true;
         public int autoCompactThreshold = DefaultAutoCompactThreshold;
@@ -151,7 +151,7 @@ namespace RimAgent
             Scribe_Values.Look(ref autoOnEmergencyMedical, "autoOnEmergencyMedical", true);
             Scribe_Values.Look(ref autoOnFire, "autoOnFire", true);
             Scribe_Values.Look(ref autoCompact, "autoCompact", true);
-            Scribe_Values.Look(ref autoCompactThreshold, "autoCompactThreshold", DefaultAutoCompactThreshold);
+            Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
             Scribe_Values.Look(ref recordRuns, "recordRuns", false);
             Scribe_Values.Look(ref windowRectX, "windowRectX", -1f);
             Scribe_Values.Look(ref windowRectY, "windowRectY", -1f);

@@ -34,6 +34,7 @@ namespace RimAgent.UI
         private const float BubbleMaxRatio = 0.8f;
         private const float BubblePadX = 8f;
         private const float BubblePadY = 4f;
+        private const float BubbleRadius = 8f;
         /// <summary>捲動位置離底部多近仍算「停在底部」，新內容來時自動跟隨。</summary>
         private const float StickToBottomSlack = 4f;
         private const float JumpButtonWidth = 130f;
@@ -368,7 +369,10 @@ namespace RimAgent.UI
                 string compact = status.AutoCompactEnabled
                     ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
                     : "RimAgent.Context.CompactOff".Translate(status.Messages);
-                TooltipHandler.TipRegion(contextRect, "RimAgent.Context.Tooltip".Translate(compact));
+                string window = status.ContextWindow.HasValue
+                    ? "RimAgent.Context.WindowKnown".Translate(status.ContextWindow.Value.ToString("N0"))
+                    : "RimAgent.Context.WindowUnknown".Translate();
+                TooltipHandler.TipRegion(contextRect, "RimAgent.Context.Tooltip".Translate(window, compact));
             }
             GUI.color = Color.white;
             Text.Anchor = TextAnchor.UpperLeft;
@@ -481,8 +485,9 @@ namespace RimAgent.UI
                             // 縮窄視窗、延後重排期間 lineWidth 仍是舊寬度；氣泡貼齊目前可見的右緣，不被推出畫面。
                             float bubbleRight = Mathf.Min(lineRect.xMax, width);
                             var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
-                            Widgets.DrawBoxSolid(bubble, BubbleColor);
-                            DrawThinBox(bubble, BubbleBorderColor);
+                            // Unity 內建圓角：borderWidth 0 是實心填滿，1 是外框。
+                            GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleColor, 0f, BubbleRadius);
+                            GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleBorderColor, 1f, BubbleRadius);
                             Widgets.Label(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text);
                             break;
                         case LineKind.ToolHeader:

@@ -34,17 +34,18 @@ namespace RimAgent.Tests
 
 #pragma warning disable MAAI001 // AF 1.21 壓縮 API 評估中；測試直接覆蓋觸發條件。
         [Test]
-        public void AutoCompactDefaultsToEnabledAtSixty()
+        public void AutoCompactDefaultsToEnabledAtNinetyPercent()
         {
             ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
             Assert.That(session.AutoCompactEnabled, Is.True);
-            Assert.That(session.AutoCompactThreshold, Is.EqualTo(60));
+            Assert.That(session.AutoCompactThreshold, Is.EqualTo(90));
         }
 
         [Test]
         public void SyncAutoCompactUpdatesBothAndStatusReflectsHistory()
         {
-            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8,
+                contextWindowLookup: _ => 10000) { PreferredModel = "Test:model" };
             session.SyncAutoCompact(false, 20);
 
             Assert.That(session.AutoCompactEnabled, Is.False);
@@ -52,7 +53,8 @@ namespace RimAgent.Tests
             ColonyAgentSession.ContextStatus empty = session.GetContextStatus();
             Assert.That(empty.Messages, Is.EqualTo(0));
             Assert.That(empty.Threshold, Is.EqualTo(20));
-            Assert.That(empty.UsageFraction, Is.EqualTo(0.0));
+            Assert.That(empty.ContextWindow, Is.EqualTo(10000));
+            Assert.That(empty.UsageFraction, Is.Null);
         }
 
         [Test]
@@ -64,7 +66,7 @@ namespace RimAgent.Tests
 
             ColonyAgentSession.ContextStatus status = session.GetContextStatus();
             Assert.That(status.Messages, Is.EqualTo(session.History.Count).And.GreaterThan(0));
-            Assert.That(status.UsageFraction, Is.EqualTo((double)status.Messages / status.Threshold));
+            Assert.That(status.UsageFraction, Is.Null);
             Assert.That(status.LastInputTokens, Is.Null, "供應商未回報時不得把訊息數當 token");
         }
 
@@ -72,11 +74,13 @@ namespace RimAgent.Tests
         public async Task ContextStatusUsesProviderInputTokensAndClearsWithSession()
         {
             _client.ReplyWithUsage("ok", 12345).Reply("usage omitted");
-            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8,
+                contextWindowLookup: _ => 20000) { PreferredModel = "Test:model" };
 
             await session.SendAsync("hello");
 
             Assert.That(session.GetContextStatus().LastInputTokens, Is.EqualTo(12345));
+            Assert.That(session.GetContextStatus().UsageFraction, Is.EqualTo(12345.0 / 20000));
             await session.SendAsync("again");
             Assert.That(session.GetContextStatus().LastInputTokens, Is.Null, "下一次未回報用量時不可沿用舊數字");
             session.Clear();
@@ -95,9 +99,9 @@ namespace RimAgent.Tests
                    .CallTool("set_work_priorities", new { assignments = "Ali:doctor=3" }).Reply("done 3")
                    .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done 4")
                    .Reply("hello back");
-            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+            ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8,
+                contextWindowLookup: _ => 4010) { PreferredModel = "Test:model" };
             session.AutoCompactEnabled = enabled;
-            session.AutoCompactThreshold = 10;
             await session.SendAsync("set doctor 1");
             await session.SendAsync("set doctor 2");
             await session.SendAsync("set doctor 3");
@@ -123,29 +127,27 @@ namespace RimAgent.Tests
 #pragma warning restore MAAI001
 
         /// <summary>
-        /// 存量上限：超過門檻兩倍才裁，裁到門檻以內，且從玩家訊息開始（工具呼叫與結果不被拆開）。
+        /// 存量上限與 token 折疊門檻分開：超過 120 則才裁到 60 則內，從玩家訊息開始。
         /// </summary>
         [Test]
-        public async Task StoredHistoryIsTrimmedOnUserBoundaryPastTwiceTheThreshold()
+        public async Task StoredHistoryIsTrimmedOnUserBoundaryPastTwiceTheLimit()
         {
-            for (int i = 0; i < 12; i++)
+            for (int i = 0; i < 32; i++)
             {
                 _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
             }
             ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
-            session.AutoCompactThreshold = 10;
+            // 每句 4 則；30 句 120 則還不裁。
+            for (int i = 0; i < 30; i++) await session.SendAsync("set doctor " + i);
+            Assert.That(session.History.Count, Is.EqualTo(120));
 
-            // 每句 4 則（使用者、工具呼叫、工具結果、回覆）：5 句 20 則還不裁。
-            for (int i = 0; i < 5; i++) await session.SendAsync("set doctor " + i);
-            Assert.That(session.History.Count, Is.EqualTo(20));
-
-            await session.SendAsync("set doctor 5");
+            await session.SendAsync("set doctor 30");
 
             IReadOnlyList<ChatMessage> history = session.History;
-            Assert.That(history.Count, Is.LessThanOrEqualTo(10));
+            Assert.That(history.Count, Is.LessThanOrEqualTo(60));
             Assert.That(history[0].Role, Is.EqualTo(ChatRole.User), "裁切只能落在玩家訊息上");
-            Assert.That(history[0].Text, Is.EqualTo("set doctor 4"));
-            Assert.That(history.Last().Text, Is.EqualTo("done 5"));
+            Assert.That(history[0].Text, Is.EqualTo("set doctor 16"));
+            Assert.That(history.Last().Text, Is.EqualTo("done 30"));
         }
 
         [Test]
@@ -168,7 +170,7 @@ namespace RimAgent.Tests
                 _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
             }
             ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
-            session.AutoCompactThreshold = 10;
+            session.AutoCompactThreshold = 75;
             for (int i = 0; i < 4; i++) await session.SendAsync("set doctor " + i);
 
             string saved = session.SerializeForSave();
