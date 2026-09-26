@@ -96,17 +96,6 @@ namespace RimAgent.Agent
             }
         }
 
-        public int Depth
-        {
-            get
-            {
-                lock (_gate)
-                {
-                    return _frames.Count;
-                }
-            }
-        }
-
         public void BeginFrame()
         {
             lock (_gate)

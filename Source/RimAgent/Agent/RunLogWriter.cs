@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using RimAgent.Tools;
 
 namespace RimAgent.Agent
 {
@@ -59,8 +60,7 @@ namespace RimAgent.Agent
 
         public static string Limit(string value)
         {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            return value.Length > MaxFieldChars ? value.Substring(0, MaxFieldChars) + "…" : value;
+            return ToolText.TruncateField(value, MaxFieldChars);
         }
     }
 

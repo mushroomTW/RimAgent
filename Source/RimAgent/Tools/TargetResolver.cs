@@ -23,7 +23,7 @@ namespace RimAgent.Tools
         /// 以 id、全名、綽號、短名或其前綴指定一位殖民者；大小寫不敏感。
         /// 命中多於一位即回錯誤並列出候選。
         /// </summary>
-        public static ResolveResult<ColonistInfo> ResolveColonist(string input, IReadOnlyList<ColonistInfo> colonists)
+        public static Result<ColonistInfo> ResolveColonist(string input, IReadOnlyList<ColonistInfo> colonists)
         {
             return ResolveEntity(
                 input,
@@ -35,76 +35,72 @@ namespace RimAgent.Tools
         }
 
         /// <summary>逗號分隔的多位殖民者，或 all / everyone / * 代表全部。</summary>
-        public static ResolveResult<List<ColonistInfo>> ResolveColonists(string input, IReadOnlyList<ColonistInfo> colonists)
+        public static Result<List<ColonistInfo>> ResolveColonists(string input, IReadOnlyList<ColonistInfo> colonists)
         {
             string needle = (input ?? string.Empty).Trim();
             if (IsEveryoneKeyword(needle))
             {
                 return colonists.Count > 0
-                    ? ResolveResult<List<ColonistInfo>>.Ok(colonists.ToList())
-                    : ResolveResult<List<ColonistInfo>>.Fail("Error: there are no colonists.");
+                    ? Result<List<ColonistInfo>>.Ok(colonists.ToList())
+                    : Result<List<ColonistInfo>>.Fail("Error: there are no colonists.");
             }
 
             var result = new List<ColonistInfo>();
             foreach (string part in needle.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
             {
-                ResolveResult<ColonistInfo> one = ResolveColonist(part, colonists);
-                if (!one.Success) return ResolveResult<List<ColonistInfo>>.Fail(one.Error);
+                Result<ColonistInfo> one = ResolveColonist(part, colonists);
+                if (!one.Success) return Result<List<ColonistInfo>>.Fail(one.Error);
                 if (!result.Contains(one.Value)) result.Add(one.Value);
             }
 
             return result.Count > 0
-                ? ResolveResult<List<ColonistInfo>>.Ok(result)
-                : ResolveResult<List<ColonistInfo>>.Fail("Error: colonist is empty. Give names, ids, or \"all\".");
+                ? Result<List<ColonistInfo>>.Ok(result)
+                : Result<List<ColonistInfo>>.Fail("Error: colonist is empty. Give names, ids, or \"all\".");
         }
 
         /// <summary>通用實體解析：id 精確比對 → 名稱精確比對 → 前綴比對 → 包含比對；撞名或歧義報錯並列候選。</summary>
-        public static ResolveResult<T> ResolveEntity<T>(
+        public static Result<T> ResolveEntity<T>(
             string input,
             IReadOnlyList<T> candidates,
             Func<T, int> getId,
             Func<T, IEnumerable<string>> getNames,
             Func<T, string> describe,
             string kindLabel,
-            string emptyErrorMessage = null,
-            bool checkPrefix = true)
+            string emptyErrorMessage = null)
         {
             string needle = (input ?? string.Empty).Trim();
             if (needle.Length == 0)
             {
-                return ResolveResult<T>.Fail(emptyErrorMessage ?? $"Error: {kindLabel} is empty. Give a name or id.");
+                return Result<T>.Fail(emptyErrorMessage ?? $"Error: {kindLabel} is empty. Give a name or id.");
             }
 
             if (int.TryParse(needle, out int id))
             {
                 T byId = candidates.FirstOrDefault(c => getId(c) == id);
                 return byId != null
-                    ? ResolveResult<T>.Ok(byId)
-                    : ResolveResult<T>.Fail($"Error: no {kindLabel} has id {id}. {FormatListAll(candidates, describe, kindLabel)}");
+                    ? Result<T>.Ok(byId)
+                    : Result<T>.Fail($"Error: no {kindLabel} has id {id}. {FormatListAll(candidates, describe, kindLabel)}");
             }
 
             List<T> exact = candidates.Where(c => getNames(c).Any(n => string.Equals(n, needle, StringComparison.OrdinalIgnoreCase))).ToList();
-            if (exact.Count == 1) return ResolveResult<T>.Ok(exact[0]);
+            if (exact.Count == 1) return Result<T>.Ok(exact[0]);
             if (exact.Count > 1) return FormatAmbiguous(needle, exact, describe, kindLabel);
 
-            if (checkPrefix)
-            {
-                List<T> prefix = candidates.Where(c => getNames(c).Any(n => n != null && n.StartsWith(needle, StringComparison.OrdinalIgnoreCase))).ToList();
-                if (prefix.Count == 1) return ResolveResult<T>.Ok(prefix[0]);
-                if (prefix.Count > 1) return FormatAmbiguous(needle, prefix, describe, kindLabel);
-            }
+            List<T> prefix = candidates.Where(c => getNames(c).Any(n => n != null && n.StartsWith(needle, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (prefix.Count == 1) return Result<T>.Ok(prefix[0]);
+            if (prefix.Count > 1) return FormatAmbiguous(needle, prefix, describe, kindLabel);
 
             List<T> contains = candidates.Where(c => getNames(c).Any(n => n != null && n.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
-            if (contains.Count == 1) return ResolveResult<T>.Ok(contains[0]);
+            if (contains.Count == 1) return Result<T>.Ok(contains[0]);
             if (contains.Count > 1) return FormatAmbiguous(needle, contains, describe, kindLabel);
 
-            return ResolveResult<T>.Fail($"Error: no {kindLabel} matches \"{needle}\". {FormatListAll(candidates, describe, kindLabel)}");
+            return Result<T>.Fail($"Error: no {kindLabel} matches \"{needle}\". {FormatListAll(candidates, describe, kindLabel)}");
         }
 
-        private static ResolveResult<T> FormatAmbiguous<T>(string needle, List<T> matches, Func<T, string> describe, string kindLabel)
+        private static Result<T> FormatAmbiguous<T>(string needle, List<T> matches, Func<T, string> describe, string kindLabel)
         {
             string plural = PluralOf(kindLabel);
-            return ResolveResult<T>.Fail(
+            return Result<T>.Fail(
                 $"Error: \"{needle}\" matches several {plural}: {string.Join(", ", matches.Select(describe))}. Use the id.");
         }
 
@@ -124,15 +120,15 @@ namespace RimAgent.Tools
             return kindLabel + "s";
         }
 
-        public static ResolveResult<CellRectSpec> ResolveRect(int x1, int z1, int x2, int z2, MapBounds bounds)
+        public static Result<CellRectSpec> ResolveRect(int x1, int z1, int x2, int z2, MapBounds bounds)
         {
             CellRectSpec rect = CellRectSpec.FromCorners(x1, z1, x2, z2);
             if (!bounds.Contains(rect.MinX, rect.MinZ) || !bounds.Contains(rect.MaxX, rect.MaxZ))
             {
-                return ResolveResult<CellRectSpec>.Fail(
+                return Result<CellRectSpec>.Fail(
                     $"Error: rectangle {rect} is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}.");
             }
-            return ResolveResult<CellRectSpec>.Ok(rect);
+            return Result<CellRectSpec>.Ok(rect);
         }
 
         /// <summary>座標在地圖內回傳 null，否則回傳可轉述給模型的錯誤訊息。</summary>

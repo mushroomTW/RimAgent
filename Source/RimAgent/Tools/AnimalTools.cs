@@ -60,7 +60,7 @@ namespace RimAgent.Tools
         public string TameAnimal(
             [Description("Wild animal's species (e.g. \"muffalo\") or id; when several match, the error lists their ids.")] string animal)
         {
-            ResolveResult<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
+            Result<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
             if (!target.Success) return target.Error;
             if (!target.Value.Wild) return ToolText.Error($"{target.Value.Name} is already tame.");
 
@@ -79,11 +79,11 @@ namespace RimAgent.Tools
             [Description("Training name, e.g. \"obedience\".")] string training,
             [Description("true to train it, false to stop.")] bool enable)
         {
-            ResolveResult<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
+            Result<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
             if (!target.Success) return target.Error;
             if (target.Value.Wild) return ToolText.Error($"{target.Value.Name} is wild; tame it first.");
 
-            ResolveResult<DefInfo> def = DefResolver.Resolve(training, _world.AnimalTraining, "animal training");
+            Result<DefInfo> def = DefResolver.Resolve(training, _world.AnimalTraining, "animal training");
             if (!def.Success) return def.Error;
 
             string blocked = ToolText.Blocked(_gate, $"would {(enable ? "start" : "stop")} training {target.Value.Name} in {def.Value.Label}.");
@@ -100,7 +100,7 @@ namespace RimAgent.Tools
             [Description("Colony animal name or id.")] string animal,
             [Description("Area name, or \"unrestricted\".")] string area)
         {
-            ResolveResult<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
+            Result<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
             if (!target.Success) return target.Error;
             if (target.Value.Wild) return ToolText.Error($"{target.Value.Name} is wild; tame it first.");
 
@@ -108,7 +108,7 @@ namespace RimAgent.Tools
             if (string.Equals(label, UnrestrictedKeyword, StringComparison.OrdinalIgnoreCase)) label = string.Empty;
             else
             {
-                ResolveResult<DefInfo> def = DefResolver.Resolve(label, _world.AnimalAreas, "animal area");
+                Result<DefInfo> def = DefResolver.Resolve(label, _world.AnimalAreas, "animal area");
                 if (!def.Success) return def.Error;
                 label = def.Value.Label;
             }
@@ -122,7 +122,7 @@ namespace RimAgent.Tools
         }
 
         /// <summary>動物解析：id 精確命中；名字／物種可模糊比對，歧義即報錯並列候選。</summary>
-        internal static ResolveResult<AnimalInfo> ResolveAnimal(string input, IReadOnlyList<AnimalInfo> animals)
+        internal static Result<AnimalInfo> ResolveAnimal(string input, IReadOnlyList<AnimalInfo> animals)
         {
             return TargetResolver.ResolveEntity(
                 input,

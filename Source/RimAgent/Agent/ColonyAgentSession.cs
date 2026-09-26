@@ -41,8 +41,44 @@ namespace RimAgent.Agent
         private readonly AgentToolRegistry _registry;
         private readonly Func<ToolPermissions> _permissions;
         private readonly IChatClient _inner;
-        private readonly TokenUsageChatClient _tokenUsage;
+        private readonly TokenTrackingChatClient _tokenUsage;
         private readonly Func<string, int?> _contextWindowLookup;
+
+        /// <summary>記錄主模型最近一次回報的輸入 token；供應商未回報時維持未知。</summary>
+        private sealed class TokenTrackingChatClient : DelegatingChatClient
+        {
+            private long _lastInputTokens = -1;
+            public Action<ChatResponse> ResponseObserved { get; set; }
+
+            public TokenTrackingChatClient(IChatClient innerClient) : base(innerClient) { }
+
+            public long? LastInputTokens
+            {
+                get
+                {
+                    long value = Interlocked.Read(ref _lastInputTokens);
+                    return value < 0 ? (long?)null : value;
+                }
+            }
+
+            public void Reset()
+            {
+                Interlocked.Exchange(ref _lastInputTokens, -1);
+            }
+
+            public override async Task<ChatResponse> GetResponseAsync(
+                IEnumerable<ChatMessage> messages,
+                ChatOptions options = null,
+                CancellationToken cancellationToken = default)
+            {
+                ChatResponse response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+                long? tokens = response?.Usage?.InputTokenCount;
+                Interlocked.Exchange(ref _lastInputTokens, tokens.HasValue && tokens.Value >= 0 ? tokens.Value : -1);
+                try { ResponseObserved?.Invoke(response); }
+                catch { /* 選用紀錄失敗不影響模型回覆。 */ }
+                return response;
+            }
+        }
         /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
         private readonly IChatClient _summarizer;
         private readonly IGameWorld _world;
@@ -87,7 +123,7 @@ namespace RimAgent.Agent
             _instructions = instructions;
             _askNote = askNote;
             _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel, classifierPrompt), _memory, useLocalSearch, searxngUrl, skillsProvider);
-            _tokenUsage = new TokenUsageChatClient(innerClient);
+            _tokenUsage = new TokenTrackingChatClient(innerClient);
             _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
             _tokenUsage.ResponseObserved = response => _activeRunLog?.AddModelResponse(response);
             _inner = _tokenUsage.AsMainThreadFunctionInvokingClient(maxSteps);
@@ -105,7 +141,7 @@ namespace RimAgent.Agent
             _agent = new ChatClientAgent(_inner, new ChatClientAgentOptions
             {
                 Name = "ColonyAgent",
-                ChatOptions = new ChatOptions { Instructions = AgentSystemPrompt.FallbackPreamble },
+                ChatOptions = new ChatOptions { Instructions = AgentPromptComposer.FallbackPreamble },
                 AIContextProviders = new[] { _compaction },
                 UseProvidedChatClientAsIs = true
             });
@@ -478,7 +514,7 @@ namespace RimAgent.Agent
         private void ResetInstructionCaches()
         {
             _registry.ClearClassifierCache();
-            ConfirmGate.ClearQueryCache();
+            ConfirmGate.InvalidateQueryCache();
         }
 
         /// <summary>
@@ -863,13 +899,13 @@ namespace RimAgent.Agent
                 string note = _askNote?.Invoke();
                 if (!string.IsNullOrWhiteSpace(note))
                 {
-                    instructions = (instructions ?? AgentSystemPrompt.FallbackPreamble) + "\n\n" + note.Trim();
+                    instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + note.Trim();
                 }
             }
             if (permissions.Allows(ToolCategory.Memory))
             {
                 // 索引只在寫入或刪除記憶時改變，放在系統提示不會讓每句都失去前綴快取。
-                instructions = (instructions ?? AgentSystemPrompt.FallbackPreamble) + "\n\n"
+                instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n"
                     + (Mode == AgentMode.Ask ? MemoryTools.ReadOnlyInstructions : MemoryTools.Instructions);
                 // 檔名與描述是模型先前寫的（可能源自網頁）；儲存層已壓成單行，這裡再標明它只是資料。
                 string index = _memory.Index;

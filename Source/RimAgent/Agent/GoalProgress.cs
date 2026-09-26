@@ -20,12 +20,11 @@ namespace RimAgent.Agent
         public readonly bool Complete;
         public readonly bool Pause;
         public readonly bool Blocked;
-        public readonly bool TurnLimit;
         public readonly bool NoProgress;
         public readonly string BlockerKey;
 
         public GoalTurnDecision(int turns, int blockedTurns, bool complete, bool pause,
-            bool blocked = false, bool turnLimit = false, string blockerKey = null,
+            bool blocked = false, string blockerKey = null,
             int idleTurns = 0, bool noProgress = false)
         {
             Turns = turns;
@@ -34,7 +33,6 @@ namespace RimAgent.Agent
             Complete = complete;
             Pause = pause;
             Blocked = blocked;
-            TurnLimit = turnLimit;
             NoProgress = noProgress;
             BlockerKey = blockerKey;
         }
@@ -126,7 +124,7 @@ namespace RimAgent.Agent
             int idleTurns = reply != null && !usedTool ? previousIdleTurns + 1 : 0;
             bool noProgress = idleTurns >= MaxIdleTurns;
             return new GoalTurnDecision(turns, blocks, false, blocked || turnLimit || noProgress,
-                blocked, turnLimit, blockerKey, idleTurns, noProgress);
+                blocked, blockerKey, idleTurns, noProgress);
         }
 
         private static string GetBlockerKey(string reply)

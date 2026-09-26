@@ -769,7 +769,7 @@ namespace RimAgent
             AgentPack pack = _pack;
             string preamble = pack != null && !string.IsNullOrWhiteSpace(pack.Preamble)
                 ? pack.Preamble
-                : AgentSystemPrompt.FallbackPreamble;
+                : AgentPromptComposer.FallbackPreamble;
             return AgentPromptComposer.ComposeWithSkillIndex(
                 preamble,
                 pack != null ? pack.PlayerNotes : string.Empty,

@@ -21,7 +21,7 @@ namespace RimAgent.Tests
         [Test]
         public void ExactDefNameWins_CaseInsensitive()
         {
-            ResolveResult<DefInfo> r = DefResolver.Resolve("solargenerator", Defs, "buildable");
+            Result<DefInfo> r = DefResolver.Resolve("solargenerator", Defs, "buildable");
             Assert.That(r.Success, Is.True);
             Assert.That(r.Value.DefName, Is.EqualTo("SolarGenerator"));
         }
@@ -29,7 +29,7 @@ namespace RimAgent.Tests
         [Test]
         public void ExactLabelMatches()
         {
-            ResolveResult<DefInfo> r = DefResolver.Resolve("Wind Turbine", Defs, "buildable");
+            Result<DefInfo> r = DefResolver.Resolve("Wind Turbine", Defs, "buildable");
             Assert.That(r.Success, Is.True);
             Assert.That(r.Value.DefName, Is.EqualTo("WindTurbine"));
         }
@@ -37,7 +37,7 @@ namespace RimAgent.Tests
         [Test]
         public void PrefixMatchesWhenUnique()
         {
-            ResolveResult<DefInfo> r = DefResolver.Resolve("sol", Defs, "buildable");
+            Result<DefInfo> r = DefResolver.Resolve("sol", Defs, "buildable");
             Assert.That(r.Success, Is.True);
             Assert.That(r.Value.DefName, Is.EqualTo("SolarGenerator"));
         }
@@ -46,7 +46,7 @@ namespace RimAgent.Tests
         public void ExactMatchBeatsPrefixAmbiguity()
         {
             // "bed" 同時是 Bed 的 defName 與 DoubleBed 的 label 子字串；精確比對優先。
-            ResolveResult<DefInfo> r = DefResolver.Resolve("bed", Defs, "buildable");
+            Result<DefInfo> r = DefResolver.Resolve("bed", Defs, "buildable");
             Assert.That(r.Success, Is.True);
             Assert.That(r.Value.DefName, Is.EqualTo("Bed"));
         }
@@ -55,7 +55,7 @@ namespace RimAgent.Tests
         public void InputContainingLabelMatches()
         {
             // 玩家說「木牆」時模型可能傳 "wooden wall"：輸入包含 label "wall"。
-            ResolveResult<DefInfo> r = DefResolver.Resolve("wooden wall", Defs, "buildable");
+            Result<DefInfo> r = DefResolver.Resolve("wooden wall", Defs, "buildable");
             Assert.That(r.Success, Is.True);
             Assert.That(r.Value.DefName, Is.EqualTo("Wall"));
         }
@@ -64,7 +64,7 @@ namespace RimAgent.Tests
         public void AmbiguousListsCandidatesAndAsksForDefName()
         {
             var defs = new List<DefInfo> { new DefInfo("SteelWall", "steel wall"), new DefInfo("StoneWall", "stone wall") };
-            ResolveResult<DefInfo> r = DefResolver.Resolve("wall", defs, "buildable");
+            Result<DefInfo> r = DefResolver.Resolve("wall", defs, "buildable");
             Assert.That(r.Success, Is.False);
             Assert.That(r.Error, Does.Contain("SteelWall").And.Contain("StoneWall").And.Contain("defName"));
         }
@@ -72,7 +72,7 @@ namespace RimAgent.Tests
         [Test]
         public void NoMatchReportsKind()
         {
-            ResolveResult<DefInfo> r = DefResolver.Resolve("teleporter", Defs, "buildable");
+            Result<DefInfo> r = DefResolver.Resolve("teleporter", Defs, "buildable");
             Assert.That(r.Success, Is.False);
             Assert.That(r.Error, Does.StartWith("Error:").And.Contain("buildable").And.Contain("teleporter"));
         }
@@ -121,7 +121,7 @@ namespace RimAgent.Tests
         [Test]
         public void PrefixAmbiguityListsCandidatesWithIds()
         {
-            ResolveResult<ColonistInfo> r = TargetResolver.ResolveColonist("Alic", _colonists);
+            Result<ColonistInfo> r = TargetResolver.ResolveColonist("Alic", _colonists);
             Assert.That(r.Success, Is.False);
             Assert.That(r.Error, Does.Contain("[101]").And.Contain("[103]"));
         }
@@ -129,7 +129,7 @@ namespace RimAgent.Tests
         [Test]
         public void UnknownNameListsEveryone()
         {
-            ResolveResult<ColonistInfo> r = TargetResolver.ResolveColonist("Zed", _colonists);
+            Result<ColonistInfo> r = TargetResolver.ResolveColonist("Zed", _colonists);
             Assert.That(r.Success, Is.False);
             Assert.That(r.Error, Does.Contain("[101]").And.Contain("[102]").And.Contain("[103]"));
         }
@@ -145,7 +145,7 @@ namespace RimAgent.Tests
         [TestCase("*")]
         public void EveryoneKeywordsReturnAll(string keyword)
         {
-            ResolveResult<List<ColonistInfo>> r = TargetResolver.ResolveColonists(keyword, _colonists);
+            Result<List<ColonistInfo>> r = TargetResolver.ResolveColonists(keyword, _colonists);
             Assert.That(r.Success, Is.True);
             Assert.That(r.Value, Has.Count.EqualTo(3));
         }
@@ -153,7 +153,7 @@ namespace RimAgent.Tests
         [Test]
         public void CommaListResolvesEachAndDeduplicates()
         {
-            ResolveResult<List<ColonistInfo>> r = TargetResolver.ResolveColonists("Bob, 101, ali", _colonists);
+            Result<List<ColonistInfo>> r = TargetResolver.ResolveColonists("Bob, 101, ali", _colonists);
             Assert.That(r.Success, Is.True);
             Assert.That(r.Value, Has.Count.EqualTo(2));
         }
@@ -168,12 +168,12 @@ namespace RimAgent.Tests
         public void RectIsNormalisedAndBoundsChecked()
         {
             var bounds = new MapBounds { Width = 50, Height = 50 };
-            ResolveResult<CellRectSpec> ok = TargetResolver.ResolveRect(20, 30, 5, 7, bounds);
+            Result<CellRectSpec> ok = TargetResolver.ResolveRect(20, 30, 5, 7, bounds);
             Assert.That(ok.Success, Is.True);
             Assert.That(ok.Value.MinX, Is.EqualTo(5));
             Assert.That(ok.Value.MaxZ, Is.EqualTo(30));
 
-            ResolveResult<CellRectSpec> bad = TargetResolver.ResolveRect(0, 0, 50, 10, bounds);
+            Result<CellRectSpec> bad = TargetResolver.ResolveRect(0, 0, 50, 10, bounds);
             Assert.That(bad.Success, Is.False);
             Assert.That(bad.Error, Does.Contain("0-49"));
         }

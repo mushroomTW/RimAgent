@@ -49,9 +49,9 @@ namespace RimAgent.Tools
             [Description("Goods to sell as \"name x count\", comma-separated, e.g. \"steel x100, corn x50\"; empty sells nothing.")] string sells,
             [Description("Negotiator name, nickname or id; empty picks the colonist with the highest Social skill.")] string negotiator)
         {
-            ResolveResult<List<ParsedLine>> buyLines = ParseTradeList(buys, "buys");
+            Result<List<ParsedLine>> buyLines = ParseTradeList(buys, "buys");
             if (!buyLines.Success) return buyLines.Error;
-            ResolveResult<List<ParsedLine>> sellLines = ParseTradeList(sells, "sells");
+            Result<List<ParsedLine>> sellLines = ParseTradeList(sells, "sells");
             if (!sellLines.Success) return sellLines.Error;
             if (buyLines.Value.Count == 0 && sellLines.Value.Count == 0)
             {
@@ -65,13 +65,13 @@ namespace RimAgent.Tools
                 return ToolText.Error($"unknown trader \"{trader}\". Use list_traders to get a valid id.");
             }
 
-            ResolveResult<ColonistInfo> negotiatorResult = ResolveNegotiator(negotiator);
+            Result<ColonistInfo> negotiatorResult = ResolveNegotiator(negotiator);
             if (!negotiatorResult.Success) return negotiatorResult.Error;
             ColonistInfo pawn = negotiatorResult.Value;
 
-            ResolveResult<List<TradeLine>> resolvedBuys = ResolveLines(buyLines.Value);
+            Result<List<TradeLine>> resolvedBuys = ResolveLines(buyLines.Value);
             if (!resolvedBuys.Success) return resolvedBuys.Error;
-            ResolveResult<List<TradeLine>> resolvedSells = ResolveLines(sellLines.Value);
+            Result<List<TradeLine>> resolvedSells = ResolveLines(sellLines.Value);
             if (!resolvedSells.Success) return resolvedSells.Error;
             var request = new TradeRequest
             {
@@ -102,7 +102,7 @@ namespace RimAgent.Tools
             {
                 return ToolText.Error("name the caravan members explicitly, e.g. \"Ali, Bob\"; \"all\" would send the whole colony away.");
             }
-            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
+            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
             var request = new CaravanRequest
@@ -119,20 +119,20 @@ namespace RimAgent.Tools
         }
 
         /// <summary>品名解析到 defName；銀兩不用列（自動結算），列了直接擋下並說明。</summary>
-        private ResolveResult<List<TradeLine>> ResolveLines(List<ParsedLine> parsed)
+        private Result<List<TradeLine>> ResolveLines(List<ParsedLine> parsed)
         {
             var lines = new List<TradeLine>();
             foreach (ParsedLine p in parsed)
             {
-                ResolveResult<DefInfo> def = DefResolver.Resolve(p.Item, _world.TradeGoods, "trade goods");
-                if (!def.Success) return ResolveResult<List<TradeLine>>.Fail(def.Error);
+                Result<DefInfo> def = DefResolver.Resolve(p.Item, _world.TradeGoods, "trade goods");
+                if (!def.Success) return Result<List<TradeLine>>.Fail(def.Error);
                 if (string.Equals(def.Value.DefName, "Silver", StringComparison.OrdinalIgnoreCase))
                 {
-                    return ResolveResult<List<TradeLine>>.Fail(ToolText.Error("silver moves automatically as payment; do not list it in buys or sells."));
+                    return Result<List<TradeLine>>.Fail(ToolText.Error("silver moves automatically as payment; do not list it in buys or sells."));
                 }
                 lines.Add(new TradeLine { DefName = def.Value.DefName, Count = p.Count });
             }
-            return ResolveResult<List<TradeLine>>.Ok(lines);
+            return Result<List<TradeLine>>.Ok(lines);
         }
 
         /// <summary>「品名 x 數量」一行；逗號、分號或換行分隔多行。</summary>
@@ -142,16 +142,16 @@ namespace RimAgent.Tools
             public int Count;
         }
 
-        internal static ResolveResult<List<ParsedLine>> ParseTradeList(string text, string what)
+        internal static Result<List<ParsedLine>> ParseTradeList(string text, string what)
         {
             var lines = new List<ParsedLine>();
-            if (string.IsNullOrWhiteSpace(text)) return ResolveResult<List<ParsedLine>>.Ok(lines);
+            if (string.IsNullOrWhiteSpace(text)) return Result<List<ParsedLine>>.Ok(lines);
             foreach (string raw in text.Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 Match m = Regex.Match(raw.Trim(), @"^(.*?)\s*[x×*]\s*(\d+)\s*$", RegexOptions.None, TimeSpan.FromSeconds(1));
                 if (!m.Success)
                 {
-                    return ResolveResult<List<ParsedLine>>.Fail(ToolText.Error(
+                    return Result<List<ParsedLine>>.Fail(ToolText.Error(
                         $"cannot understand \"{raw.Trim()}\" in {what}. Use \"name x count\", e.g. \"steel x100\"."));
                 }
                 int count;
@@ -161,31 +161,31 @@ namespace RimAgent.Tools
                 }
                 catch (Exception)
                 {
-                    return ResolveResult<List<ParsedLine>>.Fail(ToolText.Error($"count \"{m.Groups[2].Value}\" is not a number."));
+                    return Result<List<ParsedLine>>.Fail(ToolText.Error($"count \"{m.Groups[2].Value}\" is not a number."));
                 }
                 string item = m.Groups[1].Value.Trim();
                 if (item.Length == 0 || count < 1 || count > 100000)
                 {
-                    return ResolveResult<List<ParsedLine>>.Fail(ToolText.Error(
+                    return Result<List<ParsedLine>>.Fail(ToolText.Error(
                         $"cannot understand \"{raw.Trim()}\" in {what}. Use \"name x count\" with count 1-100000."));
                 }
                 lines.Add(new ParsedLine { Item = item, Count = count });
             }
-            return ResolveResult<List<ParsedLine>>.Ok(lines);
+            return Result<List<ParsedLine>>.Ok(lines);
         }
 
-        private ResolveResult<ColonistInfo> ResolveNegotiator(string negotiator)
+        private Result<ColonistInfo> ResolveNegotiator(string negotiator)
         {
             if (string.IsNullOrWhiteSpace(negotiator))
             {
                 // 交涉者預設：社交技能最高且未倒地者。
                 ColonistInfo defaultPawn = _world.GetColonists().Where(c => !c.Downed).OrderByDescending(SocialLevel).FirstOrDefault();
-                if (defaultPawn == null) return ResolveResult<ColonistInfo>.Fail(ToolText.Error("no colonist is available to negotiate."));
-                return ResolveResult<ColonistInfo>.Ok(defaultPawn);
+                if (defaultPawn == null) return Result<ColonistInfo>.Fail(ToolText.Error("no colonist is available to negotiate."));
+                return Result<ColonistInfo>.Ok(defaultPawn);
             }
-            ResolveResult<ColonistInfo> resolved = TargetResolver.ResolveColonist(negotiator, _world.GetColonists());
+            Result<ColonistInfo> resolved = TargetResolver.ResolveColonist(negotiator, _world.GetColonists());
             if (!resolved.Success) return resolved;
-            if (resolved.Value.Downed) return ResolveResult<ColonistInfo>.Fail(ToolText.Error($"{resolved.Value.Name} is downed and cannot negotiate."));
+            if (resolved.Value.Downed) return Result<ColonistInfo>.Fail(ToolText.Error($"{resolved.Value.Name} is downed and cannot negotiate."));
             return resolved;
         }
 

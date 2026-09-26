@@ -60,9 +60,9 @@ namespace RimAgent.Tools
                     return ToolText.Error("priority in '" + part + "' is out of range. Use 0 (disabled) or 1 (highest) to 4 (lowest).");
                 }
 
-                ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(part.Substring(0, colon).Trim(), _world.GetColonists());
+                Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(part.Substring(0, colon).Trim(), _world.GetColonists());
                 if (!pawn.Success) return pawn.Error;
-                ResolveResult<DefInfo> work = DefResolver.Resolve(part.Substring(colon + 1, equals - colon - 1).Trim(), _world.WorkTypes, "work type");
+                Result<DefInfo> work = DefResolver.Resolve(part.Substring(colon + 1, equals - colon - 1).Trim(), _world.WorkTypes, "work type");
                 if (!work.Success) return work.Error;
                 WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
                     string.Equals(w.WorkTypeDefName, work.Value.DefName, StringComparison.OrdinalIgnoreCase));
@@ -124,7 +124,7 @@ namespace RimAgent.Tools
         public string ListWorkPriorities(
             [Description("Colonist name, nickname or id, or \"all\" for everyone.")] string colonist)
         {
-            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonist, _world.GetColonists());
+            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonist, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
             var sb = new StringBuilder();
@@ -154,10 +154,10 @@ namespace RimAgent.Tools
                 return ToolText.Error("startHour and endHour are the same; the range would be empty. Use 0 and 23 plus a second call to cover a full day.");
             }
 
-            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
+            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
-            ResolveResult<DefInfo> assign = DefResolver.Resolve(assignment, _world.TimeAssignments, "time assignment");
+            Result<DefInfo> assign = DefResolver.Resolve(assignment, _world.TimeAssignments, "time assignment");
             if (!assign.Success) return assign.Error;
 
             var hours = new List<int>();

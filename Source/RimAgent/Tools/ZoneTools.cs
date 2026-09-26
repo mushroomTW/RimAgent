@@ -54,7 +54,7 @@ namespace RimAgent.Tools
                 return ToolText.Error("only growing zones take a plant.");
             }
 
-            ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+            Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
             if (!rect.Success) return rect.Error;
 
             string plantDef = string.Empty;
@@ -77,7 +77,7 @@ namespace RimAgent.Tools
         public string DeleteZone(
             [Description("Zone id in square brackets from list_zones, or its label.")] string zone)
         {
-            ResolveResult<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
+            Result<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
             if (!target.Success) return target.Error;
 
             string blocked = ToolText.Blocked(_gate, $"would delete zone [{target.Value.Id}] {target.Value.Label} ({target.Value.CellCount} cells).");
@@ -95,12 +95,12 @@ namespace RimAgent.Tools
             [Description("Items to allow, comma-separated; empty allows nothing new.")] string allow,
             [Description("Items to disallow, comma-separated; empty disallows nothing.")] string disallow)
         {
-            ResolveResult<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
+            Result<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
             if (!target.Success) return target.Error;
 
-            ResolveResult<List<DefInfo>> allows = ResolveItems(allow);
+            Result<List<DefInfo>> allows = ResolveItems(allow);
             if (!allows.Success) return allows.Error;
-            ResolveResult<List<DefInfo>> disallows = ResolveItems(disallow);
+            Result<List<DefInfo>> disallows = ResolveItems(disallow);
             if (!disallows.Success) return disallows.Error;
             if (allows.Value.Count == 0 && disallows.Value.Count == 0)
             {
@@ -129,25 +129,25 @@ namespace RimAgent.Tools
             return null;
         }
 
-        private ResolveResult<List<DefInfo>> ResolveItems(string input)
+        private Result<List<DefInfo>> ResolveItems(string input)
         {
             var defs = new List<DefInfo>();
             foreach (string part in (input ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 string name = part.Trim();
                 if (name.Length == 0) continue;
-                ResolveResult<DefInfo> def = DefResolver.Resolve(name, _world.StorageFilterables, "stored item");
-                if (!def.Success) return ResolveResult<List<DefInfo>>.Fail(def.Error);
+                Result<DefInfo> def = DefResolver.Resolve(name, _world.StorageFilterables, "stored item");
+                if (!def.Success) return Result<List<DefInfo>>.Fail(def.Error);
                 if (!defs.Any(d => string.Equals(d.DefName, def.Value.DefName, StringComparison.OrdinalIgnoreCase)))
                 {
                     defs.Add(def.Value);
                 }
             }
-            return ResolveResult<List<DefInfo>>.Ok(defs);
+            return Result<List<DefInfo>>.Ok(defs);
         }
 
         /// <summary>區域解析：id 精確命中；label 精確或唯一包含，撞名即報錯。</summary>
-        internal static ResolveResult<ZoneInfo> ResolveZone(string input, IReadOnlyList<ZoneInfo> zones)
+        internal static Result<ZoneInfo> ResolveZone(string input, IReadOnlyList<ZoneInfo> zones)
         {
             return TargetResolver.ResolveEntity(
                 input,

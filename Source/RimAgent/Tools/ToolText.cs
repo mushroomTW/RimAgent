@@ -52,6 +52,12 @@ namespace RimAgent.Tools
             return "(" + x.ToString(CultureInfo.InvariantCulture) + "," + z.ToString(CultureInfo.InvariantCulture) + ")";
         }
 
+        public static string TruncateField(string value, int max)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return value.Length > max ? value.Substring(0, max) + "…" : value;
+        }
+
         public static string Thing(ThingInfo t)
         {
             var sb = new StringBuilder();

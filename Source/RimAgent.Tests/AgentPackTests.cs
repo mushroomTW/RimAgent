@@ -196,25 +196,27 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void ComposeOrdersLayersAndSkipsEmpties()
+        public void ComposeWithSkillIndexOrdersLayersAndSkipsEmpties()
         {
             var skills = new[]
             {
                 new AgentSkill { Name = "raid-defense", Description = "fight", Body = "Draft all." }
             };
 
-            string text = AgentPromptComposer.Compose("CORE", "Tall, not wide.", "Be brief.", skills);
+            string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "Tall, not wide.", "Be brief.", skills);
 
             Assert.That(text, Does.StartWith("CORE"));
             Assert.That(text.IndexOf("Tall, not wide.", StringComparison.Ordinal), Is.LessThan(text.IndexOf("Be brief.", StringComparison.Ordinal)));
             Assert.That(text.IndexOf("Be brief.", StringComparison.Ordinal), Is.LessThan(text.IndexOf("raid-defense", StringComparison.Ordinal)));
-            Assert.That(text, Does.Contain("Draft all."));
+            Assert.That(text, Does.Contain("raid-defense"));
+            Assert.That(text, Does.Contain("fight"));
+            Assert.That(text, Does.Not.Contain("Draft all."));
         }
 
         [Test]
-        public void ComposeWithAllEmptyLayersReturnsCoreOnly()
+        public void ComposeWithSkillIndexWithAllEmptyLayersReturnsCoreOnly()
         {
-            string text = AgentPromptComposer.Compose("CORE", "  ", null, null);
+            string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "  ", null, null);
 
             Assert.That(text, Is.EqualTo("CORE"));
         }

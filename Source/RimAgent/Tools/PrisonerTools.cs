@@ -48,10 +48,10 @@ namespace RimAgent.Tools
             [Description("Prisoner name, nickname or id.")] string prisoner,
             [Description("Interaction mode, e.g. \"recruit\", \"release\" or \"execution\".")] string mode)
         {
-            ResolveResult<PrisonerInfo> pawn = ResolvePrisoner(prisoner, _world.GetPrisoners());
+            Result<PrisonerInfo> pawn = ResolvePrisoner(prisoner, _world.GetPrisoners());
             if (!pawn.Success) return pawn.Error;
 
-            ResolveResult<DefInfo> def = DefResolver.Resolve(mode, _world.PrisonerInteractionModes, "prisoner interaction mode");
+            Result<DefInfo> def = DefResolver.Resolve(mode, _world.PrisonerInteractionModes, "prisoner interaction mode");
             if (!def.Success) return def.Error;
 
             string previous = string.IsNullOrEmpty(pawn.Value.InteractionModeLabel) ? pawn.Value.InteractionMode : pawn.Value.InteractionModeLabel;
@@ -69,7 +69,7 @@ namespace RimAgent.Tools
         public string ReleasePrisoner(
             [Description("Prisoner name, nickname or id.")] string prisoner)
         {
-            ResolveResult<PrisonerInfo> pawn = ResolvePrisoner(prisoner, _world.GetPrisoners());
+            Result<PrisonerInfo> pawn = ResolvePrisoner(prisoner, _world.GetPrisoners());
             if (!pawn.Success) return pawn.Error;
 
             string blocked = ToolText.Blocked(_gate, $"would release {DisplayName(pawn.Value)} [{pawn.Value.Id}]; they leave the colony for good.");
@@ -91,7 +91,7 @@ namespace RimAgent.Tools
         }
 
         /// <summary>囚犯解析：id、全名、綽號、短名或其前綴；大小寫不敏感，歧義即報錯。</summary>
-        internal static ResolveResult<PrisonerInfo> ResolvePrisoner(string input, IReadOnlyList<PrisonerInfo> prisoners)
+        internal static Result<PrisonerInfo> ResolvePrisoner(string input, IReadOnlyList<PrisonerInfo> prisoners)
         {
             return TargetResolver.ResolveEntity(
                 input,

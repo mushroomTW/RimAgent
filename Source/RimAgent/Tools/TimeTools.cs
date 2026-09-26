@@ -27,7 +27,7 @@ namespace RimAgent.Tools
             TimeSpeedInfo before = _world.GetTimeSpeed();
             string previous = SpeedLabel(before.Current, _world.TimeSpeeds);
 
-            ResolveResult<DefInfo> match = DefResolver.Resolve(want, _world.TimeSpeeds, "time speed");
+            Result<DefInfo> match = DefResolver.Resolve(want, _world.TimeSpeeds, "time speed");
             if (!match.Success) return match.Error;
 
             string blocked = ToolText.Blocked(_gate, $"would set time speed {previous} -> {match.Value.Label} ({match.Value.DefName}).");

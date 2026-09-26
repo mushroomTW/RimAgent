@@ -26,7 +26,7 @@ namespace RimAgent.Tools
             [Description("Work table id or name; empty lists every work table.")] string table)
         {
             if (string.IsNullOrWhiteSpace(table)) return ListAllBills();
-            ResolveResult<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
+            Result<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
             if (!target.Success) return target.Error;
 
             List<BillInfo> bills = _world.GetBills(target.Value.Id).ToList();
@@ -75,10 +75,10 @@ namespace RimAgent.Tools
             [Description("Recipe name, e.g. \"component\" or \"short bow\".")] string recipe,
             [Description("How many times to make it (at least 1).")] int count)
         {
-            ResolveResult<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
+            Result<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
             if (!target.Success) return target.Error;
 
-            ResolveResult<DefInfo> def = DefResolver.Resolve(recipe, _world.BillRecipes, "bill recipe");
+            Result<DefInfo> def = DefResolver.Resolve(recipe, _world.BillRecipes, "bill recipe");
             if (!def.Success) return def.Error;
             if (count < 1) return ToolText.Error($"count must be at least 1, not {count}.");
 
@@ -96,7 +96,7 @@ namespace RimAgent.Tools
             [Description("Work table id in square brackets from list_bills.")] string table,
             [Description("Bill number in square brackets from list_bills.")] int bill)
         {
-            ResolveResult<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
+            Result<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
             if (!target.Success) return target.Error;
             if (bill < 1) return ToolText.Error($"bill number must be at least 1, not {bill}.");
 
@@ -109,7 +109,7 @@ namespace RimAgent.Tools
         }
 
         /// <summary>工作台解析：id 精確命中；名稱精確或唯一包含，撞名即報錯。</summary>
-        internal static ResolveResult<WorkTableInfo> ResolveTable(string input, IReadOnlyList<WorkTableInfo> tables)
+        internal static Result<WorkTableInfo> ResolveTable(string input, IReadOnlyList<WorkTableInfo> tables)
         {
             return TargetResolver.ResolveEntity(
                 input,

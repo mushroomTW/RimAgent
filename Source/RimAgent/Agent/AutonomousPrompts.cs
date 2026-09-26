@@ -7,8 +7,9 @@ namespace RimAgent.Agent
     /// 第一個章節之前的是共用通則，會接在每個任務前面送出。
     /// 任務找不到（缺檔或缺章節）回傳 null：呼叫端跳過本輪，而不是送一句空話燒 API。
     /// </summary>
-    public static class AutonomousPrompts
+    internal static class AutonomousPrompts
     {
+        /// <summary>建構自主任務指令：有專屬章節用專屬，否則退回 Interval；共用通則接在每個任務前。</summary>
         public static string Build(AutonomousPack pack, AutonomousTrigger trigger)
         {
             if (pack == null) return null;
@@ -31,6 +32,5 @@ namespace RimAgent.Agent
             string task;
             return pack.Tasks.TryGetValue(trigger.ToString(), out task) && !string.IsNullOrWhiteSpace(task);
         }
-
     }
 }

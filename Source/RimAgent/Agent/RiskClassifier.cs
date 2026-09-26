@@ -28,9 +28,6 @@ namespace RimAgent.Agent
 
         /// <summary>只有「低風險且玩家明確要求」才執行；其餘由自動模式拒絕。</summary>
         public bool ShouldReject => Failed || Risky || !Authorized;
-
-        /// <summary>供舊版呼叫端相容；自動模式現在拒絕命令，不再詢問玩家。</summary>
-        public bool ShouldAsk => ShouldReject;
     }
 
     /// <summary>

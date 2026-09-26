@@ -109,8 +109,7 @@ namespace RimAgent.Agent
 
         internal static string Truncate(string value)
         {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            return value.Length > MaxFieldChars ? value.Substring(0, MaxFieldChars) + "…" : value;
+            return ToolText.TruncateField(value, MaxFieldChars);
         }
     }
 }

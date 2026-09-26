@@ -121,7 +121,7 @@ namespace RimAgent.Tests
             // 底層收到的是基底 ChatOptions（RimLLMChatOptions 的欄位全在 AdditionalProperties，本就穿透）。
             string first = _client.ReceivedOptions[0].Instructions;
             string second = _client.ReceivedOptions[1].Instructions;
-            Assert.That(first, Is.EqualTo(AgentSystemPrompt.FallbackPreamble));
+            Assert.That(first, Is.EqualTo(AgentPromptComposer.FallbackPreamble));
             Assert.That(second, Is.EqualTo(first));
             Assert.That(_client.ReceivedOptions[0].AdditionalProperties, Is.Null.Or.Empty);
         }

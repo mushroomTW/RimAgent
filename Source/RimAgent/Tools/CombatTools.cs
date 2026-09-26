@@ -27,7 +27,7 @@ namespace RimAgent.Tools
             [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
             [Description("true to draft, false to undraft.")] bool drafted)
         {
-            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
+            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
             string verbPreview = drafted ? "draft" : "undraft";
@@ -64,7 +64,7 @@ namespace RimAgent.Tools
             string outOfBounds = TargetResolver.CheckCell(x, z, _world.GetMapBounds());
             if (outOfBounds != null) return outOfBounds;
 
-            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
+            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
             string blocked = ToolText.Blocked(_gate, $"would order {ToolText.Names(pawns.Value)} to move to {ToolText.Cell(x, z)} (drafted first if needed).");
@@ -101,7 +101,7 @@ namespace RimAgent.Tools
                 return ToolText.Error($"no target with id {targetId} on the map. Use list_threats or find_things to get a valid id.");
             }
 
-            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
+            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
             string attackBlocked = ToolText.Blocked(_gate, $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed).");
@@ -132,7 +132,7 @@ namespace RimAgent.Tools
         {
             string kind = job?.Trim().ToLowerInvariant() ?? string.Empty;
             if (Array.IndexOf(Jobs, kind) < 0) return ToolText.Error($"unknown job \"{job}\". Use rescue, capture, tend, strip, equip or enter_casket.");
-            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
+            Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
             if (!pawn.Success) return pawn.Error;
 
             string blocked = ToolText.Blocked(_gate, $"would order {pawn.Value.Name} to {kind} [{targetId}].");

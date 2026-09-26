@@ -59,7 +59,7 @@ namespace RimAgent.Tools
             DesignationKind dk = ParseKind(kind);
             if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
 
-            ResolveResult<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, filter);
+            Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, filter);
             if (!targets.Success) return targets.Error;
 
             if (_gate != null && !_gate.AllowCommands())
@@ -135,7 +135,7 @@ namespace RimAgent.Tools
             DesignationKind dk = ParseKind(kind);
             if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
 
-            ResolveResult<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, string.Empty);
+            Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, string.Empty);
             if (!targets.Success) return targets.Error;
 
             List<ThingInfo> markedTargets = targets.Value.Where(t => t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase)).ToList();
@@ -173,15 +173,15 @@ namespace RimAgent.Tools
             [Description("0 north, 1 east, 2 south, 3 west; matters for doors, beds and other oriented buildings, otherwise 0.")] int rotation,
             [Description("Material name or defName for buildings made of stuff, e.g. \"wood\", \"steel\", \"granite blocks\"; empty uses the default material.")] string stuff)
         {
-            ResolveResult<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
+            Result<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
             if (!def.Success) return def.Error;
 
-            ResolveResult<string> stuffResult = ResolveStuffDefName(stuff);
+            Result<string> stuffResult = ResolveStuffDefName(stuff);
             if (!stuffResult.Success) return stuffResult.Error;
             string stuffDefName = stuffResult.Value;
 
             if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
-            ResolveResult<List<(int X, int Z)>> cells = ShapeCells(shape, x, z, x2, z2);
+            Result<List<(int X, int Z)>> cells = ShapeCells(shape, x, z, x2, z2);
             if (!cells.Success) return cells.Error;
 
             string what = def.Value.Label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
@@ -215,36 +215,36 @@ namespace RimAgent.Tools
         }
 
         /// <summary>形狀展開成格子；line 照模型給的起點走向終點，fill／outline 由下往上逐列。</summary>
-        private static ResolveResult<List<(int X, int Z)>> ShapeCells(string shape, int x, int z, int x2, int z2)
+        private static Result<List<(int X, int Z)>> ShapeCells(string shape, int x, int z, int x2, int z2)
         {
             var cells = new List<(int X, int Z)>();
             string kind = shape?.Trim().ToLowerInvariant() ?? string.Empty;
             if (kind == "single")
             {
                 cells.Add((x, z));
-                return ResolveResult<List<(int X, int Z)>>.Ok(cells);
+                return Result<List<(int X, int Z)>>.Ok(cells);
             }
             if (kind != "line" && kind != "fill" && kind != "outline")
             {
-                return ResolveResult<List<(int X, int Z)>>.Fail(ToolText.Error($"unknown shape \"{shape}\". Use single, line, fill or outline."));
+                return Result<List<(int X, int Z)>>.Fail(ToolText.Error($"unknown shape \"{shape}\". Use single, line, fill or outline."));
             }
             if (kind == "line" && x != x2 && z != z2)
             {
-                return ResolveResult<List<(int X, int Z)>>.Fail(ToolText.Error("a line must be straight: keep x or z the same at both ends."));
+                return Result<List<(int X, int Z)>>.Fail(ToolText.Error("a line must be straight: keep x or z the same at both ends."));
             }
             int minX = Math.Min(x, x2), maxX = Math.Max(x, x2), minZ = Math.Min(z, z2), maxZ = Math.Max(z, z2);
             long width = maxX - minX + 1L, height = maxZ - minZ + 1L;
             long count = kind == "outline" && width > 2 && height > 2 ? 2 * (width + height) - 4 : width * height;
             if (count > MaxBlueprintCells)
             {
-                return ResolveResult<List<(int X, int Z)>>.Fail(ToolText.Error($"that {kind} covers {count} cells; the limit is {MaxBlueprintCells} per call. Split it into smaller pieces."));
+                return Result<List<(int X, int Z)>>.Fail(ToolText.Error($"that {kind} covers {count} cells; the limit is {MaxBlueprintCells} per call. Split it into smaller pieces."));
             }
 
             if (kind == "line")
             {
                 int dx = Math.Sign(x2 - x), dz = Math.Sign(z2 - z);
                 for (int i = 0; i < count; i++) cells.Add((x + dx * i, z + dz * i));
-                return ResolveResult<List<(int X, int Z)>>.Ok(cells);
+                return Result<List<(int X, int Z)>>.Ok(cells);
             }
             for (int cz = minZ; cz <= maxZ; cz++)
             {
@@ -254,7 +254,7 @@ namespace RimAgent.Tools
                     if (kind == "fill" || border) cells.Add((cx, cz));
                 }
             }
-            return ResolveResult<List<(int X, int Z)>>.Ok(cells);
+            return Result<List<(int X, int Z)>>.Ok(cells);
         }
 
         [AgentTool("set_forbidden", ToolCategory.Build, ToolRisk.Safe)]
@@ -273,7 +273,7 @@ namespace RimAgent.Tools
             {
                 if (x1 < 0 || z1 < 0 || x2 < 0 || z2 < 0)
                     return ToolText.Error("pass -1 for all four corners to cover the whole map; otherwise use valid map coordinates.");
-                ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+                Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
                 if (!rect.Success) return rect.Error;
                 area = rect.Value;
             }
@@ -289,12 +289,12 @@ namespace RimAgent.Tools
             return (forbidden ? "Forbade " : "Allowed ") + r.Message + ".";
         }
 
-        private ResolveResult<string> ResolveStuffDefName(string stuff)
+        private Result<string> ResolveStuffDefName(string stuff)
         {
-            if (string.IsNullOrWhiteSpace(stuff)) return ResolveResult<string>.Ok(string.Empty);
-            ResolveResult<DefInfo> stuffDef = DefResolver.Resolve(stuff, _world.Stuffs, "material");
-            if (!stuffDef.Success) return ResolveResult<string>.Fail(stuffDef.Error);
-            return ResolveResult<string>.Ok(stuffDef.Value.DefName);
+            if (string.IsNullOrWhiteSpace(stuff)) return Result<string>.Ok(string.Empty);
+            Result<DefInfo> stuffDef = DefResolver.Resolve(stuff, _world.Stuffs, "material");
+            if (!stuffDef.Success) return Result<string>.Fail(stuffDef.Error);
+            return Result<string>.Ok(stuffDef.Value.DefName);
         }
 
         private static DesignationKind ParseKind(string kind)
@@ -304,7 +304,7 @@ namespace RimAgent.Tools
         }
 
         /// <summary>依「選取」或「矩形＋過濾」收集候選物件。</summary>
-        private ResolveResult<List<ThingInfo>> CollectTargets(ThingKind thingKind, bool useSelection, int x1, int z1, int x2, int z2, string filter)
+        private Result<List<ThingInfo>> CollectTargets(ThingKind thingKind, bool useSelection, int x1, int z1, int x2, int z2, string filter)
         {
             string needle = (filter ?? string.Empty).Trim();
             if (useSelection)
@@ -315,25 +315,25 @@ namespace RimAgent.Tools
                     .ToList();
                 if (selected.Count == 0)
                 {
-                    return ResolveResult<List<ThingInfo>>.Fail(ToolText.Error(
+                    return Result<List<ThingInfo>>.Fail(ToolText.Error(
                         $"the player's selection contains no {thingKind.ToString().ToLowerInvariant()} objects" +
                         (needle.Length > 0 ? $" matching \"{needle}\"." : ". Ask the player to select something, or give a rectangle.")));
                 }
-                return ResolveResult<List<ThingInfo>>.Ok(selected);
+                return Result<List<ThingInfo>>.Ok(selected);
             }
 
-            ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
-            if (!rect.Success) return ResolveResult<List<ThingInfo>>.Fail(rect.Error);
+            Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+            if (!rect.Success) return Result<List<ThingInfo>>.Fail(rect.Error);
 
             var query = new ThingQuery { Kind = thingKind, LabelContains = needle, Area = rect.Value, Limit = 2000 };
             List<ThingInfo> found = _world.FindThings(query).ToList();
             if (found.Count == 0)
             {
-                return ResolveResult<List<ThingInfo>>.Fail(ToolText.Error(
+                return Result<List<ThingInfo>>.Fail(ToolText.Error(
                     $"no {thingKind.ToString().ToLowerInvariant()} objects" + (needle.Length > 0 ? $" matching \"{needle}\"" : string.Empty) +
                     $" in {rect.Value}. Use find_things to look around first."));
             }
-            return ResolveResult<List<ThingInfo>>.Ok(found);
+            return Result<List<ThingInfo>>.Ok(found);
         }
 
         private static bool Matches(ThingInfo t, string needle)

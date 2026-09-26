@@ -66,7 +66,7 @@ namespace RimAgent.Tools
         [Description("Shows one colonist's needs, equipment and active mood thoughts. Reach for it when a colonist's mood, hunger, rest or recreation is low and you need the cause.")]
         public string GetColonistWellbeing([Description("Colonist name, nickname or id.")] string colonist)
         {
-            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
+            Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
             if (!pawn.Success) return pawn.Error;
             ColonistInfo c = pawn.Value;
             string needs = c.Needs.Count == 0 ? "none available" : string.Join(", ", c.Needs.Select(n => n.Label + " " + ToolText.Pct(n.Percent)));
@@ -171,7 +171,7 @@ namespace RimAgent.Tools
             string defName = want;
             if (!IsStopWord(want))
             {
-                ResolveResult<DefInfo> match = DefResolver.Resolve(want, _world.ResearchProjects, "research project");
+                Result<DefInfo> match = DefResolver.Resolve(want, _world.ResearchProjects, "research project");
                 if (!match.Success) return match.Error;
                 defName = match.Value.DefName;
             }
@@ -213,7 +213,7 @@ namespace RimAgent.Tools
         public string SetCurrentMap(
             [Description("Map id from get_maps, or part of its name.")] string map)
         {
-            ResolveResult<MapInfo> match = ResolveMap(map, _world.GetMaps());
+            Result<MapInfo> match = ResolveMap(map, _world.GetMaps());
             if (!match.Success) return match.Error;
 
             string blocked = ToolText.Blocked(_gate, $"would switch current map to [{match.Value.Id}] {match.Value.Label}.");
@@ -233,26 +233,26 @@ namespace RimAgent.Tools
         }
 
         /// <summary>用 id 或名稱找地圖：整數先對 id，否則對名稱做精確→包含比對。</summary>
-        internal static ResolveResult<MapInfo> ResolveMap(string input, IReadOnlyList<MapInfo> maps)
+        internal static Result<MapInfo> ResolveMap(string input, IReadOnlyList<MapInfo> maps)
         {
             string needle = (input ?? string.Empty).Trim();
-            if (needle.Length == 0) return ResolveResult<MapInfo>.Fail("Error: map name is empty.");
+            if (needle.Length == 0) return Result<MapInfo>.Fail("Error: map name is empty.");
             if (int.TryParse(needle, out int id))
             {
                 MapInfo byId = maps.FirstOrDefault(m => m.Id == id);
-                if (byId != null) return ResolveResult<MapInfo>.Ok(byId);
-                return ResolveResult<MapInfo>.Fail($"Error: no map has id {id}.");
+                if (byId != null) return Result<MapInfo>.Ok(byId);
+                return Result<MapInfo>.Fail($"Error: no map has id {id}.");
             }
             MapInfo exact = maps.FirstOrDefault(m => string.Equals(m.Label, needle, StringComparison.OrdinalIgnoreCase));
-            if (exact != null) return ResolveResult<MapInfo>.Ok(exact);
+            if (exact != null) return Result<MapInfo>.Ok(exact);
             List<MapInfo> contains = maps.Where(m => m.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-            if (contains.Count == 1) return ResolveResult<MapInfo>.Ok(contains[0]);
+            if (contains.Count == 1) return Result<MapInfo>.Ok(contains[0]);
             if (contains.Count > 1)
             {
-                return ResolveResult<MapInfo>.Fail($"Error: \"{needle}\" matches several maps: " +
+                return Result<MapInfo>.Fail($"Error: \"{needle}\" matches several maps: " +
                     string.Join(", ", contains.Select(m => $"[{m.Id}] {m.Label}")) + ". Use the map id.");
             }
-            return ResolveResult<MapInfo>.Fail($"Error: no map matches \"{needle}\".");
+            return Result<MapInfo>.Fail($"Error: no map matches \"{needle}\".");
         }
 
         [AgentTool("find_things", ToolCategory.Observe, ToolRisk.Query)]
@@ -280,7 +280,7 @@ namespace RimAgent.Tools
 
             if (x1 >= 0 && z1 >= 0 && x2 >= 0 && z2 >= 0)
             {
-                ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+                Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
                 if (!rect.Success) return rect.Error;
                 query.Area = rect.Value;
             }
@@ -347,7 +347,7 @@ namespace RimAgent.Tools
             [Description("Opposite corner z.")] int z2)
         {
             if (x1 == x2 && z1 == z2) return DescribeCell(x1, z1);
-            ResolveResult<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+            Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
             if (!rect.Success) return rect.Error;
             if (rect.Value.CellCount > MaxInspectedCells)
             {

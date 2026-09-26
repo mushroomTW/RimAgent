@@ -249,13 +249,8 @@ namespace RimAgent.Agent
         /// 同一句內執行了命令（成功、失敗或部分生效皆可能改變世界）：丟掉已記的查詢結果，
         /// 之後重查才看得到最新狀態。預覽不碰世界，不必失效。
         /// </summary>
-        internal void InvalidateQueryCache()
-        {
-            _queryCache.Clear();
-        }
-
         /// <summary>對話重來或新局時清空查詢快取（平時由每句的額度計數一併清空）。</summary>
-        internal void ClearQueryCache()
+        internal void InvalidateQueryCache()
         {
             _queryCache.Clear();
         }

@@ -29,10 +29,10 @@ namespace RimAgent.Tools
             [Description("Colonist name, nickname or id.")] string colonist,
             [Description("Care level: NoCare, NoMeds, HerbalOrWorse, NormalOrWorse or Best.")] string level)
         {
-            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
+            Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
             if (!pawn.Success) return pawn.Error;
 
-            ResolveResult<DefInfo> care = DefResolver.Resolve(level, _world.MedicalCareLevels, "medical care level");
+            Result<DefInfo> care = DefResolver.Resolve(level, _world.MedicalCareLevels, "medical care level");
             if (!care.Success) return care.Error;
 
             // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
@@ -51,7 +51,7 @@ namespace RimAgent.Tools
         public string GetHealth(
             [Description("Colonist names or ids separated by commas, or \"all\" for everyone.")] string colonists)
         {
-            ResolveResult<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
+            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
             if (!pawns.Success) return pawns.Error;
 
             Dictionary<int, ColonistHealthInfo> health = _world.GetHealth().ToDictionary(h => h.PawnId);
@@ -124,10 +124,10 @@ namespace RimAgent.Tools
             [Description("Surgery name, e.g. \"remove body part\".")] string surgery,
             [Description("Body part, e.g. \"left lung\". Required for surgeries that target a part; leave it empty to have the tool list the candidate parts. Ignored by surgeries that need no part.")] string part)
         {
-            ResolveResult<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
+            Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
             if (!pawn.Success) return pawn.Error;
 
-            ResolveResult<DefInfo> recipe = DefResolver.Resolve(surgery, _world.SurgeryRecipes, "surgery");
+            Result<DefInfo> recipe = DefResolver.Resolve(surgery, _world.SurgeryRecipes, "surgery");
             if (!recipe.Success) return recipe.Error;
 
             var request = new SurgeryRequest

@@ -57,13 +57,28 @@ namespace RimAgent.Tools
 #pragma warning disable MAAI001
             var provider = new FileMemoryProvider(store ?? throw new ArgumentNullException(nameof(store)));
             // InvokingContext 必須有 agent；這個 agent 只用來取工具，不會送出任何請求。
-            var context = new AIContextProvider.InvokingContext(new ChatClientAgent(new NoRequestChatClient()), null, new AIContext());
+            var dummyClient = new ChatClientAgent(new NoOpChatClient());
+            var context = new AIContextProvider.InvokingContext(dummyClient, null, new AIContext());
             AIContext provided = provider.InvokingAsync(context).AsTask().GetAwaiter().GetResult();
 #pragma warning restore MAAI001
             return provided.Tools.OfType<AIFunction>()
                 .Where(tool => Risks.ContainsKey(tool.Name))
                 .Select(tool => RiskOf(tool.Name) == ToolRisk.Query ? tool : new GatedMemoryFunction(tool, gate))
                 .ToList();
+        }
+
+        /// <summary>極小 stub：只為 FileMemoryProvider 建立 InvokingContext；任何實際呼叫都代表誤用。</summary>
+        private sealed class NoOpChatClient : IChatClient
+        {
+            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+                => throw new NotSupportedException("This client only hosts FileMemoryProvider tool creation.");
+
+            public bclasync::System.Collections.Generic.IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+                IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+                => throw new NotSupportedException("This client only hosts FileMemoryProvider tool creation.");
+
+            public object GetService(Type serviceType, object serviceKey = null) => null;
+            public void Dispose() { }
         }
 
         /// <summary>寫入、刪除與編輯前先過命令閘門；擋下時回傳預覽，不碰儲存。</summary>
@@ -105,27 +120,6 @@ namespace RimAgent.Tools
             private static string Argument(AIFunctionArguments arguments, string name)
             {
                 return arguments != null && arguments.TryGetValue(name, out object value) ? value?.ToString() ?? string.Empty : string.Empty;
-            }
-        }
-
-        /// <summary>只為建立 InvokingContext 而存在；任何請求都代表誤用。</summary>
-        private sealed class NoRequestChatClient : IChatClient
-        {
-            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
-            {
-                throw new NotSupportedException("This client only hosts FileMemoryProvider tool creation.");
-            }
-
-            public bclasync::System.Collections.Generic.IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-                IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
-            {
-                throw new NotSupportedException("This client only hosts FileMemoryProvider tool creation.");
-            }
-
-            public object GetService(Type serviceType, object serviceKey = null) => null;
-
-            public void Dispose()
-            {
             }
         }
     }
