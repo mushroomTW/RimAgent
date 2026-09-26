@@ -25,5 +25,5 @@ and all skills together have an 8,000-character limit.
 
 - A folder without `SKILL.md` is not a skill. Unrecognized files are ignored.
 - Without frontmatter, the folder name becomes the skill name.
-- The shipped `Skills/` folder has no skills; add your own here.
+- The shipped `Skills/` folder has seven heuristic gameplay skills: `raid-defense`, `food-security`, `mood-management`, `work-assignment`, `medical-triage`, `seasonal-prep` and `colony-progression`. Edit or delete them freely, or add your own alongside.
 - Missing or unreadable prompt files are treated as empty. The game continues: a missing preamble uses a one-line fallback, and a missing classifier prompt makes Auto mode ask before every action.

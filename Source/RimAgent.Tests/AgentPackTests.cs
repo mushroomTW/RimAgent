@@ -169,6 +169,22 @@ namespace RimAgent.Tests
                 Does.StartWith(pack.Autonomous.Preamble.Trim()), "共用通則要真的接在任務前面");
         }
 
+        /// <summary>出貨技能超過上限會被靜靜截斷或擠出索引，模型讀到的就不是寫的那份。</summary>
+        [Test]
+        public void ShippedSkillsFitLimits()
+        {
+            AgentPack pack = AgentPackLoader.Load(FindAgentPack());
+
+            Assert.That(pack.Skills, Is.Not.Empty);
+            foreach (AgentSkill skill in pack.Skills)
+            {
+                Assert.That(skill.Description, Is.Not.Empty, skill.Name + " 缺描述");
+                Assert.That(skill.Body, Does.Not.Contain("[skill truncated]"), skill.Name + " 超過單一技能上限");
+            }
+            string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", null, null, pack.Skills);
+            Assert.That(text, Does.Not.Contain("omitted: over budget"), "技能索引超過總量上限");
+        }
+
         [Test]
         public void SkillWithoutFrontmatterFallsBackToFolderName()
         {
