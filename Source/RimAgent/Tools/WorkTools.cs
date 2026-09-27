@@ -42,17 +42,14 @@ namespace RimAgent.Tools
         public string SetWorkPriorities(
             [Description("Semicolon-separated colonist:work=priority, e.g. \"Ali:Doctor=1; Bob:Hauling=2\". Priority 0 disables, 1 highest, 4 lowest.")] string assignments)
         {
+            #pragma warning disable S3878 // net472 mono 相容性
             string[] parts = (assignments ?? string.Empty).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            #pragma warning restore S3878
             if (parts.Length == 0) return ToolText.Error("assignments is empty. Use colonist:work=priority; colonist:work=priority.");
 
-            var changes = new List<WorkPriorityChange>();
-            foreach (string raw in parts)
+            if (!TryParseAllAssignments(parts, out List<WorkPriorityChange> changes, out string parseError))
             {
-                if (!TryParseAssignment(raw, out WorkPriorityChange change, out string error))
-                {
-                    return ToolText.Error(error);
-                }
-                changes.Add(change);
+                return ToolText.Error(parseError);
             }
 
             string blocked = ToolText.Blocked(_gate, "would set " + string.Join("; ", changes.Select(c => c.Describe())) + ".");
@@ -60,19 +57,9 @@ namespace RimAgent.Tools
 
             var applied = new List<WorkPriorityChange>();
             var notes = new List<string>();
-            foreach (WorkPriorityChange change in changes)
-            {
-                CommandResult result = _world.SetWorkPriority(change.Colonist.Id, change.Work.DefName, change.Priority);
-                if (result.Success && !string.IsNullOrEmpty(result.Message)) notes.Add(result.Message);
-                if (!result.Success)
-                {
-                    List<string> rollbackFailures = RollBackWorkPriorities(applied);
-                    string message = change.Colonist.Name + " " + change.Work.Label + ": " + result.Message;
-                    if (rollbackFailures.Count > 0) message += " Rollback failures: " + string.Join("; ", rollbackFailures);
-                    return ToolText.Error("No batch changes were kept. " + message);
-                }
-                applied.Add(change);
-            }
+            string applyError = ApplyWorkPriorityChanges(changes, applied, notes);
+            if (applyError != null) return ToolText.Error(applyError);
+
             if (_undo != null)
             {
                 foreach (WorkPriorityChange change in applied)
@@ -82,6 +69,40 @@ namespace RimAgent.Tools
             }
             string suffix = notes.Count == 0 ? string.Empty : " " + string.Join(" ", notes);
             return "Set " + string.Join("; ", applied.Select(c => c.Describe())) + "." + suffix;
+        }
+
+        private bool TryParseAllAssignments(string[] parts, out List<WorkPriorityChange> changes, out string error)
+        {
+            changes = new List<WorkPriorityChange>();
+            error = null;
+            foreach (string raw in parts)
+            {
+                if (!TryParseAssignment(raw, out WorkPriorityChange change, out string err))
+                {
+                    error = err;
+                    return false;
+                }
+                changes.Add(change);
+            }
+            return true;
+        }
+
+        private string ApplyWorkPriorityChanges(List<WorkPriorityChange> changes, List<WorkPriorityChange> applied, List<string> notes)
+        {
+            foreach (WorkPriorityChange change in changes)
+            {
+                CommandResult result = _world.SetWorkPriority(change.Colonist.Id, change.Work.DefName, change.Priority);
+                if (result.Success && !string.IsNullOrEmpty(result.Message)) notes.Add(result.Message);
+                if (!result.Success)
+                {
+                    List<string> rollbackFailures = RollBackWorkPriorities(applied);
+                    string message = change.Colonist.Name + " " + change.Work.Label + ": " + result.Message;
+                    if (rollbackFailures.Count > 0) message += " Rollback failures: " + string.Join("; ", rollbackFailures);
+                    return "No batch changes were kept. " + message;
+                }
+                applied.Add(change);
+            }
+            return null;
         }
 
         private bool TryParseAssignment(string raw, out WorkPriorityChange change, out string error)

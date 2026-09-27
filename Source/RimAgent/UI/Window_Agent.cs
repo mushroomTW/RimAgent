@@ -413,11 +413,11 @@ namespace RimAgent.UI
             GetWorkingIndicator(session.IsBusy, width, out string working, out float workingHeight);
             float total = _linesTotal + (working != null ? workingHeight + EntryGap : 0f);
 
-            UpdateScrollPosition(total, width, outRect, out Rect viewRect, out float maxScroll, out bool showJump, out Rect jumpRect, out bool mouseOnJump);
-            float visibleTop = Mathf.Clamp(_scroll.y, 0f, maxScroll);
+            TranscriptScrollLayout scrollLayout = UpdateScrollPosition(total, width, outRect);
+            float visibleTop = Mathf.Clamp(_scroll.y, 0f, scrollLayout.MaxScroll);
             float visibleBottom = visibleTop + outRect.height;
 
-            Widgets.BeginScrollView(outRect, ref _scroll, viewRect);
+            Widgets.BeginScrollView(outRect, ref _scroll, scrollLayout.ViewRect);
             float y = 0f;
             TranscriptEntry clickedTool = null;
             foreach (TranscriptLine line in _lines)
@@ -432,7 +432,7 @@ namespace RimAgent.UI
                 }
                 if (y + line.Height >= visibleTop && y <= visibleBottom)
                 {
-                    DrawTranscriptLine(line, y, lineWidth, width, mouseOnJump, ref clickedTool);
+                    DrawTranscriptLine(line, y, lineWidth, width, scrollLayout.MouseOnJump, ref clickedTool);
                 }
                 y += line.Height + EntryGap;
             }
@@ -449,10 +449,19 @@ namespace RimAgent.UI
                 RelayoutEntry(clickedTool);
             }
 
-            if (showJump)
+            if (scrollLayout.ShowJump)
             {
-                DrawJumpButton(jumpRect);
+                DrawJumpButton(scrollLayout.JumpRect);
             }
+        }
+
+        private struct TranscriptScrollLayout
+        {
+            public Rect ViewRect;
+            public float MaxScroll;
+            public bool ShowJump;
+            public Rect JumpRect;
+            public bool MouseOnJump;
         }
 
         private void EnsureTranscriptLines(AgentTranscript transcript, float width, out bool deferReflow)
@@ -493,28 +502,24 @@ namespace RimAgent.UI
             workingHeight = _workingHeight;
         }
 
-        private void UpdateScrollPosition(
-            float total,
-            float width,
-            Rect outRect,
-            out Rect viewRect,
-            out float maxScroll,
-            out bool showJump,
-            out Rect jumpRect,
-            out bool mouseOnJump)
+        private TranscriptScrollLayout UpdateScrollPosition(float total, float width, Rect outRect)
         {
-            viewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height));
-            maxScroll = viewRect.height - outRect.height;
+            var layout = new TranscriptScrollLayout
+            {
+                ViewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height))
+            };
+            layout.MaxScroll = layout.ViewRect.height - outRect.height;
             if (_scrollToBottom || _scroll.y >= _lastMaxScroll - StickToBottomSlack)
             {
-                _scroll.y = maxScroll;
+                _scroll.y = layout.MaxScroll;
                 _scrollToBottom = false;
                 _seenVersion = _linesTranscriptVersion;
             }
-            _lastMaxScroll = maxScroll;
-            showJump = _scroll.y < maxScroll - StickToBottomSlack;
-            jumpRect = new Rect(outRect.center.x - JumpButtonWidth / 2f, outRect.yMax - JumpButtonHeight - 6f, JumpButtonWidth, JumpButtonHeight);
-            mouseOnJump = showJump && Mouse.IsOver(jumpRect);
+            _lastMaxScroll = layout.MaxScroll;
+            layout.ShowJump = _scroll.y < layout.MaxScroll - StickToBottomSlack;
+            layout.JumpRect = new Rect(outRect.center.x - JumpButtonWidth / 2f, outRect.yMax - JumpButtonHeight - 6f, JumpButtonWidth, JumpButtonHeight);
+            layout.MouseOnJump = layout.ShowJump && Mouse.IsOver(layout.JumpRect);
+            return layout;
         }
 
         private void DrawTranscriptLine(

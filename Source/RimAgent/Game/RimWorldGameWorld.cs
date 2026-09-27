@@ -64,6 +64,15 @@ namespace RimAgent.Game
             public int Bedless;
             public int OutdoorsBed;
 
+            public void AccumulateColonists(List<Pawn> colonists)
+            {
+                if (colonists == null) return;
+                for (int p = 0; p < colonists.Count; p++)
+                {
+                    AccumulateColonist(colonists[p]);
+                }
+            }
+
             public void AccumulateColonist(Pawn pawn)
             {
                 // 每 500 tick 跑一次，外層抓到例外就整次作廢：其他模組的 pawn 一丟例外自主模式就停擺。
@@ -98,6 +107,28 @@ namespace RimAgent.Game
                 if (noBed) Bedless++;
                 if (bedOutdoors) OutdoorsBed++;
             }
+
+            private static bool HasBleeding(Pawn pawn)
+            {
+                return pawn.health?.hediffSet?.BleedRateTotal > 0f;
+            }
+
+            private static bool IsInDangerousTemperature(Pawn pawn)
+            {
+                if (pawn.health?.hediffSet == null) return false;
+                return !pawn.SafeTemperatureRange().Includes(pawn.AmbientTemperature);
+            }
+
+            private static bool IsOutdoors(Room room)
+            {
+                return room == null || room.PsychologicallyOutdoors;
+            }
+
+            private static bool IsLowMood(Pawn pawn)
+            {
+                Need_Mood mood = pawn.needs?.mood;
+                return mood != null && mood.CurLevel < Agent.AutonomousScheduler.LowMoodThreshold;
+            }
         }
 
         /// <summary>
@@ -118,22 +149,7 @@ namespace RimAgent.Game
             {
                 for (int m = 0; m < maps.Count; m++)
                 {
-                    Map map = maps[m];
-                    if (map == null) continue;
-
-                    // 地圖層的讀數不包 try：讀一半就把食物、電力當 0 會造成假警報，寧可整次作廢。
-                    // 會跑到其他模組程式的攻擊目標已在 CountHostiles 裡逐個隔離。
-                    hostileCount += CountHostiles(map);
-                    foodNutrition += map.resourceCounter.TotalHumanEdibleNutrition;
-                    fireCount += map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
-                    if (!anyPower && HasWorkingPower(map)) anyPower = true;
-
-                    List<Pawn> freeColonists = map.mapPawns.FreeColonistsSpawned;
-                    if (freeColonists == null) continue;
-                    for (int p = 0; p < freeColonists.Count; p++)
-                    {
-                        accumulator.AccumulateColonist(freeColonists[p]);
-                    }
+                    AccumulateMapSignals(maps[m], ref hostileCount, ref foodNutrition, ref fireCount, ref anyPower, ref accumulator);
                 }
             }
 
@@ -155,32 +171,16 @@ namespace RimAgent.Game
             };
         }
 
-        private static bool HasBleeding(Pawn pawn)
+        private static void AccumulateMapSignals(Map map, ref int hostileCount, ref float foodNutrition, ref int fireCount, ref bool anyPower, ref ColonistSignalsAccumulator accumulator)
         {
-            return pawn.health?.hediffSet?.BleedRateTotal > 0f;
-        }
-
-        /// <summary>
-        /// 會發展成低溫症：環境溫度已落在安全範圍外。沿用原版 ThinkNode_ConditionalDangerousTemperature
-        /// 的判法（1.6 沒有溫度需求，只有低溫症 hediff），比等 hediff 真的結痂早一步。
-        /// </summary>
-        private static bool IsInDangerousTemperature(Pawn pawn)
-        {
-            if (pawn.health?.hediffSet == null) return false;
-            return !pawn.SafeTemperatureRange().Includes(pawn.AmbientTemperature);
-        }
-
-        /// <summary>露宿：房間不存在或遊戲自己就判定為「戶外」。原版會因此讓殖民者 BedroomTantrum。</summary>
-        private static bool IsOutdoors(Room room)
-        {
-            return room == null || room.PsychologicallyOutdoors;
-        }
-
-        /// <summary>心情已低到影響生產，但還沒到 <see cref="IsNearMentalBreak"/> 的程度。</summary>
-        private static bool IsLowMood(Pawn pawn)
-        {
-            Need_Mood mood = pawn.needs?.mood;
-            return mood != null && mood.CurLevel < Agent.AutonomousScheduler.LowMoodThreshold;
+            if (map == null) return;
+            // 地圖層的讀數不包 try：讀一半就把食物、電力當 0 會造成假警報，寧可整次作廢。
+            // 會跑到其他模組程式的攻擊目標已在 CountHostiles 裡逐個隔離。
+            hostileCount += CountHostiles(map);
+            foodNutrition += map.resourceCounter.TotalHumanEdibleNutrition;
+            fireCount += map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
+            if (!anyPower && HasWorkingPower(map)) anyPower = true;
+            accumulator.AccumulateColonists(map.mapPawns.FreeColonistsSpawned);
         }
 
         /// <summary>有東西真的通電在跑（不只是接了發電機）。</summary>
@@ -1915,13 +1915,10 @@ namespace RimAgent.Game
             bool hasNeedle = !string.IsNullOrEmpty(labelContains);
             var changed = new List<Thing>();
             // HaulableEver 涵蓋物品與屍體；迷霧裡的東西玩家還看不到，不動。
-            foreach (Thing t in map.listerThings.ThingsInGroup(ThingRequestGroup.HaulableEver).ToList())
+            foreach (Thing t in map.listerThings.ThingsInGroup(ThingRequestGroup.HaulableEver).Where(t => CanSetForbidden(t, area, hasNeedle, labelContains, forbidden)).ToList())
             {
-                if (CanSetForbidden(t, area, hasNeedle, labelContains, forbidden))
-                {
-                    t.SetForbidden(forbidden, warnOnFail: false);
-                    changed.Add(t);
-                }
+                t.SetForbidden(forbidden, warnOnFail: false);
+                changed.Add(t);
             }
             if (changed.Count == 0)
             {
