@@ -53,6 +53,10 @@ namespace RimAgent
             Widgets.BeginScrollView(inRect, ref _settingsScrollPosition, viewRect);
 
             var listing = new Listing_Standard();
+            // 捲動檢視裡必須單欄：Listing.GetRect 內容超過檢視高度會自動另起一欄，
+            // 超出的內容會跑到檢視寬度外的第二欄（看起來像被截斷且捲不下去），
+            // 高度也永遠長不大、捲軸出不來。權限的雙欄是手排的絕對座標，不受影響。
+            listing.maxOneColumn = true;
             listing.Begin(viewRect);
 
             DrawPermissions(listing);

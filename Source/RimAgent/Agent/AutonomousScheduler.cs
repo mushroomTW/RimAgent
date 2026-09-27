@@ -338,6 +338,23 @@ namespace RimAgent.Agent
             return copy;
         }
 
+        /// <summary>
+        /// 玩家主動中止進行中的自主任務：該條件在解除前不再重試。
+        /// 與重試用完不同，不經 <see cref="TakeGiveUps"/> 回報——按停止鍵的玩家知道自己按了停止。
+        /// 條件解除後照常清空（下次出現算新事件），嚴重度變高照常立刻重叫。
+        /// 冪等：重複呼叫與對未觸發的條件呼叫都無作用。
+        /// </summary>
+        public void Dismiss(AutonomousTrigger trigger)
+        {
+            if (trigger == AutonomousTrigger.None) return;
+            int index = (int)trigger;
+            if (index < 0 || index >= WatcherCount) return;
+            ref Watcher w = ref _watch[index];
+            if (!w.Fired) return;
+            w.Attempts = MaxAttempts;
+            w.GaveUp = true;
+        }
+
         /// <summary>自主任務結束後記錄：推進冷卻、累計本次消耗的工具呼叫次數。</summary>
         public void RecordRun(long tick, int toolCalls, AutonomousConfig config)
         {
