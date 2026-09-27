@@ -34,24 +34,34 @@ namespace RimAgent.Agent
             var dropped = new List<string>();
             foreach (AgentMemoryEntry entry in entries)
             {
-                if (entry == null || entry.content == null) continue;
-                string name = Normalize(entry.name);
-                if (name.Length == 0 || _files.ContainsKey(name)) continue;
-                if (IsUserFile(name) && (InvalidUserFile(name, entry.content) != null || UserFileCount() >= MaxFiles))
-                {
-                    dropped.Add(name);
-                    continue;
-                }
-                _files[name] = IsDescription(name) ? OneLine(entry.content) : entry.content;
+                ProcessEntryOnLoad(entry, dropped);
             }
             DroppedOnLoad = dropped.Count;
             // 索引由 provider 在下次寫入時重建；在那之前先拿掉被丟棄檔案的列，免得模型去讀不存在的檔。
-            if (dropped.Count > 0 && _files.TryGetValue(IndexFileName, out string index))
+            PruneDroppedFilesFromIndex(dropped);
+        }
+
+        private void ProcessEntryOnLoad(AgentMemoryEntry entry, List<string> dropped)
+        {
+            if (entry == null || entry.content == null) return;
+            string name = Normalize(entry.name);
+            if (name.Length == 0 || _files.ContainsKey(name)) return;
+            if (IsUserFile(name) && (InvalidUserFile(name, entry.content) != null || UserFileCount() >= MaxFiles))
             {
-                // Split(char) 只存在於 Mono；net472 要傳字元陣列。
-                _files[IndexFileName] = string.Join("\n", index.Split(new[] { '\n' })
-                    .Where(line => !dropped.Any(name => line.IndexOf("**" + name + "**", StringComparison.OrdinalIgnoreCase) >= 0)));
+                dropped.Add(name);
+                return;
             }
+            _files[name] = IsDescription(name) ? OneLine(entry.content) : entry.content;
+        }
+
+        private void PruneDroppedFilesFromIndex(List<string> dropped)
+        {
+            if (dropped.Count == 0 || !_files.TryGetValue(IndexFileName, out string index)) return;
+
+            #pragma warning disable S3878 // net472 runtime requires char array to avoid MissingMethodException
+            _files[IndexFileName] = string.Join("\n", index.Split(new[] { '\n' })
+                .Where(line => !dropped.Any(name => line.IndexOf("**" + name + "**", StringComparison.OrdinalIgnoreCase) >= 0)));
+            #pragma warning restore S3878
         }
 
         /// <summary>讀檔時因超出限制而捨棄的記憶檔數。</summary>
@@ -162,15 +172,19 @@ namespace RimAgent.Agent
         private static string Normalize(string path)
         {
             // Trim(char) 只存在於 Mono；net472 只有 Trim(params char[])。
+            #pragma warning disable S3878 // net472 runtime requires char array to avoid MissingMethodException
             return (path ?? string.Empty).Replace('\\', '/').Trim().Trim(new[] { '/' });
+            #pragma warning restore S3878
         }
     }
 #pragma warning restore MAAI001
 
     public sealed class AgentMemoryEntry : IExposable
     {
+        #pragma warning disable S1104 // Required for RimWorld Scribe serialization via ref parameter
         public string name;
         public string content;
+        #pragma warning restore S1104
 
         public void ExposeData()
         {

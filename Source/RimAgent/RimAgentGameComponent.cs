@@ -264,6 +264,7 @@ namespace RimAgent
         /// <summary>今日自主任務已消耗的工具呼叫次數。</summary>
         public int AutonomousToolsUsed => _scheduler.ToolsUsed;
 
+        #pragma warning disable S3776 // RimWorld ExposeData serialization requires sequential save/load branches
         public override void ExposeData()
         {
             base.ExposeData();
@@ -321,6 +322,7 @@ namespace RimAgent
                 _mcp.SweepIdle();
             }
         }
+        #pragma warning restore S3776
 
         public override void StartedNewGame()
         {
@@ -451,59 +453,11 @@ namespace RimAgent
                     || _goals.Count == 0 || _goals[0] != objective || _goalPaused) return;
                 IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
                 bool hasToolEvidence = GoalProgress.HasVerificationEvidence(entries, instructionId);
-                // 記憶與網頁搜尋不碰殖民地，不算推進目標；否則每輪讀 preferences.md 就能躲過閒置暫停。
-                // 委派本身也不算，子代理實際跑的工具另有紀錄。
-                bool usedTool = entries.Any(e => e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool
-                    && e.ToolCategory != ToolCategory.Memory && e.ToolCategory != ToolCategory.Web
-                    && e.ToolCategory != ToolCategory.Agents
-                    && !e.Failed && !(e.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
+                bool usedTool = HasActiveGoalToolUsage(entries, instructionId);
                 GoalTurnDecision decision = GoalProgress.AfterTurn(
                     _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence,
                     _goalBlockerKey, _goalIdleTurns, usedTool);
-                _goalTurns = decision.Turns;
-                _goalBlockedTurns = decision.BlockedTurns;
-                _goalIdleTurns = decision.IdleTurns;
-                _goalBlockerKey = decision.BlockerKey;
-                _goalNeedsVerification = reply != null && GoalProgress.ParseStatus(reply) == GoalTurnStatus.Complete
-                    && !decision.Complete;
-                if (reply != null && !session.HasPendingConfirmation)
-                {
-                    _goalLastProgress = TranscriptEntryData.Truncate(GoalProgress.VisibleReply(reply));
-                }
-                if (decision.Complete)
-                {
-                    _lastCompletedGoal = objective;
-                    _goals.RemoveAt(0);
-                    _goalTurns = 0;
-                    _goalBlockedTurns = 0;
-                    _goalIdleTurns = 0;
-                    _goalBlockerKey = null;
-                    _goalNeedsVerification = false;
-                    _goalLastProgress = null;
-                    _goalPauseReason = GoalPauseReason.None;
-                    session.Transcript.Add(new TranscriptEntry
-                    {
-                        Kind = TranscriptKind.Notice,
-                        Text = "Goal completed and verified: " + objective
-                    });
-                }
-                else if (decision.Pause)
-                {
-                    _goalPaused = true;
-                    _goalPauseReason = decision.Blocked ? reply == null ? GoalPauseReason.Error : GoalPauseReason.Blocked
-                        : decision.NoProgress ? GoalPauseReason.NoProgress : GoalPauseReason.TurnLimit;
-                    session.Transcript.Add(new TranscriptEntry
-                    {
-                        Kind = TranscriptKind.Notice,
-                        Text = decision.Blocked
-                            ? reply == null
-                                ? "Goal paused after repeated errors. Use /goal resume to continue: " + objective
-                                : "Goal blocked by the same condition for three turns. Use /goal resume after it changes: " + objective
-                            : decision.NoProgress
-                                ? "Goal paused after three turns without a successful tool action. Use /goal resume to continue: " + objective
-                                : "Goal paused at the turn limit. Use /goal resume to continue: " + objective
-                    });
-                }
+                HandleGoalDecision(session, objective, reply, decision);
             }
             catch (Exception ex)
             {
@@ -532,6 +486,89 @@ namespace RimAgent
                     _goalRunning = false;
                     _goalNextRunAt = DateTime.UtcNow.AddSeconds(1);
                 }
+            }
+        }
+
+        private static bool HasActiveGoalToolUsage(IEnumerable<TranscriptEntry> entries, int instructionId)
+        {
+            // 記憶與網頁搜尋不碰殖民地，不算推進目標；否則每輪讀 preferences.md 就能躲過閒置暫停。
+            // 委派本身也不算，子代理實際跑的工具另有紀錄。
+            return entries.Any(e => e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool
+                && e.ToolCategory != ToolCategory.Memory && e.ToolCategory != ToolCategory.Web
+                && e.ToolCategory != ToolCategory.Agents
+                && !e.Failed && !(e.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
+        }
+
+        private void HandleGoalDecision(ColonyAgentSession session, string objective, string reply, GoalTurnDecision decision)
+        {
+            _goalTurns = decision.Turns;
+            _goalBlockedTurns = decision.BlockedTurns;
+            _goalIdleTurns = decision.IdleTurns;
+            _goalBlockerKey = decision.BlockerKey;
+            _goalNeedsVerification = reply != null && GoalProgress.ParseStatus(reply) == GoalTurnStatus.Complete
+                && !decision.Complete;
+            if (reply != null && !session.HasPendingConfirmation)
+            {
+                _goalLastProgress = TranscriptEntryData.Truncate(GoalProgress.VisibleReply(reply));
+            }
+            if (decision.Complete)
+            {
+                _lastCompletedGoal = objective;
+                _goals.RemoveAt(0);
+                _goalTurns = 0;
+                _goalBlockedTurns = 0;
+                _goalIdleTurns = 0;
+                _goalBlockerKey = null;
+                _goalNeedsVerification = false;
+                _goalLastProgress = null;
+                _goalPauseReason = GoalPauseReason.None;
+                session.Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = "Goal completed and verified: " + objective
+                });
+            }
+            else if (decision.Pause)
+            {
+                _goalPaused = true;
+                DetermineGoalPauseDetails(decision, reply, objective, out _goalPauseReason, out string noticeText);
+                session.Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = noticeText
+                });
+            }
+        }
+
+        private static void DetermineGoalPauseDetails(
+            GoalTurnDecision decision,
+            string reply,
+            string objective,
+            out GoalPauseReason reason,
+            out string noticeText)
+        {
+            if (decision.Blocked)
+            {
+                if (reply == null)
+                {
+                    reason = GoalPauseReason.Error;
+                    noticeText = "Goal paused after repeated errors. Use /goal resume to continue: " + objective;
+                }
+                else
+                {
+                    reason = GoalPauseReason.Blocked;
+                    noticeText = "Goal blocked by the same condition for three turns. Use /goal resume after it changes: " + objective;
+                }
+            }
+            else if (decision.NoProgress)
+            {
+                reason = GoalPauseReason.NoProgress;
+                noticeText = "Goal paused after three turns without a successful tool action. Use /goal resume to continue: " + objective;
+            }
+            else
+            {
+                reason = GoalPauseReason.TurnLimit;
+                noticeText = "Goal paused at the turn limit. Use /goal resume to continue: " + objective;
             }
         }
 

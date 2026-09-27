@@ -28,6 +28,7 @@ namespace RimAgent.Mcp
             PropertyNameCaseInsensitive = true
         };
 
+        #pragma warning disable S1144, S3459 // 由 System.Text.Json 反序列化賦值
         /// <summary>servers.json 條目的反序列化形態；缺欄位一律給預設，由呼叫端映射並容錯。</summary>
         private sealed class ServerDto
         {
@@ -37,6 +38,7 @@ namespace RimAgent.Mcp
             public bool Enabled { get; set; }
             public int TimeoutSeconds { get; set; }
         }
+        #pragma warning restore S1144, S3459
 
         public static bool TryLoad(string path, out List<McpServerEntry> servers, out string error)
         {

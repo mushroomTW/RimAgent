@@ -169,54 +169,18 @@ namespace RimAgent.Agent
             // 冷卻期間完全不動條件狀態：被冷卻擋下的事件，等冷卻一過仍是新的邊緣，照樣會觸發。
             if (config.CooldownTicks > 0 && tick - _lastRunTick < config.CooldownTicks) return AutonomousTrigger.None;
 
-            // 襲擊是雙向條件：上升邊是 Raid，下降邊是 RaidEnded。
-            // 兩邊都值得重試——敵人還在就再部署一次，收尾沒做完就再收一次。
-            bool raid = signals.HostileCount > 0;
-            if (config.OnRaid)
+            if (TryEvaluateRaid(tick, signals, config, out AutonomousTrigger raidTrigger))
             {
-                if (raid != _prevRaid)
-                {
-                    _prevRaid = raid;
-                    // 襲擊走 _prevRaid 的轉態判定，不吃迴圈的層級比較；這裡只把在場狀態記進去，
-                    // 讓存檔後重試退避的計算維持一致。
-                    _watch[(int)AutonomousTrigger.Raid].Level = raid ? 1 : 0;
-                    return Armed(raid ? AutonomousTrigger.Raid : AutonomousTrigger.RaidEnded, tick);
-                }
-                AutonomousTrigger retry = Retry(raid ? AutonomousTrigger.Raid : AutonomousTrigger.RaidEnded, tick);
-                if (retry != AutonomousTrigger.None) return retry;
-            }
-            else
-            {
-                // 關掉時不追蹤襲擊狀態：_prevRaid 若跟著更新，重新開啟就看不到上升邊，
-                // 明明還在打卻再也不會觸發。清成 false 代表「開啟的那一刻就是新事件」。
-                _prevRaid = false;
-                _watch[(int)AutonomousTrigger.Raid] = default(Watcher);
-                _watch[(int)AutonomousTrigger.RaidEnded] = default(Watcher);
+                return raidTrigger;
             }
 
             int foodTier = FoodTier(signals);
             foreach (Condition condition in Build(signals, config, foodTier))
             {
-                ref Watcher w = ref _watch[(int)condition.Trigger];
-                if (!condition.Enabled)
+                if (TryEvaluateCondition(condition, tick, out AutonomousTrigger conditionTrigger))
                 {
-                    // 開關被關掉：狀態要立刻清空。留著會讓玩家把開關關掉再開時，
-                    // 條件還沒恢復就先吃到「次數用完」的舊狀態，之後再也不處理也沒人知道。
-                    w = default(Watcher);
-                    continue;
+                    return conditionTrigger;
                 }
-                int previousLevel = w.Level;
-                w.Level = condition.Level;
-                if (condition.Level <= 0)
-                {
-                    // 問題解除：清空重試狀態，等它再出現時算新的一次事件。
-                    w = default(Watcher);
-                    continue;
-                }
-                // 層級變高＝新情況惡化，立刻叫；持平代表上次已經看過，繼續走重試。
-                if (condition.Level > previousLevel) return Armed(condition.Trigger, tick);
-                AutonomousTrigger retry = Retry(condition.Trigger, tick);
-                if (retry != AutonomousTrigger.None) return retry;
             }
 
             // 優先序最低的保底：一切正常也定期推進一件事。
@@ -225,6 +189,76 @@ namespace RimAgent.Agent
                 return AutonomousTrigger.Interval;
             }
             return AutonomousTrigger.None;
+        }
+
+        private bool TryEvaluateRaid(long tick, AutonomousSignals signals, AutonomousConfig config, out AutonomousTrigger trigger)
+        {
+            trigger = AutonomousTrigger.None;
+            if (!config.OnRaid)
+            {
+                // 關掉時不追蹤襲擊狀態：_prevRaid 若跟著更新，重新開啟就看不到上升邊，
+                // 明明還在打卻再也不會觸發。清成 false 代表「開啟的那一刻就是新事件」。
+                _prevRaid = false;
+                _watch[(int)AutonomousTrigger.Raid] = default(Watcher);
+                _watch[(int)AutonomousTrigger.RaidEnded] = default(Watcher);
+                return false;
+            }
+
+            // 襲擊是雙向條件：上升邊是 Raid，下降邊是 RaidEnded。
+            // 兩邊都值得重試——敵人還在就再部署一次，收尾沒做完就再收一次。
+            bool raid = signals.HostileCount > 0;
+            if (raid != _prevRaid)
+            {
+                _prevRaid = raid;
+                // 襲擊走 _prevRaid 的轉態判定，不吃迴圈的層級比較；這裡只把在場狀態記進去，
+                // 讓存檔後重試退避的計算維持一致。
+                _watch[(int)AutonomousTrigger.Raid].Level = raid ? 1 : 0;
+                trigger = Armed(raid ? AutonomousTrigger.Raid : AutonomousTrigger.RaidEnded, tick);
+                return true;
+            }
+
+            AutonomousTrigger retry = Retry(raid ? AutonomousTrigger.Raid : AutonomousTrigger.RaidEnded, tick);
+            if (retry != AutonomousTrigger.None)
+            {
+                trigger = retry;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryEvaluateCondition(Condition condition, long tick, out AutonomousTrigger trigger)
+        {
+            trigger = AutonomousTrigger.None;
+            ref Watcher w = ref _watch[(int)condition.Trigger];
+            if (!condition.Enabled)
+            {
+                // 開關被關掉：狀態要立刻清空。留著會讓玩家把開關關掉再開時，
+                // 條件還沒恢復就先吃到「次數用完」的舊狀態，之後再也不處理也沒人知道。
+                w = default(Watcher);
+                return false;
+            }
+            int previousLevel = w.Level;
+            w.Level = condition.Level;
+            if (condition.Level <= 0)
+            {
+                // 問題解除：清空重試狀態，等它再出現時算新的一次事件。
+                w = default(Watcher);
+                return false;
+            }
+            // 層級變高＝新情況惡化，立刻叫；持平代表上次已經看過，繼續走重試。
+            if (condition.Level > previousLevel)
+            {
+                trigger = Armed(condition.Trigger, tick);
+                return true;
+            }
+            AutonomousTrigger retry = Retry(condition.Trigger, tick);
+            if (retry != AutonomousTrigger.None)
+            {
+                trigger = retry;
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -426,6 +460,7 @@ namespace RimAgent.Agent
     /// <summary>重試表的存檔項目。欄位預設值即「尚未觸發」，舊存檔沒有這個型別時自然相容。</summary>
     public class AutonomousWatch : IExposable
     {
+        #pragma warning disable S1104 // Required for RimWorld Scribe serialization via ref parameter
         public int Trigger;
         /// <summary>上次評估時的嚴重度；0 代表問題當時不存在。</summary>
         public int Level;
@@ -433,6 +468,7 @@ namespace RimAgent.Agent
         public bool GaveUp;
         public long LastTick;
         public int Attempts;
+        #pragma warning restore S1104
 
         public void ExposeData()
         {

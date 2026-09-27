@@ -23,6 +23,7 @@ namespace RimAgent.Agent
         public readonly bool NoProgress;
         public readonly string BlockerKey;
 
+        #pragma warning disable S107 // 狀態物件包含完整輪次決策資料
         public GoalTurnDecision(int turns, int blockedTurns, bool complete, bool pause,
             bool blocked = false, string blockerKey = null,
             int idleTurns = 0, bool noProgress = false)
@@ -36,6 +37,7 @@ namespace RimAgent.Agent
             NoProgress = noProgress;
             BlockerKey = blockerKey;
         }
+        #pragma warning restore S107
     }
 
     /// <summary>每輪重述完整目標，並以明確結尾標記回報進度，避免壓縮後遺失目標。</summary>
@@ -46,7 +48,8 @@ namespace RimAgent.Agent
         public const int MaxIdleTurns = 3;
         private static readonly Regex StatusMarker = new Regex(
             @"(?:\A|\r?\n)[ \t]*\[\[GOAL:(COMPLETE|BLOCKED|CONTINUE)(?::([a-z0-9_-]{1,64}))?\]\][ \t]*\z",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            TimeSpan.FromSeconds(1));
 
         public static string BuildPrompt(string objective, string confirmationReport = null,
             bool needsVerification = false)
@@ -104,6 +107,7 @@ namespace RimAgent.Agent
             return verified;
         }
 
+        #pragma warning disable S107 // 評估決策需傳入輪次相關各狀態變數
         public static GoalTurnDecision AfterTurn(int previousTurns, int previousBlocks, string reply,
             bool waitingConfirmation, bool hasToolEvidence, string previousBlockerKey = null,
             int previousIdleTurns = 0, bool usedTool = false)
@@ -117,10 +121,8 @@ namespace RimAgent.Agent
             {
                 return new GoalTurnDecision(turns, 0, true, false);
             }
-            string blockerKey = reply == null ? "model-error"
-                : status == GoalTurnStatus.Blocked ? GetBlockerKey(reply) : null;
-            int blocks = blockerKey == null ? 0
-                : string.Equals(previousBlockerKey, blockerKey, StringComparison.Ordinal) ? previousBlocks + 1 : 1;
+            string blockerKey = DetermineBlockerKey(reply, status);
+            int blocks = DetermineBlocks(previousBlocks, previousBlockerKey, blockerKey);
             bool blocked = blocks >= MaxConsecutiveBlocks;
             bool turnLimit = turns >= MaxTurns;
             int idleTurns = reply != null && !usedTool ? previousIdleTurns + 1 : 0;
@@ -128,12 +130,26 @@ namespace RimAgent.Agent
             return new GoalTurnDecision(turns, blocks, false, blocked || turnLimit || noProgress,
                 blocked, blockerKey, idleTurns, noProgress);
         }
+        #pragma warning restore S107
+
+        private static string DetermineBlockerKey(string reply, GoalTurnStatus status)
+        {
+            if (reply == null) return "model-error";
+            if (status == GoalTurnStatus.Blocked) return GetBlockerKey(reply);
+            return null;
+        }
+
+        private static int DetermineBlocks(int previousBlocks, string previousBlockerKey, string blockerKey)
+        {
+            if (blockerKey == null) return 0;
+            return string.Equals(previousBlockerKey, blockerKey, StringComparison.Ordinal) ? previousBlocks + 1 : 1;
+        }
 
         private static string GetBlockerKey(string reply)
         {
             Match match = StatusMarker.Match(reply.TrimEnd(' ', '\t', '\r', '\n'));
             if (match.Groups[2].Success) return match.Groups[2].Value.ToLowerInvariant();
-            string description = Regex.Replace(VisibleReply(reply), @"\s+", " ").Trim().ToLowerInvariant();
+            string description = Regex.Replace(VisibleReply(reply), @"\s+", " ", RegexOptions.None, TimeSpan.FromSeconds(1)).Trim().ToLowerInvariant();
             return description.Length == 0 ? "unspecified" : description.Substring(0, Math.Min(120, description.Length));
         }
 
