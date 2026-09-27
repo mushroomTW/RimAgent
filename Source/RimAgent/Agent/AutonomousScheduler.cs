@@ -341,12 +341,20 @@ namespace RimAgent.Agent
         /// <summary>
         /// 玩家主動中止進行中的自主任務：該條件在解除前不再重試。
         /// 與重試用完不同，不經 <see cref="TakeGiveUps"/> 回報——按停止鍵的玩家知道自己按了停止。
-        /// 條件解除後照常清空（下次出現算新事件），嚴重度變高照常立刻重叫。
+        /// 條件解除後照常清空（下次出現算新事件），嚴重度變高照常立刻重叫（與放棄後的行為一致，
+        /// 都是排程器既有的「層級變高＝新情況」規則，不是中止新增的語義）。
+        /// 定期巡視不經重試表：把心跳時鐘撥到現在，下一次巡視是一個完整間隔之後。
+        /// 抉擇只對新 id 觸發一次，本來就不會重試，無需處理。
         /// 冪等：重複呼叫與對未觸發的條件呼叫都無作用。
         /// </summary>
-        public void Dismiss(AutonomousTrigger trigger)
+        public void Dismiss(AutonomousTrigger trigger, long tick)
         {
-            if (trigger == AutonomousTrigger.None) return;
+            if (trigger == AutonomousTrigger.None || trigger == AutonomousTrigger.Choice) return;
+            if (trigger == AutonomousTrigger.Interval)
+            {
+                _lastRunTick = tick;
+                return;
+            }
             int index = (int)trigger;
             if (index < 0 || index >= WatcherCount) return;
             ref Watcher w = ref _watch[index];

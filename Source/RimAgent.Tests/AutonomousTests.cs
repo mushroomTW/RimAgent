@@ -35,6 +35,19 @@ namespace RimAgent.Tests
             return new AutonomousSignals { HostileCount = 0, NearMentalBreakCount = 0, FoodNutrition = 100f, ColonistCount = colonists };
         }
 
+        /// <summary>通電＋研究中：隔離火災訊號，不被停電／停研條件搶先。</summary>
+        private static AutonomousSignals ActiveBase()
+        {
+            return new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+        }
+
+        private static AutonomousSignals ActiveFire()
+        {
+            AutonomousSignals signals = ActiveBase();
+            signals.FireCount = 1;
+            return signals;
+        }
+
         [Test]
         public void DisabledNeverFires()
         {
@@ -251,11 +264,11 @@ namespace RimAgent.Tests
         public void DismissingARunStopsRetriesUntilTheConditionClears()
         {
             _config.OnFire = true;
-            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1, HasActiveResearch = true, AnyWorkingPower = true };
-            var calm = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+            AutonomousSignals fire = ActiveFire();
+            AutonomousSignals calm = ActiveBase();
             Assert.That(_scheduler.Evaluate(0, fire, _config), Is.EqualTo(AutonomousTrigger.Fire));
 
-            _scheduler.Dismiss(AutonomousTrigger.Fire);
+            _scheduler.Dismiss(AutonomousTrigger.Fire, 0);
 
             Assert.That(_scheduler.Evaluate(2500, fire, _config), Is.EqualTo(AutonomousTrigger.None), "退避到了也不重試");
             Assert.That(_scheduler.Evaluate(20000, fire, _config), Is.Not.EqualTo(AutonomousTrigger.Fire), "之後也不重試（定期巡視除外）");
@@ -272,7 +285,7 @@ namespace RimAgent.Tests
             var starving = new AutonomousSignals { FoodNutrition = 3 * 2f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
             Assert.That(_scheduler.Evaluate(0, tight, _config), Is.EqualTo(AutonomousTrigger.FoodShortage));
 
-            _scheduler.Dismiss(AutonomousTrigger.FoodShortage);
+            _scheduler.Dismiss(AutonomousTrigger.FoodShortage, 0);
 
             Assert.That(_scheduler.Evaluate(2500, tight, _config), Is.EqualTo(AutonomousTrigger.None), "層級持平不重試");
             Assert.That(_scheduler.Evaluate(3000, starving, _config), Is.EqualTo(AutonomousTrigger.FoodShortage), "惡化要立刻再叫");
@@ -282,11 +295,28 @@ namespace RimAgent.Tests
         [Test]
         public void DismissingIdleOrEmptyTriggerDoesNothing()
         {
-            _scheduler.Dismiss(AutonomousTrigger.None);
+            _scheduler.Dismiss(AutonomousTrigger.None, 0);
             _config.OnFire = true;
-            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1, HasActiveResearch = true, AnyWorkingPower = true };
-            _scheduler.Dismiss(AutonomousTrigger.Fire);
+            AutonomousSignals fire = ActiveFire();
+            _scheduler.Dismiss(AutonomousTrigger.Fire, 0);
             Assert.That(_scheduler.Evaluate(0, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "沒跑過的條件不受影響");
+        }
+
+        /// <summary>
+        /// 中止一次定期巡視：下一次巡視是一個完整間隔之後，不是下次檢查就回來。
+        /// 定期巡視不經重試表，壓制靠心跳時鐘。
+        /// </summary>
+        [Test]
+        public void DismissingAnIntervalRunDelaysTheNextHeartbeat()
+        {
+            Assert.That(_scheduler.Evaluate(15000, Calm(), _config), Is.EqualTo(AutonomousTrigger.Interval));
+
+            _scheduler.Dismiss(AutonomousTrigger.Interval, 15000);
+
+            Assert.That(_scheduler.Evaluate(15500, Calm(), _config), Is.EqualTo(AutonomousTrigger.None));
+            Assert.That(_scheduler.Evaluate(29999, Calm(), _config), Is.EqualTo(AutonomousTrigger.None));
+            Assert.That(_scheduler.Evaluate(30000, Calm(), _config), Is.EqualTo(AutonomousTrigger.Interval), "完整間隔後照常巡視");
+            Assert.That(_scheduler.TakeGiveUps(), Is.Empty);
         }
 
         [Test]

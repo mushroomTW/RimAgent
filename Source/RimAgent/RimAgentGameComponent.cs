@@ -65,12 +65,6 @@ namespace RimAgent
         /// 早於冷卻記錄；只看 busy 的話，中間落下的訊號檢查會拿舊冷卻再起一輪。
         /// </summary>
         private volatile bool _autoRunning;
-        /// <summary>
-        /// 進行中的自主任務的觸發原因（None 代表沒在跑），給停止鍵判斷要壓住哪個條件的重試。
-        /// 起跑與停止都在主線程；收尾的清空可能落在背景執行緒，讀到舊值只會少做一次冪等的 Dismiss，
-        /// 取消路徑的處理會補上。
-        /// </summary>
-        private AutonomousTrigger _autoTrigger = AutonomousTrigger.None;
         /// <summary>見過的抉擇 id：只在出現新抉擇時起一輪，模型沒處理掉的不會每幾秒重觸發、白燒 API。</summary>
         private readonly HashSet<string> _seenChoices = new HashSet<string>();
         private DateTime _nextChoiceCheckAt;
@@ -416,7 +410,6 @@ namespace RimAgent
                 _seenChoices.RemoveWhere(id => choices.All(c => c.Id != id));
                 if (!fresh) return;
                 _autoRunning = true;
-                _autoTrigger = AutonomousTrigger.Choice;
                 _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Choice, Find.TickManager.TicksGame, ToConfig(settings));
             }
             catch (Exception ex)
@@ -598,7 +591,6 @@ namespace RimAgent
                 ReportGiveUps(session);
                 if (trigger == AutonomousTrigger.None) return;
                 _autoRunning = true;
-                _autoTrigger = trigger;
                 _ = RunAutonomousGuardedAsync(session, trigger, tick, config);
                 _lastAutoError = null;
             }
@@ -687,15 +679,10 @@ namespace RimAgent
             }
         }
 
-        /// <summary>
-        /// UI 的停止鍵：取消進行中的自主任務（玩家指令另有自己的 token）。
-        /// 中止的條件在解除前不再重試——否則退避一到就自己跑回來，等於停止鍵沒用。
-        /// </summary>
+        /// <summary>UI 的停止鍵：取消進行中的自主任務（玩家指令另有自己的 token）。收尾憑 token 壓住重試，見 RunAutonomousAsync。</summary>
         public void StopAutonomousRun()
         {
             _autoCts?.Cancel();
-            AutonomousTrigger trigger = _autoTrigger;
-            if (trigger != AutonomousTrigger.None) _scheduler.Dismiss(trigger);
         }
 
         private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config)
@@ -707,7 +694,6 @@ namespace RimAgent
             finally
             {
                 _autoRunning = false;
-                _autoTrigger = AutonomousTrigger.None;
             }
         }
 
@@ -715,6 +701,7 @@ namespace RimAgent
         {
             _autoCts?.Dispose();
             _autoCts = new CancellationTokenSource();
+            CancellationTokenSource cts = _autoCts;
             // 送出前先算好這句會拿到的編號：busy 旗標保證成功送出的那句取的是下一個號；
             // 送完才讀 CurrentInstructionId 的話，玩家在旗標釋放的瞬間送指令會讓我們數到別句。
             int instructionId = session.Transcript.CurrentInstructionId + 1;
@@ -737,7 +724,7 @@ namespace RimAgent
                 // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
                 await session.SendAsync(
                     instruction,
-                    _autoCts.Token,
+                    cts.Token,
                     autonomous: true,
                     maxToolSteps: AutonomousRunMaxSteps,
                     reasoningOverride: ReasoningLevel.Low);
@@ -749,18 +736,20 @@ namespace RimAgent
             }
             catch (OperationCanceledException)
             {
-                // 玩家主動停止自主任務（點擊停止或 /stop）：該條件在解除前不再重試。
-                // 若尚未消耗任何工具配額，不吃冷卻（其他條件不受影響）。
-                _scheduler.Dismiss(trigger);
+                // 玩家主動停止自主任務（點擊停止或 /stop）：收尾統一壓住重試。
             }
             catch (Exception ex)
             {
                 Log.Warning("RimAgent autonomous run failed: " + ex.Message);
             }
+            // 玩家按了停止就壓住該條件的重試（解除前不再跑）：憑 token 判斷，
+            // SendAsync 吃掉取消沒擲 OCE 時同樣生效；沒消耗工具配額就不吃冷卻（其他條件不受影響）。
+            bool stopped = cts.IsCancellationRequested;
+            if (stopped) _scheduler.Dismiss(trigger, tick);
             // 只數這一句的工具紀錄：transcript 會裁掉最舊的紀錄，前後相減會失準。
             int used = session.Transcript.Snapshot().Count(e =>
                 e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId && e.BudgetConsumed);
-            if (used > 0 || _autoCts == null || !_autoCts.IsCancellationRequested)
+            if (used > 0 || !stopped)
             {
                 _scheduler.RecordRun(tick, used, config);
             }
