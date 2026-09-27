@@ -32,7 +32,8 @@ namespace RimAgent.Tests
             "RimAgent.UI.Window_Agent.CopyToolHeaderOnRightClick", // 工具列右鍵複製
             "RimAgent.RimAgentMod.OpenFolder",                 // 設定頁開啟紀錄資料夾
             "RimAgent.Game.RimWorldGameWorld.TakeScreenshot",  // 截圖
-            "RimAgent.UI.Window_Agent.LoadPendingScreenshot"   // 截圖預覽縮圖
+            "RimAgent.UI.Window_Agent.LoadPendingScreenshot",  // 截圖預覽縮圖
+            "RimAgent.UI.Window_Agent.DownscaleTexture"        // 截圖預覽縮圖繪製
         };
 
         [Test]

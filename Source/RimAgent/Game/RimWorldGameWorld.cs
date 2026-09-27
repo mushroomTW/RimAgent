@@ -54,6 +54,52 @@ namespace RimAgent.Game
             };
         }
 
+        private struct ColonistSignalsAccumulator
+        {
+            public int ColonistCount;
+            public int NearMentalBreak;
+            public int LowMood;
+            public int DownedOrBleeding;
+            public int ColdColonists;
+            public int Bedless;
+            public int OutdoorsBed;
+
+            public void AccumulateColonist(Pawn pawn)
+            {
+                // 每 500 tick 跑一次，外層抓到例外就整次作廢：其他模組的 pawn 一丟例外自主模式就停擺。
+                // 逐個隔離，全部讀完才一起計入，壞掉的那一位整個不算，不留半套計數。
+                bool nearBreak;
+                bool low;
+                bool downed;
+                bool cold;
+                bool noBed;
+                bool bedOutdoors;
+                try
+                {
+                    // 兩個心情門檻不疊加：快崩潰的算崩潰事件，不然同一件事報兩次。
+                    nearBreak = IsNearMentalBreak(pawn);
+                    low = !nearBreak && IsLowMood(pawn);
+                    downed = pawn.Downed || HasBleeding(pawn);
+                    cold = IsInDangerousTemperature(pawn);
+                    Building_Bed bed = pawn.ownership?.OwnedBed;
+                    noBed = bed == null;
+                    bedOutdoors = !noBed && IsOutdoors(bed.GetRoom());
+                }
+                catch (Exception ex)
+                {
+                    WarnModError(pawn, "autonomous signals", ex);
+                    return;
+                }
+                ColonistCount++;
+                if (nearBreak) NearMentalBreak++;
+                if (low) LowMood++;
+                if (downed) DownedOrBleeding++;
+                if (cold) ColdColonists++;
+                if (noBed) Bedless++;
+                if (bedOutdoors) OutdoorsBed++;
+            }
+        }
+
         /// <summary>
         /// 自主排程器每 500 tick 要的數字，不建完整快照（GetOverview／GetResources 會為每個威脅與資源配置物件）。
         /// 除了應急訊號，也收「基地狀況」（受寒、沒床、露宿、停電、心情、停研），
@@ -63,16 +109,10 @@ namespace RimAgent.Game
         {
             List<Map> maps = Find.Maps;
             int hostileCount = 0;
-            int nearMentalBreak = 0;
             float foodNutrition = 0f;
-            int colonistCount = 0;
-            int downedOrBleeding = 0;
             int fireCount = 0;
-            int coldColonists = 0;
-            int bedless = 0;
-            int outdoorsBed = 0;
-            int lowMood = 0;
             bool anyPower = false;
+            var accumulator = new ColonistSignalsAccumulator();
 
             if (maps != null)
             {
@@ -92,33 +132,7 @@ namespace RimAgent.Game
                     if (freeColonists == null) continue;
                     for (int p = 0; p < freeColonists.Count; p++)
                     {
-                        Pawn pawn = freeColonists[p];
-                        // 每 500 tick 跑一次，外層抓到例外就整次作廢：其他模組的 pawn 一丟例外自主模式就停擺。
-                        // 逐個隔離，全部讀完才一起計入，壞掉的那一位整個不算，不留半套計數。
-                        bool nearBreak, low, downed, cold, noBed, bedOutdoors;
-                        try
-                        {
-                            // 兩個心情門檻不疊加：快崩潰的算崩潰事件，不然同一件事報兩次。
-                            nearBreak = IsNearMentalBreak(pawn);
-                            low = !nearBreak && IsLowMood(pawn);
-                            downed = pawn.Downed || HasBleeding(pawn);
-                            cold = IsInDangerousTemperature(pawn);
-                            Building_Bed bed = pawn.ownership?.OwnedBed;
-                            noBed = bed == null;
-                            bedOutdoors = !noBed && IsOutdoors(bed.GetRoom());
-                        }
-                        catch (Exception ex)
-                        {
-                            WarnModError(pawn, "autonomous signals", ex);
-                            continue;
-                        }
-                        colonistCount++;
-                        if (nearBreak) nearMentalBreak++;
-                        if (low) lowMood++;
-                        if (downed) downedOrBleeding++;
-                        if (cold) coldColonists++;
-                        if (noBed) bedless++;
-                        if (bedOutdoors) outdoorsBed++;
+                        accumulator.AccumulateColonist(freeColonists[p]);
                     }
                 }
             }
@@ -126,15 +140,15 @@ namespace RimAgent.Game
             return new Agent.AutonomousSignals
             {
                 HostileCount = hostileCount,
-                NearMentalBreakCount = nearMentalBreak,
+                NearMentalBreakCount = accumulator.NearMentalBreak,
                 FoodNutrition = foodNutrition,
-                ColonistCount = colonistCount,
-                DownedOrBleedingCount = downedOrBleeding,
+                ColonistCount = accumulator.ColonistCount,
+                DownedOrBleedingCount = accumulator.DownedOrBleeding,
                 FireCount = fireCount,
-                ColdColonistCount = coldColonists,
-                BedlessCount = bedless,
-                OutdoorsBedCount = outdoorsBed,
-                LowMoodCount = lowMood,
+                ColdColonistCount = accumulator.ColdColonists,
+                BedlessCount = accumulator.Bedless,
+                OutdoorsBedCount = accumulator.OutdoorsBed,
+                LowMoodCount = accumulator.LowMood,
                 // 1.6 的 ResearchManager 同時只有一個 currentProj，沒有 activeProjects 清單。
                 HasActiveResearch = Find.ResearchManager != null && Find.ResearchManager.GetProject() != null,
                 AnyWorkingPower = anyPower
@@ -328,8 +342,10 @@ namespace RimAgent.Game
 
         // AlertsReadout 的活動清單在 1.6 為私有快取；只讀取遊戲已計算的結果，
         // 找不到欄位時安全地回傳空清單，避免版本差異中斷 agent。
+        #pragma warning disable S3011 // RimWorld 私有欄位與方法存取為 Mod 運作必需
         private static readonly FieldInfo ActiveAlertsField =
             typeof(AlertsReadout).GetField("activeAlerts", BindingFlags.Instance | BindingFlags.NonPublic);
+        #pragma warning restore S3011
 
         public IReadOnlyList<AlertInfo> GetAlerts()
         {
@@ -353,6 +369,7 @@ namespace RimAgent.Game
 
         // 抉擇對話框：DiaOption 的文字與觸發、對話框目前的節點與標題都是 protected。
         // 只讀取、觸發遊戲原生的選項；找不到成員時視為沒有可回應的抉擇，避免版本差異中斷 agent。
+        #pragma warning disable S3011 // RimWorld 私有欄位與方法存取為 Mod 運作必需
         private static readonly FieldInfo DiaOptionTextField =
             typeof(DiaOption).GetField("text", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly MethodInfo DiaOptionActivateMethod =
@@ -361,6 +378,7 @@ namespace RimAgent.Game
             typeof(Dialog_NodeTree).GetField("curNode", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo NodeTreeTitleField =
             typeof(Dialog_NodeTree).GetField("title", BindingFlags.Instance | BindingFlags.NonPublic);
+        #pragma warning restore S3011
         private const string LetterChoicePrefix = "letter-";
         private const string DialogChoicePrefix = "dialog-";
         private const int ChoiceTextLimit = 600;
@@ -533,6 +551,7 @@ namespace RimAgent.Game
             return CommandResult.Ok(label);
         }
 
+        #pragma warning disable S1168 // null 代表未在地圖上找到該實體
         public IReadOnlyList<GizmoInfo> GetGizmos(int thingId)
         {
             Thing thing = FindThing(thingId);
@@ -547,7 +566,7 @@ namespace RimAgent.Game
                     Number = i + 1,
                     Label = CommandLabel(command),
                     Description = LimitChoiceText(command.Desc),
-                    Kind = command is Command_Toggle ? GizmoInfo.ToggleKind : command is Command_Action ? GizmoInfo.ActionKind : GizmoInfo.UnsupportedKind,
+                    Kind = DetermineGizmoKind(command),
                     On = (command as Command_Toggle)?.isActive?.Invoke() ?? false,
                     Disabled = command.Disabled,
                     DisabledReason = command.disabledReason ?? string.Empty
@@ -555,31 +574,62 @@ namespace RimAgent.Game
             }
             return result;
         }
+        #pragma warning restore S1168
+
+        private static string DetermineGizmoKind(Command command)
+        {
+            if (command is Command_Toggle) return GizmoInfo.ToggleKind;
+            if (command is Command_Action) return GizmoInfo.ActionKind;
+            return GizmoInfo.UnsupportedKind;
+        }
 
         public CommandResult UseGizmo(int thingId, int gizmoNumber, string label)
         {
             Thing thing = FindThing(thingId);
             if (thing == null || thing.Fogged()) return CommandResult.Fail("thing not found on the map");
             List<Command> commands = VisibleCommands(thing);
-            Command command = gizmoNumber >= 1 && gizmoNumber <= commands.Count ? commands[gizmoNumber - 1] : null;
-            if (command == null || !string.Equals(CommandLabel(command), label, StringComparison.OrdinalIgnoreCase))
-                return CommandResult.Fail($"{thing.LabelShort}'s button list changed; call list_gizmos again");
-            if (command.Disabled) return CommandResult.Fail($"\"{label}\" is disabled" + (command.disabledReason.NullOrEmpty() ? string.Empty : ": " + command.disabledReason));
-            // 只支援按一下與開關；其他 Command（Designator、選目標、挑作物之類）要滑鼠在地圖或選單上操作。
-            if (!(command is Command_Action) && !(command is Command_Toggle)) return CommandResult.Fail($"\"{label}\" needs a map target or a menu choice");
+            CommandResult validation = ValidateGizmoCommand(thing, gizmoNumber, label, commands, out Command command);
+            if (validation != null) return validation;
 
             var before = new HashSet<Window>(Find.WindowStack.Windows);
             command.ProcessInput(null);
-            // 按了開出選單或其他視窗（改名、分頁之類）：代選不了，關回去免得擋住遊戲。
-            // 抉擇對話框與確認框留著，交給 choose_option。
-            List<Window> opened = Find.WindowStack.Windows.Where(w => !before.Contains(w)).ToList();
+            CommandResult windowFailure = CloseUnsupportedWindows(before, label);
+            if (windowFailure != null) return windowFailure;
+
+            return CommandResult.Ok(GetToggleCommandResultSuffix(command));
+        }
+
+        private static CommandResult ValidateGizmoCommand(Thing thing, int gizmoNumber, string label, List<Command> commands, out Command command)
+        {
+            command = gizmoNumber >= 1 && gizmoNumber <= commands.Count ? commands[gizmoNumber - 1] : null;
+            if (command == null || !string.Equals(CommandLabel(command), label, StringComparison.OrdinalIgnoreCase))
+                return CommandResult.Fail($"{thing.LabelShort}'s button list changed; call list_gizmos again");
+            if (command.Disabled)
+                return CommandResult.Fail($"\"{label}\" is disabled" + (command.disabledReason.NullOrEmpty() ? string.Empty : ": " + command.disabledReason));
+            if (!(command is Command_Action) && !(command is Command_Toggle))
+                return CommandResult.Fail($"\"{label}\" needs a map target or a menu choice");
+            return null;
+        }
+
+        private static CommandResult CloseUnsupportedWindows(HashSet<Window> beforeWindows, string label)
+        {
+            List<Window> opened = Find.WindowStack.Windows.Where(w => !beforeWindows.Contains(w)).ToList();
             List<Window> unsupported = opened.Where(w => !(w is Dialog_NodeTree) && !(w is Dialog_MessageBox)).ToList();
             foreach (Window window in unsupported) window.Close(false);
             if (unsupported.Count > 0)
             {
                 return CommandResult.Fail($"\"{label}\" opened a {(unsupported[0] is FloatMenu ? "menu" : "window")} to pick from, which is not supported yet; it was closed");
             }
-            return CommandResult.Ok(command is Command_Toggle toggle ? (toggle.isActive() ? "now on" : "now off") : string.Empty);
+            return null;
+        }
+
+        private static string GetToggleCommandResultSuffix(Command command)
+        {
+            if (command is Command_Toggle toggle)
+            {
+                return toggle.isActive() ? "now on" : "now off";
+            }
+            return string.Empty;
         }
 
         /// <summary>選取時會畫出來的指令按鈕；純狀態顯示的 gizmo（護盾條之類）與開發者模式按鈕不算。</summary>
@@ -832,15 +882,23 @@ namespace RimAgent.Game
             foreach (Thing t in CandidateThings(map, query.Kind))
             {
                 if (result.Count >= query.Limit) break;
-                if (!t.Spawned) continue;
-                if (query.Area.HasValue && !query.Area.Value.Contains(t.Position.x, t.Position.z)) continue;
-                ThingKind? kind = KindOf(t);
-                if (kind == null || (query.Kind != ThingKind.Any && kind != query.Kind)) continue;
-                if (hasDefName && !string.Equals(t.def.defName, query.DefName, StringComparison.OrdinalIgnoreCase)) continue;
-                if (hasNeedle && !MatchesLabel(t, query.LabelContains)) continue;
-                result.Add(ToThing(t, map));
+                if (MatchesQuery(t, query, hasDefName, hasNeedle))
+                {
+                    result.Add(ToThing(t, map));
+                }
             }
             return result;
+        }
+
+        private static bool MatchesQuery(Thing t, ThingQuery query, bool hasDefName, bool hasNeedle)
+        {
+            if (!t.Spawned) return false;
+            if (query.Area.HasValue && !query.Area.Value.Contains(t.Position.x, t.Position.z)) return false;
+            ThingKind? kind = KindOf(t);
+            if (kind == null || (query.Kind != ThingKind.Any && kind != query.Kind)) return false;
+            if (hasDefName && !string.Equals(t.def.defName, query.DefName, StringComparison.OrdinalIgnoreCase)) return false;
+            if (hasNeedle && !MatchesLabel(t, query.LabelContains)) return false;
+            return true;
         }
 
         /// <summary>
@@ -1739,23 +1797,44 @@ namespace RimAgent.Game
 
         private static CommandResult OrderTend(Pawn doctor, Pawn patient)
         {
-            if (patient == null) return CommandResult.Fail("only pawns can be tended");
-            if (doctor.WorkTypeIsDisabled(WorkTypeDefOf.Doctor)) return CommandResult.Fail($"{doctor.LabelShort} is incapable of doctoring");
-            if (!patient.health.HasHediffsNeedingTend()) return CommandResult.Fail($"{patient.LabelShort} does not need tending");
-            bool ours = patient.IsColonist || patient.IsQuestLodger() || patient.IsPrisonerOfColony || patient.IsSlaveOfColony
-                        || (patient.Faction == Faction.OfPlayer && patient.IsAnimal);
-            if (!patient.Downed && (patient.HostileTo(doctor.Faction) || !ours)) return CommandResult.Fail($"{patient.LabelShort} will not accept treatment");
-            if (patient == doctor && doctor.playerSettings != null && !doctor.playerSettings.selfTend) return CommandResult.Fail($"self-tend is disabled for {doctor.LabelShort}");
-            if (patient.InAggroMentalState && !patient.health.hediffSet.HasHediff(HediffDefOf.Scaria)) return CommandResult.Fail($"{patient.LabelShort} is in an aggressive mental state");
+            if (!ValidateTendOrder(doctor, patient, out string failReason))
+            {
+                return CommandResult.Fail(failReason);
+            }
 
             // 找藥與建工作同 WorkGiver_Tend：藥在別人身上（背包、架子）時第三個目標是它的持有者。
             Thing medicine = HealthAIUtility.FindBestMedicine(doctor, patient);
-            Job tend = medicine == null ? JobMaker.MakeJob(JobDefOf.TendPatient, patient)
-                : medicine.SpawnedParentOrMe != medicine ? JobMaker.MakeJob(JobDefOf.TendPatient, patient, medicine, medicine.SpawnedParentOrMe)
-                : JobMaker.MakeJob(JobDefOf.TendPatient, patient, medicine);
+            Job tend = CreateTendJob(patient, medicine);
             tend.count = 1;
             tend.draftedTend = doctor.Drafted;
             return TakeOrderedJob(doctor, tend, $"tending {patient.LabelShort} " + (medicine == null ? "without medicine" : "with " + medicine.def.label));
+        }
+
+        private static bool ValidateTendOrder(Pawn doctor, Pawn patient, out string failReason)
+        {
+            failReason = null;
+            if (patient == null) { failReason = "only pawns can be tended"; return false; }
+            if (doctor.WorkTypeIsDisabled(WorkTypeDefOf.Doctor)) { failReason = $"{doctor.LabelShort} is incapable of doctoring"; return false; }
+            if (!patient.health.HasHediffsNeedingTend()) { failReason = $"{patient.LabelShort} does not need tending"; return false; }
+            bool ours = patient.IsColonist || patient.IsQuestLodger() || patient.IsPrisonerOfColony || patient.IsSlaveOfColony
+                        || (patient.Faction == Faction.OfPlayer && patient.IsAnimal);
+            if (!patient.Downed && (patient.HostileTo(doctor.Faction) || !ours)) { failReason = $"{patient.LabelShort} will not accept treatment"; return false; }
+            if (patient == doctor && doctor.playerSettings != null && !doctor.playerSettings.selfTend) { failReason = $"self-tend is disabled for {doctor.LabelShort}"; return false; }
+            if (patient.InAggroMentalState && !patient.health.hediffSet.HasHediff(HediffDefOf.Scaria)) { failReason = $"{patient.LabelShort} is in an aggressive mental state"; return false; }
+            return true;
+        }
+
+        private static Job CreateTendJob(Pawn patient, Thing medicine)
+        {
+            if (medicine == null)
+            {
+                return JobMaker.MakeJob(JobDefOf.TendPatient, patient);
+            }
+            if (medicine.SpawnedParentOrMe != medicine)
+            {
+                return JobMaker.MakeJob(JobDefOf.TendPatient, patient, medicine, medicine.SpawnedParentOrMe);
+            }
+            return JobMaker.MakeJob(JobDefOf.TendPatient, patient, medicine);
         }
 
         private static CommandResult OrderStrip(Pawn pawn, Thing target)
@@ -1838,12 +1917,11 @@ namespace RimAgent.Game
             // HaulableEver 涵蓋物品與屍體；迷霧裡的東西玩家還看不到，不動。
             foreach (Thing t in map.listerThings.ThingsInGroup(ThingRequestGroup.HaulableEver).ToList())
             {
-                if (!t.Spawned || t.Fogged()) continue;
-                if (area.HasValue && !area.Value.Contains(t.Position.x, t.Position.z)) continue;
-                if (t.TryGetComp<CompForbiddable>() == null || t.IsForbidden(Faction.OfPlayer) == forbidden) continue;
-                if (hasNeedle && !MatchesLabel(t, labelContains)) continue;
-                t.SetForbidden(forbidden, warnOnFail: false);
-                changed.Add(t);
+                if (CanSetForbidden(t, area, hasNeedle, labelContains, forbidden))
+                {
+                    t.SetForbidden(forbidden, warnOnFail: false);
+                    changed.Add(t);
+                }
             }
             if (changed.Count == 0)
             {
@@ -1852,6 +1930,15 @@ namespace RimAgent.Game
             }
             IEnumerable<string> labels = changed.Take(10).Select(t => t.LabelShort);
             return CommandResult.Ok($"{changed.Count} item(s): {string.Join(", ", labels)}{(changed.Count > 10 ? ", …" : string.Empty)}");
+        }
+
+        private static bool CanSetForbidden(Thing t, CellRectSpec? area, bool hasNeedle, string labelContains, bool targetForbidden)
+        {
+            if (!t.Spawned || t.Fogged()) return false;
+            if (area.HasValue && !area.Value.Contains(t.Position.x, t.Position.z)) return false;
+            if (t.TryGetComp<CompForbiddable>() == null || t.IsForbidden(Faction.OfPlayer) == targetForbidden) return false;
+            if (hasNeedle && !MatchesLabel(t, labelContains)) return false;
+            return true;
         }
 
         public CommandResult ExecuteTrade(TradeRequest request)

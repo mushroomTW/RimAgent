@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,8 +18,14 @@ namespace RimAgent.UI
     /// 懸浮可移動的 Agent 視窗，支援隨意拖曳、自由縮放、位置記憶。
     /// 包含雙色標籤決策日誌串流、模式/思考切換、輸入列與斜線指令。
     /// </summary>
+    #pragma warning disable S101 // RimWorld Window 類別命名慣例
     public class Window_Agent : Window
     {
+        private const string ColorTagPrefix = "<color=#";
+        private const string ColorTagClose = "</color>";
+        private const string ColorTagCloseSpace = "</color> ";
+        private const string GoalEmptyTranslationKey = "RimAgent.Goal.Empty";
+
         private const string InputControlName = "RimAgentFloatingInput";
         private const float TitleBarHeight = 30f;
         private const float BottomBarHeight = 32f;
@@ -400,67 +407,15 @@ namespace RimAgent.UI
         private void DrawTranscript(Rect outRect, ColonyAgentSession session)
         {
             float width = outRect.width - 16f;
-            AgentTranscript transcript = session.Transcript;
-            bool sameTranscript = ReferenceEquals(transcript, _linesTranscript);
-            bool widthChanged = Mathf.Abs(width - _linesWidth) > 0.001f;
-            // 拖曳縮放時寬度每幀都在變，全量重排（每行 CalcHeight＋markdown）會一路卡到放開；
-            // 寬度穩定 ReflowDelayMs 之後才重排，期間照舊寬度排版（行高才對得上）。有新內容時照常重排，不擋新回覆。
-            bool deferReflow = widthChanged && sameTranscript && transcript.Version == _linesTranscriptVersion
-                               && _linesWidth > 0f && !WidthSettled(width);
-            if (!deferReflow && (!sameTranscript || transcript.Version != _linesTranscriptVersion || widthChanged))
-            {
-                IReadOnlyList<TranscriptEntry> entries = transcript.Snapshot(out int version, out int epoch);
-                bool appendOnly = sameTranscript
-                                  && epoch == _linesTranscriptEpoch
-                                  && Mathf.Abs(width - _linesWidth) <= 0.001f
-                                  && entries.Count >= _linesEntryCount;
-                if (appendOnly) AppendLines(entries, _linesEntryCount, width);
-                else RebuildLines(entries, width);
-                _linesTranscript = transcript;
-                _linesTranscriptVersion = version;
-                _linesTranscriptEpoch = epoch;
-                _linesWidth = width;
-            }
+            EnsureTranscriptLines(session.Transcript, width, out bool deferReflow);
 
             float lineWidth = deferReflow ? _linesWidth : width;
-            float total = _linesTotal;
-            string working = null;
-            float workingHeight = 0f;
-            if (session.IsBusy)
-            {
-                // 執行中的省略號做 . → .. → ... 循環動畫（每 0.5 秒一格）；
-                // 翻譯字尾的 … 先去掉再補動畫點，中英語言檔都不必改。
-                // 用 Environment.TickCount 而不用 Unity Time：BCL 在測試與遊戲內都能 JIT。
-                working = _workingLabel.Get(WorkingPhase(), phase => "<color=#" + PauseHex + ">"
-                    + "RimAgent.Working".Translate().ToString().TrimEnd('…', '.', ' ') + WorkingDots(phase) + "</color>");
-                // 一行字，高度只隨寬度變。
-                if (Mathf.Abs(width - _workingHeightWidth) > 0.001f)
-                {
-                    _workingHeight = Text.CalcHeight(working, width);
-                    _workingHeightWidth = width;
-                }
-                workingHeight = _workingHeight;
-                total += workingHeight + EntryGap;
-            }
+            GetWorkingIndicator(session.IsBusy, width, out string working, out float workingHeight);
+            float total = _linesTotal + (working != null ? workingHeight + EntryGap : 0f);
 
-            // 只有原本就停在底部（或剛送出指令）才跟著新內容捲到底；往上翻舊紀錄時不被拉回去。
-            // 設成確切的最大值而非 float.MaxValue：捲軸狀態會記住這個值，太大時滾輪往上的位移會被吃掉。
-            var viewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height));
-            float maxScroll = viewRect.height - outRect.height;
-            if (_scrollToBottom || _scroll.y >= _lastMaxScroll - StickToBottomSlack)
-            {
-                _scroll.y = maxScroll;
-                _scrollToBottom = false;
-                _seenVersion = _linesTranscriptVersion;
-            }
-            _lastMaxScroll = maxScroll;
+            UpdateScrollPosition(total, width, outRect, out Rect viewRect, out float maxScroll, out bool showJump, out Rect jumpRect, out bool mouseOnJump);
             float visibleTop = Mathf.Clamp(_scroll.y, 0f, maxScroll);
             float visibleBottom = visibleTop + outRect.height;
-
-            bool showJump = _scroll.y < maxScroll - StickToBottomSlack;
-            var jumpRect = new Rect(outRect.center.x - JumpButtonWidth / 2f, outRect.yMax - JumpButtonHeight - 6f, JumpButtonWidth, JumpButtonHeight);
-            // 捲動區內的座標系不同，先在外面判斷滑鼠是否壓在跳底按鈕上，免得同一下點擊也展開底下的工具列。
-            bool mouseOnJump = showJump && Mouse.IsOver(jumpRect);
 
             Widgets.BeginScrollView(outRect, ref _scroll, viewRect);
             float y = 0f;
@@ -477,39 +432,7 @@ namespace RimAgent.UI
                 }
                 if (y + line.Height >= visibleTop && y <= visibleBottom)
                 {
-                    var lineRect = new Rect(0f, y, lineWidth, line.Height);
-                    switch (line.Kind)
-                    {
-                        case LineKind.Screenshot:
-                            DrawScreenshotPreview(lineRect, line.ImagePath);
-                            break;
-                        case LineKind.PlayerBubble:
-                            // 縮窄視窗、延後重排期間 lineWidth 仍是舊寬度；氣泡貼齊目前可見的右緣，不被推出畫面。
-                            float bubbleRight = Mathf.Min(lineRect.xMax, width);
-                            var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
-                            // Unity 內建圓角：borderWidth 0 是實心填滿，1 是外框。
-                            GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleColor, 0f, BubbleRadius);
-                            GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleBorderColor, 1f, BubbleRadius);
-                            DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
-                            break;
-                        case LineKind.ToolHeader:
-                            if (!mouseOnJump)
-                            {
-                                CopyToolHeaderOnRightClick(lineRect, line.PlainText);
-                                if (Mouse.IsOver(lineRect))
-                                {
-                                    Widgets.DrawHighlight(lineRect);
-                                    if (_toolToggleTip == null) _toolToggleTip = "RimAgent.Tool.ToggleTip".Translate();
-                                    TooltipHandler.TipRegion(lineRect, _toolToggleTip);
-                                }
-                                if (Widgets.ButtonInvisible(lineRect)) clickedTool = line.Entry;
-                            }
-                            Widgets.Label(lineRect, line.Text);
-                            break;
-                        default:
-                            DrawSelectableLine(lineRect, line.Text, line.PlainText);
-                            break;
-                    }
+                    DrawTranscriptLine(line, y, lineWidth, width, mouseOnJump, ref clickedTool);
                 }
                 y += line.Height + EntryGap;
             }
@@ -528,11 +451,119 @@ namespace RimAgent.UI
 
             if (showJump)
             {
-                bool unseen = _linesTranscriptVersion != _seenVersion;
-                string jumpLabel = _jumpLabel.Get(unseen, u => (u ? "RimAgent.Scroll.NewMessages" : "RimAgent.Scroll.Latest").Translate().ToString());
-                Color jumpColor = unseen ? NoticeColor : TitleColor;
-                if (DrawUnifiedButton(jumpRect, jumpLabel, jumpColor, jumpColor, true, GameFont.Tiny)) _scrollToBottom = true;
+                DrawJumpButton(jumpRect);
             }
+        }
+
+        private void EnsureTranscriptLines(AgentTranscript transcript, float width, out bool deferReflow)
+        {
+            bool sameTranscript = ReferenceEquals(transcript, _linesTranscript);
+            bool widthChanged = Mathf.Abs(width - _linesWidth) > 0.001f;
+            deferReflow = widthChanged && sameTranscript && transcript.Version == _linesTranscriptVersion
+                               && _linesWidth > 0f && !WidthSettled(width);
+            if (!deferReflow && (!sameTranscript || transcript.Version != _linesTranscriptVersion || widthChanged))
+            {
+                IReadOnlyList<TranscriptEntry> entries = transcript.Snapshot(out int version, out int epoch);
+                bool appendOnly = sameTranscript
+                                  && epoch == _linesTranscriptEpoch
+                                  && Mathf.Abs(width - _linesWidth) <= 0.001f
+                                  && entries.Count >= _linesEntryCount;
+                if (appendOnly) AppendLines(entries, _linesEntryCount, width);
+                else RebuildLines(entries, width);
+                _linesTranscript = transcript;
+                _linesTranscriptVersion = version;
+                _linesTranscriptEpoch = epoch;
+                _linesWidth = width;
+            }
+        }
+
+        private void GetWorkingIndicator(bool isBusy, float width, out string working, out float workingHeight)
+        {
+            working = null;
+            workingHeight = 0f;
+            if (!isBusy) return;
+
+            working = _workingLabel.Get(WorkingPhase(), phase => ColorTagPrefix + PauseHex + ">"
+                + "RimAgent.Working".Translate().ToString().TrimEnd('…', '.', ' ') + WorkingDots(phase) + ColorTagClose);
+            if (Mathf.Abs(width - _workingHeightWidth) > 0.001f)
+            {
+                _workingHeight = Text.CalcHeight(working, width);
+                _workingHeightWidth = width;
+            }
+            workingHeight = _workingHeight;
+        }
+
+        private void UpdateScrollPosition(
+            float total,
+            float width,
+            Rect outRect,
+            out Rect viewRect,
+            out float maxScroll,
+            out bool showJump,
+            out Rect jumpRect,
+            out bool mouseOnJump)
+        {
+            viewRect = new Rect(0f, 0f, width, Math.Max(total, outRect.height));
+            maxScroll = viewRect.height - outRect.height;
+            if (_scrollToBottom || _scroll.y >= _lastMaxScroll - StickToBottomSlack)
+            {
+                _scroll.y = maxScroll;
+                _scrollToBottom = false;
+                _seenVersion = _linesTranscriptVersion;
+            }
+            _lastMaxScroll = maxScroll;
+            showJump = _scroll.y < maxScroll - StickToBottomSlack;
+            jumpRect = new Rect(outRect.center.x - JumpButtonWidth / 2f, outRect.yMax - JumpButtonHeight - 6f, JumpButtonWidth, JumpButtonHeight);
+            mouseOnJump = showJump && Mouse.IsOver(jumpRect);
+        }
+
+        private void DrawTranscriptLine(
+            TranscriptLine line,
+            float y,
+            float lineWidth,
+            float visibleWidth,
+            bool mouseOnJump,
+            ref TranscriptEntry clickedTool)
+        {
+            var lineRect = new Rect(0f, y, lineWidth, line.Height);
+            switch (line.Kind)
+            {
+                case LineKind.Screenshot:
+                    DrawScreenshotPreview(lineRect, line.ImagePath);
+                    break;
+                case LineKind.PlayerBubble:
+                    float bubbleRight = Mathf.Min(lineRect.xMax, visibleWidth);
+                    var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
+                    GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleColor, 0f, BubbleRadius);
+                    GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleBorderColor, 1f, BubbleRadius);
+                    DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
+                    break;
+                case LineKind.ToolHeader:
+                    if (!mouseOnJump)
+                    {
+                        CopyToolHeaderOnRightClick(lineRect, line.PlainText);
+                        if (Mouse.IsOver(lineRect))
+                        {
+                            Widgets.DrawHighlight(lineRect);
+                            if (_toolToggleTip == null) _toolToggleTip = "RimAgent.Tool.ToggleTip".Translate();
+                            TooltipHandler.TipRegion(lineRect, _toolToggleTip);
+                        }
+                        if (Widgets.ButtonInvisible(lineRect)) clickedTool = line.Entry;
+                    }
+                    Widgets.Label(lineRect, line.Text);
+                    break;
+                default:
+                    DrawSelectableLine(lineRect, line.Text, line.PlainText);
+                    break;
+            }
+        }
+
+        private void DrawJumpButton(Rect jumpRect)
+        {
+            bool unseen = _linesTranscriptVersion != _seenVersion;
+            string jumpLabel = _jumpLabel.Get(unseen, u => (u ? "RimAgent.Scroll.NewMessages" : "RimAgent.Scroll.Latest").Translate().ToString());
+            Color jumpColor = unseen ? NoticeColor : TitleColor;
+            if (DrawUnifiedButton(jumpRect, jumpLabel, jumpColor, jumpColor, true, GameFont.Tiny)) _scrollToBottom = true;
         }
 
         /// <summary>寬度是否已經停在同一個值超過 <see cref="ReflowDelayMs"/>（用 TickCount：BCL 在測試與遊戲內都能 JIT）。</summary>
@@ -667,7 +698,7 @@ namespace RimAgent.UI
                 _pendingScreenshot = null;
                 if (pending == null || _screenshotTextures.ContainsKey(pending)) return;
                 _readingScreenshot = pending;
-                _screenshotRead = Task.Run(() => File.Exists(pending) ? File.ReadAllBytes(pending) : null);
+                _screenshotRead = Task.Run(() => File.Exists(pending) ? File.ReadAllBytes(pending) : null, CancellationToken.None);
                 return;
             }
             if (!_screenshotRead.IsCompleted) return;
@@ -677,58 +708,7 @@ namespace RimAgent.UI
             _screenshotRead = null;
             _readingScreenshot = null;
 
-            Texture2D preview = null;
-            Texture2D full = null;
-            RenderTexture previous = RenderTexture.active;
-            RenderTexture step = null;
-            try
-            {
-                full = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                if (bytes != null && full.LoadImage(bytes))
-                {
-                    if (full.width <= MaxScreenshotWidth)
-                    {
-                        // 原圖已經夠小：直接用，只丟掉 CPU 端副本。
-                        preview = full;
-                        full = null;
-                        preview.Apply(false, true);
-                    }
-                    else
-                    {
-                        Texture source = full;
-                        int width = full.width;
-                        int height;
-                        do
-                        {
-                            // 每次最多縮一半：雙線性取樣剛好涵蓋 2×2 來源像素，不會跳過細節。
-                            width = Mathf.Max(MaxScreenshotWidth, width / 2);
-                            height = Mathf.Max(1, Mathf.RoundToInt(full.height * (width / (float)full.width)));
-                            RenderTexture next = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
-                            Graphics.Blit(source, next);
-                            if (step != null) RenderTexture.ReleaseTemporary(step);
-                            step = next;
-                            source = next;
-                        }
-                        while (width > MaxScreenshotWidth);
-                        RenderTexture.active = step;
-                        preview = new Texture2D(width, height, TextureFormat.RGBA32, false);
-                        preview.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
-                        preview.Apply(false, true);
-                    }
-                }
-            }
-            catch (Exception ex) when (ex is ArgumentException || ex is UnityException)
-            {
-                if (preview != null) UnityEngine.Object.Destroy(preview);
-                preview = null;
-            }
-            finally
-            {
-                RenderTexture.active = previous;
-                if (step != null) RenderTexture.ReleaseTemporary(step);
-                if (full != null) UnityEngine.Object.Destroy(full);
-            }
-
+            Texture2D preview = TryCreatePreviewTexture(bytes);
             if (preview == null)
             {
                 _screenshotFailedAt[path] = Environment.TickCount;
@@ -743,6 +723,67 @@ namespace RimAgent.UI
                 _screenshotOrder.RemoveAt(0);
                 UnityEngine.Object.Destroy(_screenshotTextures[oldest]);
                 _screenshotTextures.Remove(oldest);
+            }
+        }
+
+        private static Texture2D TryCreatePreviewTexture(byte[] bytes)
+        {
+            if (bytes == null) return null;
+            Texture2D full = null;
+            try
+            {
+                full = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!full.LoadImage(bytes))
+                {
+                    UnityEngine.Object.Destroy(full);
+                    return null;
+                }
+                return DownscaleTexture(full);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is UnityException)
+            {
+                if (full != null) UnityEngine.Object.Destroy(full);
+                return null;
+            }
+        }
+
+        private static Texture2D DownscaleTexture(Texture2D full)
+        {
+            if (full.width <= MaxScreenshotWidth)
+            {
+                full.Apply(false, true);
+                return full;
+            }
+
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture step = null;
+            try
+            {
+                Texture source = full;
+                int width = full.width;
+                do
+                {
+                    width = Mathf.Max(MaxScreenshotWidth, width / 2);
+                    int height = Mathf.Max(1, Mathf.RoundToInt(full.height * (width / (float)full.width)));
+                    RenderTexture next = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                    Graphics.Blit(source, next);
+                    if (step != null) RenderTexture.ReleaseTemporary(step);
+                    step = next;
+                    source = next;
+                }
+                while (width > MaxScreenshotWidth);
+
+                RenderTexture.active = step;
+                var preview = new Texture2D(step.width, step.height, TextureFormat.RGBA32, false);
+                preview.ReadPixels(new Rect(0f, 0f, step.width, step.height), 0, 0);
+                preview.Apply(false, true);
+                return preview;
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                if (step != null) RenderTexture.ReleaseTemporary(step);
+                UnityEngine.Object.Destroy(full);
             }
         }
 
@@ -777,11 +818,7 @@ namespace RimAgent.UI
         {
             if (_toolExpanded.Count == 0) return;
             var live = new HashSet<TranscriptEntry>(entries);
-            var stale = new List<TranscriptEntry>();
-            foreach (TranscriptEntry entry in _toolExpanded.Keys)
-            {
-                if (!live.Contains(entry)) stale.Add(entry);
-            }
+            List<TranscriptEntry> stale = _toolExpanded.Keys.Where(entry => !live.Contains(entry)).ToList();
             foreach (TranscriptEntry entry in stale) _toolExpanded.Remove(entry);
         }
 
@@ -879,19 +916,19 @@ namespace RimAgent.UI
                 case TranscriptKind.User:
                     if (entry.GoalRun)
                     {
-                        string goalTag = "<color=#" + NoticeHex + ">" + "RimAgent.Tag.Goal".Translate() + "</color> ";
-                        yield return (goalTag + "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>", LineKind.Text);
+                        string goalTag = ColorTagPrefix + NoticeHex + ">" + "RimAgent.Tag.Goal".Translate() + ColorTagCloseSpace;
+                        yield return (goalTag + ColorTagPrefix + TextHex + ">" + EscapeRichText(entry.Text) + ColorTagClose, LineKind.Text);
                     }
                     else if (entry.Autonomous)
                     {
-                        string autoTag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.AutoAction".Translate() + "</color> ";
-                        string body = "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
+                        string autoTag = ColorTagPrefix + AutoActionHex + ">" + "RimAgent.Tag.AutoAction".Translate() + ColorTagCloseSpace;
+                        string body = ColorTagPrefix + TextHex + ">" + EscapeRichText(entry.Text) + ColorTagClose;
                         yield return (autoTag + body, LineKind.Text);
                     }
                     else
                     {
                         // 靠右的氣泡本身就標明是玩家說的，不再加標籤。
-                        yield return ("<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>", LineKind.PlayerBubble);
+                        yield return (ColorTagPrefix + TextHex + ">" + EscapeRichText(entry.Text) + ColorTagClose, LineKind.PlayerBubble);
                     }
                     break;
 
@@ -904,8 +941,8 @@ namespace RimAgent.UI
                     break;
 
                 case TranscriptKind.Error:
-                    string errTag = "<color=#" + EmergencyHex + ">" + "RimAgent.Tag.EmergencyStop".Translate() + "</color> ";
-                    string errBody = "<color=#" + EmergencyHex + ">" + EscapeRichText(DescribeError(entry)) + "</color>";
+                    string errTag = ColorTagPrefix + EmergencyHex + ">" + "RimAgent.Tag.EmergencyStop".Translate() + ColorTagCloseSpace;
+                    string errBody = ColorTagPrefix + EmergencyHex + ">" + EscapeRichText(DescribeError(entry)) + ColorTagClose;
                     yield return (errTag + errBody, LineKind.Text);
                     break;
 
@@ -913,9 +950,9 @@ namespace RimAgent.UI
                     // Notice 條目：檢驗是否為暫停、告警或提醒
                     bool isPauseOrAlert = ContainsAny(entry.Text, "暫停", "暂停", "pause", "告警", "警告", "warn", "alert");
                     string noticeTag = isPauseOrAlert
-                        ? "<color=#" + PauseHex + ">" + "RimAgent.Tag.AutoPause".Translate().ToString() + "</color> "
-                        : "<color=#" + NoticeHex + ">" + "RimAgent.Tag.Notice".Translate().ToString() + "</color> ";
-                    string noticeBody = "<color=#" + TextHex + ">" + EscapeRichText(entry.Text) + "</color>";
+                        ? ColorTagPrefix + PauseHex + ">" + "RimAgent.Tag.AutoPause".Translate().ToString() + ColorTagCloseSpace
+                        : ColorTagPrefix + NoticeHex + ">" + "RimAgent.Tag.Notice".Translate().ToString() + ColorTagCloseSpace;
+                    string noticeBody = ColorTagPrefix + TextHex + ">" + EscapeRichText(entry.Text) + ColorTagClose;
                     yield return (noticeTag + noticeBody, LineKind.Text);
                     break;
             }
@@ -935,48 +972,48 @@ namespace RimAgent.UI
         {
             string reply = RenderReply(EscapeRichText(entry.Text));
             string replyText = reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply;
-            string agentTag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.Agent".Translate() + "</color> ";
-            yield return agentTag + "<color=#" + TextHex + ">" + replyText + "</color>";
+            string agentTag = ColorTagPrefix + AutoActionHex + ">" + "RimAgent.Tag.Agent".Translate() + ColorTagCloseSpace;
+            yield return agentTag + ColorTagPrefix + TextHex + ">" + replyText + ColorTagClose;
             if (entry.ToolsStripped)
             {
-                yield return "<color=#" + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + "</color>";
+                yield return ColorTagPrefix + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + ColorTagClose;
             }
         }
 
         /// <summary>摘要列（▸／▾、工具名、風險判定；失敗時工具名轉紅）一定顯示，參數與結果只在展開時顯示。</summary>
         private static IEnumerable<(string Text, LineKind Kind)> RenderTool(TranscriptEntry entry, bool expanded, HashSet<int> combatNoted)
         {
-            string arrow = "<color=#" + SubTextHex + ">" + (expanded ? "▾" : "▸") + "</color> ";
-            string tag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.Tool".Translate() + "</color> ";
+            string arrow = ColorTagPrefix + SubTextHex + ">" + (expanded ? "▾" : "▸") + ColorTagCloseSpace;
+            string tag = ColorTagPrefix + AutoActionHex + ">" + "RimAgent.Tag.Tool".Translate() + ColorTagCloseSpace;
             // 子代理的工具呼叫標上名稱，玩家才分得出是誰做的。
             if (!string.IsNullOrEmpty(entry.Agent))
             {
-                tag += "<color=#" + SubTextHex + ">[" + EscapeRichText(entry.Agent) + "]</color> ";
+                tag += ColorTagPrefix + SubTextHex + ">[" + EscapeRichText(entry.Agent) + "]" + ColorTagCloseSpace;
             }
-            string call = arrow + tag + "<color=#" + (entry.Failed ? EmergencyHex : TextHex) + ">" + EscapeRichText(entry.ToolName) + "</color>";
+            string call = arrow + tag + ColorTagPrefix + (entry.Failed ? EmergencyHex : TextHex) + ">" + EscapeRichText(entry.ToolName) + ColorTagClose;
             if (entry.RiskCheck.Length > 0)
             {
-                call += " <color=#" + (entry.Failed ? EmergencyHex : NoticeHex) + ">["
-                    + RiskLabel(entry.RiskCheck) + "]</color>";
+                call += " " + ColorTagPrefix + (entry.Failed ? EmergencyHex : NoticeHex) + ">["
+                    + RiskLabel(entry.RiskCheck) + "]" + ColorTagClose;
             }
             yield return (call, LineKind.ToolHeader);
             if (expanded)
             {
                 if (!string.IsNullOrEmpty(entry.Arguments))
                 {
-                    yield return ("<color=#" + SubTextHex + ">" + "RimAgent.Tool.Arguments".Translate()
-                        + " " + EscapeRichText(entry.Arguments) + "</color>", LineKind.Text);
+                    yield return (ColorTagPrefix + SubTextHex + ">" + "RimAgent.Tool.Arguments".Translate()
+                        + " " + EscapeRichText(entry.Arguments) + ColorTagClose, LineKind.Text);
                 }
 
                 string resultStr = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
                 string resColorHex = entry.Failed ? EmergencyHex : SubTextHex;
-                yield return ("<color=#" + resColorHex + ">" + "RimAgent.Tool.Result".Translate()
-                    + " " + EscapeRichText(resultStr) + "</color>", LineKind.Text);
+                yield return (ColorTagPrefix + resColorHex + ">" + "RimAgent.Tool.Result".Translate()
+                    + " " + EscapeRichText(resultStr) + ColorTagClose, LineKind.Text);
             }
 
             if (entry.ToolCategory == ToolCategory.Combat && combatNoted.Add(entry.InstructionId))
             {
-                string combatNote = "<color=#" + NoticeHex + ">" + "RimAgent.CombatLatencyNote".Translate() + "</color>";
+                string combatNote = ColorTagPrefix + NoticeHex + ">" + "RimAgent.CombatLatencyNote".Translate() + ColorTagClose;
                 yield return (combatNote, LineKind.CombatNote);
             }
         }
@@ -1015,8 +1052,28 @@ namespace RimAgent.UI
             RimAgentSettings settings = RimAgentMod.Settings;
             var modeRect = new Rect(rect.x, rect.y, DropdownWidth, rect.height);
             var reasoningRect = new Rect(modeRect.xMax + 6f, rect.y, DropdownWidth, rect.height);
-
             bool enabled = !session.IsBusy && settings != null;
+
+            DrawModeButton(modeRect, enabled, settings, session);
+            DrawReasoningButton(reasoningRect, enabled, settings);
+
+            var modelRect = new Rect(reasoningRect.xMax + 6f, rect.y, Mathf.Clamp(rect.xMax - reasoningRect.xMax - 6f, 0f, ModelDropdownWidth), rect.height);
+            DrawModelButton(modelRect, enabled, settings);
+
+            // 視窗窄到模型按鈕吃滿時，用量字樣就不畫。
+            if (RimAgentGameComponent.AutonomousEnabled && rect.xMax - modelRect.xMax > 8f)
+            {
+                var usageRect = new Rect(modelRect.xMax + 8f, rect.y, rect.xMax - modelRect.xMax - 8f, rect.height);
+                Text.Anchor = TextAnchor.MiddleRight;
+                GUI.color = ToolTextColor;
+                Widgets.Label(usageRect, _autoUsageLabel.Get(component.AutonomousToolsUsed, used => "RimAgent.Auto.StatusUnlimited".Translate(used).ToString()));
+                GUI.color = Color.white;
+                Text.Anchor = TextAnchor.UpperLeft;
+            }
+        }
+
+        private void DrawModeButton(Rect modeRect, bool enabled, RimAgentSettings settings, ColonyAgentSession session)
+        {
             string modeStatus = _modeLabel.Get(session.Mode, mode => "RimAgent.Mode.Status".Translate(ModeLabel(mode)).ToString());
             if (DrawUnifiedButton(modeRect, modeStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
             {
@@ -1030,9 +1087,11 @@ namespace RimAgent.UI
                 }
                 Find.WindowStack.Add(new FloatMenu(options));
             }
-            // 提示字串只在滑鼠停在上面時才組。
             if (Mouse.IsOver(modeRect)) TooltipHandler.TipRegion(modeRect, ModeDescription(session.Mode));
+        }
 
+        private void DrawReasoningButton(Rect reasoningRect, bool enabled, RimAgentSettings settings)
+        {
             ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
             string reasoningStatus = _reasoningLabel.Get(current, level => "RimAgent.Reasoning.Status".Translate(ReasoningLabel(level)).ToString());
             if (DrawUnifiedButton(reasoningRect, reasoningStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
@@ -1044,8 +1103,10 @@ namespace RimAgent.UI
                 }
                 Find.WindowStack.Add(new FloatMenu(options));
             }
+        }
 
-            var modelRect = new Rect(reasoningRect.xMax + 6f, rect.y, Mathf.Clamp(rect.xMax - reasoningRect.xMax - 6f, 0f, ModelDropdownWidth), rect.height);
+        private void DrawModelButton(Rect modelRect, bool enabled, RimAgentSettings settings)
+        {
             string model = settings != null ? settings.agentModel ?? string.Empty : string.Empty;
             if (Mathf.Abs(modelRect.width - _modelLabelWidth) >= 0.5f)
             {
@@ -1073,23 +1134,6 @@ namespace RimAgent.UI
                     options.Add(new FloatMenuOption(entry, () => SetModel(settings, entry)));
                 }
                 Find.WindowStack.Add(new FloatMenu(options));
-            }
-            if (Mouse.IsOver(modelRect))
-            {
-                TooltipHandler.TipRegion(modelRect, string.IsNullOrWhiteSpace(model)
-                    ? "RimAgent.Model.DefaultTip".Translate()
-                    : "RimAgent.Model.Tip".Translate(model.Trim()));
-            }
-
-            // 視窗窄到模型按鈕吃滿時，用量字樣就不畫。
-            if (RimAgentGameComponent.AutonomousEnabled && rect.xMax - modelRect.xMax > 8f)
-            {
-                var usageRect = new Rect(modelRect.xMax + 8f, rect.y, rect.xMax - modelRect.xMax - 8f, rect.height);
-                Text.Anchor = TextAnchor.MiddleRight;
-                GUI.color = ToolTextColor;
-                Widgets.Label(usageRect, _autoUsageLabel.Get(component.AutonomousToolsUsed, used => "RimAgent.Auto.StatusUnlimited".Translate(used).ToString()));
-                GUI.color = Color.white;
-                Text.Anchor = TextAnchor.UpperLeft;
             }
         }
 
@@ -1457,59 +1501,111 @@ namespace RimAgent.UI
             switch (SlashCommands.ParseGoal(args, out int index, out string text))
             {
                 case GoalAction.Add:
-                    int newIndex = goals.Count + 1;
-                    if (text.Length > RimAgentGameComponent.MaxGoalChars)
-                        Notice(session, "RimAgent.Goal.TooLong".Translate(RimAgentGameComponent.MaxGoalChars));
-                    else if (component.AddGoal(text)) Notice(session, "RimAgent.Goal.Added".Translate(newIndex, text));
-                    else Notice(session, "RimAgent.Goal.Full".Translate());
+                    HandleGoalAdd(session, component, goals, text);
                     break;
                 case GoalAction.Pause:
-                    if (goals.Count == 0) { Notice(session, "RimAgent.Goal.Empty".Translate()); break; }
-                    component.PauseGoal();
-                    if (session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
-                    Notice(session, "RimAgent.Goal.Paused".Translate());
+                    HandleGoalPause(session, component, goals);
                     break;
                 case GoalAction.Resume:
-                    if (goals.Count == 0) { Notice(session, "RimAgent.Goal.Empty".Translate()); break; }
-                    component.ResumeGoal();
-                    Notice(session, "RimAgent.Goal.Resumed".Translate());
+                    HandleGoalResume(session, component, goals);
                     break;
                 case GoalAction.Edit:
-                    if (index < 1 || index > goals.Count || text.Length == 0)
-                        Notice(session, "RimAgent.Goal.EditUsage".Translate());
-                    else if (text.Length > RimAgentGameComponent.MaxGoalChars)
-                        Notice(session, "RimAgent.Goal.TooLong".Translate(RimAgentGameComponent.MaxGoalChars));
-                    else if (component.EditGoalAt(index - 1, text))
-                    {
-                        if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
-                        Notice(session, "RimAgent.Goal.Edited".Translate(index, text));
-                    }
+                    HandleGoalEdit(session, component, goals, index, text);
                     break;
                 case GoalAction.Clear:
-                    if (goals.Count == 0 && string.IsNullOrEmpty(component.LastCompletedGoal))
-                    { Notice(session, "RimAgent.Goal.Empty".Translate()); break; }
-                    component.ClearGoals();
-                    if (session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
-                    Notice(session, "RimAgent.Goal.Cleared".Translate());
+                    HandleGoalClear(session, component, goals);
                     break;
                 case GoalAction.Show:
-                    Notice(session, index >= 1 && index <= goals.Count
-                        ? "RimAgent.Goal.Show".Translate(index, goals[index - 1]).ToString()
-                        : "RimAgent.Goal.ShowUsage".Translate().ToString());
+                    HandleGoalShow(session, goals, index);
                     break;
                 case GoalAction.Remove:
-                    if (index >= 1 && index <= goals.Count)
-                    {
-                        string removed = goals[index - 1];
-                        component.RemoveGoalAt(index - 1);
-                        if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
-                        Notice(session, "RimAgent.Goal.Removed".Translate(index, removed));
-                    }
-                    else Notice(session, "RimAgent.Goal.NoSuch".Translate(index));
+                    HandleGoalRemove(session, component, goals, index);
                     break;
                 default:
                     Notice(session, GoalListText(component));
                     break;
+            }
+        }
+
+        private static void HandleGoalAdd(ColonyAgentSession session, RimAgentGameComponent component, IReadOnlyList<string> goals, string text)
+        {
+            int newIndex = goals.Count + 1;
+            if (text.Length > RimAgentGameComponent.MaxGoalChars)
+                Notice(session, "RimAgent.Goal.TooLong".Translate(RimAgentGameComponent.MaxGoalChars));
+            else if (component.AddGoal(text)) Notice(session, "RimAgent.Goal.Added".Translate(newIndex, text));
+            else Notice(session, "RimAgent.Goal.Full".Translate());
+        }
+
+        private static void HandleGoalPause(ColonyAgentSession session, RimAgentGameComponent component, IReadOnlyList<string> goals)
+        {
+            if (goals.Count == 0) { Notice(session, GoalEmptyTranslationKey.Translate()); return; }
+            component.PauseGoal();
+            if (session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
+            Notice(session, "RimAgent.Goal.Paused".Translate());
+        }
+
+        private static void HandleGoalResume(ColonyAgentSession session, RimAgentGameComponent component, IReadOnlyList<string> goals)
+        {
+            if (goals.Count == 0) { Notice(session, GoalEmptyTranslationKey.Translate()); return; }
+            component.ResumeGoal();
+            Notice(session, "RimAgent.Goal.Resumed".Translate());
+        }
+
+        private static void HandleGoalEdit(ColonyAgentSession session, RimAgentGameComponent component, IReadOnlyList<string> goals, int index, string text)
+        {
+            if (index < 1 || index > goals.Count || text.Length == 0)
+                Notice(session, "RimAgent.Goal.EditUsage".Translate());
+            else if (text.Length > RimAgentGameComponent.MaxGoalChars)
+                Notice(session, "RimAgent.Goal.TooLong".Translate(RimAgentGameComponent.MaxGoalChars));
+            else if (component.EditGoalAt(index - 1, text))
+            {
+                if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
+                Notice(session, "RimAgent.Goal.Edited".Translate(index, text));
+            }
+        }
+
+        private static void HandleGoalClear(ColonyAgentSession session, RimAgentGameComponent component, IReadOnlyList<string> goals)
+        {
+            if (goals.Count == 0 && string.IsNullOrEmpty(component.LastCompletedGoal))
+            { Notice(session, GoalEmptyTranslationKey.Translate()); return; }
+            component.ClearGoals();
+            if (session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
+            Notice(session, "RimAgent.Goal.Cleared".Translate());
+        }
+
+        private static void HandleGoalShow(ColonyAgentSession session, IReadOnlyList<string> goals, int index)
+        {
+            Notice(session, index >= 1 && index <= goals.Count
+                ? "RimAgent.Goal.Show".Translate(index, goals[index - 1]).ToString()
+                : "RimAgent.Goal.ShowUsage".Translate().ToString());
+        }
+
+        private static void HandleGoalRemove(ColonyAgentSession session, RimAgentGameComponent component, IReadOnlyList<string> goals, int index)
+        {
+            if (index >= 1 && index <= goals.Count)
+            {
+                string removed = goals[index - 1];
+                component.RemoveGoalAt(index - 1);
+                if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
+                Notice(session, "RimAgent.Goal.Removed".Translate(index, removed));
+            }
+            else Notice(session, "RimAgent.Goal.NoSuch".Translate(index));
+        }
+
+        private static string GetGoalStateTranslationKey(RimAgentGameComponent component)
+        {
+            switch (component.CurrentGoalPauseReason)
+            {
+                case GoalPauseReason.Blocked:
+                    return "RimAgent.Goal.StateBlocked";
+                case GoalPauseReason.TurnLimit:
+                    return "RimAgent.Goal.StateTurnLimit";
+                case GoalPauseReason.NoProgress:
+                    return "RimAgent.Goal.StateNoProgress";
+                case GoalPauseReason.Error:
+                    return "RimAgent.Goal.StateError";
+                default:
+                    return component.GoalPaused ? "RimAgent.Goal.StatePaused" : "RimAgent.Goal.StateActive";
             }
         }
 
@@ -1518,7 +1614,7 @@ namespace RimAgent.UI
             IReadOnlyList<string> goals = component.Goals;
             if (goals.Count == 0)
             {
-                string empty = "RimAgent.Goal.Empty".Translate();
+                string empty = GoalEmptyTranslationKey.Translate();
                 return string.IsNullOrEmpty(component.LastCompletedGoal) ? empty
                     : empty + "\n" + "RimAgent.Goal.LastCompleted".Translate(component.LastCompletedGoal).ToString();
             }
@@ -1530,11 +1626,7 @@ namespace RimAgent.UI
                 sb.Append('\n').Append(i + 1).Append(". ").Append(title);
                 if (i == 0)
                 {
-                    string state = component.CurrentGoalPauseReason == GoalPauseReason.Blocked ? "RimAgent.Goal.StateBlocked"
-                        : component.CurrentGoalPauseReason == GoalPauseReason.TurnLimit ? "RimAgent.Goal.StateTurnLimit"
-                        : component.CurrentGoalPauseReason == GoalPauseReason.NoProgress ? "RimAgent.Goal.StateNoProgress"
-                        : component.CurrentGoalPauseReason == GoalPauseReason.Error ? "RimAgent.Goal.StateError"
-                        : component.GoalPaused ? "RimAgent.Goal.StatePaused" : "RimAgent.Goal.StateActive";
+                    string state = GetGoalStateTranslationKey(component);
                     sb.Append(" (").Append(state.Translate()).Append(')');
                 }
             }

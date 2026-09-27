@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using RimAgent.Agent;
 using RimAgent.Tools;
@@ -29,10 +30,10 @@ namespace RimAgent
         private static float _permissionLabelWidth = -1f;
 
         // 設定頁要列出每個子代理的模型槽，但主選單時沒有遊戲元件可問；自己讀一次擴充包，關頁時丟掉。
-        private static IReadOnlyList<AgentSubagent> _subagents;
+        private IReadOnlyList<AgentSubagent> _subagents;
 
-        private static Vector2 _settingsScrollPosition = Vector2.zero;
-        private static float _settingsHeight = 960f;
+        private Vector2 _settingsScrollPosition = Vector2.zero;
+        private float _settingsHeight = 960f;
 
         public RimAgentMod(ModContentPack content) : base(content)
         {
@@ -188,9 +189,8 @@ namespace RimAgent
                 "RimAgent.Settings.SubagentModelTip".Translate(),
                 () => Settings.subagentReasoning, v => Settings.subagentReasoning = v);
             if (_subagents == null) _subagents = AgentPackLoader.LoadSubagentsOnly(Path.Combine(Content.RootDir, "AgentPack"));
-            foreach (AgentSubagent subagent in _subagents)
+            foreach (string name in _subagents.Select(s => s.Name))
             {
-                string name = subagent.Name;
                 // 沒有鍵＝跟隨子代理預設；AGENT.md 寫了 reasoning 就以它為準，這裡只管模型。
                 DrawModelDropdown(listing, "RimAgent.Settings.SubagentModelFor".Translate(name),
                     () => Settings.subagentModels.TryGetValue(name, out string own) ? own : null,
@@ -232,36 +232,10 @@ namespace RimAgent
             Widgets.Label(labelRect, label.Truncate(labelWidth));
             Text.WordWrap = true;
             string raw = current();
-            bool inheriting = raw == null && reasoning == null;
-            string value = (raw ?? string.Empty).Trim();
-            bool following = string.Equals(value, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal);
-            string shown = inheriting ? "RimAgent.Model.FollowSubagentDefault".Translate().ToString()
-                : value.Length == 0 ? "RimAgent.Model.Default".Translate().ToString()
-                : following ? "RimAgent.Model.FollowAgent".Translate().ToString() : value;
+            string shown = GetModelDropdownDisplayText(raw, reasoning != null);
             if (Widgets.ButtonText(dropdownRect, shown.Truncate(dropdownRect.width - 12f)))
             {
-                var options = new List<FloatMenuOption>();
-                if (reasoning == null)
-                {
-                    options.Add(new FloatMenuOption("RimAgent.Model.FollowSubagentDefault".Translate(), () => set(null))
-                    {
-                        tooltip = new TipSignal("RimAgent.Model.FollowSubagentDefaultTip".Translate())
-                    });
-                }
-                options.Add(new FloatMenuOption("RimAgent.Model.FollowAgent".Translate(), () => set(RimAgentSettings.FollowAgentModel))
-                {
-                    tooltip = new TipSignal("RimAgent.Model.FollowAgentTip".Translate())
-                });
-                options.Add(new FloatMenuOption("RimAgent.Model.Default".Translate(), () => set(string.Empty))
-                {
-                    tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
-                });
-                foreach (string entry in Window_Agent.ConfiguredModels())
-                {
-                    string captured = entry;
-                    options.Add(new FloatMenuOption(captured, () => set(captured)));
-                }
-                Find.WindowStack.Add(new FloatMenu(options));
+                ShowModelDropdownMenu(set, reasoning == null);
             }
             if (Mouse.IsOver(dropdownRect) || Mouse.IsOver(labelRect))
             {
@@ -272,17 +246,66 @@ namespace RimAgent
                 var reasoningRect = new Rect(row.xMax - reasoningWidth, row.y, reasoningWidth, 26f);
                 if (Widgets.ButtonText(reasoningRect, ("RimAgent.Reasoning." + reasoning()).Translate()))
                 {
-                    var options = new List<FloatMenuOption>();
-                    foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
-                    {
-                        ReasoningLevel captured = level;
-                        options.Add(new FloatMenuOption(("RimAgent.Reasoning." + level).Translate(), () => setReasoning(captured)));
-                    }
-                    Find.WindowStack.Add(new FloatMenu(options));
+                    ShowReasoningDropdownMenu(setReasoning);
                 }
                 TooltipHandler.TipRegion(reasoningRect, "RimAgent.Settings.SlotReasoningTip".Translate());
             }
             listing.Gap(6f);
+        }
+
+        private static string GetModelDropdownDisplayText(string raw, bool hasReasoning)
+        {
+            if (raw == null && !hasReasoning)
+            {
+                return "RimAgent.Model.FollowSubagentDefault".Translate().ToString();
+            }
+            string value = (raw ?? string.Empty).Trim();
+            if (value.Length == 0)
+            {
+                return "RimAgent.Model.Default".Translate().ToString();
+            }
+            if (string.Equals(value, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal))
+            {
+                return "RimAgent.Model.FollowAgent".Translate().ToString();
+            }
+            return value;
+        }
+
+        private static void ShowModelDropdownMenu(Action<string> set, bool allowFollowSubagentDefault)
+        {
+            var options = new List<FloatMenuOption>();
+            if (allowFollowSubagentDefault)
+            {
+                options.Add(new FloatMenuOption("RimAgent.Model.FollowSubagentDefault".Translate(), () => set(null))
+                {
+                    tooltip = new TipSignal("RimAgent.Model.FollowSubagentDefaultTip".Translate())
+                });
+            }
+            options.Add(new FloatMenuOption("RimAgent.Model.FollowAgent".Translate(), () => set(RimAgentSettings.FollowAgentModel))
+            {
+                tooltip = new TipSignal("RimAgent.Model.FollowAgentTip".Translate())
+            });
+            options.Add(new FloatMenuOption("RimAgent.Model.Default".Translate(), () => set(string.Empty))
+            {
+                tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
+            });
+            foreach (string entry in Window_Agent.ConfiguredModels())
+            {
+                string captured = entry;
+                options.Add(new FloatMenuOption(captured, () => set(captured)));
+            }
+            Find.WindowStack.Add(new FloatMenu(options));
+        }
+
+        private static void ShowReasoningDropdownMenu(Action<ReasoningLevel> setReasoning)
+        {
+            var options = new List<FloatMenuOption>();
+            foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
+            {
+                ReasoningLevel captured = level;
+                options.Add(new FloatMenuOption(("RimAgent.Reasoning." + level).Translate(), () => setReasoning(captured)));
+            }
+            Find.WindowStack.Add(new FloatMenu(options));
         }
 
         /// <summary>
