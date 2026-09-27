@@ -14,9 +14,11 @@ namespace RimAgent.Agent
         {
             if (pack == null) return null;
             string task;
-            if (pack.Tasks == null || !pack.Tasks.TryGetValue(trigger.ToString(), out task) || string.IsNullOrWhiteSpace(task))
+            if (pack.Tasks == null
+                || ((!pack.Tasks.TryGetValue(trigger.ToString(), out task) || string.IsNullOrWhiteSpace(task))
+                    && (!pack.Tasks.TryGetValue(AutonomousTrigger.Interval.ToString(), out task) || string.IsNullOrWhiteSpace(task))))
             {
-                if (pack.Tasks == null || !pack.Tasks.TryGetValue(AutonomousTrigger.Interval.ToString(), out task) || string.IsNullOrWhiteSpace(task)) return null;
+                return null;
             }
             // 共用通則一定要跟著送：像「沒緊急狀況也要產出、不要只回報」這種規則
             // 寫在檔頭比在十三個章節各寫一次好，漏送就等於規則不存在。

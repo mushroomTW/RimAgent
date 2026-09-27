@@ -44,10 +44,12 @@ namespace RimAgent.Tools
         /// <param name="reasoning">子代理預設思考強度；AGENT.md 有寫 reasoning 時以它為準。</param>
         /// <param name="remainingBudget">本輪剩餘的工具額度（null 表示不限制）；子代理的迴圈夾在額度內。</param>
         /// <param name="responseObserved">子代理每次模型回應的觀察者（執行紀錄）；並行任務會從不同執行緒呼叫。</param>
+#pragma warning disable S107 // Subagent execution context requires dependencies injected for agent dispatching
         public SubagentTools(IChatClient client, AgentToolRegistry registry, AgentTranscript transcript,
             Func<IReadOnlyList<AgentSubagent>> subagents, Func<ToolPermissions> permissions, Func<AgentMode> mode,
             Func<string, string> model = null, Func<ReasoningLevel> reasoning = null,
             Func<int?> remainingBudget = null, Action<ChatResponse> responseObserved = null)
+#pragma warning restore S107
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));

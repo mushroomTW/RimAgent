@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace RimAgent.UI
 {
@@ -53,14 +54,9 @@ namespace RimAgent.UI
         /// <summary>依目前輸入的前綴篩選指令；非指令狀態回傳空清單。</summary>
         public static List<SlashCommand> Match(string input)
         {
-            var matches = new List<SlashCommand>();
-            if (!IsTypingName(input)) return matches;
+            if (!IsTypingName(input)) return new List<SlashCommand>();
             string prefix = input.Substring(1);
-            foreach (SlashCommand command in All)
-            {
-                if (command.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) matches.Add(command);
-            }
-            return matches;
+            return All.Where(c => c.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
         /// <summary>
@@ -68,21 +64,17 @@ namespace RimAgent.UI
         /// </summary>
         public static bool TryParse(string input, out SlashCommand command, out string args)
         {
-            command = null;
             args = string.Empty;
             string text = (input ?? string.Empty).Trim();
-            if (text.Length == 0 || text[0] != '/') return false;
+            if (text.Length == 0 || text[0] != '/')
+            {
+                command = null;
+                return false;
+            }
             int space = text.IndexOf(' ');
             string name = space < 0 ? text.Substring(1) : text.Substring(1, space - 1);
             args = space < 0 ? string.Empty : text.Substring(space + 1).Trim();
-            foreach (SlashCommand candidate in All)
-            {
-                if (string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase))
-                {
-                    command = candidate;
-                    break;
-                }
-            }
+            command = All.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
             return true;
         }
 

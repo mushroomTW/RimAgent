@@ -64,7 +64,9 @@ namespace RimAgent
         }
         /// <summary>選用本機 SearXNG；預設改用免設定的 Parallel 匿名搜尋。</summary>
         public bool useLocalSearch = false;
+#pragma warning disable S1075 // Default URL for local SearXNG service setting
         public string searxngUrl = "http://127.0.0.1:8888";
+#pragma warning restore S1075
 
         // 自主模式（排程器）的節奏與配額在設定頁；持續目標另由獨立流程執行並跟著存檔走。
         // 定期巡檢的節奏刻意不在這裡（見 AutonomousScheduler.HeartbeatTicks）：那是 agent 的運轉節奏，

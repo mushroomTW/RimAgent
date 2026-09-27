@@ -163,6 +163,7 @@ namespace RimAgent.Tools
 
         [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
         [Description("Places blueprints for colonists to build. shape single places one building or floor at (x, z); line places a straight row from (x, z) to (x2, z2); fill covers every cell of the rectangle (floors, ship structural beams); outline places only its border (the walls of a room; put a door on the wall line afterwards). line, fill and outline suit 1x1 things; place larger buildings one at a time. Up to 400 cells per call. Reports how many cells the game refused and the first few reasons.")]
+#pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
         public string PlaceBlueprint(
             [Description("Building or floor name or defName, e.g. \"wall\", \"door\", \"solar generator\", \"ship structural beam\".")] string building,
             [Description("single, line, fill or outline.")] string shape,
@@ -172,6 +173,7 @@ namespace RimAgent.Tools
             [Description("z of the line end or opposite corner; ignored for single.")] int z2,
             [Description("0 north, 1 east, 2 south, 3 west; matters for doors, beds and other oriented buildings, otherwise 0.")] int rotation,
             [Description("Material name or defName for buildings made of stuff, e.g. \"wood\", \"steel\", \"granite blocks\"; empty uses the default material.")] string stuff)
+#pragma warning restore S107
         {
             Result<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
             if (!def.Success) return def.Error;
@@ -217,12 +219,10 @@ namespace RimAgent.Tools
         /// <summary>形狀展開成格子；line 照模型給的起點走向終點，fill／outline 由下往上逐列。</summary>
         private static Result<List<(int X, int Z)>> ShapeCells(string shape, int x, int z, int x2, int z2)
         {
-            var cells = new List<(int X, int Z)>();
             string kind = shape?.Trim().ToLowerInvariant() ?? string.Empty;
             if (kind == "single")
             {
-                cells.Add((x, z));
-                return Result<List<(int X, int Z)>>.Ok(cells);
+                return Result<List<(int X, int Z)>>.Ok(new List<(int X, int Z)> { (x, z) });
             }
             if (kind != "line" && kind != "fill" && kind != "outline")
             {
@@ -242,10 +242,22 @@ namespace RimAgent.Tools
 
             if (kind == "line")
             {
-                int dx = Math.Sign(x2 - x), dz = Math.Sign(z2 - z);
-                for (int i = 0; i < count; i++) cells.Add((x + dx * i, z + dz * i));
-                return Result<List<(int X, int Z)>>.Ok(cells);
+                return Result<List<(int X, int Z)>>.Ok(GenerateLineCells(x, z, x2, z2, count));
             }
+            return Result<List<(int X, int Z)>>.Ok(GenerateRectCells(kind, minX, maxX, minZ, maxZ));
+        }
+
+        private static List<(int X, int Z)> GenerateLineCells(int x, int z, int x2, int z2, long count)
+        {
+            var cells = new List<(int X, int Z)>();
+            int dx = Math.Sign(x2 - x), dz = Math.Sign(z2 - z);
+            for (int i = 0; i < count; i++) cells.Add((x + dx * i, z + dz * i));
+            return cells;
+        }
+
+        private static List<(int X, int Z)> GenerateRectCells(string kind, int minX, int maxX, int minZ, int maxZ)
+        {
+            var cells = new List<(int X, int Z)>();
             for (int cz = minZ; cz <= maxZ; cz++)
             {
                 for (int cx = minX; cx <= maxX; cx++)
@@ -254,7 +266,7 @@ namespace RimAgent.Tools
                     if (kind == "fill" || border) cells.Add((cx, cz));
                 }
             }
-            return Result<List<(int X, int Z)>>.Ok(cells);
+            return cells;
         }
 
         [AgentTool("set_forbidden", ToolCategory.Build, ToolRisk.Safe)]

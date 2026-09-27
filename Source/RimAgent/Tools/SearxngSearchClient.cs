@@ -22,7 +22,9 @@ namespace RimAgent.Tools
 
         public async Task<string> SearchAsync(string query, CancellationToken cancellationToken)
         {
+#pragma warning disable S3878 // net472 runtime requires char array to avoid MissingMethodException
             string endpoint = (_endpoint() ?? string.Empty).Trim().TrimEnd(new[] { '/' });
+#pragma warning restore S3878
             if (!Uri.TryCreate(endpoint, UriKind.Absolute, out Uri baseUri) ||
                 (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps) ||
                 !string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))

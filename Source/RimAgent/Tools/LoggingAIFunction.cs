@@ -65,36 +65,10 @@ namespace RimAgent.Tools
                 Agent = _transcript.CurrentAgent
             };
 
-            string notReady = _world.GetNotReadyReason();
-            if (notReady != null)
+            if (TryHandlePreInvocation(entry, out string earlyResult))
             {
-                entry.Result = ToolText.Error($"the game cannot run tools right now ({notReady}). Tell the player and stop.");
-                entry.Failed = true;
-                _transcript.Add(entry);
-                return entry.Result;
+                return earlyResult;
             }
-
-            // 同一句內重複的唯讀查詢：直接回快取，不碰世界也不扣自主額度；
-            // 行動紀錄照記，讓玩家看得到模型確實又問了一次。
-            if (_risk == ToolRisk.Query && _gate != null &&
-                _gate.TryGetCachedQuery(Name, entry.Arguments, out string cached))
-            {
-                entry.Result = AppendGameErrors(cached);
-                entry.Failed = entry.Result.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
-                entry.BudgetConsumed = false;
-                _transcript.Add(entry);
-                return entry.Result;
-            }
-
-            bool budgetConsumed = false;
-            if (_gate != null && !_gate.TryConsumeToolBudget(out budgetConsumed))
-            {
-                entry.Result = ToolText.Error("autonomous tool budget exhausted.");
-                entry.Failed = true;
-                _transcript.Add(entry);
-                return entry.Result;
-            }
-            entry.BudgetConsumed = budgetConsumed;
 
             _gate?.BeginInvocation(Name, _risk);
             try
@@ -146,6 +120,43 @@ namespace RimAgent.Tools
                 _gate?.EndInvocation();
                 _transcript.Add(entry);
             }
+        }
+
+        private bool TryHandlePreInvocation(TranscriptEntry entry, out string earlyResult)
+        {
+            string notReady = _world.GetNotReadyReason();
+            if (notReady != null)
+            {
+                entry.Result = ToolText.Error($"the game cannot run tools right now ({notReady}). Tell the player and stop.");
+                entry.Failed = true;
+                _transcript.Add(entry);
+                earlyResult = entry.Result;
+                return true;
+            }
+
+            if (_risk == ToolRisk.Query && _gate != null &&
+                _gate.TryGetCachedQuery(Name, entry.Arguments, out string cached))
+            {
+                entry.Result = AppendGameErrors(cached);
+                entry.Failed = entry.Result.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
+                entry.BudgetConsumed = false;
+                _transcript.Add(entry);
+                earlyResult = entry.Result;
+                return true;
+            }
+
+            bool budgetConsumed = false;
+            if (_gate != null && !_gate.TryConsumeToolBudget(out budgetConsumed))
+            {
+                entry.Result = ToolText.Error("autonomous tool budget exhausted.");
+                entry.Failed = true;
+                _transcript.Add(entry);
+                earlyResult = entry.Result;
+                return true;
+            }
+            entry.BudgetConsumed = budgetConsumed;
+            earlyResult = null;
+            return false;
         }
 
         private async Task<object> ExecuteApprovedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)

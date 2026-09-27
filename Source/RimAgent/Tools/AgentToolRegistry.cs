@@ -73,7 +73,9 @@ namespace RimAgent.Tools
         {
         }
 
+#pragma warning disable S107 // Tool registry aggregates all domain tool implementations
         public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null)
+#pragma warning restore S107
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (transcript == null) throw new ArgumentNullException(nameof(transcript));
@@ -102,13 +104,14 @@ namespace RimAgent.Tools
         }
 
         private IReadOnlyList<AITool> _allTools;
+        private IReadOnlyList<AgentToolDescriptor> _descriptors;
 
         /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
         public IReadOnlyList<AITool> All => _allTools ?? (_allTools = _tools.Select(t => t.Tool).ToList());
 
         /// <summary>全部工具的名稱、類別與風險，依登錄順序（供測試與診斷）。</summary>
         public IReadOnlyList<AgentToolDescriptor> Descriptors =>
-            _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk)).ToList();
+            _descriptors ?? (_descriptors = _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk)).ToList());
 
         /// <summary>依權限挑選完整工具清單；未指定模式時採確認模式，不套用自主模式的禁止清單。</summary>
         public IList<AITool> Select(ToolPermissions permissions)

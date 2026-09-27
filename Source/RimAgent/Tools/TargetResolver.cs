@@ -66,7 +66,7 @@ namespace RimAgent.Tools
             Func<T, IEnumerable<string>> getNames,
             Func<T, string> describe,
             string kindLabel,
-            string emptyErrorMessage = null)
+            string emptyErrorMessage = null) where T : class
         {
             string needle = (input ?? string.Empty).Trim();
             if (needle.Length == 0)

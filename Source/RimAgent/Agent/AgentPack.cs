@@ -268,7 +268,9 @@ namespace RimAgent.Agent
                     subagent.Description = value;
                     break;
                 case "categories":
+#pragma warning disable S3878 // net472 runtime requires char array to avoid MissingMethodException
                     foreach (string token in value.Split(new[] { ',' }))
+#pragma warning restore S3878
                     {
                         if (TryParseName(token, out ToolCategory category) && category != ToolCategory.Agents
                             && !categories.Contains(category))
@@ -356,7 +358,7 @@ namespace RimAgent.Agent
         {
             foreach (string line in Lines(text))
             {
-                string stripped = line.TrimStart(new[] { '#', ' ', '\t' });
+                string stripped = line.TrimStart('#', ' ', '\t');
                 if (stripped.Length > 0) return stripped;
             }
             return string.Empty;

@@ -10,7 +10,8 @@ namespace RimAgent.UI
     {
         private static readonly Regex SavedResult = new Regex(
             @"^Screenshot saved: (.+) \([0-9]+x[0-9]+\)$",
-            RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            TimeSpan.FromSeconds(1));
 
         public static string TryGetPath(TranscriptEntry entry, string screenshotFolder)
         {

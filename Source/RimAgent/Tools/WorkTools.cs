@@ -48,42 +48,11 @@ namespace RimAgent.Tools
             var changes = new List<WorkPriorityChange>();
             foreach (string raw in parts)
             {
-                string part = raw.Trim();
-                int colon = part.IndexOf(':');
-                int equals = part.LastIndexOf('=');
-                if (colon <= 0 || equals <= colon + 1 || equals == part.Length - 1)
+                if (!TryParseAssignment(raw, out WorkPriorityChange change, out string error))
                 {
-                    return ToolText.Error("invalid assignment '" + part + "'. Use colonist:work=priority.");
+                    return ToolText.Error(error);
                 }
-                if (!int.TryParse(part.Substring(equals + 1).Trim(), out int priority) || priority < 0 || priority > 4)
-                {
-                    return ToolText.Error("priority in '" + part + "' is out of range. Use 0 (disabled) or 1 (highest) to 4 (lowest).");
-                }
-
-                Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(part.Substring(0, colon).Trim(), _world.GetColonists());
-                if (!pawn.Success) return pawn.Error;
-                // 讀不到目前的優先級就記不了原值，/undo 與失敗回滾會寫回錯的數字，寧可不改。
-                if (pawn.Value.UnreadableParts.Contains(ColonistInfo.WorkPrioritiesPart))
-                {
-                    return ToolText.Error($"{pawn.Value.Name}'s current work priorities could not be read because another mod threw an error; not changing them.");
-                }
-                Result<DefInfo> work = DefResolver.Resolve(part.Substring(colon + 1, equals - colon - 1).Trim(), _world.WorkTypes, "work type");
-                if (!work.Success) return work.Error;
-                WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
-                    string.Equals(w.WorkTypeDefName, work.Value.DefName, StringComparison.OrdinalIgnoreCase));
-                if (current != null && current.Disabled)
-                {
-                    return ToolText.Error(pawn.Value.Name + " is incapable of " + work.Value.Label + " and cannot be assigned to it.");
-                }
-                changes.Add(new WorkPriorityChange
-                {
-                    Colonist = pawn.Value,
-                    Work = work.Value,
-                    Priority = priority,
-                    // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
-                    Previous = current != null ? current.Priority : 3,
-                    PreviousLabel = current != null ? current.Priority.ToString() : "?"
-                });
+                changes.Add(change);
             }
 
             string blocked = ToolText.Blocked(_gate, "would set " + string.Join("; ", changes.Select(c => c.Describe())) + ".");
@@ -104,12 +73,70 @@ namespace RimAgent.Tools
                 }
                 applied.Add(change);
             }
-            foreach (WorkPriorityChange change in applied)
+            if (_undo != null)
             {
-                if (_undo != null) _undo.RecordPriority(change.Colonist.Id, change.Work.DefName, change.Previous);
+                foreach (WorkPriorityChange change in applied)
+                {
+                    _undo.RecordPriority(change.Colonist.Id, change.Work.DefName, change.Previous);
+                }
             }
             string suffix = notes.Count == 0 ? string.Empty : " " + string.Join(" ", notes);
             return "Set " + string.Join("; ", applied.Select(c => c.Describe())) + "." + suffix;
+        }
+
+        private bool TryParseAssignment(string raw, out WorkPriorityChange change, out string error)
+        {
+            change = null;
+            error = null;
+            string part = raw.Trim();
+            int colon = part.IndexOf(':');
+            int equals = part.LastIndexOf('=');
+            if (colon <= 0 || equals <= colon + 1 || equals == part.Length - 1)
+            {
+                error = "invalid assignment '" + part + "'. Use colonist:work=priority.";
+                return false;
+            }
+            if (!int.TryParse(part.Substring(equals + 1).Trim(), out int priority) || priority < 0 || priority > 4)
+            {
+                error = "priority in '" + part + "' is out of range. Use 0 (disabled) or 1 (highest) to 4 (lowest).";
+                return false;
+            }
+
+            Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(part.Substring(0, colon).Trim(), _world.GetColonists());
+            if (!pawn.Success)
+            {
+                error = pawn.Error;
+                return false;
+            }
+            // 讀不到目前的優先級就記不了原值，/undo 與失敗回滾會寫回錯的數字，寧可不改。
+            if (pawn.Value.UnreadableParts.Contains(ColonistInfo.WorkPrioritiesPart))
+            {
+                error = $"{pawn.Value.Name}'s current work priorities could not be read because another mod threw an error; not changing them.";
+                return false;
+            }
+            Result<DefInfo> work = DefResolver.Resolve(part.Substring(colon + 1, equals - colon - 1).Trim(), _world.WorkTypes, "work type");
+            if (!work.Success)
+            {
+                error = work.Error;
+                return false;
+            }
+            WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
+                string.Equals(w.WorkTypeDefName, work.Value.DefName, StringComparison.OrdinalIgnoreCase));
+            if (current != null && current.Disabled)
+            {
+                error = pawn.Value.Name + " is incapable of " + work.Value.Label + " and cannot be assigned to it.";
+                return false;
+            }
+            change = new WorkPriorityChange
+            {
+                Colonist = pawn.Value,
+                Work = work.Value,
+                Priority = priority,
+                // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
+                Previous = current != null ? current.Priority : 3,
+                PreviousLabel = current != null ? current.Priority.ToString() : "?"
+            };
+            return true;
         }
 
         private List<string> RollBackWorkPriorities(List<WorkPriorityChange> applied)
