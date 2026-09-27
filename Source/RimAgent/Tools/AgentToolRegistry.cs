@@ -128,6 +128,26 @@ namespace RimAgent.Tools
                 .ToList();
         }
 
+        /// <summary>
+        /// 子代理的工具：玩家權限、模式過濾照 <see cref="Select(ToolPermissions, AgentMode)"/>，
+        /// 再限縮到子代理宣告的類別；唯讀子代理只拿查詢工具。
+        /// </summary>
+        public IList<AITool> SelectForSubagent(ToolPermissions permissions, AgentMode mode, IReadOnlyList<ToolCategory> categories, bool readOnly)
+        {
+            if (permissions == null) throw new ArgumentNullException(nameof(permissions));
+            var scoped = new ToolPermissions();
+            foreach (ToolCategory category in categories ?? Array.Empty<ToolCategory>())
+            {
+                scoped.Set(category, permissions.Allows(category));
+            }
+            HashSet<AITool> allowed = new HashSet<AITool>(Select(scoped, mode));
+            return _tools
+                .Where(t => allowed.Contains(t.Tool))
+                .Where(t => !readOnly || t.Risk == ToolRisk.Query)
+                .Select(t => t.Tool)
+                .ToList();
+        }
+
         private static readonly HashSet<string> YoloForbiddenToolNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "execute_trade",

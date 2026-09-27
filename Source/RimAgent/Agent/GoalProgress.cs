@@ -96,7 +96,9 @@ namespace RimAgent.Agent
                 if (entry.InstructionId != instructionId || entry.Kind != TranscriptKind.Tool || entry.Failed
                     || (entry.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) continue;
                 // 記憶與網頁搜尋不觀察也不改變殖民地，不算完成證據，也不推翻先前的查詢。
-                if (entry.ToolCategory == ToolCategory.Memory || entry.ToolCategory == ToolCategory.Web) continue;
+                // 委派本身只是子代理的轉述；子代理實際跑的工具各有紀錄，以那些為準。
+                if (entry.ToolCategory == ToolCategory.Memory || entry.ToolCategory == ToolCategory.Web
+                    || entry.ToolCategory == ToolCategory.Agents) continue;
                 verified = entry.ToolRisk == ToolRisk.Query;
             }
             return verified;

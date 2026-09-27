@@ -17,7 +17,9 @@ namespace RimAgent.Tools
         Time,
         Mcp,
         Web,
-        Memory
+        Memory,
+        /// <summary>委派子代理（delegate_task）；子代理自己的工具仍各依其類別過濾。</summary>
+        Agents
     }
 
     /// <summary>

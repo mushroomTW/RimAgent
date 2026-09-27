@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using RimAgent.Tools;
 
 namespace RimAgent.Agent
@@ -51,6 +52,8 @@ namespace RimAgent.Agent
         public bool BudgetConsumed { get; set; }
         /// <summary>自動模式的分類結果：low／high／unavailable；沒經分類器為空。</summary>
         public string RiskCheck { get; set; } = string.Empty;
+        /// <summary>替哪個子代理執行；主 Agent 自己的呼叫為空。</summary>
+        public string Agent { get; set; } = string.Empty;
 
         // Assistant / Error 專用
         public bool ToolsStripped { get; set; }
@@ -73,6 +76,8 @@ namespace RimAgent.Agent
         private int _instructionIds;
         private int _version;
         private int _epoch;
+        // 子代理與主 Agent 共用同一組工具實例，靠呼叫流程上的 AsyncLocal 分辨是誰呼叫的；並行的子代理各有一份。
+        private readonly AsyncLocal<string> _agent = new AsyncLocal<string>();
 
         /// <summary>每次 Add／Clear／既有紀錄更新時遞增；UI 以此判斷是否要更新渲染快取。</summary>
         public int Version
@@ -148,6 +153,17 @@ namespace RimAgent.Agent
                     return string.Empty;
                 }
             }
+        }
+
+        /// <summary>目前這條呼叫流程所屬的子代理名稱；主 Agent 為空字串。工具紀錄以此標記。</summary>
+        public string CurrentAgent => _agent.Value ?? string.Empty;
+
+        /// <summary>設定目前呼叫流程的子代理並回傳原值；呼叫端要在 finally 以原值還原。</summary>
+        internal string SwapCurrentAgent(string name)
+        {
+            string previous = _agent.Value;
+            _agent.Value = name;
+            return previous;
         }
 
         public void Add(TranscriptEntry entry)

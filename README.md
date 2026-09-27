@@ -53,7 +53,8 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 - **60 tools:** inspect the colony, issue orders, search the web, and manage saved memories.
 - **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
-- **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills, or connect trusted local MCP servers.
+- **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel), and subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
+- **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills or subagents, or connect trusted local MCP servers.
 - **Saved progress:** the transcript, model history, scheduler, goals, memories, and `/undo` state persist with the game.
 
 ---
@@ -62,7 +63,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. The Auto-mode classifier follows the agent's current model by default, or can be pinned to its own model or Fallback in mod settings; `/compact` summaries use the agent model. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
+- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. Everything else is set under **Model roles** in mod settings (after hermes-agent's auxiliary models): the subagent default, each subagent, the Auto-mode classifier and `/compact` summaries each pick a model (**Default (agent's current model)**, **Fallback**, or a fallback-chain entry) and a reasoning level. All of them follow the agent's current model by default. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
 - Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default. Drag across any message to select and copy its text; right-click a tool row to copy it. LaTeX math (`$...$`) is shown as plain readable text.
 - The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
@@ -87,7 +88,7 @@ Drag the window to move it or its lower-right corner to resize it. RimAgent reme
 
 > **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB; the settings page can open the log folder directly.
 
-> **Prompts are editable:** `AgentPack/Prompts/` contains the built-in prompts, `AgentPack/Skills/` holds optional skills (seven heuristic gameplay skills ship by default: raid defense, food security, mood, work assignment, medical triage, seasonal prep and colony progression), and `AgentPack/AGENTS.md` ships empty for your own instructions. Reload the save or start a new game after editing; no rebuild is needed. The agent only receives a skill index each turn; full skill texts load on demand through `read_skill`. See [skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
+> **Prompts are editable:** `AgentPack/Prompts/` contains the built-in prompts, `AgentPack/Skills/` holds optional skills (seven heuristic gameplay skills ship by default: raid defense, food security, mood, work assignment, medical triage, seasonal prep and colony progression), `AgentPack/Agents/` holds subagents (one read-only `scout` ships by default), and `AgentPack/AGENTS.md` ships empty for your own instructions. Reload the save or start a new game after editing; no rebuild is needed. The agent only receives a skill index each turn; full skill texts load on demand through `read_skill`. See [skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
 
 ---
 
@@ -100,7 +101,7 @@ One setting decides how much the agent may do on its own:
 | **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
 | **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
 | **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery. No background scheduler. |
-| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model in mod settings: it follows the agent's current model by default, or you can pin a fallback-chain entry or Fallback. |
+| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model and reasoning under Model roles in mod settings: it follows the agent's current model by default, or you can pin a fallback-chain entry or Fallback. |
 | **Autonomous** | Adds emergency responses, base upkeep, and a fixed-cadence scheduled check. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
 
 ### Confirmation details
@@ -133,7 +134,7 @@ Select **Autonomous** from the Agent window's mode dropdown to let the agent act
 
 ## What It Can Do
 
-All 14 categories are enabled by default and can be switched off individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
+All 15 categories are enabled by default and can be switched off individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
 
 | Category | Examples |
 | --- | --- |
@@ -151,10 +152,13 @@ All 14 categories are enabled by default and can be switched off individually in
 | MCP | Tools from configured local MCP servers |
 | Web | `web_search` uses Parallel Search MCP anonymously by default; a local SearXNG server is optional |
 | Memory | `file_memory_*` tools read, list, search, write, edit and delete up to 30 memory files in each game save |
+| Subagents | `delegate_task` hands self-contained tasks to the subagents in `AgentPack/Agents/` |
 
 Web search connects directly to [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) by default, without an API key or local server. Anonymous requests have lower rate limits; search queries are sent to Parallel. To use a local source instead, enable **Use local SearXNG** in RimAgent settings and enter its URL (`http://127.0.0.1:8888` by default). The server must be running with JSON output enabled; [free-web-search](https://github.com/vksco/free-web-search) provides one setup. Local searches request Google, DuckDuckGo and Qwant engines and exclude Bing results. Results are external text and should be checked before use. Because queries leave the game, web search follows the current mode's command policy and is unavailable in Ask mode.
 
 Memory uses the Agent Framework's `FileMemoryProvider`. Each memory is a short file stored in the game save; a new game starts empty, and loading an older save restores its memories. Every instruction receives an index of file names and descriptions, and the agent reads a file when it is relevant. Standing preferences are kept in `preferences.md`. Files are limited to 30 per save and 4,000 characters each; names are limited to 60 characters, and descriptions are flattened to one line of up to 200 characters. Reading, listing and searching are queries; writing, editing and deleting follow the current mode's command policy, so Ask mode can only read memories.
+
+Subagents follow hermes-agent's `delegate_task`. Each subagent is an `AgentPack/Agents/<name>/AGENT.md` file whose frontmatter declares its tool categories, `read_only`, and optional `reasoning`. The agent passes up to four task briefs per call. Each task runs in a fresh context with the subagent's own prompt, tools and model, and only the final report enters the agent's history. Read-only subagents run their tasks in parallel; others run them in order. A subagent only gets categories that are also allowed in the settings. Its commands pass through the same mode, confirmation, classifier, autonomous budget, `/undo` and action log, and the action log labels its tool calls with its name. Subagents cannot delegate further. The shipped `scout` is read-only reconnaissance across every colony category.
 
 ---
 
@@ -164,7 +168,7 @@ Memory uses the Agent Framework's `FileMemoryProvider`. Each memory is a short f
 Player request → ColonyAgentSession → RimLLM Framework model → colony tools → IGameWorld → RimWorld
 ```
 
-The model receives tools selected for the current mode and category permissions. Two interfaces keep most behavior testable without starting RimWorld:
+The model receives tools selected for the current mode and category permissions. With the Subagents category on, it also gets `delegate_task`, which runs a subagent through the same tools on a separate model call. Two interfaces keep most behavior testable without starting RimWorld:
 
 - **`IChatClient`** lets tests use scripted model responses without network calls.
 - **`IGameWorld`** lets tool tests use an in-memory world; `RimWorldGameWorld` connects those tools to the game.

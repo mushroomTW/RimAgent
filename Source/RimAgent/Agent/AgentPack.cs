@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using RimAgent.Tools;
 
 namespace RimAgent.Agent
 {
@@ -12,7 +13,25 @@ namespace RimAgent.Agent
         public string Body { get; set; } = string.Empty;
     }
 
-    /// <summary>出貨的 agent 擴充包內容：前情提要、玩家自留地、內建行為準則、Ask 註記、分類器提示詞、自主任務與技能包。</summary>
+    /// <summary>
+    /// 一個子代理（Agents/ 下的一個資料夾，以 AGENT.md 為本體）：主 Agent 用 delegate_task 把任務交給它，
+    /// 它以獨立上下文、自己的工具類別與模型槽跑完，只把報告交回主 Agent。
+    /// </summary>
+    public sealed class AgentSubagent
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        /// <summary>子代理可用的工具類別；仍要與玩家權限取交集，且 <see cref="ToolCategory.Agents"/> 永遠不給（只委派一層）。</summary>
+        public IReadOnlyList<ToolCategory> Categories { get; set; } = new[] { ToolCategory.Observe };
+        /// <summary>只拿查詢工具；唯讀子代理的多個任務可並行執行。</summary>
+        public bool ReadOnly { get; set; }
+        /// <summary>思考強度；null 則用設定頁的子代理預設。</summary>
+        public ReasoningLevel? Reasoning { get; set; }
+        /// <summary>子代理的系統提示詞本文。</summary>
+        public string Body { get; set; } = string.Empty;
+    }
+
+    /// <summary>出貨的 agent 擴充包內容：前情提要、玩家自留地、內建行為準則、Ask 註記、分類器提示詞、自主任務、技能包與子代理。</summary>
     public sealed class AgentPack
     {
         /// <summary>前情提要（Briefing.md）：每次請求的第一層。缺檔時呼叫端用內建 fallback 兜底。</summary>
@@ -28,6 +47,7 @@ namespace RimAgent.Agent
         /// <summary>自主任務文案（Autonomous.en.md，英文）。缺檔時該輪自主任務跳過。</summary>
         public AutonomousPack Autonomous { get; set; } = new AutonomousPack();
         public IReadOnlyList<AgentSkill> Skills { get; set; } = Array.Empty<AgentSkill>();
+        public IReadOnlyList<AgentSubagent> Subagents { get; set; } = Array.Empty<AgentSubagent>();
     }
 
     /// <summary>一個語言的自主任務文案：共用通則＋觸發原因→指令文字。</summary>
@@ -42,7 +62,7 @@ namespace RimAgent.Agent
     }
 
     /// <summary>
-    /// 讀 AgentPack/ 資料夾（Prompts/ 下的內建提示詞、根目錄的 AGENTS.md、Skills/*/SKILL.md）。
+    /// 讀 AgentPack/ 資料夾（Prompts/ 下的內建提示詞、根目錄的 AGENTS.md、Skills/*/SKILL.md、Agents/*/AGENT.md）。
     /// 純檔案邏輯，不碰遊戲 API，
     /// rootDir 可注入，方便測試。缺檔、壞檔一律視為空，不丟例外。
     /// </summary>
@@ -50,6 +70,8 @@ namespace RimAgent.Agent
     {
         /// <summary>單個技能讀進提示詞的上限（字數），超過截斷並註明。</summary>
         public const int MaxSkillChars = 3000;
+        /// <summary>單個子代理提示詞的上限（字數），超過截斷並註明。</summary>
+        public const int MaxSubagentChars = 4000;
 
         /// <summary>自主任務檔名（只留英文）。</summary>
         internal const string AutonomousFileName = "Autonomous.en.md";
@@ -68,6 +90,7 @@ namespace RimAgent.Agent
                 pack.AskModeNote = ReadFile(promptsDir, "AskMode.md");
                 pack.ClassifierPrompt = ReadFile(promptsDir, "RiskClassifier.md");
                 LoadAutonomous(pack, promptsDir);
+                pack.Subagents = LoadSubagents(Path.Combine(rootDir, "Agents"));
 
                 string skillsDir = Path.Combine(rootDir, "Skills");
                 if (!Directory.Exists(skillsDir)) return pack;
@@ -163,6 +186,116 @@ namespace RimAgent.Agent
             }
             current = null;
             body.Length = 0;
+        }
+
+        /// <summary>只讀子代理（設定頁用，不必讀整個擴充包）；缺檔、壞檔一樣視為空。</summary>
+        public static IReadOnlyList<AgentSubagent> LoadSubagentsOnly(string rootDir)
+        {
+            if (string.IsNullOrEmpty(rootDir)) return Array.Empty<AgentSubagent>();
+            try
+            {
+                return LoadSubagents(Path.Combine(rootDir, "Agents"));
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                return Array.Empty<AgentSubagent>();
+            }
+        }
+
+        /// <summary>Agents/*/AGENT.md，依資料夾名排序；同名子代理只留第一個（名稱是設定頁與委派的鍵）。</summary>
+        private static IReadOnlyList<AgentSubagent> LoadSubagents(string agentsDir)
+        {
+            if (!Directory.Exists(agentsDir)) return Array.Empty<AgentSubagent>();
+            var subagents = new List<AgentSubagent>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            string[] dirs = Directory.GetDirectories(agentsDir);
+            Array.Sort(dirs, StringComparer.OrdinalIgnoreCase);
+            foreach (string dir in dirs)
+            {
+                string path = Path.Combine(dir, "AGENT.md");
+                if (!File.Exists(path)) continue;
+                string text = (File.ReadAllText(path) ?? string.Empty).Trim();
+                if (text.Length == 0) continue;
+                AgentSubagent subagent = ParseSubagent(Path.GetFileName(dir) ?? dir, text);
+                if (subagent.Name.Length == 0 || subagent.Body.Length == 0 || !seen.Add(subagent.Name)) continue;
+                subagents.Add(subagent);
+            }
+            return subagents;
+        }
+
+        /// <summary>
+        /// frontmatter：name、description、categories（逗號分隔的 <see cref="ToolCategory"/> 名稱，不分大小寫）、
+        /// read_only（true／yes／on／1 為是）、reasoning（<see cref="ReasoningLevel"/> 名稱）。
+        /// 名稱一律轉小寫當鍵；沒寫類別或全寫錯時只給觀察類；Agents 類別一律剔除。
+        /// </summary>
+        internal static AgentSubagent ParseSubagent(string folderName, string text)
+        {
+            var subagent = new AgentSubagent { Name = folderName };
+            string body = text;
+            var categories = new List<ToolCategory>();
+            if (text.StartsWith("---"))
+            {
+                int end = text.IndexOf("---", 3, StringComparison.Ordinal);
+                if (end > 3)
+                {
+                    body = text.Substring(end + 3).Trim();
+                    foreach (string line in Lines(text.Substring(3, end - 3)))
+                    {
+                        ApplySubagentField(subagent, categories, line);
+                    }
+                }
+            }
+            subagent.Name = subagent.Name.Trim().ToLowerInvariant();
+            if (categories.Count > 0) subagent.Categories = categories;
+            if (subagent.Description.Length == 0) subagent.Description = FirstLine(body);
+            if (body.Length > MaxSubagentChars) body = body.Substring(0, MaxSubagentChars) + "\n[agent prompt truncated]";
+            subagent.Body = body;
+            return subagent;
+        }
+
+        private static void ApplySubagentField(AgentSubagent subagent, List<ToolCategory> categories, string line)
+        {
+            int colon = line.IndexOf(':');
+            if (colon <= 0) return;
+            string key = line.Substring(0, colon).Trim().ToLowerInvariant();
+            string value = line.Substring(colon + 1).Trim();
+            switch (key)
+            {
+                case "name":
+                    if (value.Length > 0) subagent.Name = value;
+                    break;
+                case "description":
+                    subagent.Description = value;
+                    break;
+                case "categories":
+                    foreach (string token in value.Split(new[] { ',' }))
+                    {
+                        if (TryParseName(token, out ToolCategory category) && category != ToolCategory.Agents
+                            && !categories.Contains(category))
+                        {
+                            categories.Add(category);
+                        }
+                    }
+                    break;
+                case "read_only":
+                    // YAML 常見的真值寫法都算；寫錯的值當作否，子代理拿到的是依序執行的完整工具。
+                    subagent.ReadOnly = Array.IndexOf(new[] { "true", "yes", "on", "1" }, value.ToLowerInvariant()) >= 0;
+                    break;
+                case "reasoning":
+                    if (TryParseName(value, out ReasoningLevel level)) subagent.Reasoning = level;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        /// <summary>Enum.TryParse 會把數字字串也當成合法值；這裡只收名稱。</summary>
+        private static bool TryParseName<T>(string value, out T result) where T : struct
+        {
+            result = default(T);
+            string trimmed = (value ?? string.Empty).Trim();
+            if (trimmed.Length == 0 || char.IsDigit(trimmed[0]) || trimmed[0] == '-') return false;
+            return Enum.TryParse(trimmed, true, out result) && Enum.IsDefined(typeof(T), result);
         }
 
         internal static AgentSkill ParseSkill(string folderName, string text)

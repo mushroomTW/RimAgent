@@ -196,6 +196,18 @@ namespace RimAgent.Agent
             }
         }
 
+        /// <summary>本輪剩餘的工具額度；null 表示不限制。委派用它把子代理的迴圈夾在額度內。</summary>
+        internal int? RemainingToolBudget
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _remainingToolCalls < 0 ? (int?)null : _remainingToolCalls;
+                }
+            }
+        }
+
         /// <summary>在工具碰觸世界前原子扣除一次額度；無預算限制的玩家指令不計入自主配額。</summary>
         internal bool TryConsumeToolBudget(out bool consumed)
         {

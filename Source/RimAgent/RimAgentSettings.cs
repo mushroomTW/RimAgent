@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using Verse;
@@ -17,25 +18,49 @@ namespace RimAgent
         public ReasoningLevel reasoning = ReasoningLevel.Auto;
         /// <summary>Agent 優先使用的模型（"供應商:模型"，在 Agent 視窗切換）；留空則沿用框架備援鏈。</summary>
         public string agentModel = string.Empty;
-        /// <summary>
-        /// Auto 模式風險分類器模型識別碼，有三態：空白＝沿用框架備援鏈、
-        /// <see cref="FollowAgentModel"/>＝跟著 Agent 視窗當前模型、其餘＝指定模型。
-        /// 用非空 sentinel 而不是 null：Scribe 讀不到 null 會回填預設值，
-        /// 玩家選了「跟隨」存檔後會靜靜變回 Fallback。
-        /// </summary>
-        public string classifierModel = string.Empty;
+        // 模型槽（參照 hermes-agent 的 auxiliary 模型）：Agent 以外的每一種模型呼叫各有一格，
+        // 值有三態：<see cref="FollowAgentModel"/>＝跟著 Agent 視窗當前模型（預設）、空白＝框架備援鏈、其餘＝指定模型。
+        // 用非空 sentinel 當預設而不是 null：Scribe 讀不到 null 會回填預設值，玩家選的值存檔後會靜靜被換掉。
 
-        /// <summary>分類器模型的「跟隨 Agent」值。不含冒號，真實模型識別碼都是「供應商:模型」，撞不到。</summary>
+        /// <summary>Auto 模式風險分類器的模型槽。</summary>
+        public string classifierModel = FollowAgentModel;
+        public ReasoningLevel classifierReasoning = ReasoningLevel.Auto;
+        /// <summary>手動 /compact 摘要的模型槽。</summary>
+        public string compactModel = FollowAgentModel;
+        public ReasoningLevel compactReasoning = ReasoningLevel.Auto;
+        /// <summary>子代理的預設模型槽；個別子代理可在 <see cref="subagentModels"/> 覆寫模型。</summary>
+        public string subagentModel = FollowAgentModel;
+        public ReasoningLevel subagentReasoning = ReasoningLevel.Auto;
+        /// <summary>子代理名稱 → 模型槽值；沒有鍵的子代理跟隨 <see cref="subagentModel"/>。</summary>
+        public Dictionary<string, string> subagentModels = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        /// <summary>模型槽的「跟隨 Agent」值。不含冒號，真實模型識別碼都是「供應商:模型」，撞不到。</summary>
         public const string FollowAgentModel = "=agent";
 
-        /// <summary>分類器實際該用的模型識別碼；空白表示交給框架備援鏈。</summary>
-        public string ResolveClassifierModel()
+        /// <summary>把模型槽值解成實際模型識別碼；空白表示交給框架備援鏈。</summary>
+        public string ResolveModelSlot(string slot)
         {
-            string value = (classifierModel ?? string.Empty).Trim();
+            string value = (slot ?? string.Empty).Trim();
             if (value.Length == 0) return string.Empty;
             if (!string.Equals(value, FollowAgentModel, StringComparison.Ordinal)) return value;
             // Agent 自己也選了 Fallback 時回空字串，兩邊就一致地走備援鏈。
             return (agentModel ?? string.Empty).Trim();
+        }
+
+        /// <summary>分類器實際該用的模型識別碼；空白表示交給框架備援鏈。</summary>
+        public string ResolveClassifierModel()
+        {
+            return ResolveModelSlot(classifierModel);
+        }
+
+        /// <summary>指定子代理實際該用的模型識別碼：有個別設定用個別的，否則用子代理預設槽。</summary>
+        public string ResolveSubagentModel(string name)
+        {
+            if (name != null && subagentModels != null && subagentModels.TryGetValue(name, out string own))
+            {
+                return ResolveModelSlot(own);
+            }
+            return ResolveModelSlot(subagentModel);
         }
         /// <summary>選用本機 SearXNG；預設改用免設定的 Parallel 匿名搜尋。</summary>
         public bool useLocalSearch = false;
@@ -86,7 +111,7 @@ namespace RimAgent
         {
             "allowObserve", "allowWork", "allowBuild", "allowCombat", "allowTrade", "allowMedical",
             "allowPrisoner", "allowAnimal", "allowZone", "allowProduction", "allowTime", "allowMCP",
-            "allowWeb", "allowMemory"
+            "allowWeb", "allowMemory", "allowAgents"
         };
 
         private static bool[] DefaultAllows()
@@ -95,7 +120,7 @@ namespace RimAgent
             {
                 true, true, true, true, true, true,
                 true, true, true, true, true, true,
-                true, true
+                true, true, true
             };
         }
 
@@ -167,7 +192,14 @@ namespace RimAgent
             Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
             Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
             Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
-            Scribe_Values.Look(ref classifierModel, "classifierModel", string.Empty);
+            Scribe_Values.Look(ref classifierModel, "classifierModel", FollowAgentModel);
+            Scribe_Values.Look(ref classifierReasoning, "classifierReasoning", ReasoningLevel.Auto);
+            Scribe_Values.Look(ref compactModel, "compactModel", FollowAgentModel);
+            Scribe_Values.Look(ref compactReasoning, "compactReasoning", ReasoningLevel.Auto);
+            Scribe_Values.Look(ref subagentModel, "subagentModel", FollowAgentModel);
+            Scribe_Values.Look(ref subagentReasoning, "subagentReasoning", ReasoningLevel.Auto);
+            Scribe_Collections.Look(ref subagentModels, "subagentModels", LookMode.Value, LookMode.Value);
+            if (subagentModels == null) subagentModels = new Dictionary<string, string>(StringComparer.Ordinal);
             Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
             Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
             Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);

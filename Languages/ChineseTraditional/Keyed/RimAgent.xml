@@ -85,6 +85,13 @@
   <RimAgent.Settings.SearxngUrl>SearXNG 服務網址</RimAgent.Settings.SearxngUrl>
   <RimAgent.Settings.Memory>記憶 — 依存檔保存資訊</RimAgent.Settings.Memory>
   <RimAgent.Settings.MemoryTip>允許 Agent 在本存檔中讀取、寫入、編輯與刪除最多 30 個記憶檔。</RimAgent.Settings.MemoryTip>
+  <RimAgent.Settings.Agents>子代理 — 委派任務</RimAgent.Settings.Agents>
+  <RimAgent.Settings.AgentsTip>允許 Agent 把自足的任務交給 AgentPack/Agents 裡的子代理（delegate_task）。子代理仍只拿得到這裡允許的工具類別，命令照目前模式把關。</RimAgent.Settings.AgentsTip>
+  <RimAgent.Settings.ModelRolesHeader>模型分工</RimAgent.Settings.ModelRolesHeader>
+  <RimAgent.Settings.SubagentModel>子代理預設：</RimAgent.Settings.SubagentModel>
+  <RimAgent.Settings.SubagentModelTip>沒有在下方個別指定模型的子代理使用的模型與思考強度。AGENT.md 寫了 reasoning 的子代理以它為準。</RimAgent.Settings.SubagentModelTip>
+  <RimAgent.Settings.SubagentModelFor>子代理 {0}：</RimAgent.Settings.SubagentModelFor>
+  <RimAgent.Settings.SubagentModelForTip>只給 {0} 子代理使用的模型。</RimAgent.Settings.SubagentModelForTip>
   <RimAgent.Settings.Mode.Ask>詢問</RimAgent.Settings.Mode.Ask>
   <RimAgent.Settings.Mode.AskDesc>唯讀。Agent 可以查看殖民地並給建議，但沒有任何會改變遊戲的工具。</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>確認</RimAgent.Settings.Mode.Confirm>
@@ -93,9 +100,11 @@
   <RimAgent.Settings.Mode.YoloDesc>夾在確認與自動之間，無排程器。受黑名單保護（交易、商隊、手術、囚犯等高危工具排除），其餘所有操作與 MCP 工具免確認直接執行。</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>自動</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>另起一次模型呼叫判定每個動作（含 MCP 工具）兩件事：動作本身的風險，以及你這句話有沒有要求它。只有低風險且你要求的才直接執行，其餘等你確認。每個動作多一次請求。</RimAgent.Settings.Mode.AutoDesc>
-  <RimAgent.Settings.ClassifierHeader>自動模式 — 安全審查</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>分類器模型：</RimAgent.Settings.ClassifierModel>
-  <RimAgent.Settings.ClassifierModelTip>自動模式判定風險時使用的模型，可從 RimLLM Framework 備援鏈上的條目挑選；選「Fallback」則依備援鏈。</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.ClassifierModelTip>自動模式判定風險時使用的模型與思考強度。</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.CompactModel>/compact 摘要：</RimAgent.Settings.CompactModel>
+  <RimAgent.Settings.CompactModelTip>/compact 摘要較舊歷史時使用的模型與思考強度，通常用便宜的模型就夠。</RimAgent.Settings.CompactModelTip>
+  <RimAgent.Settings.SlotReasoningTip>只套用在這一格的思考強度；自動＝沿用框架預設。</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>後台排程器自主運轉。不限制任何行為（無黑名單限制），不設每日預算上限，MCP 免確認直接執行，依排程與突發事件自動行動。玩家仍可隨時下指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行動</RimAgent.Settings.AutonomousHeader>
@@ -118,7 +127,9 @@
   <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>依 RimLLM Framework 的備援鏈選擇模型。</RimAgent.Model.DefaultTip>
   <RimAgent.Model.FollowAgent>默認（Agent 當前模型）</RimAgent.Model.FollowAgent>
-  <RimAgent.Model.FollowAgentTip>跟著 Agent 視窗當前選的模型走；在那邊換模型，這裡會自動跟上，不必分開設定。Agent 視窗是 Fallback 時，分類器也走備援鏈。</RimAgent.Model.FollowAgentTip>
+  <RimAgent.Model.FollowAgentTip>跟著 Agent 視窗當前選的模型走；在那邊換模型，這裡會自動跟上，不必分開設定。Agent 視窗是 Fallback 時，這一格也走備援鏈。</RimAgent.Model.FollowAgentTip>
+  <RimAgent.Model.FollowSubagentDefault>跟隨子代理預設</RimAgent.Model.FollowSubagentDefault>
+  <RimAgent.Model.FollowSubagentDefaultTip>使用上方的子代理預設。</RimAgent.Model.FollowSubagentDefaultTip>
   <RimAgent.Model.Tip>優先使用：{0}&#10;失敗時由框架依備援鏈改用其他模型。</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>自動</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>關閉</RimAgent.Reasoning.Off>

@@ -85,6 +85,13 @@
   <RimAgent.Settings.SearxngUrl>SearXNG server URL</RimAgent.Settings.SearxngUrl>
   <RimAgent.Settings.Memory>Memory — save facts per game</RimAgent.Settings.Memory>
   <RimAgent.Settings.MemoryTip>Allow the agent to read, write, edit and delete up to 30 memory files in this game's save file.</RimAgent.Settings.MemoryTip>
+  <RimAgent.Settings.Agents>Subagents — delegate tasks</RimAgent.Settings.Agents>
+  <RimAgent.Settings.AgentsTip>Allow the agent to hand self-contained tasks to the subagents in AgentPack/Agents (delegate_task). Each subagent still only gets the tool categories you allow here, and its commands follow the current mode.</RimAgent.Settings.AgentsTip>
+  <RimAgent.Settings.ModelRolesHeader>Model roles</RimAgent.Settings.ModelRolesHeader>
+  <RimAgent.Settings.SubagentModel>Subagent default:</RimAgent.Settings.SubagentModel>
+  <RimAgent.Settings.SubagentModelTip>Model and reasoning used by subagents that have no model of their own below. A subagent whose AGENT.md sets reasoning keeps that reasoning.</RimAgent.Settings.SubagentModelTip>
+  <RimAgent.Settings.SubagentModelFor>Subagent {0}:</RimAgent.Settings.SubagentModelFor>
+  <RimAgent.Settings.SubagentModelForTip>Model for the {0} subagent only.</RimAgent.Settings.SubagentModelForTip>
   <RimAgent.Settings.Mode.Ask>Ask</RimAgent.Settings.Mode.Ask>
   <RimAgent.Settings.Mode.AskDesc>Read-only. The agent can inspect the colony and advise, but has no tools that change it.</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>Confirm</RimAgent.Settings.Mode.Confirm>
@@ -93,9 +100,11 @@
   <RimAgent.Settings.Mode.YoloDesc>Between Confirm and Auto, no scheduler. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); all other commands and MCP execute directly without confirmation.</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools) on two axes: how risky it is, and whether your instruction asked for it. Only low-risk actions you asked for run directly; the rest wait for your Confirm. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
-  <RimAgent.Settings.ClassifierHeader>Auto mode — safety review</RimAgent.Settings.ClassifierHeader>
   <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
-  <RimAgent.Settings.ClassifierModelTip>Model used by Auto mode for risk classification. Choose from the entries in your RimLLM Framework fallback chain; Fallback follows the fallback chain.</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.ClassifierModelTip>Model and reasoning used by Auto mode for risk classification.</RimAgent.Settings.ClassifierModelTip>
+  <RimAgent.Settings.CompactModel>/compact summary:</RimAgent.Settings.CompactModel>
+  <RimAgent.Settings.CompactModelTip>Model and reasoning used when /compact summarizes older history. A cheaper model is usually fine here.</RimAgent.Settings.CompactModelTip>
+  <RimAgent.Settings.SlotReasoningTip>Reasoning level for this role only; Auto keeps the framework default.</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>Background scheduler runs autonomously. No restrictions on any behavior (no blacklist), no daily tool budget limit, MCP executes directly, operating on routine and events. Players can still give instructions anytime.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
@@ -117,7 +126,9 @@
   <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>Use the RimLLM Framework fallback chain.</RimAgent.Model.DefaultTip>
   <RimAgent.Model.FollowAgent>Default (agent's current model)</RimAgent.Model.FollowAgent>
-  <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, the classifier follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
+  <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, this role follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
+  <RimAgent.Model.FollowSubagentDefault>Subagent default</RimAgent.Model.FollowSubagentDefault>
+  <RimAgent.Model.FollowSubagentDefaultTip>Use the subagent default above.</RimAgent.Model.FollowSubagentDefaultTip>
   <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>

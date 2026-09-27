@@ -61,7 +61,8 @@ namespace RimAgent.Tools
                 ToolCategory = _category,
                 ToolRisk = _risk,
                 Arguments = FormatArguments(arguments),
-                InstructionId = _transcript.CurrentInstructionId
+                InstructionId = _transcript.CurrentInstructionId,
+                Agent = _transcript.CurrentAgent
             };
 
             string notReady = _world.GetNotReadyReason();

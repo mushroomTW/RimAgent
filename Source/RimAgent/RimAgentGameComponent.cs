@@ -452,8 +452,10 @@ namespace RimAgent
                 IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
                 bool hasToolEvidence = GoalProgress.HasVerificationEvidence(entries, instructionId);
                 // 記憶與網頁搜尋不碰殖民地，不算推進目標；否則每輪讀 preferences.md 就能躲過閒置暫停。
+                // 委派本身也不算，子代理實際跑的工具另有紀錄。
                 bool usedTool = entries.Any(e => e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool
                     && e.ToolCategory != ToolCategory.Memory && e.ToolCategory != ToolCategory.Web
+                    && e.ToolCategory != ToolCategory.Agents
                     && !e.Failed && !(e.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
                 GoalTurnDecision decision = GoalProgress.AfterTurn(
                     _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence,
@@ -746,7 +748,16 @@ namespace RimAgent
                 memory: _memoryStore,
                 useLocalSearch: () => settings.useLocalSearch,
                 searxngUrl: () => settings.searxngUrl,
-                skillsProvider: () => _pack != null ? _pack.Skills : null);
+                skillsProvider: () => _pack != null ? _pack.Skills : null,
+                subagentsProvider: () => _pack != null ? _pack.Subagents : null,
+                routing: new ModelRouting
+                {
+                    ClassifierReasoning = () => settings.classifierReasoning,
+                    CompactModel = () => settings.ResolveModelSlot(settings.compactModel),
+                    CompactReasoning = () => settings.compactReasoning,
+                    SubagentModel = settings.ResolveSubagentModel,
+                    SubagentReasoning = () => settings.subagentReasoning
+                });
             session.Reasoning = settings.reasoning;
             session.PreferredModel = settings.agentModel;
             session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);

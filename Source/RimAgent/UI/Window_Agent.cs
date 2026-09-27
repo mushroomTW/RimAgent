@@ -948,6 +948,11 @@ namespace RimAgent.UI
         {
             string arrow = "<color=#" + SubTextHex + ">" + (expanded ? "▾" : "▸") + "</color> ";
             string tag = "<color=#" + AutoActionHex + ">" + "RimAgent.Tag.Tool".Translate() + "</color> ";
+            // 子代理的工具呼叫標上名稱，玩家才分得出是誰做的。
+            if (!string.IsNullOrEmpty(entry.Agent))
+            {
+                tag += "<color=#" + SubTextHex + ">[" + EscapeRichText(entry.Agent) + "]</color> ";
+            }
             string call = arrow + tag + "<color=#" + (entry.Failed ? EmergencyHex : TextHex) + ">" + EscapeRichText(entry.ToolName) + "</color>";
             if (entry.RiskCheck.Length > 0)
             {

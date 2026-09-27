@@ -39,6 +39,7 @@ namespace RimAgent.Agent
         private readonly CompactionProvider _compaction;
 #pragma warning restore MAAI001
         private readonly AgentToolRegistry _registry;
+        private readonly SubagentTools _subagents;
         private readonly Func<ToolPermissions> _permissions;
         private readonly IChatClient _inner;
         private readonly TokenTrackingChatClient _tokenUsage;
@@ -108,8 +109,10 @@ namespace RimAgent.Agent
         /// <param name="classifierModel">自動模式分類器指定使用的模型識別碼 provider；null 則沿用框架預設。</param>
         /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
         /// <param name="askNote">詢問模式附加註記（AgentPack/Prompts/AskMode.md）；null 則詢問模式不加註。</param>
+        /// <param name="subagentsProvider">AgentPack/Agents 載入的子代理；null 或空清單則不提供委派工具。</param>
+        /// <param name="routing">分類器、/compact 摘要與子代理的模型槽；null 則全部沿用框架備援鏈與 Auto 思考強度。</param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null)
+        public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null)
         {
             if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -122,12 +125,19 @@ namespace RimAgent.Agent
             _memory = memory ?? new AgentMemoryStore();
             _instructions = instructions;
             _askNote = askNote;
-            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, new RiskClassifier(classifierClient ?? innerClient, classifierModel, classifierPrompt), _memory, useLocalSearch, searxngUrl, skillsProvider);
+            // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
+            var classifier = new RiskClassifier(
+                new ModelSlotChatClient(classifierClient ?? innerClient, null, routing?.ClassifierReasoning),
+                classifierModel, classifierPrompt);
+            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider);
+            // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
+            _subagents = new SubagentTools(innerClient, _registry, Transcript, subagentsProvider, _permissions, () => Mode,
+                routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);
             _tokenUsage = new TokenTrackingChatClient(innerClient);
             _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
-            _tokenUsage.ResponseObserved = response => _activeRunLog?.AddModelResponse(response);
+            _tokenUsage.ResponseObserved = RecordModelResponse;
             _inner = _tokenUsage.AsMainThreadFunctionInvokingClient(maxSteps);
-            _summarizer = innerClient;
+            _summarizer = new ModelSlotChatClient(innerClient, routing?.CompactModel, routing?.CompactReasoning);
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
             // 前情提要走 Instructions（AF 正統）；檔遺失時以一行保底代替，不拿空提示詞燒 API。
@@ -454,6 +464,17 @@ namespace RimAgent.Agent
                 ApplyRunStepLimit(null);
                 PrepareSaveSnapshot();
                 Volatile.Write(ref _busy, 0);
+            }
+        }
+
+        /// <summary>主 Agent 與子代理的模型回應都記進執行紀錄；並行的子代理會同時呼叫，所以上鎖。</summary>
+        private void RecordModelResponse(ChatResponse response)
+        {
+            RunLogRecord log = _activeRunLog;
+            if (log == null) return;
+            lock (log)
+            {
+                log.AddModelResponse(response);
             }
         }
 
@@ -876,14 +897,19 @@ namespace RimAgent.Agent
         internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride = null)
         {
             ToolPermissions permissions = _permissions();
+            IList<AITool> tools = _registry.Select(permissions, Mode);
+            IReadOnlyList<AgentSubagent> subagents = permissions.Allows(ToolCategory.Agents)
+                ? _subagents.Available(permissions, Mode)
+                : Array.Empty<AgentSubagent>();
+            if (subagents.Count > 0) tools.Add(_subagents.Function);
             var options = new RimLLMChatOptions
             {
-                Tools = _registry.Select(permissions, Mode),
+                Tools = tools,
                 ToolMode = ChatToolMode.Auto,
                 Temperature = Temperature,
                 MaxOutputTokens = MaxOutputTokens
             };
-            ApplyReasoning(options, reasoningOverride ?? Reasoning);
+            ModelSlots.ApplyReasoning(options, reasoningOverride ?? Reasoning);
             if (!string.IsNullOrWhiteSpace(PreferredModel)) options.ModelId = PreferredModel.Trim();
             // Run 層覆寫 agent 層的核心提示詞：擴充包內容變更後下一句立即生效，不必重建會話。
             string instructions = null;
@@ -902,6 +928,11 @@ namespace RimAgent.Agent
                     instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + note.Trim();
                 }
             }
+            if (subagents.Count > 0)
+            {
+                // 子代理清單只在擴充包變更時改變，放在易變的記憶索引之前，保住前綴快取。
+                instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + SubagentTools.Instructions(subagents);
+            }
             if (permissions.Allows(ToolCategory.Memory))
             {
                 // 索引只在寫入或刪除記憶時改變，放在系統提示不會讓每句都失去前綴快取。
@@ -916,33 +947,17 @@ namespace RimAgent.Agent
             return options;
         }
 
-        /// <summary>Auto 什麼都不設（框架補預設）；Off 走框架的 DisableReasoning；其餘交給 MEAI 的 ReasoningEffort。</summary>
-        private static void ApplyReasoning(RimLLMChatOptions options, ReasoningLevel level)
-        {
-            switch (level)
-            {
-                case ReasoningLevel.Off:
-                    options.DisableReasoning = true;
-                    break;
-                case ReasoningLevel.Low:
-                    options.Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Low };
-                    break;
-                case ReasoningLevel.Medium:
-                    options.Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Medium };
-                    break;
-                case ReasoningLevel.High:
-                    options.Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High };
-                    break;
-                default:
-                    break;
-            }
-        }
-
         /// <summary>迴圈中間的 assistant 訊息可能夾雜「讓我看看…」之類的文字；玩家要的是最後那則。</summary>
         private static string FinalAssistantText(AgentResponse response)
         {
-            ChatMessage last = response.Messages.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
-            return last != null ? last.Text.Trim() : (response.Text ?? string.Empty).Trim();
+            return FinalAssistantText(response.Messages, response.Text);
+        }
+
+        /// <summary>主 Agent 與子代理共用：取最後一則有文字的 assistant 訊息，沒有就退回整體文字。</summary>
+        internal static string FinalAssistantText(IEnumerable<ChatMessage> messages, string fallback)
+        {
+            ChatMessage last = messages.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
+            return last != null ? last.Text.Trim() : (fallback ?? string.Empty).Trim();
         }
 
         private static bool IsToolsStripped(AgentResponse response)

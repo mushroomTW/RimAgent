@@ -28,6 +28,9 @@ namespace RimAgent
         private static LoadedLanguage _permissionLanguage;
         private static float _permissionLabelWidth = -1f;
 
+        // 設定頁要列出每個子代理的模型槽，但主選單時沒有遊戲元件可問；自己讀一次擴充包，關頁時丟掉。
+        private static IReadOnlyList<AgentSubagent> _subagents;
+
         private static Vector2 _settingsScrollPosition = Vector2.zero;
         private static float _settingsHeight = 960f;
 
@@ -64,14 +67,7 @@ namespace RimAgent
                 Settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), Settings.searxngUrl ?? string.Empty);
             }
 
-            listing.Gap();
-            listing.Label("RimAgent.Settings.ClassifierHeader".Translate());
-            listing.GapLine();
-            // 模型下拉列共用同一形狀：Fallback＋備援鏈條目；分類器多一項「跟隨 Agent 模型」。
-            DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel",
-                () => Settings.classifierModel, v => Settings.classifierModel = v,
-                "RimAgent.Settings.ClassifierModelTip",
-                RimAgentSettings.FollowAgentModel, "RimAgent.Model.FollowAgent");
+            DrawModelRoles(listing);
 
             listing.Gap();
             listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
@@ -131,7 +127,7 @@ namespace RimAgent
             Widgets.EndScrollView();
         }
 
-        /// <summary>十四類工具權限：標題列右側一鍵全開／全關，勾選框排成兩欄（先填滿左欄再換右欄）。</summary>
+        /// <summary>十五類工具權限：標題列右側一鍵全開／全關，勾選框排成兩欄（先填滿左欄再換右欄）。</summary>
         private static void DrawPermissions(Listing_Standard listing)
         {
             ToolCategory[] categories = Categories;
@@ -171,44 +167,95 @@ namespace RimAgent
             }
         }
 
+        public override void WriteSettings()
+        {
+            base.WriteSettings();
+            // 關閉設定頁時觸發：下次打開重讀擴充包，玩家新增的子代理才看得到。
+            _subagents = null;
+        }
+
         /// <summary>
-        /// 模型下拉列：Fallback＋備援鏈條目，備援鏈之後可再插一個「跟隨 Agent 模型」。
-        /// 選項與 Agent 視窗的模型選單相同。
+        /// 模型分工（參照 hermes-agent 的 auxiliary 模型）：Agent 主模型在 Agent 視窗切換，
+        /// 其餘每種模型呼叫各一格，預設跟隨 Agent 模型；子代理另可逐一覆寫模型。
         /// </summary>
-        /// <param name="followValue">「跟隨 Agent 模型」的設定值；null 表示不提供這個選項。</param>
-        /// <param name="followLabelKey">該選項的譯文鍵；提示沿用同一鍵加 "Tip"。</param>
+        private void DrawModelRoles(Listing_Standard listing)
+        {
+            listing.Gap();
+            listing.Label("RimAgent.Settings.ModelRolesHeader".Translate());
+            listing.GapLine();
+            DrawModelDropdown(listing, "RimAgent.Settings.SubagentModel".Translate(),
+                () => Settings.subagentModel, v => Settings.subagentModel = v,
+                "RimAgent.Settings.SubagentModelTip".Translate(),
+                () => Settings.subagentReasoning, v => Settings.subagentReasoning = v);
+            if (_subagents == null) _subagents = AgentPackLoader.LoadSubagentsOnly(Path.Combine(Content.RootDir, "AgentPack"));
+            foreach (AgentSubagent subagent in _subagents)
+            {
+                string name = subagent.Name;
+                // 沒有鍵＝跟隨子代理預設；AGENT.md 寫了 reasoning 就以它為準，這裡只管模型。
+                DrawModelDropdown(listing, "RimAgent.Settings.SubagentModelFor".Translate(name),
+                    () => Settings.subagentModels.TryGetValue(name, out string own) ? own : null,
+                    v =>
+                    {
+                        if (v == null) Settings.subagentModels.Remove(name);
+                        else Settings.subagentModels[name] = v;
+                    },
+                    "RimAgent.Settings.SubagentModelForTip".Translate(name));
+            }
+            DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel".Translate(),
+                () => Settings.classifierModel, v => Settings.classifierModel = v,
+                "RimAgent.Settings.ClassifierModelTip".Translate(),
+                () => Settings.classifierReasoning, v => Settings.classifierReasoning = v);
+            DrawModelDropdown(listing, "RimAgent.Settings.CompactModel".Translate(),
+                () => Settings.compactModel, v => Settings.compactModel = v,
+                "RimAgent.Settings.CompactModelTip".Translate(),
+                () => Settings.compactReasoning, v => Settings.compactReasoning = v);
+        }
+
+        /// <summary>
+        /// 一格模型槽：模型下拉（跟隨 Agent／Fallback／備援鏈條目，選項與 Agent 視窗的模型選單相同）
+        /// 加上選用的思考強度下拉。
+        /// </summary>
+        /// <param name="current">目前的槽值；回傳 null 表示「跟隨子代理預設」（只有個別子代理的列會這樣）。</param>
+        /// <param name="reasoning">思考強度的讀取；null 表示這列不顯示思考強度。</param>
         private static void DrawModelDropdown(
-            Listing_Standard listing, string labelKey, Func<string> current, Action<string> set, string tipKey,
-            string followValue = null, string followLabelKey = null)
+            Listing_Standard listing, string label, Func<string> current, Action<string> set, string tip,
+            Func<ReasoningLevel> reasoning = null, Action<ReasoningLevel> setReasoning = null)
         {
             Rect row = listing.GetRect(28f);
-            const float labelWidth = 140f;
+            const float labelWidth = 160f;
+            const float reasoningWidth = 90f;
             var labelRect = new Rect(row.x, row.y + 3f, labelWidth, 24f);
-            var dropdownRect = new Rect(labelRect.xMax + 4f, row.y, row.xMax - labelRect.xMax - 4f, 26f);
+            float dropdownRight = reasoning != null ? row.xMax - reasoningWidth - 6f : row.xMax;
+            var dropdownRect = new Rect(labelRect.xMax + 4f, row.y, dropdownRight - labelRect.xMax - 4f, 26f);
 
-            Widgets.Label(labelRect, labelKey.Translate());
-            string value = (current() ?? string.Empty).Trim();
-            bool following = followValue != null && string.Equals(value, followValue, StringComparison.Ordinal);
-            string shown = value.Length == 0
-                ? "RimAgent.Model.Default".Translate().ToString()
-                : following ? followLabelKey.Translate().ToString() : value;
+            Text.WordWrap = false;
+            Widgets.Label(labelRect, label.Truncate(labelWidth));
+            Text.WordWrap = true;
+            string raw = current();
+            bool inheriting = raw == null && reasoning == null;
+            string value = (raw ?? string.Empty).Trim();
+            bool following = string.Equals(value, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal);
+            string shown = inheriting ? "RimAgent.Model.FollowSubagentDefault".Translate().ToString()
+                : value.Length == 0 ? "RimAgent.Model.Default".Translate().ToString()
+                : following ? "RimAgent.Model.FollowAgent".Translate().ToString() : value;
             if (Widgets.ButtonText(dropdownRect, shown.Truncate(dropdownRect.width - 12f)))
             {
-                var options = new List<FloatMenuOption>
+                var options = new List<FloatMenuOption>();
+                if (reasoning == null)
                 {
-                    new FloatMenuOption("RimAgent.Model.Default".Translate(), () => set(string.Empty))
+                    options.Add(new FloatMenuOption("RimAgent.Model.FollowSubagentDefault".Translate(), () => set(null))
                     {
-                        tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
-                    }
-                };
-                if (followValue != null)
-                {
-                    string captured = followValue;
-                    options.Add(new FloatMenuOption(followLabelKey.Translate(), () => set(captured))
-                    {
-                        tooltip = new TipSignal(followLabelKey + "Tip".Translate())
+                        tooltip = new TipSignal("RimAgent.Model.FollowSubagentDefaultTip".Translate())
                     });
                 }
+                options.Add(new FloatMenuOption("RimAgent.Model.FollowAgent".Translate(), () => set(RimAgentSettings.FollowAgentModel))
+                {
+                    tooltip = new TipSignal("RimAgent.Model.FollowAgentTip".Translate())
+                });
+                options.Add(new FloatMenuOption("RimAgent.Model.Default".Translate(), () => set(string.Empty))
+                {
+                    tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
+                });
                 foreach (string entry in Window_Agent.ConfiguredModels())
                 {
                     string captured = entry;
@@ -216,9 +263,24 @@ namespace RimAgent
                 }
                 Find.WindowStack.Add(new FloatMenu(options));
             }
-            if (Mouse.IsOver(row))
+            if (Mouse.IsOver(dropdownRect) || Mouse.IsOver(labelRect))
             {
-                TooltipHandler.TipRegion(row, following ? followLabelKey + "Tip".Translate() : tipKey.Translate());
+                TooltipHandler.TipRegion(new Rect(row.x, row.y, dropdownRect.xMax - row.x, row.height), tip);
+            }
+            if (reasoning != null)
+            {
+                var reasoningRect = new Rect(row.xMax - reasoningWidth, row.y, reasoningWidth, 26f);
+                if (Widgets.ButtonText(reasoningRect, ("RimAgent.Reasoning." + reasoning()).Translate()))
+                {
+                    var options = new List<FloatMenuOption>();
+                    foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
+                    {
+                        ReasoningLevel captured = level;
+                        options.Add(new FloatMenuOption(("RimAgent.Reasoning." + level).Translate(), () => setReasoning(captured)));
+                    }
+                    Find.WindowStack.Add(new FloatMenu(options));
+                }
+                TooltipHandler.TipRegion(reasoningRect, "RimAgent.Settings.SlotReasoningTip".Translate());
             }
             listing.Gap(6f);
         }
