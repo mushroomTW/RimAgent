@@ -329,6 +329,7 @@ namespace RimAgent.Agent
         /// </summary>
         /// <param name="autonomous">這句是排程器起的自主任務；只影響對話裡的標示，模型看到的內容相同。</param>
         /// <param name="maxToolSteps">本輪額外步數上限；自主排程器用它把單輪呼叫夾在剩餘每日預算內。</param>
+        /// <param name="onAccepted">玩家訊息寫入對話後的通知；忙碌而拒收時不呼叫。</param>
         public async Task<string> SendAsync(
             string userText,
             CancellationToken cancellationToken = default,
@@ -336,7 +337,8 @@ namespace RimAgent.Agent
             int? maxToolSteps = null,
             bool goalRun = false,
             string displayText = null,
-            ReasoningLevel? reasoningOverride = null)
+            ReasoningLevel? reasoningOverride = null,
+            Action onAccepted = null)
         {
             if (string.IsNullOrWhiteSpace(userText)) return null;
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
@@ -366,6 +368,7 @@ namespace RimAgent.Agent
                 Autonomous = autonomous,
                 GoalRun = goalRun
             });
+            onAccepted?.Invoke();
             Undo.BeginFrame();
             ConfirmGate.BeginToolBudget(maxToolSteps);
             ApplyRunStepLimit(maxToolSteps);

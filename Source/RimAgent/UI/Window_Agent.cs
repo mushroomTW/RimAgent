@@ -1200,6 +1200,7 @@ namespace RimAgent.UI
         private static void SetMode(RimAgentSettings settings, AgentMode mode)
         {
             if (settings == null || settings.mode == mode) return;
+            RimAgentGameComponent.Instance?.ResetAutonomousConversation();
             settings.mode = mode;
             settings.Write();
         }
@@ -1744,7 +1745,13 @@ namespace RimAgent.UI
 
             _cts?.Dispose();
             _cts = new CancellationTokenSource();
-            Observe(session, session.SendAsync(text, _cts.Token));
+            Observe(session, session.SendAsync(text, _cts.Token, onAccepted: () =>
+            {
+                if (RimAgentMod.Settings != null && RimAgentMod.Settings.mode == AgentMode.Autonomous)
+                {
+                    RimAgentGameComponent.Instance?.StartAutonomousAfterPlayerMessage();
+                }
+            }));
         }
 
         private void ProbeCapabilities()

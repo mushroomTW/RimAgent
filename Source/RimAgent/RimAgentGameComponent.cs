@@ -65,6 +65,8 @@ namespace RimAgent
         /// 早於冷卻記錄；只看 busy 的話，中間落下的訊號檢查會拿舊冷卻再起一輪。
         /// </summary>
         private volatile bool _autoRunning;
+        // 自主排程須由玩家在目前這次自主模式中送出對話後才啟動。
+        private bool _autonomousConversationStarted;
         /// <summary>
         /// 自主任務因金鑰、額度（402）、供應商離線等設定問題失敗後，暫停到這個 tick 為止。
         /// 這類錯誤幾秒內不會自己好，照常重觸發只會連續失敗；不存檔，讀檔即恢復。
@@ -267,6 +269,19 @@ namespace RimAgent
         /// <summary>UI 狀態列用：自主模式是否開啟中。</summary>
         public static bool AutonomousEnabled => RimAgentMod.Settings != null && RimAgentMod.Settings.mode == AgentMode.Autonomous;
 
+        public bool AutonomousConversationStarted => _autonomousConversationStarted;
+
+        public void StartAutonomousAfterPlayerMessage()
+        {
+            _autonomousConversationStarted = true;
+        }
+
+        public void ResetAutonomousConversation()
+        {
+            _autonomousConversationStarted = false;
+            StopAutonomousRun();
+        }
+
         /// <summary>今日自主任務已消耗的工具呼叫次數。</summary>
         public int AutonomousToolsUsed => _scheduler.ToolsUsed;
 
@@ -314,6 +329,7 @@ namespace RimAgent
             Scribe_Values.Look(ref _goalLastProgress, "goalLastProgress");
             Scribe_Values.Look(ref _lastCompletedGoal, "lastCompletedGoal");
             Scribe_Values.Look(ref _goalPauseReason, "goalPauseReason", GoalPauseReason.None);
+            Scribe_Values.Look(ref _autonomousConversationStarted, "autonomousConversationStarted", false);
 
             // 重試表住在唯讀陣列裡，Scribe 過不了：存檔前攤平成清單，讀檔後灌回排程器。
             if (Scribe.mode == LoadSaveMode.Saving) _schedulerWatch = _scheduler.CaptureWatch().ToList();
@@ -332,6 +348,7 @@ namespace RimAgent
 
         public override void StartedNewGame()
         {
+            _autonomousConversationStarted = false;
             _session = null;
             _loadedTranscript = null;
             _loadedUndoFrames = null;
@@ -403,7 +420,7 @@ namespace RimAgent
         private void TryStartChoiceRun()
         {
             RimAgentSettings settings = RimAgentMod.Settings;
-            if (settings == null || settings.mode != AgentMode.Autonomous || DateTime.UtcNow < _nextChoiceCheckAt) return;
+            if (settings == null || settings.mode != AgentMode.Autonomous || !_autonomousConversationStarted || DateTime.UtcNow < _nextChoiceCheckAt) return;
             _nextChoiceCheckAt = DateTime.UtcNow.AddSeconds(ChoiceCheckSeconds);
             if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
             if (Find.TickManager.TicksGame < _autoHoldUntilTick) return;
@@ -583,7 +600,7 @@ namespace RimAgent
         {
             base.GameComponentTick();
             RimAgentSettings settings = RimAgentMod.Settings;
-            if (settings == null || settings.mode != AgentMode.Autonomous) return;
+            if (settings == null || settings.mode != AgentMode.Autonomous || !_autonomousConversationStarted) return;
             int tick = Find.TickManager.TicksGame;
             if (tick % SignalCheckIntervalTicks != 0) return;
             if (Find.CurrentMap == null) return;

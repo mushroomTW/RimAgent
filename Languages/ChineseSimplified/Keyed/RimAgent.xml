@@ -106,7 +106,7 @@
   <RimAgent.Settings.CompactModelTip>/compact 摘要较旧历史时使用的模型与思考强度，通常用便宜的模型就够。</RimAgent.Settings.CompactModelTip>
   <RimAgent.Settings.SlotReasoningTip>只作用于这一格的思考强度；自动＝沿用框架默认。</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
-  <RimAgent.Settings.Mode.AutonomousDesc>后台排程器自主运转。不限制任何行为（无黑名单限制），不设每日预算上限，MCP 免确认直接执行，按排程与突发事件自动行动。玩家仍可随时下达指令。</RimAgent.Settings.Mode.AutonomousDesc>
+  <RimAgent.Settings.Mode.AutonomousDesc>选择自主模式后，玩家首次发送对话才会启动后台排程器。之后按排程与突发事件自动行动；玩家仍可随时下达指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行动</RimAgent.Settings.AutonomousHeader>
   <RimAgent.Settings.AutoInterval>例行巡检间隔：{0} 小时</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoCooldown>自主任务冷却时间：{0} 分钟</RimAgent.Settings.AutoCooldown>
