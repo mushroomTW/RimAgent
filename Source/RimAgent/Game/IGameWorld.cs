@@ -11,6 +11,8 @@ namespace RimAgent.Game
     public interface IGameWorld
     {
         ColonyOverview GetOverview();
+        /// <summary>當前地圖上敵對目標的數量（與概況的 HostileCount 同一算法，但不必算整份概況）。</summary>
+        int GetHostileCount();
         IReadOnlyList<ColonistInfo> GetColonists();
         IReadOnlyList<PrisonerInfo> GetPrisoners();
         /// <summary>地圖上的動物（殖民地與野生，見 AnimalInfo.Wild）。</summary>
@@ -49,6 +51,12 @@ namespace RimAgent.Game
         string GetNotReadyReason();
 
         /// <summary>
+        /// 讓遊戲時間推進 <paramref name="ticks"/> tick 後才完成（不阻塞主線程，遊戲照常跑）。
+        /// 遊戲暫停（含對話框強制暫停）或不能執行工具時立即以失敗結束，已推進的部分不回溯。
+        /// </summary>
+        System.Threading.Tasks.Task<CommandResult> WaitTicksAsync(int ticks, System.Threading.CancellationToken cancellationToken);
+
+        /// <summary>
         /// 取走自上次呼叫以來遊戲記錄的錯誤（Log.Error）訊息，每則一行；沒有新錯誤回傳空表。
         /// 只看主線程可見的訊息佇列，不攔截遊戲。
         /// </summary>
@@ -71,12 +79,16 @@ namespace RimAgent.Game
         IReadOnlyList<DefInfo> AnimalAreas { get; }
         /// <summary>儲藏篩選可開關的品項目錄（物品類 ThingDef）。</summary>
         IReadOnlyList<DefInfo> StorageFilterables { get; }
+        /// <summary>種植區可指定的作物目錄（可播種的植物 ThingDef，供 add_zone 把名稱對到 defName）。</summary>
+        IReadOnlyList<DefInfo> GrowablePlants { get; }
         /// <summary>這張工作台可做的配方（有產出物的 RecipeDef，不含手術）；找不到工作台回傳空清單。</summary>
         IReadOnlyList<DefInfo> GetTableRecipes(int tableId);
         /// <summary>可排程的手術目錄（worker 為手術的 RecipeDef）。</summary>
         IReadOnlyList<DefInfo> SurgeryRecipes { get; }
         /// <summary>尚未完成的研發目錄（供 set_research 把名稱對到 defName）。</summary>
         IReadOnlyList<DefInfo> ResearchProjects { get; }
+        /// <summary>已完成的研發目錄（set_research 對不到未完成專案時，用來回報「已經研究完」而不是「找不到」）。</summary>
+        IReadOnlyList<DefInfo> FinishedResearchProjects { get; }
         /// <summary>可切換的時間流速目錄（供 set_time_speed 把名稱對到 defName）。</summary>
         IReadOnlyList<DefInfo> TimeSpeeds { get; }
 

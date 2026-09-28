@@ -62,6 +62,28 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void LongRunKeepsTheEndOfBothListsAndCountsWhatWasDropped()
+        {
+            var record = new RunLogRecord();
+            var entries = new List<TranscriptEntry>();
+            for (int i = 0; i < 50; i++)
+            {
+                entries.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "t" + i, InstructionId = 7 });
+                record.AddModelResponse(new Microsoft.Extensions.AI.ChatResponse(
+                    new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.Assistant, "step " + i)));
+            }
+            entries.Add(new TranscriptEntry { Kind = TranscriptKind.Assistant, Text = "final", InstructionId = 7 });
+
+            record.CaptureTranscript(entries, 7);
+
+            Assert.That(record.TranscriptSteps.Last().Text, Is.EqualTo("final"), "結尾的回覆不能被截掉");
+            Assert.That(record.TranscriptSteps, Has.Count.EqualTo(40));
+            Assert.That(record.OmittedTranscriptSteps, Is.EqualTo(11));
+            Assert.That(record.ModelSteps.Last().Text, Is.EqualTo("step 49"));
+            Assert.That(record.OmittedModelSteps, Is.EqualTo(34));
+        }
+
+        [Test]
         public async Task LoggingOffProducesNoRunRecord()
         {
             var client = new ScriptedChatClient().Reply("ok");

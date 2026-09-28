@@ -31,6 +31,7 @@ namespace RimAgent.Game
         private IReadOnlyList<DefInfo> _prisonerInteractionModes;
         private IReadOnlyList<DefInfo> _animalTraining;
         private IReadOnlyList<DefInfo> _storageFilterables;
+        private IReadOnlyList<DefInfo> _growablePlants;
 
         private static Map Map => Find.CurrentMap;
 
@@ -205,6 +206,8 @@ namespace RimAgent.Game
         /// 倒地、休眠中的機兵群、迷霧裡、逃跑中的都不算：留著會讓「襲擊結束」的邊緣永遠不歸零，
         /// 下一波真襲擊就觸發不了。守巢的蟲族照算（蟲災本身就是襲擊）。火與敵方砲塔也不算。
         /// </summary>
+        public int GetHostileCount() => CountHostiles(Map);
+
         private static int CountHostiles(Map map)
         {
             int count = 0;
@@ -802,6 +805,13 @@ namespace RimAgent.Game
                 .Select(r => new DefInfo(r.defName, r.label))
                 .ToList();
 
+        [SuppressMessage("Major Code Smell", "S2365:Properties should not copy collections", Justification = "Implements IGameWorld property contract which reflects dynamic game state")]
+        public IReadOnlyList<DefInfo> FinishedResearchProjects =>
+            DefDatabase<ResearchProjectDef>.AllDefsListForReading
+                .Where(r => r.IsFinished)
+                .Select(r => new DefInfo(r.defName, r.label))
+                .ToList();
+
         public CommandResult SetResearch(string researchDefName)
         {
             string want = (researchDefName ?? string.Empty).Trim();
@@ -1015,6 +1025,24 @@ namespace RimAgent.Game
             if (Current.Game == null || Current.ProgramState != ProgramState.Playing) return "no game is being played";
             if (Find.CurrentMap == null) return "there is no current map";
             return null;
+        }
+
+        private const int WaitPollMilliseconds = 100;
+
+        public async System.Threading.Tasks.Task<CommandResult> WaitTicksAsync(int ticks, System.Threading.CancellationToken cancellationToken)
+        {
+            Verse.Game game = Current.Game;
+            int target = Find.TickManager.TicksGame + Math.Max(0, ticks);
+            while (true)
+            {
+                string notReady = GetNotReadyReason();
+                // 等待期間讀了別的檔：tick 已換一條時間軸，目標不再有意義。
+                if (notReady != null || Current.Game != game) return CommandResult.Fail(notReady ?? "a different game was loaded");
+                if (Find.TickManager.TicksGame >= target) return CommandResult.Ok(string.Empty);
+                if (Find.TickManager.Paused) return CommandResult.Fail("the game is paused");
+                // 不加 ConfigureAwait(false)：續行要回主線程才能再讀 TickManager。
+                await System.Threading.Tasks.Task.Delay(WaitPollMilliseconds, cancellationToken);
+            }
         }
 
         private LogMessage _lastSeenLog;
@@ -1349,6 +1377,14 @@ namespace RimAgent.Game
         public IReadOnlyList<DefInfo> StorageFilterables =>
             _storageFilterables ?? (_storageFilterables = DefDatabase<ThingDef>.AllDefsListForReading
                 .Where(d => d.category == ThingCategory.Item)
+                .Select(d => new DefInfo(d.defName, d.label))
+                .ToList());
+
+        public IReadOnlyList<DefInfo> GrowablePlants =>
+            _growablePlants ?? (_growablePlants = DefDatabase<ThingDef>.AllDefsListForReading
+                // 種植區只收 Ground 標籤（PlantUtility.CanSowOnGrower）；裝飾花卉、僅水耕的作物不算。
+                .Where(d => d.category == ThingCategory.Plant && d.plant != null && d.plant.Sowable
+                            && d.plant.sowTags.Contains("Ground"))
                 .Select(d => new DefInfo(d.defName, d.label))
                 .ToList());
 

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using RimAgent.Game;
 
 namespace RimAgent.Tests
@@ -171,11 +173,17 @@ namespace RimAgent.Tests
 
         /// <summary>已完成的研究 defName（正式端用遊戲研究狀態判斷）。</summary>
         public HashSet<string> FinishedResearch { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyList<DefInfo> FinishedResearchProjects => FinishedResearch.Select(d => new DefInfo(d, d)).ToList();
         public IReadOnlyList<DefInfo> StorageFilterables { get; set; } = new[]
         {
             new DefInfo("Steel", "steel"), new DefInfo("WoodLog", "wood"), new DefInfo("Corn", "corn"),
             new DefInfo("Rice", "rice"), new DefInfo("MedicineUltratech", "ultratech medicine"),
             new DefInfo("ComponentSpacer", "spacer component")
+        };
+
+        public IReadOnlyList<DefInfo> GrowablePlants { get; set; } = new[]
+        {
+            new DefInfo("Plant_Rice", "水稻"), new DefInfo("Plant_Potato", "土豆"), new DefInfo("Plant_Corn", "玉米")
         };
 
         /// <summary>各儲藏區明確禁收的 defName（正式端讀 ThingFilter）。</summary>
@@ -236,6 +244,7 @@ namespace RimAgent.Tests
         }
 
         public ColonyOverview GetOverview() => Overview;
+        public int GetHostileCount() => Overview.HostileCount;
         public IReadOnlyList<ColonistInfo> GetColonists()
         {
             ColonistQueryCount++;
@@ -357,6 +366,30 @@ namespace RimAgent.Tests
         public string NotReadyReason { get; set; }
 
         public string GetNotReadyReason() => NotReadyReason;
+
+        /// <summary>假世界的遊戲時間；WaitTicksAsync 立即推進它。</summary>
+        public int TicksGame { get; set; }
+        public bool Paused { get; set; }
+        /// <summary>時間推到這個 tick 時觸發一次（測試用來模擬等待中途來襲擊或被暫停）。</summary>
+        public int? EventAtTick { get; set; }
+        public Action OnEvent { get; set; }
+
+        public Task<CommandResult> WaitTicksAsync(int ticks, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Calls.Add($"WaitTicks({ticks})");
+            if (Paused) return Task.FromResult(CommandResult.Fail("the game is paused"));
+            int target = TicksGame + ticks;
+            if (EventAtTick.HasValue && EventAtTick.Value > TicksGame && EventAtTick.Value <= target)
+            {
+                TicksGame = EventAtTick.Value;
+                EventAtTick = null;
+                OnEvent?.Invoke();
+                if (Paused) return Task.FromResult(CommandResult.Fail("the game is paused"));
+            }
+            TicksGame = target;
+            return Task.FromResult(CommandResult.Ok(string.Empty));
+        }
 
         /// <summary>下一次 TakeNewGameErrors 會取走的錯誤（測試塞進來模擬遊戲噴錯）。</summary>
         public List<string> PendingGameErrors { get; } = new List<string>();
@@ -663,7 +696,7 @@ namespace RimAgent.Tests
 
         public CommandResult AddZone(string kind, CellRectSpec rect, string plantDefName)
         {
-            Calls.Add($"AddZone({kind},{rect})");
+            Calls.Add(string.IsNullOrEmpty(plantDefName) ? $"AddZone({kind},{rect})" : $"AddZone({kind},{rect},{plantDefName})");
             bool stockpile = string.Equals(kind, "Stockpile", StringComparison.OrdinalIgnoreCase);
             bool growing = string.Equals(kind, "Growing", StringComparison.OrdinalIgnoreCase);
             if (!stockpile && !growing) return CommandResult.Fail($"unknown zone kind {kind}. Use stockpile or growing.");

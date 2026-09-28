@@ -230,6 +230,32 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task FallbackChainFailureIsClassifiedByItsInnerCause()
+        {
+            // 框架備援鏈全失敗：外層 Unknown 包著最後一次的 402（QuotaExceeded）。
+            var inner = new RimLLMException(LLMError.QuotaExceeded, "Payment required");
+            _client.Throw(new RimLLMException(LLMError.Unknown, "All fallback attempts failed. Last error: Payment required", inner));
+            ColonyAgentSession session = NewSession();
+
+            await session.SendAsync("anything");
+
+            Assert.That(session.Transcript.Snapshot().Last().ErrorKind, Is.EqualTo(AgentErrorKind.Configuration));
+            Assert.That(session.Transcript.ErrorKindOf(session.Transcript.CurrentInstructionId), Is.EqualTo(AgentErrorKind.Configuration),
+                "自主任務據此暫停一個遊戲日");
+        }
+
+        [Test]
+        public async Task SuccessfulInstructionHasNoErrorKind()
+        {
+            _client.Reply("ok");
+            ColonyAgentSession session = NewSession();
+
+            await session.SendAsync("anything");
+
+            Assert.That(session.Transcript.ErrorKindOf(session.Transcript.CurrentInstructionId), Is.Null);
+        }
+
+        [Test]
         public async Task FailedTurnLeavesNoTraceInLaterHistory()
         {
             // 失敗那一輪的使用者訊息不進 AF session：靠 AF ChatHistoryProvider 在例外時略過儲存，
@@ -884,7 +910,7 @@ namespace RimAgent.Tests
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(59));
+            Assert.That(registry.All.Count, Is.EqualTo(60));
             var observeOnly = new ToolPermissions();
             observeOnly.Set(ToolCategory.Observe, true);
             Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(15));

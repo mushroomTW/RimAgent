@@ -89,6 +89,43 @@ namespace RimAgent.Tests
             Assert.That(r.Error, Does.StartWith("Error:").And.Contain("buildable").And.Contain("teleporter"));
         }
 
+        [TestCase("research bench")]
+        [TestCase("simple_research-bench")]
+        public void SeparatorsAreIgnoredAgainstDefName(string input)
+        {
+            // 簡中遊戲的 label 是中文，英文只能對 defName。
+            var defs = new[] { new DefInfo("SimpleResearchBench", "简易研究台"), new DefInfo("Wall", "墙") };
+
+            Result<DefInfo> r = DefResolver.Resolve(input, defs, "buildable");
+
+            Assert.That(r.Success, Is.True);
+            Assert.That(r.Value.DefName, Is.EqualTo("SimpleResearchBench"));
+        }
+
+        [Test]
+        public void NoMatchSuggestsClosestByWords()
+        {
+            var defs = new[]
+            {
+                new DefInfo("SimpleResearchBench", "简易研究台"), new DefInfo("HiTechResearchBench", "高级研究台"),
+                new DefInfo("Wall", "墙")
+            };
+
+            Result<DefInfo> r = DefResolver.Resolve("FueledResearchBench", defs, "buildable");
+
+            Assert.That(r.Success, Is.False);
+            Assert.That(r.Error, Does.Contain("Closest: HiTechResearchBench").And.Contain("SimpleResearchBench"));
+            Assert.That(r.Error, Does.Not.Contain("Wall"));
+        }
+
+        [Test]
+        public void NoMatchWithoutSharedWordsListsNothing()
+        {
+            Result<DefInfo> r = DefResolver.Resolve("teleporter", Defs, "buildable");
+
+            Assert.That(r.Error, Does.Not.Contain("Closest"));
+        }
+
         [Test]
         public void EmptyInputFails()
         {

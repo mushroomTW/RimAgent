@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 60 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 61 tools, with control over when actions require approval.
 
-**RimWorld 1.6** &nbsp;·&nbsp; **60 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.6** &nbsp;·&nbsp; **61 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,7 +50,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **60 tools:** inspect the colony, issue orders, search the web, and manage saved memories.
+- **61 tools:** inspect the colony, issue orders, search the web, and manage saved memories.
 - **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel), and subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
@@ -148,7 +148,7 @@ All 15 categories are enabled by default and can be switched off individually in
 | Animal | Animals, taming, training, and allowed areas |
 | Zone | Stockpiles, growing zones, and storage filters |
 | Production | Work tables and bills |
-| Time | Pause and game speed |
+| Time | Pause, game speed, and waiting for in-game time to pass |
 | MCP | Tools from configured local MCP servers |
 | Web | `web_search` uses Parallel Search MCP anonymously by default; a local SearXNG server is optional |
 | Memory | `file_memory_*` tools read, list, search, write, edit and delete up to 30 memory files in each game save |

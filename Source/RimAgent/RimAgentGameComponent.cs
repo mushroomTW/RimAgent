@@ -65,6 +65,12 @@ namespace RimAgent
         /// 早於冷卻記錄；只看 busy 的話，中間落下的訊號檢查會拿舊冷卻再起一輪。
         /// </summary>
         private volatile bool _autoRunning;
+        /// <summary>
+        /// 自主任務因金鑰、額度（402）、供應商離線等設定問題失敗後，暫停到這個 tick 為止。
+        /// 這類錯誤幾秒內不會自己好，照常重觸發只會連續失敗；不存檔，讀檔即恢復。
+        /// </summary>
+        private int _autoHoldUntilTick;
+        private const int ConfigurationErrorHoldTicks = 60000;
         /// <summary>見過的抉擇 id：只在出現新抉擇時起一輪，模型沒處理掉的不會每幾秒重觸發、白燒 API。</summary>
         private readonly HashSet<string> _seenChoices = new HashSet<string>();
         private DateTime _nextChoiceCheckAt;
@@ -400,6 +406,7 @@ namespace RimAgent
             if (settings == null || settings.mode != AgentMode.Autonomous || DateTime.UtcNow < _nextChoiceCheckAt) return;
             _nextChoiceCheckAt = DateTime.UtcNow.AddSeconds(ChoiceCheckSeconds);
             if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
+            if (Find.TickManager.TicksGame < _autoHoldUntilTick) return;
             try
             {
                 ColonyAgentSession session = Session;
@@ -580,6 +587,7 @@ namespace RimAgent
             int tick = Find.TickManager.TicksGame;
             if (tick % SignalCheckIntervalTicks != 0) return;
             if (Find.CurrentMap == null) return;
+            if (tick < _autoHoldUntilTick) return;
 
             try
             {
@@ -753,6 +761,20 @@ namespace RimAgent
             {
                 _scheduler.RecordRun(tick, used, config);
             }
+            HoldAfterConfigurationError(session, instructionId, tick);
+        }
+
+        private void HoldAfterConfigurationError(ColonyAgentSession session, int instructionId, int tick)
+        {
+            if (session.Transcript.ErrorKindOf(instructionId) != AgentErrorKind.Configuration) return;
+            _autoHoldUntilTick = tick + ConfigurationErrorHoldTicks;
+            WarnOnce("RimAgent autonomous tasks paused for one in-game day after a provider configuration error.");
+            session.Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = "Autonomous tasks are paused for one in-game day: the model provider reported a key, balance or availability problem. " +
+                       "Fix it in the RimLLM Framework settings; player instructions still work."
+            });
         }
 
         /// <summary>讀檔後第一次開分頁時，把存檔裡的對話倒回 transcript，並把指令編號推過舊紀錄。</summary>

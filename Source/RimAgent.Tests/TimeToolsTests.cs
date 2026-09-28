@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
@@ -20,6 +21,93 @@ namespace RimAgent.Tests
         {
             _world = new FakeGameWorld();
             _tools = new TimeTools(_world);
+        }
+
+        [Test]
+        public async Task WaitLetsTimePassAndReturnsTheOverview()
+        {
+            string text = await _tools.WaitForTime(6, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Waited 6 in-game hour(s).").And.Contain("Colony: New Arrivals"));
+            Assert.That(_world.TicksGame, Is.EqualTo(6 * 2500));
+        }
+
+        [TestCase(0)]
+        [TestCase(25)]
+        public async Task WaitRejectsHoursOutOfRange(int hours)
+        {
+            Assert.That(await _tools.WaitForTime(hours, CancellationToken.None), Does.StartWith("Error:").And.Contain("1-24"));
+            Assert.That(_world.TicksGame, Is.Zero);
+        }
+
+        [Test]
+        public async Task WaitWhilePausedIsAnError()
+        {
+            _world.Paused = true;
+
+            string text = await _tools.WaitForTime(2, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("paused").And.Contain("set_time_speed"));
+        }
+
+        [Test]
+        public async Task WaitStopsEarlyWhenHostilesAppear()
+        {
+            _world.EventAtTick = 3000;
+            _world.OnEvent = () => _world.Overview.HostileCount = 5;
+
+            string text = await _tools.WaitForTime(12, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Stopped waiting after about").And.Contain("new hostiles appeared"));
+            Assert.That(_world.TicksGame, Is.LessThan(12 * 2500));
+        }
+
+        [Test]
+        public async Task WaitStopsEarlyWhenTheGameGetsPaused()
+        {
+            _world.EventAtTick = 5000;
+            _world.OnEvent = () => _world.Paused = true;
+
+            string text = await _tools.WaitForTime(12, CancellationToken.None);
+
+            // 暫停發生在第 20 段途中：只算完整跑完的 19 段（4750 tick）。
+            Assert.That(text, Does.StartWith("Stopped waiting after about 1.9 of 12").And.Contain("paused"));
+        }
+
+        [Test]
+        public async Task GameErrorsLoggedWhileWaitingAreNotBlamedOnTheWait()
+        {
+            var client = new ScriptedChatClient();
+            client.CallTool("wait_for_time", new { hours = 2 }).Reply("done.");
+            _world.EventAtTick = 1000;
+            _world.OnEvent = () => _world.PendingGameErrors.Add("SomeOtherMod exploded");
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Time), 8);
+
+            await session.SendAsync("wait two hours");
+
+            TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+            Assert.That(tool.Result, Does.Not.Contain("Game errors").And.Not.Contain("exploded"));
+        }
+
+        [Test]
+        public async Task WaitInvalidatesTheQueryCacheSoLaterQueriesSeeNewState()
+        {
+            var client = new ScriptedChatClient();
+            client.CallTool("get_colony_overview", new { })
+                  .CallTool("wait_for_time", new { hours = 1 })
+                  .CallTool("get_colony_overview", new { })
+                  .Reply("done.");
+            _world.EventAtTick = 2500;
+            _world.OnEvent = () => _world.Overview.Hour = 15;
+            var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Time), 8);
+
+            await session.SendAsync("wait an hour");
+
+            System.Collections.Generic.List<TranscriptEntry> tools = session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool).ToList();
+            Assert.That(tools.Select(t => t.ToolName), Is.EqualTo(new[] { "get_colony_overview", "wait_for_time", "get_colony_overview" }));
+            Assert.That(tools.All(t => !t.Failed), Is.True);
+            Assert.That(tools[0].Result, Does.Contain("14:00"));
+            Assert.That(tools[2].Result, Does.Contain("15:00"), "等待後的查詢不吃等待前的快取");
         }
 
         [Test]

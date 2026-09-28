@@ -24,11 +24,18 @@ namespace RimAgent.Agent
         public string Outcome { get; set; } = string.Empty;
         public List<RunLogModelStep> ModelSteps { get; set; } = new List<RunLogModelStep>();
         public List<RunLogTranscriptStep> TranscriptSteps { get; set; } = new List<RunLogTranscriptStep>();
+        /// <summary>超過上限而丟掉的最早幾步；兩個清單都只留最後的部分，彼此對得上、也看得到結尾。</summary>
+        public int OmittedModelSteps { get; set; }
+        public int OmittedTranscriptSteps { get; set; }
 
         public void AddModelResponse(ChatResponse response)
         {
             if (response == null) return;
-            if (ModelSteps.Count >= MaxModelSteps) ModelSteps.RemoveAt(0);
+            if (ModelSteps.Count >= MaxModelSteps)
+            {
+                ModelSteps.RemoveAt(0);
+                OmittedModelSteps++;
+            }
             ModelSteps.Add(new RunLogModelStep
             {
                 Text = Limit(response.Text),
@@ -43,7 +50,10 @@ namespace RimAgent.Agent
         public void CaptureTranscript(IReadOnlyList<TranscriptEntry> entries, int instructionId)
         {
             if (entries == null) return;
-            foreach (TranscriptEntry entry in entries.Where(e => e.InstructionId == instructionId).Take(MaxEntries))
+            List<TranscriptEntry> own = entries.Where(e => e.InstructionId == instructionId).ToList();
+            int skip = Math.Max(0, own.Count - MaxEntries);
+            OmittedTranscriptSteps += skip;
+            foreach (TranscriptEntry entry in own.Skip(skip))
             {
                 TranscriptSteps.Add(new RunLogTranscriptStep
                 {

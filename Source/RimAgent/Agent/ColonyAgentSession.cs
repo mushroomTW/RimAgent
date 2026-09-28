@@ -1010,7 +1010,8 @@ namespace RimAgent.Agent
                     case LLMError.Cancelled:
                         return AgentErrorKind.Cancelled;
                     default:
-                        return AgentErrorKind.Unknown;
+                        // 框架的備援鏈全失敗時外層是 Unknown，真正原因（例如 402 餘額用完）包在內層：往內找。
+                        continue;
                 }
             }
             return AgentErrorKind.Unknown;

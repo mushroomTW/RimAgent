@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using RimAgent.Tools;
 
@@ -205,6 +206,16 @@ namespace RimAgent.Agent
             lock (_gate)
             {
                 return _entries.ToArray();
+            }
+        }
+
+        /// <summary>這句指令以哪種錯誤結束；沒出錯回傳 null（自主任務遇到設定類錯誤時據此暫停）。</summary>
+        public AgentErrorKind? ErrorKindOf(int instructionId)
+        {
+            lock (_gate)
+            {
+                TranscriptEntry error = _entries.LastOrDefault(e => e.Kind == TranscriptKind.Error && e.InstructionId == instructionId);
+                return error?.ErrorKind;
             }
         }
 

@@ -118,6 +118,21 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void SetResearchOnFinishedProjectSaysItIsFinished()
+        {
+            _world.Research = new ResearchInfo
+            {
+                Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } }
+            };
+            _world.FinishedResearch.Add("Electricity");
+
+            string text = _tools.SetResearch("Electricity");
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("already finished"));
+            Assert.That(_world.Research.Current, Is.Null);
+        }
+
+        [Test]
         public void SetResearchNoneStopsTheCurrentProject()
         {
             _world.Research = new ResearchInfo

@@ -64,8 +64,9 @@ namespace RimAgent.Tools
                 InstructionId = _transcript.CurrentInstructionId,
                 Agent = _transcript.CurrentAgent
             };
+            string callKey = CallKey(arguments);
 
-            if (TryHandlePreInvocation(entry, out string earlyResult))
+            if (TryHandlePreInvocation(entry, callKey, out string earlyResult))
             {
                 return earlyResult;
             }
@@ -93,11 +94,15 @@ namespace RimAgent.Tools
                 // 命令動過世界（成功、失敗或部分生效皆可能）：同句的查詢快取全部作廢；
                 // 預覽不碰世界，不必失效。
                 if (_risk != ToolRisk.Query && !isPreview) _gate?.InvalidateQueryCache();
+                // 失敗的呼叫記下來擋掉同句的原樣重送；命令成功改了世界則先前的失敗可能已不成立。
+                // 分類器暫時不可用而被擋的不算：下一次重問分類器可能就通過了。
+                if (entry.Failed && entry.RiskCheck != "unavailable") _gate?.StoreFailedCall(Name, callKey, text);
+                else if (_risk != ToolRisk.Query && !isPreview) _gate?.ClearFailedCalls();
                 // 成功的查詢才進快取：錯誤可能隨同句後續命令改變而消失，
                 // 夾帶遊戲錯誤的結果也不記，免得下一次命中回傳過期的錯誤。
                 if (_risk == ToolRisk.Query && !entry.Failed && !hasFreshGameErrors && !isPreview)
                 {
-                    _gate?.StoreCachedQuery(Name, entry.Arguments, text);
+                    _gate?.StoreCachedQuery(Name, callKey, text);
                 }
                 if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
                 {
@@ -122,7 +127,7 @@ namespace RimAgent.Tools
             }
         }
 
-        private bool TryHandlePreInvocation(TranscriptEntry entry, out string earlyResult)
+        private bool TryHandlePreInvocation(TranscriptEntry entry, string callKey, out string earlyResult)
         {
             string notReady = _world.GetNotReadyReason();
             if (notReady != null)
@@ -134,8 +139,20 @@ namespace RimAgent.Tools
                 return true;
             }
 
+            if (_gate != null && _gate.TryGetFailedCall(Name, callKey, out string previousError))
+            {
+                entry.Result = ToolText.Error("this exact call already failed twice in this instruction and was not run again. " +
+                    "Do not repeat it unchanged: use different arguments, try another approach, or stop and tell the player. " +
+                    "Previous result: " + previousError);
+                entry.Failed = true;
+                entry.BudgetConsumed = false;
+                _transcript.Add(entry);
+                earlyResult = entry.Result;
+                return true;
+            }
+
             if (_risk == ToolRisk.Query && _gate != null &&
-                _gate.TryGetCachedQuery(Name, entry.Arguments, out string cached))
+                _gate.TryGetCachedQuery(Name, callKey, out string cached))
             {
                 entry.Result = AppendGameErrors(cached);
                 entry.Failed = entry.Result.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
@@ -300,6 +317,18 @@ namespace RimAgent.Tools
             foreach (string error in errors.Take(MaxGameErrorsAppended)) sb.AppendLine().Append("- ").Append(error);
             if (errors.Count > MaxGameErrorsAppended) sb.AppendLine().Append("- ... and ").Append(errors.Count - MaxGameErrorsAppended).Append(" more");
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// 快取與失敗紀錄的鍵：依參數名排序，同一組參數換順序送來仍視為同一個呼叫
+        /// （模型重送時常打亂順序）；顯示用的 <see cref="FormatArguments"/> 保留原順序。
+        /// </summary>
+        private static string CallKey(AIFunctionArguments arguments)
+        {
+            if (arguments == null || arguments.Count == 0) return string.Empty;
+            return string.Join(", ", arguments
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => pair.Key + "=" + (pair.Value?.ToString() ?? "null")));
         }
 
         private static string FormatArguments(AIFunctionArguments arguments)

@@ -51,6 +51,7 @@ namespace RimAgent.Tests
             ["delete_bill"] = Args(("table", "800"), ("bill", 1)),
             ["set_research"] = Args(("project", "batteries")),
             ["set_time_speed"] = Args(("speed", "Fast")),
+            ["wait_for_time"] = Args(("hours", 2)),
             ["set_current_map"] = Args(("map", "2")),
             ["take_screenshot"] = Args(("name", "test_shot")),
             ["mcp_call_tool"] = Args(("server", "fetch"), ("tool", "fetch"), ("args", "{}")),

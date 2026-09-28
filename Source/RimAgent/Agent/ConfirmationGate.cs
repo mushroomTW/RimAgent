@@ -45,6 +45,7 @@ namespace RimAgent.Agent
         private int _remainingToolCalls = -1;
         /// <summary>同一句指令內的查詢結果快取：同樣的唯讀查詢只碰一次世界，之後直接回快取。</summary>
         private readonly InstructionCache<string> _queryCache = new InstructionCache<string>();
+        private readonly InstructionCache<FailedCall> _failedCalls = new InstructionCache<FailedCall>();
 
         public ConfirmationGate(Func<AgentMode> mode)
         {
@@ -183,8 +184,9 @@ namespace RimAgent.Agent
             lock (_gate)
             {
                 _remainingToolCalls = maximumCalls.HasValue ? Math.Max(0, maximumCalls.Value) : -1;
-                // 新的一句指令：查詢快取與分類器快取（由呼叫端另行清空）都不跨指令。
+                // 新的一句指令：查詢快取、失敗紀錄與分類器快取（由呼叫端另行清空）都不跨指令。
                 _queryCache.Clear();
+                _failedCalls.Clear();
             }
         }
 
@@ -265,6 +267,44 @@ namespace RimAgent.Agent
         internal void InvalidateQueryCache()
         {
             _queryCache.Clear();
+        }
+
+        /// <summary>
+        /// 同一句內一模一樣的呼叫是否已失敗到不該再跑；是則呼叫端直接擋下，不碰世界也不扣額度。
+        /// 模型常把同一組失敗參數重送十幾次直到額度用完，原錯誤訊息再給一次也不會變。
+        /// 允許原樣重試一次（與提示詞「重試一次」一致，也涵蓋格子被小人暫時擋住這類很快會好的失敗），第三次起才擋。
+        /// </summary>
+        internal bool TryGetFailedCall(string toolName, string arguments, out string error)
+        {
+            if (_failedCalls.TryGet(QueryCacheKey(toolName, arguments), out FailedCall failed) && failed.Count >= MaxIdenticalFailures)
+            {
+                error = failed.Error;
+                return true;
+            }
+            error = null;
+            return false;
+        }
+
+        internal void StoreFailedCall(string toolName, string arguments, string error)
+        {
+            if (string.IsNullOrEmpty(error)) return;
+            string key = QueryCacheKey(toolName, arguments);
+            int count = _failedCalls.TryGet(key, out FailedCall previous) ? previous.Count : 0;
+            _failedCalls.Store(key, new FailedCall { Count = count + 1, Error = error });
+        }
+
+        private const int MaxIdenticalFailures = 2;
+
+        private sealed class FailedCall
+        {
+            public int Count;
+            public string Error;
+        }
+
+        /// <summary>命令成功改動了世界（或遊戲時間推進）：先前失敗的呼叫可能已能成功，紀錄作廢。</summary>
+        internal void ClearFailedCalls()
+        {
+            _failedCalls.Clear();
         }
 
         private static string QueryCacheKey(string toolName, string arguments)

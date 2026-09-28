@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using RimAgent.Tools;
 
 namespace RimAgent.Agent
@@ -152,8 +153,20 @@ namespace RimAgent.Agent
             var intro = new System.Text.StringBuilder();
             string current = null;
             var body = new System.Text.StringBuilder();
-            foreach (string line in Lines(text))
+            bool inComment = false;
+            List<string> lines = Lines(text).ToList();
+            for (int i = 0; i < lines.Count; i++)
             {
+                string line = lines[i];
+                // 註解留給編輯提示詞的人看，不該餵給模型。註解可跨多行，一路略過到含 --> 的那行
+                //（該行 --> 之後的文字一併略過）；註解中的 ## 也不算標題。
+                // 忘了收尾的註解只略過開頭那一行，免得整份檔案後面的章節無聲消失。
+                if (inComment || line.StartsWith("<!--", StringComparison.Ordinal))
+                {
+                    inComment = line.IndexOf("-->", StringComparison.Ordinal) < 0
+                        && (inComment || lines.Skip(i + 1).Any(l => l.IndexOf("-->", StringComparison.Ordinal) >= 0));
+                    continue;
+                }
                 // Lines 已 Trim（含 \r），標題行即整行比對。
                 if (line.StartsWith("## ", StringComparison.Ordinal))
                 {
@@ -161,8 +174,6 @@ namespace RimAgent.Agent
                     current = line.Substring(3).Trim();
                     continue;
                 }
-                // 註解留給編輯提示詞的人看，不該餵給模型。
-                if (line.StartsWith("<!--", StringComparison.Ordinal)) continue;
                 if (current == null)
                 {
                     if (intro.Length > 0) intro.Append('\n');

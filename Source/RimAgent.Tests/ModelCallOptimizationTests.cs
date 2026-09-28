@@ -126,6 +126,7 @@ namespace RimAgent.Tests
         {
             _client.CallTool("get_colonist_wellbeing", new { colonist = "Nobody" })
                    .CallTool("get_colonist_wellbeing", new { colonist = "Nobody" })
+                   .CallTool("get_colonist_wellbeing", new { colonist = "Nobody" })
                    .Reply("unknown.");
             ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
 
@@ -133,7 +134,59 @@ namespace RimAgent.Tests
 
             IReadOnlyList<TranscriptEntry> tools = session.Transcript.Snapshot()
                 .Where(e => e.Kind == TranscriptKind.Tool).ToList();
-            Assert.That(tools.All(t => t.Failed), Is.True, "錯誤不進快取，第二次是真的又查了一次");
+            Assert.That(tools.All(t => t.Failed), Is.True, "錯誤不進成功快取");
+            Assert.That(tools[1].Result, Does.Not.Contain("already failed"), "允許原樣重試一次");
+            Assert.That(tools[2].Result, Does.Contain("already failed"), "失敗兩次後的原樣重送直接擋下");
+        }
+
+        [Test]
+        public async Task IdenticalFailedCallIsBlockedEvenWithReorderedArguments()
+        {
+            _client.CallTool("set_schedule", new { colonists = "Nobody", startHour = 22, endHour = 6, assignment = "Sleep" })
+                   .CallTool("set_schedule", new { endHour = 6, colonists = "Nobody", assignment = "Sleep", startHour = 22 })
+                   .CallTool("set_schedule", new { assignment = "Sleep", endHour = 6, colonists = "Nobody", startHour = 22 })
+                   .Reply("gave up.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+
+            await session.SendAsync("let Nobody sleep at night");
+
+            List<TranscriptEntry> tools = session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool).ToList();
+            Assert.That(tools[0].Failed, Is.True);
+            Assert.That(tools[1].Result, Does.Not.Contain("already failed"), "換了參數順序的第一次重試照常執行");
+            Assert.That(tools[2].Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("already failed").And.Contain("Previous result"));
+            Assert.That(tools[2].BudgetConsumed, Is.False, "擋下的重送不扣自主額度");
+        }
+
+        [Test]
+        public async Task FailedCallMayRunAgainAfterASuccessfulCommand()
+        {
+            _client.CallTool("set_work_priorities", new { assignments = "Nobody:doctor=1" })
+                   .CallTool("set_work_priorities", new { assignments = "Nobody:doctor=1" })
+                   .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
+                   .CallTool("set_work_priorities", new { assignments = "Nobody:doctor=1" })
+                   .Reply("done.");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+
+            await session.SendAsync("set doctors");
+
+            List<TranscriptEntry> tools = session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool).ToList();
+            Assert.That(tools[2].Failed, Is.False);
+            Assert.That(tools[3].Result, Does.Not.Contain("already failed"), "世界改過之後失敗紀錄作廢，照常重跑");
+        }
+
+        [Test]
+        public async Task FailedCallGuardDoesNotCrossInstructions()
+        {
+            _client.CallTool("set_work_priorities", new { assignments = "Nobody:doctor=1" })
+                   .CallTool("set_work_priorities", new { assignments = "Nobody:doctor=1" }).Reply("one")
+                   .CallTool("set_work_priorities", new { assignments = "Nobody:doctor=1" }).Reply("two");
+            var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+
+            await session.SendAsync("first");
+            await session.SendAsync("second");
+
+            List<TranscriptEntry> tools = session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool).ToList();
+            Assert.That(tools[2].Result, Does.Not.Contain("already failed"), "上一句失敗兩次，新的一句照常執行");
         }
 
         [Test]

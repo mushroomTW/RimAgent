@@ -45,7 +45,7 @@ namespace RimAgent.Tools
             [Description("Rectangle corner z.")] int z1,
             [Description("Opposite corner x.")] int x2,
             [Description("Opposite corner z.")] int z2,
-            [Description("Plant to grow, e.g. \"rice\"; growing zones only. Empty keeps the game's default.")] string plant)
+            [Description("Plant to grow: name or defName, e.g. \"rice\" or \"Plant_Rice\"; growing zones only. Empty keeps the game's default.")] string plant)
         {
             string canonical = CanonicalKind(kind);
             if (canonical == null) return ToolText.Error($"unknown zone kind \"{kind}\". Use stockpile or growing.");
@@ -60,7 +60,9 @@ namespace RimAgent.Tools
             string plantDef = string.Empty;
             if (!string.IsNullOrWhiteSpace(plant))
             {
-                plantDef = (plant ?? string.Empty).Trim();
+                Result<DefInfo> match = DefResolver.Resolve(plant, _world.GrowablePlants, "growable plant");
+                if (!match.Success) return match.Error;
+                plantDef = match.Value.DefName;
             }
 
             string growing = plantDef.Length > 0 ? $" growing {plantDef}" : string.Empty;

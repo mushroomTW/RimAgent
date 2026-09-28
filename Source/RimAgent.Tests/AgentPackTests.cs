@@ -96,6 +96,31 @@ namespace RimAgent.Tests
             Assert.That(intro, Is.EqualTo("Shared rule."), "註解不進提示詞");
         }
 
+        [Test]
+        public void ParseSectionsSkipsMultiLineComments()
+        {
+            string intro;
+            IDictionary<string, string> sections = AgentPackLoader.ParseSections(
+                "# Title\n<!-- first line\n   second line\n   ## NotASection -->\nShared rule.\n## Raid\n<!-- a\nb -->\nHostiles.",
+                out intro);
+
+            Assert.That(intro, Is.EqualTo("# Title\nShared rule."), "跨行註解的後續行也不進提示詞");
+            Assert.That(sections, Has.Count.EqualTo(1), "註解裡的 ## 不算章節");
+            Assert.That(sections["Raid"], Is.EqualTo("Hostiles."));
+        }
+
+        [Test]
+        public void UnterminatedCommentOnlyDropsItsOwnLine()
+        {
+            string intro;
+            IDictionary<string, string> sections = AgentPackLoader.ParseSections(
+                "Shared rule.\n<!-- forgot to close\n## Raid\nHostiles.",
+                out intro);
+
+            Assert.That(intro, Is.EqualTo("Shared rule."));
+            Assert.That(sections["Raid"], Is.EqualTo("Hostiles."), "後面的章節不能因為沒收尾的註解而消失");
+        }
+
         /// <summary>
         /// 共用通則放在第一個章節之前，而 Build 必須把它送出去。
         /// 少了這段，寫在檔頭的規則會被靜靜丟掉，模型永遠看不到。

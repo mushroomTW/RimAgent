@@ -71,6 +71,27 @@ namespace RimAgent.Tests
             Assert.That(_tools.AddZone("stockpile", 10, 10, 12, 12, "rice"), Does.StartWith("Error:").And.Contain("growing zones"));
         }
 
+        [TestCase("rice")]
+        [TestCase("plant_rice")]
+        [TestCase("Plant_Rice")]
+        [TestCase("水稻")]
+        public void GrowingPlantResolvesByNameOrDefName(string plant)
+        {
+            string text = _tools.AddZone("growing", 10, 10, 12, 12, plant);
+
+            Assert.That(text, Does.StartWith("Added"));
+            Assert.That(_world.Calls.Last(), Does.EndWith(",Plant_Rice)"), "世界層收到的是正確的 defName");
+        }
+
+        [Test]
+        public void UnknownPlantIsRejectedBeforeTouchingTheWorld()
+        {
+            string text = _tools.AddZone("growing", 10, 10, 12, 12, "moon lettuce");
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("growable plant"));
+            Assert.That(_world.Calls, Has.None.StartsWith("AddZone"));
+        }
+
         [Test]
         public void OutOfBoundsRectangleIsRejected()
         {

@@ -1,14 +1,21 @@
 using System;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using RimAgent.Agent;
 using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>時間流速：切換暫停與加速（目前速度在殖民地概況裡）。</summary>
+    /// <summary>時間流速：切換暫停與加速（目前速度在殖民地概況裡），以及讓時間推進的等待。</summary>
     public sealed class TimeTools
     {
+        private const int TicksPerHour = 2500;
+        private const int MaxWaitHours = 24;
+        /// <summary>等待分段的長度（0.1 遊戲小時）：段與段之間檢查敵人。</summary>
+        private const int WaitChunkTicks = 250;
+
         private readonly IGameWorld _world;
         private readonly ConfirmationGate _gate;
 
@@ -41,6 +48,51 @@ namespace RimAgent.Tools
             string current = SpeedLabel(after.Current, _world.TimeSpeeds);
             string suffix = string.IsNullOrEmpty(result.Message) ? string.Empty : " " + result.Message;
             return $"Time speed {previous} -> {current}.{suffix}";
+        }
+
+        [AgentTool("wait_for_time", ToolCategory.Time, ToolRisk.Safe)]
+        [Description("Lets in-game time pass while colonists carry out orders (building, hauling, harvesting, research), then returns the colony overview. Use this to wait for progress instead of calling query tools over and over. The game must be unpaused (see set_time_speed). Stops early when the game gets paused or new hostiles appear.")]
+        public async Task<string> WaitForTime(
+            [Description("In-game hours to wait, 1-24.")] int hours,
+            CancellationToken cancellationToken)
+        {
+            if (hours < 1 || hours > MaxWaitHours) return ToolText.Error($"hours must be 1-{MaxWaitHours}.");
+
+            string blocked = ToolText.Blocked(_gate, $"would let {hours} in-game hour(s) pass.");
+            if (blocked != null) return blocked;
+
+            // 分段等：每段之間看一次敵人，等待中途來襲擊就先回來，不讓模型悶著頭等完整段時間。
+            int hostilesBefore = _world.GetHostileCount();
+            int total = hours * TicksPerHour;
+            int waited = 0;
+            string stopReason = null;
+            while (waited < total)
+            {
+                int chunk = Math.Min(WaitChunkTicks, total - waited);
+                CommandResult result = await _world.WaitTicksAsync(chunk, cancellationToken);
+                if (!result.Success)
+                {
+                    stopReason = result.Message;
+                    break;
+                }
+                waited += chunk;
+                if (_world.GetHostileCount() > hostilesBefore)
+                {
+                    stopReason = "new hostiles appeared";
+                    break;
+                }
+            }
+            // 等待期間遊戲（或其他模組）記下的錯誤不是這次呼叫造成的，丟掉，免得包裝層把它們附在結果後面誤導模型。
+            _world.TakeNewGameErrors();
+
+            if (stopReason != null && waited == 0)
+            {
+                return ToolText.Error($"cannot wait: {stopReason}. Unpause with set_time_speed first, or tell the player.");
+            }
+            string head = stopReason == null
+                ? $"Waited {hours} in-game hour(s)."
+                : $"Stopped waiting after about {ToolText.Num(waited / (float)TicksPerHour)} of {hours} in-game hour(s): {stopReason}.";
+            return head + "\n" + ObserveTools.FormatOverview(_world);
         }
 
         /// <summary>中文別名（大小寫不敏感）；英文循 DefResolver 的既有規則。</summary>

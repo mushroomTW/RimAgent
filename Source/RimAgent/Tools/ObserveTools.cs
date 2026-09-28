@@ -25,10 +25,16 @@ namespace RimAgent.Tools
         [Description("Colony summary: population, date and time, time speed, weather, outdoor temperature, wealth, hostiles on the map, colonists close to a mental break, power (networks, net watts, stored battery energy) and the game's active alerts (food, rescue, bedroom, power and so on). Start here for any general question and on every routine inspection.")]
         public string GetColonyOverview()
         {
-            ColonyOverview o = _world.GetOverview();
-            string speed = TimeTools.SpeedLabel(_world.GetTimeSpeed().Current, _world.TimeSpeeds);
-            PowerInfo power = _world.GetPower();
-            IReadOnlyList<AlertInfo> alerts = _world.GetAlerts();
+            return FormatOverview(_world);
+        }
+
+        /// <summary>殖民地概況的文字；wait_for_time 等完也回這一份，模型不必再查一次。</summary>
+        internal static string FormatOverview(IGameWorld world)
+        {
+            ColonyOverview o = world.GetOverview();
+            string speed = TimeTools.SpeedLabel(world.GetTimeSpeed().Current, world.TimeSpeeds);
+            PowerInfo power = world.GetPower();
+            IReadOnlyList<AlertInfo> alerts = world.GetAlerts();
             return $"Colony: {o.ColonyName} | Colonists: {o.ColonistCount} | Date: year {o.Year}, {o.Season} day {o.DayOfSeason}, {o.Hour:00}:00" +
                    $" | Time speed: {speed} | Weather: {o.Weather} | Outdoor temp: {ToolText.Num(o.OutdoorTemperatureC)}°C | Wealth: {ToolText.Num(o.Wealth)}" +
                    $" | Hostiles on map: {o.HostileCount} | Colonists near mental break: {o.ColonistsNearMentalBreak}\n" +
@@ -172,7 +178,7 @@ namespace RimAgent.Tools
             if (!IsStopWord(want))
             {
                 Result<DefInfo> match = DefResolver.Resolve(want, _world.ResearchProjects, "research project");
-                if (!match.Success) return match.Error;
+                if (!match.Success) return (DefResolver.IsNoMatch(match) ? FinishedResearchError(want) : null) ?? match.Error;
                 defName = match.Value.DefName;
             }
 
@@ -187,6 +193,15 @@ namespace RimAgent.Tools
             string current = after.Current == null ? "none" : $"{after.Current.Label} ({after.Current.DefName})";
             string suffix = string.IsNullOrEmpty(result.Message) ? string.Empty : " " + result.Message;
             return $"Research {previous} -> {current}.{suffix}";
+        }
+
+        /// <summary>未完成目錄對不到時，若是已研究完的專案就明講，免得模型以為名稱寫錯而一直換著猜。</summary>
+        private string FinishedResearchError(string want)
+        {
+            Result<DefInfo> finished = DefResolver.Resolve(want, _world.FinishedResearchProjects, "research project");
+            if (!finished.Success) return null;
+            return ToolText.Error($"research {finished.Value.Label} ({finished.Value.DefName}) is already finished. " +
+                "Pick an unfinished project from get_research_status.");
         }
 
         [AgentTool("get_maps", ToolCategory.Observe, ToolRisk.Query)]
