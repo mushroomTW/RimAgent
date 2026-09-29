@@ -255,6 +255,37 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void ComposeWithSkillIndexPutsExpansionsRightAfterPreamble()
+        {
+            string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "Tall, not wide.", null, null, "Game expansions active: Biotech.");
+
+            Assert.That(text, Does.StartWith("CORE\n\nGame expansions active: Biotech."));
+            Assert.That(text.IndexOf("Biotech", StringComparison.Ordinal), Is.LessThan(text.IndexOf("Tall, not wide.", StringComparison.Ordinal)));
+        }
+
+        [Test]
+        public void FormatExpansionsSplitsActiveAndInactiveAndSkipsCore()
+        {
+            string line = AgentPromptComposer.FormatExpansions(new[]
+            {
+                ("Core", true, true),
+                ("Royalty", false, true),
+                ("Anomaly", false, false),
+                ("Biotech", false, true)
+            });
+
+            Assert.That(line, Is.EqualTo("Game expansions active: Royalty, Biotech. Not active: Anomaly; their content does not exist in this game."));
+        }
+
+        [Test]
+        public void FormatExpansionsWithNoneActiveSaysBaseGameAndSkipsEmptyInactive()
+        {
+            Assert.That(AgentPromptComposer.FormatExpansions(new[] { ("Core", true, true), ("Biotech", false, false) }),
+                Does.StartWith("Game expansions active: none (base game only)."));
+            Assert.That(AgentPromptComposer.FormatExpansions(new[] { ("Biotech", false, true) }), Is.EqualTo("Game expansions active: Biotech."));
+        }
+
+        [Test]
         public void ComposeWithSkillIndexWithAllEmptyLayersReturnsCoreOnly()
         {
             string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "  ", null, null);

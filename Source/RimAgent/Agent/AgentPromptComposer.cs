@@ -1,10 +1,12 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace RimAgent.Agent
 {
     /// <summary>
-    /// 每句指令的系統提示詞組裝：前情提要→玩家自留地→內建準則→技能索引。
+    /// 每句指令的系統提示詞組裝：前情提要→DLC 啟用狀況→玩家自留地→內建準則→技能索引。
     /// 純字串邏輯；任一層為空就跳過，不留空標題。
     /// </summary>
     public static class AgentPromptComposer
@@ -20,9 +22,13 @@ namespace RimAgent.Agent
         /// 索引版組裝：只列技能名稱與描述，全文由 `read_skill` 按需讀取。
         /// 易變的記憶索引由呼叫端接在尾端，保住前綴快取。
         /// </summary>
-        public static string ComposeWithSkillIndex(string preamble, string playerNotes, string conduct, IReadOnlyList<AgentSkill> skills)
+        public static string ComposeWithSkillIndex(string preamble, string playerNotes, string conduct, IReadOnlyList<AgentSkill> skills, string expansions = null)
         {
             var sb = new StringBuilder(preamble ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(expansions))
+            {
+                sb.Append("\n\n").Append(expansions.Trim());
+            }
             if (!string.IsNullOrWhiteSpace(playerNotes))
             {
                 sb.Append("\n\nPlayer notes:\n").Append(playerNotes.Trim());
@@ -33,6 +39,23 @@ namespace RimAgent.Agent
             }
             AppendSkillIndex(sb, skills);
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// 本局 DLC 啟用狀況的一行說明（名稱用 defName，不隨遊戲語言變動）；本體不列。整場遊戲不變，不破壞前綴快取。
+        /// </summary>
+        public static string FormatExpansions(IReadOnlyList<(string Name, bool IsCore, bool IsActive)> expansions)
+        {
+            var dlcs = (expansions ?? Array.Empty<(string Name, bool IsCore, bool IsActive)>()).Where(e => !e.IsCore).ToList();
+            List<string> active = dlcs.Where(e => e.IsActive).Select(e => e.Name).ToList();
+            List<string> inactive = dlcs.Where(e => !e.IsActive).Select(e => e.Name).ToList();
+            string line = "Game expansions active: " +
+                          (active.Count == 0 ? "none (base game only)" : string.Join(", ", active)) + ".";
+            if (inactive.Count > 0)
+            {
+                line += " Not active: " + string.Join(", ", inactive) + "; their content does not exist in this game.";
+            }
+            return line;
         }
 
         private static void AppendSkillIndex(StringBuilder sb, IReadOnlyList<AgentSkill> skills)

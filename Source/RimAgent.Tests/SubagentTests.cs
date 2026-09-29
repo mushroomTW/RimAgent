@@ -104,6 +104,17 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void SubagentPromptCarriesExpansionsBeforeBody()
+        {
+            var subagent = new AgentSubagent { Name = "scout", Body = "BODY" };
+
+            string prompt = SubagentTools.BuildPrompt(subagent, "Game expansions active: Biotech.");
+
+            Assert.That(prompt, Does.EndWith("Game expansions active: Biotech.\n\nBODY"));
+            Assert.That(SubagentTools.BuildPrompt(subagent), Does.Not.Contain("Game expansions"));
+        }
+
+        [Test]
         public void ShippedScoutIsReadOnly()
         {
             AgentPack pack = AgentPackLoader.Load(Path.Combine(FindRepositoryRoot(), "AgentPack"));

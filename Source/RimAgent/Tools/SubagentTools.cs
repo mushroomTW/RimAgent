@@ -65,6 +65,9 @@ namespace RimAgent.Tools
                 typeof(SubagentTools).GetMethod(nameof(DelegateTask)), this, ToolName, null, null);
         }
 
+        /// <summary>本局 DLC 啟用狀況的一行說明，接在子代理提示詞裡；null 或空白就不加。</summary>
+        public string Expansions { get; set; }
+
         /// <summary>交給主 Agent 的工具。</summary>
         public AIFunction Function { get; }
 
@@ -208,7 +211,7 @@ namespace RimAgent.Tools
             ModelSlots.Apply(options, model, reasoning);
             var messages = new List<ChatMessage>
             {
-                new ChatMessage(ChatRole.System, BuildPrompt(subagent)),
+                new ChatMessage(ChatRole.System, BuildPrompt(subagent, Expansions)),
                 new ChatMessage(ChatRole.User, brief)
             };
             try
@@ -231,12 +234,13 @@ namespace RimAgent.Tools
             }
         }
 
-        internal static string BuildPrompt(AgentSubagent subagent)
+        internal static string BuildPrompt(AgentSubagent subagent, string expansions = null)
         {
             return "You are \"" + subagent.Name + "\", a subagent of RimAgent working in the player's RimWorld colony. " +
                 "The main agent delegated one task to you. You cannot talk to the player or ask questions: use your tools, " +
                 "then finish with a concise report for the main agent (facts, names, numbers, and anything you could not do). " +
                 "Commands follow the player's current mode; if one is held for confirmation or rejected, say so in your report.\n\n" +
+                (string.IsNullOrWhiteSpace(expansions) ? string.Empty : expansions.Trim() + "\n\n") +
                 subagent.Body;
         }
 

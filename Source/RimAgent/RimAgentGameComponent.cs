@@ -52,6 +52,8 @@ namespace RimAgent
         private List<string> _goals = new List<string>();
         private AgentMemoryStore _memoryStore = new AgentMemoryStore();
         private AgentPack _pack;
+        /// <summary>DLC 啟用狀況；模組清單要重開遊戲才會變，建立會話時在主線程算一次。</summary>
+        private string _expansions;
         private McpManager _mcp;
         private bool _mcpWarmedUp;
         private readonly AutonomousScheduler _scheduler = new AutonomousScheduler();
@@ -841,6 +843,8 @@ namespace RimAgent
                 });
             session.Reasoning = settings.reasoning;
             session.PreferredModel = settings.agentModel;
+            _expansions = ExpansionsLine();
+            session.SubagentExpansions = _expansions;
             session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
             session.RunLoggingEnabled = () => settings.recordRuns;
             session.RunLogSink = record =>
@@ -855,7 +859,7 @@ namespace RimAgent
             return session;
         }
 
-        /// <summary>每句指令的完整提示詞：前情提要→玩家自留地→行為準則→技能索引（全文按需讀）。每句現組，AgentPack 變更後下一句生效。</summary>
+        /// <summary>每句指令的完整提示詞：前情提要→DLC 啟用狀況→玩家自留地→行為準則→技能索引（全文按需讀）。每句現組，AgentPack 變更後下一句生效。</summary>
         private string ComposeInstructions()
         {
             AgentPack pack = _pack;
@@ -866,7 +870,15 @@ namespace RimAgent
                 preamble,
                 pack != null ? pack.PlayerNotes : string.Empty,
                 pack != null ? pack.Conduct : string.Empty,
-                pack != null ? pack.Skills : null);
+                pack != null ? pack.Skills : null,
+                _expansions);
+        }
+
+        private static string ExpansionsLine()
+        {
+            return AgentPromptComposer.FormatExpansions(ModLister.AllExpansions
+                .Select(e => (e.defName, e.isCore, e.Status == RimWorld.ExpansionStatus.Active))
+                .ToList());
         }
     }
 }

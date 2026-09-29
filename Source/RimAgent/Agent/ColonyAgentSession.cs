@@ -207,6 +207,13 @@ namespace RimAgent.Agent
         /// </summary>
         public string PreferredModel { get; set; }
 
+        /// <summary>本局 DLC 啟用狀況的一行說明，交給子代理提示詞；主提示詞由 GameComponent 自己組。建立會話時在主線程設定一次。</summary>
+        public string SubagentExpansions
+        {
+            get => _subagents.Expansions;
+            set => _subagents.Expansions = value;
+        }
+
         /// <summary>工具迴圈的迭代上限；正式遊戲傳入 int.MaxValue，僅測試或單輪預算另行縮小。</summary>
         public int MaxSteps => Volatile.Read(ref _maxSteps);
 
