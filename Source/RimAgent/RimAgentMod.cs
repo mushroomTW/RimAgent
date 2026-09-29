@@ -248,7 +248,7 @@ namespace RimAgent
             if (reasoning != null)
             {
                 var reasoningRect = new Rect(row.xMax - reasoningWidth, row.y, reasoningWidth, 26f);
-                if (Widgets.ButtonText(reasoningRect, ("RimAgent.Reasoning." + reasoning()).Translate()))
+                if (Widgets.ButtonText(reasoningRect, ReasoningKey(reasoning()).Translate()))
                 {
                     ShowReasoningDropdownMenu(setReasoning);
                 }
@@ -307,7 +307,7 @@ namespace RimAgent
             foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
             {
                 ReasoningLevel captured = level;
-                options.Add(new FloatMenuOption(("RimAgent.Reasoning." + level).Translate(), () => setReasoning(captured)));
+                options.Add(new FloatMenuOption(ReasoningKey(level).Translate(), () => setReasoning(captured)));
             }
             Find.WindowStack.Add(new FloatMenu(options));
         }
@@ -326,14 +326,24 @@ namespace RimAgent
             _permissionTips = new string[Categories.Length];
             for (int i = 0; i < Categories.Length; i++)
             {
-                // 設定鍵以類別英文命名，只有 MCP 全大寫。
-                string suffix = Categories[i] == ToolCategory.Mcp ? "MCP" : Categories[i].ToString();
-                string key = "RimAgent.Settings." + suffix;
+                string key = PermissionKey(Categories[i]);
                 string label = key.Translate();
                 string tip = (key + "Tip").Translate();
                 _permissionLabels[i] = label.Truncate(labelWidth);
                 _permissionTips[i] = _permissionLabels[i] == label ? tip : label + "\n\n" + tip;
             }
+        }
+
+        /// <summary>工具類別權限的翻譯鍵（提示另加 "Tip" 後綴）。設定鍵以類別英文命名，只有 MCP 全大寫。</summary>
+        internal static string PermissionKey(ToolCategory category)
+        {
+            return "RimAgent.Settings." + (category == ToolCategory.Mcp ? "MCP" : category.ToString());
+        }
+
+        /// <summary>思考強度的翻譯鍵。</summary>
+        internal static string ReasoningKey(ReasoningLevel level)
+        {
+            return "RimAgent.Reasoning." + level;
         }
 
         /// <summary>還沒寫過紀錄時資料夾可能不存在，先建立再開；建不了（唯讀、權限不足）就提示玩家，不讓例外打斷設定頁繪製。</summary>

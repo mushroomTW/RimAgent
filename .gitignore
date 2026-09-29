@@ -22,6 +22,7 @@ TODO.md
 # .NET build output
 [Bb]in/
 [Oo]bj/
+Source/RimAgent.InGameTests/Mod/Assemblies/
 *.pdb
 
 # Test results & coverage

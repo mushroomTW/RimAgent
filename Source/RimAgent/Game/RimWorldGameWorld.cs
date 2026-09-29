@@ -1617,10 +1617,20 @@ namespace RimAgent.Game
             {
                 // 1/2/4 只有在手動優先級開啟時才有意義；否則遊戲只認勾選／不勾選。
                 Current.Game.playSettings.useWorkPriorities = true;
+                NotifyUseWorkPrioritiesChanged();
                 note = "Manual work priorities were turned on for the colony.";
             }
             pawn.workSettings.SetPriority(workType, priority);
             return CommandResult.Ok(note);
+        }
+
+        /// <summary>照原版工作分頁的勾選框：切換手動優先級後，每個玩家 pawn 的工作順序快取都要重建。</summary>
+        internal static void NotifyUseWorkPrioritiesChanged()
+        {
+            foreach (Pawn pawn in PawnsFinder.AllMapsWorldAndTemporary_Alive)
+            {
+                if (pawn.Faction == Faction.OfPlayer && pawn.workSettings != null) pawn.workSettings.Notify_UseWorkPrioritiesChanged();
+            }
         }
 
         public CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName)

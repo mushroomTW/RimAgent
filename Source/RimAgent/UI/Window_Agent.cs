@@ -1194,7 +1194,7 @@ namespace RimAgent.UI
 
         private static string ReasoningLabel(ReasoningLevel level)
         {
-            return ("RimAgent.Reasoning." + level).Translate();
+            return RimAgentMod.ReasoningKey(level).Translate();
         }
 
         private static void SetMode(RimAgentSettings settings, AgentMode mode)

@@ -5,3 +5,5 @@ using System.Runtime.CompilerServices;
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
 [assembly: InternalsVisibleTo("RimAgent.Tests")]
+// 遊戲內整合測試（Source/RimAgent.InGameTests，只供開發）要直接驅動 internal 的 RimWorldGameWorld。
+[assembly: InternalsVisibleTo("RimAgent.InGameTests")]

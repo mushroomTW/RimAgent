@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    RimAgent 的遊戲內整合測試（RimTest Redux）。只供開發：不在 RimAgent.slnx、不隨 mod 出貨。
+    輸出到 Mod/Assemblies/，以 rimworld-mod-mcp run_test_cycle 指向 Mod/ 當作一個獨立 mod 載入。
+    直接參考已出貨的 ../../Assemblies/RimAgent.dll：建置測試不會重建 RimAgent，改了 RimAgent 要先自行 Release 建置。
+  -->
+  <PropertyGroup>
+    <!-- RimTest Redux 以 net481 建置，參考它的組件不能低於此版。 -->
+    <TargetFramework>net481</TargetFramework>
+    <AssemblyName>RimAgent.InGameTests</AssemblyName>
+    <RootNamespace>RimAgent.InGameTests</RootNamespace>
+    <LangVersion>8.0</LangVersion>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>Mod\Assemblies\</OutputPath>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <!-- Workshop 位置；RimWorld 不在預設 Steam 路徑時以 /p:WorkshopDir=... 覆寫。 -->
+    <WorkshopDir Condition="'$(WorkshopDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\..\..\..\workshop\content\294100</WorkshopDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="RimAgent">
+      <HintPath>..\..\Assemblies\RimAgent.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(WorkshopDir)\2009463077\Current\Assemblies\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RimTestRedux">
+      <HintPath>$(WorkshopDir)\3762405308\1.6\Assemblies\RimTestRedux.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
