@@ -50,12 +50,12 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **61 tools:** inspect the colony, issue orders, search the web, and manage saved memories.
+- **61 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
 - **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel), and subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
 - **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills or subagents, or connect trusted local MCP servers.
-- **Saved progress:** the transcript, model history, scheduler, goals, memories, and `/undo` state persist with the game.
+- **Saved progress:** the transcript, model history, scheduler, goals, this save's memories, and `/undo` state persist with the game; global memory lives in the mod folder and is shared by every save.
 
 ---
 
@@ -151,12 +151,12 @@ All 15 categories are enabled by default and can be switched off individually in
 | Time | Pause, game speed, and waiting for in-game time to pass |
 | MCP | Tools from configured local MCP servers |
 | Web | `web_search` uses Parallel Search MCP anonymously by default; a local SearXNG server is optional |
-| Memory | `file_memory_*` tools read, list, search, write, edit and delete up to 30 memory files in each game save |
+| Memory | `file_memory_*` tools read, list, search, write, edit and delete memory files; names starting with `global_` are shared by every save, the rest belong to one save (30 files in each scope) |
 | Subagents | `delegate_task` hands self-contained tasks to the subagents in `AgentPack/Agents/` |
 
 Web search connects directly to [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) by default, without an API key or local server. Anonymous requests have lower rate limits; search queries are sent to Parallel. To use a local source instead, enable **Use local SearXNG** in RimAgent settings and enter its URL (`http://127.0.0.1:8888` by default). The server must be running with JSON output enabled; [free-web-search](https://github.com/vksco/free-web-search) provides one setup. Local searches request Google, DuckDuckGo and Qwant engines and exclude Bing results. Results are external text and should be checked before use. Because queries leave the game, web search follows the current mode's command policy and is unavailable in Ask mode.
 
-Memory uses the Agent Framework's `FileMemoryProvider`. Each memory is a short file stored in the game save; a new game starts empty, and loading an older save restores its memories. Every instruction receives an index of file names and descriptions, and the agent reads a file when it is relevant. Standing preferences are kept in `preferences.md`. Files are limited to 30 per save and 4,000 characters each; names are limited to 60 characters, and descriptions are flattened to one line of up to 200 characters. Reading, listing and searching are queries; writing, editing and deleting follow the current mode's command policy, so Ask mode can only read memories.
+Memory uses the Agent Framework's `FileMemoryProvider` in two scopes, chosen by the file name. A name starting with `global_` is **global memory**: it is kept in `Memory/global-memory.json` inside the same RimAgent folder as the run logs and is shared by every save, so it suits the player's standing preferences and rules (`global_preferences.md` by convention). Every other name is **memory for this save**: it is stored in the game save, a new game starts empty, and loading an older save restores its memories. Every instruction receives an index built from both scopes (file names and descriptions, up to 50 entries), and the agent reads a file when it is relevant. Each scope allows 30 files of 4,000 characters; names are limited to 60 characters, and descriptions are flattened to one line of up to 200 characters. Reading, listing and searching are queries; writing, editing and deleting follow the current mode's command policy, so Ask mode can only read memories. Memories named `global_*` that an older save still holds are handed back to global memory when it is loaded.
 
 Subagents follow hermes-agent's `delegate_task`. Each subagent is an `AgentPack/Agents/<name>/AGENT.md` file whose frontmatter declares its tool categories, `read_only`, and optional `reasoning`. The agent passes up to four task briefs per call. Each task runs in a fresh context with the subagent's own prompt, tools and model, and only the final report enters the agent's history. Read-only subagents run their tasks in parallel; others run them in order. A subagent only gets categories that are also allowed in the settings. Its commands pass through the same mode, confirmation, classifier, autonomous budget, `/undo` and action log, and the action log labels its tool calls with its name. Subagents cannot delegate further. The shipped `scout` is read-only reconnaissance across every colony category.
 

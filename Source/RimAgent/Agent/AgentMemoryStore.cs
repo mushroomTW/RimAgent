@@ -10,10 +10,11 @@ namespace RimAgent.Agent
 {
 #pragma warning disable MAAI001
     /// <summary>
-    /// FileMemoryProvider 的儲存層：記憶檔跟著存檔走，讀回舊存檔時記憶一併回溯。
-    /// 只有平面檔名（provider 的工作資料夾固定為空字串），並在這裡限制檔數與長度。
+    /// FileMemoryProvider 的儲存層：只有平面檔名（provider 的工作資料夾固定為空字串），
+    /// 並在這裡限制檔數與長度。一個實例就是一個範圍的記憶——
+    /// 局內記憶跟著存檔走，全域記憶由 <see cref="ScopedMemoryStore"/> 另外寫進磁碟。
     /// </summary>
-    public sealed class AgentMemoryStore : AgentFileStore
+    public class AgentMemoryStore : AgentFileStore
     {
         public const int MaxFiles = 30;
         public const int MaxFileChars = 4000;
@@ -27,6 +28,7 @@ namespace RimAgent.Agent
         private readonly Dictionary<string, string> _files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         // 工具在執行緒池上寫入，存檔在主執行緒讀取。
         private readonly object _gate = new object();
+        private readonly int _droppedOnLoad;
 
         public AgentMemoryStore(List<AgentMemoryEntry> entries = null)
         {
@@ -36,7 +38,7 @@ namespace RimAgent.Agent
             {
                 ProcessEntryOnLoad(entry, dropped);
             }
-            DroppedOnLoad = dropped.Count;
+            _droppedOnLoad = dropped.Count;
             // 索引由 provider 在下次寫入時重建；在那之前先拿掉被丟棄檔案的列，免得模型去讀不存在的檔。
             PruneDroppedFilesFromIndex(dropped);
         }
@@ -44,7 +46,7 @@ namespace RimAgent.Agent
         private void ProcessEntryOnLoad(AgentMemoryEntry entry, List<string> dropped)
         {
             if (entry == null || entry.content == null) return;
-            string name = Normalize(entry.name);
+            string name = NormalizeName(entry.name);
             if (name.Length == 0 || _files.ContainsKey(name)) return;
             if (IsUserFile(name) && (InvalidUserFile(name, entry.content) != null || UserFileCount() >= MaxFiles))
             {
@@ -64,16 +66,16 @@ namespace RimAgent.Agent
             #pragma warning restore S3878
         }
 
-        /// <summary>讀檔時因超出限制而捨棄的記憶檔數。</summary>
-        public int DroppedOnLoad { get; }
+        /// <summary>讀檔時因超出限制而捨棄的記憶檔數（合成兩個範圍時為兩者相加）。</summary>
+        public virtual int DroppedOnLoad => _droppedOnLoad;
 
-        public List<AgentMemoryEntry> Snapshot()
+        public virtual List<AgentMemoryEntry> Snapshot()
         {
             lock (_gate) return _files.Select(f => new AgentMemoryEntry { name = f.Key, content = f.Value }).ToList();
         }
 
         /// <summary>目前的記憶索引（檔名與描述）；沒有記憶時為空字串。</summary>
-        public string Index
+        public virtual string Index
         {
             get
             {
@@ -81,9 +83,33 @@ namespace RimAgent.Agent
             }
         }
 
+        /// <summary>使用者記憶檔（不含索引與描述檔）的名稱與描述，依檔名排序；供合成兩個範圍的索引。</summary>
+        public IReadOnlyList<MemoryFileInfo> DescribedFiles()
+        {
+            lock (_gate)
+            {
+                return _files.Keys.Where(IsUserFile)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .Select(name => new MemoryFileInfo(name, DescriptionOf(name)))
+                    .ToList();
+            }
+        }
+
+        /// <summary>描述檔的檔名規則與 FileMemoryProvider 一致：去掉最後一段副檔名再加上後綴。</summary>
+        private static string DescriptionFileName(string name)
+        {
+            int dot = name.LastIndexOf('.');
+            return dot > 0 ? name.Substring(0, dot) + DescriptionSuffix : name + DescriptionSuffix;
+        }
+
+        private string DescriptionOf(string name)
+        {
+            return _files.TryGetValue(DescriptionFileName(name), out string description) ? description : string.Empty;
+        }
+
         public override Task WriteAsync(string path, string content, CancellationToken cancellationToken = default)
         {
-            string name = Normalize(path);
+            string name = NormalizeName(path);
             content = content ?? string.Empty;
             // provider 先寫內容、再寫描述、最後重建索引：只在內容這一步拒絕，
             // 描述一律截短而不丟例外，避免內容已存入卻沒進索引。
@@ -119,12 +145,12 @@ namespace RimAgent.Agent
 
         public override Task<string> ReadAsync(string path, CancellationToken cancellationToken = default)
         {
-            lock (_gate) return Task.FromResult(_files.TryGetValue(Normalize(path), out string content) ? content : null);
+            lock (_gate) return Task.FromResult(_files.TryGetValue(NormalizeName(path), out string content) ? content : null);
         }
 
         public override Task<bool> DeleteAsync(string path, CancellationToken cancellationToken = default)
         {
-            lock (_gate) return Task.FromResult(_files.Remove(Normalize(path)));
+            lock (_gate) return Task.FromResult(_files.Remove(NormalizeName(path)));
         }
 
         public override Task<IReadOnlyList<FileStoreEntry>> ListChildrenAsync(string directory, CancellationToken cancellationToken = default)
@@ -132,7 +158,7 @@ namespace RimAgent.Agent
             IReadOnlyList<FileStoreEntry> entries;
             lock (_gate)
             {
-                entries = Normalize(directory).Length > 0
+                entries = NormalizeName(directory).Length > 0
                     ? new FileStoreEntry[0]
                     : _files.Keys.Select(name => new FileStoreEntry(name, "file")).ToArray();
             }
@@ -141,7 +167,7 @@ namespace RimAgent.Agent
 
         public override Task<bool> FileExistsAsync(string path, CancellationToken cancellationToken = default)
         {
-            lock (_gate) return Task.FromResult(_files.ContainsKey(Normalize(path)));
+            lock (_gate) return Task.FromResult(_files.ContainsKey(NormalizeName(path)));
         }
 
         public override Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
@@ -169,7 +195,8 @@ namespace RimAgent.Agent
             return !IsIndex(name) && !IsDescription(name);
         }
 
-        private static string Normalize(string path)
+        /// <summary>檔名正規化：扁平命名空間，反斜線一律視為斜線。</summary>
+        internal static string NormalizeName(string path)
         {
             // Trim(char) 只存在於 Mono；net472 只有 Trim(params char[])。
             #pragma warning disable S3878 // net472 runtime requires char array to avoid MissingMethodException

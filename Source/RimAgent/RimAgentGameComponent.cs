@@ -50,7 +50,12 @@ namespace RimAgent
         private List<TranscriptEntryData> _loadedTranscript;
         private List<UndoFrame> _loadedUndoFrames;
         private List<string> _goals = new List<string>();
-        private AgentMemoryStore _memoryStore = new AgentMemoryStore();
+        /// <summary>局內記憶：跟著這份存檔序列化，新局清空。</summary>
+        private AgentMemoryStore _saveMemory = new AgentMemoryStore();
+        /// <summary>全域記憶：跨存檔，放在 RimAgent 資料夾；null 代表還沒從磁碟載入。</summary>
+        private AgentMemoryStore _globalMemory;
+        /// <summary>agent 實際使用的記憶：兩個範圍的合成視圖。</summary>
+        private ScopedMemoryStore _scopedMemory;
         private AgentPack _pack;
         /// <summary>DLC 啟用狀況；模組清單要重開遊戲才會變，建立會話時在主線程算一次。</summary>
         private string _expansions;
@@ -166,6 +171,77 @@ namespace RimAgent
                 string root = PackRoot;
                 return root != null ? Path.Combine(root, "MCP", "servers.json") : null;
             }
+        }
+
+        /// <summary>全域記憶檔：跨存檔共用，玩家可直接檢視、備份或手動編輯。</summary>
+        internal static string GlobalMemoryPath
+        {
+            get { return Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent", "Memory", GlobalMemoryFile.FileName); }
+        }
+
+        /// <summary>全域記憶；第一次取用時從磁碟載入，讀不了的檔案改名保留再從空白開始。</summary>
+        private AgentMemoryStore GlobalMemory
+        {
+            get
+            {
+                if (_globalMemory == null)
+                {
+                    _globalMemory = GlobalMemoryFile.Load(GlobalMemoryPath, out string warning);
+                    if (warning != null) Log.Warning("RimAgent " + warning);
+                    if (_globalMemory.DroppedOnLoad > 0)
+                        Log.Warning("RimAgent discarded " + _globalMemory.DroppedOnLoad + " global memory file(s) that exceed the current limits.");
+                }
+                return _globalMemory;
+            }
+        }
+
+        /// <summary>agent 看到的一組記憶：以檔名把局內記憶與全域記憶分到兩個範圍。</summary>
+        private ScopedMemoryStore Memory
+        {
+            get
+            {
+                if (_scopedMemory == null) _scopedMemory = new ScopedMemoryStore(_saveMemory, GlobalMemory, SaveGlobalMemory);
+                return _scopedMemory;
+            }
+        }
+
+        /// <summary>開新局或讀檔時忘掉全域記憶快取：玩家可能改過檔案，別的存檔也可能剛寫過。</summary>
+        private void ResetMemory()
+        {
+            _globalMemory = null;
+            _scopedMemory = null;
+        }
+
+        /// <summary>寫回全域記憶；寫不了就讓工具回報失敗，不假裝記住了。</summary>
+        private void SaveGlobalMemory()
+        {
+            AgentMemoryStore global = _globalMemory ?? GlobalMemory;
+            try
+            {
+                GlobalMemoryFile.Save(GlobalMemoryPath, global.Snapshot());
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                throw new InvalidOperationException("global memory could not be saved: " + ex.Message, ex);
+            }
+        }
+
+        /// <summary>把先前版本留在存檔裡的全域記憶併入全域記憶（同名者以磁碟上的為準）；回傳被捨棄的筆數。</summary>
+        private int MergeIntoGlobalMemory(List<AgentMemoryEntry> migrated)
+        {
+            List<AgentMemoryEntry> merged = GlobalMemory.Snapshot();
+            merged.AddRange(migrated);
+            _globalMemory = new AgentMemoryStore(merged);
+            try
+            {
+                SaveGlobalMemory();
+            }
+            catch (InvalidOperationException ex)
+            {
+                // 讀檔不能因為寫不回磁碟而失敗：這批記憶留在記憶體裡，下次寫入再試。
+                Log.Warning("RimAgent could not persist migrated global memory: " + ex.Message);
+            }
+            return _globalMemory.DroppedOnLoad;
         }
 
         public bool AddGoal(string goal)
@@ -314,13 +390,18 @@ namespace RimAgent
             Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
             if (_goals == null) _goals = new List<string>();
             List<AgentMemoryEntry> memories = Scribe.mode == LoadSaveMode.Saving
-                ? _memoryStore.Snapshot() : null;
+                ? _saveMemory.Snapshot() : null;
             Scribe_Collections.Look(ref memories, "agentMemories", LookMode.Deep);
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
-                _memoryStore = new AgentMemoryStore(memories);
-                if (_memoryStore.DroppedOnLoad > 0)
-                    Log.Warning("RimAgent discarded " + _memoryStore.DroppedOnLoad + " saved memory file(s) that exceed the current limits.");
+                // 舊存檔可能把全域記憶存在存檔裡：先挑出來交還全域記憶，存檔才真的只留局內記憶。
+                List<AgentMemoryEntry> migrated = MemoryScopes.TakeGlobalEntries(memories);
+                _saveMemory = new AgentMemoryStore(memories);
+                int dropped = _saveMemory.DroppedOnLoad;
+                ResetMemory();
+                if (migrated.Count > 0) dropped += MergeIntoGlobalMemory(migrated);
+                if (dropped > 0)
+                    Log.Warning("RimAgent discarded " + dropped + " saved memory file(s) that exceed the current limits.");
             }
             Scribe_Values.Look(ref _goalPaused, "goalPaused", false);
             Scribe_Values.Look(ref _goalTurns, "goalTurns", 0);
@@ -356,7 +437,8 @@ namespace RimAgent
             _loadedUndoFrames = null;
             _loadedAgentSession = null;
             _goals = new List<string>();
-            _memoryStore = new AgentMemoryStore();
+            _saveMemory = new AgentMemoryStore();
+            ResetMemory();
             _goalCts?.Cancel();
             _goalGeneration++;
             _goalRunning = false;
@@ -378,6 +460,8 @@ namespace RimAgent
         public override void LoadedGame()
         {
             _session = null;
+            // 全域記憶跟著遊戲之外的檔案走，讀檔時重新載入（玩家或別的存檔可能剛改過）。
+            ResetMemory();
             _goalCts?.Cancel();
             _goalGeneration++;
             _goalRunning = false;
@@ -828,7 +912,7 @@ namespace RimAgent
                 classifierModel: () => settings?.ResolveClassifierModel(),
                 classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
                 askNote: () => _pack != null ? _pack.AskModeNote : string.Empty,
-                memory: _memoryStore,
+                memory: Memory,
                 useLocalSearch: () => settings.useLocalSearch,
                 searxngUrl: () => settings.searxngUrl,
                 skillsProvider: () => _pack != null ? _pack.Skills : null,
