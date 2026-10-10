@@ -23,6 +23,7 @@
   <RimAgent.Window.ResizeTip>拖曳右下角調整視窗大小</RimAgent.Window.ResizeTip>
   <RimAgent.Close>關閉</RimAgent.Close>
   <RimAgent.Placeholder>告訴 Agent 要做什麼，或輸入 / 使用指令</RimAgent.Placeholder>
+  <RimAgent.PlaceholderBusy>執行中…在此輸入並按 Enter，可補充或改變目前的任務</RimAgent.PlaceholderBusy>
   <RimAgent.Send>送出</RimAgent.Send>
   <RimAgent.Stop>停止</RimAgent.Stop>
   <RimAgent.Confirm>確認執行</RimAgent.Confirm>

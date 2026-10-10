@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -177,7 +178,8 @@ namespace RimAgent.Tests
             var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Ask));
             IEnumerable<string> names = registry.Select(ToolPermissions.For(ToolCategory.Memory), AgentMode.Ask).Select(t => t.Name);
 
-            Assert.That(names, Is.EquivalentTo(new[] { "file_memory_read", "file_memory_ls", "file_memory_grep" }));
+            // read_tool_output 跟著任何可用工具一起給（讀截斷的結果），不屬於記憶權限。
+            Assert.That(names, Is.EquivalentTo(new[] { "file_memory_read", "file_memory_ls", "file_memory_grep", ToolOutputTools.ToolName }));
         }
 
         [Test]
@@ -199,6 +201,24 @@ namespace RimAgent.Tests
             Assert.That(client.ReceivedOptions[0].Instructions, Does.Not.Contain("Storage is near the river."), "索引只列檔名與描述");
             Assert.That(client.ReceivedMessages[0].Last(m => m.Role == ChatRole.User).Text, Is.EqualTo("Where is storage?"));
             Assert.That(client.ReceivedOptions[1].Instructions, Does.Not.Contain("## Saved memory"));
+        }
+
+        [Test]
+        public async Task ReplaceLinesUsesSlimSchemaAndStillEditsByLineNumber()
+        {
+            var memory = new AgentMemoryStore();
+            await Invoke(memory, "file_memory_write", ("fileName", "base.md"), ("content", "a\nb\n"));
+            // 模型送來的引數是 JsonElement，照實際路徑模擬。
+            JsonElement edits = JsonDocument.Parse("[{\"line_number\":2,\"new_line\":\"c\\n\",\"expected_line\":\"b\"}]").RootElement;
+
+            await Invoke(memory, "file_memory_replace_lines", ("fileName", "base.md"), ("edits", edits));
+
+            Assert.That(await Invoke(memory, "file_memory_read", ("fileName", "base.md")), Does.Contain("a\nc\n"));
+            AIFunction tool = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null, memory: memory)
+                .All.OfType<AIFunction>().Single(t => t.Name == "file_memory_replace_lines");
+            string schema = tool.JsonSchema.GetRawText();
+            Assert.That(tool.Description.Length + schema.Length, Is.LessThan(700), "精簡後的說明與 schema");
+            Assert.That(schema, Does.Contain("\"fileName\"").And.Contain("\"line_number\"").And.Contain("\"new_line\"").And.Contain("\"expected_line\""));
         }
 
         private static async Task<string> Invoke(AgentMemoryStore memory, string toolName, params (string Key, object Value)[] arguments)

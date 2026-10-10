@@ -800,9 +800,14 @@ namespace RimAgent.Tests
             var session = new ColonyAgentSession(_client, _world, () => ToolPermissions.All, 8, () => AgentMode.Ask);
 
             List<string> names = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
+            // 包內工具不公告，完整的允許集合看登錄表（會話用同一套過濾）。
+            List<string> allowed = new AgentToolRegistry(_world, new AgentTranscript())
+                .Select(ToolPermissions.All, AgentMode.Ask).Select(t => t.Name).ToList();
 
-            Assert.That(names, Does.Contain("list_colonists").And.Contain("get_health").And.Contain("mcp_list_tools"));
-            Assert.That(names, Does.Not.Contain("set_work_priorities").And.Not.Contain("execute_trade").And.Not.Contain("mcp_call_tool"));
+            Assert.That(names, Does.Contain("list_colonists"));
+            Assert.That(names, Does.Not.Contain("set_work_priorities"));
+            Assert.That(allowed, Does.Contain("get_health").And.Contain("mcp_list_tools"));
+            Assert.That(allowed, Does.Not.Contain("execute_trade").And.Not.Contain("mcp_call_tool"));
         }
 
         [Test]
@@ -810,8 +815,12 @@ namespace RimAgent.Tests
         {
             var session = new ColonyAgentSession(_client, _world, () => ToolPermissions.All, 8, () => AgentMode.Yolo);
 
-            List<string> names = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
+            List<string> advertised = session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name).ToList();
+            // 包內工具不公告，完整的允許集合看登錄表（會話用同一套過濾）。
+            List<string> names = new AgentToolRegistry(_world, new AgentTranscript())
+                .Select(ToolPermissions.All, AgentMode.Yolo).Select(t => t.Name).ToList();
 
+            Assert.That(advertised, Does.Contain("set_work_priorities"));
             Assert.That(names, Does.Not.Contain("execute_trade"));
             Assert.That(names, Does.Not.Contain("form_caravan"));
             Assert.That(names, Does.Not.Contain("release_prisoner"));
@@ -910,10 +919,10 @@ namespace RimAgent.Tests
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(60));
+            Assert.That(registry.All.Count, Is.EqualTo(61));
             var observeOnly = new ToolPermissions();
             observeOnly.Set(ToolCategory.Observe, true);
-            Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(15));
+            Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(16));
             Assert.That(registry.Select(new ToolPermissions()), Is.Empty);
         }
 

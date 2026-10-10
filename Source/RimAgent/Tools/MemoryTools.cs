@@ -3,6 +3,7 @@ extern alias ste;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Agents.AI;
@@ -66,8 +67,39 @@ namespace RimAgent.Tools
 #pragma warning restore MAAI001
             return provided.Tools.OfType<AIFunction>()
                 .Where(tool => Risks.ContainsKey(tool.Name))
+                .Select(tool => tool.Name == "file_memory_replace_lines" ? new SlimSchemaFunction(tool, ReplaceLinesDescription, ReplaceLinesSchema) : tool)
                 .Select(tool => RiskOf(tool.Name) == ToolRisk.Query ? tool : new GatedMemoryFunction(tool, gate))
                 .ToList();
+        }
+
+        private const string ReplaceLinesDescription =
+            "Replace lines in a memory file by 1-based line number (lines end at \\n, \\r\\n or \\r). Fails on out-of-range or duplicate line numbers.";
+
+        /// <summary>參數名稱與結構和 provider 原版相同，只縮短說明；引數仍由原函式綁定。</summary>
+        private static readonly JsonElement ReplaceLinesSchema = JsonDocument.Parse(
+            "{\"type\":\"object\",\"properties\":{\"fileName\":{\"type\":\"string\"},\"edits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{" +
+            "\"line_number\":{\"type\":\"integer\"}," +
+            "\"new_line\":{\"description\":\"New text including its trailing newline; empty deletes the line.\",\"type\":\"string\"}," +
+            "\"expected_line\":{\"description\":\"Optional current text of the line (without the read prefix); the edit is rejected if it differs.\",\"type\":[\"string\",\"null\"]}" +
+            "}}}},\"required\":[\"fileName\",\"edits\"]}").RootElement;
+
+        /// <summary>
+        /// provider 內建 replace_lines 的說明與 schema 約 1.4k 字元，每次模型呼叫都要送；
+        /// 改送精簡版，執行仍交給原函式。
+        /// </summary>
+        private sealed class SlimSchemaFunction : DelegatingAIFunction
+        {
+            private readonly string _description;
+            private readonly JsonElement _schema;
+
+            public SlimSchemaFunction(AIFunction inner, string description, JsonElement schema) : base(inner)
+            {
+                _description = description;
+                _schema = schema;
+            }
+
+            public override string Description => _description;
+            public override JsonElement JsonSchema => _schema;
         }
 
         /// <summary>極小 stub：只為 FileMemoryProvider 建立 InvokingContext；任何實際呼叫都代表誤用。</summary>

@@ -33,6 +33,7 @@ namespace RimAgent.Agent
         public string riskCheck = string.Empty;
         public bool autonomous;
         public bool goalRun;
+        public bool interjection;
         public string agent = string.Empty;
 #pragma warning restore S1104
 
@@ -53,6 +54,7 @@ namespace RimAgent.Agent
             Scribe_Values.Look(ref riskCheck, "risk", string.Empty);
             Scribe_Values.Look(ref autonomous, "autonomous", false);
             Scribe_Values.Look(ref goalRun, "goalRun", false);
+            Scribe_Values.Look(ref interjection, "interjection", false);
             Scribe_Values.Look(ref agent, "agent", string.Empty);
         }
 
@@ -75,6 +77,7 @@ namespace RimAgent.Agent
                 RiskCheck = riskCheck ?? string.Empty,
                 Autonomous = autonomous,
                 GoalRun = goalRun,
+                Interjection = interjection,
                 Agent = agent ?? string.Empty
             };
         }
@@ -105,6 +108,7 @@ namespace RimAgent.Agent
                     riskCheck = e.RiskCheck ?? string.Empty,
                     autonomous = e.Autonomous,
                     goalRun = e.GoalRun,
+                    interjection = e.Interjection,
                     agent = e.Agent ?? string.Empty
                 });
             }

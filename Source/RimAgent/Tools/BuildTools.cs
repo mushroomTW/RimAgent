@@ -46,15 +46,15 @@ namespace RimAgent.Tools
         private const string KindList = "mine, cut_plants, harvest, deconstruct, haul or hunt";
 
         [AgentTool("designate_area", ToolCategory.Build, ToolRisk.Confirm)]
-        [Description("Marks map objects for colonists: mine (ore and rock), cut_plants, harvest (ripe plants only), deconstruct (player-owned buildings only), haul (items) or hunt (wild animals). Targets the player's current selection or a rectangle, optionally filtered by name; reports how many were marked, already marked and not applicable.")]
+        [Description("Marks things for colonists: mine, cut_plants, harvest (ripe only), deconstruct (player-owned only), haul or hunt (wild only) in the player's selection or a rectangle (x1,z1)-(x2,z2). Reports marked, already marked and not applicable counts.")]
         public string DesignateArea(
             [Description("mine, cut_plants, harvest, deconstruct, haul or hunt.")] string kind,
-            [Description("true to use the player's current map selection instead of a rectangle.")] bool useSelection,
-            [Description("Rectangle corner x (ignored when useSelection is true).")] int x1,
-            [Description("Rectangle corner z.")] int z1,
-            [Description("Opposite corner x.")] int x2,
-            [Description("Opposite corner z.")] int z2,
-            [Description("Mark only objects whose defName or label contains this text, e.g. \"steel\" or \"tree\"; empty marks everything of that kind.")] string filter)
+            [Description("true uses the player's selection and ignores the rectangle.")] bool useSelection,
+            int x1,
+            int z1,
+            int x2,
+            int z2,
+            [Description("Only names or defNames containing this text, e.g. \"steel\"; empty = all.")] string filter)
         {
             DesignationKind dk = ParseKind(kind);
             if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
@@ -162,17 +162,17 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-        [Description("Places blueprints for colonists to build. shape single places one building or floor at (x, z); line places a straight row from (x, z) to (x2, z2); fill covers every cell of the rectangle (floors, ship structural beams); outline places only its border (the walls of a room; put a door on the wall line afterwards). line, fill and outline suit 1x1 things; place larger buildings one at a time. Up to 400 cells per call. Reports how many cells the game refused and the first few reasons.")]
+        [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1. Max 400 cells per call; reports refused cells with reasons.")]
 #pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
         public string PlaceBlueprint(
-            [Description("Building or floor name or defName, e.g. \"wall\", \"door\", \"solar generator\", \"ship structural beam\".")] string building,
+            [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
             [Description("single, line, fill or outline.")] string shape,
-            [Description("x of the cell, line start or rectangle corner.")] int x,
-            [Description("z of the cell, line start or rectangle corner.")] int z,
-            [Description("x of the line end or opposite corner; ignored for single.")] int x2,
-            [Description("z of the line end or opposite corner; ignored for single.")] int z2,
-            [Description("0 north, 1 east, 2 south, 3 west; matters for doors, beds and other oriented buildings, otherwise 0.")] int rotation,
-            [Description("Material name or defName for buildings made of stuff, e.g. \"wood\", \"steel\", \"granite blocks\"; empty uses the default material.")] string stuff)
+            int x,
+            int z,
+            [Description("Line end or opposite corner; ignored for single.")] int x2,
+            [Description("Line end or opposite corner; ignored for single.")] int z2,
+            [Description("0 north, 1 east, 2 south, 3 west (doors, beds); otherwise 0.")] int rotation,
+            [Description("Material, e.g. \"wood\", \"granite blocks\"; empty = default.")] string stuff)
 #pragma warning restore S107
         {
             Result<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");

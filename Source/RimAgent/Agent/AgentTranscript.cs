@@ -41,6 +41,8 @@ namespace RimAgent.Agent
         public bool Autonomous { get; set; }
         /// <summary>User 專用：這句由獨立 goal 執行器續跑。</summary>
         public bool GoalRun { get; set; }
+        /// <summary>User 專用：玩家在 agent 執行中插的話，屬於進行中的指令，不另起回合。</summary>
+        public bool Interjection { get; set; }
 
         // Tool 專用
         public string ToolName { get; set; } = string.Empty;
@@ -140,18 +142,26 @@ namespace RimAgent.Agent
             }
         }
 
-        /// <summary>目前這句指令的原文（最後一則 User 紀錄）；沒有則為空字串。分類器要看玩家原話。</summary>
+        /// <summary>
+        /// 目前這句指令的原文（最後一則非插話的 User 紀錄），後面依序接上執行中的插話；沒有則為空字串。
+        /// 分類器要看玩家原話：只看插話會把原指令要求的命令誤判成未要求。
+        /// </summary>
         public string CurrentInstructionText
         {
             get
             {
                 lock (_gate)
                 {
+                    var parts = new List<string>();
                     for (int i = _entries.Count - 1; i >= 0; i--)
                     {
-                        if (_entries[i].Kind == TranscriptKind.User) return _entries[i].Text;
+                        TranscriptEntry entry = _entries[i];
+                        if (entry.Kind != TranscriptKind.User) continue;
+                        parts.Add(entry.Text);
+                        if (!entry.Interjection) break;
                     }
-                    return string.Empty;
+                    parts.Reverse();
+                    return string.Join("\n", parts);
                 }
             }
         }

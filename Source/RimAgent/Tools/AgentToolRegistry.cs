@@ -57,12 +57,15 @@ namespace RimAgent.Tools
             public ToolCategory Category;
             public ToolRisk Risk;
             public AITool Tool;
+            /// <summary>所屬的工具包；常駐工具為 null。</summary>
+            public string Pack;
         }
 
         private readonly List<Entry> _tools = new List<Entry>();
         private readonly IGameWorld _world;
         private readonly ConfirmationGate _gate;
         private readonly RiskClassifier _classifier;
+        private readonly PlayerInterjections _interjections;
 
         public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, null, null)
         {
@@ -74,7 +77,7 @@ namespace RimAgent.Tools
         }
 
 #pragma warning disable S107 // Tool registry aggregates all domain tool implementations
-        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null)
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null)
 #pragma warning restore S107
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -82,6 +85,7 @@ namespace RimAgent.Tools
             _world = world;
             _gate = gate;
             _classifier = classifier;
+            _interjections = interjections;
 
             Register(new ObserveTools(world, gate), transcript);
             Register(new ChoiceTools(world, gate), transcript);
@@ -101,7 +105,14 @@ namespace RimAgent.Tools
             foreach (AIFunction function in MemoryTools.Create(memory ?? new AgentMemoryStore(), gate))
                 Add(function, ToolCategory.Memory, MemoryTools.RiskOf(function.Name), transcript);
             if (skills != null) Register(new SkillTools(skills), transcript);
+            Register(new ToolOutputTools(Outputs), transcript);
+            _outputReader = _tools.Single(t => t.Name == ToolOutputTools.ToolName);
         }
+
+        private readonly Entry _outputReader;
+
+        /// <summary>被截斷的工具結果原文；本登錄的工具共用，對話清除時由會話清空。</summary>
+        internal ToolOutputStore Outputs { get; } = new ToolOutputStore();
 
         private IReadOnlyList<AITool> _allTools;
         private IReadOnlyList<AgentToolDescriptor> _descriptors;
@@ -122,13 +133,59 @@ namespace RimAgent.Tools
         /// <summary>依權限與模式挑選：詢問模式只留查詢工具，YOLO 模式排除黑名單工具，命令工具連 schema 都不送給模型。</summary>
         public IList<AITool> Select(ToolPermissions permissions, AgentMode mode)
         {
+            return WithOutputReader(Allowed(permissions, mode)).Select(t => t.Tool).ToList();
+        }
+
+        /// <summary>主 Agent 一次請求的工具，依權限與模式一次分好。</summary>
+        internal sealed class MainAgentTools
+        {
+            /// <summary>放進 ChatOptions.Tools 公告給模型的：常駐工具加上已展開的包。</summary>
+            public readonly List<AITool> Advertised = new List<AITool>();
+            /// <summary>每個包可用的工具（含已展開的）；未公告的仍可直接執行。</summary>
+            public readonly Dictionary<string, List<AITool>> PackTools = new Dictionary<string, List<AITool>>(StringComparer.Ordinal);
+            /// <summary>至少有一個可用工具的包，依 <see cref="ToolPacks.All"/> 的順序。</summary>
+            public IReadOnlyList<ToolPacks.Pack> Packs = Array.Empty<ToolPacks.Pack>();
+        }
+
+        internal MainAgentTools SelectForMainAgent(ToolPermissions permissions, AgentMode mode, ICollection<string> loadedPacks)
+        {
+            var result = new MainAgentTools();
+            foreach (Entry t in WithOutputReader(Allowed(permissions, mode)))
+            {
+                if (t.Pack != null)
+                {
+                    if (!result.PackTools.TryGetValue(t.Pack, out List<AITool> tools))
+                    {
+                        tools = new List<AITool>();
+                        result.PackTools[t.Pack] = tools;
+                    }
+                    tools.Add(t.Tool);
+                    if (loadedPacks == null || !loadedPacks.Contains(t.Pack)) continue;
+                }
+                result.Advertised.Add(t.Tool);
+            }
+            result.Packs = ToolPacks.All.Where(p => result.PackTools.ContainsKey(p.Id)).ToList();
+            return result;
+        }
+
+        /// <summary>
+        /// read_tool_output 只讀已允許工具被截斷的輸出：清單裡有其他工具就一併給，不看類別開關；
+        /// 否則關掉觀察類（或子代理沒宣告觀察類）時，截斷說明會指向不存在的工具。
+        /// </summary>
+        private List<Entry> WithOutputReader(IEnumerable<Entry> entries)
+        {
+            List<Entry> list = entries.ToList();
+            if (list.Count > 0 && !list.Contains(_outputReader)) list.Add(_outputReader);
+            return list;
+        }
+
+        private IEnumerable<Entry> Allowed(ToolPermissions permissions, AgentMode mode)
+        {
             if (permissions == null) throw new ArgumentNullException(nameof(permissions));
             return _tools
                 .Where(t => permissions.Allows(t.Category))
                 .Where(t => mode != AgentMode.Ask || t.Risk == ToolRisk.Query)
-                .Where(t => mode != AgentMode.Yolo || !IsYoloForbidden(t.Name))
-                .Select(t => t.Tool)
-                .ToList();
+                .Where(t => mode != AgentMode.Yolo || !IsYoloForbidden(t.Name));
         }
 
         /// <summary>
@@ -143,10 +200,8 @@ namespace RimAgent.Tools
             {
                 scoped.Set(category, permissions.Allows(category));
             }
-            HashSet<AITool> allowed = new HashSet<AITool>(Select(scoped, mode));
-            return _tools
-                .Where(t => allowed.Contains(t.Tool))
-                .Where(t => !readOnly || t.Risk == ToolRisk.Query)
+            // 讀取器在唯讀過濾之後才補：沒有其他可用工具的子代理仍視為不可用。
+            return WithOutputReader(Allowed(scoped, mode).Where(t => !readOnly || t.Risk == ToolRisk.Query))
                 .Select(t => t.Tool)
                 .ToList();
         }
@@ -200,7 +255,8 @@ namespace RimAgent.Tools
                 Name = function.Name,
                 Category = category,
                 Risk = risk,
-                Tool = new LoggingAIFunction(function, transcript, _world, category, risk, _gate, _classifier)
+                Pack = ToolPacks.PackOf(function.Name, category),
+                Tool = new LoggingAIFunction(function, transcript, _world, category, risk, _gate, _classifier, Outputs, _interjections)
             });
         }
     }

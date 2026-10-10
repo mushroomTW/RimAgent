@@ -74,6 +74,18 @@ namespace RimAgent.Tests
             return this;
         }
 
+        /// <summary>上一個排好的步驟被叫到時先執行 <paramref name="action"/>（例如模擬玩家在模型思考時插話）。</summary>
+        public ScriptedChatClient Do(Action action)
+        {
+            Func<IList<ChatMessage>, ChatOptions, ChatResponse> step = _script[_script.Count - 1];
+            _script[_script.Count - 1] = (messages, options) =>
+            {
+                action();
+                return step(messages, options);
+            };
+            return this;
+        }
+
         public ScriptedChatClient Throw(Exception exception)
         {
             _script.Add((_, __) => throw exception);
@@ -95,7 +107,8 @@ namespace RimAgent.Tests
             cancellationToken.ThrowIfCancellationRequested();
             var list = messages.ToList();
             ReceivedMessages.Add(list);
-            ReceivedOptions.Add(options);
+            // 存當下的複本：工具迴圈在同一輪會沿用並修改同一份 options（展開工具包）。
+            ReceivedOptions.Add(options?.Clone());
 
             if (_script.Count == 0) throw new InvalidOperationException("ScriptedChatClient has no scripted response.");
             // 腳本用完後重複最後一則。

@@ -181,7 +181,7 @@ namespace RimAgent.Tools
                 throw;
             }
 
-            string result = ToolOutputLimit.Apply(Combine(subagent.Name, reports));
+            string result = ToolOutputLimit.Apply(Combine(subagent.Name, reports), _registry.Outputs);
             _transcript.UpdateToolResult(entry, result, reports.All(r => r.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal)));
             return result;
         }

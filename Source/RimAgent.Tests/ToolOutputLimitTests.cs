@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
 using NUnit.Framework;
 using RimAgent.Agent;
 using RimAgent.Game;
@@ -88,8 +89,141 @@ namespace RimAgent.Tests
             await session.SendAsync("list everything mineable");
 
             TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
-            Assert.That(tool.Result.Length, Is.LessThan(ToolOutputLimit.MaxResultChars + 200));
+            Assert.That(tool.Result.Length, Is.LessThan(ToolOutputLimit.MaxResultChars + 400));
             Assert.That(tool.Result, Does.Contain("characters omitted"));
+        }
+
+        [Test]
+        public void LongOutputIsSavedUnderAnIdThatPointsAtTheOmittedPart()
+        {
+            var store = new ToolOutputStore();
+            string text = "HEAD" + new string('x', 200) + "MIDDLE" + new string('y', 200) + "TAIL";
+
+            string limited = ToolOutputLimit.Apply(text, 100, store);
+
+            Assert.That(limited, Does.StartWith("HEAD").And.EndWith("TAIL"));
+            Assert.That(limited, Does.Contain("out_1").And.Contain("offset 50"));
+            Assert.That(store.TryGet("out_1", out string saved), Is.True);
+            Assert.That(saved, Is.EqualTo(text));
+        }
+
+        [Test]
+        public void ShortOutputIsNotSaved()
+        {
+            var store = new ToolOutputStore();
+
+            ToolOutputLimit.Apply("short", 100, store);
+
+            Assert.That(store.TryGet("out_1", out _), Is.False);
+        }
+
+        [Test]
+        public void StoreKeepsOnlyTheMostRecentOutputs()
+        {
+            var store = new ToolOutputStore();
+            for (int i = 0; i < ToolOutputStore.Capacity + 1; i++) store.Save("output " + i);
+
+            Assert.That(store.TryGet("out_1", out _), Is.False, "最舊的被淘汰");
+            Assert.That(store.TryGet("out_" + (ToolOutputStore.Capacity + 1), out string last), Is.True);
+            Assert.That(last, Is.EqualTo("output " + ToolOutputStore.Capacity));
+        }
+
+        [Test]
+        public void StoreEvictsOldestOutputsWhenTotalSizeExceedsTheCap()
+        {
+            var store = new ToolOutputStore();
+            string first = store.Save(new string('a', ToolOutputStore.MaxTotalChars * 3 / 5));
+            string second = store.Save(new string('b', ToolOutputStore.MaxTotalChars * 3 / 5));
+
+            Assert.That(store.TryGet(first, out _), Is.False);
+            Assert.That(store.TryGet(second, out _), Is.True, "最新的一定留著");
+        }
+
+        [Test]
+        public void OversizedOutputIsSavedOnlyUpToTheCap()
+        {
+            var store = new ToolOutputStore();
+            string id = store.Save(new string('a', ToolOutputStore.MaxTotalChars + 10));
+
+            Assert.That(store.TryGet(id, out string saved), Is.True);
+            Assert.That(saved.Length, Is.LessThan(ToolOutputStore.MaxTotalChars + 200));
+            Assert.That(saved, Does.EndWith("characters were kept]"));
+        }
+
+        [Test]
+        public void SubagentWithoutObserveStillGetsTheOutputReaderButNotAlone()
+        {
+            var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
+
+            var builder = registry.SelectForSubagent(ToolPermissions.All, AgentMode.Autonomous, new[] { ToolCategory.Build }, readOnly: false).Select(t => t.Name).ToList();
+            var readOnlyCombat = registry.SelectForSubagent(ToolPermissions.All, AgentMode.Autonomous, new[] { ToolCategory.Combat }, readOnly: true);
+
+            Assert.That(builder, Does.Contain("place_blueprint").And.Contain(ToolOutputTools.ToolName));
+            Assert.That(readOnlyCombat, Is.Empty, "沒有其他可用工具時不補讀取器");
+        }
+
+        [Test]
+        public void ReadToolOutputReturnsASliceFromTheOffsetAndSaysWhereToContinue()
+        {
+            var store = new ToolOutputStore();
+            string id = store.Save("0123456789" + new string('z', ToolOutputTools.SliceChars * 2));
+            var tools = new ToolOutputTools(store);
+
+            string first = tools.ReadToolOutput(id, 5, string.Empty);
+            string beyond = tools.ReadToolOutput(id, 1000000, string.Empty);
+
+            Assert.That(first, Does.Contain("56789"));
+            Assert.That(first, Does.Contain("offset " + (5 + ToolOutputTools.SliceChars)));
+            Assert.That(beyond, Does.Contain("end of output"));
+        }
+
+        [Test]
+        public void ReadToolOutputFindsMatchingLines()
+        {
+            var store = new ToolOutputStore();
+            string id = store.Save("steel at (1, 2)\nwood at (3, 4)\nSTEEL at (5, 6)");
+
+            string found = new ToolOutputTools(store).ReadToolOutput(id, 0, "steel");
+
+            Assert.That(found, Does.Contain("(1, 2)").And.Contain("(5, 6)").And.Not.Contain("wood"));
+        }
+
+        [Test]
+        public void UnknownIdTellsTheModelToRerunTheTool()
+        {
+            string result = new ToolOutputTools(new ToolOutputStore()).ReadToolOutput("out_9", 0, string.Empty);
+
+            Assert.That(result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("again"));
+        }
+
+        /// <summary>整條路徑：模型看到代號後能讀回被省略的中段；清除對話後代號失效。</summary>
+        [Test]
+        public async Task ModelCanReadTheOmittedMiddleOfAHugeResultUntilTheConversationIsCleared()
+        {
+            var world = new FakeGameWorld();
+            world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
+            for (int i = 0; i < 200; i++)
+            {
+                world.Things.Add(FakeGameWorld.MakeThing(1000 + i, "MineableSteel",
+                    "compacted steel deposit with a deliberately long label for this test", ThingKind.Mineable, i % 50, i / 50));
+            }
+            var client = new ScriptedChatClient();
+            client.CallTool("find_things", new { kind = "mineable", name = "", x1 = -1, z1 = -1, x2 = -1, z2 = -1, limit = 200 })
+                  .CallTool("read_tool_output", new { id = "out_1", offset = 0, find = "(25,1)" })
+                  .Reply("Done.")
+                  .CallTool("read_tool_output", new { id = "out_1", offset = 0, find = "" })
+                  .Reply("Gone.");
+            var session = new ColonyAgentSession(client, world, () => ToolPermissions.All, 8, () => AgentMode.Autonomous);
+
+            await session.SendAsync("list everything mineable");
+            session.Clear();
+            await session.SendAsync("read it again");
+
+            TranscriptEntry[] reads = session.Transcript.Snapshot().Where(e => e.ToolName == "read_tool_output").ToArray();
+            Assert.That(reads, Has.Length.EqualTo(1), "清除對話也清掉行動紀錄，只剩清除後那次");
+            Assert.That(reads[0].Failed, Is.True, "清除對話後代號失效");
+            ChatMessage firstRead = client.ReceivedMessages[2].Last();
+            Assert.That(firstRead.Contents.OfType<FunctionResultContent>().Single().Result?.ToString(), Does.Contain("(25,1)"));
         }
     }
 }

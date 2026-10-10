@@ -35,11 +35,14 @@ namespace RimAgent.Tools
         private readonly ToolRisk _risk;
         private readonly ConfirmationGate _gate;
         private readonly RiskClassifier _classifier;
+        private readonly ToolOutputStore _outputs;
+        private readonly PlayerInterjections _interjections;
+        private readonly bool _consumesBudget;
 
         private bool RequiresExplicitConfirmation =>
             _gate != null && _gate.RequiresExplicitConfirmation(Name);
 
-        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null)
+        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true)
             : base(inner)
         {
             _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -48,9 +51,29 @@ namespace RimAgent.Tools
             _risk = risk;
             _gate = gate;
             _classifier = classifier;
+            _outputs = outputs;
+            _interjections = interjections;
+            _consumesBudget = consumesBudget;
         }
 
         protected override async ste::System.Threading.Tasks.ValueTask<object> InvokeCoreAsync(
+            AIFunctionArguments arguments,
+            CancellationToken cancellationToken)
+        {
+            object result = await InvokeLoggedAsync(arguments, cancellationToken);
+            // 玩家執行中插話：附在主 Agent 這次的工具結果後面送給模型。只附在送回的文字，
+            // 行動紀錄、查詢快取與失敗紀錄都存工具本身的結果。子代理的工具不取，免得話被子代理吃掉。
+            string interjection = _transcript.CurrentAgent.Length == 0 ? _interjections?.TakeAll() : null;
+            return interjection == null ? result : (result?.ToString() ?? string.Empty) + FormatInterjection(interjection);
+        }
+
+        private static string FormatInterjection(string text)
+        {
+            return "\n\n<player_message>\n" + text + "\n</player_message>\n" +
+                   "The player sent this while you were working. Take it into account before your next step; it may change or cancel your current plan.";
+        }
+
+        private async Task<object> InvokeLoggedAsync(
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
@@ -87,7 +110,7 @@ namespace RimAgent.Tools
                 {
                     result = await base.InvokeCoreAsync(arguments, cancellationToken);
                 }
-                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty, out bool hasFreshGameErrors));
+                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty, out bool hasFreshGameErrors), _outputs);
                 entry.Result = text;
                 entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
                 bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
@@ -163,7 +186,7 @@ namespace RimAgent.Tools
             }
 
             bool budgetConsumed = false;
-            if (_gate != null && !_gate.TryConsumeToolBudget(out budgetConsumed))
+            if (_consumesBudget && _gate != null && !_gate.TryConsumeToolBudget(out budgetConsumed))
             {
                 entry.Result = ToolText.Error("autonomous tool budget exhausted.");
                 entry.Failed = true;
@@ -183,7 +206,7 @@ namespace RimAgent.Tools
             try
             {
                 object result = await base.InvokeCoreAsync(arguments, cancellationToken);
-                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty));
+                string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), _outputs);
                 // 確認執行是真正的世界寫入：同句的查詢快取作廢。
                 _gate?.InvalidateQueryCache();
                 _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));

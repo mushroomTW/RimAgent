@@ -126,8 +126,9 @@ namespace RimAgent.Tests
             permissions.Set(ToolCategory.Trade, true);
             await session.SendAsync("two");
 
-            Assert.That(client.ReceivedOptions[0].Tools.OfType<AIFunction>().Any(t => t.Name == "list_traders"), Is.False);
-            Assert.That(client.ReceivedOptions[1].Tools.OfType<AIFunction>().Any(t => t.Name == "list_traders"), Is.True);
+            // 交易工具收在包裡：看包索引是否出現。
+            Assert.That(client.ReceivedOptions[0].Instructions ?? string.Empty, Does.Not.Contain("- trade:"));
+            Assert.That(client.ReceivedOptions[1].Instructions, Does.Contain("- trade:"));
         }
 
         [Test]

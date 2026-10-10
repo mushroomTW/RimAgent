@@ -832,8 +832,8 @@ namespace RimAgent.UI
             for (int i = Math.Max(0, from); i < entries.Count; i++)
             {
                 TranscriptEntry entry = entries[i];
-                // 每句 User 紀錄開啟新回合；第一行上面不畫分隔線。
-                bool turnStart = entry.Kind == TranscriptKind.User && _lines.Count > 0;
+                // 每句 User 紀錄開啟新回合（插話屬於進行中的回合）；第一行上面不畫分隔線。
+                bool turnStart = entry.Kind == TranscriptKind.User && !entry.Interjection && _lines.Count > 0;
                 _linesTotal += BuildEntryLines(entry, width, turnStart, _lines);
             }
             _linesEntryCount = entries.Count;
@@ -1271,7 +1271,7 @@ namespace RimAgent.UI
                                 Event.current.type == EventType.KeyDown &&
                                 (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
-            DrawInputField(inputRect);
+            DrawInputField(inputRect, session.IsBusy);
             if (DrawSendOrStop(session, buttonRect, canSend, enterPressed) && enterPressed)
             {
                 Event.current.Use();
@@ -1287,7 +1287,8 @@ namespace RimAgent.UI
                 {
                     StopRun();
                 }
-                if (!enterPressed || !isSlash) return false;
+                // 忙碌時按鈕留給停止；Enter 送出斜線指令或插話（Send 依忙碌狀態分流）。
+                if (!enterPressed || _input.Trim().Length == 0) return false;
                 Send(session);
                 return true;
             }
@@ -1307,7 +1308,7 @@ namespace RimAgent.UI
             if (component?.IsGoalRunning == true) component.PauseGoal();
         }
 
-        private void DrawInputField(Rect inputRect)
+        private void DrawInputField(Rect inputRect, bool busy)
         {
             Widgets.DrawBoxSolid(inputRect, ControlBgColor);
             DrawThinBox(inputRect, ControlBorderColor);
@@ -1324,7 +1325,8 @@ namespace RimAgent.UI
                 GUI.color = new Color(0.5f, 0.55f, 0.6f);
                 Text.WordWrap = false;
                 Text.Anchor = TextAnchor.MiddleLeft;
-                Widgets.Label(innerInputRect, "RimAgent.Placeholder".Translate().ToString().Truncate(innerInputRect.width));
+                string placeholder = (busy ? "RimAgent.PlaceholderBusy" : "RimAgent.Placeholder").Translate();
+                Widgets.Label(innerInputRect, placeholder.Truncate(innerInputRect.width));
                 Text.Anchor = TextAnchor.UpperLeft;
                 Text.WordWrap = true;
                 GUI.color = Color.white;
@@ -1730,10 +1732,23 @@ namespace RimAgent.UI
         {
             string text = _input.Trim();
             if (text.Length == 0) return;
+            // 執行中插話；確認、壓縮等非指令的忙碌不收，輸入框內容留著等忙完再送。
+            // 剛好在這瞬間跑完的照一般指令送出。
+            bool interjected = false;
+            if (text[0] != '/' && session.IsBusy)
+            {
+                interjected = session.Interject(text);
+                if (!interjected && session.IsBusy)
+                {
+                    Notice(session, "RimAgent.Slash.Busy".Translate());
+                    return;
+                }
+            }
             _input = string.Empty;
             RememberInput(text);
             _historyIndex = -1;
             _scrollToBottom = true;
+            if (interjected) return;
 
             if (SlashCommands.TryParse(text, out SlashCommand command, out string args))
             {

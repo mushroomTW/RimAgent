@@ -23,6 +23,7 @@
   <RimAgent.Window.ResizeTip>Drag the bottom-right corner to resize the window</RimAgent.Window.ResizeTip>
   <RimAgent.Close>Close</RimAgent.Close>
   <RimAgent.Placeholder>Tell the agent what to do, or type / for commands</RimAgent.Placeholder>
+  <RimAgent.PlaceholderBusy>Working… type here and press Enter to add to the current task</RimAgent.PlaceholderBusy>
   <RimAgent.Send>Send</RimAgent.Send>
   <RimAgent.Stop>Stop</RimAgent.Stop>
   <RimAgent.Confirm>Confirm</RimAgent.Confirm>

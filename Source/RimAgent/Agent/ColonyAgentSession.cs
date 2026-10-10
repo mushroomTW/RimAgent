@@ -35,6 +35,11 @@ namespace RimAgent.Agent
         private const int ManualSummaryPreservedGroups = 4;
 
         private readonly ChatClientAgent _agent;
+        private readonly RunOptionsCapture _runOptions;
+        private readonly FunctionInvokingChatClient _invoking;
+        private readonly AIFunction _toolPackLoader;
+        /// <summary>本段對話展開過的工具包；清除對話、讀檔或手動壓縮時重置。工具（主線程）與組請求（背景）都會碰，所以上鎖。</summary>
+        private readonly HashSet<string> _loadedPacks = new HashSet<string>(StringComparer.Ordinal);
 #pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
         private readonly CompactionProvider _compaction;
 #pragma warning restore MAAI001
@@ -80,10 +85,44 @@ namespace RimAgent.Agent
                 return response;
             }
         }
+        /// <summary>
+        /// 記下工具迴圈最近一步實際使用的 ChatOptions。掛在迴圈內側：迴圈可能中途換成複本
+        /// （ConversationId 改變、最後一輪剝除工具），每一步送出時記的都是當下那份。
+        /// load_toolpack 在這一步的工具執行期間改它；迴圈下一步重讀（或複製）options.Tools，新清單就生效。
+        /// </summary>
+        private sealed class RunOptionsCapture : DelegatingChatClient
+        {
+            private ChatOptions _current;
+
+            public RunOptionsCapture(IChatClient innerClient) : base(innerClient) { }
+
+            public override async Task<ChatResponse> GetResponseAsync(
+                IEnumerable<ChatMessage> messages,
+                ChatOptions options = null,
+                CancellationToken cancellationToken = default)
+            {
+                Volatile.Write(ref _current, options);
+                return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            }
+
+            public void AddTools(IEnumerable<AITool> tools)
+            {
+                ChatOptions options = Volatile.Read(ref _current);
+                if (options == null) return;
+                var list = new List<AITool>(options.Tools ?? Array.Empty<AITool>());
+                foreach (AITool tool in tools)
+                {
+                    if (!list.Contains(tool)) list.Add(tool);
+                }
+                options.Tools = list;
+            }
+        }
+
         /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
         private readonly IChatClient _summarizer;
         private readonly IGameWorld _world;
         private readonly AgentMemoryStore _memory;
+        private readonly PlayerInterjections _interjections = new PlayerInterjections();
         private readonly Func<string> _instructions;
         private readonly Func<string> _askNote;
         private AgentSession _session;
@@ -129,14 +168,22 @@ namespace RimAgent.Agent
             var classifier = new RiskClassifier(
                 new ModelSlotChatClient(classifierClient ?? innerClient, null, routing?.ClassifierReasoning),
                 classifierModel, classifierPrompt);
-            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider);
+            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections);
             // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
             _subagents = new SubagentTools(innerClient, _registry, Transcript, subagentsProvider, _permissions, () => Mode,
                 routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);
             _tokenUsage = new TokenTrackingChatClient(innerClient);
             _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
             _tokenUsage.ResponseObserved = RecordModelResponse;
-            _inner = _tokenUsage.AsMainThreadFunctionInvokingClient(maxSteps);
+            _runOptions = new RunOptionsCapture(_tokenUsage);
+            _inner = _runOptions.AsMainThreadFunctionInvokingClient(maxSteps);
+            _invoking = _inner as FunctionInvokingChatClient;
+            // 經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話。不碰遊戲世界，不扣自主模式的工具額度。
+            _toolPackLoader = new LoggingAIFunction(
+                AIFunctionFactory.Create(typeof(ToolPackTools).GetMethod(nameof(ToolPackTools.LoadToolpack)),
+                    new ToolPackTools(LoadToolPack), ToolPackTools.ToolName, null, null),
+                Transcript, world, ToolCategory.Observe, ToolRisk.Query, ConfirmGate, null, _registry.Outputs, _interjections,
+                consumesBudget: false);
             _summarizer = new ModelSlotChatClient(innerClient, routing?.CompactModel, routing?.CompactReasoning);
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
@@ -304,9 +351,9 @@ namespace RimAgent.Agent
         {
             int normalized = NormalizeSteps(maxSteps);
             if (Interlocked.Exchange(ref _maxSteps, normalized) == normalized) return;
-            if (_inner is FunctionInvokingChatClient invoking)
+            if (_invoking != null)
             {
-                invoking.MaximumIterationsPerRequest = normalized;
+                _invoking.MaximumIterationsPerRequest = normalized;
             }
         }
 
@@ -333,6 +380,7 @@ namespace RimAgent.Agent
         /// 送出一句玩家指令並等待 agent 做完。回傳最後一則 assistant 文字。
         /// 失敗時把錯誤寫進 transcript 並回傳 null；失敗那一輪的使用者訊息不會進歷史
         /// （AF 的 ChatHistoryProvider 在例外時略過儲存，等同以往的手動回滾）。
+        /// 執行中沒趕上工具結果的插話（<see cref="Interject"/>）會接著跑完才返回，回傳值仍是這句的回覆。
         /// </summary>
         /// <param name="autonomous">這句是排程器起的自主任務；只影響對話裡的標示，模型看到的內容相同。</param>
         /// <param name="maxToolSteps">本輪額外步數上限；自主排程器用它把單輪呼叫夾在剩餘每日預算內。</param>
@@ -353,7 +401,91 @@ namespace RimAgent.Agent
                 throw new InvalidOperationException("RimAgent is still working on the previous instruction.");
             }
 
-            string text = userText.Trim();
+            _interjections.Open();
+            try
+            {
+                string reply = await RunInstructionAsync(userText.Trim(), cancellationToken, autonomous, maxToolSteps, goalRun,
+                    displayText, reasoningOverride, onAccepted, echo: true).ConfigureAwait(false);
+                await RunLateInterjectionsAsync(cancellationToken).ConfigureAwait(false);
+                return reply;
+            }
+            finally
+            {
+                // 例外路徑的保險：忙碌結束後不留下永遠送不出的插話。
+                _interjections.CloseAndDiscard();
+                Volatile.Write(ref _busy, 0);
+            }
+        }
+
+        /// <summary>
+        /// 玩家在執行中送出的話：寫進對話並排入佇列，主 Agent 下一個工具結果會帶給模型；
+        /// 沒趕上的在本輪結束後接著當新指令跑。只在 <see cref="SendAsync"/> 執行期間收，其他時候回傳 false，
+        /// 呼叫端照一般指令送出（或在確認、壓縮等忙碌時提示稍候）。
+        /// </summary>
+        public bool Interject(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            string trimmed = text.Trim();
+            if (!_interjections.TryAdd(trimmed)) return false;
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.User,
+                Text = trimmed,
+                InstructionId = Transcript.CurrentInstructionId,
+                Interjection = true
+            });
+            return true;
+        }
+
+        /// <summary>
+        /// 本輪最後已不再呼叫工具時，佇列裡的插話接著當新指令跑（同一段忙碌期間，不與排程器或目標搶執行權）。
+        /// 原指令的回覆不變，目標判讀不受影響。按了停止就不再送，丟棄並留一則說明。
+        /// 有命令等玩家確認時也不送：新指令會作廢那些確認，玩家連確認列都還沒看到。
+        /// </summary>
+        private async Task RunLateInterjectionsAsync(CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    DropInterjections("the run was stopped");
+                    return;
+                }
+                if (HasPendingConfirmation)
+                {
+                    DropInterjections("commands are waiting for confirmation; confirm or discard them, then send it again");
+                    return;
+                }
+                string next = _interjections.TakeAllOrClose();
+                if (next == null) return;
+                await RunInstructionAsync(next, cancellationToken, false, null, false, null, null, null, echo: false).ConfigureAwait(false);
+            }
+        }
+
+        private void DropInterjections(string reason)
+        {
+            int dropped = _interjections.CloseAndDiscard();
+            if (dropped == 0) return;
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = dropped + " message(s) sent while RimAgent was working were not delivered because " + reason + ".",
+                InstructionId = Transcript.CurrentInstructionId
+            });
+        }
+
+        /// <param name="echo">false 代表這句已經以插話顯示在對話裡，不再寫一次。</param>
+        private async Task<string> RunInstructionAsync(
+            string text,
+            CancellationToken cancellationToken,
+            bool autonomous,
+            int? maxToolSteps,
+            bool goalRun,
+            string displayText,
+            ReasoningLevel? reasoningOverride,
+            Action onAccepted,
+            bool echo)
+        {
             // 新指令取代等待中的確認，先記錄捨棄，再建立新指令的編號。
             DiscardPendingConfirmation();
             // 句內快取（分類器判定、查詢結果）不跨指令，下一句重來。
@@ -367,14 +499,17 @@ namespace RimAgent.Agent
             } : null;
             _activeRunLog = runLog;
             string runOutcome = "finished";
-            Transcript.Add(new TranscriptEntry
+            if (echo)
             {
-                Kind = TranscriptKind.User,
-                Text = displayText ?? text,
-                InstructionId = instructionId,
-                Autonomous = autonomous,
-                GoalRun = goalRun
-            });
+                Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.User,
+                    Text = displayText ?? text,
+                    InstructionId = instructionId,
+                    Autonomous = autonomous,
+                    GoalRun = goalRun
+                });
+            }
             onAccepted?.Invoke();
             Undo.BeginFrame();
             ConfirmGate.BeginToolBudget(maxToolSteps);
@@ -448,7 +583,6 @@ namespace RimAgent.Agent
                 ConfirmGate.EndToolBudget();
                 ApplyRunStepLimit(null);
                 PrepareSaveSnapshot();
-                Volatile.Write(ref _busy, 0);
             }
         }
 
@@ -530,9 +664,9 @@ namespace RimAgent.Agent
 
         private void ApplyRunStepLimit(int? overrideSteps)
         {
-            if (!(_inner is FunctionInvokingChatClient invoking)) return;
+            if (_invoking == null) return;
             int configured = MaxSteps;
-            invoking.MaximumIterationsPerRequest = overrideSteps.HasValue
+            _invoking.MaximumIterationsPerRequest = overrideSteps.HasValue
                 ? Math.Max(1, Math.Min(configured, overrideSteps.Value))
                 : configured;
         }
@@ -553,6 +687,8 @@ namespace RimAgent.Agent
             ConfirmGate.DiscardPendingApprovals();
             ConfirmGate.ClearSessionApprovals();
             ResetInstructionCaches();
+            _registry.Outputs.Clear();
+            UnloadToolPacks();
             Transcript.Clear();
             Undo.Clear();
         }
@@ -607,6 +743,8 @@ namespace RimAgent.Agent
                 }
                 provider.SetMessages(_session, after.ToList());
                 _tokenUsage.Reset();
+                // 展開紀錄多半已被摘要掉，包跟著收回，工具清單回到精簡狀態。
+                UnloadToolPacks();
                 string summary = $"Context compacted: model history {before.Count} -> {after.Count} messages. Visible log kept.";
                 AddNotice(summary);
                 return summary;
@@ -789,6 +927,8 @@ namespace RimAgent.Agent
             // 讀進來的內容先當快照：讀檔後第一句還在跑時存檔，也不會漏掉舊歷史。
             _saveSnapshot = _serializedSession;
             _session = null;
+            _registry.Outputs.Clear();
+            UnloadToolPacks();
         }
 
         private string SerializeSession(AgentSession session)
@@ -923,7 +1063,12 @@ namespace RimAgent.Agent
         internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride = null)
         {
             ToolPermissions permissions = _permissions();
-            IList<AITool> tools = _registry.Select(permissions, Mode);
+            AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, Mode, LoadedPacks());
+            IList<AITool> tools = selected.Advertised;
+            IReadOnlyList<ToolPacks.Pack> packs = selected.Packs;
+            if (packs.Count > 0) tools.Add(_toolPackLoader);
+            // 包內工具照常可執行、只是不公告；同樣受權限與模式過濾，每輪依當下設定重設。
+            if (_invoking != null) _invoking.AdditionalTools = selected.PackTools.Values.SelectMany(t => t).ToList();
             IReadOnlyList<AgentSubagent> subagents = permissions.Allows(ToolCategory.Agents)
                 ? _subagents.Available(permissions, Mode)
                 : Array.Empty<AgentSubagent>();
@@ -937,12 +1082,43 @@ namespace RimAgent.Agent
             };
             ModelSlots.ApplyReasoning(options, reasoningOverride ?? Reasoning);
             if (!string.IsNullOrWhiteSpace(PreferredModel)) options.ModelId = PreferredModel.Trim();
-            string instructions = ComposeRunInstructions(permissions, subagents);
+            string instructions = ComposeRunInstructions(permissions, subagents, packs);
             if (instructions != null) options.Instructions = instructions;
             return options;
         }
 
-        private string ComposeRunInstructions(ToolPermissions permissions, IReadOnlyList<AgentSubagent> subagents)
+        /// <summary>load_toolpack 的本體：照目前權限與模式展開，記進本段對話，並把工具加進這一輪送出中的清單。</summary>
+        private string LoadToolPack(string pack)
+        {
+            ToolPermissions permissions = _permissions();
+            AgentMode mode = Mode;
+            AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, mode, null);
+            IReadOnlyList<ToolPacks.Pack> available = selected.Packs;
+            string wanted = (pack ?? string.Empty).Trim();
+            ToolPacks.Pack match = available.FirstOrDefault(p => string.Equals(p.Id, wanted, StringComparison.OrdinalIgnoreCase));
+            if (match == null)
+            {
+                return ToolText.Error("unknown or unavailable tool pack \"" + wanted + "\". Available: " +
+                    (available.Count == 0 ? "none" : string.Join(", ", available.Select(p => p.Id))) + ".");
+            }
+            List<AITool> tools = selected.PackTools[match.Id];
+            lock (_loadedPacks) _loadedPacks.Add(match.Id);
+            _runOptions.AddTools(tools);
+            return "Loaded tool pack " + match.Id + ": " + string.Join(", ", tools.Select(t => t.Name)) +
+                   ". These tools are available from your next step.";
+        }
+
+        private List<string> LoadedPacks()
+        {
+            lock (_loadedPacks) return _loadedPacks.ToList();
+        }
+
+        private void UnloadToolPacks()
+        {
+            lock (_loadedPacks) _loadedPacks.Clear();
+        }
+
+        private string ComposeRunInstructions(ToolPermissions permissions, IReadOnlyList<AgentSubagent> subagents, IReadOnlyList<ToolPacks.Pack> packs)
         {
             // Run 層覆寫 agent 層的核心提示詞：擴充包內容變更後下一句立即生效，不必重建會話。
             string instructions = null;
@@ -960,6 +1136,11 @@ namespace RimAgent.Agent
                 {
                     instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + note.Trim();
                 }
+            }
+            if (packs.Count > 0)
+            {
+                // 包索引只隨權限與模式改變，展開與否不影響，放在易變的記憶索引之前。
+                instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + ToolPackTools.Index(packs);
             }
             if (subagents.Count > 0)
             {
