@@ -38,11 +38,12 @@ namespace RimAgent.Tools
         private readonly ToolOutputStore _outputs;
         private readonly PlayerInterjections _interjections;
         private readonly bool _consumesBudget;
+        private readonly AgentActivityTracker _activity;
 
         private bool RequiresExplicitConfirmation =>
             _gate != null && _gate.RequiresExplicitConfirmation(Name);
 
-        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true)
+        public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true, AgentActivityTracker activity = null)
             : base(inner)
         {
             _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -54,13 +55,18 @@ namespace RimAgent.Tools
             _outputs = outputs;
             _interjections = interjections;
             _consumesBudget = consumesBudget;
+            _activity = activity;
         }
 
         protected override async ste::System.Threading.Tasks.ValueTask<object> InvokeCoreAsync(
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
-            object result = await InvokeLoggedAsync(arguments, cancellationToken);
+            object result;
+            using (_activity?.Begin(AgentActivityKind.Tool, Name))
+            {
+                result = await InvokeLoggedAsync(arguments, cancellationToken);
+            }
             // 玩家執行中插話：附在主 Agent 這次的工具結果後面送給模型。只附在送回的文字，
             // 行動紀錄、查詢快取與失敗紀錄都存工具本身的結果。子代理的工具不取，免得話被子代理吃掉。
             string interjection = _transcript.CurrentAgent.Length == 0 ? _interjections?.TakeAll() : null;
@@ -205,7 +211,11 @@ namespace RimAgent.Tools
             _gate?.ForceExecute();
             try
             {
-                object result = await base.InvokeCoreAsync(arguments, cancellationToken);
+                object result;
+                using (_activity?.Begin(AgentActivityKind.Tool, Name))
+                {
+                    result = await base.InvokeCoreAsync(arguments, cancellationToken);
+                }
                 string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), _outputs);
                 // 確認執行是真正的世界寫入：同句的查詢快取作廢。
                 _gate?.InvalidateQueryCache();
@@ -274,14 +284,18 @@ namespace RimAgent.Tools
             // 沒走到閘門（參數錯、目標不存在）就沒有可判定的命令，原樣回給模型。
             if (!preview.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) return previewResult;
 
-            RiskVerdict verdict = await _classifier.ClassifyAsync(new RiskQuestion
+            RiskVerdict verdict;
+            using (_activity?.Begin(AgentActivityKind.Checking, Name))
             {
-                Instruction = _transcript.CurrentInstructionText,
-                ToolName = Name,
-                Arguments = entry.Arguments,
-                // 分類器也是模型呼叫：預覽過長會直接撐爆它的視窗，這裡照同一個上限縮。
-                Preview = ToolOutputLimit.Apply(preview.Substring(ToolText.ConfirmationPrefix.Length))
-            }, cancellationToken);
+                verdict = await _classifier.ClassifyAsync(new RiskQuestion
+                {
+                    Instruction = _transcript.CurrentInstructionText,
+                    ToolName = Name,
+                    Arguments = entry.Arguments,
+                    // 分類器也是模型呼叫：預覽過長會直接撐爆它的視窗，這裡照同一個上限縮。
+                    Preview = ToolOutputLimit.Apply(preview.Substring(ToolText.ConfirmationPrefix.Length))
+                }, cancellationToken);
+            }
             string riskCheck;
             if (verdict.Failed)
             {

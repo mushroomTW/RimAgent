@@ -66,6 +66,7 @@ namespace RimAgent.Tools
         private readonly ConfirmationGate _gate;
         private readonly RiskClassifier _classifier;
         private readonly PlayerInterjections _interjections;
+        private readonly AgentActivityTracker _activity;
 
         public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, null, null)
         {
@@ -77,7 +78,7 @@ namespace RimAgent.Tools
         }
 
 #pragma warning disable S107 // Tool registry aggregates all domain tool implementations
-        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null)
+        public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null)
 #pragma warning restore S107
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
@@ -86,6 +87,7 @@ namespace RimAgent.Tools
             _gate = gate;
             _classifier = classifier;
             _interjections = interjections;
+            _activity = activity;
 
             Register(new ObserveTools(world, gate), transcript);
             Register(new ChoiceTools(world, gate), transcript);
@@ -256,7 +258,7 @@ namespace RimAgent.Tools
                 Category = category,
                 Risk = risk,
                 Pack = ToolPacks.PackOf(function.Name, category),
-                Tool = new LoggingAIFunction(function, transcript, _world, category, risk, _gate, _classifier, Outputs, _interjections)
+                Tool = new LoggingAIFunction(function, transcript, _world, category, risk, _gate, _classifier, Outputs, _interjections, activity: _activity)
             });
         }
     }

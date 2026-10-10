@@ -31,6 +31,10 @@
   <RimAgent.ConfirmAlways>Always allow</RimAgent.ConfirmAlways>
   <RimAgent.ConfirmNote>The plan above is a preview — nothing has changed yet.</RimAgent.ConfirmNote>
   <RimAgent.Working>Agent is working…</RimAgent.Working>
+  <RimAgent.Activity.Thinking>Agent is thinking…</RimAgent.Activity.Thinking>
+  <RimAgent.Activity.Tool>Running {0}…</RimAgent.Activity.Tool>
+  <RimAgent.Activity.Checking>Safety check on {0}…</RimAgent.Activity.Checking>
+  <RimAgent.Activity.Compacting>Compacting the conversation…</RimAgent.Activity.Compacting>
   <RimAgent.NoGame>Load a colony first.</RimAgent.NoGame>
   <RimAgent.EmptyReply>(the agent finished without a reply)</RimAgent.EmptyReply>
   <RimAgent.ToolsStripped>Tools were not available for this reply: the model that answered does not support tool calling, so nothing was changed.</RimAgent.ToolsStripped>
@@ -182,7 +186,7 @@
   <RimAgent.Settings.AutoCompactThreshold>Auto-compact threshold: {0}% of context window</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>Uses the framework's model context limit and estimated history tokens. Auto-fold is unavailable when the limit is unknown.</RimAgent.Settings.AutoCompactThresholdTip>
   <RimAgent.Settings.RunLogHeader>Run history</RimAgent.Settings.RunLogHeader>
-  <RimAgent.Settings.RecordRuns>Record Agent runs (off by default)</RimAgent.Settings.RecordRuns>
+  <RimAgent.Settings.RecordRuns>Record Agent runs</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>Log file: {0}</RimAgent.Settings.RunLogPath>
   <RimAgent.Settings.OpenLogFolder>Open folder</RimAgent.Settings.OpenLogFolder>
   <RimAgent.Settings.OpenLogFolderFailed>Could not open the log folder: {0}</RimAgent.Settings.OpenLogFolderFailed>

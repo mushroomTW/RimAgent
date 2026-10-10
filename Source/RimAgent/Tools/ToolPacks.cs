@@ -28,7 +28,7 @@ namespace RimAgent.Tools
         public static readonly IReadOnlyList<Pack> All = new[]
         {
             new Pack("combat", "draft colonists, move them, attack and force jobs"),
-            new Pack("medical", "detailed health, medical care levels and surgery"),
+            new Pack("medical", "injuries, diseases and health conditions (get_health), medical care levels and surgery"),
             new Pack("zone", "stockpiles and growing zones, storage filters"),
             new Pack("production", "production bills"),
             new Pack("animal", "list, tame and train animals, animal areas"),

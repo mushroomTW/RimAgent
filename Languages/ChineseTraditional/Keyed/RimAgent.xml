@@ -31,6 +31,10 @@
   <RimAgent.ConfirmAlways>本局不再問</RimAgent.ConfirmAlways>
   <RimAgent.ConfirmNote>上面是預覽，還沒有改動任何東西。</RimAgent.ConfirmNote>
   <RimAgent.Working>Agent 執行中…</RimAgent.Working>
+  <RimAgent.Activity.Thinking>Agent 思考中…</RimAgent.Activity.Thinking>
+  <RimAgent.Activity.Tool>正在執行 {0}…</RimAgent.Activity.Tool>
+  <RimAgent.Activity.Checking>安全分類器檢查 {0} 中…</RimAgent.Activity.Checking>
+  <RimAgent.Activity.Compacting>正在壓縮對話…</RimAgent.Activity.Compacting>
   <RimAgent.NoGame>請先載入殖民地。</RimAgent.NoGame>
   <RimAgent.EmptyReply>（Agent 結束了但沒有回覆）</RimAgent.EmptyReply>
   <RimAgent.ToolsStripped>這次回覆沒有工具可用：回答的模型不支援工具呼叫，因此沒有改動任何東西。</RimAgent.ToolsStripped>
@@ -183,7 +187,7 @@
   <RimAgent.Settings.AutoCompactThreshold>自動壓縮門檻：上下文視窗的 {0}%</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>依框架提供的模型視窗上限與歷史 token 估算值觸發；上限未知時不自動折疊。</RimAgent.Settings.AutoCompactThresholdTip>
   <RimAgent.Settings.RunLogHeader>執行復盤</RimAgent.Settings.RunLogHeader>
-  <RimAgent.Settings.RecordRuns>記錄 Agent 運行過程（預設關閉）</RimAgent.Settings.RecordRuns>
+  <RimAgent.Settings.RecordRuns>記錄 Agent 運行過程</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>紀錄檔：{0}</RimAgent.Settings.RunLogPath>
   <RimAgent.Settings.OpenLogFolder>開啟資料夾</RimAgent.Settings.OpenLogFolder>
   <RimAgent.Settings.OpenLogFolderFailed>無法開啟紀錄資料夾：{0}</RimAgent.Settings.OpenLogFolderFailed>

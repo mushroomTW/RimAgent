@@ -152,11 +152,15 @@ namespace RimAgent.UI
         private TextCache<string> _modelLabel = new TextCache<string>();
         private float _modelLabelWidth = -1f;
         private readonly TextCache<int> _autoUsageLabel = new TextCache<int>();
-        private readonly TextCache<int> _workingLabel = new TextCache<int>();
+        // 執行中提示的快取：活動（參考比對）與動畫格任一改變才重組字串。
+        private AgentActivity _workingActivity;
+        private int _workingPhase = -1;
+        private string _workingText;
         private readonly TextCache<bool> _jumpLabel = new TextCache<bool>();
         private string _toolToggleTip;
         private float _workingHeight;
         private float _workingHeightWidth = -1f;
+        private string _workingHeightText;
         private float _settlingWidth = -1f;
         private int _settlingSince;
         private float _linesTotal;
@@ -410,7 +414,7 @@ namespace RimAgent.UI
             EnsureTranscriptLines(session.Transcript, width, out bool deferReflow);
 
             float lineWidth = deferReflow ? _linesWidth : width;
-            GetWorkingIndicator(session.IsBusy, width, out string working, out float workingHeight);
+            GetWorkingIndicator(session.IsBusy, session.Activity.Current, width, out string working, out float workingHeight);
             float total = _linesTotal + (working != null ? workingHeight + EntryGap : 0f);
 
             TranscriptScrollLayout scrollLayout = UpdateScrollPosition(total, width, outRect);
@@ -486,18 +490,26 @@ namespace RimAgent.UI
             }
         }
 
-        private void GetWorkingIndicator(bool isBusy, float width, out string working, out float workingHeight)
+        private void GetWorkingIndicator(bool isBusy, AgentActivity activity, float width, out string working, out float workingHeight)
         {
             working = null;
             workingHeight = 0f;
             if (!isBusy) return;
 
-            working = _workingLabel.Get(WorkingPhase(), phase => ColorTagPrefix + PauseHex + ">"
-                + "RimAgent.Working".Translate().ToString().TrimEnd('…', '.', ' ') + WorkingDots(phase) + ColorTagClose);
-            if (Mathf.Abs(width - _workingHeightWidth) > 0.001f)
+            int phase = WorkingPhase();
+            if (_workingText == null || !ReferenceEquals(activity, _workingActivity) || phase != _workingPhase)
+            {
+                _workingActivity = activity;
+                _workingPhase = phase;
+                _workingText = ColorTagPrefix + PauseHex + ">"
+                    + ActivityText(activity).TrimEnd('…', '.', ' ') + WorkingDots(phase) + ColorTagClose;
+            }
+            working = _workingText;
+            if (Mathf.Abs(width - _workingHeightWidth) > 0.001f || !ReferenceEquals(working, _workingHeightText))
             {
                 _workingHeight = Text.CalcHeight(working, width);
                 _workingHeightWidth = width;
+                _workingHeightText = working;
             }
             workingHeight = _workingHeight;
         }
@@ -789,6 +801,23 @@ namespace RimAgent.UI
                 RenderTexture.active = previous;
                 if (step != null) RenderTexture.ReleaseTemporary(step);
                 UnityEngine.Object.Destroy(full);
+            }
+        }
+
+        /// <summary>執行中提示：依 Agent 此刻實際在做的事顯示；尚未得知時只說執行中。</summary>
+        private static string ActivityText(AgentActivity activity)
+        {
+            if (activity == null) return "RimAgent.Working".Translate().ToString();
+            switch (activity.Kind)
+            {
+                case AgentActivityKind.Tool:
+                    return "RimAgent.Activity.Tool".Translate(activity.ToolName).ToString();
+                case AgentActivityKind.Checking:
+                    return "RimAgent.Activity.Checking".Translate(activity.ToolName).ToString();
+                case AgentActivityKind.Compacting:
+                    return "RimAgent.Activity.Compacting".Translate().ToString();
+                default:
+                    return "RimAgent.Activity.Thinking".Translate().ToString();
             }
         }
 

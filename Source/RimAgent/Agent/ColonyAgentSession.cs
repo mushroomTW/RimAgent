@@ -147,6 +147,28 @@ namespace RimAgent.Agent
         /// <param name="classifierClient">自動模式分類器用的 client；null 則與 innerClient 共用（測試可另給假 client）。</param>
         /// <param name="classifierModel">自動模式分類器指定使用的模型識別碼 provider；null 則沿用框架預設。</param>
         /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
+        /// <summary>等模型回覆期間把活動標成思考中；主 Agent 與子代理的模型呼叫都經過它。</summary>
+        private sealed class ThinkingActivityClient : DelegatingChatClient
+        {
+            private readonly AgentActivityTracker _activity;
+
+            public ThinkingActivityClient(IChatClient innerClient, AgentActivityTracker activity) : base(innerClient)
+            {
+                _activity = activity;
+            }
+
+            public override async Task<ChatResponse> GetResponseAsync(
+                IEnumerable<ChatMessage> messages,
+                ChatOptions options = null,
+                CancellationToken cancellationToken = default)
+            {
+                using (_activity.Begin(AgentActivityKind.Thinking))
+                {
+                    return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+
         /// <param name="askNote">詢問模式附加註記（AgentPack/Prompts/AskMode.md）；null 則詢問模式不加註。</param>
         /// <param name="subagentsProvider">AgentPack/Agents 載入的子代理；null 或空清單則不提供委派工具。</param>
         /// <param name="routing">分類器、/compact 摘要與子代理的模型槽；null 則全部沿用框架備援鏈與 Auto 思考強度。</param>
@@ -168,14 +190,14 @@ namespace RimAgent.Agent
             var classifier = new RiskClassifier(
                 new ModelSlotChatClient(classifierClient ?? innerClient, null, routing?.ClassifierReasoning),
                 classifierModel, classifierPrompt);
-            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections);
+            _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity);
             // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
-            _subagents = new SubagentTools(innerClient, _registry, Transcript, subagentsProvider, _permissions, () => Mode,
+            _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity), _registry, Transcript, subagentsProvider, _permissions, () => Mode,
                 routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);
             _tokenUsage = new TokenTrackingChatClient(innerClient);
             _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
             _tokenUsage.ResponseObserved = RecordModelResponse;
-            _runOptions = new RunOptionsCapture(_tokenUsage);
+            _runOptions = new RunOptionsCapture(new ThinkingActivityClient(_tokenUsage, Activity));
             _inner = _runOptions.AsMainThreadFunctionInvokingClient(maxSteps);
             _invoking = _inner as FunctionInvokingChatClient;
             // 經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話。不碰遊戲世界，不扣自主模式的工具額度。
@@ -183,7 +205,7 @@ namespace RimAgent.Agent
                 AIFunctionFactory.Create(typeof(ToolPackTools).GetMethod(nameof(ToolPackTools.LoadToolpack)),
                     new ToolPackTools(LoadToolPack), ToolPackTools.ToolName, null, null),
                 Transcript, world, ToolCategory.Observe, ToolRisk.Query, ConfirmGate, null, _registry.Outputs, _interjections,
-                consumesBudget: false);
+                consumesBudget: false, activity: Activity);
             _summarizer = new ModelSlotChatClient(innerClient, routing?.CompactModel, routing?.CompactReasoning);
             _maxSteps = NormalizeSteps(maxSteps);
             // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
@@ -206,6 +228,9 @@ namespace RimAgent.Agent
         }
 
         public AgentTranscript Transcript { get; }
+
+        /// <summary>Agent 此刻實際在做的事，供視窗的執行中提示；不存檔。</summary>
+        public AgentActivityTracker Activity { get; } = new AgentActivityTracker();
 
         /// <summary>工作設定復原堆疊（工作優先級與時間表）。UI 的復原鍵經此操作。</summary>
         public WorkUndoStack Undo { get; }
@@ -714,6 +739,7 @@ namespace RimAgent.Agent
             {
                 throw new InvalidOperationException("RimAgent is still working on the previous instruction.");
             }
+            IDisposable compacting = Activity.Begin(AgentActivityKind.Compacting);
             try
             {
                 var provider = _agent.ChatHistoryProvider as InMemoryChatHistoryProvider;
@@ -762,6 +788,7 @@ namespace RimAgent.Agent
             }
             finally
             {
+                compacting.Dispose();
                 PrepareSaveSnapshot();
                 Volatile.Write(ref _busy, 0);
             }

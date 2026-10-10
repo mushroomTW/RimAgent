@@ -69,7 +69,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_colonist_wellbeing", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Shows one colonist's needs, equipment and active mood thoughts. Reach for it when a colonist's mood, hunger, rest or recreation is low and you need the cause.")]
+        [Description("Shows one colonist's needs, equipment and active mood thoughts. Reach for it when a colonist's mood, hunger, rest or recreation is low and you need the cause. Does not cover injuries or diseases; those are in get_health (medical tools).")]
         public string GetColonistWellbeing([Description("Colonist name, nickname or id.")] string colonist)
         {
             Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
