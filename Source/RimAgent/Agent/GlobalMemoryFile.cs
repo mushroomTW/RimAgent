@@ -37,7 +37,7 @@ namespace RimAgent.Agent
             }
         }
 
-        /// <summary>寫回全域記憶；先寫暫存檔再換檔，中途失敗不會留下半個檔。</summary>
+        /// <summary>寫回全域記憶；先寫暫存檔再原子換檔，任何時間點中斷都至少留著完整的舊檔或新檔。</summary>
         public static void Save(string path, IReadOnlyList<AgentMemoryEntry> entries)
         {
             if (string.IsNullOrEmpty(path)) return;
@@ -51,8 +51,8 @@ namespace RimAgent.Agent
             if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
             string temp = path + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(document, Options), Utf8);
-            if (File.Exists(path)) File.Delete(path);
-            File.Move(temp, path);
+            if (File.Exists(path)) File.Replace(temp, path, null);
+            else File.Move(temp, path);
         }
 
         private static List<AgentMemoryEntry> ToEntries(MemoryDocumentDto document)

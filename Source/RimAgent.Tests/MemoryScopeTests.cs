@@ -154,7 +154,7 @@ namespace RimAgent.Tests
         }
 
         [Test]
-        public void IndexIsCappedAtTheMemoryIndexLimit()
+        public void IndexListsEveryFileWhenBothScopesAreFull()
         {
             var save = new AgentMemoryStore();
             var global = new AgentMemoryStore();
@@ -167,9 +167,22 @@ namespace RimAgent.Tests
             // net472 沒有 Split(char, StringSplitOptions)（Mono 專屬），一律傳 char 陣列。
             string[] lines = new ScopedMemoryStore(save, global).Index.Split(new[] { '\n' });
 
-            Assert.That(lines.Length, Is.EqualTo(MemoryScopes.MaxIndexEntries));
+            Assert.That(lines.Length, Is.EqualTo(AgentMemoryStore.MaxFiles * 2), "兩邊都滿也不會有檔案落在索引外");
             Assert.That(lines[0], Is.EqualTo("- **global_note00.md**"), "兩個範圍一起排序");
-            Assert.That(lines[lines.Length - 1], Is.EqualTo("- **note19.md**"));
+            Assert.That(lines[lines.Length - 1], Is.EqualTo("- **note29.md**"));
+        }
+
+        [Test]
+        public void SavingOverAnExistingGlobalFileReplacesItWithoutLeavingATempFile()
+        {
+            GlobalMemoryFile.Save(_globalPath, new List<AgentMemoryEntry> { new AgentMemoryEntry { name = "global_a.md", content = "old" } });
+            GlobalMemoryFile.Save(_globalPath, new List<AgentMemoryEntry> { new AgentMemoryEntry { name = "global_a.md", content = "new" } });
+
+            AgentMemoryStore reloaded = GlobalMemoryFile.Load(_globalPath, out string warning);
+
+            Assert.That(warning, Is.Null);
+            Assert.That(reloaded.ReadAsync("global_a.md").GetAwaiter().GetResult(), Is.EqualTo("new"));
+            Assert.That(File.Exists(_globalPath + ".tmp"), Is.False, "暫存檔換進正式檔後不留下");
         }
 
         [Test]

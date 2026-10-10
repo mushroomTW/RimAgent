@@ -12,8 +12,8 @@ namespace RimAgent.Agent
     {
         /// <summary>全域記憶的檔名前綴。</summary>
         public const string GlobalPrefix = "global_";
-        /// <summary>系統提示裡的索引筆數上限；與 FileMemoryProvider 自己重建的索引上限一致。</summary>
-        public const int MaxIndexEntries = 50;
+        /// <summary>系統提示裡的索引筆數上限；兩個範圍都滿時也要全部列得進去。</summary>
+        public const int MaxIndexEntries = AgentMemoryStore.MaxFiles * 2;
 
         /// <summary>這個檔名是否屬全域記憶。</summary>
         public static bool IsGlobal(string name)
