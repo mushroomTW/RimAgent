@@ -112,6 +112,18 @@ namespace RimAgent.Game
         /// 成功時 Message 為選到的選項文字；對話框可能接著出現下一段（再查 GetPendingChoices）。
         /// </summary>
         CommandResult ChooseOption(string choiceId, int option);
+        /// <summary>
+        /// 任務分頁的任務：可接受（含被拒絕、不含已過期）與進行中，不含已結束與隱藏的。
+        /// </summary>
+        IReadOnlyList<QuestInfo> GetQuests();
+        /// <summary>
+        /// 照任務分頁的接受鈕接受任務。rewardNumber 為獎勵選項序號（沒有選項或只有一組時可為 0），
+        /// accepterPawnId 為接受者（任務不需要接受者時為 0）。條件不滿足、已過期、接受者不合格都回失敗並帶遊戲的原因。
+        /// 成功時 Message 為接受明細。
+        /// </summary>
+        CommandResult AcceptQuest(int questId, int rewardNumber, int accepterPawnId);
+        /// <summary>照任務分頁的拒絕鈕拒絕或取消拒絕一個尚未接受的任務（任務照常到期，只是從可接受頁收起來）。</summary>
+        CommandResult SetQuestDismissed(int questId, bool dismissed);
         /// <summary>物件目前看得到的指令按鈕（不含開發者模式按鈕）；找不到或在迷霧裡的物件回傳 null。</summary>
         IReadOnlyList<GizmoInfo> GetGizmos(int thingId);
         /// <summary>

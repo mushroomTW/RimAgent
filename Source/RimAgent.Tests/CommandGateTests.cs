@@ -35,6 +35,8 @@ namespace RimAgent.Tests
             ["set_forbidden"] = Args(("forbidden", false), ("x1", -1), ("z1", -1), ("x2", -1), ("z2", -1), ("filter", "")),
             ["choose_option"] = Args(("choiceId", "letter-12"), ("option", 1)),
             ["use_gizmo"] = Args(("thingId", 300), ("gizmo", "Launch ship")),
+            ["accept_quest"] = Args(("questId", 40), ("reward", 0), ("accepter", "")),
+            ["dismiss_quest"] = Args(("questId", 40), ("dismissed", true)),
             ["execute_trade"] = Args(("trader", "PassingShip_1"), ("buys", "spacer component x1"), ("sells", ""), ("negotiator", "Ali")),
             ["form_caravan"] = Args(("colonists", "Bob"), ("heading", "N")),
             ["set_medical_care"] = Args(("colonist", "Ali"), ("level", "best")),
@@ -106,6 +108,7 @@ namespace RimAgent.Tests
                 Title = "Wanderer joins",
                 Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Accept" } }
             });
+            _world.Quests.Add(new QuestInfo { Id = 40, Name = "Hospitality request", State = QuestInfo.AvailableState });
             return _world;
         }
 

@@ -147,6 +147,58 @@ namespace RimAgent.Game
         public string DisabledReason { get; set; } = string.Empty;
     }
 
+    /// <summary>任務分頁裡的一個任務：可接受（含被拒絕的）或進行中。</summary>
+    public sealed class QuestInfo
+    {
+        public const string AvailableState = "available";
+        public const string ActiveState = "active";
+
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        /// <summary>available（還沒接受）或 active（已接受、進行中）。</summary>
+        public string State { get; set; } = AvailableState;
+        /// <summary>玩家在任務分頁按過拒絕（可再取消）；只對 available 有意義。</summary>
+        public bool Dismissed { get; set; }
+        /// <summary>純文字描述（標籤已去除，含各任務段落附加的說明）。</summary>
+        public string Description { get; set; } = string.Empty;
+        /// <summary>還剩幾 tick 過期（只對 available）；沒有期限為 null。</summary>
+        public int? ExpiresInTicks { get; set; }
+        /// <summary>進行中任務的完成期限，遊戲給的原文（例如「剩 3 天」）；沒有則為空。</summary>
+        public IReadOnlyList<string> Deadlines { get; set; } = Array.Empty<string>();
+        /// <summary>已接受者的名字（只對 active，且該任務有接受者）。</summary>
+        public string AccepterName { get; set; } = string.Empty;
+        /// <summary>遊戲目前是否允許接受（只對 available）。</summary>
+        public bool CanAccept { get; set; } = true;
+        /// <summary>接受條件不滿足的原因，遊戲給的原文；CanAccept 為 false 時至少有一筆。</summary>
+        public IReadOnlyList<string> UnmetRequirements { get; set; } = Array.Empty<string>();
+        /// <summary>獎勵選項；只有一組也算一個選項。沒有獎勵選擇的任務為空。</summary>
+        public IReadOnlyList<QuestRewardInfo> RewardOptions { get; set; } = Array.Empty<QuestRewardInfo>();
+        /// <summary>接受時要指名接受者（沒有獎勵選項的任務看這個；有選項的任務以各選項的 RequiresAccepter 為準）。</summary>
+        public bool RequiresAccepter { get; set; }
+        /// <summary>目前能當接受者的殖民者（只在任務需要接受者時列出）。</summary>
+        public IReadOnlyList<QuestAccepterInfo> Accepters { get; set; } = Array.Empty<QuestAccepterInfo>();
+    }
+
+    /// <summary>任務的一組獎勵選項（接受時選其一）。</summary>
+    public sealed class QuestRewardInfo
+    {
+        /// <summary>1 起的序號。</summary>
+        public int Number { get; set; }
+        public IReadOnlyList<string> Rewards { get; set; } = Array.Empty<string>();
+        /// <summary>選了這一組之後，接受時是否要指名接受者。</summary>
+        public bool RequiresAccepter { get; set; }
+    }
+
+    /// <summary>可以接受某個任務的殖民者。</summary>
+    public sealed class QuestAccepterInfo
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        /// <summary>遊戲在確認框提醒的風險（個性、社交能力等），沒有則為空。</summary>
+        public string Warning { get; set; } = string.Empty;
+    }
+
     public sealed class PowerInfo
     {
         public int NetworkCount { get; set; }

@@ -89,6 +89,7 @@ namespace RimAgent.InGameTests
                 Query("GetAlerts", () => _world.GetAlerts()),
                 Query("GetRecentLetters", () => _world.GetRecentLetters()),
                 Query("GetPendingChoices", () => _world.GetPendingChoices()),
+                Query("GetQuests", () => _world.GetQuests()),
                 Query("GetPower", () => _world.GetPower()),
                 Query("GetThreats", () => _world.GetThreats()),
                 Query("GetResearch", () => _world.GetResearch()),
@@ -376,6 +377,88 @@ namespace RimAgent.InGameTests
                 Find.TickManager.CurTimeSpeed = original;
             }
             TestHelpers.AssertNone(failures, "set_time_speed");
+        }
+
+        /// <summary>
+        /// 用原版產生一個需要玩家接受的任務（強盜營地或交易請求；物資藏匿點等 autoAccept 任務生成即接受，不適用），
+        /// 走過列出、拒絕、取消拒絕、接受，再以原版欄位讀回；結束後移除任務。
+        /// </summary>
+        [Test]
+        public static void QuestListDismissAndAccept()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(QuestListDismissAndAccept))) return;
+            Quest quest = GenerateManualQuest("OpportunitySite_BanditCamp", "TradeRequest");
+            if (quest == null)
+            {
+                TestHelpers.Skip(nameof(QuestListDismissAndAccept), "no manually accepted quest could be generated on this world");
+                return;
+            }
+            var failures = new List<string>();
+            try
+            {
+                QuestInfo info = _world.GetQuests().FirstOrDefault(q => q.Id == quest.id);
+                if (info == null) failures.Add("generated quest is missing from GetQuests");
+                else
+                {
+                    if (info.State != QuestInfo.AvailableState) failures.Add("state is " + info.State + ", expected available");
+                    if (string.IsNullOrEmpty(info.Name)) failures.Add("empty name");
+                    if (info.CanAccept != QuestUtility.CanAcceptQuest(quest).Accepted) failures.Add("CanAccept differs from vanilla");
+                }
+
+                CommandResult dismiss = _world.SetQuestDismissed(quest.id, true);
+                if (!dismiss.Success || !quest.dismissed) failures.Add("dismiss did not set quest.dismissed: " + dismiss.Error);
+                CommandResult restore = _world.SetQuestDismissed(quest.id, false);
+                if (!restore.Success || quest.dismissed) failures.Add("restore did not clear quest.dismissed: " + restore.Error);
+
+                if (QuestUtility.CanAcceptQuest(quest).Accepted)
+                {
+                    int accepter = quest.RequiresAccepter
+                        ? PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoSuspended
+                            .FirstOrDefault(p => QuestUtility.CanPawnAcceptQuest(p, quest))?.thingIDNumber ?? 0
+                        : 0;
+                    // 有獎勵選項的任務只能「以此獎勵接受」，選第一組。
+                    int reward = quest.PartsListForReading.OfType<QuestPart_Choice>().Any() ? 1 : 0;
+                    CommandResult accept = _world.AcceptQuest(quest.id, reward, accepter);
+                    if (!accept.Success) failures.Add("accept failed: " + accept.Error);
+                    else if (quest.State != QuestState.Ongoing) failures.Add("after accept the quest state is " + quest.State);
+                    if (_world.AcceptQuest(quest.id, reward, accepter).Success) failures.Add("accepting twice succeeded");
+                    if (!_world.GetQuests().Any(q => q.Id == quest.id && q.State == QuestInfo.ActiveState))
+                        failures.Add("accepted quest is not listed as active");
+                }
+                else
+                {
+                    failures.Add("item stash quest cannot be accepted: " + QuestUtility.CanAcceptQuest(quest).Reason);
+                }
+            }
+            finally
+            {
+                if (!quest.Historical) quest.End(QuestEndOutcome.Unknown, sendLetter: false, playSound: false);
+                Find.QuestManager.Remove(quest);
+            }
+            TestHelpers.AssertNone(failures, "quests");
+        }
+
+        /// <summary>依序嘗試產生任務，取第一個生成後仍待玩家接受的；生成失敗或自動接受的會移除。</summary>
+        private static Quest GenerateManualQuest(params string[] scripts)
+        {
+            foreach (string name in scripts)
+            {
+                QuestScriptDef script = DefDatabase<QuestScriptDef>.GetNamedSilentFail(name);
+                if (script == null || script.autoAccept) continue;
+                Quest quest;
+                try
+                {
+                    quest = QuestUtility.GenerateQuestAndMakeAvailable(script, 500f);
+                }
+                catch (Exception ex)
+                {
+                    Log.Message($"{TestHelpers.LogPrefix}{name} could not be generated: {ex.Message}");
+                    continue;
+                }
+                if (quest != null && quest.State == QuestState.NotYetAccepted) return quest;
+                if (quest != null) Find.QuestManager.Remove(quest);
+            }
+            return null;
         }
 
         private static KeyValuePair<string, Func<object>> Query(string name, Func<object> call) =>

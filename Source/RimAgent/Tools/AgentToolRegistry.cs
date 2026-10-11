@@ -91,6 +91,7 @@ namespace RimAgent.Tools
 
             Register(new ObserveTools(world, gate), transcript);
             Register(new ChoiceTools(world, gate), transcript);
+            Register(new QuestTools(world, gate), transcript);
             Register(new WorkTools(world, undo ?? new WorkUndoStack(), gate), transcript);
             Register(new BuildTools(world, gate), transcript);
             Register(new GizmoTools(world, gate), transcript);

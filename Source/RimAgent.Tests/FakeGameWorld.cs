@@ -24,6 +24,7 @@ namespace RimAgent.Tests
         public List<PendingChoiceInfo> PendingChoices { get; } = new List<PendingChoiceInfo>();
         /// <summary>物件 id → 指令按鈕；沒登記但存在的物件視為沒有按鈕。</summary>
         public Dictionary<int, List<GizmoInfo>> Gizmos { get; } = new Dictionary<int, List<GizmoInfo>>();
+        public List<QuestInfo> Quests { get; } = new List<QuestInfo>();
         /// <summary>下一次 ChooseOption 或按下 action 按鈕成功後接著出現的對話框（模擬多段對話與確認框）。</summary>
         public PendingChoiceInfo FollowUpDialog { get; set; }
         public PowerInfo Power { get; set; } = new PowerInfo();
@@ -513,6 +514,28 @@ namespace RimAgent.Tests
                 FollowUpDialog = null;
             }
             return CommandResult.Ok(picked.Text);
+        }
+
+        public IReadOnlyList<QuestInfo> GetQuests() => Quests;
+
+        public CommandResult AcceptQuest(int questId, int rewardNumber, int accepterPawnId)
+        {
+            Calls.Add($"AcceptQuest({questId},{rewardNumber},{accepterPawnId})");
+            QuestInfo quest = Quests.FirstOrDefault(q => q.Id == questId);
+            if (quest == null) return CommandResult.Fail("quest not found");
+            quest.State = QuestInfo.ActiveState;
+            quest.ExpiresInTicks = null;
+            quest.AccepterName = Colonists.FirstOrDefault(c => c.Id == accepterPawnId)?.Name ?? string.Empty;
+            return CommandResult.Ok(quest.Name);
+        }
+
+        public CommandResult SetQuestDismissed(int questId, bool dismissed)
+        {
+            Calls.Add($"SetQuestDismissed({questId},{dismissed})");
+            QuestInfo quest = Quests.FirstOrDefault(q => q.Id == questId);
+            if (quest == null) return CommandResult.Fail("quest not found");
+            quest.Dismissed = dismissed;
+            return CommandResult.Ok();
         }
 
         public IReadOnlyList<GizmoInfo> GetGizmos(int thingId)
