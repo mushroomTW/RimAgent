@@ -205,6 +205,24 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task SubagentStoppedAtTheStepLimitSaysSoInsteadOfReturningRawToolCalls()
+        {
+            var client = new ScriptedChatClient()
+                .CallTool(SubagentTools.ToolName, new { agent = "scout", tasks = new[] { "Look everywhere." } });
+            for (int i = 0; i < SubagentTools.MaxSteps; i++) client.CallTool("list_colonists", null);
+            client.Reply("<tool_call> <function=list_colonists> </function> </tool_call>")
+                  .Reply("The scout ran out of steps.");
+            ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
+                AgentMode.Confirm, new[] { Scout });
+
+            await session.SendAsync("survey the colony");
+
+            TranscriptEntry delegated = session.Transcript.Snapshot().Single(e => e.ToolName == SubagentTools.ToolName);
+            Assert.That(delegated.Result, Does.Not.Contain("<tool_call>"));
+            Assert.That(delegated.Result, Does.Contain("stopped at the subagent step limit"));
+        }
+
+        [Test]
         public async Task SubagentReasoningFromAgentFileOverridesSlot()
         {
             var client = new ScriptedChatClient()

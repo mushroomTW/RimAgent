@@ -855,17 +855,23 @@ namespace RimAgent
             {
                 Log.Warning("RimAgent autonomous run failed: " + ex.Message);
             }
+            // 冷卻、定期巡視與重試退避都從任務結束起算：一輪在高速下常跑掉十幾個遊戲小時，
+            // 從起跑算的話一結束就全部到期，上一輪的效果還沒反映到訊號上就接著再跑。
+            // 已回到主線程（上面的 await 沒加 ConfigureAwait(false)），讀得到結束當下的 tick；
+            // 任務期間玩家退回主選單時沒有遊戲可讀，這個排程器也跟著舊遊戲作廢，沿用起跑 tick 即可。
+            int finishTick = Current.Game != null ? Find.TickManager.TicksGame : tick;
             // 玩家按了停止就壓住該條件的重試（解除前不再跑）：憑 token 判斷，
             // SendAsync 吃掉取消沒擲 OCE 時同樣生效；沒消耗工具配額就不吃冷卻（其他條件不受影響）。
             bool stopped = cts.IsCancellationRequested;
-            if (stopped) _scheduler.Dismiss(trigger, tick);
+            if (stopped) _scheduler.Dismiss(trigger, finishTick);
             // 只數這一句的工具紀錄：transcript 會裁掉最舊的紀錄，前後相減會失準。
             int used = session.Transcript.Snapshot().Count(e =>
                 e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId && e.BudgetConsumed);
             if (used > 0 || !stopped)
             {
-                _scheduler.RecordRun(tick, used, config);
+                _scheduler.RecordRun(finishTick, used, config);
             }
+            _scheduler.RecordRunFinished(trigger, finishTick);
             HoldAfterConfigurationError(session, instructionId, tick);
         }
 

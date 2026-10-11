@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,6 +61,74 @@ namespace RimAgent.Tests
 
             Assert.That(text, Does.StartWith("Stopped waiting after about").And.Contain("new hostiles appeared"));
             Assert.That(_world.TicksGame, Is.LessThan(12 * 2500));
+        }
+
+        [Test]
+        public async Task WaitStopsEarlyWhenAColonistGoesDown()
+        {
+            _world.EventAtTick = 3000;
+            _world.OnEvent = () => _world.MedicalEmergencies.Add(101);
+
+            string text = await _tools.WaitForTime(12, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Stopped waiting after about").And.Contain("colonist went down or started bleeding"));
+            Assert.That(_world.TicksGame, Is.LessThan(12 * 2500));
+        }
+
+        [Test]
+        public async Task WaitStopsWhenANewColonistGoesDownEvenIfAnotherRecovered()
+        {
+            // 開始時 101、102 倒地；102 恢復的同時 103 倒下，人數仍是 2，但 103 是新的急診。
+            _world.MedicalEmergencies = new List<int> { 101, 102 };
+            _world.EventAtTick = 3000;
+            _world.OnEvent = () => _world.MedicalEmergencies = new List<int> { 101, 103 };
+
+            string text = await _tools.WaitForTime(12, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Stopped waiting after about").And.Contain("colonist went down"));
+            Assert.That(_world.TicksGame, Is.LessThan(12 * 2500));
+        }
+
+        [Test]
+        public async Task WaitStopsWhenARecoveredColonistGoesDownAgain()
+        {
+            _world.MedicalEmergencies = new List<int> { 101 };
+            _world.EventAtTick = 1000;
+            _world.OnEvent = () =>
+            {
+                _world.MedicalEmergencies = new List<int>();
+                _world.EventAtTick = 3000;
+                _world.OnEvent = () => _world.MedicalEmergencies = new List<int> { 101 };
+            };
+
+            string text = await _tools.WaitForTime(12, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Stopped waiting after about").And.Contain("colonist went down"));
+        }
+
+        [Test]
+        public async Task WaitStopsEarlyWhenAFireStarts()
+        {
+            _world.EventAtTick = 3000;
+            _world.OnEvent = () => _world.FireCount = 2;
+
+            string text = await _tools.WaitForTime(12, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Stopped waiting after about").And.Contain("fire started"));
+            Assert.That(_world.TicksGame, Is.LessThan(12 * 2500));
+        }
+
+        [Test]
+        public async Task WaitKeepsGoingForEmergenciesThatWereAlreadyThere()
+        {
+            // 和敵人同一規則：只看「變多」。模型開始等的時候就知道的狀況不該讓它一直提早回來。
+            _world.MedicalEmergencies = new List<int> { 101 };
+            _world.FireCount = 1;
+
+            string text = await _tools.WaitForTime(2, CancellationToken.None);
+
+            Assert.That(text, Does.StartWith("Waited 2 in-game hour(s)."));
+            Assert.That(_world.TicksGame, Is.EqualTo(2 * 2500));
         }
 
         [Test]

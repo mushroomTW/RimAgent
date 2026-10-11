@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
@@ -559,6 +560,8 @@ namespace RimAgent.Agent
                     text, instructionId, reasoningOverride, cancellationToken).ConfigureAwait(false);
 
                 string reply = FinalAssistantText(response);
+                bool hitStepLimit = HitStepLimit(response.Messages, _invoking?.MaximumIterationsPerRequest ?? 0);
+                if (hitStepLimit) reply = StripToolCallMarkup(reply);
                 if (goalRun) runOutcome = "goal_reported_" + GoalProgress.ParseStatus(reply).ToString().ToLowerInvariant();
                 Transcript.Add(new TranscriptEntry
                 {
@@ -567,7 +570,7 @@ namespace RimAgent.Agent
                     InstructionId = instructionId,
                     ToolsStripped = IsToolsStripped(response)
                 });
-                if (IsToolsStripped(response))
+                if (hitStepLimit)
                 {
                     Transcript.Add(new TranscriptEntry
                     {
@@ -1204,6 +1207,42 @@ namespace RimAgent.Agent
         {
             ChatMessage last = messages.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
             return last != null ? last.Text.Trim() : (fallback ?? string.Empty).Trim();
+        }
+
+        /// <summary>
+        /// 回應是否停在工具迴圈的步數上限：每一輪都在呼叫工具，最後一輪被 MEAI 拿掉工具強制作答。
+        /// 不能用 WereToolsStripped 判斷，那代表「供應商不支援工具」，和步數無關。
+        /// </summary>
+        internal static bool HitStepLimit(IEnumerable<ChatMessage> messages, int limit)
+        {
+            if (limit <= 0 || messages == null) return false;
+            int rounds = messages.Count(m => m.Role == ChatRole.Assistant && m.Contents.OfType<FunctionCallContent>().Any());
+            return rounds >= limit;
+        }
+
+        /// <summary>各家模型把工具呼叫寫成純文字時的開頭標記（Hermes／Qwen、Mistral、Llama）。</summary>
+        private static readonly string[] ToolCallMarkers = { "<tool_call", "<function=", "[TOOL_CALLS]", "<|tool_call", "<|python_tag|>" };
+
+        /// <summary>裸 JSON 形式的工具呼叫：{"name": "...", "arguments"／"parameters": ...}。</summary>
+        private static readonly Regex JsonToolCall = new Regex(
+            "\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"(arguments|parameters)\"\\s*:", RegexOptions.CultureInvariant);
+
+        /// <summary>
+        /// 步數用完的最後一輪沒有工具定義，有些模型會把想呼叫的工具寫成純文字。
+        /// 那段不是給玩家的回覆：從最早出現的工具呼叫標記起截掉，保留前面的正文（可能是空字串）。
+        /// </summary>
+        internal static string StripToolCallMarkup(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
+            int cut = text.Length;
+            foreach (string marker in ToolCallMarkers)
+            {
+                int index = text.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (index >= 0 && index < cut) cut = index;
+            }
+            Match json = JsonToolCall.Match(text);
+            if (json.Success && json.Index < cut) cut = json.Index;
+            return cut == text.Length ? text : text.Substring(0, cut).Trim();
         }
 
         private static bool IsToolsStripped(AgentResponse response)

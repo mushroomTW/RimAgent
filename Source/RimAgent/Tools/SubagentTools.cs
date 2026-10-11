@@ -219,8 +219,10 @@ namespace RimAgent.Tools
                 ChatResponse response = await _client.AsMainThreadFunctionInvokingClient(steps)
                     .GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
                 string report = ColonyAgentSession.FinalAssistantText(response.Messages, response.Text);
+                bool hitStepLimit = ColonyAgentSession.HitStepLimit(response.Messages, steps);
+                if (hitStepLimit) report = ColonyAgentSession.StripToolCallMarkup(report);
                 if (report.Length == 0) report = "(no report)";
-                if (response.WereToolsStripped()) report += "\n[stopped at the subagent step limit before finishing]";
+                if (hitStepLimit) report += "\n[stopped at the subagent step limit before finishing]";
                 return report;
             }
             catch (OperationCanceledException)

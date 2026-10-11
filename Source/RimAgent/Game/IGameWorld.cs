@@ -13,6 +13,10 @@ namespace RimAgent.Game
         ColonyOverview GetOverview();
         /// <summary>當前地圖上敵對目標的數量（與概況的 HostileCount 同一算法，但不必算整份概況）。</summary>
         int GetHostileCount();
+        /// <summary>當前地圖上處於急診的殖民者 id（倒地或流血危及生命，不含麻醉中；與排程器急診訊號同一判定）。</summary>
+        IReadOnlyList<int> GetColonistsInMedicalEmergency();
+        /// <summary>當前地圖上燃燒中的火數。</summary>
+        int GetFireCount();
         IReadOnlyList<ColonistInfo> GetColonists();
         IReadOnlyList<PrisonerInfo> GetPrisoners();
         /// <summary>地圖上的動物（殖民地與野生，見 AnimalInfo.Wild）。</summary>

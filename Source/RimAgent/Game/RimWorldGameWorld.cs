@@ -89,7 +89,7 @@ namespace RimAgent.Game
                     // 兩個心情門檻不疊加：快崩潰的算崩潰事件，不然同一件事報兩次。
                     nearBreak = IsNearMentalBreak(pawn);
                     low = !nearBreak && IsLowMood(pawn);
-                    downed = pawn.Downed || HasBleeding(pawn);
+                    downed = IsMedicalEmergency(pawn);
                     cold = IsInDangerousTemperature(pawn);
                     Building_Bed bed = pawn.ownership?.OwnedBed;
                     noBed = bed == null;
@@ -107,11 +107,6 @@ namespace RimAgent.Game
                 if (cold) ColdColonists++;
                 if (noBed) Bedless++;
                 if (bedOutdoors) OutdoorsBed++;
-            }
-
-            private static bool HasBleeding(Pawn pawn)
-            {
-                return pawn.health?.hediffSet?.BleedRateTotal > 0f;
             }
 
             private static bool IsInDangerousTemperature(Pawn pawn)
@@ -179,9 +174,27 @@ namespace RimAgent.Game
             // 會跑到其他模組程式的攻擊目標已在 CountHostiles 裡逐個隔離。
             hostileCount += CountHostiles(map);
             foodNutrition += map.resourceCounter.TotalHumanEdibleNutrition;
-            fireCount += map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
+            fireCount += FireCount(map);
             if (!anyPower && HasWorkingPower(map)) anyPower = true;
+            int bedlessBefore = accumulator.Bedless;
             accumulator.AccumulateColonists(map.mapPawns.FreeColonistsSpawned);
+            // 床蓋好之後殖民者要等到去睡覺才會認領；只看認領的話，床已經夠了訊號仍報沒床，
+            // 排程器就會在問題其實已解決時重試。同一張地圖上還沒人認領的床位先抵掉沒床的人。
+            int mapBedless = accumulator.Bedless - bedlessBefore;
+            if (mapBedless > 0) accumulator.Bedless -= Math.Min(mapBedless, FreeColonistBedSlots(map));
+        }
+
+        /// <summary>殖民者可以睡、還沒被認領的床位數（雙人床算兩位；不含囚犯、奴隸、醫療與嬰兒床）。</summary>
+        private static int FreeColonistBedSlots(Map map)
+        {
+            int free = 0;
+            foreach (Building building in map.listerBuildings.allBuildingsColonist)
+            {
+                if (!(building is Building_Bed bed) || !bed.def.building.bed_humanlike) continue;
+                if (!bed.ForColonists || bed.Medical || bed.ForHumanBabies) continue;
+                free += Math.Max(0, bed.SleepingSlotsCount - bed.OwnersForReading.Count);
+            }
+            return free;
         }
 
         /// <summary>有東西真的通電在跑（不只是接了發電機）。</summary>
@@ -207,6 +220,43 @@ namespace RimAgent.Game
         /// 下一波真襲擊就觸發不了。守巢的蟲族照算（蟲災本身就是襲擊）。火與敵方砲塔也不算。
         /// </summary>
         public int GetHostileCount() => CountHostiles(Map);
+
+        public IReadOnlyList<int> GetColonistsInMedicalEmergency()
+        {
+            var ids = new List<int>();
+            foreach (Pawn pawn in Map.mapPawns.FreeColonistsSpawned)
+            {
+                // 與排程器訊號一樣逐個隔離：其他模組的 pawn 丟例外就跳過，不讓等待工具整個失敗。
+                try
+                {
+                    if (IsMedicalEmergency(pawn)) ids.Add(pawn.thingIDNumber);
+                }
+                catch (Exception ex)
+                {
+                    WarnModError(pawn, "wait checks", ex);
+                }
+            }
+            return ids;
+        }
+
+        public int GetFireCount() => FireCount(Map);
+
+        /// <summary>排程器的火災訊號與 wait_for_time 的提早結束共用同一個算法。</summary>
+        private static int FireCount(Map map) => map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
+
+        /// <summary>流血到失血致死不到這麼久才算急診；小擦傷算出來要十幾天，不該打斷等待或起急診任務。</summary>
+        private const int LifeThreateningBleedTicks = GenDate.TicksPerDay;
+
+        /// <summary>
+        /// 急診的判定，排程器訊號與 wait_for_time 的提早結束共用：倒地，或流血到一天內會失血致死。
+        /// 麻醉中的不算：手術時病人本來就會倒地流血，那是排好的醫療行為，不是意外。
+        /// </summary>
+        private static bool IsMedicalEmergency(Pawn pawn)
+        {
+            if (pawn.health?.hediffSet == null) return pawn.Downed;
+            if (pawn.health.hediffSet.HasHediff(HediffDefOf.Anesthetic)) return false;
+            return pawn.Downed || HealthUtility.TicksUntilDeathDueToBloodLoss(pawn) < LifeThreateningBleedTicks;
+        }
 
         private static int CountHostiles(Map map)
         {
@@ -1032,12 +1082,15 @@ namespace RimAgent.Game
         public async System.Threading.Tasks.Task<CommandResult> WaitTicksAsync(int ticks, System.Threading.CancellationToken cancellationToken)
         {
             Verse.Game game = Current.Game;
+            Map map = Find.CurrentMap;
             int target = Find.TickManager.TicksGame + Math.Max(0, ticks);
             while (true)
             {
                 string notReady = GetNotReadyReason();
                 // 等待期間讀了別的檔：tick 已換一條時間軸，目標不再有意義。
                 if (notReady != null || Current.Game != game) return CommandResult.Fail(notReady ?? "a different game was loaded");
+                // 工具都作用在當前地圖：玩家切到別張地圖後，等待中的檢查與之後的指令都會換成那張圖，先回來讓模型知道。
+                if (Find.CurrentMap != map) return CommandResult.Fail("the current map changed");
                 if (Find.TickManager.TicksGame >= target) return CommandResult.Ok(string.Empty);
                 if (Find.TickManager.Paused) return CommandResult.Fail("the game is paused");
                 // 不加 ConfigureAwait(false)：續行要回主線程才能再讀 TickManager。

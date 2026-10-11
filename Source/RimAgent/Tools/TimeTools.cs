@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
@@ -51,7 +52,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("wait_for_time", ToolCategory.Time, ToolRisk.Safe)]
-        [Description("Lets in-game time pass while colonists carry out orders (building, hauling, harvesting, research), then returns the colony overview. Use this to wait for progress instead of calling query tools over and over. The game must be unpaused (see set_time_speed). Stops early when the game gets paused or new hostiles appear.")]
+        [Description("Lets in-game time pass while colonists carry out orders (building, hauling, harvesting, research), then returns the colony overview. Use this to wait for progress instead of calling query tools over and over. The game must be unpaused (see set_time_speed). Stops early when the game gets paused, the current map changes, new hostiles appear, a colonist goes down or starts bleeding badly (not from surgery under anesthesia), or a fire starts.")]
         public async Task<string> WaitForTime(
             [Description("In-game hours to wait, 1-24.")] int hours,
             CancellationToken cancellationToken)
@@ -61,8 +62,13 @@ namespace RimAgent.Tools
             string blocked = ToolText.Blocked(_gate, $"would let {hours} in-game hour(s) pass.");
             if (blocked != null) return blocked;
 
-            // 分段等：每段之間看一次敵人，等待中途來襲擊就先回來，不讓模型悶著頭等完整段時間。
+            // 分段等：每段之間看一次敵人、倒地流血與火災，任一變多就先回來，不讓模型悶著頭等完整段時間。
+            // 等待佔著整句指令，期間排程器也不會起急診或火災任務，只能靠這裡把模型叫回來處理。
             int hostilesBefore = _world.GetHostileCount();
+            // 急診比對的是人而不是人數：有人恢復的同時另一人倒下，人數不變也要叫回來。
+            // 已知名單跟著縮小，恢復後再次倒下的人也算新的。
+            var knownEmergencies = new HashSet<int>(_world.GetColonistsInMedicalEmergency());
+            int firesBefore = _world.GetFireCount();
             int total = hours * TicksPerHour;
             int waited = 0;
             string stopReason = null;
@@ -79,6 +85,18 @@ namespace RimAgent.Tools
                 if (_world.GetHostileCount() > hostilesBefore)
                 {
                     stopReason = "new hostiles appeared";
+                    break;
+                }
+                IReadOnlyList<int> emergencies = _world.GetColonistsInMedicalEmergency();
+                if (emergencies.Any(id => !knownEmergencies.Contains(id)))
+                {
+                    stopReason = "a colonist went down or started bleeding badly";
+                    break;
+                }
+                knownEmergencies.IntersectWith(emergencies);
+                if (_world.GetFireCount() > firesBefore)
+                {
+                    stopReason = "a fire started";
                     break;
                 }
             }

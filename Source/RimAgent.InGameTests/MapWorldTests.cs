@@ -77,6 +77,8 @@ namespace RimAgent.InGameTests
             {
                 Query("GetOverview", () => _world.GetOverview()),
                 Query("GetHostileCount", () => _world.GetHostileCount()),
+                Query("GetColonistsInMedicalEmergency", () => _world.GetColonistsInMedicalEmergency()),
+                Query("GetFireCount", () => _world.GetFireCount()),
                 Query("GetColonists", () => _world.GetColonists()),
                 Query("GetPrisoners", () => _world.GetPrisoners()),
                 Query("GetAnimals", () => _world.GetAnimals()),
@@ -304,6 +306,55 @@ namespace RimAgent.InGameTests
                 }
             }
             TestHelpers.AssertNone(failures, "place_blueprint");
+        }
+
+        /// <summary>剛蓋好、還沒人認領的床要抵掉沒床的人：殖民者去睡覺前，排程器不該一直以為床不夠。</summary>
+        [Test]
+        public static void UnclaimedBedOffsetsBedlessColonists()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(UnclaimedBedOffsetsBedlessColonists))) return;
+            Map map = Find.CurrentMap;
+            int before = _world.GetAutonomousSignals().BedlessCount;
+            if (before == 0)
+            {
+                TestHelpers.Skip(nameof(UnclaimedBedOffsetsBedlessColonists), "no colonist is short of a bed");
+                return;
+            }
+            // 單人床 1x2、雙人床 2x2，朝北都放得進一塊 2x2。只挑完全沒東西的格子：
+            // 生成建築預設會把格子上的植物、汙物直接刪掉，事後無法復原。
+            CellRect? found = FindFreeRect(map, 2, c => c.Standable(map) && c.GetThingList(map).Count == 0);
+            if (found == null)
+            {
+                TestHelpers.Skip(nameof(UnclaimedBedOffsetsBedlessColonists), "no empty 2x2 area near the colonists");
+                return;
+            }
+            var cell = new IntVec3(found.Value.minX, 0, found.Value.minZ);
+            var failures = new List<string>();
+            CheckBed(map, cell, ThingDefOf.Bed, null, Math.Max(0, before - 1), before, "unclaimed single bed", failures);
+            CheckBed(map, cell, ThingDefOf.Bed, b => b.Medical = true, before, before, "medical bed", failures);
+            CheckBed(map, cell, ThingDefOf.Bed, b => b.ForPrisoners = true, before, before, "prisoner bed", failures);
+            ThingDef doubleBed = DefDatabase<ThingDef>.GetNamedSilentFail("DoubleBed");
+            if (doubleBed != null) CheckBed(map, cell, doubleBed, null, Math.Max(0, before - 2), before, "unclaimed double bed", failures);
+            TestHelpers.AssertNone(failures, "bedless signal");
+        }
+
+        /// <summary>生成一張床（可再設定用途），比對沒床人數是否符合預期，再拆掉。</summary>
+        private static void CheckBed(Map map, IntVec3 cell, ThingDef def, Action<Building_Bed> configure, int expected, int before,
+            string label, List<string> failures)
+        {
+            var bed = (Building_Bed)ThingMaker.MakeThing(def, GenStuff.DefaultStuffFor(def));
+            bed.SetFaction(Faction.OfPlayer);
+            try
+            {
+                GenSpawn.Spawn(bed, cell, map, Rot4.North);
+                configure?.Invoke(bed);
+                int after = _world.GetAutonomousSignals().BedlessCount;
+                if (after != expected) failures.Add($"{label}: bedless {before} -> {after}, expected {expected}");
+            }
+            finally
+            {
+                if (!bed.Destroyed) bed.Destroy();
+            }
         }
 
         [Test]

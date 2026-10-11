@@ -374,13 +374,28 @@ namespace RimAgent.Agent
             w.GaveUp = true;
         }
 
-        /// <summary>自主任務結束後記錄：推進冷卻、累計本次消耗的工具呼叫次數。</summary>
+        /// <summary>自主任務結束後記錄：推進冷卻、累計本次消耗的工具呼叫次數。<paramref name="tick"/> 傳任務結束的時刻，冷卻與定期巡視都從這裡起算。</summary>
         public void RecordRun(long tick, int toolCalls, AutonomousConfig config)
         {
             ResetWindowIfNeeded(tick, config);
             _lastRunTick = tick;
             _toolsUsed += toolCalls < 0 ? 0 : toolCalls;
             _runs++;
+        }
+
+        /// <summary>
+        /// 自主任務結束時呼叫：觸發它的條件改從結束時刻起算重試退避。
+        /// 一輪任務在高速下常跑掉十幾個遊戲小時（LLM 延遲＋任務內等待），從觸發時刻算的話，
+        /// 任務一結束重試就已到期，上一輪做的事還沒反映到訊號上就被當成失敗重來。
+        /// 沒觸發過的條件、定期巡視與抉擇不走重試表，不受影響。
+        /// </summary>
+        public void RecordRunFinished(AutonomousTrigger trigger, long tick)
+        {
+            int index = (int)trigger;
+            if (index < 0 || index >= WatcherCount) return;
+            ref Watcher w = ref _watch[index];
+            if (!w.Fired) return;
+            w.LastTick = tick;
         }
 
         public void Reset()

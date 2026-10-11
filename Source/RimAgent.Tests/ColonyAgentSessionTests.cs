@@ -194,6 +194,58 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task HittingTheStepLimitAddsTheNoticeAndHidesRawToolCallText()
+        {
+            // 步數用完時 MEAI 會拿掉工具再要一次回覆；有些模型（Nemotron）就把工具呼叫寫成純文字。
+            _client.CallTool("get_colony_overview", null)
+                   .CallTool("get_colony_overview", null)
+                   .Reply("<tool_call> <function=inspect_area> <parameter=x1> 124 </parameter> </function> </tool_call>");
+            ColonyAgentSession session = NewSession(maxSteps: 2);
+
+            await session.SendAsync("look around");
+
+            IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
+            TranscriptEntry reply = entries.Last(e => e.Kind == TranscriptKind.Assistant);
+            Assert.That(reply.Text, Does.Not.Contain("<tool_call>"), "原始工具呼叫標記不能當成回覆給玩家看");
+            Assert.That(reply.ToolsStripped, Is.False, "這不是供應商不支援工具");
+            Assert.That(entries.Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget was reached")), Is.True);
+        }
+
+        [TestCase("I placed two beds. <tool_call> <function=inspect_area> </function> </tool_call>", "I placed two beds.")]
+        [TestCase("Research started.\n[TOOL_CALLS][{\"name\":\"list_colonists\",\"arguments\":{}}]", "Research started.")]
+        [TestCase("Done for now. {\"name\": \"inspect_area\", \"arguments\": {\"x1\": 1}}", "Done for now.")]
+        [TestCase("<|python_tag|>{\"name\": \"list_colonists\", \"parameters\": {}}", "")]
+        [TestCase("Everything is fine.", "Everything is fine.")]
+        public void StripToolCallMarkupKeepsTheProseBeforeTheFirstCall(string text, string expected)
+        {
+            Assert.That(ColonyAgentSession.StripToolCallMarkup(text), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public async Task FinishingWithinTheStepLimitHasNoBudgetNotice()
+        {
+            _client.CallTool("get_colony_overview", null).Reply("All good.");
+            ColonyAgentSession session = NewSession(maxSteps: 2);
+
+            await session.SendAsync("look around");
+
+            IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
+            Assert.That(entries.Last(e => e.Kind == TranscriptKind.Assistant).Text, Is.EqualTo("All good."));
+            Assert.That(entries.Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget")), Is.False);
+        }
+
+        [Test]
+        public async Task StrippedToolsDoNotClaimTheStepBudgetWasReached()
+        {
+            _client.ReplyWithToolsStripped("I cannot use tools right now.");
+            ColonyAgentSession session = NewSession();
+            await session.SendAsync("do something");
+
+            // 供應商不支援工具時，UI 會依 ToolsStripped 顯示正確原因；不該再多一條「步數用完」的錯誤說明。
+            Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget")), Is.False);
+        }
+
+        [Test]
         public async Task StrippedToolsAreFlaggedOnTheReply()
         {
             _client.ReplyWithToolsStripped("I cannot use tools right now.");

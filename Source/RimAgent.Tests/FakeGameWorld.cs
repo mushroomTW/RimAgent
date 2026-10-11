@@ -245,6 +245,10 @@ namespace RimAgent.Tests
 
         public ColonyOverview GetOverview() => Overview;
         public int GetHostileCount() => Overview.HostileCount;
+        public List<int> MedicalEmergencies { get; set; } = new List<int>();
+        public IReadOnlyList<int> GetColonistsInMedicalEmergency() => MedicalEmergencies.ToList();
+        public int FireCount { get; set; }
+        public int GetFireCount() => FireCount;
         public IReadOnlyList<ColonistInfo> GetColonists()
         {
             ColonistQueryCount++;

@@ -116,6 +116,48 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void RetryBackoffCountsFromWhenTheRunFinished()
+        {
+            _config.OnFire = true;
+            _config.CooldownTicks = 0;
+            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            Assert.That(_scheduler.Evaluate(0, fire, _config), Is.EqualTo(AutonomousTrigger.Fire));
+            // 任務跑了 10000 tick（Superfast 下 LLM 延遲＋任務內等待很常見）才結束。
+            _scheduler.RecordRunFinished(AutonomousTrigger.Fire, 10000);
+
+            Assert.That(_scheduler.Evaluate(10500, fire, _config), Is.EqualTo(AutonomousTrigger.None),
+                "從觸發算早就過了 2500，但上一輪剛結束、效果還沒時間反映，不能立刻重試");
+            Assert.That(_scheduler.Evaluate(12500, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "結束後滿一段退避才重試");
+        }
+
+        [Test]
+        public void CooldownAndHeartbeatCountFromTheRecordedFinishTick()
+        {
+            // 呼叫端傳的是任務結束 tick：一輪從 0 跑到 20000 才結束。
+            _scheduler.RecordRun(20000, 5, _config);
+            var raid = new AutonomousSignals { HostileCount = 3, FoodNutrition = 100f, ColonistCount = 3 };
+            Assert.That(_scheduler.Evaluate(21000, raid, _config), Is.EqualTo(AutonomousTrigger.None), "結束後的冷卻還沒過");
+            Assert.That(_scheduler.Evaluate(22500, raid, _config), Is.EqualTo(AutonomousTrigger.Raid), "冷卻從結束起算");
+
+            var other = new AutonomousScheduler();
+            other.RecordRun(20000, 5, _config);
+            Assert.That(other.Evaluate(30000, Calm(), _config), Is.EqualTo(AutonomousTrigger.None),
+                "從起跑算早就超過 6 小時，但上一輪剛結束，不能馬上接一輪巡視");
+            Assert.That(other.Evaluate(35000, Calm(), _config), Is.EqualTo(AutonomousTrigger.Interval), "結束後滿一個間隔才巡視");
+        }
+
+        [Test]
+        public void RecordRunFinishedIgnoresTriggersOutsideTheRetryTable()
+        {
+            _config.OnFire = true;
+            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            _scheduler.RecordRunFinished(AutonomousTrigger.Fire, 5000);
+            Assert.That(_scheduler.Evaluate(5500, fire, _config), Is.EqualTo(AutonomousTrigger.Fire), "沒觸發過的條件不受影響");
+            Assert.DoesNotThrow(() => _scheduler.RecordRunFinished(AutonomousTrigger.Interval, 6000));
+            Assert.DoesNotThrow(() => _scheduler.RecordRunFinished(AutonomousTrigger.None, 6000));
+        }
+
+        [Test]
         public void ClearingTheConditionRearmsForTheNextOccurrence()
         {
             _config.OnFire = true;
