@@ -2824,6 +2824,429 @@ namespace RimAgent.Game
             return CommandResult.Ok($"Formed {caravan.Name} with {names}, heading {display}.");
         }
 
+        // ---- 世界地圖：商隊與世界物件 ----
+
+        private static Caravan FindPlayerCaravan(int id)
+        {
+            return Find.WorldObjects.Caravans.FirstOrDefault(c => c.ID == id && c.IsPlayerControlled);
+        }
+
+        /// <summary>
+        /// 查詢與距離的起點：指定的商隊，否則當前地圖所在的格子。找不到起點時回傳無效格（呼叫端要檢查 Valid）。
+        /// </summary>
+        private static PlanetTile ResolveOrigin(int originCaravanId, out Caravan caravan, out string label)
+        {
+            caravan = originCaravanId >= 0 ? FindPlayerCaravan(originCaravanId) : null;
+            if (caravan != null)
+            {
+                label = caravan.LabelCap;
+                return caravan.Tile;
+            }
+            Map map = Find.CurrentMap;
+            if (map == null)
+            {
+                label = "no map";
+                return PlanetTile.Invalid;
+            }
+            label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID);
+            return map.Tile;
+        }
+
+        /// <summary>工具給的格子編號對到起點同一個星球層的格子（預設地表）。</summary>
+        private static PlanetTile ToPlanetTile(int id, PlanetTile origin)
+        {
+            return origin.Valid ? new PlanetTile(id, origin.Layer) : new PlanetTile(id);
+        }
+
+        private static bool TileInWorld(PlanetTile tile)
+        {
+            return tile.Valid && Find.WorldGrid.InBounds(tile);
+        }
+
+        /// <summary>格子的白話名稱：上面有世界物件就用物件名與編號（排除商隊），否則是格子編號加生態。</summary>
+        private static string DescribeWorldTile(PlanetTile tile)
+        {
+            if (!TileInWorld(tile)) return "no tile";
+            WorldObject obj = Find.WorldObjects.ObjectsAt(tile).FirstOrDefault(o => !(o is Caravan));
+            string text = "tile " + tile.tileId + " (" + tile.Tile.PrimaryBiome.LabelCap + ")";
+            return obj == null ? text : obj.LabelCap + " [" + obj.ID + "], " + text;
+        }
+
+        public IReadOnlyList<CaravanInfo> GetCaravans()
+        {
+            return Find.WorldObjects.Caravans.Where(c => c.IsPlayerControlled).Select(ToCaravanInfo).ToList();
+        }
+
+        private static CaravanInfo ToCaravanInfo(Caravan caravan)
+        {
+            // 就地建立的可否與原因直接讀原版商隊按鈕（Caravan.GetGizmos 的同一組判斷）。
+            Command settle = SettleInEmptyTileUtility.SettleCommand(caravan);
+            Command camp = SettleInEmptyTileUtility.SetupCamp(caravan);
+            // 沒在走時 Destination 是上次的殘值（struct 預設是有效的 0 號格），只在 Moving 時讀。
+            bool moving = caravan.pather.Moving;
+            PlanetTile destination = moving ? caravan.pather.Destination : PlanetTile.Invalid;
+            return new CaravanInfo
+            {
+                Id = caravan.ID,
+                Name = caravan.LabelCap,
+                Tile = caravan.Tile,
+                Terrain = caravan.Tile.Tile.PrimaryBiome.LabelCap + ", " + caravan.Tile.Tile.hilliness.GetLabelCap(),
+                Members = caravan.PawnsListForReading.Select(ToCaravanMember).ToList(),
+                Moving = moving,
+                Paused = caravan.pather.Paused,
+                Resting = caravan.NightResting,
+                Immobilized = caravan.ImmobilizedByMass,
+                AllOwnersDowned = caravan.AllOwnersDowned,
+                AllOwnersInMentalBreak = caravan.AllOwnersHaveMentalBreak,
+                DestinationTile = destination.Valid ? destination.tileId : -1,
+                DestinationLabel = destination.Valid ? DescribeWorldTile(destination) : string.Empty,
+                ArrivalAction = moving ? SafeArrivalActionLabel(caravan.pather.ArrivalAction) : string.Empty,
+                EtaTicks = moving ? CaravanArrivalTimeEstimator.EstimatedTicksToArrive(caravan, allowCaching: false) : 0,
+                FoodDays = DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(caravan),
+                MassUsage = caravan.MassUsage,
+                MassCapacity = caravan.MassCapacity,
+                TicksPerMove = caravan.TicksPerMove,
+                CanSettle = !settle.Disabled,
+                SettleBlockedReason = settle.Disabled ? PlainText(settle.disabledReason) : string.Empty,
+                CanCamp = !camp.Disabled,
+                CampBlockedReason = camp.Disabled ? PlainText(camp.disabledReason) : string.Empty,
+                ObjectsHere = Find.WorldObjects.ObjectsAt(caravan.Tile).Where(o => o != caravan).Select(o => o.LabelCap + " [" + o.ID + "]").ToList()
+            };
+        }
+
+        /// <summary>抵達動作的標籤；模組的動作可能在欄位為空時丟例外，當作沒有。</summary>
+        private static string SafeArrivalActionLabel(CaravanArrivalAction action)
+        {
+            if (action == null) return string.Empty;
+            try
+            {
+                return PlainText(action.Label);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("RimAgent: could not read a caravan arrival action label: " + ex.Message);
+                return string.Empty;
+            }
+        }
+
+        private static CaravanMemberInfo ToCaravanMember(Pawn pawn)
+        {
+            string kind = CaravanMemberInfo.OtherKind;
+            if (pawn.IsPrisoner) kind = CaravanMemberInfo.PrisonerKind;
+            else if (pawn.IsSlave) kind = CaravanMemberInfo.SlaveKind;
+            else if (pawn.RaceProps.Animal) kind = CaravanMemberInfo.AnimalKind;
+            else if (pawn.RaceProps.IsMechanoid) kind = CaravanMemberInfo.MechKind;
+            else if (pawn.IsColonist) kind = CaravanMemberInfo.ColonistKind;
+            return new CaravanMemberInfo
+            {
+                Id = pawn.thingIDNumber,
+                Name = pawn.LabelShort,
+                Kind = kind,
+                Downed = pawn.Downed,
+                InMentalState = pawn.InMentalState,
+                HealthPercent = pawn.health?.summaryHealth?.SummaryHealthPercent ?? 1f
+            };
+        }
+
+        public WorldSurveyInfo GetWorldSurvey(int originCaravanId)
+        {
+            PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan fromCaravan, out string label);
+            Dictionary<int, List<WorldObjectQuestLink>> quests = QuestLinksByWorldObject();
+            var objects = new List<WorldObjectInfo>();
+            foreach (WorldObject obj in Find.WorldObjects.AllWorldObjects)
+            {
+                if (!obj.Spawned || !obj.Tile.Valid) continue;
+                if (origin.Valid && obj.Tile.Layer != origin.Layer) continue;
+                if (obj is RoutePlannerWaypoint) continue;
+                if (obj is Caravan own && own.IsPlayerControlled) continue;
+                objects.Add(ToWorldObjectInfo(obj, origin, quests));
+            }
+            return new WorldSurveyInfo
+            {
+                OriginTile = origin.Valid ? origin.tileId : -1,
+                OriginLabel = label,
+                OriginIsCaravan = fromCaravan != null,
+                Objects = objects
+            };
+        }
+
+        private static WorldObjectInfo ToWorldObjectInfo(WorldObject obj, PlanetTile origin, Dictionary<int, List<WorldObjectQuestLink>> quests)
+        {
+            Faction faction = obj.Faction;
+            string kind = WorldObjectInfo.OtherKind;
+            if (obj is Settlement) kind = faction == Faction.OfPlayer ? WorldObjectInfo.PlayerSettlementKind : WorldObjectInfo.FactionSettlementKind;
+            else if (obj is Site) kind = WorldObjectInfo.SiteKind;
+            else if (obj is Camp) kind = WorldObjectInfo.CampKind;
+            else if (obj is Caravan) kind = WorldObjectInfo.CaravanKind;
+            var info = new WorldObjectInfo
+            {
+                Id = obj.ID,
+                Kind = kind,
+                Label = obj.LabelCap,
+                DefName = obj.def.defName,
+                Tile = obj.Tile.tileId,
+                Faction = faction?.Name ?? string.Empty,
+                Hostile = faction != null && faction != Faction.OfPlayer && faction.HostileTo(Faction.OfPlayer),
+                HasMap = obj is MapParent mapParent && mapParent.HasMap,
+                DistanceTiles = origin.Valid ? Find.WorldGrid.ApproxDistanceInTiles(origin, obj.Tile) : 0f,
+                Quests = quests.TryGetValue(obj.ID, out List<WorldObjectQuestLink> links) ? links : new List<WorldObjectQuestLink>()
+            };
+            if (obj is Site site)
+            {
+                info.ExpiresInTicks = site.WorldObjectTimeoutTicksLeft;
+                if (site.sitePartsKnown)
+                    info.Detail = string.Join(", ", site.parts.Select(p => p.def.label).Distinct().ToArray());
+            }
+            return info;
+        }
+
+        /// <summary>世界物件編號 → 把它列為目標的任務（待接受與進行中）；任務目標清單來自各任務段落的 QuestLookTargets。</summary>
+        private static Dictionary<int, List<WorldObjectQuestLink>> QuestLinksByWorldObject()
+        {
+            var links = new Dictionary<int, List<WorldObjectQuestLink>>();
+            foreach (Quest quest in Find.QuestManager.QuestsListForReading)
+            {
+                if (quest.hidden || quest.hiddenInUI) continue;
+                if (quest.State != QuestState.NotYetAccepted && quest.State != QuestState.Ongoing) continue;
+                try
+                {
+                    foreach (WorldObject obj in quest.QuestLookTargets.Where(t => t.HasWorldObject).Select(t => t.WorldObject).Where(o => o != null).Distinct())
+                    {
+                        if (!links.TryGetValue(obj.ID, out List<WorldObjectQuestLink> list)) links[obj.ID] = list = new List<WorldObjectQuestLink>();
+                        list.Add(new WorldObjectQuestLink { QuestId = quest.id, QuestName = PlainText(quest.name), Active = quest.State == QuestState.Ongoing });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("RimAgent: could not read the world targets of quest " + quest.id + ": " + ex.Message);
+                }
+            }
+            return links;
+        }
+
+        public IReadOnlyList<TravelEstimateInfo> GetTravelEstimates(int originCaravanId, IReadOnlyList<int> tiles)
+        {
+            PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan fromCaravan, out string _);
+            var result = new List<TravelEstimateInfo>();
+            foreach (int id in tiles)
+            {
+                PlanetTile to = ToPlanetTile(id, origin);
+                var estimate = new TravelEstimateInfo { Tile = id };
+                if (origin.Valid && TileInWorld(to) && to.Layer == origin.Layer)
+                {
+                    estimate.DistanceTiles = Find.WorldGrid.ApproxDistanceInTiles(origin, to);
+                    estimate.Reachable = fromCaravan != null ? fromCaravan.CanReach(to) : Find.WorldReachability.CanReach(origin, to);
+                    // 沒有商隊時傳 null：遊戲以預設速度（每格 3300 tick）估算。
+                    if (estimate.Reachable && origin != to)
+                        estimate.Ticks = CaravanArrivalTimeEstimator.EstimatedTicksToArrive(origin, to, fromCaravan);
+                }
+                result.Add(estimate);
+            }
+            return result;
+        }
+
+        public WorldTileInfo GetWorldTile(int tile, int originCaravanId)
+        {
+            PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan _, out string _);
+            PlanetTile pt = ToPlanetTile(tile, origin);
+            if (!TileInWorld(pt))
+                return new WorldTileInfo { Tile = tile, Error = $"tile {tile} does not exist on this layer of the world (valid ids are 0 to {pt.Layer.TilesCount - 1})" };
+            RimWorld.Planet.Tile data = Find.WorldGrid[pt];
+            var reason = new System.Text.StringBuilder();
+            bool canSettle = TileFinder.IsValidTileForNewSettlement(pt, reason);
+            if (canSettle && SettleUtility.PlayerSettlementsCountLimitReached)
+            {
+                canSettle = false;
+                reason.Append(Prefs.MaxNumberOfPlayerSettlements > 1
+                    ? "CommandSettleFailReachedMaximumNumberOfBases".Translate().ToString()
+                    : "CommandSettleFailAlreadyHaveBase".Translate().ToString());
+            }
+            Dictionary<int, List<WorldObjectQuestLink>> quests = QuestLinksByWorldObject();
+            Landmark landmark = data.Landmark;
+            return new WorldTileInfo
+            {
+                Tile = tile,
+                Biome = data.PrimaryBiome.LabelCap,
+                Hilliness = data.hilliness.GetLabelCap(),
+                TemperatureC = data.temperature,
+                MinTemperatureC = data.MinTemperature,
+                MaxTemperatureC = data.MaxTemperature,
+                RainfallMm = data.rainfall,
+                ElevationM = data.elevation,
+                Impassable = Find.World.Impassable(pt),
+                WaterCovered = data.WaterCovered,
+                Coastal = data.IsCoastal,
+                Feature = data.feature?.name ?? string.Empty,
+                Landmark = landmark == null ? string.Empty : (landmark.name.NullOrEmpty() ? landmark.def.label : landmark.name),
+                Mutators = data.Mutators.Select(m => m.label).ToList(),
+                CanSettle = canSettle,
+                SettleBlockedReason = canSettle ? string.Empty : PlainText(reason.ToString()),
+                Objects = Find.WorldObjects.ObjectsAt(pt).Select(o => ToWorldObjectInfo(o, origin, quests)).ToList()
+            };
+        }
+
+        /// <summary>商隊對一格能下的一道命令：標籤與執行動作。</summary>
+        private sealed class CaravanOrder
+        {
+            public string Label = string.Empty;
+            public bool Disabled;
+            public Action Run;
+        }
+
+        /// <summary>
+        /// 第 1 項是單純前往（與玩家在世界地圖對空地按右鍵相同：AutoOrderToTileNow 的 BestGotoDestNear 加 StartPath），
+        /// 其餘是原版世界右鍵選單 FloatMenuMakerWorld.ChoicesAtFor 對這格上所有世界物件產生的選項，開發者模式的瞬間抵達選項不收。
+        /// </summary>
+        private static List<CaravanOrder> BuildCaravanOrders(Caravan caravan, PlanetTile to)
+        {
+            var orders = new List<CaravanOrder>();
+            string name = "Travel to tile " + to.tileId;
+            if (to == caravan.Tile)
+            {
+                orders.Add(new CaravanOrder { Label = name + " (the caravan is already here)", Disabled = true });
+            }
+            else
+            {
+                PlanetTile destination = CaravanUtility.BestGotoDestNear(to, caravan);
+                if (!destination.Valid)
+                    orders.Add(new CaravanOrder { Label = name + " (no reachable tile nearby)", Disabled = true });
+                else
+                    orders.Add(new CaravanOrder
+                    {
+                        Label = destination == to ? name : name + " (stops at the nearest reachable tile " + destination.tileId + ")",
+                        Run = () => caravan.pather.StartPath(destination, null, repathImmediately: true)
+                    });
+            }
+            try
+            {
+                foreach (FloatMenuOption option in FloatMenuMakerWorld.ChoicesAtFor(to, caravan))
+                {
+                    if (option.Label.Contains("(Dev:")) continue;
+                    FloatMenuOption chosen = option;
+                    orders.Add(new CaravanOrder { Label = chosen.Label.StripTags(), Disabled = chosen.Disabled, Run = () => chosen.Chosen(colonistOrdering: false, null) });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("RimAgent: building the caravan world menu failed: " + ex);
+            }
+            return orders;
+        }
+
+        public CaravanOptionsInfo GetCaravanOptions(int caravanId, int tile)
+        {
+            Caravan caravan = FindPlayerCaravan(caravanId);
+            if (caravan == null) return new CaravanOptionsInfo { Error = "caravan not found" };
+            PlanetTile to = ToPlanetTile(tile, caravan.Tile);
+            if (!TileInWorld(to)) return new CaravanOptionsInfo { Error = $"tile {tile} does not exist on this layer of the world", CaravanName = caravan.LabelCap };
+            return new CaravanOptionsInfo
+            {
+                CaravanName = caravan.LabelCap,
+                Options = BuildCaravanOrders(caravan, to).Select((o, i) => new FloatMenuOptionInfo { Number = i + 1, Label = o.Label, Disabled = o.Disabled }).ToList()
+            };
+        }
+
+        public CommandResult SendCaravan(int caravanId, int tile, int optionNumber, string label)
+        {
+            Caravan caravan = FindPlayerCaravan(caravanId);
+            if (caravan == null) return CommandResult.Fail("caravan not found");
+            PlanetTile to = ToPlanetTile(tile, caravan.Tile);
+            if (!TileInWorld(to)) return CommandResult.Fail($"tile {tile} does not exist on this layer of the world");
+            List<CaravanOrder> orders = BuildCaravanOrders(caravan, to);
+            CaravanOrder order = optionNumber >= 1 && optionNumber <= orders.Count ? orders[optionNumber - 1] : null;
+            if (order == null || !string.Equals(order.Label, label, StringComparison.OrdinalIgnoreCase))
+                return CommandResult.Fail($"{caravan.LabelCap}'s orders for tile {tile} changed; call get_world_tile again");
+            if (order.Disabled) return CommandResult.Fail($"\"{label}\" is disabled");
+
+            bool startedOnTile = to == caravan.Tile;
+            StopAllTargeting();
+            var before = new HashSet<Window>(Find.WindowStack.Windows);
+            var watch = new MessageWatch();
+            try
+            {
+                order.Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("RimAgent: caravan order \"" + label + "\" threw: " + ex);
+                return CommandResult.Fail($"\"{label}\" failed in the game: {ex.Message}");
+            }
+
+            // 命令若接著要選目標或開別的視窗，這裡沒辦法回應，收掉並回報；確認框與對話留著給 ChooseOption。
+            bool targeting = Find.Targeter.IsTargeting || Find.WorldTargeter.IsTargeting;
+            StopAllTargeting();
+            CommandResult windowFailure = CloseUnsupportedWindows(before, label);
+            if (targeting) return CommandResult.Fail($"\"{label}\" asks for a further target, which is not supported yet; it was cancelled");
+            if (windowFailure != null) return windowFailure;
+
+            if (caravan.Destroyed || !caravan.Spawned)
+                return CommandResult.Ok(WithGameMessages($"\"{label}\" done: the caravan has left the world map (it entered a map or was dissolved)", watch));
+            if (caravan.pather.Moving)
+                return CommandResult.Ok(WithGameMessages($"{caravan.LabelCap} is on its way to {DescribeWorldTile(caravan.pather.Destination)}", watch));
+            if (Find.WindowStack.Windows.Any(w => !before.Contains(w)))
+                return CommandResult.Ok(WithGameMessages($"\"{label}\" is waiting for an answer", watch));
+            if (startedOnTile)
+                return CommandResult.Ok(WithGameMessages($"\"{label}\" done at {DescribeWorldTile(to)}", watch));
+            return CommandResult.Fail(WithGameMessages($"{caravan.LabelCap} did not start moving", watch));
+        }
+
+        public CommandResult SetCaravanMovement(int caravanId, string action)
+        {
+            Caravan caravan = FindPlayerCaravan(caravanId);
+            if (caravan == null) return CommandResult.Fail("caravan not found");
+            Caravan_PathFollower pather = caravan.pather;
+            switch (action)
+            {
+                case CaravanMovementAction.Pause:
+                    if (!pather.Moving) return CommandResult.Fail($"{caravan.LabelCap} has no destination, so there is nothing to pause");
+                    if (pather.Paused) return CommandResult.Ok($"{caravan.LabelCap} is already paused.");
+                    pather.Paused = true;
+                    return CommandResult.Ok($"{caravan.LabelCap} paused on tile {caravan.Tile.tileId}; its destination is kept.");
+                case CaravanMovementAction.Resume:
+                    if (!pather.Moving) return CommandResult.Fail($"{caravan.LabelCap} has no destination; send it somewhere first");
+                    if (!pather.Paused) return CommandResult.Ok($"{caravan.LabelCap} is already travelling.");
+                    pather.Paused = false;
+                    return CommandResult.Ok($"{caravan.LabelCap} resumed its journey to {DescribeWorldTile(pather.Destination)}.");
+                case CaravanMovementAction.Stop:
+                    if (!pather.Moving) return CommandResult.Ok($"{caravan.LabelCap} is already stopped.");
+                    pather.StopDead();
+                    return CommandResult.Ok($"{caravan.LabelCap} stopped on tile {caravan.Tile.tileId}; its destination was cleared.");
+                default:
+                    return CommandResult.Fail($"unknown action \"{action}\"");
+            }
+        }
+
+        public CommandResult SettleCaravan(int caravanId, string action)
+        {
+            Caravan caravan = FindPlayerCaravan(caravanId);
+            if (caravan == null) return CommandResult.Fail("caravan not found");
+            bool camp = action == CaravanSettleAction.Camp;
+            if (!camp && action != CaravanSettleAction.Settle) return CommandResult.Fail($"unknown action \"{action}\"");
+            // 與玩家按商隊按鈕同一條路：可否判斷、確認框與背景生成地圖都在原版的按鈕動作裡。
+            Command command = camp ? SettleInEmptyTileUtility.SetupCamp(caravan) : SettleInEmptyTileUtility.SettleCommand(caravan);
+            string verb = camp ? "set up camp" : "found a colony";
+            if (command.Disabled) return CommandResult.Fail($"{caravan.LabelCap} cannot {verb} here: {PlainText(command.disabledReason)}");
+
+            StopAllTargeting();
+            var before = new HashSet<Window>(Find.WindowStack.Windows);
+            var watch = new MessageWatch();
+            try
+            {
+                ((Command_Action)command).action();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("RimAgent: caravan " + verb + " threw: " + ex);
+                return CommandResult.Fail($"could not {verb} in the game: {ex.Message}");
+            }
+            CommandResult windowFailure = CloseUnsupportedWindows(before, verb);
+            if (windowFailure != null) return windowFailure;
+            if (Find.WindowStack.Windows.Any(w => !before.Contains(w)))
+                return CommandResult.Ok(WithGameMessages($"The game asks to confirm before {caravan.LabelCap} can {verb} on tile {caravan.Tile.tileId}", watch));
+            return CommandResult.Ok(WithGameMessages(
+                $"{caravan.LabelCap} is starting to {verb} on tile {caravan.Tile.tileId}. The map is generated in the background; it shows up in get_maps when it is ready", watch));
+        }
+
         private static bool TryParseHeading(string heading, out Direction8Way dir, out string display)
         {
             string needle = (heading ?? string.Empty).Trim().ToUpperInvariant();

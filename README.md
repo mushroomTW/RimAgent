@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 68 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 74 tools, with control over when actions require approval.
 
-**RimWorld 1.6** &nbsp;·&nbsp; **68 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.6** &nbsp;·&nbsp; **74 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,7 +50,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **68 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
+- **74 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
 - **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel), and subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
@@ -108,7 +108,7 @@ One setting decides how much the agent may do on its own:
 
 - **Confirm / Discard:** Confirm executes the captured tool call and arguments without asking the model again. Discard or a new instruction clears pending calls.
 - If a confirmed command fails, later commands remain pending for another confirmation. The failed command is removed because it may have partially taken effect; the log shows how many commands completed and remain.
-- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool` or the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `set_prisoner_interaction`). Auto still reviews every command.
+- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool` or the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`). Auto still reviews every command.
 - **MCP calls:** `mcp_call_tool` needs explicit approval in Confirm mode, passes through the classifier in Auto mode, and runs directly in YOLO or Autonomous mode.
 
 > [!WARNING]
@@ -142,7 +142,7 @@ All 15 categories are enabled by default and can be switched off individually in
 | Work | Work priorities and daily schedules (undoable) |
 | Build | Designations, blueprints (single, line, fill, or outline; up to 400 cells), forbidden items, gizmo buttons (including ones that need a target), and right-click menu options |
 | Combat | Draft, move, attack, rescue, capture, tend, strip, equip, and enter cryptosleep caskets |
-| Trade | Orbital and visiting traders, buy/sell transactions, and caravans |
+| Trade | Orbital and visiting traders, buy/sell transactions, caravans, and the world map (world objects and tiles, sending caravans with arrival orders, pause/stop, settling) |
 | Medical | Health, medicine levels, and surgery |
 | Prisoner | Prisoner status, interaction modes, and release |
 | Animal | Animals, taming, training, and allowed areas |

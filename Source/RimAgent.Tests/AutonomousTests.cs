@@ -531,6 +531,8 @@ namespace RimAgent.Tests
             "set_prisoner_interaction",
             "execute_trade",
             "form_caravan",
+            "send_caravan",
+            "settle_caravan",
             "release_prisoner"
         };
 

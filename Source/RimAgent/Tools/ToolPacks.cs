@@ -32,7 +32,7 @@ namespace RimAgent.Tools
             new Pack("zone", "stockpiles and growing zones, storage filters"),
             new Pack("production", "production bills"),
             new Pack("animal", "list, tame and train animals, animal areas"),
-            new Pack("trade", "traders, trading and caravans"),
+            new Pack("trade", "traders, trading, caravans and the world map (travel, settle)"),
             new Pack("prisoner", "prisoners: interaction mode and release"),
             new Pack("memory_edit", "write, edit and delete memory files (reading is always available)"),
             new Pack("mcp", "list and call tools on configured MCP servers")

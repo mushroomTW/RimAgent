@@ -99,6 +99,7 @@ namespace RimAgent.Tools
             Register(new FloatMenuTools(world, gate), transcript);
             Register(new CombatTools(world, gate), transcript);
             Register(new TradeTools(world, gate), transcript);
+            Register(new WorldTools(world, gate), transcript);
             Register(new MedicalTools(world, gate), transcript);
             Register(new PrisonerTools(world, gate), transcript);
             Register(new AnimalTools(world, gate), transcript);
@@ -217,7 +218,9 @@ namespace RimAgent.Tools
             "form_caravan",
             "release_prisoner",
             "schedule_surgery",
-            "set_prisoner_interaction"
+            "send_caravan",
+            "set_prisoner_interaction",
+            "settle_caravan"
         };
 
         /// <summary>YOLO 模式下受保護的黑名單工具（不可直接執行的重大高危操作）。</summary>

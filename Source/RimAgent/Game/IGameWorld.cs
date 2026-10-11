@@ -164,6 +164,38 @@ namespace RimAgent.Game
         CommandResult ExecuteTrade(TradeRequest request);
         /// <summary>組織商隊外出：驗證不過不組，成功時 Message 為成團明細。</summary>
         CommandResult FormCaravan(CaravanRequest request);
+        /// <summary>世界地圖上的玩家商隊（含成員、行進狀態、存糧與負重）。</summary>
+        IReadOnlyList<CaravanInfo> GetCaravans();
+        /// <summary>
+        /// 世界上值得注意的物件（定居點、據點、營地、其他派系商隊…，不含玩家商隊本身），距離從起點量。
+        /// originCaravanId 為商隊編號，-1 代表從當前地圖所在的格子量。清單不分頁，篩選與排序由呼叫端做。
+        /// </summary>
+        WorldSurveyInfo GetWorldSurvey(int originCaravanId);
+        /// <summary>
+        /// 從起點到各格的行程估算，用遊戲自己的路徑與到達時間估算；起點同 <see cref="GetWorldSurvey"/>。
+        /// 每格各跑一次尋路，呼叫端只該問要顯示的幾格。
+        /// </summary>
+        IReadOnlyList<TravelEstimateInfo> GetTravelEstimates(int originCaravanId, IReadOnlyList<int> tiles);
+        /// <summary>一格的地形與其上的世界物件（距離從起點量）；格子不存在時 Error 帶原因。</summary>
+        WorldTileInfo GetWorldTile(int tile, int originCaravanId);
+        /// <summary>
+        /// 商隊對某一格能下的命令，照原版世界右鍵選單（FloatMenuMakerWorld.ChoicesAtFor）產生，
+        /// 第 1 項固定是單純前往。商隊不存在或格子不合法時 Error 帶原因。
+        /// </summary>
+        CaravanOptionsInfo GetCaravanOptions(int caravanId, int tile);
+        /// <summary>
+        /// 執行 <see cref="GetCaravanOptions"/> 的一個選項（重新產生選單，依 1 起的序號定位並核對標籤，等同玩家點它）。
+        /// 選項開出對話框或確認框時留著給 ChooseOption 回應；開出選目標器或其他視窗則關回去並回報失敗。
+        /// 成功時 Message 為商隊的新去向。
+        /// </summary>
+        CommandResult SendCaravan(int caravanId, int tile, int optionNumber, string label);
+        /// <summary>暫停、繼續或停下商隊（<see cref="CaravanMovementAction"/>）；不合用時回失敗並說明。</summary>
+        CommandResult SetCaravanMovement(int caravanId, string action);
+        /// <summary>
+        /// 商隊就地建立新殖民地或搭營地（<see cref="CaravanSettleAction"/>），照原版商隊按鈕：同樣的可否判斷與確認框。
+        /// 地圖在背景生成，回傳時還沒完成；原版會跳出的確認框留著給 ChooseOption 回應。
+        /// </summary>
+        CommandResult SettleCaravan(int caravanId, string action);
         CommandResult SetMedicalCare(int pawnId, string careDefName);
         /// <summary>切換囚犯互動模式（走獄卒原生機制，不硬轉派系）。</summary>
         CommandResult SetPrisonerInteraction(int pawnId, string modeDefName);

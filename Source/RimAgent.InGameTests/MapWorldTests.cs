@@ -5,6 +5,7 @@ using HarmonyLib;
 using RimAgent.Game;
 using RimTestRedux;
 using RimWorld;
+using RimWorld.Planet;
 using Verse;
 using Verse.AI;
 
@@ -96,6 +97,10 @@ namespace RimAgent.InGameTests
                 Query("GetResearch", () => _world.GetResearch()),
                 Query("GetTimeSpeed", () => _world.GetTimeSpeed()),
                 Query("GetMaps", () => _world.GetMaps()),
+                Query("GetCaravans", () => _world.GetCaravans()),
+                Query("GetWorldSurvey", () => _world.GetWorldSurvey(-1)),
+                Query("GetTravelEstimates", () => _world.GetTravelEstimates(-1, new List<int> { Find.CurrentMap.Tile.tileId })),
+                Query("GetWorldTile", () => _world.GetWorldTile(Find.CurrentMap.Tile.tileId, -1)),
                 Query("GetTraders", () => _world.GetTraders()),
                 Query("FindThings", () => _world.FindThings(new ThingQuery())),
                 Query("GetSelection", () => _world.GetSelection()),
@@ -117,6 +122,11 @@ namespace RimAgent.InGameTests
             }
             foreach (Pawn pawn in map.mapPawns.FreeColonistsSpawned)
                 Run($"GetGizmos({pawn.LabelShort})", () => _world.GetGizmos(pawn.thingIDNumber), failures);
+            foreach (Caravan caravan in Find.WorldObjects.Caravans.Where(c => c.IsPlayerControlled))
+            {
+                Run($"GetWorldSurvey({caravan.LabelCap})", () => _world.GetWorldSurvey(caravan.ID), failures);
+                Run($"GetCaravanOptions({caravan.LabelCap})", () => _world.GetCaravanOptions(caravan.ID, caravan.Tile.tileId), failures);
+            }
 
             foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
             TestHelpers.AssertNone(failures, "queries that failed on the real map");
@@ -1038,6 +1048,296 @@ namespace RimAgent.InGameTests
                 pawn.jobs.EndCurrentJob(JobCondition.InterruptForced);
                 pawn.drafter.Drafted = false;
             }
+        }
+
+        /// <summary>
+        /// 世界物件清單對照原版：同一批物件（不含玩家商隊與路線規劃點）、種類與敵對判定、到起點的距離、
+        /// 定居點的地圖狀態；起點格的地形資料對照原版 Tile，被自己的殖民地占著所以不能建立殖民地。
+        /// </summary>
+        [Test]
+        public static void WorldSurveyAndTileMatchVanilla()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(WorldSurveyAndTileMatchVanilla))) return;
+            var failures = new List<string>();
+            _world.TakeNewGameErrors();
+            Map map = Find.CurrentMap;
+            PlanetTile origin = map.Tile;
+
+            WorldSurveyInfo survey = _world.GetWorldSurvey(-1);
+            if (survey.OriginTile != origin.tileId) failures.Add($"origin tile {survey.OriginTile}, vanilla {origin.tileId}");
+            if (survey.OriginIsCaravan) failures.Add("a survey without a caravan claims its origin is a caravan");
+            var expected = Find.WorldObjects.AllWorldObjects
+                .Where(o => o.Spawned && o.Tile.Valid && o.Tile.Layer == origin.Layer && !(o is RoutePlannerWaypoint) && !(o is Caravan { IsPlayerControlled: true }))
+                .ToDictionary(o => o.ID);
+            foreach (WorldObjectInfo info in survey.Objects)
+            {
+                if (!expected.TryGetValue(info.Id, out WorldObject obj))
+                {
+                    failures.Add($"[{info.Id}] {info.Label} is not a vanilla world object of this layer");
+                    continue;
+                }
+                if (info.Tile != obj.Tile.tileId) failures.Add($"{obj.LabelCap}: tile {info.Tile}, vanilla {obj.Tile.tileId}");
+                float distance = Find.WorldGrid.ApproxDistanceInTiles(origin, obj.Tile);
+                if (Math.Abs(info.DistanceTiles - distance) > 0.01f) failures.Add($"{obj.LabelCap}: distance {info.DistanceTiles}, vanilla {distance}");
+                bool hostile = obj.Faction != null && obj.Faction != Faction.OfPlayer && obj.Faction.HostileTo(Faction.OfPlayer);
+                if (info.Hostile != hostile) failures.Add($"{obj.LabelCap}: hostile {info.Hostile}, vanilla {hostile}");
+                if (obj is Settlement settlement)
+                {
+                    string kind = settlement.Faction == Faction.OfPlayer ? WorldObjectInfo.PlayerSettlementKind : WorldObjectInfo.FactionSettlementKind;
+                    if (info.Kind != kind) failures.Add($"{obj.LabelCap}: kind {info.Kind}, expected {kind}");
+                    if (info.HasMap != settlement.HasMap) failures.Add($"{obj.LabelCap}: HasMap {info.HasMap}, vanilla {settlement.HasMap}");
+                }
+                if (obj is Site && info.Kind != WorldObjectInfo.SiteKind) failures.Add($"{obj.LabelCap}: a site listed as {info.Kind}");
+            }
+            foreach (WorldObject obj in expected.Values.Where(o => survey.Objects.All(i => i.Id != o.ID)))
+                failures.Add($"{obj.LabelCap} [{obj.ID}] is missing from the survey");
+            if (!survey.Objects.Any(o => o.Kind == WorldObjectInfo.PlayerSettlementKind && o.HasMap))
+                failures.Add("the home settlement with a map is not in the survey");
+
+            IReadOnlyList<TravelEstimateInfo> estimates = _world.GetTravelEstimates(-1, survey.Objects.Take(5).Select(o => o.Tile).ToList());
+            foreach (TravelEstimateInfo e in estimates)
+            {
+                PlanetTile to = new PlanetTile(e.Tile, origin.Layer);
+                bool reachable = Find.WorldReachability.CanReach(origin, to);
+                if (e.Reachable != reachable) failures.Add($"tile {e.Tile}: reachable {e.Reachable}, vanilla {reachable}");
+                if (e.Reachable && to != origin && e.Ticks <= 0) failures.Add($"tile {e.Tile}: reachable but no travel time");
+            }
+
+            WorldTileInfo tile = _world.GetWorldTile(origin.tileId, -1);
+            RimWorld.Planet.Tile vanillaTile = Find.WorldGrid[origin];
+            if (!string.IsNullOrEmpty(tile.Error)) failures.Add("home tile: " + tile.Error);
+            if (tile.Biome != vanillaTile.PrimaryBiome.LabelCap) failures.Add($"biome {tile.Biome}, vanilla {vanillaTile.PrimaryBiome.LabelCap}");
+            if (tile.Hilliness != vanillaTile.hilliness.GetLabelCap()) failures.Add($"hilliness {tile.Hilliness}, vanilla {vanillaTile.hilliness.GetLabelCap()}");
+            if (Math.Abs(tile.TemperatureC - vanillaTile.temperature) > 0.01f) failures.Add($"temperature {tile.TemperatureC}, vanilla {vanillaTile.temperature}");
+            if (tile.CanSettle || string.IsNullOrEmpty(tile.SettleBlockedReason)) failures.Add("the home tile claims a colony could be founded there, or gives no reason");
+            if (!tile.Objects.Any(o => o.Kind == WorldObjectInfo.PlayerSettlementKind)) failures.Add("the home settlement is not on its own tile");
+            if (string.IsNullOrEmpty(_world.GetWorldTile(int.MaxValue, -1).Error)) failures.Add("a tile id outside the world was accepted");
+
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            TestHelpers.AssertNone(failures, "world survey and tile");
+        }
+
+        /// <summary>
+        /// 任務地點與任務的關聯：產生一個會在世界地圖放地點的任務，清單裡該地點要連到這個任務；結束後移除任務與新增的世界物件。
+        /// </summary>
+        [Test]
+        public static void QuestSiteIsLinkedToItsQuest()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(QuestSiteIsLinkedToItsQuest))) return;
+            var worldObjectsBefore = new HashSet<WorldObject>(Find.WorldObjects.AllWorldObjects);
+            Quest quest = GenerateManualQuest("OpportunitySite_BanditCamp", "TradeRequest");
+            if (quest == null)
+            {
+                TestHelpers.Skip(nameof(QuestSiteIsLinkedToItsQuest), "no manually accepted quest could be generated on this world");
+                return;
+            }
+            var failures = new List<string>();
+            try
+            {
+                // 營地這類據點要等任務接受（QuestPart_SpawnWorldObject 收到訊號）才出現在世界上；接受前查詢略過它是對的。
+                List<WorldObject> unspawned = QuestTargets(quest).Where(o => !o.Spawned).ToList();
+                if (_world.GetWorldSurvey(-1).Objects.Any(o => unspawned.Any(u => u.ID == o.Id)))
+                    failures.Add("the survey lists a quest site that is not on the world yet");
+                Pawn accepter = quest.RequiresAccepter
+                    ? PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoSuspended.FirstOrDefault(p => QuestUtility.CanPawnAcceptQuest(p, quest))
+                    : null;
+                // 有獎勵選項時原版要先選定再接受，否則會記錯誤並自動選第一項。
+                QuestPart_Choice choice = quest.PartsListForReading.OfType<QuestPart_Choice>().FirstOrDefault();
+                if (choice != null && choice.choices.Count > 0) choice.Choose(choice.choices[0]);
+                quest.Accept(accepter);
+                List<WorldObject> targets = QuestTargets(quest).Where(o => o.Spawned).ToList();
+                if (targets.Count == 0)
+                {
+                    TestHelpers.Skip(nameof(QuestSiteIsLinkedToItsQuest), "the accepted quest has no world object on the world");
+                    return;
+                }
+                WorldSurveyInfo survey = _world.GetWorldSurvey(-1);
+                foreach (WorldObject target in targets)
+                {
+                    WorldObjectInfo info = survey.Objects.FirstOrDefault(o => o.Id == target.ID);
+                    if (info == null) failures.Add($"quest target {target.LabelCap} [{target.ID}] is not in the survey");
+                    else if (!info.Quests.Any(q => q.QuestId == quest.id && q.Active)) failures.Add($"{target.LabelCap} is not linked to the accepted quest {quest.id}");
+                }
+            }
+            finally
+            {
+                if (!quest.Historical) quest.End(QuestEndOutcome.Unknown, sendLetter: false, playSound: false);
+                Find.QuestManager.Remove(quest);
+                foreach (WorldObject created in Find.WorldObjects.AllWorldObjects.Where(o => !worldObjectsBefore.Contains(o)).ToList())
+                    if (!created.Destroyed) created.Destroy();
+            }
+            TestHelpers.AssertNone(failures, "quest links");
+        }
+
+        private static List<WorldObject> QuestTargets(Quest quest) =>
+            quest.QuestLookTargets.Where(t => t.HasWorldObject).Select(t => t.WorldObject).Where(o => o != null).Distinct().ToList();
+
+        /// <summary>
+        /// 商隊走完一趟：用原版從地圖邊緣組一支單人商隊，查詢對照原版，派到相鄰格並以 pather 讀回目的地，
+        /// 暫停、繼續、停下，過期的選單被擋下；再把商隊放回家的格子，走「進入地圖」命令，
+        /// 殖民者要回到家園地圖上，get_maps 的人數同步。結束時一定把殖民者帶回地圖。
+        /// </summary>
+        [Test]
+        public static void CaravanTravelsPausesStopsAndEntersTheHomeMap()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap))) return;
+            Map map = Find.CurrentMap;
+            if (!(map.Parent is Settlement) || map.Parent.Faction != Faction.OfPlayer)
+            {
+                TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "the current map is not a player settlement");
+                return;
+            }
+            List<Pawn> colonists = map.mapPawns.FreeColonistsSpawned.Where(p => !p.Downed && !p.Drafted && p.IsFreeNonSlaveColonist).ToList();
+            if (colonists.Count < 2)
+            {
+                TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "needs at least two free colonists so the colony is never empty");
+                return;
+            }
+
+            var failures = new List<string>();
+            _world.TakeNewGameErrors();
+            var lettersBefore = new HashSet<Letter>(Find.LetterStack.LettersListForReading);
+            Pawn pawn = colonists[0];
+            Caravan caravan = null;
+            try
+            {
+                caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(new List<Pawn> { pawn }, Faction.OfPlayer, map.Tile, Direction8Way.North, PlanetTile.Invalid);
+                if (caravan == null)
+                {
+                    TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "vanilla could not form a caravan here");
+                    return;
+                }
+                // 原版從地圖邊緣出發時會自動往出口方向的格子走（CaravanExitMapUtility 的 StartPath(directionTile)）；
+                // 查詢要照實回報，之後停下來，讓後面的檢查從靜止開始。
+                CaravanInfo leaving = _world.GetCaravans().FirstOrDefault(c => c.Id == caravan.ID);
+                if (leaving != null && leaving.Moving != caravan.pather.Moving) failures.Add($"Moving {leaving.Moving}, vanilla {caravan.pather.Moving}");
+                caravan.pather.StopDead();
+                CheckCaravanQuery(caravan, pawn, failures);
+
+                // 單純前往相鄰的可走格（不是家）。
+                var neighbors = new List<PlanetTile>();
+                Find.WorldGrid.GetTileNeighbors(caravan.Tile, neighbors);
+                PlanetTile next = neighbors.Where(t => t != map.Tile && !Find.World.Impassable(t) && caravan.CanReach(t))
+                    .DefaultIfEmpty(PlanetTile.Invalid).First();
+                if (!next.Valid)
+                {
+                    TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "no passable neighbouring tile to travel to");
+                }
+                else
+                {
+                    CheckTravelControls(caravan, next, failures);
+                }
+
+                CheckEnterHomeMap(caravan, pawn, map, failures);
+            }
+            finally
+            {
+                // 沒走完測試流程時也要把人帶回家園地圖。
+                if (caravan != null && !caravan.Destroyed && caravan.Spawned)
+                {
+                    caravan.pather.StopDead();
+                    caravan.Tile = map.Tile;
+                    CaravanEnterMapUtility.Enter(caravan, map, CaravanEnterMode.Edge, CaravanDropInventoryMode.DoNotDrop, false);
+                }
+                foreach (Letter letter in Find.LetterStack.LettersListForReading.Where(l => !lettersBefore.Contains(l)).ToList())
+                    Find.LetterStack.RemoveLetter(letter);
+            }
+            if (!pawn.Spawned || pawn.Map != map) failures.Add($"{pawn.LabelShort} did not end up back on the home map");
+            if (Find.Targeter.IsTargeting || Find.WorldTargeter.IsTargeting) failures.Add("a targeter was left open");
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            TestHelpers.AssertNone(failures, "caravan journey");
+        }
+
+        private static void CheckCaravanQuery(Caravan caravan, Pawn pawn, List<string> failures)
+        {
+            CaravanInfo info = _world.GetCaravans().FirstOrDefault(c => c.Id == caravan.ID);
+            if (info == null)
+            {
+                failures.Add("the new caravan is missing from GetCaravans");
+                return;
+            }
+            if (info.Tile != caravan.Tile.tileId) failures.Add($"caravan tile {info.Tile}, vanilla {caravan.Tile.tileId}");
+            if (info.Members.Count != 1 || info.Members[0].Id != pawn.thingIDNumber || info.Members[0].Kind != CaravanMemberInfo.ColonistKind)
+                failures.Add("caravan members do not match the one colonist that left");
+            if (info.Moving) failures.Add("a fresh caravan reports it is moving");
+            if (info.DestinationTile != -1) failures.Add("a fresh caravan reports destination " + info.DestinationTile);
+            if (Math.Abs(info.MassCapacity - caravan.MassCapacity) > 0.01f) failures.Add($"mass capacity {info.MassCapacity}, vanilla {caravan.MassCapacity}");
+            if (Math.Abs(info.FoodDays - DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(caravan)) > 0.01f) failures.Add("food days differ from vanilla");
+            bool settleBlocked = SettleInEmptyTileUtility.SettleCommand(caravan).Disabled;
+            if (info.CanSettle == settleBlocked) failures.Add($"CanSettle {info.CanSettle}, vanilla command disabled {settleBlocked}");
+            if (settleBlocked && string.IsNullOrEmpty(info.SettleBlockedReason)) failures.Add("settling is blocked but no reason is given");
+            if (info.CanCamp == SettleInEmptyTileUtility.SetupCamp(caravan).Disabled) failures.Add("CanCamp differs from the vanilla camp command");
+
+            WorldSurveyInfo survey = _world.GetWorldSurvey(caravan.ID);
+            if (!survey.OriginIsCaravan || survey.OriginTile != caravan.Tile.tileId) failures.Add("a survey from the caravan does not start at the caravan");
+            if (survey.Objects.Any(o => o.Id == caravan.ID)) failures.Add("the survey lists the caravan it starts from");
+            // 沒打算在這裡真的定居：只在原版也說不行時驗證命令會被擋下。
+            if (settleBlocked)
+            {
+                CommandResult settle = _world.SettleCaravan(caravan.ID, CaravanSettleAction.Settle);
+                if (settle.Success) failures.Add("settling succeeded although the vanilla command is disabled");
+                if (caravan.Destroyed || !caravan.Spawned) failures.Add("a refused settle removed the caravan");
+            }
+            if (_world.SettleCaravan(caravan.ID, "build").Success) failures.Add("an unknown settle action succeeded");
+        }
+
+        private static void CheckTravelControls(Caravan caravan, PlanetTile next, List<string> failures)
+        {
+            CaravanOptionsInfo options = _world.GetCaravanOptions(caravan.ID, next.tileId);
+            if (!string.IsNullOrEmpty(options.Error) || options.Options.Count == 0)
+            {
+                failures.Add("no orders for the neighbouring tile: " + options.Error);
+                return;
+            }
+            FloatMenuOptionInfo travel = options.Options[0];
+            if (travel.Disabled || !travel.Label.StartsWith("Travel to tile " + next.tileId, StringComparison.Ordinal))
+                failures.Add($"first order is \"{travel.Label}\" (disabled {travel.Disabled})");
+            if (options.Options.Any(o => o.Label.Contains("(Dev:"))) failures.Add("a developer-mode order was offered");
+
+            // 過期的標籤擋下，商隊不動。
+            CommandResult stale = _world.SendCaravan(caravan.ID, next.tileId, 1, "Travel somewhere else");
+            if (stale.Success || caravan.pather.Moving) failures.Add("an order with a wrong label was carried out");
+
+            CommandResult sent = _world.SendCaravan(caravan.ID, next.tileId, travel.Number, travel.Label);
+            if (!sent.Success) failures.Add("send failed: " + sent.Error);
+            if (!caravan.pather.Moving || caravan.pather.Destination != next) failures.Add("the caravan's pather has no destination " + next.tileId);
+            CaravanInfo moving = _world.GetCaravans().First(c => c.Id == caravan.ID);
+            if (!moving.Moving || moving.DestinationTile != next.tileId) failures.Add($"GetCaravans destination {moving.DestinationTile}, expected {next.tileId}");
+            if (moving.EtaTicks <= 0) failures.Add("a travelling caravan has no arrival estimate");
+
+            if (!_world.SetCaravanMovement(caravan.ID, CaravanMovementAction.Pause).Success || !caravan.pather.Paused) failures.Add("pause did not pause the pather");
+            if (!_world.GetCaravans().First(c => c.Id == caravan.ID).Paused) failures.Add("GetCaravans does not show the pause");
+            if (!_world.SetCaravanMovement(caravan.ID, CaravanMovementAction.Resume).Success || caravan.pather.Paused) failures.Add("resume did not clear the pause");
+            if (!_world.SetCaravanMovement(caravan.ID, CaravanMovementAction.Stop).Success || caravan.pather.Moving) failures.Add("stop left the caravan moving");
+            if (_world.GetCaravans().First(c => c.Id == caravan.ID).DestinationTile != -1) failures.Add("a stopped caravan still reports a destination");
+            if (_world.SetCaravanMovement(caravan.ID, CaravanMovementAction.Pause).Success) failures.Add("pausing a stopped caravan succeeded");
+        }
+
+        private static void CheckEnterHomeMap(Caravan caravan, Pawn pawn, Map map, List<string> failures)
+        {
+            // 瞬間回到家的格子（原版開發者「Dev: instantly」做的事），再走正式的進入命令。
+            caravan.pather.StopDead();
+            caravan.Tile = map.Tile;
+            CaravanInfo here = _world.GetCaravans().FirstOrDefault(c => c.Id == caravan.ID);
+            if (here == null || here.ObjectsHere.Count == 0) failures.Add("the caravan on the home tile does not list the home settlement as an object here");
+
+            string enterLabel = "EnterMap".Translate(map.Parent.Label).ToString();
+            CaravanOptionsInfo options = _world.GetCaravanOptions(caravan.ID, map.Tile.tileId);
+            if (options.Options.Count == 0 || !options.Options[0].Disabled) failures.Add("plain travel to the caravan's own tile should be disabled");
+            FloatMenuOptionInfo enter = options.Options.FirstOrDefault(o => o.Label.StartsWith(enterLabel, StringComparison.Ordinal) && !o.Disabled);
+            if (enter == null)
+            {
+                failures.Add($"no enabled \"{enterLabel}\" order; orders: {string.Join("; ", options.Options.Select(o => o.Number + ") " + o.Label).ToArray())}");
+                return;
+            }
+            CommandResult entered = _world.SendCaravan(caravan.ID, map.Tile.tileId, enter.Number, enter.Label);
+            if (!entered.Success) failures.Add("entering the home map failed: " + entered.Error);
+            if (!pawn.Spawned || pawn.Map != map) failures.Add($"{pawn.LabelShort} is not spawned on the home map after entering");
+            if (!caravan.Destroyed && caravan.Spawned) failures.Add("the caravan still exists after its members entered the map");
+            if (_world.GetCaravans().Any(c => c.Id == caravan.ID)) failures.Add("the entered caravan is still listed");
+            RimAgent.Game.MapInfo mapInfo = _world.GetMaps().FirstOrDefault(m => m.Id == map.uniqueID);
+            if (mapInfo == null) failures.Add("the home map is missing from GetMaps");
+            else if (mapInfo.ColonistCount != map.mapPawns.FreeColonistsSpawnedCount) failures.Add($"GetMaps counts {mapInfo.ColonistCount} colonists, vanilla {map.mapPawns.FreeColonistsSpawnedCount}");
         }
 
         private static KeyValuePair<string, Func<object>> Query(string name, Func<object> call) =>

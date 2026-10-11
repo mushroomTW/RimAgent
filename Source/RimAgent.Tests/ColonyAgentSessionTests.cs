@@ -905,11 +905,11 @@ namespace RimAgent.Tests
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-            foreach (string name in new[] { "execute_trade", "form_caravan", "release_prisoner", "set_prisoner_interaction", "schedule_surgery", "delete_zone", "delete_bill", "place_blueprint", "designate_area", "order_attack", "accept_quest", "use_right_click_option" })
+            foreach (string name in new[] { "execute_trade", "form_caravan", "release_prisoner", "set_prisoner_interaction", "schedule_surgery", "delete_zone", "delete_bill", "place_blueprint", "designate_area", "order_attack", "accept_quest", "use_right_click_option", "send_caravan", "settle_caravan" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Confirm), name);
-            foreach (string name in new[] { "set_work_priorities", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_time_speed", "set_current_map", "take_screenshot", "dismiss_quest" })
+            foreach (string name in new[] { "set_work_priorities", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_time_speed", "set_current_map", "take_screenshot", "dismiss_quest", "set_caravan_movement" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Safe), name);
-            foreach (string name in new[] { "get_colony_overview", "list_colonists", "get_colonist_wellbeing", "list_recent_letters", "find_things", "inspect_area", "get_health", "list_prisoners", "list_bills", "list_traders", "list_quests", "view_map_grid", "list_right_click_menu", "mcp_list_tools" })
+            foreach (string name in new[] { "get_colony_overview", "list_colonists", "get_colonist_wellbeing", "list_recent_letters", "find_things", "inspect_area", "get_health", "list_prisoners", "list_bills", "list_traders", "list_quests", "view_map_grid", "list_right_click_menu", "list_caravans", "list_world_objects", "get_world_tile", "mcp_list_tools" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Query), name);
             Assert.That(registry.RiskOf("mcp_call_tool"), Is.EqualTo(ToolRisk.Confirm));
         }
@@ -971,7 +971,7 @@ namespace RimAgent.Tests
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(67));
+            Assert.That(registry.All.Count, Is.EqualTo(73));
             var observeOnly = new ToolPermissions();
             observeOnly.Set(ToolCategory.Observe, true);
             Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(20));

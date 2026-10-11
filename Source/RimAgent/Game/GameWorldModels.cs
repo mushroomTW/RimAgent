@@ -307,6 +307,181 @@ namespace RimAgent.Game
         public string Heading { get; set; } = string.Empty;
     }
 
+    /// <summary>玩家商隊的一名成員。</summary>
+    public sealed class CaravanMemberInfo
+    {
+        public const string ColonistKind = "colonist";
+        public const string SlaveKind = "slave";
+        public const string PrisonerKind = "prisoner";
+        public const string AnimalKind = "animal";
+        public const string MechKind = "mech";
+        public const string OtherKind = "other";
+
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        /// <summary>colonist、slave、prisoner、animal、mech 或 other。</summary>
+        public string Kind { get; set; } = ColonistKind;
+        public bool Downed { get; set; }
+        public bool InMentalState { get; set; }
+        /// <summary>整體健康度 0 到 1（遊戲的 SummaryHealthPercent）。</summary>
+        public float HealthPercent { get; set; } = 1f;
+    }
+
+    /// <summary>世界地圖上的一支玩家商隊。tile 一律是地表層的格子編號。</summary>
+    public sealed class CaravanInfo
+    {
+        /// <summary>世界物件編號（WorldObject.ID）。</summary>
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int Tile { get; set; }
+        /// <summary>所在格的生態與地形白話描述。</summary>
+        public string Terrain { get; set; } = string.Empty;
+        public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = Array.Empty<CaravanMemberInfo>();
+        /// <summary>有目的地在走（含暫停中）。</summary>
+        public bool Moving { get; set; }
+        public bool Paused { get; set; }
+        /// <summary>夜間休息中（原版 NightResting）。</summary>
+        public bool Resting { get; set; }
+        /// <summary>超載而動彈不得（負重大於容量）。</summary>
+        public bool Immobilized { get; set; }
+        public bool AllOwnersDowned { get; set; }
+        public bool AllOwnersInMentalBreak { get; set; }
+        /// <summary>目的地格；沒有目的地為 -1。</summary>
+        public int DestinationTile { get; set; } = -1;
+        public string DestinationLabel { get; set; } = string.Empty;
+        /// <summary>抵達後要做的事（進入、交易、攻擊…），遊戲給的原文；單純移動為空。</summary>
+        public string ArrivalAction { get; set; } = string.Empty;
+        /// <summary>預計還要幾 tick 抵達（含夜間休息）；沒有目的地或路徑還沒算出來為 0。</summary>
+        public int EtaTicks { get; set; }
+        /// <summary>目前存糧撐得了幾天（遊戲的估算，600 為上限代表不需要或很充足）。</summary>
+        public float FoodDays { get; set; }
+        public float MassUsage { get; set; }
+        public float MassCapacity { get; set; }
+        /// <summary>走一格要幾 tick（越小越快）。</summary>
+        public int TicksPerMove { get; set; }
+        public bool CanSettle { get; set; }
+        /// <summary>不能就地建立殖民地的原因，遊戲給的原文；CanSettle 為 true 時為空。</summary>
+        public string SettleBlockedReason { get; set; } = string.Empty;
+        public bool CanCamp { get; set; }
+        public string CampBlockedReason { get; set; } = string.Empty;
+        /// <summary>同一格上的其他世界物件，格式「標籤 [id]」。</summary>
+        public IReadOnlyList<string> ObjectsHere { get; set; } = Array.Empty<string>();
+    }
+
+    /// <summary>任務與世界物件的關聯（任務的目標清單裡有該物件）。</summary>
+    public sealed class WorldObjectQuestLink
+    {
+        public int QuestId { get; set; }
+        public string QuestName { get; set; } = string.Empty;
+        /// <summary>任務已接受、進行中；false 代表還在等玩家接受。</summary>
+        public bool Active { get; set; }
+    }
+
+    /// <summary>世界地圖上的一個物件（定居點、據點、營地…）。</summary>
+    public sealed class WorldObjectInfo
+    {
+        public const string PlayerSettlementKind = "player settlement";
+        public const string FactionSettlementKind = "faction settlement";
+        public const string SiteKind = "site";
+        public const string CampKind = "camp";
+        public const string CaravanKind = "caravan";
+        public const string OtherKind = "other";
+
+        /// <summary>世界物件編號（WorldObject.ID）。</summary>
+        public int Id { get; set; }
+        /// <summary>player settlement、faction settlement、site、camp、caravan（其他派系的）或 other。</summary>
+        public string Kind { get; set; } = OtherKind;
+        public string Label { get; set; } = string.Empty;
+        public string DefName { get; set; } = string.Empty;
+        public int Tile { get; set; }
+        public string Faction { get; set; } = string.Empty;
+        public bool Hostile { get; set; }
+        /// <summary>已經有生成好的地圖（可直接進入）。</summary>
+        public bool HasMap { get; set; }
+        /// <summary>據點或任務地點的補充說明（據點的組成、可否攻擊…）。</summary>
+        public string Detail { get; set; } = string.Empty;
+        /// <summary>從查詢起點到這裡的大約格數。</summary>
+        public float DistanceTiles { get; set; }
+        /// <summary>還剩幾 tick 消失（任務地點的期限）；沒有期限為 -1。</summary>
+        public int ExpiresInTicks { get; set; } = -1;
+        public IReadOnlyList<WorldObjectQuestLink> Quests { get; set; } = Array.Empty<WorldObjectQuestLink>();
+    }
+
+    /// <summary>世界物件清單與量距離的起點。</summary>
+    public sealed class WorldSurveyInfo
+    {
+        public int OriginTile { get; set; }
+        /// <summary>起點的白話名稱：商隊名或當前地圖名。</summary>
+        public string OriginLabel { get; set; } = string.Empty;
+        /// <summary>起點是商隊（行程時間用該商隊的速度）；false 則是當前地圖，時間以預設速度估算。</summary>
+        public bool OriginIsCaravan { get; set; }
+        public IReadOnlyList<WorldObjectInfo> Objects { get; set; } = Array.Empty<WorldObjectInfo>();
+    }
+
+    /// <summary>從起點走到某一格的行程估算（遊戲的 CaravanArrivalTimeEstimator，含夜間休息與道路）。</summary>
+    public sealed class TravelEstimateInfo
+    {
+        public int Tile { get; set; }
+        public bool Reachable { get; set; }
+        /// <summary>大約要幾 tick；不可達或就在原地為 0。</summary>
+        public int Ticks { get; set; }
+        public float DistanceTiles { get; set; }
+    }
+
+    /// <summary>世界地圖上一格的地形資料。</summary>
+    public sealed class WorldTileInfo
+    {
+        /// <summary>非空代表這一格查不到（編號超出範圍…），內容是原因。</summary>
+        public string Error { get; set; } = string.Empty;
+        public int Tile { get; set; }
+        public string Biome { get; set; } = string.Empty;
+        public string Hilliness { get; set; } = string.Empty;
+        /// <summary>年平均氣溫（攝氏）。</summary>
+        public float TemperatureC { get; set; }
+        public float MinTemperatureC { get; set; }
+        public float MaxTemperatureC { get; set; }
+        public float RainfallMm { get; set; }
+        public float ElevationM { get; set; }
+        public bool Impassable { get; set; }
+        public bool WaterCovered { get; set; }
+        public bool Coastal { get; set; }
+        /// <summary>世界地貌名稱（山脈、海灣…）；沒有為空。</summary>
+        public string Feature { get; set; } = string.Empty;
+        public string Landmark { get; set; } = string.Empty;
+        public IReadOnlyList<string> Mutators { get; set; } = Array.Empty<string>();
+        /// <summary>這格目前能不能建立新殖民地（含玩家殖民地數量上限）。</summary>
+        public bool CanSettle { get; set; }
+        public string SettleBlockedReason { get; set; } = string.Empty;
+        public IReadOnlyList<WorldObjectInfo> Objects { get; set; } = Array.Empty<WorldObjectInfo>();
+    }
+
+    /// <summary>某支商隊對某一格能下的命令，照原版右鍵選單（FloatMenuMakerWorld.ChoicesAtFor）產生。</summary>
+    public sealed class CaravanOptionsInfo
+    {
+        /// <summary>非空代表選單做不出來（商隊不存在、格子不合法…），內容是原因。</summary>
+        public string Error { get; set; } = string.Empty;
+        public string CaravanName { get; set; } = string.Empty;
+        /// <summary>1 起的序號與標籤；停用的選項原因寫在標籤裡。第 1 項固定是單純前往（沒有抵達動作）。</summary>
+        public IReadOnlyList<FloatMenuOptionInfo> Options { get; set; } = Array.Empty<FloatMenuOptionInfo>();
+    }
+
+    /// <summary>商隊的行進控制。</summary>
+    public static class CaravanMovementAction
+    {
+        public const string Pause = "pause";
+        public const string Resume = "resume";
+        public const string Stop = "stop";
+    }
+
+    /// <summary>商隊在所在格建立新據點的方式。</summary>
+    public static class CaravanSettleAction
+    {
+        /// <summary>建立新殖民地。</summary>
+        public const string Settle = "settle";
+        /// <summary>搭臨時營地（生成一張臨時地圖）。</summary>
+        public const string Camp = "camp";
+    }
+
     /// <summary>一張可接帳單的工作台（遊戲內有 BillStack 的建築）。</summary>
     public sealed class WorkTableInfo
     {

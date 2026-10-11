@@ -40,6 +40,9 @@ namespace RimAgent.Tests
             ["dismiss_quest"] = Args(("questId", 40), ("dismissed", true)),
             ["execute_trade"] = Args(("trader", "PassingShip_1"), ("buys", "spacer component x1"), ("sells", ""), ("negotiator", "Ali")),
             ["form_caravan"] = Args(("colonists", "Bob"), ("heading", "N")),
+            ["send_caravan"] = Args(("caravan", "Trailblazers"), ("option", "1) Travel to tile 4600"), ("tile", 4600), ("worldObjectId", -1)),
+            ["set_caravan_movement"] = Args(("caravan", "Trailblazers"), ("action", "pause")),
+            ["settle_caravan"] = Args(("caravan", "Trailblazers"), ("action", "settle")),
             ["set_medical_care"] = Args(("colonist", "Ali"), ("level", "best")),
             ["schedule_surgery"] = Args(("colonist", "Ali"), ("surgery", "remove body part"), ("part", "left leg")),
             ["set_prisoner_interaction"] = Args(("prisoner", "Zed"), ("mode", "recruit")),
@@ -111,6 +114,12 @@ namespace RimAgent.Tests
             });
             _world.FloatMenuOptions.Add(new FloatMenuOptionInfo { Number = 1, Label = "Equip revolver" });
             _world.Quests.Add(new QuestInfo { Id = 40, Name = "Hospitality request", State = QuestInfo.AvailableState });
+            _world.Caravans.Add(new CaravanInfo
+            {
+                Id = 12, Name = "Trailblazers", Tile = 4500, Moving = true, DestinationTile = 4700, CanSettle = true, CanCamp = true,
+                Members = new[] { new CaravanMemberInfo { Id = 101, Name = "Ali" } }
+            });
+            _world.CaravanOrders.Add(new FloatMenuOptionInfo { Number = 1, Label = "Travel to tile 4600" });
             return _world;
         }
 

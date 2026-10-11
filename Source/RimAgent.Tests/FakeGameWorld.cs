@@ -16,6 +16,16 @@ namespace RimAgent.Tests
         public List<ThingInfo> Things { get; } = new List<ThingInfo>();
         public List<ThingInfo> Selection { get; } = new List<ThingInfo>();
         public List<ThreatInfo> Threats { get; } = new List<ThreatInfo>();
+        /// <summary>世界地圖上的玩家商隊。</summary>
+        public List<CaravanInfo> Caravans { get; } = new List<CaravanInfo>();
+        public WorldSurveyInfo Survey { get; set; } = new WorldSurveyInfo { OriginTile = 100, OriginLabel = "New Arrivals" };
+        /// <summary>格子編號 → 行程估算；沒登記的格子當作走得到、一天、十格。</summary>
+        public Dictionary<int, TravelEstimateInfo> TravelEstimates { get; } = new Dictionary<int, TravelEstimateInfo>();
+        /// <summary>格子編號 → 地形；沒登記的格子給一般平地。</summary>
+        public Dictionary<int, WorldTileInfo> WorldTiles { get; } = new Dictionary<int, WorldTileInfo>();
+        /// <summary>任何商隊對任何格子得到的命令清單（測試要的情境各自擺）。</summary>
+        public List<FloatMenuOptionInfo> CaravanOrders { get; } = new List<FloatMenuOptionInfo>();
+        public string CaravanOrdersError { get; set; } = string.Empty;
         public List<TraderInfo> Traders { get; } = new List<TraderInfo>();
         public ColonyOverview Overview { get; set; } = new ColonyOverview { ColonyName = "New Arrivals", ColonistCount = 2, Year = 5500, Season = "Spring", DayOfSeason = 3, Hour = 14, Weather = "Clear", OutdoorTemperatureC = 21.4f, Wealth = 12000f };
         public ResourceSnapshot Resources { get; set; } = new ResourceSnapshot();
@@ -689,6 +699,86 @@ namespace RimAgent.Tests
                 members.Add(pawn);
             }
             return CommandResult.Ok($"Formed a caravan with {string.Join(", ", members.Select(m => m.Name).ToArray())}, heading {display}.");
+        }
+
+        public IReadOnlyList<CaravanInfo> GetCaravans() => Caravans;
+
+        public WorldSurveyInfo GetWorldSurvey(int originCaravanId) => Survey;
+
+        public IReadOnlyList<TravelEstimateInfo> GetTravelEstimates(int originCaravanId, IReadOnlyList<int> tiles)
+        {
+            return tiles.Select(t => TravelEstimates.TryGetValue(t, out TravelEstimateInfo e)
+                ? e
+                : new TravelEstimateInfo { Tile = t, Reachable = true, Ticks = 60000, DistanceTiles = 10f }).ToList();
+        }
+
+        public WorldTileInfo GetWorldTile(int tile, int originCaravanId)
+        {
+            if (tile > 99999) return new WorldTileInfo { Tile = tile, Error = $"tile {tile} does not exist on this layer of the world" };
+            return WorldTiles.TryGetValue(tile, out WorldTileInfo info)
+                ? info
+                : new WorldTileInfo { Tile = tile, Biome = "Temperate forest", Hilliness = "Flat", TemperatureC = 14f, MinTemperatureC = -8f, MaxTemperatureC = 31f, RainfallMm = 900f, ElevationM = 300f, CanSettle = true };
+        }
+
+        public CaravanOptionsInfo GetCaravanOptions(int caravanId, int tile)
+        {
+            CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
+            if (caravan == null) return new CaravanOptionsInfo { Error = "caravan not found" };
+            if (!string.IsNullOrEmpty(CaravanOrdersError)) return new CaravanOptionsInfo { Error = CaravanOrdersError, CaravanName = caravan.Name };
+            return new CaravanOptionsInfo { CaravanName = caravan.Name, Options = CaravanOrders };
+        }
+
+        public CommandResult SendCaravan(int caravanId, int tile, int optionNumber, string label)
+        {
+            Calls.Add($"SendCaravan({caravanId},{tile},{optionNumber},{label})");
+            CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
+            if (caravan == null) return CommandResult.Fail("caravan not found");
+            FloatMenuOptionInfo option = CaravanOrders.FirstOrDefault(o => o.Number == optionNumber);
+            if (option == null || !string.Equals(option.Label, label, StringComparison.OrdinalIgnoreCase)) return CommandResult.Fail("orders changed");
+            if (option.Disabled) return CommandResult.Fail("disabled");
+            if (FollowUpDialog != null)
+            {
+                PendingChoices.Add(FollowUpDialog);
+                FollowUpDialog = null;
+                return CommandResult.Ok($"\"{label}\" is waiting for an answer");
+            }
+            caravan.Moving = true;
+            caravan.Paused = false;
+            caravan.DestinationTile = tile;
+            caravan.DestinationLabel = "tile " + tile;
+            caravan.EtaTicks = 150000;
+            return CommandResult.Ok($"{caravan.Name} is on its way to tile {tile}");
+        }
+
+        public CommandResult SetCaravanMovement(int caravanId, string action)
+        {
+            Calls.Add($"SetCaravanMovement({caravanId},{action})");
+            CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
+            if (caravan == null) return CommandResult.Fail("caravan not found");
+            if (!caravan.Moving) return CommandResult.Fail($"{caravan.Name} has no destination");
+            if (action == CaravanMovementAction.Pause) caravan.Paused = true;
+            else if (action == CaravanMovementAction.Resume) caravan.Paused = false;
+            else
+            {
+                caravan.Moving = false;
+                caravan.Paused = false;
+                caravan.DestinationTile = -1;
+            }
+            return CommandResult.Ok($"{caravan.Name} {action}");
+        }
+
+        public CommandResult SettleCaravan(int caravanId, string action)
+        {
+            Calls.Add($"SettleCaravan({caravanId},{action})");
+            CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
+            if (caravan == null) return CommandResult.Fail("caravan not found");
+            if (FollowUpDialog != null)
+            {
+                PendingChoices.Add(FollowUpDialog);
+                FollowUpDialog = null;
+                return CommandResult.Ok("The game asks to confirm");
+            }
+            return CommandResult.Ok($"{caravan.Name} is starting to {action}");
         }
 
         public CommandResult ScheduleSurgery(SurgeryRequest request)
