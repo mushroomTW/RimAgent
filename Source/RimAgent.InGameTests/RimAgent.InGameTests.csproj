@@ -32,6 +32,11 @@
       <HintPath>$(WorkshopDir)\2009463077\Current\Assemblies\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- RetryExperiment 的 JSONL 序列化；執行期由 RimLLM Framework 的 Assemblies/ 提供，與 RimAgent 用同一顆。 -->
+    <Reference Include="System.Text.Json">
+      <HintPath>..\..\..\RimLLM Framework\Assemblies\System.Text.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="RimTestRedux">
       <HintPath>$(WorkshopDir)\3762405308\1.6\Assemblies\RimTestRedux.dll</HintPath>
       <Private>false</Private>

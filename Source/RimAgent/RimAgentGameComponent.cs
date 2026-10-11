@@ -520,7 +520,7 @@ namespace RimAgent
                 _seenChoices.RemoveWhere(id => choices.All(c => c.Id != id));
                 if (!fresh) return;
                 _autoRunning = true;
-                _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Choice, Find.TickManager.TicksGame, ToConfig(settings));
+                _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Choice, Find.TickManager.TicksGame, ToConfig(settings), null);
             }
             catch (Exception ex)
             {
@@ -698,11 +698,12 @@ namespace RimAgent
                 // 玩家還在忙（上一句沒做完、或有預覽等確認）就不搶。
                 if (_autoRunning || session.IsBusy || session.HasPendingConfirmation) return;
                 AutonomousConfig config = ToConfig(settings);
-                AutonomousTrigger trigger = _scheduler.Evaluate(tick, GatherSignals(), config);
+                AutonomousSignals signals = GatherSignals();
+                AutonomousTrigger trigger = _scheduler.Evaluate(tick, signals, config);
                 ReportGiveUps(session);
                 if (trigger == AutonomousTrigger.None) return;
                 _autoRunning = true;
-                _ = RunAutonomousGuardedAsync(session, trigger, tick, config);
+                _ = RunAutonomousGuardedAsync(session, trigger, tick, config, signals);
                 _lastAutoError = null;
             }
             catch (Exception ex)
@@ -796,11 +797,11 @@ namespace RimAgent
             _autoCts?.Cancel();
         }
 
-        private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config)
+        private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals)
         {
             try
             {
-                await RunAutonomousAsync(session, trigger, tick, config);
+                await RunAutonomousAsync(session, trigger, tick, config, signals);
             }
             finally
             {
@@ -808,7 +809,7 @@ namespace RimAgent
             }
         }
 
-        private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config)
+        private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals)
         {
             _autoCts?.Dispose();
             _autoCts = new CancellationTokenSource();
@@ -838,7 +839,8 @@ namespace RimAgent
                     cts.Token,
                     autonomous: true,
                     maxToolSteps: AutonomousRunMaxSteps,
-                    reasoningOverride: ReasoningLevel.Low);
+                    reasoningOverride: ReasoningLevel.Low,
+                    autonomousInfo: RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(trigger, tick, signals) : null);
             }
             catch (InvalidOperationException)
             {
@@ -865,6 +867,19 @@ namespace RimAgent
                 _scheduler.RecordRun(tick, used, config);
             }
             HoldAfterConfigurationError(session, instructionId, tick);
+        }
+
+        /// <summary>執行紀錄用的起跑脈絡；在主線程起跑前組好，嘗試次數才是這一次的。</summary>
+        private AutonomousRunInfo BuildRunInfo(AutonomousTrigger trigger, int tick, AutonomousSignals? signals)
+        {
+            int attempt = _scheduler.AttemptOf(trigger);
+            return new AutonomousRunInfo
+            {
+                Trigger = trigger.ToString(),
+                Attempt = attempt > 0 ? attempt : (int?)null,
+                GameTick = tick,
+                Signals = signals
+            };
         }
 
         private void HoldAfterConfigurationError(ColonyAgentSession session, int instructionId, int tick)

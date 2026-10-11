@@ -62,6 +62,36 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public async Task AutonomousRunInfoIsWrittenOnlyForTheRunThatCarriesIt()
+        {
+            var client = new ScriptedChatClient().Reply("ok").Reply("ok");
+            var session = new ColonyAgentSession(client, new FakeGameWorld(), () => ToolPermissions.All, 8);
+            var records = new List<RunLogRecord>();
+            session.RunLoggingEnabled = () => true;
+            session.RunLogSink = records.Add;
+            var info = new AutonomousRunInfo
+            {
+                Trigger = AutonomousTrigger.BedShortage.ToString(),
+                Attempt = 2,
+                GameTick = 12345,
+                Signals = new AutonomousSignals { ColonistCount = 3, BedlessCount = 2 }
+            };
+
+            // 只帶脈絡、不帶 autonomous 旗標：紀錄仍要標成自主任務，不能出現「player＋自主脈絡」的矛盾。
+            await session.SendAsync("autonomous task", autonomousInfo: info);
+            await session.SendAsync("player instruction");
+
+            Assert.That(records, Has.Count.EqualTo(2));
+            Assert.That(records[0].Source, Is.EqualTo("autonomous"));
+            string json = System.Text.Json.JsonSerializer.Serialize(records[0]);
+            Assert.That(json, Does.Contain("\"Trigger\":\"BedShortage\""));
+            Assert.That(json, Does.Contain("\"Attempt\":2"));
+            Assert.That(json, Does.Contain("\"GameTick\":12345"));
+            Assert.That(json, Does.Contain("\"BedlessCount\":2"));
+            Assert.That(records[1].Autonomous, Is.Null, "玩家指令不帶自主脈絡");
+        }
+
+        [Test]
         public void LongRunKeepsTheEndOfBothListsAndCountsWhatWasDropped()
         {
             var record = new RunLogRecord();

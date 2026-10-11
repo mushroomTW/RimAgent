@@ -22,6 +22,8 @@ namespace RimAgent.Agent
         public string Source { get; set; } = string.Empty;
         public string Instruction { get; set; } = string.Empty;
         public string Outcome { get; set; } = string.Empty;
+        /// <summary>自主任務的起跑脈絡；玩家指令與目標為 null。</summary>
+        public AutonomousRunInfo Autonomous { get; set; }
         public List<RunLogModelStep> ModelSteps { get; set; } = new List<RunLogModelStep>();
         public List<RunLogTranscriptStep> TranscriptSteps { get; set; } = new List<RunLogTranscriptStep>();
         /// <summary>超過上限而丟掉的最早幾步；兩個清單都只留最後的部分，彼此對得上、也看得到結尾。</summary>
@@ -72,6 +74,20 @@ namespace RimAgent.Agent
         {
             return ToolText.TruncateField(value, MaxFieldChars);
         }
+    }
+
+    /// <summary>
+    /// 自主任務起跑時的觸發、嘗試次數、遊戲 tick 與排程器看到的訊號。
+    /// 指令文字會被截斷（共用通則在前），觸發原因要在這裡另記，才能事後比對重試與施工進度。
+    /// </summary>
+    public sealed class AutonomousRunInfo
+    {
+        public string Trigger { get; set; } = string.Empty;
+        /// <summary>該條件的第幾次嘗試（含首次）；定期巡視與抉擇不走重試表，為 null。</summary>
+        public int? Attempt { get; set; }
+        public int GameTick { get; set; }
+        /// <summary>觸發當下排程器評估用的訊號；抉擇不經排程器評估，為 null。</summary>
+        public AutonomousSignals? Signals { get; set; }
     }
 
     public sealed class RunLogModelStep

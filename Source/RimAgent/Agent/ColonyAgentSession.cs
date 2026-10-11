@@ -410,6 +410,7 @@ namespace RimAgent.Agent
         /// <param name="autonomous">這句是排程器起的自主任務；只影響對話裡的標示，模型看到的內容相同。</param>
         /// <param name="maxToolSteps">本輪額外步數上限；自主排程器用它把單輪呼叫夾在剩餘每日預算內。</param>
         /// <param name="onAccepted">玩家訊息寫入對話後的通知；忙碌而拒收時不呼叫。</param>
+        /// <param name="autonomousInfo">自主任務的起跑脈絡，只寫進執行紀錄；帶了就視為自主任務。</param>
         public async Task<string> SendAsync(
             string userText,
             CancellationToken cancellationToken = default,
@@ -418,9 +419,12 @@ namespace RimAgent.Agent
             bool goalRun = false,
             string displayText = null,
             ReasoningLevel? reasoningOverride = null,
-            Action onAccepted = null)
+            Action onAccepted = null,
+            AutonomousRunInfo autonomousInfo = null)
         {
             if (string.IsNullOrWhiteSpace(userText)) return null;
+            // 紀錄關閉時呼叫端不建脈絡，所以只能單向推導：有脈絡必是自主任務，反之不一定。
+            autonomous |= autonomousInfo != null;
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
             {
                 throw new InvalidOperationException("RimAgent is still working on the previous instruction.");
@@ -430,7 +434,7 @@ namespace RimAgent.Agent
             try
             {
                 string reply = await RunInstructionAsync(userText.Trim(), cancellationToken, autonomous, maxToolSteps, goalRun,
-                    displayText, reasoningOverride, onAccepted, echo: true).ConfigureAwait(false);
+                    displayText, reasoningOverride, onAccepted, echo: true, autonomousInfo: autonomousInfo).ConfigureAwait(false);
                 await RunLateInterjectionsAsync(cancellationToken).ConfigureAwait(false);
                 return reply;
             }
@@ -509,7 +513,8 @@ namespace RimAgent.Agent
             string displayText,
             ReasoningLevel? reasoningOverride,
             Action onAccepted,
-            bool echo)
+            bool echo,
+            AutonomousRunInfo autonomousInfo = null)
         {
             // 新指令取代等待中的確認，先記錄捨棄，再建立新指令的編號。
             DiscardPendingConfirmation();
@@ -520,7 +525,8 @@ namespace RimAgent.Agent
             {
                 Instruction = RunLogRecord.Limit(displayText ?? text),
                 Mode = Mode.ToString(),
-                Source = DetermineRunSource(goalRun, autonomous)
+                Source = DetermineRunSource(goalRun, autonomous),
+                Autonomous = autonomousInfo
             } : null;
             _activeRunLog = runLog;
             string runOutcome = "finished";

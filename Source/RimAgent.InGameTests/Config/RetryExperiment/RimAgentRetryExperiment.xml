@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自主任務重試時機實驗的啟動標記（RetryExperiment.cs）。內容不會被讀取，只看檔案是否存在。
+  run_test_cycle 的 seed_config 要同時帶入：
+    1. 本檔
+    2. 玩家 Config 裡的 Mod_RimAgent_RimAgentMod.xml（模型照玩家的設定；自主模式與 recordRuns 由實驗在記憶體裡打開）
+    3. 玩家 Config 裡的 Mod_RimLLM Framework_RimLLMFrameworkMod.xml 與 RimLLM_EncryptionKey.dat（供應商設定與金鑰）
+    以上 2、3 都直接指向玩家的 Config 路徑帶入，不要複製進版本庫。
+    4. ../Mod_3762405308_RimTestReduxMod.xml
+-->
+<RimAgentRetryExperiment />

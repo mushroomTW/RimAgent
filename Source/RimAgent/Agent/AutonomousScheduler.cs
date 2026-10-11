@@ -329,6 +329,17 @@ namespace RimAgent.Agent
             return trigger;
         }
 
+        /// <summary>
+        /// 條件目前是第幾次嘗試（含首次）；剛由 <see cref="Evaluate"/> 回傳的觸發即為這一次。
+        /// 定期巡視與抉擇不走重試表，回傳 0。
+        /// </summary>
+        public int AttemptOf(AutonomousTrigger trigger)
+        {
+            int index = (int)trigger;
+            if (index < 0 || index >= WatcherCount) return 0;
+            return _watch[index].Attempts;
+        }
+
         /// <summary>取走「重試用完而放棄」的條件，讓呼叫端告知玩家；讀完即清空。</summary>
         public IReadOnlyList<AutonomousTrigger> TakeGiveUps()
         {

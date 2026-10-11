@@ -94,6 +94,28 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void AttemptOfCountsEveryTryAndResetsWhenTheConditionClears()
+        {
+            _config.OnFire = true;
+            var fire = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, FireCount = 1 };
+            var calm = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3 };
+            Assert.That(_scheduler.AttemptOf(AutonomousTrigger.Fire), Is.Zero, "還沒觸發過");
+
+            _scheduler.Evaluate(0, fire, _config);
+            Assert.That(_scheduler.AttemptOf(AutonomousTrigger.Fire), Is.EqualTo(1));
+            _scheduler.Evaluate(1000, fire, _config);
+            Assert.That(_scheduler.AttemptOf(AutonomousTrigger.Fire), Is.EqualTo(1), "退避未到不算一次");
+            _scheduler.Evaluate(2500, fire, _config);
+            Assert.That(_scheduler.AttemptOf(AutonomousTrigger.Fire), Is.EqualTo(2));
+            _scheduler.Evaluate(7500, fire, _config);
+            Assert.That(_scheduler.AttemptOf(AutonomousTrigger.Fire), Is.EqualTo(3));
+
+            _scheduler.Evaluate(8000, calm, _config);
+            Assert.That(_scheduler.AttemptOf(AutonomousTrigger.Fire), Is.Zero, "條件解除後重新計次");
+            Assert.That(_scheduler.AttemptOf(AutonomousTrigger.Interval), Is.Zero, "定期巡視不走重試表");
+        }
+
+        [Test]
         public void ClearingTheConditionRearmsForTheNextOccurrence()
         {
             _config.OnFire = true;
