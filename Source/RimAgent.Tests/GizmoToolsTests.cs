@@ -23,7 +23,9 @@ namespace RimAgent.Tests
                 new GizmoInfo { Number = 1, Label = "Deconstruct", Kind = GizmoInfo.UnsupportedKind },
                 new GizmoInfo { Number = 2, Label = "Initiate ship reactor startup", Description = "Wake the hibernating reactor." },
                 new GizmoInfo { Number = 3, Label = "Launch ship", Disabled = true, DisabledReason = "Missing: ship engine" },
-                new GizmoInfo { Number = 4, Label = "Power", Kind = GizmoInfo.ToggleKind, On = true }
+                new GizmoInfo { Number = 4, Label = "Power", Kind = GizmoInfo.ToggleKind, On = true },
+                new GizmoInfo { Number = 5, Label = "Set force attack target", Kind = GizmoInfo.TargetKind, TargetHint = "a cell, a pawn, a building" },
+                new GizmoInfo { Number = 6, Label = "Activate...", Description = "Choose who activates it." }
             };
             _tools = new GizmoTools(_world);
         }
@@ -38,6 +40,59 @@ namespace RimAgent.Tests
             Assert.That(text, Does.Contain("2) Initiate ship reactor startup [action] — Wake the hibernating reactor."));
             Assert.That(text, Does.Contain("3) Launch ship [action] disabled: Missing: ship engine"));
             Assert.That(text, Does.Contain("4) Power [toggle, on]"));
+        }
+
+        [Test]
+        public void ListShowsWhatKindOfTargetAButtonNeeds()
+        {
+            string text = _tools.ListGizmos(40);
+
+            Assert.That(text, Does.Contain("5) Set force attack target [target: a cell, a pawn, a building]"));
+            Assert.That(text, Does.Not.Contain("5) Set force attack target [unsupported]"));
+        }
+
+        [Test]
+        public void TargetButtonTakesAThingOrACell()
+        {
+            Assert.That(_tools.UseGizmo(40, "5", targetId: 41), Is.EqualTo("Pressed \"Set force attack target\" on [40]: targeted [41]."));
+            Assert.That(_tools.UseGizmo(40, "Set force attack target", targetX: 30, targetZ: 25), Is.EqualTo("Pressed \"Set force attack target\" on [40]: targeted cell (30,25)."));
+            Assert.That(_world.Calls, Is.EqualTo(new[] { "UseGizmo(40,5,Set force attack target,[41])", "UseGizmo(40,5,Set force attack target,cell (30,25))" }));
+        }
+
+        [Test]
+        public void TargetButtonWithoutATargetSaysWhatIsNeededAndDoesNothing()
+        {
+            string text = _tools.UseGizmo(40, "5");
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("needs a target: a cell, a pawn, a building").And.Contain("targetId").And.Contain("targetX"));
+            Assert.That(_world.Calls, Is.Empty);
+        }
+
+        [Test]
+        public void InvalidTargetReportsTheGamesReason()
+        {
+            _world.RejectedTargets["cell (30,25)"] = "target is beyond the maximum range";
+
+            string text = _tools.UseGizmo(40, "5", targetX: 30, targetZ: 25);
+
+            Assert.That(text, Is.EqualTo("Error: target is beyond the maximum range"));
+        }
+
+        [Test]
+        public void ActionThatTurnsOutToStartTargetingGetsTheTarget()
+        {
+            // 虛空巨石柱、互動物件的按鈕是 Command_Action，按下才開始選目標；工具照樣把目標交給遊戲。
+            Assert.That(_tools.UseGizmo(40, "6", targetId: 41), Is.EqualTo("Pressed \"Activate...\" on [40]: targeted [41]."));
+            Assert.That(_world.Calls, Is.EqualTo(new[] { "UseGizmo(40,6,Activate...,[41])" }));
+        }
+
+        [Test]
+        public void ContradictoryOrIncompleteTargetsAreRefusedBeforeTouchingTheWorld()
+        {
+            Assert.That(_tools.UseGizmo(40, "5", targetId: 41, targetX: 3, targetZ: 3), Does.StartWith("Error:").And.Contain("not both"));
+            Assert.That(_tools.UseGizmo(40, "5", targetX: 3), Does.StartWith("Error:").And.Contain("both targetX and targetZ"));
+            Assert.That(_tools.UseGizmo(40, "4", targetId: 41), Does.StartWith("Error:").And.Contain("toggle"));
+            Assert.That(_world.Calls, Is.Empty);
         }
 
         [Test]
@@ -92,7 +147,7 @@ namespace RimAgent.Tests
         public void UseRefusesDisabledUnsupportedAndUnknownButtons()
         {
             Assert.That(_tools.UseGizmo(40, "Launch ship"), Is.EqualTo("Error: \"Launch ship\" is disabled: Missing: ship engine"));
-            Assert.That(_tools.UseGizmo(40, "1"), Does.StartWith("Error:").And.Contain("map target or a menu choice"));
+            Assert.That(_tools.UseGizmo(40, "1"), Does.StartWith("Error:").And.Contain("menu choice or another kind of input"));
             Assert.That(_tools.UseGizmo(40, "self-destruct"), Does.StartWith("Error:").And.Contain("Buttons: 1) Deconstruct"));
             Assert.That(_world.Calls, Is.Empty);
         }
@@ -103,6 +158,7 @@ namespace RimAgent.Tests
             var gated = new GizmoTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
             Assert.That(gated.UseGizmo(40, "Power"), Does.StartWith("Needs confirmation:").And.Contain("\"Power\" on [40]"));
+            Assert.That(gated.UseGizmo(40, "5", targetX: 30, targetZ: 25), Does.StartWith("Needs confirmation:").And.Contain("aimed at cell (30,25)"));
             Assert.That(_world.Calls, Is.Empty);
         }
     }

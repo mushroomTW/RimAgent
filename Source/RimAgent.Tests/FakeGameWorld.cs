@@ -25,6 +25,13 @@ namespace RimAgent.Tests
         /// <summary>物件 id → 指令按鈕；沒登記但存在的物件視為沒有按鈕。</summary>
         public Dictionary<int, List<GizmoInfo>> Gizmos { get; } = new Dictionary<int, List<GizmoInfo>>();
         public List<QuestInfo> Quests { get; } = new List<QuestInfo>();
+        /// <summary>目標（MapTarget.ToString()，例如「[305]」「cell (4,5)」）→ 遊戲拒絕該目標的原因。</summary>
+        public Dictionary<string, string> RejectedTargets { get; } = new Dictionary<string, string>();
+        /// <summary>任何殖民者對任何目標按右鍵得到的選單（測試要的情境各自擺）。</summary>
+        public List<FloatMenuOptionInfo> FloatMenuOptions { get; } = new List<FloatMenuOptionInfo>();
+        /// <summary>非空時右鍵選單做不出來（例如殖民者倒地）。</summary>
+        public string FloatMenuError { get; set; } = string.Empty;
+        public string FloatMenuResult { get; set; } = string.Empty;
         /// <summary>下一次 ChooseOption 或按下 action 按鈕成功後接著出現的對話框（模擬多段對話與確認框）。</summary>
         public PendingChoiceInfo FollowUpDialog { get; set; }
         public PowerInfo Power { get; set; } = new PowerInfo();
@@ -544,13 +551,19 @@ namespace RimAgent.Tests
             return Things.Any(t => t.Id == thingId) ? new List<GizmoInfo>() : null;
         }
 
-        public CommandResult UseGizmo(int thingId, int gizmoNumber, string label)
+        public CommandResult UseGizmo(int thingId, int gizmoNumber, string label, MapTarget target)
         {
-            Calls.Add($"UseGizmo({thingId},{gizmoNumber},{label})");
+            Calls.Add($"UseGizmo({thingId},{gizmoNumber},{label}" + (target == null ? ")" : $",{target})"));
             GizmoInfo gizmo = GetGizmos(thingId)?.FirstOrDefault(g => g.Number == gizmoNumber);
             if (gizmo != null && !string.Equals(gizmo.Label, label, StringComparison.OrdinalIgnoreCase))
                 return CommandResult.Fail("button list changed");
             if (gizmo == null) return CommandResult.Fail("no such button");
+            if (gizmo.Kind == GizmoInfo.TargetKind || target != null)
+            {
+                if (target == null) return CommandResult.Fail("asks for a target");
+                if (RejectedTargets.TryGetValue(target.ToString(), out string reason)) return CommandResult.Fail(reason);
+                return CommandResult.Ok("targeted " + target);
+            }
             if (gizmo.Kind == GizmoInfo.ToggleKind)
             {
                 gizmo.On = !gizmo.On;
@@ -562,6 +575,28 @@ namespace RimAgent.Tests
                 FollowUpDialog = null;
             }
             return CommandResult.Ok();
+        }
+
+        public FloatMenuInfo GetFloatMenuOptions(int colonistId, MapTarget target)
+        {
+            ColonistInfo colonist = Colonists.FirstOrDefault(c => c.Id == colonistId);
+            if (colonist == null) return new FloatMenuInfo { Error = "colonist not found" };
+            if (!string.IsNullOrEmpty(FloatMenuError)) return new FloatMenuInfo { Error = FloatMenuError, PawnName = colonist.Name };
+            return new FloatMenuInfo { PawnName = colonist.Name, Drafted = colonist.Drafted, TargetLabel = target.ToString(), Options = FloatMenuOptions };
+        }
+
+        public CommandResult UseFloatMenuOption(int colonistId, MapTarget target, int optionNumber, string label)
+        {
+            Calls.Add($"UseFloatMenuOption({colonistId},{target},{optionNumber},{label})");
+            FloatMenuOptionInfo option = FloatMenuOptions.FirstOrDefault(o => o.Number == optionNumber);
+            if (option == null || !string.Equals(option.Label, label, StringComparison.OrdinalIgnoreCase)) return CommandResult.Fail("menu changed");
+            if (option.Disabled) return CommandResult.Fail("disabled");
+            if (FollowUpDialog != null)
+            {
+                PendingChoices.Add(FollowUpDialog);
+                FollowUpDialog = null;
+            }
+            return CommandResult.Ok(FloatMenuResult);
         }
 
         public CommandResult OrderJob(int pawnId, string job, int targetId)

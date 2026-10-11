@@ -34,6 +34,22 @@ namespace RimAgent.Tools
                 "colonist");
         }
 
+        /// <summary>
+        /// 命令的地圖目標：物件 id 或格子座標擇一（沒給的欄位為 -1）。都沒給回成功但值為 null，
+        /// 由命令決定缺目標算不算錯；兩種都給或格子只給一個座標就報錯。
+        /// </summary>
+        public static Result<MapTarget> ResolveMapTarget(int targetId, int x, int z)
+        {
+            bool hasThing = targetId >= 0;
+            bool hasCell = x >= 0 || z >= 0;
+            if (hasThing && hasCell)
+                return Result<MapTarget>.Fail("Error: give either a target thing id or a target cell (x and z), not both.");
+            if (hasCell && (x < 0 || z < 0))
+                return Result<MapTarget>.Fail("Error: a target cell needs both targetX and targetZ.");
+            if (hasThing) return Result<MapTarget>.Ok(MapTarget.OfThing(targetId));
+            return Result<MapTarget>.Ok(hasCell ? MapTarget.OfCell(x, z) : null);
+        }
+
         /// <summary>逗號分隔的多位殖民者，或 all / everyone / * 代表全部。</summary>
         public static Result<List<ColonistInfo>> ResolveColonists(string input, IReadOnlyList<ColonistInfo> colonists)
         {

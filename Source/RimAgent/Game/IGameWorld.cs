@@ -127,11 +127,24 @@ namespace RimAgent.Game
         /// <summary>物件目前看得到的指令按鈕（不含開發者模式按鈕）；找不到或在迷霧裡的物件回傳 null。</summary>
         IReadOnlyList<GizmoInfo> GetGizmos(int thingId);
         /// <summary>
-        /// 按一個指令按鈕（依 1 起的序號定位並核對標籤），等同玩家點它。只支援按一下與開關；
+        /// 按一個指令按鈕（依 1 起的序號定位並核對標籤），等同玩家點它。支援按一下、開關與需要地圖目標的按鈕；
         /// 按了開出選單或其他視窗會關回去並回報失敗，開出對話框或確認框則留著給 ChooseOption 回應。
-        /// 成功時 Message 為開關的新狀態（action 為空字串）。
+        /// 按鈕開始選目標時：給了 target 就照遊戲的選目標器同一套檢查（可選的種類、可否命中、遊戲自己的拒絕原因）
+        /// 驗證後下令，不合法回失敗並帶原因；沒給 target 則取消選目標並回失敗，說明要什麼目標。
+        /// 成功時 Message 為開關的新狀態或目標與遊戲訊息（單純 action 為空字串）。
         /// </summary>
-        CommandResult UseGizmo(int thingId, int gizmoNumber, string label);
+        CommandResult UseGizmo(int thingId, int gizmoNumber, string label, MapTarget target);
+        /// <summary>
+        /// 殖民者對某目標（物件或格子）按右鍵得到的選單，照原版 FloatMenuMakerMap 產生；
+        /// 殖民者不存在、無法下令或目標不在地圖上時 Error 帶原因。
+        /// </summary>
+        FloatMenuInfo GetFloatMenuOptions(int colonistId, MapTarget target);
+        /// <summary>
+        /// 執行右鍵選單的一個選項（重新產生選單，依 1 起的序號定位並核對標籤，等同玩家點它）。
+        /// 選項開出對話框或確認框時留著給 ChooseOption 回應；開出選目標器或其他視窗則關回去並回報失敗。
+        /// 成功時 Message 為遊戲回報的訊息（可為空字串）。
+        /// </summary>
+        CommandResult UseFloatMenuOption(int colonistId, MapTarget target, int optionNumber, string label);
         /// <summary>
         /// 對一名殖民者下達一次性的工作命令（job：rescue、capture、tend、strip、equip、enter_casket），檢查照遊戲右鍵選單。
         /// 成功時 Message 為做什麼（例如把誰送去哪張床、用哪種藥）。
