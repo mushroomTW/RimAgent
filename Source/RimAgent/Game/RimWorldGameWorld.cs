@@ -1616,6 +1616,79 @@ namespace RimAgent.Game
             return result;
         }
 
+        public IReadOnlyList<MapGridCell> GetMapGrid(CellRectSpec rect)
+        {
+            Map map = Map;
+            var result = new List<MapGridCell>(rect.CellCount);
+            for (int z = rect.MinZ; z <= rect.MaxZ; z++)
+            {
+                for (int x = rect.MinX; x <= rect.MaxX; x++)
+                {
+                    result.Add(ToGridCell(new IntVec3(x, 0, z), map));
+                }
+            }
+            return result;
+        }
+
+        private static MapGridCell ToGridCell(IntVec3 c, Map map)
+        {
+            // 迷霧裡的東西玩家看不到，其他圖層一律不填（與 ToCell 同一原則）。
+            if (c.Fogged(map)) return new MapGridCell { Fogged = true };
+
+            TerrainDef terrain = c.GetTerrain(map);
+            Zone zone = c.GetZone(map);
+            RoofDef roof = c.GetRoof(map);
+            var cell = new MapGridCell
+            {
+                Terrain = terrain.IsWater
+                    ? (terrain.passability == Traversability.Impassable ? GridTerrain.DeepWater : GridTerrain.ShallowWater)
+                    : (terrain.IsFloor || terrain.bridge || terrain.IsSubstructure ? GridTerrain.Floor : GridTerrain.Ground),
+                Zone = zone is Zone_Stockpile ? GridZone.Stockpile : zone is Zone_Growing ? GridZone.Growing : GridZone.None,
+                Roof = roof == null ? GridRoof.None : !roof.isNatural ? GridRoof.Constructed : roof.isThickRoof ? GridRoof.Mountain : GridRoof.Natural
+            };
+
+            List<Thing> things = c.GetThingList(map);
+            for (int i = 0; i < things.Count; i++)
+            {
+                Thing t = things[i];
+                if (t is Pawn pawn)
+                {
+                    GridPawn kind = pawn.HostileTo(Faction.OfPlayer) ? GridPawn.Hostile : pawn.IsColonist ? GridPawn.Colonist : GridPawn.Other;
+                    if (kind > cell.Pawn) cell.Pawn = kind;
+                }
+                else if (t is Plant plant)
+                {
+                    // 玩家點不到的植物（草、苔、蒲公英）是地表覆蓋，畫出來只會淹掉真正要看的東西。
+                    if (!plant.def.selectable) continue;
+                    GridPlant kind = plant.def.plant != null && plant.def.plant.IsTree ? GridPlant.Tree : GridPlant.Other;
+                    if (kind > cell.Plant) cell.Plant = kind;
+                }
+                else if (t is Blueprint || t is Frame)
+                {
+                    // 地板的藍圖與框架蓋滿整間房，只會遮住家具與物品；地板在地形圖層看得到成品，這裡不畫。
+                    if (t.def.entityDefToBuild is TerrainDef) continue;
+                    GridBuilding kind = t is Frame ? GridBuilding.Frame : GridBuilding.Blueprint;
+                    if (kind > cell.Building) cell.Building = kind;
+                }
+                else if (t.def.mineable)
+                {
+                    cell.Rock = true;
+                }
+                else if (t is Building)
+                {
+                    // 電線與管線貼著整片地面，畫出來沒有佈局資訊。
+                    if (t.def.altitudeLayer == AltitudeLayer.Conduits) continue;
+                    GridBuilding kind = t.def.IsWall ? GridBuilding.Wall : t.def.IsDoor ? GridBuilding.Door : GridBuilding.Other;
+                    if (kind > cell.Building) cell.Building = kind;
+                }
+                else if (t.def.category == ThingCategory.Item)
+                {
+                    cell.HasItem = true;
+                }
+            }
+            return cell;
+        }
+
         private static CellInfo ToCell(IntVec3 c, Map map, Dictionary<int, RoomInfo> rooms)
         {
             TerrainDef terrain = c.GetTerrain(map);

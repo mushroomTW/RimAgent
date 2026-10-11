@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 67 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 68 tools, with control over when actions require approval.
 
-**RimWorld 1.6** &nbsp;·&nbsp; **67 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.6** &nbsp;·&nbsp; **68 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,7 +50,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **67 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
+- **68 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
 - **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel), and subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
@@ -138,7 +138,7 @@ All 15 categories are enabled by default and can be switched off individually in
 
 | Category | Examples |
 | --- | --- |
-| Observe | Colony status, resources, threats, research, maps, objects, areas, screenshots, skill texts, pending choices, and quests (list, accept, dismiss) |
+| Observe | Colony status, resources, threats, research, maps, objects, areas, character-grid map views, screenshots, skill texts, pending choices, and quests (list, accept, dismiss) |
 | Work | Work priorities and daily schedules (undoable) |
 | Build | Designations, blueprints (single, line, fill, or outline; up to 400 cells), forbidden items, gizmo buttons (including ones that need a target), and right-click menu options |
 | Combat | Draft, move, attack, rescue, capture, tend, strip, equip, and enter cryptosleep caskets |

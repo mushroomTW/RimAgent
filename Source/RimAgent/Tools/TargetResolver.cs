@@ -147,6 +147,19 @@ namespace RimAgent.Tools
             return Result<CellRectSpec>.Ok(rect);
         }
 
+        /// <summary>矩形與地圖有重疊就裁到地圖內，完全在地圖外才報錯（純看的工具用，不像 <see cref="ResolveRect"/> 一格越界就拒絕）。</summary>
+        public static Result<CellRectSpec> ClampRect(int x1, int z1, int x2, int z2, MapBounds bounds)
+        {
+            CellRectSpec rect = CellRectSpec.FromCorners(x1, z1, x2, z2);
+            if (rect.MaxX < 0 || rect.MaxZ < 0 || rect.MinX >= bounds.Width || rect.MinZ >= bounds.Height)
+            {
+                return Result<CellRectSpec>.Fail(
+                    $"Error: rectangle {rect} is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}.");
+            }
+            return Result<CellRectSpec>.Ok(new CellRectSpec(
+                Math.Max(0, rect.MinX), Math.Max(0, rect.MinZ), Math.Min(bounds.Width - 1, rect.MaxX), Math.Min(bounds.Height - 1, rect.MaxZ)));
+        }
+
         /// <summary>座標在地圖內回傳 null，否則回傳可轉述給模型的錯誤訊息。</summary>
         public static string CheckCell(int x, int z, MapBounds bounds)
         {

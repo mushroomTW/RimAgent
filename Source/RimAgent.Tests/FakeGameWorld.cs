@@ -374,6 +374,26 @@ namespace RimAgent.Tests
             return result;
         }
 
+        /// <summary>字元網格的格子；沒登記的格子為室外裸地（預設的 MapGridCell）。</summary>
+        public Dictionary<(int X, int Z), MapGridCell> GridCells { get; } = new Dictionary<(int, int), MapGridCell>();
+
+        /// <summary>每次 GetMapGrid 收到的矩形（驗證工具層有裁切、有擋超大矩形）。</summary>
+        public List<CellRectSpec> GridRequests { get; } = new List<CellRectSpec>();
+
+        public IReadOnlyList<MapGridCell> GetMapGrid(CellRectSpec rect)
+        {
+            GridRequests.Add(rect);
+            var result = new List<MapGridCell>();
+            for (int z = rect.MinZ; z <= rect.MaxZ; z++)
+            {
+                for (int x = rect.MinX; x <= rect.MaxX; x++)
+                {
+                    result.Add(GridCells.TryGetValue((x, z), out MapGridCell cell) ? cell : new MapGridCell());
+                }
+            }
+            return result;
+        }
+
         /// <summary>非 null 時所有工具都會被擋下（模擬讀檔中／回到主選單）。</summary>
         public string NotReadyReason { get; set; }
 

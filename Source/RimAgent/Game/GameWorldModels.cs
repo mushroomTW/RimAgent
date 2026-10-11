@@ -603,6 +603,74 @@ namespace RimAgent.Game
         public IReadOnlyList<ThingInfo> Things { get; set; } = Array.Empty<ThingInfo>();
     }
 
+    /// <summary>字元網格上一格的 pawn：同格有多個時由世界層挑出現在的優先序（敵對 > 殖民者 > 其他）。</summary>
+    public enum GridPawn
+    {
+        None,
+        Other,
+        Colonist,
+        Hostile
+    }
+
+    /// <summary>字元網格上一格的建築類：列舉值越大越優先（同格有多筆時取最大）。不含天然岩石，岩石另有欄位。</summary>
+    public enum GridBuilding
+    {
+        None,
+        Blueprint,
+        Frame,
+        Other,
+        Door,
+        Wall
+    }
+
+    public enum GridTerrain
+    {
+        Ground,
+        Floor,
+        ShallowWater,
+        DeepWater
+    }
+
+    public enum GridPlant
+    {
+        None,
+        Other,
+        Tree
+    }
+
+    public enum GridZone
+    {
+        None,
+        Stockpile,
+        Growing
+    }
+
+    public enum GridRoof
+    {
+        None,
+        Constructed,
+        Natural,
+        Mountain
+    }
+
+    /// <summary>
+    /// 字元網格的一格：世界層只分類每個圖層的狀態，圖層之間的優先序與字元由工具層決定。
+    /// 迷霧中的格子只有 Fogged 有意義，其他欄位一律是預設值（不透露玩家看不到的東西）。
+    /// </summary>
+    public sealed class MapGridCell
+    {
+        public bool Fogged { get; set; }
+        public GridPawn Pawn { get; set; }
+        public GridBuilding Building { get; set; }
+        public bool HasItem { get; set; }
+        /// <summary>天然岩石或礦脈（可開採的牆）。</summary>
+        public bool Rock { get; set; }
+        public GridTerrain Terrain { get; set; }
+        public GridPlant Plant { get; set; }
+        public GridZone Zone { get; set; }
+        public GridRoof Roof { get; set; }
+    }
+
     public sealed class DefInfo
     {
         public DefInfo()

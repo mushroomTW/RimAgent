@@ -102,6 +102,7 @@ namespace RimAgent.InGameTests
                 Query("GetMapBounds", () => _world.GetMapBounds()),
                 Query("GetCell", () => _world.GetCell(center.x, center.z)),
                 Query("GetCells", () => _world.GetCells(new CellRectSpec(center.x - 2, center.z - 2, center.x + 2, center.z + 2))),
+                Query("GetMapGrid", () => _world.GetMapGrid(new CellRectSpec(center.x - 2, center.z - 2, center.x + 2, center.z + 2))),
                 Query("AnimalAreas", () => _world.AnimalAreas),
                 Query("ResearchProjects", () => _world.ResearchProjects),
                 Query("FinishedResearchProjects", () => _world.FinishedResearchProjects)
@@ -308,6 +309,202 @@ namespace RimAgent.InGameTests
                 }
             }
             TestHelpers.AssertNone(failures, "place_blueprint");
+        }
+
+        /// <summary>
+        /// view_map_grid 的兩個圖層逐格對照原版資料：基準不走轉接層的分類，直接用迷霧格、spawn 的 pawn、
+        /// 邊緣建築（GetEdifice）、屋頂格與物品清單算出「該是什麼字元」。地圖上沒有的種類（沒牆、沒門、沒岩石）
+        /// 就沒有該項的樣本，記在 log 的樣本數裡，不算失敗。
+        /// </summary>
+        [Test]
+        public static void MapGridMatchesVanillaCells()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(MapGridMatchesVanillaCells))) return;
+            Map map = Find.CurrentMap;
+            _world.TakeNewGameErrors();
+            Pawn anchor = map.mapPawns.FreeColonistsSpawned.FirstOrDefault();
+            CellRect rect = CellRect.CenteredOn(anchor?.Position ?? map.Center, 12).ClipInsideMap(map);
+            var tool = new RimAgent.Tools.MapGridTools(_world);
+            var failures = new List<string>();
+            var samples = new Dictionary<string, int>();
+
+            // 地圖層
+            Dictionary<int, string> rows = ParseGridRows(tool.ViewMapGrid(rect.minX, rect.minZ, rect.maxX, rect.maxZ), failures);
+            foreach (IntVec3 c in rect.Cells)
+            {
+                char shown = GlyphAt(rows, rect, c);
+                if (c.Fogged(map))
+                {
+                    Expect(failures, samples, "fog", c, shown, '?');
+                    continue;
+                }
+                List<Thing> things = c.GetThingList(map);
+                List<Pawn> pawns = things.OfType<Pawn>().ToList();
+                Building edifice = c.GetEdifice(map);
+                if (pawns.Count > 0)
+                {
+                    char want = pawns.Any(p => p.HostileTo(Faction.OfPlayer)) ? '!' : pawns.Any(p => p.IsColonist) ? '@' : 'o';
+                    Expect(failures, samples, "pawn " + want, c, shown, want);
+                }
+                else if (edifice != null && edifice.def.IsWall) Expect(failures, samples, "wall", c, shown, '#');
+                else if (edifice != null && edifice.def.mineable) Expect(failures, samples, "rock", c, shown, '^');
+                else if (edifice != null && edifice.def.IsDoor) Expect(failures, samples, "door", c, shown, '+');
+                else if (things.Count > 0 && things.All(t => t.def.category == ThingCategory.Item)) Expect(failures, samples, "item", c, shown, 'i');
+            }
+            if (anchor != null)
+            {
+                char colonist = GlyphAt(rows, rect, anchor.Position);
+                if (colonist != '@' && colonist != '!') failures.Add($"colonist {anchor.LabelShort} at {anchor.Position} is drawn as '{colonist}'");
+            }
+
+            // 屋頂層：牆與門當參照，其餘照屋頂格。
+            Dictionary<int, string> roofRows = ParseGridRows(tool.ViewMapGrid(rect.minX, rect.minZ, rect.maxX, rect.maxZ, "roof"), failures);
+            foreach (IntVec3 c in rect.Cells)
+            {
+                char shown = GlyphAt(roofRows, rect, c);
+                Building edifice = c.GetEdifice(map);
+                RoofDef roof = c.GetRoof(map);
+                char want = c.Fogged(map) ? '?'
+                    : edifice != null && edifice.def.IsWall ? '#'
+                    : edifice != null && edifice.def.IsDoor ? '+'
+                    : roof == null ? '.' : !roof.isNatural ? 'r' : roof.isThickRoof ? 'M' : 'n';
+                Expect(failures, samples, "roof " + want, c, shown, want);
+            }
+
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            Log.Message($"{TestHelpers.LogPrefix}MapGridMatchesVanillaCells: rect {rect}, samples {string.Join(", ", samples.Select(kv => kv.Key + " x" + kv.Value))}");
+            TestHelpers.AssertNone(failures, "view_map_grid differs from vanilla cells");
+        }
+
+        /// <summary>藍圖在字元網格裡是 b，不是成品；拆掉後那一格回到原樣。</summary>
+        [Test]
+        public static void MapGridDrawsPlacedBlueprint()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(MapGridDrawsPlacedBlueprint))) return;
+            Map map = Find.CurrentMap;
+            _world.TakeNewGameErrors();
+            ThingDef wall = ThingDefOf.Wall;
+            ThingDef stuff = GenStuff.DefaultStuffFor(wall);
+            // 只挑什麼都沒有、看得到的格子：藍圖不會被別的圖層蓋掉。
+            CellRect? found = FindFreeRect(map, 1, c => !c.Fogged(map) && c.GetThingList(map).Count == 0
+                && GenConstruct.CanPlaceBlueprintAt(wall, c, Rot4.North, map, false, null, null, stuff).Accepted);
+            if (found == null)
+            {
+                TestHelpers.Skip(nameof(MapGridDrawsPlacedBlueprint), "no empty visible cell accepts a wall blueprint");
+                return;
+            }
+            IntVec3 cell = found.Value.CenterCell;
+            var tool = new RimAgent.Tools.MapGridTools(_world);
+            var before = new HashSet<Thing>(cell.GetThingList(map));
+            var failures = new List<string>();
+            try
+            {
+                CellRect view = CellRect.CenteredOn(cell, 1).ClipInsideMap(map);
+                char beforeGlyph = GlyphAt(ParseGridRows(tool.ViewMapGrid(view.minX, view.minZ, view.maxX, view.maxZ), failures), view, cell);
+                if (beforeGlyph == 'b') failures.Add($"{cell} already drawn as a blueprint before placing one");
+
+                CommandResult result = _world.TryPlaceBlueprint(wall.defName, cell.x, cell.z, 0, null);
+                if (!result.Success) failures.Add("command failed: " + result.Error);
+                char planned = GlyphAt(ParseGridRows(tool.ViewMapGrid(view.minX, view.minZ, view.maxX, view.maxZ), failures), view, cell);
+                if (planned != 'b') failures.Add($"wall blueprint at {cell} is drawn as '{planned}', expected 'b'");
+            }
+            finally
+            {
+                foreach (Thing thing in cell.GetThingList(map).Where(t => !before.Contains(t) && (t.def == wall || t.def.entityDefToBuild == wall)).ToList())
+                {
+                    if (!thing.Destroyed) thing.Destroy();
+                }
+            }
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            TestHelpers.AssertNone(failures, "view_map_grid blueprint");
+        }
+
+        /// <summary>
+        /// quicktest 地圖多半是空地，取樣碰不到牆、門、岩石與屋頂；這裡在空地上直接生成這些東西、設屋頂，
+        /// 確認兩個圖層畫出的字元，結束後拆掉並還原屋頂。
+        /// </summary>
+        [Test]
+        public static void MapGridDrawsBuiltStructures()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(MapGridDrawsBuiltStructures))) return;
+            Map map = Find.CurrentMap;
+            _world.TakeNewGameErrors();
+            ThingDef rockDef = DefDatabase<ThingDef>.GetNamedSilentFail("Granite");
+            CellRect? found = FindFreeRect(map, 5, c => !c.Fogged(map) && c.Standable(map) && c.GetThingList(map).Count == 0
+                && !map.roofGrid.Roofed(c) && c.GetZone(map) == null);
+            if (found == null || rockDef == null)
+            {
+                TestHelpers.Skip(nameof(MapGridDrawsBuiltStructures), rockDef == null ? "no Granite def" : "no empty unroofed 5x5 area near the colonists");
+                return;
+            }
+            CellRect rect = found.Value;
+            IntVec3 wallCell = new IntVec3(rect.minX + 1, 0, rect.minZ + 1);
+            IntVec3 doorCell = new IntVec3(rect.minX + 2, 0, rect.minZ + 1);
+            IntVec3 rockCell = new IntVec3(rect.minX + 3, 0, rect.minZ + 3);
+            IntVec3 builtRoofCell = new IntVec3(rect.minX + 1, 0, rect.minZ + 3);
+            IntVec3 thickRoofCell = new IntVec3(rect.minX + 2, 0, rect.minZ + 3);
+            var spawned = new List<Thing>();
+            var tool = new RimAgent.Tools.MapGridTools(_world);
+            var failures = new List<string>();
+            try
+            {
+                spawned.Add(GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Wall, GenStuff.DefaultStuffFor(ThingDefOf.Wall)), wallCell, map));
+                spawned.Add(GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Door, GenStuff.DefaultStuffFor(ThingDefOf.Door)), doorCell, map));
+                spawned.Add(GenSpawn.Spawn(ThingMaker.MakeThing(rockDef), rockCell, map));
+                map.roofGrid.SetRoof(builtRoofCell, RoofDefOf.RoofConstructed);
+                map.roofGrid.SetRoof(thickRoofCell, RoofDefOf.RoofRockThick);
+
+                Dictionary<int, string> mapRows = ParseGridRows(tool.ViewMapGrid(rect.minX, rect.minZ, rect.maxX, rect.maxZ), failures);
+                ExpectGlyph(mapRows, rect, wallCell, '#', "wall", failures);
+                ExpectGlyph(mapRows, rect, doorCell, '+', "door", failures);
+                ExpectGlyph(mapRows, rect, rockCell, '^', "natural rock", failures);
+
+                Dictionary<int, string> roofRows = ParseGridRows(tool.ViewMapGrid(rect.minX, rect.minZ, rect.maxX, rect.maxZ, "roof"), failures);
+                ExpectGlyph(roofRows, rect, wallCell, '#', "wall on the roof layer", failures);
+                ExpectGlyph(roofRows, rect, builtRoofCell, 'r', "constructed roof", failures);
+                ExpectGlyph(roofRows, rect, thickRoofCell, 'M', "thick mountain roof", failures);
+                ExpectGlyph(roofRows, rect, new IntVec3(rect.maxX, 0, rect.maxZ), '.', "unroofed cell", failures);
+            }
+            finally
+            {
+                foreach (Thing thing in spawned.Where(t => !t.Destroyed)) thing.Destroy();
+                map.roofGrid.SetRoof(builtRoofCell, null);
+                map.roofGrid.SetRoof(thickRoofCell, null);
+            }
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            TestHelpers.AssertNone(failures, "view_map_grid built structures");
+        }
+
+        private static void ExpectGlyph(Dictionary<int, string> rows, CellRect rect, IntVec3 cell, char expected, string what, List<string> failures)
+        {
+            char actual = GlyphAt(rows, rect, cell);
+            if (actual != expected) failures.Add($"{what} at {cell} is drawn as '{actual}', expected '{expected}'");
+        }
+
+        /// <summary>把 view_map_grid 的輸出拆成 z → 該列字元（去掉 "z12 " 標籤）；格式不對記成失敗。</summary>
+        private static Dictionary<int, string> ParseGridRows(string text, List<string> failures)
+        {
+            var rows = new Dictionary<int, string>();
+            if (text.StartsWith("Error:", StringComparison.Ordinal)) failures.Add("view_map_grid: " + text);
+            foreach (string line in text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string trimmed = line.TrimStart(new[] { ' ' });
+                int space = trimmed.IndexOf(' ');
+                if (space < 2 || trimmed[0] != 'z' || !int.TryParse(trimmed.Substring(1, space - 1), out int z)) continue;
+                rows[z] = trimmed.Substring(space + 1);
+            }
+            return rows;
+        }
+
+        private static char GlyphAt(Dictionary<int, string> rows, CellRect rect, IntVec3 c)
+        {
+            return rows.TryGetValue(c.z, out string row) && c.x - rect.minX >= 0 && c.x - rect.minX < row.Length ? row[c.x - rect.minX] : '\0';
+        }
+
+        private static void Expect(List<string> failures, Dictionary<string, int> samples, string what, IntVec3 c, char shown, char want)
+        {
+            samples[what] = samples.TryGetValue(what, out int n) ? n + 1 : 1;
+            if (shown != want && failures.Count < 20) failures.Add($"{what} at {c}: drawn '{shown}', expected '{want}'");
         }
 
         /// <summary>剛蓋好、還沒人認領的床要抵掉沒床的人：殖民者去睡覺前，排程器不該一直以為床不夠。</summary>

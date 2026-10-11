@@ -48,6 +48,11 @@ namespace RimAgent.Game
         CellInfo GetCell(int x, int z);
         /// <summary>矩形內每一格的地面狀態（含邊界）；呼叫者已確認矩形在地圖內並限制大小。</summary>
         IReadOnlyList<CellInfo> GetCells(CellRectSpec rect);
+        /// <summary>
+        /// 矩形內每一格的圖層分類（供字元網格用，比 GetCells 輕）；順序同 GetCells：先 z 由小到大，同列 x 由小到大。
+        /// 呼叫者已確認矩形在地圖內並限制大小。
+        /// </summary>
+        IReadOnlyList<MapGridCell> GetMapGrid(CellRectSpec rect);
 
         /// <summary>
         /// 遊戲目前不能執行工具的原因（沒有進行中的遊戲、讀檔或生成地圖中、沒有當前地圖）；可以執行時回傳 null。

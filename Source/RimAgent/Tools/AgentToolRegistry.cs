@@ -90,6 +90,7 @@ namespace RimAgent.Tools
             _activity = activity;
 
             Register(new ObserveTools(world, gate), transcript);
+            Register(new MapGridTools(world), transcript);
             Register(new ChoiceTools(world, gate), transcript);
             Register(new QuestTools(world, gate), transcript);
             Register(new WorkTools(world, undo ?? new WorkUndoStack(), gate), transcript);
