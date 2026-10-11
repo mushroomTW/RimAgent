@@ -451,6 +451,17 @@ namespace RimAgent.InGameTests
                 spawned.Add(GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Wall, GenStuff.DefaultStuffFor(ThingDefOf.Wall)), wallCell, map));
                 spawned.Add(GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Door, GenStuff.DefaultStuffFor(ThingDefOf.Door)), doorCell, map));
                 spawned.Add(GenSpawn.Spawn(ThingMaker.MakeThing(rockDef), rockCell, map));
+                IntVec3 sandbagCell = new IntVec3(rect.minX + 3, 0, rect.minZ + 1);
+                IntVec3 turretCell = new IntVec3(rect.minX + 1, 0, rect.minZ + 2);
+                ThingDef sandbags = DefDatabase<ThingDef>.GetNamedSilentFail("Sandbags");
+                ThingDef turret = DefDatabase<ThingDef>.GetNamedSilentFail("Turret_MiniTurret");
+                if (sandbags != null) spawned.Add(GenSpawn.Spawn(ThingMaker.MakeThing(sandbags, GenStuff.DefaultStuffFor(sandbags)), sandbagCell, map));
+                if (turret != null)
+                {
+                    Thing spawnedTurret = ThingMaker.MakeThing(turret, GenStuff.DefaultStuffFor(turret));
+                    spawnedTurret.SetFaction(Faction.OfPlayer);
+                    spawned.Add(GenSpawn.Spawn(spawnedTurret, turretCell, map));
+                }
                 map.roofGrid.SetRoof(builtRoofCell, RoofDefOf.RoofConstructed);
                 map.roofGrid.SetRoof(thickRoofCell, RoofDefOf.RoofRockThick);
 
@@ -458,6 +469,8 @@ namespace RimAgent.InGameTests
                 ExpectGlyph(mapRows, rect, wallCell, '#', "wall", failures);
                 ExpectGlyph(mapRows, rect, doorCell, '+', "door", failures);
                 ExpectGlyph(mapRows, rect, rockCell, '^', "natural rock", failures);
+                if (sandbags != null) ExpectGlyph(mapRows, rect, sandbagCell, 'c', "sandbags", failures);
+                if (turret != null) ExpectGlyph(mapRows, rect, turretCell, 't', "mini-turret", failures);
 
                 Dictionary<int, string> roofRows = ParseGridRows(tool.ViewMapGrid(rect.minX, rect.minZ, rect.maxX, rect.maxZ, "roof"), failures);
                 ExpectGlyph(roofRows, rect, wallCell, '#', "wall on the roof layer", failures);

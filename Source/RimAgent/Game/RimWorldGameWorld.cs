@@ -1616,6 +1616,9 @@ namespace RimAgent.Game
             return result;
         }
 
+        /// <summary>沙包與路障是 0.55；家具多在 0.4 上下，不算進網格的掩體。</summary>
+        private const float CoverFillPercent = 0.5f;
+
         public IReadOnlyList<MapGridCell> GetMapGrid(CellRectSpec rect)
         {
             Map map = Map;
@@ -1678,7 +1681,11 @@ namespace RimAgent.Game
                 {
                     // 電線與管線貼著整片地面，畫出來沒有佈局資訊。
                     if (t.def.altitudeLayer == AltitudeLayer.Conduits) continue;
-                    GridBuilding kind = t.def.IsWall ? GridBuilding.Wall : t.def.IsDoor ? GridBuilding.Door : GridBuilding.Other;
+                    GridBuilding kind = t.def.IsWall ? GridBuilding.Wall
+                        : t.def.IsDoor ? GridBuilding.Door
+                        : t is Building_Turret ? GridBuilding.Turret
+                        : t.def.passability == Traversability.PassThroughOnly && t.def.fillPercent >= CoverFillPercent ? GridBuilding.Cover
+                        : GridBuilding.Other;
                     if (kind > cell.Building) cell.Building = kind;
                 }
                 else if (t.def.category == ThingCategory.Item)

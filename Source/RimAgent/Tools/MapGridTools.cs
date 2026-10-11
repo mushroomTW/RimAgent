@@ -44,6 +44,8 @@ namespace RimAgent.Tools
         private static readonly Glyph OtherPawn = new Glyph('o', "other pawn (animal, guest, prisoner, neutral)");
         private static readonly Glyph Wall = new Glyph('#', "wall");
         private static readonly Glyph Door = new Glyph('+', "door");
+        private static readonly Glyph Turret = new Glyph('t', "turret");
+        private static readonly Glyph Cover = new Glyph('c', "cover you can walk through (sandbags, barricade)");
         private static readonly Glyph OtherBuilding = new Glyph('B', "other building");
         private static readonly Glyph Frame = new Glyph('f', "frame (under construction)");
         private static readonly Glyph Blueprint = new Glyph('b', "blueprint (planned)");
@@ -66,7 +68,7 @@ namespace RimAgent.Tools
         /// <summary>圖例的固定順序（只列出現的字元）；圖層優先序見 <see cref="Classify"/>。</summary>
         private static readonly Glyph[] MapOrder =
         {
-            Fog, Hostile, Colonist, OtherPawn, Wall, Door, OtherBuilding, Frame, Blueprint, Item, Rock,
+            Fog, Hostile, Colonist, OtherPawn, Wall, Door, Turret, Cover, OtherBuilding, Frame, Blueprint, Item, Rock,
             DeepWater, ShallowWater, Tree, OtherPlant, Stockpile, Growing, Floor, Ground
         };
 
@@ -80,7 +82,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("view_map_grid", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Draws a rectangle of the current map as a character grid, one character per cell, so you can see rooms, walls, doors, kill boxes, hull shapes, water and zones. Rows run north (top, highest z) to south and columns west to east; x labels sit above the columns and a z label starts each row, so you can read exact cells for place_blueprint, add_zone or order_move. A legend lists only the characters that appear. Default layer \"map\" draws, by priority: unexplored fog, pawns (hostile, colonist, other), buildings (wall, door, other, then frame and blueprint of unfinished ones), items, natural rock, water, trees and other plants, stockpile and growing zones, constructed floor, bare ground. Not drawn: grass and other ground cover, filth, power conduits, floor blueprints. Layer \"roof\" instead shows roofs (thick rock, thin rock, constructed, none) with walls and doors for orientation, to find unroofed gaps in a room. Up to 2500 cells (50x50); a rectangle partly outside the map is clamped. For counts, ids and room details use inspect_area and find_things.")]
+        [Description("Draws a rectangle of the current map as a character grid, one character per cell, so you can see rooms, walls, doors, kill boxes, hull shapes, water and zones. Rows run north (top, highest z) to south and columns west to east; x labels sit above the columns and a z label starts each row, so you can read exact cells for place_blueprint, add_zone or order_move. A legend lists only the characters that appear. Default layer \"map\" draws, by priority: unexplored fog, pawns (hostile, colonist, other), buildings (wall, door, turret, walk-through cover such as sandbags, other, then frame and blueprint of unfinished ones), items, natural rock, water, trees and other plants, stockpile and growing zones, constructed floor, bare ground. Not drawn: grass and other ground cover, filth, power conduits, floor blueprints. Layer \"roof\" instead shows roofs (thick rock, thin rock, constructed, none) with walls and doors for orientation, to find unroofed gaps in a room. Up to 2500 cells (50x50); a rectangle partly outside the map is clamped. For counts, ids and room details use inspect_area and find_things.")]
         public string ViewMapGrid(
             [Description("Rectangle corner x.")] int x1,
             [Description("Rectangle corner z.")] int z1,
@@ -140,7 +142,7 @@ namespace RimAgent.Tools
         }
 
         /// <summary>
-        /// 一格畫哪個字元。地圖層的優先序（高到低）：迷霧 → pawn（敵對 > 殖民者 > 其他）→ 建築（牆 > 門 > 其他 > 框架 > 藍圖）
+        /// 一格畫哪個字元。地圖層的優先序（高到低）：迷霧 → pawn（敵對 > 殖民者 > 其他）→ 建築（牆 > 門 > 砲塔 > 掩體 > 其他 > 框架 > 藍圖）
         /// → 物品 → 天然岩石 → 水 → 植物（樹 > 其他）→ 區域 → 地板 → 裸地。
         /// 區域排在地板之前（與地形並列時區域贏）：倉庫常鋪在水泥地上，空的儲藏區若被地板蓋掉，模型就看不到它。
         /// 屋頂不在地圖層：疊上去會蓋掉上面任何一層，所以另開 roof 層，只留牆與門當參照。
@@ -171,6 +173,8 @@ namespace RimAgent.Tools
             {
                 case GridBuilding.Wall: return Wall;
                 case GridBuilding.Door: return Door;
+                case GridBuilding.Turret: return Turret;
+                case GridBuilding.Cover: return Cover;
                 case GridBuilding.Other: return OtherBuilding;
                 case GridBuilding.Frame: return Frame;
                 case GridBuilding.Blueprint: return Blueprint;

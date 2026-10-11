@@ -137,6 +137,10 @@ namespace RimAgent.Tests
             Assert.That(Draw(), Is.EqualTo("#"));
             cell.Building = GridBuilding.Door;
             Assert.That(Draw(), Is.EqualTo("+"));
+            cell.Building = GridBuilding.Turret;
+            Assert.That(Draw(), Is.EqualTo("t"));
+            cell.Building = GridBuilding.Cover;
+            Assert.That(Draw(), Is.EqualTo("c"));
             cell.Building = GridBuilding.Other;
             Assert.That(Draw(), Is.EqualTo("B"));
             cell.Building = GridBuilding.Frame;

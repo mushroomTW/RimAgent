@@ -619,6 +619,9 @@ namespace RimAgent.Game
         Blueprint,
         Frame,
         Other,
+        /// <summary>可穿過、遮蔽率至少一半的掩體（沙包、路障）。</summary>
+        Cover,
+        Turret,
         Door,
         Wall
     }

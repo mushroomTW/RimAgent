@@ -8,7 +8,7 @@ description: Hostiles on the map (raid, siege, sappers, manhunter pack, mechanoi
 Orders land seconds late: win by positioning and let the colonists' own AI do the shooting. Pause with set_time_speed before a batch of orders when the enemy is already close.
 
 ## 1. Size up
-From list_threats, list_colonists and inspect_area on the approach:
+From list_threats, list_colonists and view_map_grid on the approach (hostiles !, cover c, turrets t):
 - Fighters: colonists with a weapon who can do violence and are not downed.
 - Threat type: ranged, melee, manhunting animals, mechanoids, or a siege or sapper camp that is not charging yet.
 - Approach: where they come from relative to the colony's walls and doors.
@@ -20,7 +20,7 @@ Done when you can state: N hostiles of type T coming from D, against M fighters.
 | Clearly stronger (about 1.5x fighters, better weapons) | Hold a line just outside the base |
 | Even or weaker | Hold inside: fight from doorways and behind walls, let them come |
 | Manhunting animals | Shelter: everyone indoors with order_move until the madness wears off; fight only at a breached door |
-| Siege or sappers still camped | Dig in, then offer the player the choice: wait, strike with the best fighters, or reinforce |
+| Siege or sappers still camped | Dig in; shell the camp with a manned mortar (use_gizmo with a target cell) if the colony has one; otherwise offer the player the choice: wait, strike with the best fighters, or reinforce |
 | Mechanoids | Behind cover at long range, focus fire one target at a time |
 
 ## 3. Position
