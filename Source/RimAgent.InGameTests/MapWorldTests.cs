@@ -488,6 +488,95 @@ namespace RimAgent.InGameTests
             TestHelpers.AssertNone(failures, "view_map_grid built structures");
         }
 
+        /// <summary>
+        /// 飛船結局的機制路徑（不發射）：在空地生成一整艘船，電腦核心的發射鈕要帶停用原因、反應爐要有啟動鈕，
+        /// 零件的發射報告鈕經 use_gizmo 開出對話框並列出完整原因，模型才讀得到。結束後拆掉並關掉對話框。
+        /// </summary>
+        [Test]
+        public static void ShipPartsExposeStartupLaunchAndReport()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(ShipPartsExposeStartupLaunchAndReport))) return;
+            Map map = Find.CurrentMap;
+            _world.TakeNewGameErrors();
+            // 由西到東排成一列、底邊對齊，相鄰兩件一定以東西向相接。
+            ThingDef[] parts =
+            {
+                ThingDefOf.Ship_Reactor, ThingDefOf.Ship_Engine, ThingDefOf.Ship_Engine, ThingDefOf.Ship_Engine,
+                ThingDefOf.Ship_ComputerCore, ThingDefOf.Ship_SensorCluster, ThingDefOf.Ship_CryptosleepCasket, ThingDefOf.Ship_Beam
+            };
+            int width = parts.Sum(p => p.size.x);
+            int height = parts.Max(p => p.size.z);
+            // 整艘船很大，殖民者附近常常放不下；全圖每 4 格試一個角落。
+            Predicate<IntVec3> clear = c => !c.Fogged(map) && c.Standable(map) && !map.roofGrid.Roofed(c)
+                && c.GetEdifice(map) == null && c.GetThingList(map).All(t => t is Plant);
+            CellRect? found = null;
+            for (int cx = 0; found == null && cx + width < map.Size.x; cx += 4)
+            {
+                for (int cz = 0; cz + height < map.Size.z; cz += 4)
+                {
+                    var candidate = new CellRect(cx, cz, width, height);
+                    if (candidate.Cells.All(c => clear(c))) { found = candidate; break; }
+                }
+            }
+            if (found == null)
+            {
+                TestHelpers.Skip(nameof(ShipPartsExposeStartupLaunchAndReport), $"no clear unroofed {width}x{height} area near the colonists");
+                return;
+            }
+            var spawned = new List<Building>();
+            var windowsBefore = new HashSet<Window>(Find.WindowStack.Windows);
+            var failures = new List<string>();
+            try
+            {
+                int x = found.Value.minX;
+                foreach (ThingDef def in parts)
+                {
+                    var probe = new IntVec3(x, 0, found.Value.minZ);
+                    CellRect occupied = GenAdj.OccupiedRect(probe, Rot4.North, def.size);
+                    IntVec3 center = probe + (probe - new IntVec3(occupied.minX, 0, occupied.minZ));
+                    Thing part = ThingMaker.MakeThing(def, def.MadeFromStuff ? GenStuff.DefaultStuffFor(def) : null);
+                    part.SetFaction(Faction.OfPlayer);
+                    spawned.Add((Building)GenSpawn.Spawn(part, center, map, Rot4.North));
+                    x += def.size.x;
+                }
+                Building core = spawned.First(b => b.def == ThingDefOf.Ship_ComputerCore);
+                Building reactor = spawned.First(b => b.def == ThingDefOf.Ship_Reactor);
+                List<string> vanillaReasons = ShipUtility.LaunchFailReasons(core).ToList();
+                if (vanillaReasons.Any(r => r.StartsWith("ShipReportMissingPart".Translate(), StringComparison.Ordinal)))
+                    failures.Add("test layout is not connected: " + string.Join("; ", vanillaReasons));
+
+                string launchLabel = "CommandShipLaunch".Translate();
+                GizmoInfo launch = _world.GetGizmos(core.thingIDNumber)?.FirstOrDefault(g => g.Label == launchLabel);
+                if (launch == null) failures.Add("the computer core has no launch button");
+                else if (!launch.Disabled || string.IsNullOrEmpty(launch.DisabledReason)) failures.Add("launch is not disabled with a reason before startup");
+
+                string startupLabel = "CommandShipStartup".Translate();
+                GizmoInfo startup = _world.GetGizmos(reactor.thingIDNumber)?.FirstOrDefault(g => g.Label == startupLabel);
+                if (startup == null) failures.Add("the hibernating reactor has no startup button");
+                else if (startup.Kind != GizmoInfo.ActionKind) failures.Add("startup button kind is " + startup.Kind);
+
+                Building beam = spawned.First(b => b.def == ThingDefOf.Ship_Beam);
+                string reportLabel = "CommandShipLaunchReport".Translate();
+                GizmoInfo report = _world.GetGizmos(beam.thingIDNumber)?.FirstOrDefault(g => g.Label == reportLabel);
+                if (report == null) failures.Add("the beam has no launch report button");
+                else
+                {
+                    CommandResult pressed = _world.UseGizmo(beam.thingIDNumber, report.Number, report.Label, null);
+                    if (!pressed.Success) failures.Add("pressing the launch report failed: " + pressed.Error);
+                    string cannot = "ShipReportCannotLaunch".Translate();
+                    if (!_world.GetPendingChoices().Any(c => c.Text.Contains(cannot)))
+                        failures.Add("the launch report dialog is not listed among pending choices");
+                }
+            }
+            finally
+            {
+                foreach (Window window in Find.WindowStack.Windows.Where(w => !windowsBefore.Contains(w)).ToList()) window.Close(false);
+                foreach (Building part in spawned.Where(b => !b.Destroyed)) part.Destroy();
+            }
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            TestHelpers.AssertNone(failures, "ship parts");
+        }
+
         private static void ExpectGlyph(Dictionary<int, string> rows, CellRect rect, IntVec3 cell, char expected, string what, List<string> failures)
         {
             char actual = GlyphAt(rows, rect, cell);
