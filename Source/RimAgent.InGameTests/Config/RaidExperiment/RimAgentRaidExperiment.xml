@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  08 防禦實驗的啟動標記（EndgameExperiments.cs 的 RaidDefenseExperimentComponent）。
+  根節點帶 baseline="true" 屬性時不開 Agent，當對照組；本檔沒有，跑 Agent 組。
+  對照組請另存一份根節點加上該屬性的同名檔帶入。
+  run_test_cycle 的 seed_config 要同時帶入：
+    1. 本檔
+    2. 玩家 Config 裡的 Mod_RimAgent_RimAgentMod.xml（模型由實驗在記憶體裡改成 :free 版本）
+    3. 玩家 Config 裡的 Mod_RimLLM Framework_RimLLMFrameworkMod.xml 與 RimLLM_EncryptionKey.dat
+    以上 2、3 都直接指向玩家的 Config 路徑帶入，不要複製進版本庫。
+    4. ../Mod_3762405308_RimTestReduxMod.xml
+  結果寫在隔離環境存檔資料夾的 RimAgent/RaidExperiment.jsonl。
+-->
+<RimAgentRaidExperiment />
