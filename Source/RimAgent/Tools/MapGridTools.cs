@@ -25,6 +25,10 @@ namespace RimAgent.Tools
 
         internal const string MapLayer = "map";
         internal const string RoofLayer = "roof";
+        internal const string BuildLayer = "build";
+
+        /// <summary>三個圖層共用的矩形上限錯誤：角落含頭尾，51 格寬就超過了，要明講並給可直接照抄的例子。</summary>
+        internal const string RectLimitHint = "at most 50 cells per side; corners are inclusive, so (0,0)-(49,49) is the largest square";
 
         private sealed class Glyph
         {
@@ -66,6 +70,12 @@ namespace RimAgent.Tools
         private static readonly Glyph NoRoof = new Glyph('.', "no roof");
 
         /// <summary>圖例的固定順序（只列出現的字元）；圖層優先序見 <see cref="Classify"/>。</summary>
+        private static readonly Glyph Blocked = new Glyph('#', "taken: building, blueprint, frame or natural rock (cannot build over it)");
+        private static readonly Glyph HeavySupport = new Glyph('H', "heavy-capable ground (ship parts, reactor, most large buildings fit)");
+        private static readonly Glyph MediumSupport = new Glyph('m', "medium-capable ground only");
+        private static readonly Glyph LightSupport = new Glyph('l', "light-capable ground only");
+        private static readonly Glyph NoSupport = new Glyph('~', "no building support (deep water, etc.)");
+
         private static readonly Glyph[] MapOrder =
         {
             Fog, Hostile, Colonist, OtherPawn, Wall, Door, Turret, Cover, OtherBuilding, Frame, Blueprint, Item, Rock,
@@ -73,6 +83,8 @@ namespace RimAgent.Tools
         };
 
         private static readonly Glyph[] RoofOrder = { Fog, Wall, Door, MountainRoof, NaturalRoof, BuiltRoof, NoRoof };
+
+        private static readonly Glyph[] BuildOrder = { Fog, Blocked, HeavySupport, MediumSupport, LightSupport, NoSupport };
 
         private readonly IGameWorld _world;
 
@@ -82,19 +94,20 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("view_map_grid", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Draws a rectangle of the current map as a character grid, one character per cell, so you can see rooms, walls, doors, kill boxes, hull shapes, water and zones. Rows run north (top, highest z) to south and columns west to east; x labels sit above the columns and a z label starts each row, so you can read exact cells for place_blueprint, add_zone or order_move. A legend lists only the characters that appear. Default layer \"map\" draws, by priority: unexplored fog, pawns (hostile, colonist, other), buildings (wall, door, turret, walk-through cover such as sandbags, other, then frame and blueprint of unfinished ones), items, natural rock, water, trees and other plants, stockpile and growing zones, constructed floor, bare ground. Not drawn: grass and other ground cover, filth, power conduits, floor blueprints. Layer \"roof\" instead shows roofs (thick rock, thin rock, constructed, none) with walls and doors for orientation, to find unroofed gaps in a room. Up to 2500 cells (50x50); a rectangle partly outside the map is clamped. For counts, ids and room details use inspect_area and find_things.")]
+        [Description("Draws a rectangle of the current map as a character grid, one character per cell, so you can see rooms, walls, doors, kill boxes, hull shapes, water and zones. Rows run north (top, highest z) to south and columns west to east; x labels sit above the columns and a z label starts each row, so you can read exact cells for place_blueprint, add_zone or order_move. A legend lists only the characters that appear. Default layer \"map\" draws, by priority: unexplored fog, pawns (hostile, colonist, other), buildings (wall, door, turret, walk-through cover such as sandbags, other, then frame and blueprint of unfinished ones), items, natural rock, water, trees and other plants, stockpile and growing zones, constructed floor, bare ground. Not drawn: grass and other ground cover, filth, power conduits, floor blueprints. Layer \"roof\" instead shows roofs (thick rock, thin rock, constructed, none) with walls and doors for orientation, to find unroofed gaps in a room. Layer \"build\" shows where structures can go: # taken by a building, blueprint, frame or natural rock (floors, conduits, plants and items do not count; a multi-cell building marks every cell it covers), H heavy-capable ground, m medium only, l light only, ~ no support (deep water); fog stays ?. Ship parts and most large buildings (reactor, engines, etc.) need H on every cell they cover. Up to 50 cells per side (2500 cells); corners are inclusive, so (0,0)-(49,49) is the largest square. A rectangle partly outside the map is clamped. For counts, ids and room details use inspect_area and find_things.")]
         public string ViewMapGrid(
             [Description("Rectangle corner x.")] int x1,
             [Description("Rectangle corner z.")] int z1,
             [Description("Opposite corner x.")] int x2,
             [Description("Opposite corner z.")] int z2,
-            [Description("\"map\" (default) or \"roof\".")] string layer = null)
+            [Description("\"map\" (default), \"roof\", or \"build\" (where heavy structures such as ship parts can be placed).")] string layer = null)
         {
             string wanted = (layer ?? string.Empty).Trim();
-            bool roof;
-            if (wanted.Length == 0 || string.Equals(wanted, MapLayer, StringComparison.OrdinalIgnoreCase)) roof = false;
-            else if (string.Equals(wanted, RoofLayer, StringComparison.OrdinalIgnoreCase)) roof = true;
-            else return ToolText.Error($"unknown layer \"{wanted}\". Use \"map\" (default) or \"roof\".");
+            string kind;
+            if (wanted.Length == 0 || string.Equals(wanted, MapLayer, StringComparison.OrdinalIgnoreCase)) kind = MapLayer;
+            else if (string.Equals(wanted, RoofLayer, StringComparison.OrdinalIgnoreCase)) kind = RoofLayer;
+            else if (string.Equals(wanted, BuildLayer, StringComparison.OrdinalIgnoreCase)) kind = BuildLayer;
+            else return ToolText.Error($"unknown layer \"{wanted}\". Use \"map\" (default), \"roof\" or \"build\".");
 
             CellRectSpec requested = CellRectSpec.FromCorners(x1, z1, x2, z2);
             Result<CellRectSpec> clamped = TargetResolver.ClampRect(x1, z1, x2, z2, _world.GetMapBounds());
@@ -102,7 +115,7 @@ namespace RimAgent.Tools
             CellRectSpec rect = clamped.Value;
             if (rect.CellCount > MaxCells)
             {
-                return ToolText.Error($"rectangle {rect} has {rect.CellCount} cells; the limit is {MaxCells} (50x50). Split it into smaller rectangles.");
+                return ToolText.Error($"rectangle {rect} has {rect.CellCount} cells; the limit is {MaxCells} cells: {RectLimitHint}. Split it into smaller rectangles.");
             }
 
             IReadOnlyList<MapGridCell> cells = _world.GetMapGrid(rect);
@@ -110,7 +123,7 @@ namespace RimAgent.Tools
             int height = rect.MaxZ - rect.MinZ + 1;
 
             var sb = new StringBuilder();
-            sb.Append(roof ? "Roof grid " : "Map grid ").Append(rect).Append(": ").Append(width).Append('x').Append(height)
+            sb.Append(kind == RoofLayer ? "Roof grid " : kind == BuildLayer ? "Build grid " : "Map grid ").Append(rect).Append(": ").Append(width).Append('x').Append(height)
               .Append(" cells. Rows run north (top, highest z) to south, columns west to east.").AppendLine();
             if (!SameRect(requested, rect))
             {
@@ -129,7 +142,7 @@ namespace RimAgent.Tools
                 int rowStart = (z - rect.MinZ) * width;
                 for (int x = 0; x < width; x++)
                 {
-                    Glyph glyph = Classify(cells[rowStart + x], roof);
+                    Glyph glyph = Classify(cells[rowStart + x], kind);
                     used.Add(glyph);
                     sb.Append(glyph.Symbol);
                 }
@@ -137,7 +150,7 @@ namespace RimAgent.Tools
             }
 
             AppendAxis(sb, rect, labelWidth);
-            sb.Append("Legend: ").Append(string.Join(", ", (roof ? RoofOrder : MapOrder).Where(used.Contains).Select(g => g.Symbol + " " + g.Meaning)));
+            sb.Append("Legend: ").Append(string.Join(", ", (kind == RoofLayer ? RoofOrder : kind == BuildLayer ? BuildOrder : MapOrder).Where(used.Contains).Select(g => g.Symbol + " " + g.Meaning)));
             return sb.ToString();
         }
 
@@ -146,11 +159,23 @@ namespace RimAgent.Tools
         /// → 物品 → 天然岩石 → 水 → 植物（樹 > 其他）→ 區域 → 地板 → 裸地。
         /// 區域排在地板之前（與地形並列時區域贏）：倉庫常鋪在水泥地上，空的儲藏區若被地板蓋掉，模型就看不到它。
         /// 屋頂不在地圖層：疊上去會蓋掉上面任何一層，所以另開 roof 層，只留牆與門當參照。
+        /// build 層回答「重型建築放得下哪裡」：迷霧 → 已被占走（建築、藍圖、框架或天然岩石，得先移除；多格的每一格都標）→ 地形承載力（H > m > l > 無）。
         /// </summary>
-        private static Glyph Classify(MapGridCell c, bool roof)
+        private static Glyph Classify(MapGridCell c, string layer)
         {
             if (c.Fogged) return Fog;
-            if (roof)
+            if (layer == BuildLayer)
+            {
+                if (c.Blocked) return Blocked;
+                switch (c.BuildSupport)
+                {
+                    case GridAffordance.Heavy: return HeavySupport;
+                    case GridAffordance.Medium: return MediumSupport;
+                    case GridAffordance.Light: return LightSupport;
+                    default: return NoSupport;
+                }
+            }
+            if (layer == RoofLayer)
             {
                 if (c.Building == GridBuilding.Wall) return Wall;
                 if (c.Building == GridBuilding.Door) return Door;

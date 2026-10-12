@@ -10,9 +10,9 @@
 
 **以自然語言管理你的 RimWorld 殖民地。**
 
-專為 RimWorld 1.6 設計的遊戲內 AI 助手。透過 76 項工具，以自然語言查詢殖民地、下達命令，並自行選擇操作前的把關方式。
+專為 RimWorld 1.6 設計的遊戲內 AI 助手。透過 77 項工具，以自然語言查詢殖民地、下達命令，並自行選擇操作前的把關方式。
 
-**RimWorld 1.6** &nbsp;·&nbsp; **76 項工具** &nbsp;·&nbsp; **自動／自主模式** &nbsp;·&nbsp; **支援 MCP 擴充**
+**RimWorld 1.6** &nbsp;·&nbsp; **77 項工具** &nbsp;·&nbsp; **自動／自主模式** &nbsp;·&nbsp; **支援 MCP 擴充**
 
 [![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#先決條件)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,7 +50,7 @@
 
 ## 功能亮點
 
-- **76 項工具：** 查詢殖民地、下達命令、搜尋網路，以及管理跨存檔與單一存檔的記憶。
+- **77 項工具：** 查詢殖民地、下達命令、搜尋網路，以及管理跨存檔與單一存檔的記憶。
 - **五種執行模式：** 可從唯讀開始，要求逐次確認，或依選定規則讓助手自行操作。
 - **自主事件與長期目標：** 回應緊急事件、處理基地狀況、按固定節奏巡檢，也能用 `/goal` 排入持續目標。
 - **子代理與模型分工：** Agent 可把自足的任務交給擁有自己工具與模型的子代理（唯讀子代理可並行）；子代理、自動模式分類器與 `/compact` 摘要各自設定模型與思考強度。

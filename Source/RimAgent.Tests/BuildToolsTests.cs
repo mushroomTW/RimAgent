@@ -204,6 +204,184 @@ namespace RimAgent.Tests
             Assert.That(_tools.PlaceBlueprint("wall", "single", 3, 3, 3, 3, 0, "woo"), Does.StartWith("Error:").And.Contain("WoodLog").And.Contain("WoodPlanks"));
         }
 
+        private void AddShipParts()
+        {
+            _world.Buildables = _world.Buildables.Concat(new[] { new DefInfo("Ship_Reactor", "ship reactor"), new DefInfo("Ship_SensorCluster", "ship sensor cluster") }).ToList();
+            _world.BuildingInfos["Ship_Reactor"] = new BuildingInfo
+            {
+                DefName = "Ship_Reactor",
+                Label = "ship reactor",
+                Width = 6,
+                Height = 7,
+                Costs = new[] { new BuildingCost { Label = "steel", Count = 350 }, new BuildingCost { Label = "plasteel", Count = 280 } },
+                TerrainAffordance = "Heavy",
+                Research = new[] { new BuildingResearch { Label = "ship reactor", Done = false } },
+                ConstructionSkill = 8,
+                PlaceWorkers = new[] { "PlaceWorker_NotUnderRoof" },
+                ShipPart = true,
+                PowerWatts = -1000f
+            };
+            _world.BuildingInfos["Ship_SensorCluster"] = new BuildingInfo { DefName = "Ship_SensorCluster", Label = "ship sensor cluster", Width = 2, Height = 2 };
+        }
+
+        [Test]
+        public void LargeBlueprintReportsSizeRotationAndCoveredRectangle()
+        {
+            AddShipParts();
+
+            string text = _tools.PlaceBlueprint("ship reactor", "single", 41, 45, 41, 45, 0, "");
+
+            Assert.That(text, Is.EqualTo("Placed 1 ship reactor blueprint(s) at (41,45). Size 6x7, rotation 0, covers (39,42)-(44,48)."));
+        }
+
+        [Test]
+        public void RotatedLargeBlueprintSwapsSizeAndShiftsEvenSides()
+        {
+            AddShipParts();
+
+            string text = _tools.PlaceBlueprint("ship reactor", "single", 41, 45, 41, 45, 1, "");
+
+            Assert.That(text, Does.Contain("Size 7x6, rotation 1, covers (38,42)-(44,47)."));
+        }
+
+        [TestCase(0, 10, 20, 11, 21)]
+        [TestCase(1, 10, 19, 11, 20)]
+        [TestCase(2, 9, 19, 10, 20)]
+        [TestCase(3, 9, 20, 10, 21)]
+        public void TwoByTwoFootprintFollowsVanillaCenterRule(int rotation, int minX, int minZ, int maxX, int maxZ)
+        {
+            var info = new BuildingInfo { Width = 2, Height = 2 };
+
+            CellRectSpec rect = BuildTools.OccupiedRect(10, 20, rotation, info);
+
+            Assert.That((rect.MinX, rect.MinZ, rect.MaxX, rect.MaxZ), Is.EqualTo((minX, minZ, maxX, maxZ)));
+        }
+
+        [Test]
+        public void OneByOneAndOddSizesStayCentered()
+        {
+            Assert.That(BuildTools.OccupiedRect(5, 5, 3, new BuildingInfo { Width = 1, Height = 1 }).ToString(), Is.EqualTo("(5,5)-(5,5)"));
+            Assert.That(BuildTools.OccupiedRect(5, 5, 1, new BuildingInfo { Width = 3, Height = 1 }).ToString(), Is.EqualTo("(5,4)-(5,6)"));
+        }
+
+        [Test]
+        public void OneByOneThingsKeepTheShortMessage()
+        {
+            _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", Label = "wall" };
+
+            Assert.That(_tools.PlaceBlueprint("wall", "single", 3, 3, 3, 3, 0, ""), Is.EqualTo("Placed 1 wall blueprint(s) at (3,3)."));
+        }
+
+        [Test]
+        public void SeveralLargeBlueprintsListEachCenterAndRectangle()
+        {
+            AddShipParts();
+
+            string text = _tools.PlaceBlueprint("Ship_SensorCluster", "line", 10, 10, 20, 10, 0, "");
+
+            Assert.That(text, Does.Contain("Placed 11 ship sensor cluster blueprint(s)").And.Contain("Each is 2x2, rotation 0: (10,10) covers (10,10)-(11,11); (11,10) covers (11,10)-(12,11);"));
+            Assert.That(text, Does.Contain("+6 more."));
+        }
+
+        [Test]
+        public void RefusedLargeBlueprintShowsWhatItWouldCoverAndTheGameReason()
+        {
+            AddShipParts();
+            _world.BlockedCells[(41, 44)] = "Space already occupied (blocked by: ship reactor (blueprint) #77 (39,42)-(44,48))";
+
+            string text = _tools.PlaceBlueprint("Ship_SensorCluster", "single", 41, 44, 41, 44, 0, "");
+
+            Assert.That(text, Does.StartWith("Error: could not place any ship sensor cluster blueprint."));
+            Assert.That(text, Does.Contain("(41,44) (would cover (41,44)-(42,45)): Space already occupied (blocked by: ship reactor (blueprint) #77 (39,42)-(44,48))"));
+        }
+
+        [Test]
+        public void RefusedSmallBlueprintKeepsTheShortFailureText()
+        {
+            _world.BlockedCells[(12, 20)] = "space already occupied";
+
+            Assert.That(_tools.PlaceBlueprint("wall", "single", 12, 20, 12, 20, 0, ""), Does.Contain("(12,20): space already occupied").And.Not.Contain("would cover"));
+        }
+
+        [Test]
+        public void BuildingInfoListsSizeCostResearchAndPlacementRules()
+        {
+            AddShipParts();
+
+            string text = _tools.GetBuildingInfo("ship reactor");
+
+            Assert.That(text, Does.StartWith("ship reactor (Ship_Reactor)"));
+            Assert.That(text, Does.Contain("Size: 6x7 (x by z, facing north). Rotation 1 or 3 (east/west) makes it 7x6."));
+            Assert.That(text, Does.Contain("place_blueprint x,z is the center cell"));
+            Assert.That(text, Does.Contain("Cost: steel x350, plasteel x280"));
+            Assert.That(text, Does.Contain("Ground: needs Heavy support under every covered cell."));
+            Assert.That(text, Does.Contain("Research: ship reactor (NOT done)"));
+            Assert.That(text, Does.Contain("Builder skill: construction 8."));
+            Assert.That(text, Does.Contain("Placement: PlaceWorker_NotUnderRoof -> must not be under a roof"));
+            Assert.That(text, Does.Contain("Ship part:"));
+            Assert.That(text, Does.Contain("Power: produces 1000 W."));
+            Assert.That(text, Does.Not.Contain("Interaction cell"));
+        }
+
+        [Test]
+        public void BuildingInfoCoversMaterialsInteractionCellAndUnknownPlaceWorkers()
+        {
+            _world.BuildingInfos["Bed"] = new BuildingInfo
+            {
+                DefName = "Bed",
+                Label = "bed",
+                Width = 1,
+                Height = 2,
+                Costs = new[] { new BuildingCost { Label = "cloth", Count = 5 } },
+                StuffCount = 40,
+                StuffCategories = new[] { "metallic", "woody" },
+                AffordanceFromStuff = true,
+                TerrainAffordance = "Light",
+                PlaceWorkers = new[] { "PlaceWorker_Heater", "Placeworker_AttachedToWall" },
+                PowerWatts = 120f,
+                InteractionOffsets = new[] { (0, -1) }
+            };
+
+            string text = _tools.GetBuildingInfo("Bed");
+
+            Assert.That(text, Does.Contain("Cost: cloth x5, 40 of a material (metallic, woody)"));
+            Assert.That(text, Does.Contain("Ground: needs Light support under every covered cell (may depend on the material)."));
+            Assert.That(text, Does.Contain("Research: none."));
+            Assert.That(text, Does.Contain("Placement: PlaceWorker_Heater; Placeworker_AttachedToWall -> must be attached to a wall"));
+            Assert.That(text, Does.Contain("Power: uses 120 W."));
+            Assert.That(text, Does.Contain("Interaction cell: offset (0,-1) from the center when facing north"));
+            Assert.That(text, Does.Not.Contain("Ship part"));
+        }
+
+        [Test]
+        public void BuildingInfoOfASquareOrUnitThingSaysRotationKeepsTheFootprint()
+        {
+            _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", Label = "wall" };
+
+            string text = _tools.GetBuildingInfo("wall");
+
+            Assert.That(text, Does.Contain("Size: 1x1 (x by z, facing north). Rotation does not change the footprint."));
+            Assert.That(text, Does.Contain("Cost: none"));
+            Assert.That(text, Does.Not.Contain("center cell"));
+        }
+
+        [Test]
+        public void BuildingInfoErrorsForUnknownNamesAndMissingData()
+        {
+            Assert.That(_tools.GetBuildingInfo("teleporter"), Does.StartWith("Error:").And.Contain("buildable"));
+            Assert.That(_tools.GetBuildingInfo("wall"), Does.StartWith("Error:").And.Contain("Wall"));
+        }
+
+        [Test]
+        public void BuildingInfoIsAnAlwaysLoadedQueryTool()
+        {
+            var registry = new AgentToolRegistry(_world, new AgentTranscript());
+
+            Assert.That(registry.RiskOf("get_building_info"), Is.EqualTo(ToolRisk.Query));
+            Assert.That(registry.Descriptors.Single(d => d.Name == "get_building_info").Category, Is.EqualTo(ToolCategory.Observe));
+            Assert.That(ToolPacks.PackOf("get_building_info", ToolCategory.Observe), Is.Null);
+        }
+
         [Test]
         public void BlockedDesignationReturnsPreviewWithoutTouchingWorld()
         {

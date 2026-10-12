@@ -909,7 +909,7 @@ namespace RimAgent.Tests
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Confirm), name);
             foreach (string name in new[] { "set_work_priorities", "set_schedule", "draft", "order_move", "cancel_designation", "set_medical_care", "tame_animal", "train_animal", "set_animal_area", "add_zone", "set_zone_filter", "add_bill", "set_research", "set_time_speed", "set_current_map", "take_screenshot", "dismiss_quest", "set_caravan_movement", "cancel_forming_caravan" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Safe), name);
-            foreach (string name in new[] { "get_colony_overview", "list_colonists", "get_colonist_wellbeing", "list_recent_letters", "find_things", "inspect_area", "get_health", "list_prisoners", "list_bills", "list_traders", "list_quests", "view_map_grid", "list_right_click_menu", "list_caravans", "list_world_objects", "get_world_tile", "plan_caravan", "mcp_list_tools" })
+            foreach (string name in new[] { "get_colony_overview", "list_colonists", "get_colonist_wellbeing", "list_recent_letters", "find_things", "inspect_area", "get_health", "list_prisoners", "list_bills", "list_traders", "list_quests", "view_map_grid", "get_building_info", "list_right_click_menu", "list_caravans", "list_world_objects", "get_world_tile", "plan_caravan", "mcp_list_tools" })
                 Assert.That(registry.RiskOf(name), Is.EqualTo(ToolRisk.Query), name);
             Assert.That(registry.RiskOf("mcp_call_tool"), Is.EqualTo(ToolRisk.Confirm));
         }
@@ -971,10 +971,10 @@ namespace RimAgent.Tests
         public void RegistryExposesAllTools()
         {
             var registry = new AgentToolRegistry(_world, new AgentTranscript());
-            Assert.That(registry.All.Count, Is.EqualTo(75));
+            Assert.That(registry.All.Count, Is.EqualTo(76));
             var observeOnly = new ToolPermissions();
             observeOnly.Set(ToolCategory.Observe, true);
-            Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(20));
+            Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(21));
             Assert.That(registry.Select(new ToolPermissions()), Is.Empty);
         }
 

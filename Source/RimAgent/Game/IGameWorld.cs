@@ -40,7 +40,11 @@ namespace RimAgent.Game
         IReadOnlyList<MapInfo> GetMaps();
         /// <summary>當前地圖可交易的商人（軌道商人與來訪商隊，見 TraderInfo.Kind）。</summary>
         IReadOnlyList<TraderInfo> GetTraders();
-        IReadOnlyList<ThingInfo> FindThings(ThingQuery query);
+        /// <summary>
+        /// 收集全部符合的物件後排序再取前 Limit 筆：未被禁用的在前，同組內依距離殖民者平均位置由近到遠
+        /// （地圖上沒有殖民者時以地圖中心為準）。TotalMatches 是排序前的符合總數。
+        /// </summary>
+        ThingSearchResult FindThings(ThingQuery query);
         /// <summary>玩家目前框選的地圖物件。</summary>
         IReadOnlyList<ThingInfo> GetSelection();
         MapBounds GetMapBounds();
@@ -107,7 +111,9 @@ namespace RimAgent.Game
         CommandResult AddDesignationOnThing(int thingId, string designationDefName);
         CommandResult RemoveDesignationOnCell(int x, int z, string designationDefName);
         CommandResult RemoveDesignationOnThing(int thingId, string designationDefName);
-        /// <summary>內含可放置檢查；失敗訊息帶遊戲給的原因。</summary>
+        /// <summary>某個可建造項目的規格；defName 不存在回傳 null。</summary>
+        BuildingInfo GetBuildingInfo(string buildableDefName);
+        /// <summary>內含可放置檢查；失敗訊息帶遊戲給的原因（空間被占用時附上占用者與其範圍）。</summary>
         CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName);
         CommandResult SetDrafted(int pawnId, bool drafted);
         CommandResult OrderMoveTo(int pawnId, int x, int z);

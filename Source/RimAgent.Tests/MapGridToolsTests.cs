@@ -208,12 +208,23 @@ namespace RimAgent.Tests
         {
             string tooBig = _tools.ViewMapGrid(0, 0, 50, 49);
             Assert.That(tooBig, Does.StartWith("Error:").And.Contain("2550 cells").And.Contain("2500").And.Contain("Split"));
+            Assert.That(tooBig, Does.Contain("at most 50 cells per side").And.Contain("corners are inclusive").And.Contain("(0,0)-(49,49)"));
             Assert.That(_world.GridRequests, Is.Empty, "超過上限不該去讀世界");
 
             string full = _tools.ViewMapGrid(0, 0, 49, 49);
             Assert.That(full, Does.StartWith("Map grid (0,0)-(49,49): 50x50 cells"));
             Assert.That(Lines(full).Count(l => l.TrimStart(new[] { ' ' }).StartsWith("z", StringComparison.Ordinal)), Is.EqualTo(50));
             Assert.That(full.Length, Is.LessThan(ToolOutputLimit.MaxResultChars), "滿額也不能被工具結果上限截斷");
+        }
+
+        [Test]
+        public void InclusiveCornersMakeFiftyOneBySquareTooBig()
+        {
+            // 模型實際犯過三次的錯：(0,0)-(50,50) 看似 50x50，其實角落含頭尾是 51x51 = 2601 格。
+            string text = _tools.ViewMapGrid(0, 0, 50, 50);
+
+            Assert.That(text, Does.StartWith("Error:").And.Contain("2601 cells").And.Contain("corners are inclusive").And.Contain("(0,0)-(49,49)"));
+            Assert.That(_tools.ViewMapGrid(0, 0, 50, 50, "build"), Does.Contain("corners are inclusive"));
         }
 
         [Test]
@@ -282,9 +293,64 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void BuildLayerShowsBlockedCellsAndTheStrongestTerrainSupport()
+        {
+            Set(1, 1, c => c.BuildSupport = GridAffordance.Heavy);
+            Set(2, 1, c => c.BuildSupport = GridAffordance.Medium);
+            Set(3, 1, c => c.BuildSupport = GridAffordance.Light);
+            Set(4, 1, c => c.BuildSupport = GridAffordance.None);
+            Set(5, 1, c => { c.BuildSupport = GridAffordance.Heavy; c.Blocked = true; c.Building = GridBuilding.Wall; });
+            Set(6, 1, c => { c.BuildSupport = GridAffordance.Heavy; c.Blocked = true; c.Rock = true; });
+            Set(7, 1, c => { c.BuildSupport = GridAffordance.Heavy; c.Fogged = true; c.Blocked = true; });
+            // 地圖層的東西（殖民者、物品）不影響可建性。
+            Set(8, 1, c => { c.BuildSupport = GridAffordance.Heavy; c.Pawn = GridPawn.Colonist; c.HasItem = true; });
+
+            string text = _tools.ViewMapGrid(1, 1, 8, 1, "BUILD");
+
+            Assert.That(text, Does.StartWith("Build grid (1,1)-(8,1): 8x1 cells"));
+            Assert.That(Row(text, 1), Is.EqualTo("Hml~##?H"));
+            Assert.That(Lines(text).Last(), Is.EqualTo(
+                "Legend: ? unexplored (fogged), # taken: building, blueprint, frame or natural rock (cannot build over it), " +
+                "H heavy-capable ground (ship parts, reactor, most large buildings fit), m medium-capable ground only, " +
+                "l light-capable ground only, ~ no building support (deep water, etc.)"));
+        }
+
+        [Test]
+        public void BuildLayerMarksEveryCellOfAMultiCellBlueprintAndLeavesOthersOpen()
+        {
+            // 6x7 的藍圖覆蓋的每一格都標 #；緊鄰的空地仍是 H。
+            for (int x = 2; x <= 4; x++)
+            {
+                for (int z = 1; z <= 2; z++)
+                {
+                    Set(x, z, c => { c.BuildSupport = GridAffordance.Heavy; c.Building = GridBuilding.Blueprint; c.Blocked = true; });
+                }
+            }
+            Set(1, 1, c => c.BuildSupport = GridAffordance.Heavy);
+            Set(5, 1, c => c.BuildSupport = GridAffordance.Heavy);
+
+            string text = _tools.ViewMapGrid(1, 1, 5, 2, "build");
+
+            Assert.That(Row(text, 2), Is.EqualTo("~###~"), "未登記的格子是預設的 None 承載");
+            Assert.That(Row(text, 1), Is.EqualTo("H###H"));
+            Assert.That(Lines(text).Last(), Does.Contain("# taken: building, blueprint, frame or natural rock"));
+        }
+
+        [Test]
+        public void BuildLayerLegendListsOnlyGlyphsThatAppear()
+        {
+            Set(1, 1, c => c.BuildSupport = GridAffordance.Heavy);
+
+            string legend = Lines(_tools.ViewMapGrid(1, 1, 2, 1, "build")).Last();
+
+            Assert.That(legend, Does.Contain("H heavy-capable").And.Contain("~ no building support"));
+            Assert.That(legend, Does.Not.Contain("m medium").And.Not.Contain("# taken").And.Not.Contain("? unexplored"));
+        }
+
+        [Test]
         public void UnknownLayerIsAnErrorAndMapIsTheDefault()
         {
-            Assert.That(_tools.ViewMapGrid(0, 0, 1, 1, "rooms"), Does.StartWith("Error:").And.Contain("\"map\"").And.Contain("\"roof\""));
+            Assert.That(_tools.ViewMapGrid(0, 0, 1, 1, "rooms"), Does.StartWith("Error:").And.Contain("\"map\"").And.Contain("\"roof\"").And.Contain("\"build\""));
             Assert.That(_tools.ViewMapGrid(0, 0, 1, 1, ""), Is.EqualTo(_tools.ViewMapGrid(0, 0, 1, 1, "MAP")));
             Assert.That(_tools.ViewMapGrid(0, 0, 1, 1, null), Does.StartWith("Map grid"));
         }

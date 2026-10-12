@@ -443,7 +443,7 @@ namespace RimAgent.Tests
             return taken;
         }
 
-        public IReadOnlyList<ThingInfo> FindThings(ThingQuery query)
+        public ThingSearchResult FindThings(ThingQuery query)
         {
             IEnumerable<ThingInfo> result = Things;
             if (query.Kind != ThingKind.Any) result = result.Where(t => t.Kind == query.Kind);
@@ -454,7 +454,20 @@ namespace RimAgent.Tests
                                            t.DefName.IndexOf(query.LabelContains, StringComparison.OrdinalIgnoreCase) >= 0);
             }
             if (query.Area.HasValue) result = result.Where(t => query.Area.Value.Contains(t.X, t.Z));
-            return result.Take(query.Limit).ToList();
+            // 與真實世界層同一規則：放行的在前，同組依距離殖民者平均位置（沒有殖民者則地圖中心）由近到遠。
+            List<ThingInfo> matches = result.ToList();
+            double cx = Bounds.Width / 2.0, cz = Bounds.Height / 2.0;
+            if (Colonists.Count > 0)
+            {
+                cx = Colonists.Average(c => (double)c.X);
+                cz = Colonists.Average(c => (double)c.Z);
+            }
+            List<ThingInfo> shown = matches
+                .OrderBy(t => t.Forbidden)
+                .ThenBy(t => (t.X - cx) * (t.X - cx) + (t.Z - cz) * (t.Z - cz))
+                .Take(query.Limit)
+                .ToList();
+            return new ThingSearchResult(shown, matches.Count);
         }
 
         public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)
@@ -512,6 +525,14 @@ namespace RimAgent.Tests
             if (thing == null || !thing.Designations.Contains(designationDefName)) return CommandResult.Fail("no such designation");
             Unmark(thing, designationDefName);
             return CommandResult.Ok();
+        }
+
+        /// <summary>各建築的規格（以 defName 為鍵）；沒登記的視為不存在，GetBuildingInfo 回傳 null。</summary>
+        public Dictionary<string, BuildingInfo> BuildingInfos { get; } = new Dictionary<string, BuildingInfo>(StringComparer.OrdinalIgnoreCase);
+
+        public BuildingInfo GetBuildingInfo(string buildableDefName)
+        {
+            return BuildingInfos.TryGetValue(buildableDefName ?? string.Empty, out BuildingInfo info) ? info : null;
         }
 
         public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName)

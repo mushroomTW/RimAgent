@@ -7,7 +7,7 @@ description: Ending by building and launching the starship: research chain, part
 
 ## 1. Research (set_research, get_research_status)
 Electricity → MicroelectronicsBasics → MultiAnalyzer (hi-tech research bench) → Fabrication (needs a multi-analyzer next to the bench) → AdvancedFabrication → ShipBasics → ShipCryptosleep, ShipComputerCore, ShipSensorCluster, ShipReactor, ShipEngine.
-AdvancedFabrication lets a fabrication bench make advanced components (ComponentSpacer); start that bill early, they are the bottleneck.
+AdvancedFabrication lets a fabrication bench make advanced components (ComponentSpacer); start that bill early: the bottleneck.
 
 ## 2. Parts the launch checks
 | Part (defName) | Size | Needed | Cost each |
@@ -19,13 +19,13 @@ AdvancedFabrication lets a fabrication bench make advanced components (Component
 | Ship_Reactor | 6x7 | 1 | 350 steel, 280 plasteel, 70 uranium, 8 adv. |
 | Ship_Engine | 3x4 | 3 | 260 steel, 140 plasteel, 70 uranium, 6 adv. |
 Without beams and with one casket: about 1540 steel, 700 plasteel, 294 uranium, 74 gold, 9 components, 39 advanced components, 1 AI persona core.
-AI persona core: buy from an exotic orbital trader (list_traders), take it as a quest reward (list_quests shows rewards), or loot it from ancient sites.
+AI persona core: buy from an exotic orbital trader (list_traders), get it as a quest reward (list_quests), or loot ancient sites.
 
 ## 3. Layout
 - Every part must touch the ship cardinally (directly or through beams); the launch only counts parts connected to the one you launch from.
 - No roof over any part. Each casket's head must sit on a beam.
-- Pick an open, flat, unroofed area about 20x20 inside the defenses; check it with view_map_grid (map and roof layers).
-- place_blueprint one part at a time with single shape; check refused cells and their reasons.
+- Pick an open, unroofed area about 20x20 inside the defenses: view_map_grid layer=build must show only H there (# = taken), then roof and map layers.
+- place_blueprint one part at a time, shape single, x,z = its center. The reply gives the covered rectangle. Refusals name what blocks. get_building_info: size, cost, rules.
 
 ## 4. Startup: 14 days of raids
 - Before startup: finish every part except what needs the reactor running, build defenses for a long hold (defense-building), stock food and medicine.

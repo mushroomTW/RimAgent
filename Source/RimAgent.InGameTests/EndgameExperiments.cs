@@ -73,7 +73,13 @@ namespace RimAgent.InGameTests
                 _speedApplied = Find.TickManager.CurTimeSpeed == TimeSpeed.Superfast;
             }
             Step(tick);
-            if (tick % SampleTicks == 0) Write(Sample(tick));
+            if (tick % SampleTicks == 0)
+            {
+                Dictionary<string, object> sample = Sample(tick);
+                // 實驗收尾時還在跑的自主任務不會寫進執行紀錄，靠這欄看出它有沒有在動。
+                sample["agentBusy"] = RimAgentGameComponent.Instance?.Session.IsBusy ?? false;
+                Write(sample);
+            }
         }
 
         public override void GameComponentUpdate()
@@ -132,6 +138,7 @@ namespace RimAgent.InGameTests
             summary["tick"] = tick;
             summary["note"] = "summary";
             Write(summary);
+            WriteTranscript();
             Done = true;
             Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
             Log.Message(LogPrefix + "done: " + JsonSerializer.Serialize(summary));
@@ -140,6 +147,31 @@ namespace RimAgent.InGameTests
         protected void Note(string note)
         {
             Write(new Dictionary<string, object> { ["tick"] = Find.TickManager.TicksGame, ["note"] = note });
+        }
+
+        /// <summary>收尾時還在跑的自主任務不會進執行紀錄：把當下的對話紀錄另存一份，才看得到模型做了什麼。</summary>
+        private void WriteTranscript()
+        {
+            RimAgentGameComponent agent = RimAgentGameComponent.Instance;
+            if (agent == null) return;
+            try
+            {
+                var lines = agent.Session.Transcript.Snapshot().Select(e => JsonSerializer.Serialize(new Dictionary<string, object>
+                {
+                    ["kind"] = e.Kind.ToString(),
+                    ["id"] = e.InstructionId,
+                    ["text"] = e.Text,
+                    ["tool"] = e.ToolName,
+                    ["args"] = e.Arguments,
+                    ["result"] = e.Result,
+                    ["failed"] = e.Failed
+                }));
+                File.WriteAllLines(Path.ChangeExtension(_timelinePath, null) + "-transcript.jsonl", lines, new UTF8Encoding(false));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(LogPrefix + "transcript write failed: " + ex.GetType().Name + ": " + ex.Message);
+            }
         }
 
         private void Write(Dictionary<string, object> line)
@@ -186,7 +218,7 @@ namespace RimAgent.InGameTests
         {
             Map map = Find.CurrentMap;
             // 只看根節點屬性；註解裡提到 baseline 不算。
-            _baseline = MarkerText.IndexOf("baseline=\"true\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            _baseline = string.Equals(System.Xml.Linq.XElement.Parse(MarkerText).Attribute("baseline")?.Value, "true", StringComparison.OrdinalIgnoreCase);
             int cleared = ClearHostiles(map);
             _colonists = map.mapPawns.FreeColonistsSpawned.ToList();
             if (!EnableAgent(!_baseline)) return false;
@@ -277,9 +309,10 @@ namespace RimAgent.InGameTests
     /// </summary>
     public sealed class ShipLayoutExperimentComponent : EndgameExperimentBase
     {
-        private const int DurationTicks = 60000;
+        // 超加速下一天只有兩分多鐘，免費模型一步要好幾秒，一天只走得完二十來步；給三天。
+        private const int DurationTicks = 180000;
         private const string Goal =
-            "Build the starship and launch it. All ship research is finished and the materials, including an AI persona core, are already on the map near the colonists. Start by placing blueprints for every part the launch needs.";
+            "Build the starship and launch it. All ship research is finished and the materials, including an AI persona core, are stacked on the map around ({0},{1}). Start by placing blueprints for every part the launch needs.";
 
         private static readonly string[] ShipResearch =
             { "ShipBasics", "ShipCryptosleep", "ShipComputerCore", "ShipSensorCluster", "ShipReactor", "ShipEngine" };
@@ -299,9 +332,9 @@ namespace RimAgent.InGameTests
             Map map = Find.CurrentMap;
             int cleared = ClearHostiles(map);
             int researched = FinishResearch();
-            int stacks = SpawnMaterials(map);
+            int stacks = SpawnMaterials(map, out IntVec3 near);
             if (!EnableAgent(autonomous: true)) return false;
-            bool added = RimAgentGameComponent.Instance.AddGoal(Goal);
+            bool added = RimAgentGameComponent.Instance.AddGoal(string.Format(Goal, near.x, near.z));
             Note($"start: researched {researched}, spawned {stacks} stacks, goal added={added}, cleared {cleared} hostiles");
             return added;
         }
@@ -341,9 +374,9 @@ namespace RimAgent.InGameTests
         }
 
         /// <summary>一艘最小船（一個休眠艙）材料約 1540 鋼、700 塑鋼、294 鈾；多給一些讓結構樑與多個休眠艙夠用。</summary>
-        private static int SpawnMaterials(Map map)
+        private static int SpawnMaterials(Map map, out IntVec3 near)
         {
-            IntVec3 near = map.mapPawns.FreeColonistsSpawned.FirstOrDefault()?.Position ?? map.Center;
+            near = map.mapPawns.FreeColonistsSpawned.FirstOrDefault()?.Position ?? map.Center;
             var wanted = new List<KeyValuePair<ThingDef, int>>
             {
                 new KeyValuePair<ThingDef, int>(ThingDefOf.Steel, 3500),

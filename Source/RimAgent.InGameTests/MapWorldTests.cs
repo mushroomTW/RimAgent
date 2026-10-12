@@ -387,6 +387,213 @@ namespace RimAgent.InGameTests
             TestHelpers.AssertNone(failures, "view_map_grid differs from vanilla cells");
         }
 
+        /// <summary>
+        /// build 圖層對照原版：迷霧為 ?；格上有任何擋住蓋建築的東西為 #（判準直接用原版 CanPlaceBlueprintOver，
+        /// 以船艙反應爐當探針：建築、藍圖、框架、天然岩石會擋，電線、地板藍圖、植物、物品不會）；其餘依地形（有地基時看地基）的
+        /// affordances 取最強的 H／m／l，三種都沒有為 ~。quicktest 地圖可能全是同一種地形，沒有的字元就沒有樣本，不算失敗。
+        /// </summary>
+        [Test]
+        public static void MapGridBuildLayerMatchesVanillaAffordances()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(MapGridBuildLayerMatchesVanillaAffordances))) return;
+            Map map = Find.CurrentMap;
+            _world.TakeNewGameErrors();
+            Pawn anchor = map.mapPawns.FreeColonistsSpawned.FirstOrDefault();
+            CellRect rect = CellRect.CenteredOn(anchor?.Position ?? map.Center, 12).ClipInsideMap(map);
+            var tool = new RimAgent.Tools.MapGridTools(_world);
+            var failures = new List<string>();
+            var samples = new Dictionary<string, int>();
+            ThingDef probe = DefDatabase<ThingDef>.GetNamedSilentFail("Ship_Reactor");
+            if (probe == null)
+            {
+                TestHelpers.Skip(nameof(MapGridBuildLayerMatchesVanillaAffordances), "Ship_Reactor def not found");
+                return;
+            }
+
+            Dictionary<int, string> rows = ParseGridRows(tool.ViewMapGrid(rect.minX, rect.minZ, rect.maxX, rect.maxZ, "build"), failures);
+            foreach (IntVec3 c in rect.Cells)
+            {
+                char shown = GlyphAt(rows, rect, c);
+                if (c.Fogged(map))
+                {
+                    Expect(failures, samples, "fog", c, shown, '?');
+                    continue;
+                }
+                bool blocked = c.GetThingList(map).Any(t => !GenConstruct.CanPlaceBlueprintOver(probe, t.def, null, t.Stuff));
+                if (blocked)
+                {
+                    Expect(failures, samples, "blocked", c, shown, '#');
+                    continue;
+                }
+                TerrainDef foundation = map.terrainGrid.FoundationAt(c);
+                List<TerrainAffordanceDef> affordances = (foundation ?? map.terrainGrid.TerrainAt(c)).affordances;
+                char want = affordances.Contains(TerrainAffordanceDefOf.Heavy) ? 'H'
+                    : affordances.Contains(TerrainAffordanceDefOf.Medium) ? 'm'
+                    : affordances.Contains(TerrainAffordanceDefOf.Light) ? 'l' : '~';
+                Expect(failures, samples, "terrain " + want, c, shown, want);
+            }
+
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            Log.Message($"{TestHelpers.LogPrefix}MapGridBuildLayerMatchesVanillaAffordances: rect {rect}, samples {string.Join(", ", samples.Select(kv => kv.Key + " x" + kv.Value))}");
+            TestHelpers.AssertNone(failures, "view_map_grid build layer differs from vanilla affordances");
+        }
+
+        /// <summary>
+        /// 多格建築的藍圖：build 圖層在它覆蓋的每一格都標 #，旁邊的空格不受影響；place_blueprint 回報的佔格與原版
+        /// 藍圖的 OccupiedRect 一致（四個朝向都驗）；再往它身上放別的建築時，失敗原因列出占用者的 id 與範圍。結束後拆掉藍圖。
+        /// </summary>
+        [Test]
+        public static void MapGridBuildLayerMarksMultiCellBlueprintAndPlaceBlueprintReportsFootprint()
+        {
+            const string name = nameof(MapGridBuildLayerMarksMultiCellBlueprintAndPlaceBlueprintReportsFootprint);
+            if (TestHelpers.SkipWithoutMap(name)) return;
+            Map map = Find.CurrentMap;
+            _world.TakeNewGameErrors();
+            // 不需研發、至少 2x2 的家具；雙人床與桌子都是。
+            ThingDef def = new[] { "DoubleBed", "Table2x2c", "Table2x4c" }
+                .Select(n => DefDatabase<ThingDef>.GetNamedSilentFail(n))
+                .FirstOrDefault(d => d != null && d.BuildableByPlayer && d.IsResearchFinished && d.size.x >= 2 && d.size.z >= 2);
+            if (def == null)
+            {
+                TestHelpers.Skip(name, "no researched multi-cell furniture def");
+                return;
+            }
+            ThingDef stuff = def.MadeFromStuff ? GenStuff.DefaultStuffFor(def) : null;
+            // 空地 6x6：中心放得下任何朝向的雙人床／桌子，四周還有餘格可比對「旁邊不受影響」。
+            CellRect? found = FindFreeRect(map, 6, c => !c.Fogged(map) && c.Standable(map) && c.GetThingList(map).All(t => t is Plant && !t.def.plant.IsTree));
+            if (found == null)
+            {
+                TestHelpers.Skip(name, "no empty visible 6x6 area");
+                return;
+            }
+            CellRect free = found.Value;
+            IntVec3 center = free.CenterCell;
+            if (!GenConstruct.CanPlaceBlueprintAt(def, center, Rot4.North, map, false, null, null, stuff).Accepted)
+            {
+                TestHelpers.Skip(name, $"{def.defName} cannot be placed at the free area's center");
+                return;
+            }
+
+            var grid = new RimAgent.Tools.MapGridTools(_world);
+            var build = new RimAgent.Tools.BuildTools(_world);
+            var failures = new List<string>();
+            CellRect view = free.ExpandedBy(1).ClipInsideMap(map);
+            try
+            {
+                for (int rot = 0; rot < 4; rot++)
+                {
+                    string text = build.PlaceBlueprint(def.defName, "single", center.x, center.z, center.x, center.z, rot, string.Empty);
+                    Blueprint_Build placed = free.Cells.SelectMany(c => c.GetThingList(map)).OfType<Blueprint_Build>().Distinct().FirstOrDefault();
+                    if (placed == null)
+                    {
+                        failures.Add($"rot {rot}: no blueprint was placed: {text}");
+                        continue;
+                    }
+                    CellRect vanilla = placed.OccupiedRect();
+                    string wantRect = $"({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})";
+                    if (!text.Contains("covers " + wantRect)) failures.Add($"rot {rot}: reply should say 'covers {wantRect}': {text}");
+                    if (!text.Contains($"Size {vanilla.Width}x{vanilla.Height}, rotation {rot}")) failures.Add($"rot {rot}: reply should say 'Size {vanilla.Width}x{vanilla.Height}, rotation {rot}': {text}");
+
+                    Dictionary<int, string> rows = ParseGridRows(grid.ViewMapGrid(view.minX, view.minZ, view.maxX, view.maxZ, "build"), failures);
+                    foreach (IntVec3 c in view.Cells)
+                    {
+                        char shown = GlyphAt(rows, view, c);
+                        if (vanilla.Contains(c))
+                        {
+                            if (shown != '#') failures.Add($"rot {rot}: covered cell {c} drawn '{shown}', expected '#'");
+                        }
+                        else if (free.Contains(c) && shown == '#')
+                        {
+                            failures.Add($"rot {rot}: free cell {c} drawn '#'");
+                        }
+                    }
+
+                    // 往佔格左下角放一道牆：原版回「空間已被占用」，附上擋住的藍圖 id 與範圍。
+                    // 不能放同一件：CanReplace 讓同種藍圖直接取代舊的，那是原版的「改朝向」行為。
+                    CommandResult overlap = _world.TryPlaceBlueprint(ThingDefOf.Wall.defName, vanilla.minX, vanilla.minZ, 0, null);
+                    if (overlap.Success) failures.Add($"rot {rot}: an overlapping blueprint was accepted");
+                    else if (!overlap.Message.Contains("#" + placed.thingIDNumber) || !overlap.Message.Contains(wantRect))
+                        failures.Add($"rot {rot}: refusal should name #{placed.thingIDNumber} {wantRect}: {overlap.Message}");
+
+                    placed.Destroy();
+                }
+            }
+            finally
+            {
+                foreach (Thing t in view.Cells.SelectMany(c => c.GetThingList(map)).OfType<Blueprint>().Distinct().ToList())
+                {
+                    if (!t.Destroyed) t.Destroy();
+                }
+            }
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            TestHelpers.AssertNone(failures, "multi-cell blueprint footprint");
+        }
+
+        /// <summary>
+        /// get_building_info 的資料對照 ThingDef／TerrainDef 欄位：反應爐 6x7、需要 Heavy 地基、不能在屋頂下、是船艙零件；
+        /// 並對照所有可建造項目的佔格公式（BuildTools.OccupiedRect）與原版 GenAdj.OccupiedRect：各種尺寸、四個朝向、偶數與奇數邊長都涵蓋。
+        /// 不需要地圖，只讀 Def。
+        /// </summary>
+        [Test]
+        public static void BuildingInfoMatchesVanillaDefs()
+        {
+            var failures = new List<string>();
+            ThingDef reactor = DefDatabase<ThingDef>.GetNamedSilentFail("Ship_Reactor");
+            if (reactor == null)
+            {
+                TestHelpers.Skip(nameof(BuildingInfoMatchesVanillaDefs), "Ship_Reactor def not found");
+                return;
+            }
+
+            BuildingInfo info = _world.GetBuildingInfo("Ship_Reactor");
+            if (info == null) throw new AssertionException("GetBuildingInfo(Ship_Reactor) returned null");
+            if (info.Width != reactor.size.x || info.Height != reactor.size.z || info.Width != 6 || info.Height != 7) failures.Add($"size {info.Width}x{info.Height}, def {reactor.size}");
+            if (info.TerrainAffordance != reactor.terrainAffordanceNeeded.defName || info.TerrainAffordance != "Heavy") failures.Add("affordance " + info.TerrainAffordance);
+            if (!info.ShipPart || !reactor.building.shipPart) failures.Add("ship part flag");
+            if (!info.PlaceWorkers.Contains("PlaceWorker_NotUnderRoof")) failures.Add("place workers: " + string.Join(",", info.PlaceWorkers));
+            if (info.ConstructionSkill != reactor.constructionSkillPrerequisite) failures.Add("construction skill " + info.ConstructionSkill);
+            // 主選單那輪沒有遊戲，研究進度讀不到，一律視為未完成。
+            bool playing = Current.ProgramState == ProgramState.Playing;
+            if (info.Research.Count != reactor.researchPrerequisites.Count || info.Research.Zip(reactor.researchPrerequisites, (i, r) => i.Done != (playing && r.IsFinished)).Any(x => x)) failures.Add("research prerequisites");
+            if (info.Costs.Sum(c => c.Count) != reactor.costList.Sum(c => c.count) || info.Costs.Count != reactor.costList.Count) failures.Add("costs");
+            if (Math.Abs(info.PowerWatts - reactor.GetCompProperties<CompProperties_Power>().PowerConsumption) > 0.01f) failures.Add("power " + info.PowerWatts);
+
+            string text = new RimAgent.Tools.BuildTools(_world).GetBuildingInfo("Ship_Reactor");
+            foreach (string want in new[] { "Size: 6x7", "makes it 7x6", "Heavy support", "must not be under a roof", "Ship part" })
+            {
+                if (!text.Contains(want)) failures.Add($"tool text lacks '{want}': {text}");
+            }
+
+            // 有互動格的建築、要選材料的建築、地板：欄位與 Def 一致。
+            ThingDef withCell = DefDatabase<ThingDef>.AllDefsListForReading.FirstOrDefault(d => d.BuildableByPlayer && d.HasSingleOrMultipleInteractionCells);
+            if (withCell != null)
+            {
+                int expected = (withCell.hasInteractionCell ? 1 : 0) + (withCell.multipleInteractionCellOffsets?.Count ?? 0);
+                if (_world.GetBuildingInfo(withCell.defName).InteractionOffsets.Count != expected) failures.Add($"interaction cells of {withCell.defName}");
+            }
+            ThingDef wall = ThingDefOf.Wall;
+            BuildingInfo wallInfo = _world.GetBuildingInfo(wall.defName);
+            if (wallInfo.StuffCount != wall.CostStuffCount || wallInfo.StuffCategories.Count != wall.stuffCategories.Count) failures.Add("stuff cost of Wall");
+            TerrainDef floor = DefDatabase<TerrainDef>.AllDefsListForReading.FirstOrDefault(t => t.BuildableByPlayer);
+            if (floor != null && !_world.GetBuildingInfo(floor.defName).IsTerrain) failures.Add("terrain flag of " + floor.defName);
+            if (_world.GetBuildingInfo("NoSuchBuildableDef") != null) failures.Add("unknown def should return null");
+
+            // 佔格公式對照原版：每種尺寸取一個可建造的 ThingDef，四個朝向。
+            var origin = new IntVec3(50, 0, 60);
+            foreach (ThingDef d in DefDatabase<ThingDef>.AllDefsListForReading.Where(x => x.BuildableByPlayer).GroupBy(x => x.size).Select(g => g.First()))
+            {
+                BuildingInfo di = _world.GetBuildingInfo(d.defName);
+                for (int rot = 0; rot < 4; rot++)
+                {
+                    CellRect vanilla = GenAdj.OccupiedRect(origin, new Rot4(rot), d.size);
+                    RimAgent.Game.CellRectSpec mine = RimAgent.Tools.BuildTools.OccupiedRect(origin.x, origin.z, rot, di);
+                    if (mine.MinX != vanilla.minX || mine.MinZ != vanilla.minZ || mine.MaxX != vanilla.maxX || mine.MaxZ != vanilla.maxZ)
+                        failures.Add($"{d.defName} {d.size} rot {rot}: ours {mine}, vanilla ({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})");
+                }
+            }
+            TestHelpers.AssertNone(failures, "get_building_info vs vanilla defs");
+        }
+
         /// <summary>藍圖在字元網格裡是 b，不是成品；拆掉後那一格回到原樣。</summary>
         [Test]
         public static void MapGridDrawsPlacedBlueprint()
@@ -521,9 +728,10 @@ namespace RimAgent.InGameTests
             Predicate<IntVec3> clear = c => !c.Fogged(map) && c.Standable(map) && !map.roofGrid.Roofed(c)
                 && c.GetEdifice(map) == null && c.GetThingList(map).All(t => t is Plant);
             CellRect? found = null;
-            for (int cx = 0; found == null && cx + width < map.Size.x; cx += 4)
+            // 離地圖邊緣留一格：原版 ShipUtility.ShipBuildingsAttachedTo 會讀零件外圍的格子，不檢查是否在圖內。
+            for (int cx = 1; found == null && cx + width < map.Size.x - 1; cx += 4)
             {
-                for (int cz = 0; cz + height < map.Size.z; cz += 4)
+                for (int cz = 1; cz + height < map.Size.z - 1; cz += 4)
                 {
                     var candidate = new CellRect(cx, cz, width, height);
                     if (candidate.Cells.All(c => clear(c))) { found = candidate; break; }

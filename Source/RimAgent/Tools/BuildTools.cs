@@ -162,7 +162,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-        [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1. Max 400 cells per call; reports refused cells with reasons.")]
+        [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: get_building_info. Max 400 cells per call.")]
 #pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
         public string PlaceBlueprint(
             [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
@@ -171,7 +171,7 @@ namespace RimAgent.Tools
             int z,
             [Description("Line end or opposite corner; ignored for single.")] int x2,
             [Description("Line end or opposite corner; ignored for single.")] int z2,
-            [Description("0 north, 1 east, 2 south, 3 west (doors, beds); otherwise 0.")] int rotation,
+            [Description("0 north, 1 east, 2 south, 3 west (doors, beds). Also turns non-square buildings: east/west swaps width and depth. Otherwise 0.")] int rotation,
             [Description("Material, e.g. \"wood\", \"granite blocks\"; empty = default.")] string stuff)
 #pragma warning restore S107
         {
@@ -194,8 +194,10 @@ namespace RimAgent.Tools
             if (blocked != null) return blocked;
 
             MapBounds bounds = _world.GetMapBounds();
+            BuildingInfo info = _world.GetBuildingInfo(def.Value.DefName);
+            bool large = info != null && (info.Width > 1 || info.Height > 1);
             var failures = new List<string>();
-            int placed = 0;
+            var placedCells = new List<(int X, int Z)>();
             foreach ((int cx, int cz) in cells.Value)
             {
                 if (TargetResolver.CheckCell(cx, cz, bounds) != null)
@@ -204,16 +206,121 @@ namespace RimAgent.Tools
                     continue;
                 }
                 CommandResult r = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName);
-                if (r.Success) placed++;
-                else failures.Add($"{ToolText.Cell(cx, cz)}: {r.Message}");
+                if (r.Success) placedCells.Add((cx, cz));
+                else failures.Add($"{ToolText.Cell(cx, cz)}{(large ? " (would cover " + OccupiedRect(cx, cz, rotation, info) + ")" : string.Empty)}: {r.Message}");
             }
 
+            int placed = placedCells.Count;
             if (placed == 0)
             {
                 return ToolText.Error($"could not place any {what} blueprint. " + string.Join("; ", failures.Take(5)));
             }
-            string summary = $"Placed {placed} {what} blueprint(s) {where}.";
+            string summary = $"Placed {placed} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
             return failures.Count == 0 ? summary : summary + $" {failures.Count} failed: " + string.Join("; ", failures.Take(5));
+        }
+
+        /// <summary>最多逐一列出幾個藍圖的佔格；更多的只報數量。</summary>
+        private const int MaxFootprintsListed = 5;
+
+        /// <summary>
+        /// 一個建築放在 (x,z)、朝向 rotation 時佔的矩形；與 GenAdj.OccupiedRect 同一公式（遊戲內測試逐一對照）：
+        /// 朝東西時寬深對調；(x,z) 是中心格，偶數邊長多出的那格落在東／北側，旋轉再依方向挪一格。
+        /// </summary>
+        internal static CellRectSpec OccupiedRect(int x, int z, int rotation, BuildingInfo info)
+        {
+            int w = info.Width, h = info.Height;
+            if (w == 1 && h == 1) return new CellRectSpec(x, z, x, z);
+            if (rotation == 1 || rotation == 3)
+            {
+                int swap = w;
+                w = h;
+                h = swap;
+            }
+            int shiftX = 0, shiftZ = 0;
+            if (rotation == 1) shiftZ = -1;
+            else if (rotation == 2) { shiftX = -1; shiftZ = -1; }
+            else if (rotation == 3) shiftX = -1;
+            int cx = x + (w % 2 == 0 ? shiftX : 0);
+            int cz = z + (h % 2 == 0 ? shiftZ : 0);
+            int minX = cx - (w - 1) / 2, minZ = cz - (h - 1) / 2;
+            return new CellRectSpec(minX, minZ, minX + w - 1, minZ + h - 1);
+        }
+
+        /// <summary>成功訊息裡大於 1x1 的建築的佔格：單一藍圖直接寫範圍，多個則逐一列出中心與範圍。</summary>
+        private static string FootprintNote(BuildingInfo info, List<(int X, int Z)> placedCells, int rotation)
+        {
+            CellRectSpec first = OccupiedRect(placedCells[0].X, placedCells[0].Z, rotation, info);
+            string size = $"{first.MaxX - first.MinX + 1}x{first.MaxZ - first.MinZ + 1}";
+            if (placedCells.Count == 1) return $" Size {size}, rotation {rotation}, covers {first}.";
+            IEnumerable<string> listed = placedCells.Take(MaxFootprintsListed)
+                .Select(c => $"{ToolText.Cell(c.X, c.Z)} covers {OccupiedRect(c.X, c.Z, rotation, info)}");
+            string more = placedCells.Count > MaxFootprintsListed ? $"; +{placedCells.Count - MaxFootprintsListed} more" : string.Empty;
+            return $" Each is {size}, rotation {rotation}: {string.Join("; ", listed)}{more}.";
+        }
+
+        /// <summary>PlaceWorker 類別 → 模型看得懂的限制；沒收錄的只回類別名。</summary>
+        private static readonly Dictionary<string, string> PlaceWorkerRules = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["PlaceWorker_NotUnderRoof"] = "must not be under a roof",
+            ["Placeworker_OnlyUnderThickRoof"] = "must be under a thick rock roof",
+            ["PlaceWorker_MustBeIndoors"] = "must be in an enclosed room, not open to the map edge",
+            ["Placeworker_AttachedToWall"] = "must be attached to a wall (rotation points at the wall)",
+            ["PlaceWorker_OnSteamGeyser"] = "must sit on a steam geyser"
+        };
+
+        [AgentTool("get_building_info", ToolCategory.Observe, ToolRisk.Query)]
+        [Description("Looks up a buildable by name or defName (same names as place_blueprint) and reports its size and how rotation changes it, cost, material needs, terrain support needed (H/m/l in view_map_grid layer=build), research and construction skill, placement rules (e.g. not under a roof), ship part, power and interaction cell. Use it before planning a layout.")]
+        public string GetBuildingInfo([Description("Name or defName, e.g. \"ship reactor\", \"Ship_Engine\", \"solar generator\".")] string building)
+        {
+            Result<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
+            if (!def.Success) return def.Error;
+            BuildingInfo info = _world.GetBuildingInfo(def.Value.DefName);
+            if (info == null) return ToolText.Error($"no data for {def.Value.DefName}.");
+            return FormatBuildingInfo(info);
+        }
+
+        private static string FormatBuildingInfo(BuildingInfo b)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(b.Label).Append(" (").Append(b.DefName).AppendLine(")");
+            sb.Append("Size: ").Append(b.Width).Append('x').Append(b.Height).Append(" (x by z, facing north). ");
+            sb.AppendLine(b.Width == b.Height
+                ? "Rotation does not change the footprint."
+                : $"Rotation 1 or 3 (east/west) makes it {b.Height}x{b.Width}.");
+            if (b.Width > 1 || b.Height > 1) sb.AppendLine("place_blueprint x,z is the center cell; its reply lists the covered rectangle.");
+
+            var cost = new List<string>(b.Costs.Select(c => $"{c.Label} x{c.Count}"));
+            if (b.StuffCount > 0) cost.Add($"{b.StuffCount} of a material ({string.Join(", ", b.StuffCategories)})");
+            sb.Append("Cost: ").AppendLine(cost.Count == 0 ? "none" : string.Join(", ", cost));
+
+            if (b.TerrainAffordance.Length > 0)
+            {
+                sb.Append("Ground: needs ").Append(b.TerrainAffordance).Append(" support under every covered cell")
+                  .AppendLine(b.AffordanceFromStuff ? " (may depend on the material)." : ".");
+            }
+            if (b.Research.Count == 0) sb.AppendLine("Research: none.");
+            else sb.Append("Research: ").AppendLine(string.Join(", ", b.Research.Select(r => r.Label + (r.Done ? " (done)" : " (NOT done)"))));
+            if (b.ConstructionSkill > 0 || b.ArtisticSkill > 0)
+            {
+                var skills = new List<string>();
+                if (b.ConstructionSkill > 0) skills.Add($"construction {b.ConstructionSkill}");
+                if (b.ArtisticSkill > 0) skills.Add($"artistic {b.ArtisticSkill}");
+                sb.Append("Builder skill: ").Append(string.Join(", ", skills)).AppendLine(".");
+            }
+            if (b.PlaceWorkers.Count > 0)
+            {
+                sb.Append("Placement: ").AppendLine(string.Join("; ", b.PlaceWorkers.Select(w =>
+                    PlaceWorkerRules.TryGetValue(w, out string rule) ? w + " -> " + rule : w)));
+            }
+            if (b.ShipPart) sb.AppendLine("Ship part: counts toward the starship (must connect to the others).");
+            if (b.PowerWatts > 0) sb.Append("Power: uses ").Append(ToolText.Num(b.PowerWatts)).AppendLine(" W.");
+            else if (b.PowerWatts < 0) sb.Append("Power: produces ").Append(ToolText.Num(-b.PowerWatts)).AppendLine(" W.");
+            if (b.InteractionOffsets.Count > 0)
+            {
+                sb.Append("Interaction cell: offset ").Append(string.Join(", ", b.InteractionOffsets.Select(o => ToolText.Cell(o.X, o.Z))))
+                  .AppendLine(" from the center when facing north (turns with rotation); keep it free.");
+            }
+            return sb.ToString().TrimEnd('\r', '\n');
         }
 
         /// <summary>形狀展開成格子；line 照模型給的起點走向終點，fill／outline 由下往上逐列。</summary>

@@ -72,6 +72,17 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void EmptyResourcesExplainThatOnlyStoredItemsAreCounted()
+        {
+            _world.Resources = new ResourceSnapshot { TotalHumanEdibleNutrition = 0f, Items = new ResourceInfo[0] };
+
+            string text = _tools.GetResources();
+
+            Assert.That(text, Does.Contain("Nothing is in storage yet").And.Contain("no stockpile or shelf").And.Contain("find_things kind=item"));
+            Assert.That(text, Does.Not.Contain("No counted resources"));
+        }
+
+        [Test]
         public void ThreatsEmptyAndListed()
         {
             Assert.That(_tools.ListThreats(), Is.EqualTo("No threats on the map."));
@@ -173,6 +184,47 @@ namespace RimAgent.Tests
         {
             string text = _tools.FindThings("mineable", "steel", -1, -1, -1, -1, 20);
             Assert.That(text, Does.Contain("Found 2").And.Contain("[1] compacted steel (MineableSteel) at (5,5)").And.Contain("[2]"));
+        }
+
+        [Test]
+        public void FindThingsPutsAllowedFirstThenNearestTheColonists()
+        {
+            // 殖民者平均位置在 (11,22)。禁用的近處鋼材排在放行的遠處鋼材之後；同組內近的在前。
+            _world.Things.Clear();
+            _world.Things.Add(FakeGameWorld.MakeThing(10, "Steel", "steel", ThingKind.Item, 11, 23));
+            _world.Things[0].Forbidden = true;
+            _world.Things.Add(FakeGameWorld.MakeThing(11, "Steel", "steel", ThingKind.Item, 80, 80));
+            _world.Things.Add(FakeGameWorld.MakeThing(12, "Steel", "steel", ThingKind.Item, 14, 22));
+            _world.Things.Add(FakeGameWorld.MakeThing(13, "Steel", "steel", ThingKind.Item, 50, 50));
+
+            string text = _tools.FindThings("item", "steel", -1, -1, -1, -1, 3);
+
+            Assert.That(text, Does.StartWith("Found 4, showing the 3 nearest the colonists (allowed first, then forbidden)"));
+            Assert.That(text.IndexOf("[12]"), Is.GreaterThan(-1).And.LessThan(text.IndexOf("[13]")));
+            Assert.That(text.IndexOf("[13]"), Is.LessThan(text.IndexOf("[11]")));
+            Assert.That(text, Does.Not.Contain("[10]"), "放行的三筆已經填滿上限，禁用的被擠掉");
+        }
+
+        [Test]
+        public void FindThingsWithinTheLimitJustCountsThem()
+        {
+            string text = _tools.FindThings("any", "", -1, -1, -1, -1, 20);
+
+            Assert.That(text, Does.StartWith("Found 3:"));
+            Assert.That(text, Does.Not.Contain("showing"));
+        }
+
+        [Test]
+        public void FindThingsWithoutColonistsOrdersByDistanceToTheMapCenter()
+        {
+            _world.Colonists.Clear();
+            _world.Things.Clear();
+            _world.Things.Add(FakeGameWorld.MakeThing(20, "Steel", "steel", ThingKind.Item, 2, 2));
+            _world.Things.Add(FakeGameWorld.MakeThing(21, "Steel", "steel", ThingKind.Item, 49, 52));
+
+            string text = _tools.FindThings("item", "", -1, -1, -1, -1, 1);
+
+            Assert.That(text, Does.StartWith("Found 2, showing the 1").And.Contain("[21]").And.Not.Contain("[20]"));
         }
 
         [Test]
@@ -317,7 +369,8 @@ namespace RimAgent.Tests
         [Test]
         public void InspectAreaRejectsOversizedAndOutOfMapRectangles()
         {
-            Assert.That(_tools.InspectArea(0, 0, 50, 50), Does.StartWith("Error:").And.Contain("2601 cells"));
+            Assert.That(_tools.InspectArea(0, 0, 50, 50), Does.StartWith("Error:").And.Contain("2601 cells")
+                .And.Contain("corners are inclusive").And.Contain("(0,0)-(49,49)"));
             Assert.That(_tools.InspectArea(0, 0, 49, 49), Does.StartWith("Area (0,0)-(49,49): 2500 cells"));
             Assert.That(_tools.InspectArea(0, 0, 100, 5), Does.StartWith("Error:"));
         }

@@ -765,6 +765,27 @@ namespace RimAgent.Game
         public IReadOnlyList<string> Designations { get; set; } = Array.Empty<string>();
     }
 
+    /// <summary>
+    /// FindThings 的結果：只含排在最前面、不超過 Limit 筆的物件；TotalMatches 是符合條件的總數，
+    /// 超過 Limit 時工具要告訴模型還有多少沒列出。排序規則見 <see cref="IGameWorld.FindThings"/>。
+    /// </summary>
+    public sealed class ThingSearchResult : IReadOnlyList<ThingInfo>
+    {
+        private readonly IReadOnlyList<ThingInfo> _things;
+
+        public ThingSearchResult(IReadOnlyList<ThingInfo> things, int totalMatches)
+        {
+            _things = things ?? throw new ArgumentNullException(nameof(things));
+            TotalMatches = Math.Max(totalMatches, things.Count);
+        }
+
+        public int TotalMatches { get; }
+        public int Count => _things.Count;
+        public ThingInfo this[int index] => _things[index];
+        public IEnumerator<ThingInfo> GetEnumerator() => _things.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
     public sealed class ThingQuery
     {
         public ThingKind Kind { get; set; } = ThingKind.Any;
@@ -884,6 +905,15 @@ namespace RimAgent.Game
         DeepWater
     }
 
+    /// <summary>地形能承載的建築重量等級（取 Heavy／Medium／Light 中最強的一個）；None 代表三種都不行（深水等）。</summary>
+    public enum GridAffordance
+    {
+        None,
+        Light,
+        Medium,
+        Heavy
+    }
+
     public enum GridPlant
     {
         None,
@@ -922,6 +952,56 @@ namespace RimAgent.Game
         public GridPlant Plant { get; set; }
         public GridZone Zone { get; set; }
         public GridRoof Roof { get; set; }
+        /// <summary>build 圖層：格子已被佔走——格上有建築、藍圖、框架（地板與電線類除外）或天然岩石，蓋別的建築前得先移除或換地方。</summary>
+        public bool Blocked { get; set; }
+        /// <summary>build 圖層：地形（含地基）承載的最強建築重量等級。</summary>
+        public GridAffordance BuildSupport { get; set; }
+    }
+
+    /// <summary>建築造價的一項材料。</summary>
+    public sealed class BuildingCost
+    {
+        public string Label { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    /// <summary>建築的一項研發前置與是否已完成。</summary>
+    public sealed class BuildingResearch
+    {
+        public string Label { get; set; } = string.Empty;
+        public bool Done { get; set; }
+    }
+
+    /// <summary>
+    /// 一個可建造項目（建築或地板）的規格：尺寸、造價、前置條件與放置限制。
+    /// 尺寸是朝北時的寬（x）與深（z）；朝東西時寬深對調。
+    /// </summary>
+    public sealed class BuildingInfo
+    {
+        public string DefName { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public int Width { get; set; } = 1;
+        public int Height { get; set; } = 1;
+        /// <summary>地板類（TerrainDef）；沒有建築專屬的欄位。</summary>
+        public bool IsTerrain { get; set; }
+        public IReadOnlyList<BuildingCost> Costs { get; set; } = Array.Empty<BuildingCost>();
+        /// <summary>需要材料（stuff）時的用量；0 表示不用選材料。</summary>
+        public int StuffCount { get; set; }
+        public IReadOnlyList<string> StuffCategories { get; set; } = Array.Empty<string>();
+        /// <summary>地形承載需求的 defName（Light、Medium、Heavy…）；空字串表示沒有要求。</summary>
+        public string TerrainAffordance { get; set; } = string.Empty;
+        /// <summary>承載需求隨選用的材料而變。</summary>
+        public bool AffordanceFromStuff { get; set; }
+        public IReadOnlyList<BuildingResearch> Research { get; set; } = Array.Empty<BuildingResearch>();
+        public int ConstructionSkill { get; set; }
+        public int ArtisticSkill { get; set; }
+        /// <summary>放置檢查（PlaceWorker）的類別名稱。</summary>
+        public IReadOnlyList<string> PlaceWorkers { get; set; } = Array.Empty<string>();
+        public bool ShipPart { get; set; }
+        /// <summary>電力：正數耗電、負數發電（瓦）；0 表示沒有電力元件或不耗電。</summary>
+        public float PowerWatts { get; set; }
+        /// <summary>互動格相對中心的偏移（朝北時；隨旋轉轉動），例如工作台站的位置。</summary>
+        public IReadOnlyList<(int X, int Z)> InteractionOffsets { get; set; } = Array.Empty<(int X, int Z)>();
     }
 
     public sealed class DefInfo

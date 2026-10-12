@@ -83,7 +83,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("get_resources", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Lists counted resources on the map grouped by category, plus total human-edible nutrition. Answers questions about food, materials, medicine and components.")]
+        [Description("Lists resources on the map grouped by category, plus total human-edible nutrition. Answers questions about food, materials, medicine and components. Only items lying in storage (stockpile zones, shelves) are counted, and not spoiled or fogged ones; loose items on the ground are not, find those with find_things kind=item.")]
         public string GetResources()
         {
             ResourceSnapshot snapshot = _world.GetResources();
@@ -92,7 +92,7 @@ namespace RimAgent.Tools
               .Append(" (one colonist eats about 1.6 per day)").AppendLine();
             if (snapshot.Items.Count == 0)
             {
-                sb.Append("No counted resources.");
+                sb.Append("Nothing is in storage yet: no stockpile or shelf holds any counted items. Loose items on the ground are not counted here; find them with find_things kind=item.");
                 return sb.ToString();
             }
 
@@ -271,7 +271,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("find_things", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Finds map objects by kind, optional name and optional rectangle. Returns id, defName, label, cell and existing marks; designate_area, place_blueprint and order_attack take these ids and cells.")]
+        [Description("Finds map objects by kind, optional name and optional rectangle. Returns id, defName, label, cell and existing marks; designate_area, place_blueprint and order_attack take these ids and cells. When there are more matches than the limit, results are ordered allowed (not forbidden) before forbidden, then nearest to the colonists first, and the reply says how many matched in total.")]
         public string FindThings(
             [Description("What to look for: any, mineable, plant, building, item or pawn.")] string kind,
             [Description("defName or part of the label to match, e.g. \"steel\" or \"tree\". Empty string matches everything.")] string name,
@@ -300,7 +300,7 @@ namespace RimAgent.Tools
                 query.Area = rect.Value;
             }
 
-            IReadOnlyList<ThingInfo> things = _world.FindThings(query);
+            ThingSearchResult things = _world.FindThings(query);
             if (things.Count == 0)
             {
                 string where = query.Area.HasValue ? $" in {query.Area.Value}" : " on the map";
@@ -309,7 +309,15 @@ namespace RimAgent.Tools
             }
 
             var sb = new StringBuilder();
-            sb.Append("Found ").Append(things.Count).Append(things.Count >= query.Limit ? " (limit reached)" : string.Empty).Append(':').AppendLine();
+            if (things.TotalMatches > things.Count)
+            {
+                sb.Append("Found ").Append(things.TotalMatches).Append(", showing the ").Append(things.Count)
+                  .Append(" nearest the colonists (allowed first, then forbidden). Narrow the name or rectangle to see the rest:").AppendLine();
+            }
+            else
+            {
+                sb.Append("Found ").Append(things.Count).Append(':').AppendLine();
+            }
             foreach (ThingInfo t in things) sb.Append(ToolText.Thing(t)).AppendLine();
             return sb.ToString().Trim();
         }
@@ -354,7 +362,7 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
-        [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 2500 cells (50x50) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
+        [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
         public string InspectArea(
             [Description("Rectangle corner x.")] int x1,
             [Description("Rectangle corner z.")] int z1,
@@ -366,7 +374,7 @@ namespace RimAgent.Tools
             if (!rect.Success) return rect.Error;
             if (rect.Value.CellCount > MaxInspectedCells)
             {
-                return ToolText.Error($"rectangle {rect.Value} has {rect.Value.CellCount} cells; the limit is {MaxInspectedCells} (50x50). Inspect a smaller area or use find_things.");
+                return ToolText.Error($"rectangle {rect.Value} has {rect.Value.CellCount} cells; the limit is {MaxInspectedCells} cells: {MapGridTools.RectLimitHint}. Inspect a smaller area or use find_things.");
             }
 
             IReadOnlyList<CellInfo> cells = _world.GetCells(rect.Value);

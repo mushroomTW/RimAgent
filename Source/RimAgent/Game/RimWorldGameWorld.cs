@@ -1530,23 +1530,38 @@ namespace RimAgent.Game
             return CommandResult.Ok($"Time speed set to {speed}.");
         }
 
-        public IReadOnlyList<ThingInfo> FindThings(ThingQuery query)
+        public ThingSearchResult FindThings(ThingQuery query)
         {
             Map map = Map;
-            var result = new List<ThingInfo>();
+            var matches = new List<Thing>();
             bool hasDefName = !string.IsNullOrEmpty(query.DefName);
             bool hasNeedle = !string.IsNullOrEmpty(query.LabelContains);
             // 便宜的檢查排前面：座標是整數比較，Label 要走 GenLabel 配字串，全圖數萬個 Thing 逐一算會卡一幀。
+            // 不再碰到 Limit 就停：listerThings 的順序與玩家無關，先到先得會讓離殖民者很遠的地圖生成物件擠掉近處的。
             foreach (Thing t in CandidateThings(map, query.Kind))
             {
-                if (result.Count >= query.Limit) break;
-                if (MatchesQuery(t, query, hasDefName, hasNeedle))
-                {
-                    result.Add(ToThing(t, map));
-                }
+                if (MatchesQuery(t, query, hasDefName, hasNeedle)) matches.Add(t);
             }
-            return result;
+
+            // 排序鍵：先放行（未禁用）再禁用，同組依距離殖民者平均位置的平方由近到遠；ToThing 較貴，只對留下的幾筆算。
+            List<Pawn> colonists = map.mapPawns.FreeColonistsSpawned;
+            float cx = map.Size.x / 2f, cz = map.Size.z / 2f;
+            if (colonists.Count > 0)
+            {
+                cx = colonists.Average(p => (float)p.Position.x);
+                cz = colonists.Average(p => (float)p.Position.z);
+            }
+            List<ThingInfo> shown = matches
+                .Select(t => new { Thing = t, Forbidden = t.IsForbidden(Faction.OfPlayer), Dist = Sq(t.Position.x - cx) + Sq(t.Position.z - cz) })
+                .OrderBy(e => e.Forbidden)
+                .ThenBy(e => e.Dist)
+                .Take(query.Limit)
+                .Select(e => ToThing(e.Thing, map))
+                .ToList();
+            return new ThingSearchResult(shown, matches.Count);
         }
+
+        private static float Sq(float v) => v * v;
 
         private static bool MatchesQuery(Thing t, ThingQuery query, bool hasDefName, bool hasNeedle)
         {
@@ -1647,7 +1662,8 @@ namespace RimAgent.Game
                     ? (terrain.passability == Traversability.Impassable ? GridTerrain.DeepWater : GridTerrain.ShallowWater)
                     : (terrain.IsFloor || terrain.bridge || terrain.IsSubstructure ? GridTerrain.Floor : GridTerrain.Ground),
                 Zone = zone is Zone_Stockpile ? GridZone.Stockpile : zone is Zone_Growing ? GridZone.Growing : GridZone.None,
-                Roof = roof == null ? GridRoof.None : !roof.isNatural ? GridRoof.Constructed : roof.isThickRoof ? GridRoof.Mountain : GridRoof.Natural
+                Roof = roof == null ? GridRoof.None : !roof.isNatural ? GridRoof.Constructed : roof.isThickRoof ? GridRoof.Mountain : GridRoof.Natural,
+                BuildSupport = BuildSupportAt(c, map)
             };
 
             List<Thing> things = c.GetThingList(map);
@@ -1672,15 +1688,21 @@ namespace RimAgent.Game
                     if (t.def.entityDefToBuild is TerrainDef) continue;
                     GridBuilding kind = t is Frame ? GridBuilding.Frame : GridBuilding.Blueprint;
                     if (kind > cell.Building) cell.Building = kind;
+                    // 多格藍圖在它覆蓋的每一格都有登記（ThingGrid.Register），逐格判斷就夠。
+                    if (t.def.entityDefToBuild.IsEdifice()) cell.Blocked = true;
                 }
                 else if (t.def.mineable)
                 {
                     cell.Rock = true;
+                    cell.Blocked = true;
                 }
                 else if (t is Building)
                 {
                     // 電線與管線貼著整片地面，畫出來沒有佈局資訊。
                     if (t.def.altitudeLayer == AltitudeLayer.Conduits) continue;
+                    // 與 GenConstruct.CanPlaceBlueprintOver 同一判準：蓋建築（edifice）時，底下的 edifice 一律擋住；
+                    // 非 edifice（電線、牆上的附掛物）允許疊放，不算占用。
+                    if (t.def.IsEdifice()) cell.Blocked = true;
                     GridBuilding kind = t.def.IsWall ? GridBuilding.Wall
                         : t.def.IsDoor ? GridBuilding.Door
                         : t is Building_Turret ? GridBuilding.Turret
@@ -1694,6 +1716,16 @@ namespace RimAgent.Game
                 }
             }
             return cell;
+        }
+
+        /// <summary>與 GenConstruct.CanBuildOnTerrain 同一來源（IntVec3.GetAffordances：地基優先，否則地形）取最強的重量等級。</summary>
+        private static GridAffordance BuildSupportAt(IntVec3 c, Map map)
+        {
+            List<TerrainAffordanceDef> affordances = c.GetAffordances(map);
+            if (affordances.Contains(TerrainAffordanceDefOf.Heavy)) return GridAffordance.Heavy;
+            if (affordances.Contains(TerrainAffordanceDefOf.Medium)) return GridAffordance.Medium;
+            if (affordances.Contains(TerrainAffordanceDefOf.Light)) return GridAffordance.Light;
+            return GridAffordance.None;
         }
 
         private static CellInfo ToCell(IntVec3 c, Map map, Dictionary<int, RoomInfo> rooms)
@@ -2452,10 +2484,87 @@ namespace RimAgent.Game
             var cell = new IntVec3(x, 0, z);
             var rot = new Rot4(rotation);
             AcceptanceReport report = GenConstruct.CanPlaceBlueprintAt(def, cell, rot, map, false, null, null, stuff);
-            if (!report.Accepted) return CommandResult.Fail(string.IsNullOrEmpty(report.Reason) ? "cannot place there" : report.Reason);
+            if (!report.Accepted)
+            {
+                string reason = string.IsNullOrEmpty(report.Reason) ? "cannot place there" : report.Reason;
+                if (reason == "SpaceAlreadyOccupied".Translate().ToString()) reason += DescribeBlockers(def, cell, rot, map, stuff);
+                return CommandResult.Fail(reason);
+            }
 
             GenConstruct.PlaceBlueprintForBuild(def, cell, map, rot, Faction.OfPlayer, stuff);
             return CommandResult.Ok();
+        }
+
+        /// <summary>最多列出幾個占用者；更多的只報數量。</summary>
+        private const int MaxBlockersListed = 4;
+
+        /// <summary>
+        /// 「空間已被占用」時列出擋住的東西（名稱、id、佔用範圍）。判準與 CanPlaceBlueprintAt 的
+        /// SpaceAlreadyOccupied 迴圈相同（CanPlaceBlueprintOver）；多格物件在每格都有登記，以 id 去重。
+        /// 地板（TerrainDef）另有地基例外，這裡不處理，直接不列。
+        /// </summary>
+        private static string DescribeBlockers(BuildableDef def, IntVec3 center, Rot4 rot, Map map, ThingDef stuff)
+        {
+            if (!(def is ThingDef)) return string.Empty;
+            var seen = new HashSet<int>();
+            var parts = new List<string>();
+            int extra = 0;
+            foreach (IntVec3 c in GenAdj.OccupiedRect(center, rot, def.Size))
+            {
+                if (!c.InBounds(map)) continue;
+                List<Thing> things = c.GetThingList(map);
+                for (int i = 0; i < things.Count; i++)
+                {
+                    Thing t = things[i];
+                    if (GenConstruct.CanPlaceBlueprintOver(def, t.def, stuff, t.Stuff) || !seen.Add(t.thingIDNumber)) continue;
+                    if (parts.Count >= MaxBlockersListed)
+                    {
+                        extra++;
+                        continue;
+                    }
+                    CellRect r = t.OccupiedRect();
+                    string where = r.Width == 1 && r.Height == 1
+                        ? $"({r.minX},{r.minZ})"
+                        : $"({r.minX},{r.minZ})-({r.maxX},{r.maxZ})";
+                    parts.Add($"{t.LabelNoCount} #{t.thingIDNumber} {where}");
+                }
+            }
+            if (parts.Count == 0) return string.Empty;
+            return " (blocked by: " + string.Join("; ", parts) + (extra > 0 ? $"; +{extra} more" : string.Empty) + ")";
+        }
+
+        public BuildingInfo GetBuildingInfo(string buildableDefName)
+        {
+            BuildableDef def = (BuildableDef)DefDatabase<ThingDef>.GetNamedSilentFail(buildableDefName)
+                               ?? DefDatabase<TerrainDef>.GetNamedSilentFail(buildableDefName);
+            if (def == null) return null;
+            var thing = def as ThingDef;
+            IntVec2 size = def.Size;
+            CompProperties_Power power = thing?.GetCompProperties<CompProperties_Power>();
+            var interaction = new List<(int X, int Z)>();
+            if (thing != null && thing.hasInteractionCell) interaction.Add((thing.interactionCellOffset.x, thing.interactionCellOffset.z));
+            if (thing?.multipleInteractionCellOffsets != null) interaction.AddRange(thing.multipleInteractionCellOffsets.Select(o => (o.x, o.z)));
+
+            return new BuildingInfo
+            {
+                DefName = def.defName,
+                Label = def.label ?? def.defName,
+                Width = size.x,
+                Height = size.z,
+                IsTerrain = thing == null,
+                Costs = (def.CostList ?? new List<ThingDefCountClass>()).Select(c => new BuildingCost { Label = c.thingDef.label ?? c.thingDef.defName, Count = c.count }).ToList(),
+                StuffCount = def.MadeFromStuff ? def.CostStuffCount : 0,
+                StuffCategories = def.MadeFromStuff ? def.stuffCategories.Select(s => s.label ?? s.defName).ToList() : new List<string>(),
+                TerrainAffordance = def.terrainAffordanceNeeded?.defName ?? string.Empty,
+                AffordanceFromStuff = def.useStuffTerrainAffordance,
+                Research = (def.researchPrerequisites ?? new List<ResearchProjectDef>()).Select(r => new BuildingResearch { Label = r.label ?? r.defName, Done = Current.ProgramState == ProgramState.Playing && r.IsFinished }).ToList(),
+                ConstructionSkill = def.constructionSkillPrerequisite,
+                ArtisticSkill = def.artisticSkillPrerequisite,
+                PlaceWorkers = (def.placeWorkers ?? new List<Type>()).Select(t => t.Name).ToList(),
+                ShipPart = thing?.building != null && thing.building.shipPart,
+                PowerWatts = power != null ? power.PowerConsumption : 0f,
+                InteractionOffsets = interaction
+            };
         }
 
         public CommandResult SetDrafted(int pawnId, bool drafted)
