@@ -33,15 +33,26 @@ namespace RimAgent.Tools
         }
 
         [AgentTool("list_caravans", ToolCategory.Trade, ToolRisk.Query)]
-        [Description("Lists your caravans on the world map: id, tile, members (kind, health, downed), whether it is travelling, paused, resting or stuck, destination with arrival time, days of food left, mass carried against capacity, and whether it can found a colony or set up camp where it stands. Use the caravan id or name with get_world_tile, send_caravan, set_caravan_movement and settle_caravan.")]
+        [Description("Lists your caravans on the world map: id, tile, members (kind, health, downed), whether it is travelling, paused, resting or stuck, destination with arrival time, days of food left, mass carried against capacity, and whether it can found a colony or set up camp where it stands. Caravans still forming on the map (members gathering cargo, not left yet) are listed after them with their status. Use the caravan id or name with get_world_tile, send_caravan, set_caravan_movement and settle_caravan.")]
         public string ListCaravans()
         {
             IReadOnlyList<CaravanInfo> caravans = _world.GetCaravans();
-            if (caravans.Count == 0)
+            IReadOnlyList<FormingCaravanInfo> forming = _world.GetFormingCaravans();
+            if (caravans.Count == 0 && forming.Count == 0)
                 return "You have no caravans on the world map. A caravan is formed with form_caravan.";
             var sb = new StringBuilder();
-            sb.Append(caravans.Count).Append(caravans.Count == 1 ? " caravan:" : " caravans:").AppendLine();
-            foreach (CaravanInfo c in caravans) AppendCaravan(sb, c);
+            if (caravans.Count == 0) sb.AppendLine("No caravans on the world map yet.");
+            else
+            {
+                sb.Append(caravans.Count).Append(caravans.Count == 1 ? " caravan:" : " caravans:").AppendLine();
+                foreach (CaravanInfo c in caravans) AppendCaravan(sb, c);
+            }
+            if (forming.Count > 0)
+            {
+                sb.Append(forming.Count).Append(forming.Count == 1 ? " forming caravan" : " forming caravans")
+                  .AppendLine(" still on the map (not left yet; cancel_forming_caravan aborts):");
+                foreach (FormingCaravanInfo f in forming) AppendForming(sb, f);
+            }
             return sb.ToString().Trim();
         }
 
@@ -276,13 +287,18 @@ namespace RimAgent.Tools
         /// </summary>
         private Result<int> ResolveTile(int tile, int worldObjectId, IReadOnlyList<CaravanInfo> caravans, int originCaravanId)
         {
+            return ResolveTile(_world, tile, worldObjectId, caravans, originCaravanId);
+        }
+
+        internal static Result<int> ResolveTile(IGameWorld world, int tile, int worldObjectId, IReadOnlyList<CaravanInfo> caravans, int originCaravanId)
+        {
             if (worldObjectId < 0) return Result<int>.Ok(tile >= 0 ? tile : -1);
             int objectTile;
             CaravanInfo own = caravans.FirstOrDefault(c => c.Id == worldObjectId);
             if (own != null) objectTile = own.Tile;
             else
             {
-                WorldObjectInfo obj = _world.GetWorldSurvey(originCaravanId).Objects.FirstOrDefault(o => o.Id == worldObjectId);
+                WorldObjectInfo obj = world.GetWorldSurvey(originCaravanId).Objects.FirstOrDefault(o => o.Id == worldObjectId);
                 if (obj == null)
                     return Result<int>.Fail(ToolText.Error($"no world object has id {worldObjectId}. Use list_world_objects to get valid ids."));
                 objectTile = obj.Tile;
@@ -434,6 +450,13 @@ namespace RimAgent.Tools
             sb.Append("  found a colony here: ").Append(c.CanSettle ? "yes" : "no" + Reason(c.SettleBlockedReason))
               .Append(" | set up camp here: ").AppendLine(c.CanCamp ? "yes" : "no" + Reason(c.CampBlockedReason));
             if (c.ObjectsHere.Count > 0) sb.Append("  here: ").AppendLine(string.Join(", ", c.ObjectsHere.ToArray()));
+        }
+
+        private static void AppendForming(StringBuilder sb, FormingCaravanInfo f)
+        {
+            sb.Append('[').Append(f.Id).Append("] ").Append(f.Status).Append(" | leaves the map at ").AppendLine(ToolText.Cell(f.ExitX, f.ExitZ));
+            sb.Append("  members: ").AppendLine(string.Join(", ", f.Members.Select(FormatMember).ToArray()));
+            sb.Append("  cargo: ").AppendLine(f.Cargo.Count == 0 ? "none" : string.Join(", ", f.Cargo.ToArray()));
         }
 
         private static string Reason(string reason)

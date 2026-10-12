@@ -99,6 +99,7 @@ namespace RimAgent.Tools
             Register(new FloatMenuTools(world, gate), transcript);
             Register(new CombatTools(world, gate), transcript);
             Register(new TradeTools(world, gate), transcript);
+            Register(new CaravanTools(world, gate), transcript);
             Register(new WorldTools(world, gate), transcript);
             Register(new MedicalTools(world, gate), transcript);
             Register(new PrisonerTools(world, gate), transcript);

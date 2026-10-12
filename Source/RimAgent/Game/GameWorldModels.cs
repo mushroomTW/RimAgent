@@ -299,12 +299,87 @@ namespace RimAgent.Game
         public IReadOnlyList<TradeLine> Sells { get; set; } = Array.Empty<TradeLine>();
     }
 
-    /// <summary>組織一支商隊外出：指定的殖民者離開地圖往羅盤方向走。</summary>
+    /// <summary>
+    /// 規劃或組織一支商隊：照原版組隊視窗（Dialog_FormCaravan）的選擇——成員、貨物、目的地格。
+    /// 成員一律用世界內的 pawn 編號（殖民者、殖民地動物、囚犯混在一起），貨物是物品 defName 與數量。
+    /// </summary>
     public sealed class CaravanRequest
     {
         public IReadOnlyList<int> PawnIds { get; set; } = Array.Empty<int>();
-        /// <summary>羅盤方向（N、NE、E、SE、S、SW、W、NW，大小寫不敏感）。</summary>
-        public string Heading { get; set; } = string.Empty;
+        /// <summary>從殖民地倉儲與家園區帶走的物品。</summary>
+        public IReadOnlyList<TradeLine> Cargo { get; set; } = Array.Empty<TradeLine>();
+        /// <summary>目的地格（地表層的格子編號）；-1 代表沒選。原版組隊要求選好路線才送得出去，規劃可以不選。</summary>
+        public int DestinationTile { get; set; } = -1;
+    }
+
+    /// <summary>殖民地現在能裝上商隊的一種物品（原版組隊視窗「物品」頁的內容；已撤下打包的家具算成原家具，如睡袋）。</summary>
+    public sealed class CaravanCargoInfo
+    {
+        public string DefName { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        /// <summary>倉儲與家園區裡可帶走的總數（不含被預約的）。</summary>
+        public int Count { get; set; }
+        public float MassEach { get; set; }
+    }
+
+    /// <summary>規劃中的一行貨物。</summary>
+    public sealed class CaravanPlanCargo
+    {
+        public string DefName { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public int Count { get; set; }
+        public float MassEach { get; set; }
+    }
+
+    /// <summary>
+    /// 原版組隊視窗在這組選擇下會顯示的數字與警告（負重、速度、存糧、覓食、能見度、到目的地的天數），
+    /// 與按下「送出」時會被擋下的原因。
+    /// </summary>
+    public sealed class CaravanPlanInfo
+    {
+        /// <summary>請求本身有問題（成員或貨物對不到）；有值時其他欄位無意義。</summary>
+        public string Error { get; set; } = string.Empty;
+        public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = Array.Empty<CaravanMemberInfo>();
+        public IReadOnlyList<CaravanPlanCargo> Cargo { get; set; } = Array.Empty<CaravanPlanCargo>();
+        /// <summary>貨物與成員隨身物品的總重（不含成員自己的體重，與原版視窗一致）。</summary>
+        public float MassUsage { get; set; }
+        public float MassCapacity { get; set; }
+        public float TilesPerDay { get; set; }
+        public int TicksPerMove { get; set; }
+        /// <summary>存糧能吃幾天（有目的地時照路徑，含沿途覓食與夜間休息）。</summary>
+        public float FoodDays { get; set; }
+        /// <summary>食物多久內會腐壞（遊戲的 ApproxDaysUntilRot）。</summary>
+        public float DaysUntilRot { get; set; }
+        /// <summary>每天可覓得的食物種類與數量；沒有覓食能力時數量為 0。</summary>
+        public string ForagedFoodLabel { get; set; } = string.Empty;
+        public float ForagedPerDay { get; set; }
+        /// <summary>能見度 0 到 1（越高越容易被敵對勢力發現）。</summary>
+        public float Visibility { get; set; }
+        /// <summary>目的地格；-1 代表沒選。</summary>
+        public int DestinationTile { get; set; } = -1;
+        public string DestinationLabel { get; set; } = string.Empty;
+        public float DistanceTiles { get; set; }
+        /// <summary>到目的地的預估 tick（遊戲的 CaravanArrivalTimeEstimator，含夜間休息）；0 代表未知。</summary>
+        public int EtaTicks { get; set; }
+        public bool DestinationReachable { get; set; }
+        /// <summary>組隊視窗按「送出」會拒絕的原因（遊戲自己的訊息）；空表示送得出去。</summary>
+        public IReadOnlyList<string> Blockers { get; set; } = Array.Empty<string>();
+        /// <summary>組隊視窗會彈出「確定嗎」確認框的警告；不擋，但值得看。</summary>
+        public IReadOnlyList<string> Warnings { get; set; } = Array.Empty<string>();
+    }
+
+    /// <summary>一支正在集結、還沒離開地圖的商隊（LordJob_FormAndSendCaravan）。</summary>
+    public sealed class FormingCaravanInfo
+    {
+        /// <summary>集結用的 Lord 編號，取消時用。</summary>
+        public int Id { get; set; }
+        /// <summary>遊戲顯示的階段（集結動物、搬運物品、等待、離開…）。</summary>
+        public string Status { get; set; } = string.Empty;
+        public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = Array.Empty<CaravanMemberInfo>();
+        /// <summary>要帶走的貨物，每項「名稱 x數量」。</summary>
+        public IReadOnlyList<string> Cargo { get; set; } = Array.Empty<string>();
+        public int ExitX { get; set; }
+        public int ExitZ { get; set; }
     }
 
     /// <summary>玩家商隊的一名成員。</summary>

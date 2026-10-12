@@ -162,8 +162,23 @@ namespace RimAgent.Game
         CommandResult SetForbidden(CellRectSpec? area, string labelContains, bool forbidden);
         /// <summary>一次結清的交易：驗證不過整筆不做，成功時 Message 為交易明細。</summary>
         CommandResult ExecuteTrade(TradeRequest request);
-        /// <summary>組織商隊外出：驗證不過不組，成功時 Message 為成團明細。</summary>
+        /// <summary>殖民地現在能裝上商隊的物品（原版組隊視窗的物品頁），按名稱排序。</summary>
+        IReadOnlyList<CaravanCargoInfo> GetCaravanCargo();
+        /// <summary>
+        /// 組隊規劃：照原版組隊視窗的計算器算負重、速度、存糧、覓食、能見度與到目的地的天數，
+        /// 並列出按「送出」會被拒絕的原因與會彈出的警告；不動遊戲。請求本身有問題時 Error 有值。
+        /// </summary>
+        CaravanPlanInfo PlanCaravan(CaravanRequest request);
+        /// <summary>
+        /// 組織商隊：等同在組隊視窗按「送出」（CaravanFormingUtility.StartFormingCaravan）——成員先到集合點收齊貨物，
+        /// 再一起走出地圖邊緣；要花遊戲時間。原版會拒絕的情況（超重、沒選目的地、找不到出口…）不組並回報原因，
+        /// 成功時 Message 為集結明細。
+        /// </summary>
         CommandResult FormCaravan(CaravanRequest request);
+        /// <summary>還在地圖上集結、尚未離開的商隊。</summary>
+        IReadOnlyList<FormingCaravanInfo> GetFormingCaravans();
+        /// <summary>中止集結（CaravanFormingUtility.StopFormingCaravan）：成員放下貨物、恢復平常工作。</summary>
+        CommandResult CancelFormingCaravan(int formingId);
         /// <summary>世界地圖上的玩家商隊（含成員、行進狀態、存糧與負重）。</summary>
         IReadOnlyList<CaravanInfo> GetCaravans();
         /// <summary>

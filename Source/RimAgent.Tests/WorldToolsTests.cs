@@ -100,6 +100,36 @@ namespace RimAgent.Tests
         }
 
         [Test]
+        public void ListCaravansShowsCaravansStillFormingOnTheMap()
+        {
+            _world.Forming.Add(new FormingCaravanInfo
+            {
+                Id = 70, Status = "Gathering items", ExitX = 0, ExitZ = 30, Cargo = new[] { "silver x500" },
+                Members = new[] { new CaravanMemberInfo { Id = 102, Name = "Bob" } }
+            });
+
+            string text = _tools.ListCaravans();
+
+            Assert.That(text, Does.Contain("1 caravan:").And.Contain("[12] Trailblazers"));
+            Assert.That(text, Does.Contain("1 forming caravan still on the map").And.Contain("cancel_forming_caravan"));
+            Assert.That(text, Does.Contain("[70] Gathering items | leaves the map at (0,30)"));
+            Assert.That(text, Does.Contain("members: Bob (colonist, health 100%)"));
+            Assert.That(text, Does.Contain("cargo: silver x500"));
+        }
+
+        [Test]
+        public void ListCaravansWithOnlyAFormingOneStillShowsIt()
+        {
+            _world.Caravans.Clear();
+            _world.Forming.Add(new FormingCaravanInfo { Id = 70, Status = "Waiting", Members = new[] { new CaravanMemberInfo { Id = 102, Name = "Bob" } } });
+
+            string text = _tools.ListCaravans();
+
+            Assert.That(text, Does.StartWith("No caravans on the world map yet."));
+            Assert.That(text, Does.Contain("[70] Waiting").And.Contain("cargo: none"));
+        }
+
+        [Test]
         public void TravellingCaravanShowsDestinationArrivalActionAndEta()
         {
             CaravanInfo c = _world.Caravans[0];

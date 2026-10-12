@@ -39,7 +39,8 @@ namespace RimAgent.Tests
             ["accept_quest"] = Args(("questId", 40), ("reward", 0), ("accepter", "")),
             ["dismiss_quest"] = Args(("questId", 40), ("dismissed", true)),
             ["execute_trade"] = Args(("trader", "PassingShip_1"), ("buys", "spacer component x1"), ("sells", ""), ("negotiator", "Ali")),
-            ["form_caravan"] = Args(("colonists", "Bob"), ("heading", "N")),
+            ["form_caravan"] = Args(("colonists", "Bob"), ("animals", ""), ("cargo", ""), ("prisoners", ""), ("tile", 4600), ("worldObjectId", -1)),
+            ["cancel_forming_caravan"] = Args(("caravan", "Bob")),
             ["send_caravan"] = Args(("caravan", "Trailblazers"), ("option", "1) Travel to tile 4600"), ("tile", 4600), ("worldObjectId", -1)),
             ["set_caravan_movement"] = Args(("caravan", "Trailblazers"), ("action", "pause")),
             ["settle_caravan"] = Args(("caravan", "Trailblazers"), ("action", "settle")),
@@ -120,6 +121,10 @@ namespace RimAgent.Tests
                 Members = new[] { new CaravanMemberInfo { Id = 101, Name = "Ali" } }
             });
             _world.CaravanOrders.Add(new FloatMenuOptionInfo { Number = 1, Label = "Travel to tile 4600" });
+            _world.Forming.Add(new FormingCaravanInfo
+            {
+                Id = 77, Status = "gathering items", Members = new[] { new CaravanMemberInfo { Id = 102, Name = "Bob" } }
+            });
             return _world;
         }
 

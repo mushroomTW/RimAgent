@@ -2798,30 +2798,385 @@ namespace RimAgent.Game
             return null;
         }
 
+        // ---- 組商隊：照 Dialog_FormCaravan 的「送出」 ----
+
+        /// <summary>原版組隊視窗對背包的算法（非重組模式）。</summary>
+        private const IgnorePawnsInventoryMode CaravanInventoryMode = IgnorePawnsInventoryMode.IgnoreIfAssignedToUnload;
+
+        /// <summary>
+        /// 組隊視窗的草稿：選好的成員與貨物（原版計算器吃 <see cref="TransferableOneWay"/>）、算好的規劃，
+        /// 以及送出所需的起始格、出口與集合點。成員一人一個 transferable，避免原版把同種動物疊在一起後只取前 N 隻。
+        /// </summary>
+        private sealed class CaravanDraft
+        {
+            public readonly List<Pawn> Pawns = new List<Pawn>();
+            public readonly List<TransferableOneWay> Transferables = new List<TransferableOneWay>();
+            public PlanetTile Destination = PlanetTile.Invalid;
+            public PlanetTile StartingTile = PlanetTile.Invalid;
+            public IntVec3 ExitSpot = IntVec3.Invalid;
+            public IntVec3 MeetingPoint = IntVec3.Invalid;
+            public CaravanPlanInfo Plan = new CaravanPlanInfo();
+        }
+
+        public IReadOnlyList<CaravanCargoInfo> GetCaravanCargo()
+        {
+            // AllReachableColonyItems 回傳共用的暫存清單，先複製再分組。
+            return CaravanFormingUtility.AllReachableColonyItems(Map, false, false, false).ToList()
+                .GroupBy(t => t.GetInnerIfMinified().def)
+                .Select(g => new CaravanCargoInfo
+                {
+                    DefName = g.Key.defName,
+                    Label = string.IsNullOrEmpty(g.Key.label) ? g.Key.defName : g.Key.label,
+                    Count = g.Sum(t => t.stackCount),
+                    MassEach = g.Key.BaseMass
+                })
+                .OrderBy(c => c.Label, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        public CaravanPlanInfo PlanCaravan(CaravanRequest request)
+        {
+            return BuildCaravanDraft(request).Plan;
+        }
+
         public CommandResult FormCaravan(CaravanRequest request)
         {
-            if (request == null) return CommandResult.Fail("no caravan requested");
-            List<int> ids = (request.PawnIds ?? Array.Empty<int>()).ToList();
-            if (ids.Count == 0) return CommandResult.Fail("no colonists named. Give at least one member, e.g. \"Ali, Bob\".");
-            Direction8Way dir;
-            string display;
-            if (!TryParseHeading(request.Heading, out dir, out display))
-                return CommandResult.Fail($"unknown heading \"{request.Heading}\". Use N, NE, E, SE, S, SW, W or NW.");
+            CaravanDraft draft = BuildCaravanDraft(request);
+            CaravanPlanInfo plan = draft.Plan;
+            if (!string.IsNullOrEmpty(plan.Error)) return CommandResult.Fail(plan.Error);
+            if (plan.Blockers.Count > 0) return CommandResult.Fail(string.Join("; ", plan.Blockers.ToArray()));
+
+            // 與視窗 TryFormAndSendCaravan 最後一步相同：倒地的另外列，由同伴扛到出口。
+            CaravanFormingUtility.StartFormingCaravan(
+                draft.Pawns.Where(p => !p.Downed).ToList(), draft.Pawns.Where(p => p.Downed).ToList(), Faction.OfPlayer,
+                draft.Transferables, draft.MeetingPoint, draft.ExitSpot, draft.StartingTile, draft.Destination);
+            Messages.Message("CaravanFormationProcessStarted".Translate(), draft.Pawns[0], MessageTypeDefOf.PositiveEvent, historical: false);
+
+            string members = string.Join(", ", draft.Pawns.Select(p => p.LabelShort).ToArray());
+            string cargo = plan.Cargo.Count == 0 ? "no cargo" : string.Join(", ", plan.Cargo.Select(c => c.Label + " x" + c.Count).ToArray());
+            return CommandResult.Ok($"Started forming a caravan with {members}; they gather {cargo} at ({draft.MeetingPoint.x},{draft.MeetingPoint.z}) " +
+                                    $"and then leave the map at ({draft.ExitSpot.x},{draft.ExitSpot.z}) for tile {draft.Destination.tileId}");
+        }
+
+        private static CaravanDraft RejectCaravan(CaravanDraft draft, string error)
+        {
+            draft.Plan = new CaravanPlanInfo { Error = error };
+            return draft;
+        }
+
+        private static CaravanDraft BuildCaravanDraft(CaravanRequest request)
+        {
+            var draft = new CaravanDraft();
+            if (request == null) return RejectCaravan(draft, "no caravan requested");
             Map map = Map;
-            var pawns = new List<Pawn>();
-            foreach (int id in ids)
+            if (map == null) return RejectCaravan(draft, "there is no current map");
+
+            // 成員：只收組隊視窗會列出的人（AllSendablePawns），其餘說明為什麼不行。
+            List<Pawn> sendable = Dialog_FormCaravan.AllSendablePawns(map, false);
+            foreach (int id in (request.PawnIds ?? Array.Empty<int>()).Distinct())
             {
-                Pawn pawn = FindColonist(id);
-                if (pawn == null) return CommandResult.Fail($"no colonist has id {id} (prisoners and visitors cannot form a caravan)");
-                if (pawn.Dead) return CommandResult.Fail($"{pawn.LabelShort} is dead");
-                if (pawn.Downed) return CommandResult.Fail($"{pawn.LabelShort} is downed and cannot join a caravan");
-                if (pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is drafted; undraft them first");
-                pawns.Add(pawn);
+                Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
+                if (pawn == null) return RejectCaravan(draft, $"no pawn with id {id} is on this map");
+                if (!sendable.Contains(pawn)) return RejectCaravan(draft, $"{pawn.LabelShort} cannot join a caravan: {WhyNotSendable(pawn)}");
+                // 被徵召的人不吃集結的職責（原版「強制出發」也會先解除徵召）。
+                if (pawn.Drafted) return RejectCaravan(draft, $"{pawn.LabelShort} is drafted; undraft them first");
+                draft.Pawns.Add(pawn);
+                var transferable = new TransferableOneWay();
+                transferable.things.Add(pawn);
+                transferable.AdjustTo(1);
+                draft.Transferables.Add(transferable);
             }
-            Caravan caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(pawns, Faction.OfPlayer, map.Tile, dir, PlanetTile.Invalid);
-            if (caravan == null) return CommandResult.Fail("the game could not form a caravan from the current map");
-            string names = string.Join(", ", pawns.Select(p => p.LabelShort).ToArray());
-            return CommandResult.Ok($"Formed {caravan.Name} with {names}, heading {display}.");
+
+            // 貨物：與視窗物品頁同一份清單（AddItemsToTransferables），同種物品依原版規則併成一行。
+            var items = new List<TransferableOneWay>();
+            foreach (Thing thing in CaravanFormingUtility.AllReachableColonyItems(map, false, false, false).ToList())
+            {
+                TransferableOneWay transferable = TransferableUtility.TransferableMatching(thing, items, TransferAsOneMode.PodsOrCaravanPacking);
+                if (transferable == null)
+                {
+                    transferable = new TransferableOneWay();
+                    items.Add(transferable);
+                }
+                if (!transferable.things.Contains(thing)) transferable.things.Add(thing);
+            }
+            var cargoLines = new List<CaravanPlanCargo>();
+            foreach (TradeLine line in request.Cargo ?? Array.Empty<TradeLine>())
+            {
+                int remaining = line.Count;
+                ThingDef def = null;
+                foreach (TransferableOneWay transferable in items)
+                {
+                    ThingDef inner = transferable.AnyThing.GetInnerIfMinified().def;
+                    if (remaining <= 0 || !string.Equals(inner.defName, line.DefName, StringComparison.OrdinalIgnoreCase)) continue;
+                    def = inner;
+                    int take = Math.Min(remaining, transferable.GetMaximumToTransfer() - transferable.CountToTransfer);
+                    if (take <= 0) continue;
+                    transferable.AdjustTo(transferable.CountToTransfer + take);
+                    remaining -= take;
+                }
+                if (def == null)
+                    return RejectCaravan(draft, $"the colony has no {line.DefName} to carry; the game only lists items in storage or the home area that nobody has reserved");
+                string label = string.IsNullOrEmpty(def.label) ? def.defName : def.label;
+                if (remaining > 0)
+                    return RejectCaravan(draft, $"the colony can only supply {line.Count - remaining} {label} for the caravan (asked for {line.Count}); the game only lists items in storage or the home area that nobody has reserved");
+                cargoLines.Add(new CaravanPlanCargo { DefName = def.defName, Label = label, Count = line.Count, MassEach = def.BaseMass });
+            }
+            draft.Transferables.AddRange(items.Where(t => t.CountToTransfer > 0));
+
+            FillCaravanPlan(draft, request, map, cargoLines);
+            return draft;
+        }
+
+        /// <summary>為什麼 AllSendablePawns 不列這個 pawn（依那個方法的條件逐項對照）。</summary>
+        private static string WhyNotSendable(Pawn pawn)
+        {
+            if (pawn.Dead) return "it is dead";
+            if (pawn.Faction != Faction.OfPlayer && !pawn.IsPrisonerOfColony) return "it does not belong to the colony";
+            if (!pawn.RaceProps.allowedOnCaravan) return "this kind of creature cannot travel with caravans";
+            if (pawn.IsQuestHelper() || pawn.IsQuestLodger()) return "quest guests cannot join caravans";
+            if (pawn.InMentalState) return "it is in a mental break";
+            if (pawn.IsPrisoner && !pawn.guest.PrisonerIsSecure) return "the prisoner is not secured in a cell";
+            if (pawn.GetLord() != null) return "it is busy with a group activity";
+            return "the game does not offer it for caravans";
+        }
+
+        /// <summary>
+        /// 算出視窗顯示的數字，並照 CheckForErrors／TryFormAndSendCaravan／TrySend 收集拒絕原因與警告。
+        /// 出口與集合點的搜尋也在這裡做，讓規劃能事先說出「找不到出口」。
+        /// </summary>
+        private static void FillCaravanPlan(CaravanDraft draft, CaravanRequest request, Map map, List<CaravanPlanCargo> cargoLines)
+        {
+            var blockers = new List<string>();
+            var warnings = new List<string>();
+            PlanetTile origin = map.Tile;
+            var plan = new CaravanPlanInfo { Members = draft.Pawns.Select(ToCaravanMember).ToList(), Cargo = cargoLines };
+
+            if (!origin.LayerDef.canFormCaravans) blockers.Add("caravans cannot be formed on this world layer");
+
+            // 目的地與起始格（視窗選好路線後：startingTile = BestExitTileToGoTo）。
+            PlanetTile destination = PlanetTile.Invalid;
+            if (request.DestinationTile < 0)
+            {
+                blockers.Add("MessageMustChooseRouteFirst".Translate().Resolve());
+            }
+            else
+            {
+                PlanetTile asked = ToPlanetTile(request.DestinationTile, origin);
+                if (!TileInWorld(asked)) blockers.Add($"tile {request.DestinationTile} does not exist on this layer of the world");
+                else if (!Find.WorldReachability.CanReach(origin, asked)) blockers.Add($"tile {asked.tileId} cannot be reached by land from here");
+                else destination = asked;
+                plan.DestinationTile = request.DestinationTile;
+                plan.DestinationLabel = TileInWorld(asked) ? DescribeWorldTile(asked) : string.Empty;
+            }
+            plan.DestinationReachable = destination.Valid;
+            if (destination.Valid)
+            {
+                draft.Destination = destination;
+                draft.StartingTile = CaravanExitMapUtility.BestExitTileToGoTo(destination, map);
+                plan.DistanceTiles = Find.WorldGrid.ApproxDistanceInTiles(origin, destination);
+                if (!draft.StartingTile.Valid) blockers.Add("MessageNoValidExitTile".Translate().Resolve());
+            }
+
+            // 數字：與 Dialog_FormCaravan 的 MassUsage／MassCapacity／TilesPerDay／DaysWorthOfFood／ForagedFoodPerDay／Visibility／TicksToArrive 同一組呼叫。
+            List<TransferableOneWay> transferables = draft.Transferables;
+            plan.MassUsage = CollectionsMassCalculator.MassUsageTransferables(transferables, CaravanInventoryMode, false, false);
+            plan.MassCapacity = CollectionsMassCalculator.CapacityTransferables(transferables, new StringBuilder());
+            if (draft.Pawns.Count > 0)
+            {
+                plan.TilesPerDay = TilesPerDayCalculator.ApproxTilesPerDay(transferables, plan.MassUsage, plan.MassCapacity, origin, draft.StartingTile, false, null);
+                plan.TicksPerMove = CaravanTicksPerMoveUtility.GetTicksPerMove(draft.Pawns, plan.MassUsage, plan.MassCapacity, false, null);
+            }
+            if (destination.Valid)
+            {
+                using (WorldPath path = origin.Layer.Pather.FindPath(origin, destination, null))
+                {
+                    plan.FoodDays = DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(transferables, origin, CaravanInventoryMode, Faction.OfPlayer, path, 0f, plan.TicksPerMove);
+                    plan.DaysUntilRot = DaysUntilRotCalculator.ApproxDaysUntilRot(transferables, origin, CaravanInventoryMode, path, 0f, plan.TicksPerMove);
+                    plan.EtaTicks = CaravanArrivalTimeEstimator.EstimatedTicksToArrive(origin, destination, path, 0f, plan.TicksPerMove, Find.TickManager.TicksAbs);
+                }
+            }
+            else
+            {
+                plan.FoodDays = DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(transferables, origin, CaravanInventoryMode, Faction.OfPlayer);
+                plan.DaysUntilRot = DaysUntilRotCalculator.ApproxDaysUntilRot(transferables, origin, CaravanInventoryMode);
+            }
+            var foraged = ForagedFoodPerDayCalculator.ForagedFoodPerDay(transferables, map.Biome, Faction.OfPlayer, new StringBuilder());
+            plan.ForagedFoodLabel = foraged.Item1 != null ? foraged.Item1.label : string.Empty;
+            plan.ForagedPerDay = foraged.Item2;
+            plan.Visibility = CaravanVisibilityCalculator.Visibility(transferables, new StringBuilder());
+
+            // 送出時的拒絕（CheckForErrors）。
+            if (!draft.Pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.Downed))
+                blockers.Add((ModsConfig.IdeologyActive ? "CaravanMustHaveAtLeastOneNonSlaveColonist" : "CaravanMustHaveAtLeastOneColonist").Translate().Resolve());
+            if (plan.MassUsage > plan.MassCapacity) blockers.Add("TooBigCaravanMassUsage".Translate().Resolve());
+            foreach (TransferableOneWay transferable in transferables)
+            {
+                if (transferable.ThingDef.category != ThingCategory.Item || transferable.CountToTransfer <= 0) continue;
+                int reachable = 0;
+                foreach (Thing thing in transferable.things)
+                {
+                    if (!thing.Spawned || draft.Pawns.Any(p => p.IsColonist && p.CanReach(thing, PathEndMode.Touch, Danger.Deadly))) reachable += thing.stackCount;
+                    if (reachable >= transferable.CountToTransfer) break;
+                }
+                if (reachable >= transferable.CountToTransfer) continue;
+                blockers.Add(transferable.CountToTransfer == 1
+                    ? "CaravanItemIsUnreachableSingle".Translate(transferable.ThingDef.label).Resolve()
+                    : "CaravanItemIsUnreachableMulti".Translate(transferable.CountToTransfer, transferable.ThingDef.label).Resolve());
+            }
+
+            // 警告（TrySend 的「確定嗎」清單，只收我們能原樣算的幾項）。
+            if (plan.FoodDays < 5f)
+                warnings.Add(plan.FoodDays < 0.1f
+                    ? "DaysWorthOfFoodWarningDialog_NoFood".Translate().Resolve()
+                    : "DaysWorthOfFoodWarningDialog".Translate(plan.FoodDays.ToString("0.#")).Resolve());
+            else if (MostCaravanFoodWillRotSoon(transferables, origin))
+                warnings.Add("CaravanFoodWillRotSoonWarningDialog".Translate().Resolve());
+            if (!draft.Pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.skills.GetSkill(SkillDefOf.Social).TotallyDisabled))
+                warnings.Add("CaravanIncapableOfSocial".Translate().Resolve());
+
+            // 出口與集合點（TryFormAndSendCaravan）。起始格或隊伍不成立時不必找。
+            if (draft.StartingTile.Valid && draft.Pawns.Any(p => !p.Downed))
+                FindCaravanSpots(draft, map, blockers, warnings);
+
+            plan.Blockers = blockers;
+            plan.Warnings = warnings;
+            draft.Plan = plan;
+        }
+
+        /// <summary>視窗的 MostFoodWillRotSoon：帶的食物營養有七成五以上不到五天就壞。</summary>
+        private static bool MostCaravanFoodWillRotSoon(List<TransferableOneWay> transferables, PlanetTile tile)
+        {
+            float soon = 0f;
+            float later = 0f;
+            foreach (TransferableOneWay transferable in transferables)
+            {
+                if (!transferable.HasAnyThing || transferable.CountToTransfer <= 0 || !transferable.ThingDef.IsNutritionGivingIngestible || transferable.AnyThing is Corpse) continue;
+                float days = 600f;
+                CompRottable rottable = transferable.AnyThing.TryGetComp<CompRottable>();
+                if (rottable != null) days = DaysUntilRotCalculator.ApproxTicksUntilRot_AssumeTimePassesBy(rottable, tile) / 60000f;
+                float nutrition = transferable.ThingDef.GetStatValueAbstract(StatDefOf.Nutrition) * transferable.CountToTransfer;
+                if (days < 5f) soon += nutrition;
+                else later += nutrition;
+            }
+            return soon + later > 0f && soon / (soon + later) >= 0.75f;
+        }
+
+        /// <summary>找出口與集合點；找不到就加進拒絕原因。邏輯照 Dialog_FormCaravan.TryFormAndSendCaravan（它們是私有方法）。</summary>
+        private static void FindCaravanSpots(CaravanDraft draft, Map map, List<string> blockers, List<string> warnings)
+        {
+            List<Pawn> pawns = draft.Pawns;
+            IntVec3 root = pawns.Aggregate(IntVec3.Zero, (acc, p) => acc + p.Position) / pawns.Count;
+            string direction = Find.WorldGrid.GetDirection8WayFromTo(map.Tile, draft.StartingTile).LabelShort();
+            IntVec3 exit;
+            if (!RCellFinder.TryFindClosestEdgeCellTo(root, map, out exit) && !TryFindCaravanExitSpot(map, pawns, draft.StartingTile, true, out exit))
+            {
+                if (!TryFindCaravanExitSpot(map, pawns, draft.StartingTile, false, out exit))
+                {
+                    blockers.Add("CaravanCouldNotFindExitSpot".Translate(direction).Resolve());
+                    return;
+                }
+                warnings.Add("CaravanCouldNotFindReachableExitSpot".Translate(direction).Resolve());
+            }
+            IntVec3 meeting;
+            if (!TryFindCaravanPackingSpot(map, exit, out meeting))
+            {
+                blockers.Add("CaravanCouldNotFindPackingSpot".Translate(direction).Resolve());
+                return;
+            }
+            Pawn roamer = pawns.Find(ropee => AnimalPenUtility.NeedsToBeManagedByRope(ropee) && !pawns.Any(roper => roper.IsColonist
+                && GatherAnimalsAndSlavesForCaravanUtility.CanRoperTakeAnimalToDest(roper, ropee, exit)
+                && GatherAnimalsAndSlavesForCaravanUtility.CanRoperTakeAnimalToDest(roper, ropee, meeting)));
+            if (roamer != null)
+            {
+                blockers.Add("CaravanRoamerCannotReachSpots".Translate(roamer.LabelShort, roamer).Resolve());
+                return;
+            }
+            draft.ExitSpot = exit;
+            draft.MeetingPoint = meeting;
+        }
+
+        private static bool TryFindCaravanExitSpot(Map map, List<Pawn> pawns, PlanetTile startingTile, bool reachableForEveryColonist, out IntVec3 spot)
+        {
+            CaravanExitMapUtility.GetExitMapEdges(Find.WorldGrid, map.Tile, startingTile, out Rot4 primary, out Rot4 secondary);
+            spot = IntVec3.Invalid;
+            if (primary != Rot4.Invalid && TryFindCaravanExitSpotOnEdge(map, pawns, reachableForEveryColonist, primary, out spot)) return true;
+            if (secondary != Rot4.Invalid && TryFindCaravanExitSpotOnEdge(map, pawns, reachableForEveryColonist, secondary, out spot)) return true;
+            if (TryFindCaravanExitSpotOnEdge(map, pawns, reachableForEveryColonist, primary.Rotated(RotationDirection.Clockwise), out spot)) return true;
+            return TryFindCaravanExitSpotOnEdge(map, pawns, reachableForEveryColonist, primary.Rotated(RotationDirection.Counterclockwise), out spot);
+        }
+
+        private static bool TryFindCaravanExitSpotOnEdge(Map map, List<Pawn> pawns, bool reachableForEveryColonist, Rot4 exitDirection, out IntVec3 spot)
+        {
+            if (reachableForEveryColonist)
+            {
+                return CellFinder.TryFindRandomEdgeCellWith(
+                    c => !c.Fogged(map) && c.Standable(map) && pawns.All(p => !p.IsColonist || p.Downed || p.CanReach(c, PathEndMode.Touch, Danger.Deadly)),
+                    map, exitDirection, CellFinder.EdgeRoadChance_Always, out spot);
+            }
+            IntVec3 best = IntVec3.Invalid;
+            int bestReachable = -1;
+            foreach (IntVec3 cell in CellRect.WholeMap(map).GetEdgeCells(exitDirection).InRandomOrder())
+            {
+                if (cell.Fogged(map) || !cell.Standable(map)) continue;
+                int reachable = pawns.Count(p => p.IsColonist && !p.Downed && p.CanReach(cell, PathEndMode.Touch, Danger.Deadly));
+                if (reachable > bestReachable)
+                {
+                    bestReachable = reachable;
+                    best = cell;
+                }
+            }
+            spot = best;
+            return best.IsValid;
+        }
+
+        private static bool TryFindCaravanPackingSpot(Map map, IntVec3 exitSpot, out IntVec3 packingSpot)
+        {
+            TraverseParms traverseParams = TraverseParms.For(TraverseMode.PassDoors);
+            List<Thing> spots = map.listerThings.ThingsOfDef(ThingDefOf.CaravanPackingSpot)
+                .Where(t => map.reachability.CanReach(exitSpot, t, PathEndMode.OnCell, traverseParams)).ToList();
+            if (spots.Count > 0)
+            {
+                packingSpot = spots.RandomElement().Position;
+                return true;
+            }
+            return RCellFinder.TryFindRandomSpotJustOutsideColony(exitSpot, map, out packingSpot);
+        }
+
+        public IReadOnlyList<FormingCaravanInfo> GetFormingCaravans()
+        {
+            var result = new List<FormingCaravanInfo>();
+            foreach (Map map in Find.Maps)
+            {
+                foreach (Lord lord in map.lordManager.lords)
+                {
+                    var job = lord.LordJob as LordJob_FormAndSendCaravan;
+                    if (job == null || lord.faction != Faction.OfPlayer) continue;
+                    result.Add(new FormingCaravanInfo
+                    {
+                        Id = lord.loadID,
+                        Status = PlainText(job.Status),
+                        Members = lord.ownedPawns.Concat(job.downedPawns).Distinct().Select(ToCaravanMember).ToList(),
+                        Cargo = job.transferables.Where(t => t.HasAnyThing && t.CountToTransfer > 0)
+                            .Select(t => t.Label + " x" + t.CountToTransfer).ToList(),
+                        ExitX = job.ExitSpot.x,
+                        ExitZ = job.ExitSpot.z
+                    });
+                }
+            }
+            return result;
+        }
+
+        public CommandResult CancelFormingCaravan(int formingId)
+        {
+            foreach (Map map in Find.Maps)
+            {
+                Lord lord = map.lordManager.lords.FirstOrDefault(l => l.loadID == formingId && l.LordJob is LordJob_FormAndSendCaravan);
+                if (lord == null) continue;
+                string names = string.Join(", ", lord.ownedPawns.Select(p => p.LabelShort).ToArray());
+                CaravanFormingUtility.StopFormingCaravan(lord);
+                return CommandResult.Ok($"Stopped forming the caravan ({names}); they put down what they were carrying and go back to their usual work");
+            }
+            return CommandResult.Fail($"no caravan is being formed with id {formingId}");
         }
 
         // ---- 世界地圖：商隊與世界物件 ----
@@ -3245,35 +3600,6 @@ namespace RimAgent.Game
                 return CommandResult.Ok(WithGameMessages($"The game asks to confirm before {caravan.LabelCap} can {verb} on tile {caravan.Tile.tileId}", watch));
             return CommandResult.Ok(WithGameMessages(
                 $"{caravan.LabelCap} is starting to {verb} on tile {caravan.Tile.tileId}. The map is generated in the background; it shows up in get_maps when it is ready", watch));
-        }
-
-        private static bool TryParseHeading(string heading, out Direction8Way dir, out string display)
-        {
-            string needle = (heading ?? string.Empty).Trim().ToUpperInvariant();
-            switch (needle)
-            {
-                case "N":
-                case "NORTH": dir = Direction8Way.North; display = "north"; return true;
-                case "NE":
-                case "NORTHEAST":
-                case "NORTH-EAST": dir = Direction8Way.NorthEast; display = "north-east"; return true;
-                case "E":
-                case "EAST": dir = Direction8Way.East; display = "east"; return true;
-                case "SE":
-                case "SOUTHEAST":
-                case "SOUTH-EAST": dir = Direction8Way.SouthEast; display = "south-east"; return true;
-                case "S":
-                case "SOUTH": dir = Direction8Way.South; display = "south"; return true;
-                case "SW":
-                case "SOUTHWEST":
-                case "SOUTH-WEST": dir = Direction8Way.SouthWest; display = "south-west"; return true;
-                case "W":
-                case "WEST": dir = Direction8Way.West; display = "west"; return true;
-                case "NW":
-                case "NORTHWEST":
-                case "NORTH-WEST": dir = Direction8Way.NorthWest; display = "north-west"; return true;
-                default: dir = Direction8Way.Invalid; display = string.Empty; return false;
-            }
         }
 
         /// <summary>

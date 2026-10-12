@@ -8,6 +8,7 @@ using RimWorld;
 using RimWorld.Planet;
 using Verse;
 using Verse.AI;
+using Verse.AI.Group;
 
 namespace RimAgent.InGameTests
 {
@@ -1338,6 +1339,269 @@ namespace RimAgent.InGameTests
             RimAgent.Game.MapInfo mapInfo = _world.GetMaps().FirstOrDefault(m => m.Id == map.uniqueID);
             if (mapInfo == null) failures.Add("the home map is missing from GetMaps");
             else if (mapInfo.ColonistCount != map.mapPawns.FreeColonistsSpawnedCount) failures.Add($"GetMaps counts {mapInfo.ColonistCount} colonists, vanilla {map.mapPawns.FreeColonistsSpawnedCount}");
+        }
+
+        /// <summary>
+        /// 組商隊：在家園地圖上放好銀兩、食物與一隻殖民地動物，規劃的數字對照原版計算器；超重被擋下且不集結；
+        /// 再送出，檢查原版的集結狀態（Lord、LordJob 的貨物清單、成員），最後中止集結，成員恢復平常、貨物原封不動。
+        /// 測試期間不推進遊戲時間，所以沒有人真的離開地圖；結束時一律清掉 Lord 與放出來的東西。
+        /// </summary>
+        [Test]
+        public static void CaravanPlansFormsAndCancelsWithVanillaState()
+        {
+            if (TestHelpers.SkipWithoutMap(nameof(CaravanPlansFormsAndCancelsWithVanillaState))) return;
+            Map map = Find.CurrentMap;
+            if (!(map.Parent is Settlement) || map.Parent.Faction != Faction.OfPlayer)
+            {
+                TestHelpers.Skip(nameof(CaravanPlansFormsAndCancelsWithVanillaState), "the current map is not a player settlement");
+                return;
+            }
+            Pawn colonist = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => !p.Downed && !p.Drafted && p.IsFreeNonSlaveColonist);
+            if (colonist == null || map.mapPawns.FreeColonistsSpawnedCount < 2)
+            {
+                TestHelpers.Skip(nameof(CaravanPlansFormsAndCancelsWithVanillaState), "needs a walking colonist and at least two colonists");
+                return;
+            }
+            var neighbors = new List<PlanetTile>();
+            Find.WorldGrid.GetTileNeighbors(map.Tile, neighbors);
+            PlanetTile destination = neighbors.Where(t => !Find.World.Impassable(t) && Find.WorldReachability.CanReach(map.Tile, t))
+                .DefaultIfEmpty(PlanetTile.Invalid).First();
+            if (!destination.Valid)
+            {
+                TestHelpers.Skip(nameof(CaravanPlansFormsAndCancelsWithVanillaState), "no reachable neighbouring tile to plan a trip to");
+                return;
+            }
+            ThingDef foodDef = DefDatabase<ThingDef>.GetNamedSilentFail("Pemmican") ?? ThingDefOf.MealSimple;
+
+            // 放貨物的格子：玩家看得到、站得住、沒東西、殖民者走得到；家園區暫時設成包含它們，結束時還原。
+            List<IntVec3> cells = GenRadial.RadialCellsAround(colonist.Position, 20f, true)
+                .Where(c => c.InBounds(map) && !c.Fogged(map) && c.Standable(map) && c.GetFirstItem(map) == null && c.GetEdifice(map) == null
+                            && colonist.CanReach(c, PathEndMode.Touch, Danger.Deadly))
+                .Take(8).ToList();
+            if (cells.Count < 8)
+            {
+                TestHelpers.Skip(nameof(CaravanPlansFormsAndCancelsWithVanillaState), "not enough free cells near a colonist");
+                return;
+            }
+
+            var failures = new List<string>();
+            _world.TakeNewGameErrors();
+            var lettersBefore = new HashSet<Letter>(Find.LetterStack.LettersListForReading);
+            var homeBefore = cells.ToDictionary(c => c, c => map.areaManager.Home[c]);
+            var spawned = new List<Thing>();
+            Pawn animal = null;
+            bool createdAnimal = false;
+            Lord lord = null;
+            try
+            {
+                foreach (IntVec3 c in cells) map.areaManager.Home[c] = true;
+                Thing silver = GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Silver), cells[0], map);
+                silver.stackCount = 300;
+                Thing food = GenSpawn.Spawn(ThingMaker.MakeThing(foodDef), cells[1], map);
+                food.stackCount = 40;
+                spawned.Add(silver);
+                spawned.Add(food);
+
+                animal = map.mapPawns.PawnsInFaction(Faction.OfPlayer)
+                    .FirstOrDefault(p => p.Spawned && p.RaceProps.Animal && p.RaceProps.allowedOnCaravan && !p.Downed && !p.Drafted && p.GetLord() == null);
+                if (animal == null)
+                {
+                    animal = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Muffalo, Faction.OfPlayer));
+                    GenSpawn.Spawn(animal, cells[2], map);
+                    createdAnimal = true;
+                }
+
+                CheckCaravanCargoQuery(silver, food, failures);
+
+                var request = new CaravanRequest
+                {
+                    PawnIds = new[] { colonist.thingIDNumber, animal.thingIDNumber },
+                    Cargo = new[] { new TradeLine { DefName = silver.def.defName, Count = 100 }, new TradeLine { DefName = food.def.defName, Count = 30 } },
+                    DestinationTile = destination.tileId
+                };
+                CaravanPlanInfo plan = _world.PlanCaravan(request);
+                if (!string.IsNullOrEmpty(plan.Error))
+                {
+                    failures.Add("plan failed: " + plan.Error);
+                    TestHelpers.AssertNone(failures, "caravan forming");
+                    return;
+                }
+                CheckPlanMatchesVanilla(plan, colonist, animal, silver, food, destination, map, failures);
+
+                // 沒選目的地、超過現有數量：原版視窗不讓送出。
+                CaravanPlanInfo noRoute = _world.PlanCaravan(new CaravanRequest { PawnIds = request.PawnIds, Cargo = request.Cargo, DestinationTile = -1 });
+                if (noRoute.Blockers.Count == 0) failures.Add("a plan without a destination has no blocker");
+                if (_world.FormCaravan(new CaravanRequest { PawnIds = request.PawnIds, Cargo = request.Cargo, DestinationTile = -1 }).Success)
+                    failures.Add("forming without a destination succeeded");
+                CaravanPlanInfo tooMuch = _world.PlanCaravan(new CaravanRequest
+                {
+                    PawnIds = request.PawnIds,
+                    Cargo = new[] { new TradeLine { DefName = silver.def.defName, Count = 999999 } },
+                    DestinationTile = destination.tileId
+                });
+                if (string.IsNullOrEmpty(tooMuch.Error)) failures.Add("asking for more silver than the colony has was not an error");
+
+                // 超重：三堆鋼，遠超一個人加一隻動物扛得動的量。
+                for (int i = 3; i < 6; i++)
+                {
+                    Thing steel = GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Steel), cells[i], map);
+                    steel.stackCount = steel.def.stackLimit;
+                    spawned.Add(steel);
+                }
+                int steelAvailable = spawned.Where(t => t.def == ThingDefOf.Steel).Sum(t => t.stackCount);
+                CaravanPlanInfo heavy = _world.PlanCaravan(new CaravanRequest
+                {
+                    PawnIds = new[] { colonist.thingIDNumber },
+                    Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } },
+                    DestinationTile = destination.tileId
+                });
+                string tooBig = "TooBigCaravanMassUsage".Translate().Resolve();
+                if (string.IsNullOrEmpty(heavy.Error) && heavy.MassUsage > heavy.MassCapacity && !heavy.Blockers.Contains(tooBig))
+                    failures.Add("an overloaded plan does not carry the game's reason: " + string.Join("; ", heavy.Blockers.ToArray()));
+                if (string.IsNullOrEmpty(heavy.Error) && heavy.MassUsage > heavy.MassCapacity)
+                {
+                    int lordsBefore = map.lordManager.lords.Count;
+                    CommandResult refused = _world.FormCaravan(new CaravanRequest { PawnIds = new[] { colonist.thingIDNumber },
+                        Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } }, DestinationTile = destination.tileId });
+                    if (refused.Success || map.lordManager.lords.Count != lordsBefore || colonist.IsFormingCaravan())
+                        failures.Add("an overloaded caravan was formed");
+                }
+
+                if (plan.Blockers.Count > 0)
+                {
+                    TestHelpers.AssertNone(failures, "caravan planning");
+                    TestHelpers.Skip(nameof(CaravanPlansFormsAndCancelsWithVanillaState),
+                        "vanilla would refuse this caravan here, so forming is not exercised: " + string.Join("; ", plan.Blockers.ToArray()));
+                    return;
+                }
+
+                // 送出：原版集結狀態。
+                CommandResult formed = _world.FormCaravan(request);
+                if (!formed.Success)
+                {
+                    failures.Add("forming failed: " + formed.Error);
+                    TestHelpers.AssertNone(failures, "caravan forming");
+                }
+                if (!colonist.IsFormingCaravan() || !animal.IsFormingCaravan()) failures.Add("the colonist and the animal are not forming a caravan");
+                colonist.TryGetFormingCaravanLord(out lord);
+                var job = lord?.LordJob as LordJob_FormAndSendCaravan;
+                if (job == null) failures.Add("the colonist's lord is not a LordJob_FormAndSendCaravan");
+                else
+                {
+                    int silverQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == ThingDefOf.Silver).Sum(t => t.CountToTransfer);
+                    int foodQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == foodDef).Sum(t => t.CountToTransfer);
+                    if (silverQueued != 100 || foodQueued != 30) failures.Add($"the lord job queues silver {silverQueued}, food {foodQueued}; expected 100 and 30");
+                    if (job.transferables.Any(t => t.AnyThing is Pawn)) failures.Add("pawns were left in the lord job's item list");
+                    if (!lord.ownedPawns.Contains(colonist) || !lord.ownedPawns.Contains(animal)) failures.Add("the lord does not own both members");
+                }
+                FormingCaravanInfo listed = _world.GetFormingCaravans().FirstOrDefault(f => lord != null && f.Id == lord.loadID);
+                if (listed == null) failures.Add("GetFormingCaravans does not list the new caravan");
+                else
+                {
+                    if (!listed.Members.Any(m => m.Id == colonist.thingIDNumber) || !listed.Members.Any(m => m.Id == animal.thingIDNumber))
+                        failures.Add("the forming caravan lists the wrong members");
+                    if (!listed.Cargo.Any(c => c.EndsWith(" x100", StringComparison.Ordinal))) failures.Add("the forming caravan does not list the silver: " + string.Join(", ", listed.Cargo.ToArray()));
+                    if (string.IsNullOrEmpty(listed.Status)) failures.Add("the forming caravan has no status");
+                }
+                if (Find.WorldObjects.Caravans.Any(c => c.PawnsListForReading.Contains(colonist))) failures.Add("the caravan left the map within the same frame");
+
+                // 中止：成員恢復平常，貨物沒動。
+                if (listed != null)
+                {
+                    CommandResult cancelled = _world.CancelFormingCaravan(listed.Id);
+                    if (!cancelled.Success) failures.Add("cancelling failed: " + cancelled.Error);
+                }
+                if (colonist.IsFormingCaravan() || animal.IsFormingCaravan() || colonist.GetLord() is Lord leftover && leftover.LordJob is LordJob_FormAndSendCaravan)
+                    failures.Add("the members still belong to a forming lord after cancelling");
+                if (_world.GetFormingCaravans().Any(f => lord != null && f.Id == lord.loadID)) failures.Add("the cancelled caravan is still listed");
+                if (_world.CancelFormingCaravan(lord?.loadID ?? -12345).Success) failures.Add("cancelling a caravan that no longer exists succeeded");
+                if (!silver.Spawned || silver.stackCount != 300 || !food.Spawned || food.stackCount != 40) failures.Add("cancelling changed the cargo on the ground");
+                if (colonist.inventory.innerContainer.Any(t => t.def == ThingDefOf.Silver || t.def == foodDef)) failures.Add("the colonist still carries cargo after cancelling");
+                lord = null;
+            }
+            finally
+            {
+                Lord stuck = colonist.GetLord();
+                if (lord != null && lord.lordManager != null) CaravanFormingUtility.StopFormingCaravan(lord);
+                else if (stuck != null && stuck.LordJob is LordJob_FormAndSendCaravan) CaravanFormingUtility.StopFormingCaravan(stuck);
+                foreach (Thing thing in spawned.Where(t => !t.Destroyed)) thing.Destroy();
+                // 放下的貨物若被撿了又放，清掉殖民者身上殘留的測試物品。
+                foreach (Thing carried in colonist.inventory.innerContainer.Where(t => t.def == ThingDefOf.Silver || t.def == ThingDefOf.Steel).ToList())
+                    carried.Destroy();
+                if (createdAnimal && animal != null && !animal.Destroyed) animal.Destroy();
+                foreach (KeyValuePair<IntVec3, bool> before in homeBefore) map.areaManager.Home[before.Key] = before.Value;
+                foreach (Letter letter in Find.LetterStack.LettersListForReading.Where(l => !lettersBefore.Contains(l)).ToList())
+                    Find.LetterStack.RemoveLetter(letter);
+            }
+            foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+            TestHelpers.AssertNone(failures, "caravan forming");
+        }
+
+        private static void CheckCaravanCargoQuery(Thing silver, Thing food, List<string> failures)
+        {
+            IReadOnlyList<CaravanCargoInfo> cargo = _world.GetCaravanCargo();
+            CaravanCargoInfo silverInfo = cargo.FirstOrDefault(c => c.DefName == silver.def.defName);
+            CaravanCargoInfo foodInfo = cargo.FirstOrDefault(c => c.DefName == food.def.defName);
+            if (silverInfo == null || silverInfo.Count < 300) failures.Add("the cargo query does not list the 300 silver we put in the home area");
+            else if (Math.Abs(silverInfo.MassEach - silver.def.BaseMass) > 0.0001f) failures.Add("silver mass per unit differs from the def");
+            if (foodInfo == null || foodInfo.Count < 40) failures.Add("the cargo query does not list the food we put in the home area");
+            // 不在清單裡的不能出現：被預約的東西、非物品。
+            if (cargo.Any(c => string.IsNullOrEmpty(c.DefName) || c.Count <= 0)) failures.Add("the cargo query lists an empty entry");
+        }
+
+        /// <summary>規劃的數字逐項對照原版計算器（用測試自己組的 transferable，不經轉接層的草稿）。</summary>
+        private static void CheckPlanMatchesVanilla(CaravanPlanInfo plan, Pawn colonist, Pawn animal, Thing silver, Thing food,
+            PlanetTile destination, Map map, List<string> failures)
+        {
+            var pawns = new List<Pawn> { colonist, animal };
+            var transferables = new List<TransferableOneWay>();
+            foreach (Pawn pawn in pawns)
+            {
+                var transferable = new TransferableOneWay();
+                transferable.things.Add(pawn);
+                transferable.AdjustTo(1);
+                transferables.Add(transferable);
+            }
+            var silverRow = new TransferableOneWay();
+            silverRow.things.Add(silver);
+            silverRow.AdjustTo(100);
+            var foodRow = new TransferableOneWay();
+            foodRow.things.Add(food);
+            foodRow.AdjustTo(30);
+            transferables.Add(silverRow);
+            transferables.Add(foodRow);
+
+            const IgnorePawnsInventoryMode mode = IgnorePawnsInventoryMode.IgnoreIfAssignedToUnload;
+            float usage = CollectionsMassCalculator.MassUsageTransferables(transferables, mode, false, false);
+            float capacity = CollectionsMassCalculator.CapacityTransferables(transferables, new System.Text.StringBuilder());
+            PlanetTile start = CaravanExitMapUtility.BestExitTileToGoTo(destination, map);
+            int ticksPerMove = CaravanTicksPerMoveUtility.GetTicksPerMove(pawns, usage, capacity, false, null);
+            float tilesPerDay = TilesPerDayCalculator.ApproxTilesPerDay(transferables, usage, capacity, map.Tile, start, false, null);
+            float visibility = CaravanVisibilityCalculator.Visibility(transferables, new System.Text.StringBuilder());
+            var foraged = ForagedFoodPerDayCalculator.ForagedFoodPerDay(transferables, map.Biome, Faction.OfPlayer, new System.Text.StringBuilder());
+            float foodDays;
+            int eta;
+            using (WorldPath path = map.Tile.Layer.Pather.FindPath(map.Tile, destination, null))
+            {
+                foodDays = DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(transferables, map.Tile, mode, Faction.OfPlayer, path, 0f, ticksPerMove);
+                eta = CaravanArrivalTimeEstimator.EstimatedTicksToArrive(map.Tile, destination, path, 0f, ticksPerMove, Find.TickManager.TicksAbs);
+            }
+
+            if (Math.Abs(plan.MassUsage - usage) > 0.01f) failures.Add($"mass usage {plan.MassUsage}, vanilla {usage}");
+            if (Math.Abs(plan.MassCapacity - capacity) > 0.01f) failures.Add($"mass capacity {plan.MassCapacity}, vanilla {capacity}");
+            if (plan.TicksPerMove != ticksPerMove) failures.Add($"ticks per move {plan.TicksPerMove}, vanilla {ticksPerMove}");
+            if (Math.Abs(plan.TilesPerDay - tilesPerDay) > 0.01f) failures.Add($"tiles per day {plan.TilesPerDay}, vanilla {tilesPerDay}");
+            if (Math.Abs(plan.FoodDays - foodDays) > 0.05f) failures.Add($"days of food {plan.FoodDays}, vanilla {foodDays}");
+            if (Math.Abs(plan.Visibility - visibility) > 0.001f) failures.Add($"visibility {plan.Visibility}, vanilla {visibility}");
+            if (Math.Abs(plan.ForagedPerDay - foraged.Item2) > 0.001f) failures.Add($"foraged per day {plan.ForagedPerDay}, vanilla {foraged.Item2}");
+            if (Math.Abs(plan.EtaTicks - eta) > 60) failures.Add($"arrival estimate {plan.EtaTicks} ticks, vanilla {eta}");
+            if (plan.DestinationTile != destination.tileId || !plan.DestinationReachable) failures.Add("the plan does not report the destination as reachable");
+            if (plan.Members.Count != 2 || plan.Members.All(m => m.Kind != CaravanMemberInfo.AnimalKind)) failures.Add("the plan does not list the animal as an animal");
+            if (plan.Cargo.Sum(c => c.Count) != 130) failures.Add("the plan lists " + plan.Cargo.Sum(c => c.Count) + " cargo items, expected 130");
+            // 食物不夠五天時，原版會彈出警告框；兩邊要一致。
+            bool warnsAboutFood = plan.Warnings.Contains("DaysWorthOfFoodWarningDialog".Translate(foodDays.ToString("0.#")).Resolve())
+                                  || plan.Warnings.Contains("DaysWorthOfFoodWarningDialog_NoFood".Translate().Resolve());
+            if ((foodDays < 5f) != warnsAboutFood) failures.Add($"food warning {warnsAboutFood} with {foodDays} days of food");
         }
 
         private static KeyValuePair<string, Func<object>> Query(string name, Func<object> call) =>

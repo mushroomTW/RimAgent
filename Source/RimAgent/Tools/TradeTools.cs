@@ -10,7 +10,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools
 {
-    /// <summary>交易：商人庫存查詢、買入與賣出一次結清、組織商隊外出。</summary>
+    /// <summary>交易：商人庫存查詢、買入與賣出一次結清。組商隊在 <see cref="CaravanTools"/>。</summary>
     public sealed class TradeTools
     {
         /// <summary>單一商人最多列出的品項數，超過則截斷並註明（省 token）。</summary>
@@ -94,32 +94,6 @@ namespace RimAgent.Tools
             if (blocked != null) return blocked;
 
             CommandResult result = _world.ExecuteTrade(request);
-            if (!result.Success) return ToolText.Error(result.Message);
-            return result.Message;
-        }
-
-        [AgentTool("form_caravan", ToolCategory.Trade, ToolRisk.Confirm)]
-        [Description("Sends the named colonists off the map at once as a caravan heading in a compass direction. Name the members one by one (\"all\" is refused) and undraft them first; pack animals are not supported yet.")]
-        public string FormCaravan(
-            [Description("Colonist names or ids separated by commas, e.g. \"Ali, Bob\".")] string colonists,
-            [Description("Compass heading: N, NE, E, SE, S, SW, W or NW.")] string heading)
-        {
-            if (TargetResolver.IsEveryoneKeyword(colonists))
-            {
-                return ToolText.Error("name the caravan members explicitly, e.g. \"Ali, Bob\"; \"all\" would send the whole colony away.");
-            }
-            Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
-            if (!pawns.Success) return pawns.Error;
-
-            var request = new CaravanRequest
-            {
-                PawnIds = pawns.Value.Select(c => c.Id).ToList(),
-                Heading = (heading ?? string.Empty).Trim()
-            };
-            string blocked = ToolText.Blocked(_gate, $"would form a caravan with {ToolText.Names(pawns.Value)} heading {request.Heading} (they leave the map immediately without packing supplies).");
-            if (blocked != null) return blocked;
-
-            CommandResult result = _world.FormCaravan(request);
             if (!result.Success) return ToolText.Error(result.Message);
             return result.Message;
         }
