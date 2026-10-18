@@ -6,116 +6,115 @@ using RimAgent.Agent;
 using RimAgent.Game;
 using RimAgent.Tools;
 
-namespace RimAgent.Tests
+namespace RimAgent.Tests;
+
+/// <summary>醫療類別（issue med-03）：手術排程。</summary>
+[TestFixture]
+public class SurgeryToolsTests
 {
-    /// <summary>醫療類別（issue med-03）：手術排程。</summary>
-    [TestFixture]
-    public class SurgeryToolsTests
+    private FakeGameWorld _world;
+    private MedicalTools _tools;
+
+    [SetUp]
+    public void SetUp()
     {
-        private FakeGameWorld _world;
-        private MedicalTools _tools;
+        _world = new FakeGameWorld();
+        _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
+        _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
+        _tools = new MedicalTools(_world);
+    }
 
-        [SetUp]
-        public void SetUp()
-        {
-            _world = new FakeGameWorld();
-            _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
-            _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
-            _tools = new MedicalTools(_world);
-        }
+    [Test]
+    public void RegistryGatesTheSurgeryToolByPermission()
+    {
+        var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-        [Test]
-        public void RegistryGatesTheSurgeryToolByPermission()
-        {
-            var registry = new AgentToolRegistry(_world, new AgentTranscript());
+        Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Medical)).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.True);
+        Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.False);
+    }
 
-            Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Medical)).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.True);
-            Assert.That(registry.Select(new ToolPermissions()).OfType<AIFunction>().Any(t => t.Name == "schedule_surgery"), Is.False);
-        }
+    [Test]
+    public void SchedulesSurgeryWithExplicitPart()
+    {
+        string text = _tools.ScheduleSurgery("Ali", "remove body part", "left lung");
 
-        [Test]
-        public void SchedulesSurgeryWithExplicitPart()
-        {
-            string text = _tools.ScheduleSurgery("Ali", "remove body part", "left lung");
+        Assert.That(text, Is.EqualTo("Scheduled remove body part on Ali (left lung)."));
+        ColonistHealthInfo health = _world.Health.Single(h => h.PawnId == 101);
+        SurgeryBillInfo bill = health.PendingSurgeries.Single();
+        Assert.That(bill.Label, Is.EqualTo("remove body part"));
+        Assert.That(bill.Part, Is.EqualTo("left lung"));
+    }
 
-            Assert.That(text, Is.EqualTo("Scheduled remove body part on Ali (left lung)."));
-            ColonistHealthInfo health = _world.Health.Single(h => h.PawnId == 101);
-            SurgeryBillInfo bill = health.PendingSurgeries.Single();
-            Assert.That(bill.Label, Is.EqualTo("remove body part"));
-            Assert.That(bill.Part, Is.EqualTo("left lung"));
-        }
+    [Test]
+    public void EmptyPartAllowedWhenSurgeryNeedsNoPart()
+    {
+        string text = _tools.ScheduleSurgery("Ali", "administer anesthetic", string.Empty);
 
-        [Test]
-        public void EmptyPartAllowedWhenSurgeryNeedsNoPart()
-        {
-            string text = _tools.ScheduleSurgery("Ali", "administer anesthetic", string.Empty);
+        Assert.That(text, Is.EqualTo("Scheduled administer anesthetic on Ali."));
+    }
 
-            Assert.That(text, Is.EqualTo("Scheduled administer anesthetic on Ali."));
-        }
+    [Test]
+    public void UnknownSurgeryReportsErrorWithoutScheduling()
+    {
+        string text = _tools.ScheduleSurgery("Ali", "brain transplant", "head");
 
-        [Test]
-        public void UnknownSurgeryReportsErrorWithoutScheduling()
-        {
-            string text = _tools.ScheduleSurgery("Ali", "brain transplant", "head");
+        Assert.That(text, Does.StartWith("Error:"));
+        Assert.That(_world.Health.SelectMany(h => h.PendingSurgeries), Is.Empty);
+    }
 
-            Assert.That(text, Does.StartWith("Error:"));
-            Assert.That(_world.Health.SelectMany(h => h.PendingSurgeries), Is.Empty);
-        }
+    [Test]
+    public void UnknownColonistReportsError()
+    {
+        string text = _tools.ScheduleSurgery("Nobody", "remove body part", "left lung");
 
-        [Test]
-        public void UnknownColonistReportsError()
-        {
-            string text = _tools.ScheduleSurgery("Nobody", "remove body part", "left lung");
+        Assert.That(text, Does.StartWith("Error:"));
+    }
 
-            Assert.That(text, Does.StartWith("Error:"));
-        }
+    [Test]
+    public void DuplicateScheduleReportsError()
+    {
+        _tools.ScheduleSurgery("Ali", "remove body part", "left lung");
 
-        [Test]
-        public void DuplicateScheduleReportsError()
-        {
-            _tools.ScheduleSurgery("Ali", "remove body part", "left lung");
+        string text = _tools.ScheduleSurgery("Ali", "remove body part", "left lung");
 
-            string text = _tools.ScheduleSurgery("Ali", "remove body part", "left lung");
+        Assert.That(text, Does.StartWith("Error:").And.Contain("already scheduled"));
+        Assert.That(_world.Health.Single(h => h.PawnId == 101).PendingSurgeries.Count, Is.EqualTo(1));
+    }
 
-            Assert.That(text, Does.StartWith("Error:").And.Contain("already scheduled"));
-            Assert.That(_world.Health.Single(h => h.PawnId == 101).PendingSurgeries.Count, Is.EqualTo(1));
-        }
+    [Test]
+    public void LockedSurgeryReportsMissingResearch()
+    {
+        _world.LockedSurgeries.Add("InstallArtificialBodyPart");
 
-        [Test]
-        public void LockedSurgeryReportsMissingResearch()
-        {
-            _world.LockedSurgeries.Add("InstallArtificialBodyPart");
+        string text = _tools.ScheduleSurgery("Ali", "install artificial body part", "right arm");
 
-            string text = _tools.ScheduleSurgery("Ali", "install artificial body part", "right arm");
+        Assert.That(text, Does.StartWith("Error:").And.Contain("research"));
+        Assert.That(_world.Health.SelectMany(h => h.PendingSurgeries), Is.Empty);
+    }
 
-            Assert.That(text, Does.StartWith("Error:").And.Contain("research"));
-            Assert.That(_world.Health.SelectMany(h => h.PendingSurgeries), Is.Empty);
-        }
+    [Test]
+    public async Task ScheduleSurgeryIsRejectedWithoutClassifierInAuto()
+    {
+        var client = new ScriptedChatClient();
+        var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
+        client.CallTool("schedule_surgery", new { colonist = "Ali", surgery = "remove body part", part = "left lung" }).Reply("Done.");
+        var session = new ColonyAgentSession(
+            client,
+            _world,
+            () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Medical),
+            8,
+            () => AgentMode.Auto,
+            classifierClient: classifier,
+            classifierPrompt: () => "test classifier prompt");
 
-        [Test]
-        public async Task ScheduleSurgeryIsRejectedWithoutClassifierInAuto()
-        {
-            var client = new ScriptedChatClient();
-            var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
-            client.CallTool("schedule_surgery", new { colonist = "Ali", surgery = "remove body part", part = "left lung" }).Reply("Done.");
-            var session = new ColonyAgentSession(
-                client,
-                _world,
-                () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Medical),
-                8,
-                () => AgentMode.Auto,
-                classifierClient: classifier,
-                classifierPrompt: () => "test classifier prompt");
+        await session.SendAsync("Ali 左肺 Gallstone 排手術");
 
-            await session.SendAsync("Ali 左肺 Gallstone 排手術");
-
-            TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
-            Assert.That(tool.ToolName, Is.EqualTo("schedule_surgery"));
-            Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Medical));
-            Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-            Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
-            Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
-            Assert.That(session.HasPendingConfirmation, Is.False);
-        }
+        TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+        Assert.That(tool.ToolName, Is.EqualTo("schedule_surgery"));
+        Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Medical));
+        Assert.That(tool.RiskCheck, Is.EqualTo("high"));
+        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
+        Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+        Assert.That(session.HasPendingConfirmation, Is.False);
     }
 }

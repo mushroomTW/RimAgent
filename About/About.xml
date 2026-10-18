@@ -3,15 +3,15 @@
   <name>RimAgent</name>
   <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.10.13.1</modVersion>
+  <modVersion>2026.10.18.1</modVersion>
   <supportedVersions>
-    <li>1.6</li>
+    <li>1.7</li>
   </supportedVersions>
   <description><![CDATA[RimAgent — an LLM agent for RimWorld colony management.
 
 Open the Agent tab and give a natural-language instruction. RimAgent reads the colony through explicit tools, performs only requested game actions, and records every call in the action log.
 
-Requires RimLLM Framework 2026.09.12 or later. Configure providers, API keys, models and fallback chains in RimLLM Framework; RimAgent supplies colony tools and per-category permissions.
+Requires RimLLM Framework 2026.10.18.3 or later. Configure providers, API keys, models and fallback chains in RimLLM Framework; RimAgent supplies colony tools and per-category permissions.
 
 All tool categories are enabled by default and configurable in mod settings: observation, work, build, combat, trade, medical, prisoners, animals, zones, production, time, MCP, web search and memory. Web search uses Parallel Search MCP anonymously by default, with optional local SearXNG; neither needs an API key. Web search follows the current mode's command policy. Memories are short files in two scopes: names starting with `global_` are shared by every save (kept in the RimAgent data folder), the rest are saved with one game; each instruction receives their index and the agent reads files when relevant. Observation includes colonist wellbeing (needs, thoughts and equipment); work supports batch priorities; build includes hunting designations.
 

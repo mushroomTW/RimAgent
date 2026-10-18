@@ -25,6 +25,17 @@ csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 dotnet_sort_system_directives_first = true
 
+# C# 現代語法偏好
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_implicit_object_creation_when_type_is_apparent = true:warning
+csharp_style_prefer_collection_expression = when_types_loosely_match:warning
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+csharp_style_prefer_not_pattern = true:warning
+csharp_prefer_simple_using_statement = true:warning
+dotnet_style_coalesce_expression = true:warning
+dotnet_style_null_propagation = true:warning
+
 # 私有欄位使用 _camelCase 前綴
 dotnet_naming_rule.private_fields_underscore.symbols = private_fields
 dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case

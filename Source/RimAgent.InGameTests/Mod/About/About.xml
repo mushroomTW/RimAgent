@@ -4,9 +4,9 @@
   <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent.InGameTests</packageId>
   <supportedVersions>
-    <li>1.6</li>
+    <li>1.7</li>
   </supportedVersions>
-  <description>Development-only RimTest Redux suites for RimAgent. Not for players.</description>
+  <description>Development-only DevTools test suites for RimAgent. Not for players.</description>
   <modDependencies>
     <li>
       <packageId>brrainz.harmony</packageId>
@@ -14,26 +14,13 @@
       <steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
     </li>
     <li>
-      <packageId>ilyvion.laboratory</packageId>
-      <displayName>ilyvion's Laboratory</displayName>
-      <steamWorkshopUrl>steam://url/CommunityFilePage/3296362231</steamWorkshopUrl>
-    </li>
-    <li>
-      <packageId>ilyvion.rimtestredux</packageId>
-      <displayName>RimTest Redux</displayName>
-      <steamWorkshopUrl>steam://url/CommunityFilePage/3762405308</steamWorkshopUrl>
-    </li>
-    <li>
       <packageId>GreenMushroom.RimAgent</packageId>
       <displayName>RimAgent</displayName>
+      <downloadUrl>https://github.com/mushroomTW/RimAgent</downloadUrl>
     </li>
   </modDependencies>
   <loadAfter>
     <li>brrainz.harmony</li>
-    <li>ilyvion.laboratory</li>
-    <li>ilyvion.rimtestredux</li>
-  </loadAfter>
-  <loadBefore>
     <li>GreenMushroom.RimAgent</li>
-  </loadBefore>
+  </loadAfter>
 </ModMetaData>

@@ -1,45 +1,73 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    RimAgent 的遊戲內整合測試（RimTest Redux）。只供開發：不在 RimAgent.slnx、不隨 mod 出貨。
-    輸出到 Mod/Assemblies/，以 rimworld-mod-mcp run_test_cycle 指向 Mod/ 當作一個獨立 mod 載入。
-    直接參考已出貨的 ../../Assemblies/RimAgent.dll：建置測試不會重建 RimAgent，改了 RimAgent 要先自行 Release 建置。
+    RimAgent 的遊戲內整合測試（SmashPhil DevTools）。只供開發伴隨模組使用，不隨正式 mod 出貨。
+    輸出到 Mod/Assemblies/，由遊戲內 DevTools 執行器載入。
+    透過 ProjectReference 保證先建置主模組；執行遊戲前請以 Release 建置，更新正式載入的 Assemblies/。
   -->
   <PropertyGroup>
-    <!-- RimTest Redux 以 net481 建置，參考它的組件不能低於此版。 -->
-    <TargetFramework>net481</TargetFramework>
     <AssemblyName>RimAgent.InGameTests</AssemblyName>
     <RootNamespace>RimAgent.InGameTests</RootNamespace>
-    <LangVersion>8.0</LangVersion>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>Mod\Assemblies\</OutputPath>
-    <DebugType>none</DebugType>
-    <DebugSymbols>false</DebugSymbols>
-    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
-    <!-- Workshop 位置；RimWorld 不在預設 Steam 路徑時以 /p:WorkshopDir=... 覆寫。 -->
-    <WorkshopDir Condition="'$(WorkshopDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\..\..\..\workshop\content\294100</WorkshopDir>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
+    <Compile Remove="Mod\**" />
+    <None Remove="Mod\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="RimAgent">
-      <HintPath>..\..\Assemblies\RimAgent.dll</HintPath>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RimWorldDir)Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityStubs">
+      <HintPath>$(RimWorldDir)UnityStubs.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Waylith">
+      <HintPath>$(RimWorldDir)Waylith.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>$(WorkshopDir)\2009463077\Current\Assemblies\0Harmony.dll</HintPath>
+      <HintPath>$(HarmonyDll)</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- RetryExperiment 的 JSONL 序列化；執行期由 RimLLM Framework 的 Assemblies/ 提供，與 RimAgent 用同一顆。 -->
-    <Reference Include="System.Text.Json">
-      <HintPath>..\..\..\RimLLM Framework\Assemblies\System.Text.Json.dll</HintPath>
+    <Reference Include="DevTools">
+      <HintPath>$(DevToolsDll)</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="RimTestRedux">
-      <HintPath>$(WorkshopDir)\3762405308\1.6\Assemblies\RimTestRedux.dll</HintPath>
+    <Reference Include="RimLLM Framework">
+      <HintPath>$(RimLLMDir)RimLLM Framework.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Microsoft.Extensions.AI.Abstractions">
+      <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.Abstractions.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="CoreLib">
+      <HintPath>$(SmashToolsDir)CoreLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SmashTools">
+      <HintPath>$(SmashToolsDir)SmashTools.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <ProjectReference Include="..\RimAgent\RimAgent.csproj">
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
+
+  <Target Name="CheckDevTools" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(DevToolsDll)')"
+           Text="DevTools 1.7 DLL not found at '$(DevToolsDll)'. Pass -p:DevToolsDll=&lt;path to DevTools.dll&gt;" />
+  </Target>
+
+  <Target Name="CopyDevToolsForDevelopment" AfterTargets="Build">
+    <Copy SourceFiles="$(DevToolsDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

@@ -6,6 +6,5 @@
     2. 玩家 Config 裡的 Mod_RimAgent_RimAgentMod.xml（模型照玩家的設定；自主模式與 recordRuns 由實驗在記憶體裡打開）
     3. 玩家 Config 裡的 Mod_RimLLM Framework_RimLLMFrameworkMod.xml 與 RimLLM_EncryptionKey.dat（供應商設定與金鑰）
     以上 2、3 都直接指向玩家的 Config 路徑帶入，不要複製進版本庫。
-    4. ../Mod_3762405308_RimTestReduxMod.xml
 -->
 <RimAgentRetryExperiment />

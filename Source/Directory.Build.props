@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <!-- 預設為安裝在 RimWorld/Mods 下的工作樹；其他位置請指定 RimWorldDir。 -->
+    <RimWorldDir Condition="'$(RimWorldDir)' == '' and '$(RIMWORLD_DIR)' != ''">$(RIMWORLD_DIR)</RimWorldDir>
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\</RimWorldDir>
+    <RimWorldDir>$([MSBuild]::EnsureTrailingSlash('$(RimWorldDir)'))</RimWorldDir>
+    <WorkshopDir Condition="'$(WorkshopDir)' == '' and '$(WORKSHOP_DIR)' != ''">$(WORKSHOP_DIR)</WorkshopDir>
+    <WorkshopDir Condition="'$(WorkshopDir)' == ''">$(RimWorldDir)..\..\workshop\content\294100\</WorkshopDir>
+    <WorkshopDir>$([MSBuild]::EnsureTrailingSlash('$(WorkshopDir)'))</WorkshopDir>
+    <HarmonyDll Condition="'$(HarmonyDll)' == ''">$(WorkshopDir)2009463077\1.7\Assemblies\0Harmony.dll</HarmonyDll>
+    <RimLLMDir Condition="'$(RimLLMDir)' == '' and '$(RIMLLM_DIR)' != ''">$(RIMLLM_DIR)</RimLLMDir>
+    <RimLLMDir Condition="'$(RimLLMDir)' == ''">$(MSBuildThisFileDirectory)..\..\RimLLM Framework\Assemblies\</RimLLMDir>
+    <RimLLMDir>$([MSBuild]::EnsureTrailingSlash('$(RimLLMDir)'))</RimLLMDir>
+    <DevToolsDll Condition="'$(DevToolsDll)' == ''">$(MSBuildThisFileDirectory)Libs\DevTools\DevTools.dll</DevToolsDll>
+    <SmashToolsDir Condition="'$(SmashToolsDir)' == '' and '$(SMASHTOOLS_DIR)' != ''">$(SMASHTOOLS_DIR)</SmashToolsDir>
+    <SmashToolsDir Condition="'$(SmashToolsDir)' == ''">$(MSBuildThisFileDirectory)Libs\SmashTools\</SmashToolsDir>
+    <SmashToolsDir>$([MSBuild]::EnsureTrailingSlash('$(SmashToolsDir)'))</SmashToolsDir>
+  </PropertyGroup>
+</Project>

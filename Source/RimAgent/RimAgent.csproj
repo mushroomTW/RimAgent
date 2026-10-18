@@ -1,15 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
     <AssemblyName>RimAgent</AssemblyName>
     <RootNamespace>RimAgent</RootNamespace>
-    <LangVersion>8.0</LangVersion>
     <Deterministic>true</Deterministic>
     <Authors>mushroomTW</Authors>
     <!-- AssemblyInfo.cs 手寫（InternalsVisibleTo 給測試專案），避免與自動產生的屬性重複。 -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <!-- Release 才寫入出貨的 Assemblies/；Debug 與 dotnet test 走 bin/，不會蓋掉出貨 DLL。 -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
     <OutputPath Condition="'$(Configuration)' == 'Release'">..\..\Assemblies\</OutputPath>
     <OutputPath Condition="'$(Configuration)' != 'Release'">bin\$(Configuration)\</OutputPath>
     <DebugSymbols Condition="'$(Configuration)' != 'Release'">true</DebugSymbols>
@@ -17,100 +16,99 @@
     <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
     <!--
-      RimAgent 只出貨自己這一顆 DLL。MEAI 與其相依全部由 RimLLM Framework 的 Assemblies/ 提供，
-      RimWorld 把所有 mod 載入同一個 AppDomain，第二份 IChatClient 會讓所有型別轉換失敗。
+      RimAgent 只出貨自己與必要擴充之 DLL。MEAI 與其相依全部由 RimLLM Framework 的 Assemblies/ 提供，
+      與框架共用相同的 MEAI 組件身分，避免重複載入造成 IChatClient 型別不相容。
       因此絕不開 CopyLocalLockFileAssemblies，套件一律 ExcludeAssets="runtime"。
     -->
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
-    <!-- 已安裝的框架位置；RimWorld 不在預設 Steam 路徑時以 /p:RimLLMDir=... 覆寫。 -->
-    <RimLLMDir Condition="'$(RimLLMDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\RimLLM Framework\Assemblies</RimLLMDir>
   </PropertyGroup>
 
+  <!-- 1.7 本機遊戲組件與 Harmony 3.0：直接參考遊戲根目錄的組件，Private=false 不隨 Mod 出貨 -->
   <ItemGroup>
-    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
-    <!-- 版本必須與框架載入的組件識別一致（10.10.0.0），不可浮動。 -->
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" ExcludeAssets="runtime" />
-    <!--
-      Krafs 附帶的 RimWorld Mono mscorlib 同樣定義 IAsyncEnumerable<T> 與 ValueTask，
-      與 BCL 套件撞名（CS0433）；沿用框架的 alias 隔離法。
-      InvokeCoreAsync 的 ValueTask<object> 與 IChatClient 的 IAsyncEnumerable 都會碰到。
-      版本對齊框架（Bcl.AsyncInterfaces 10.0.12）。
-    -->
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.12" Aliases="bclasync" ExcludeAssets="runtime" />
-    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" Aliases="ste" ExcludeAssets="runtime" />
-    <!-- Microsoft Agent Framework：只用 ChatClientAgent 置換工具迴圈，不碰 Workflows。 -->
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" ExcludeAssets="runtime" />
-    <!-- 官方 MCP SDK（stdio client）：遊戲內 agent 呼叫本機 MCP 伺服器。執行期 DLL 見下方出貨白名單。 -->
-    <PackageReference Include="ModelContextProtocol" Version="2.2.0" ExcludeAssets="runtime" />
-    <!--
-      框架強制 MEAI.Abstractions 用 netstandard2.0 資產（見 RimLLM Framework.csproj）：
-      net462 資產參考 System.ComponentModel.DataAnnotations，RimWorld 的 Unity Mono 沒有出貨這顆 DLL，
-      AIFunctionFactory.Create 會在遊戲內擲 TypeLoadException。這裡沿用同一招：
-      PackageReference 只留相依圖（compile;runtime 都不要），再以 Reference 指到 netstandard2.0 的 DLL。
-      版本必須與框架載入的組件識別一致（10.10.0.0），不可浮動。
-    -->
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.0" ExcludeAssets="compile;runtime" />
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RimWorldDir)Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityStubs">
+      <HintPath>$(RimWorldDir)UnityStubs.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Waylith">
+      <HintPath>$(RimWorldDir)Waylith.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(HarmonyDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.ObjectPool">
+      <HintPath>$(RimWorldDir)Microsoft.Extensions.ObjectPool.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- RimLLM Framework 組件參考（由框架出貨，Private=false 不複製） -->
+  <ItemGroup>
+    <Reference Include="RimLLM Framework">
+      <HintPath>$(RimLLMDir)RimLLM Framework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.AI">
+      <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Microsoft.Extensions.AI.Abstractions">
-      <HintPath>$(NuGetPackageRoot)microsoft.extensions.ai.abstractions\10.10.0\lib\netstandard2.0\Microsoft.Extensions.AI.Abstractions.dll</HintPath>
+      <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.Abstractions.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- SmashTools 編譯期參考（由 RimAgent 隨 Mod 出貨，bundled DLL） -->
+  <ItemGroup>
+    <Reference Include="CoreLib">
+      <HintPath>$(SmashToolsDir)CoreLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SmashTools">
+      <HintPath>$(SmashToolsDir)SmashTools.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 直接參考已安裝的框架 DLL；Private=false 讓 MSBuild 不複製它到輸出。 -->
-    <Reference Include="RimLLM Framework">
-      <HintPath>$(RimLLMDir)\RimLLM Framework.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <!-- Microsoft Agent Framework：只用 ChatClientAgent 置換工具迴圈，不碰 Workflows。 -->
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" ExcludeAssets="runtime" />
+    <!-- ObjectPool 由 RimWorld 遊戲根目錄提供（1.7 CoreCLR），排除 NuGet 套件資產避免版本衝突 -->
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="10.0.12" ExcludeAssets="all" />
+    <!-- 官方 MCP SDK（stdio client）：遊戲內 agent 呼叫本機 MCP 伺服器。執行期 DLL 見下方出貨白名單。 -->
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <!--
-    Agent Framework 的 DLL 必須由 RimAgent 出貨（框架的 Assemblies/ 沒有 Agents.AI*、
-    Compliance.Abstractions、VectorData.Abstractions、FileSystemGlobbing，
-    也沒有 Bcl.Memory、ObjectPool）。
-    CopyLocalLockFileAssemblies 保持 false（見上方註解），改以固定白名單從 NuGet 快取複製：
-    白名單來自 Microsoft.Agents.AI 1.21.0 的 nuspec 相依清單；框架已出貨者
-    （Text.Json、Channels、DiagnosticSource、DI/Logging.Abstractions、Bcl.AsyncInterfaces、STTE）
-    一律不複製，避免第二份組件。net472/net462 優先於 netstandard2.0（與 NuGet 解析一致）。
+    必要組件複製到輸出目錄：
+    Agent Framework 與 MCP SDK 以及 SmashTools 的 bundled DLL 由 RimAgent 出貨。
+    已由遊戲根目錄（System.*, ObjectPool, Bcl.Memory, Immutable）或框架（MEAI, STJ, Channels, Logging）
+    提供者一律不複製，確保單一 provider。
+    .NET 10 / CoreCLR 環境採用 net10.0 / net8.0 / net5.0 相容資產。
     Release 寫入 Assemblies/（出貨），Debug 寫入 bin/（測試與本機建置用）。
-    出貨取捨（實機探針結論，見 docs/AgentFramework-Migration.md §7）：
-    RimWorld 啟動會對每顆 DLL 做 Assembly.GetTypes()，基底型別必須解析成功，
-    而方法簽名裡的參考是 lazy、沒執行到就不會載入。所以——
-    - 留：Compliance.Abstractions。AF 的 internal ReplacingRedactor 繼承它的 Redactor，
-      沒有它連 Microsoft.Agents.AI.dll 自身的 GetTypes 都過不了。
-    - 留：ObjectPool 8.0.31（組件版號 8.0.0.0，唯 netstandard 參考）。
-      Compliance 內六個 Pooled*Policy 的基底，沒有它 Compliance 的 GetTypes 過不了。
-    - 留：ML.Tokenizers 2.0.0（組件版號 1.0.0.0）＋ Google.Protobuf 3.30.2。
-      AF 的 CompactionMessageIndex 有 Tokenizer 型別的欄位，RimWorld 的 GetFields()
-      掃描會解析欄位型別，缺 DLL 就在啟動 log 留一組 AggregateException。
-      Tokenizers 參照 STJ 9.0.0.0 / Bcl.Memory 9.0.0.4 / System.Memory 4.0.2.0，
-      全比已出貨版本舊——Unity Mono 對「同名同 token、版本 ≥ 要求」放行
-      （框架的 Abstractions 參照 STJ 10.0.0.0、實際載入 10.0.0.12，實機運作即為證據），
-      真正缺的只有 Protobuf，其閉包（System.Memory 4.0.1.1、Unsafe 4.0.4.1）框架皆已出貨。
   -->
   <Target Name="CopyAgentFrameworkAssemblies" AfterTargets="Build">
     <ItemGroup>
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai\1.21.0\lib\net472\Microsoft.Agents.AI.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai.abstractions\1.21.0\lib\net472\Microsoft.Agents.AI.Abstractions.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.compliance.abstractions\10.10.0\lib\netstandard2.0\Microsoft.Extensions.Compliance.Abstractions.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.objectpool\8.0.31\lib\netstandard2.0\Microsoft.Extensions.ObjectPool.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.vectordata.abstractions\10.10.0\lib\net462\Microsoft.Extensions.VectorData.Abstractions.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.filesystemglobbing\10.0.12\lib\net462\Microsoft.Extensions.FileSystemGlobbing.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.memory\10.0.12\lib\net462\Microsoft.Bcl.Memory.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.bcl.hashcode\6.0.0\lib\net462\Microsoft.Bcl.HashCode.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\netstandard2.0\Microsoft.ML.Tokenizers.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)google.protobuf\3.30.2\lib\net45\Google.Protobuf.dll" />
-      <!--
-        MCP 官方 SDK（netstandard2.0 資產）：遊戲內 agent 當 client 連本機 stdio 伺服器。
-        只出這兩顆（程式碼只用到 Core 的型別，主包 ModelContextProtocol.dll 無人參考就不出貨）；
-        其餘閉包框架皆已出貨（STJ、Channels、Pipelines、SSE、DiagnosticSource、
-        Caching/Hosting/Logging.Abstractions 皆 10.0.0.x ≥ SDK 要求的 10.0.0.0，
-        Bcl.Memory 由 RimAgent 出貨的 10.0.12 覆蓋，MEAI.Abstractions 沿用既有參考）。
-      -->
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)modelcontextprotocol.core\2.2.0\lib\netstandard2.0\ModelContextProtocol.Core.dll" />
-      <AgentFrameworkAssemblies Include="$(NuGetPackageRoot)system.collections.immutable\10.0.10\lib\netstandard2.0\System.Collections.Immutable.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai\1.21.0\lib\net10.0\Microsoft.Agents.AI.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai.abstractions\1.21.0\lib\net10.0\Microsoft.Agents.AI.Abstractions.dll" />
+      <!-- .NET 10 版 Agent Framework 的公開型別繼承 EvaluationResult，遊戲掃描型別時就需要此組件。 -->
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.ai.evaluation\10.10.0\lib\net10.0\Microsoft.Extensions.AI.Evaluation.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.compliance.abstractions\10.10.0\lib\net10.0\Microsoft.Extensions.Compliance.Abstractions.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.vectordata.abstractions\10.10.0\lib\net10.0\Microsoft.Extensions.VectorData.Abstractions.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.filesystemglobbing\10.0.12\lib\net10.0\Microsoft.Extensions.FileSystemGlobbing.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\net8.0\Microsoft.ML.Tokenizers.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)google.protobuf\3.30.2\lib\net5.0\Google.Protobuf.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)modelcontextprotocol.core\2.2.0\lib\net10.0\ModelContextProtocol.Core.dll" />
+      <!-- SmashTools bundled DLLs -->
+      <BundledAssemblies Include="$(SmashToolsDir)SmashTools.dll" />
+      <BundledAssemblies Include="$(SmashToolsDir)CoreLib.dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(AgentFrameworkAssemblies)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(BundledAssemblies)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
 
   <ItemGroup>

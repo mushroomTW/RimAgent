@@ -10,13 +10,13 @@
 
 **以自然語言管理你的 RimWorld 殖民地。**
 
-專為 RimWorld 1.6 設計的遊戲內 AI 助手。透過 77 項工具，以自然語言查詢殖民地、下達命令，並自行選擇操作前的把關方式。
+專為 RimWorld 1.7 設計的遊戲內 AI 助手。透過 77 項工具，以自然語言查詢殖民地、下達命令，並自行選擇操作前的把關方式。
 
-**RimWorld 1.6** &nbsp;·&nbsp; **77 項工具** &nbsp;·&nbsp; **自動／自主模式** &nbsp;·&nbsp; **支援 MCP 擴充**
+**RimWorld 1.7** &nbsp;·&nbsp; **77 項工具** &nbsp;·&nbsp; **自動／自主模式** &nbsp;·&nbsp; **支援 MCP 擴充**
 
-[![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#先決條件)
-[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
-[![.NET Framework 4.7.2](https://img.shields.io/badge/.NET_Framework-4.7.2-512bd4.svg?style=flat)](#建置)
+[![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#先決條件)
+[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.18.3-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512bd4.svg?style=flat)](#建置)
 
 </div>
 
@@ -30,8 +30,8 @@
 
 ### 先決條件
 
-- **RimWorld 1.6**
-- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)**（版本需求 **2026.09.12 或更高**，以支援原生工具呼叫）
+- **RimWorld 1.7**
+- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)**（版本需求 **2026.10.18.3 或更高**，以支援原生工具呼叫）
 - 模組載入順序：`RimAgent` 必須排列於 `RimLLM Framework` **之後**載入。
 
 > [!IMPORTANT]
@@ -183,22 +183,32 @@
 dotnet build "Source/RimAgent/RimAgent.csproj" -c Release
 ```
 
-Release 建置將輸出 `Assemblies/RimAgent.dll` 以及本模組專屬、未隨框架出貨的 12 顆必要相依組件：
+Release 建置將輸出 `Assemblies/RimAgent.dll` 以及本模組隨附的 SmashTools 與未隨框架出貨的必要相依組件：
 
-- **10 顆 Agent Framework 組件**：`Microsoft.Agents.AI`、`Microsoft.Agents.AI.Abstractions`、`Microsoft.Extensions.Compliance.Abstractions`、`Microsoft.Extensions.ObjectPool`、`Microsoft.Extensions.VectorData.Abstractions`、`Microsoft.Extensions.FileSystemGlobbing`、`Microsoft.Bcl.Memory`、`Microsoft.Bcl.HashCode`、`Microsoft.ML.Tokenizers`、`Google.Protobuf`。
-- **2 顆 MCP SDK 組件**：`ModelContextProtocol.Core`、`System.Collections.Immutable`。
+- **隨附 SmashTools 組件**：`SmashTools.dll`、`CoreLib.dll`。
+- **Agent Framework 與 MCP SDK 組件**：`Microsoft.Agents.AI`、`Microsoft.Agents.AI.Abstractions`、`Microsoft.Extensions.AI.Evaluation`、`Microsoft.Extensions.Compliance.Abstractions`、`Microsoft.Extensions.VectorData.Abstractions`、`Microsoft.Extensions.FileSystemGlobbing`、`Microsoft.ML.Tokenizers`、`Google.Protobuf`、`ModelContextProtocol.Core`。
 
-RimWorld 啟動時會透過 `Assembly.GetTypes()` 與 `GetFields()` 掃描所有組件，因此所有基底型別與欄位型別皆已精準對齊。本專案透過 `../RimLLM Framework/Assemblies` 引用框架組件（非預設 Steam 目錄時可透過 `/p:RimLLMDir=<路徑>` 覆寫）。
+RimWorld 1.7 提供 `System.Collections.Immutable`、`Microsoft.Bcl.Memory` 與 `Microsoft.Extensions.ObjectPool`，`HashCode` 型別則由 .NET 10 本身提供。RimWorld 啟動時會透過 `Assembly.GetTypes()` 與 `GetFields()` 掃描所有組件，因此基底型別與欄位型別都必須能解析。本專案透過 `../RimLLM Framework/Assemblies` 引用框架組件（非預設 Steam 目錄時可透過 `/p:RimLLMDir=<路徑>` 覆寫）。
 
 ---
 
 ## 測試
 
+### 單元測試（離線）
+
 ```bash
 dotnet test "Source/RimAgent.Tests/RimAgent.Tests.csproj"
 ```
 
-NUnit 測試套件使用 .NET Framework 4.7.2，無需啟動 RimWorld，涵蓋工具行為、確認預覽、存讀檔、風險分類，以及兩份 README 顯示的工具數量。
+NUnit 測試套件使用 .NET 10，無需啟動 RimWorld，涵蓋工具行為、確認預覽、存讀檔、風險分類，以及兩份 README 顯示的工具數量。
+
+### 遊戲內整合測試
+
+遊戲內整合測試位於 `Source/RimAgent.InGameTests/`，使用 SmashPhil DevTools 開發，編譯輸出至僅供開發使用的隨附模組 `Source/RimAgent.InGameTests/Mod/Assemblies/`，不對玩家出貨。
+
+先執行 `dotnet build Source/RimAgent.slnx -c Release` 建置全部專案，再將測試模組與 RimAgent 及其前置模組一同載入。可使用 DevTools Test Explorer，或以 `--pid GreenMushroom.RimAgent.InGameTests --test --where "namespace =~ RimAgent.InGameTests" --exit` 啟動遊戲。測試會建立殖民地並切換場景，執行前請先存檔。結果位於遊戲持久資料目錄的 `Test.log` 與 `test-report.md`；可在 `Mod/Configs/UnitTestConfig.xml` 指定獨立日誌資料夾。套件涵蓋啟動、殖民地操作，以及 SmashTools 初始化與主執行緒派送。以標記檔啟用的真模型實驗獨立於測試，需另外設定。
+
+第三方 DLL 的固定來源版本記錄於 `Source/Libs/`。使用 PowerShell 7 執行 `pwsh -File Source/Build-Dependencies.ps1` 可重建；腳本將來源保留在 `.scratch/`，並列出實際產物的雜湊。完整散佈授權文字見 `ThirdPartyNotices.txt`。
 
 ---
 

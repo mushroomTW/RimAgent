@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="RimAgent/RimAgent.csproj" />
   <Project Path="RimAgent.Tests/RimAgent.Tests.csproj" />
+  <Project Path="RimAgent.InGameTests/RimAgent.InGameTests.csproj" />
 </Solution>

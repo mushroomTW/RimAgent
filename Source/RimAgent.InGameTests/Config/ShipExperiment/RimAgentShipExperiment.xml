@@ -6,7 +6,6 @@
     2. 玩家 Config 裡的 Mod_RimAgent_RimAgentMod.xml（模型由實驗在記憶體裡改成 :free 版本）
     3. 玩家 Config 裡的 Mod_RimLLM Framework_RimLLMFrameworkMod.xml 與 RimLLM_EncryptionKey.dat
     以上 2、3 都直接指向玩家的 Config 路徑帶入，不要複製進版本庫。
-    4. ../Mod_3762405308_RimTestReduxMod.xml
   結果寫在隔離環境存檔資料夾的 RimAgent/ShipExperiment.jsonl。
 -->
 <RimAgentShipExperiment />

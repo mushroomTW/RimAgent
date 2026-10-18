@@ -27,13 +27,13 @@ Third-party components
 The MIT license above covers this mod's own source code. Redistributed
 dependency assemblies in `Assemblies/` remain under their own licenses:
 
-  Microsoft.Extensions.AI, Microsoft.Extensions.AI.Abstractions,
-  Microsoft.Extensions.AI.OpenAI, Microsoft.Bcl.AsyncInterfaces,
-  Microsoft.Extensions.* .................................. MIT (Microsoft)
-  OpenAI .NET SDK ......................................... MIT (OpenAI)
-  Google.GenAI, Google.Apis.* ............................. Apache-2.0 (Google LLC)
-  Newtonsoft.Json ......................................... MIT (James Newton-King)
-  System.* runtime facades ................................ MIT (.NET Foundation)
+  SmashTools, CoreLib ..................................... MIT (Smash Phil)
+  Microsoft.Agents.AI, Microsoft.Agents.AI.Abstractions,
+  Microsoft.Extensions.*, Microsoft.ML.Tokenizers ......... MIT (Microsoft)
+  ModelContextProtocol.Core ............................... Apache-2.0 (MCP Contributors)
+  Google.Protobuf ......................................... BSD-3-Clause (Google LLC)
 
 RimWorld and its assemblies are property of Ludeon Studios and are not
 redistributed by this mod.
+
+Complete dependency license texts are included in ThirdPartyNotices.txt.

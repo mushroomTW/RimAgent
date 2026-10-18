@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TestConfig>
+  <log>
+    <verboseLogging>true</verboseLogging>
+    <report>DevTools.Testing.MarkdownReport</report>
+  </log>
+  <failOnWarnings>false</failOnWarnings>
+  <failOnErrors>true</failOnErrors>
+  <randSeed>12345</randSeed>
+</TestConfig>

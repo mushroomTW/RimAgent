@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- run_test_cycle 的 seed_config：關掉 RimTest Redux 內建的啟動執行與自身測試，由 TestDriver 決定何時跑。 -->
-<SettingsBlock>
-  <ModSettings Class="RimTestRedux.Core.Settings">
-    <runOwnTests>False</runOwnTests>
-    <runAtStartup>False</runAtStartup>
-  </ModSettings>
-</SettingsBlock>

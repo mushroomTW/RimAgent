@@ -10,13 +10,13 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in natural language through 77 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in natural language through 77 tools, with control over when actions require approval.
 
-**RimWorld 1.6** &nbsp;·&nbsp; **77 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.7** &nbsp;·&nbsp; **77 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
-[![RimWorld 1.6](https://img.shields.io/badge/RimWorld-1.6-10b981.svg?style=flat)](#prerequisites)
-[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.09.12-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
-[![.NET Framework 4.7.2](https://img.shields.io/badge/.NET_Framework-4.7.2-512bd4.svg?style=flat)](#building)
+[![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#prerequisites)
+[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.18.3-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512bd4.svg?style=flat)](#building)
 
 </div>
 
@@ -30,8 +30,8 @@ An in-game AI agent for RimWorld 1.6. Inspect your colony and issue orders in na
 
 ### Prerequisites
 
-- **RimWorld 1.6**
-- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.09.12 or later**, required for native tool calling)
+- **RimWorld 1.7**
+- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.10.18.3 or later**, required for native tool calling)
 - Mod load order: `RimAgent` must be placed and loaded **after** `RimLLM Framework`.
 
 > [!IMPORTANT]
@@ -183,22 +183,32 @@ UI text and the Agent main-button label are localized in English, Traditional Ch
 dotnet build "Source/RimAgent/RimAgent.csproj" -c Release
 ```
 
-Release compilation writes `Assemblies/RimAgent.dll` plus the 12 standalone assemblies required by the mod that are not provided by the base game or framework:
+Release compilation writes `Assemblies/RimAgent.dll` plus bundled SmashTools assemblies and standalone assemblies required by the mod that are not provided by the base game or framework:
 
-- **10 Agent Framework Assemblies**: `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.ObjectPool`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.Bcl.Memory`, `Microsoft.Bcl.HashCode`, `Microsoft.ML.Tokenizers`, `Google.Protobuf`.
-- **2 MCP SDK Assemblies**: `ModelContextProtocol.Core`, `System.Collections.Immutable`.
+- **Bundled SmashTools**: `SmashTools.dll`, `CoreLib.dll`.
+- **Agent Framework & MCP SDK**: `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.AI.Evaluation`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.ML.Tokenizers`, `Google.Protobuf`, `ModelContextProtocol.Core`.
 
-RimWorld scans assemblies on startup with `Assembly.GetTypes()` and `GetFields()`, requiring all base and referenced field types to resolve cleanly. The project references RimLLM Framework assemblies from `../RimLLM Framework/Assemblies` (override with `/p:RimLLMDir=<path>` if installed elsewhere).
+RimWorld 1.7 provides `System.Collections.Immutable`, `Microsoft.Bcl.Memory`, and `Microsoft.Extensions.ObjectPool`; `HashCode` is part of .NET 10 itself. RimWorld scans assemblies on startup with `Assembly.GetTypes()` and `GetFields()`, requiring all base and referenced field types to resolve cleanly. The project references RimLLM Framework assemblies from `../RimLLM Framework/Assemblies` (override with `/p:RimLLMDir=<path>` if installed elsewhere).
 
 ---
 
 ## Tests
 
+### Unit Tests (Offline)
+
 ```bash
 dotnet test "Source/RimAgent.Tests/RimAgent.Tests.csproj"
 ```
 
-The NUnit suite runs on .NET Framework 4.7.2 without launching RimWorld. It covers tool behavior, confirmation previews, save/load state, risk classification, and the tool count shown in both READMEs.
+The NUnit suite runs on .NET 10 without launching RimWorld. It covers tool behavior, confirmation previews, save/load state, risk classification, and the tool count shown in both READMEs.
+
+### In-Game Integration Tests
+
+In-game integration tests live in `Source/RimAgent.InGameTests/` and use SmashPhil DevTools. They compile to the development-only companion mod `Source/RimAgent.InGameTests/Mod/Assemblies/` and are not distributed to players.
+
+Build all projects with `dotnet build Source/RimAgent.slnx -c Release`, then load the companion mod alongside RimAgent and its dependencies. Use the DevTools Test Explorer, or launch the game with `--pid GreenMushroom.RimAgent.InGameTests --test --where "namespace =~ RimAgent.InGameTests" --exit`. Save progress first: tests create a colony and switch scenes. Results are written to `Test.log` and `test-report.md` in the game's persistent data directory; `Mod/Configs/UnitTestConfig.xml` can set a separate log folder. The suite includes startup checks, colony operations, and SmashTools initialization and thread dispatch. Marker-based model experiments are separate and require explicit configuration.
+
+Third-party DLL sources are pinned under `Source/Libs/`. To rebuild them, use PowerShell 7: `pwsh -File Source/Build-Dependencies.ps1`. The script retains source in `.scratch/` and prints hashes of the actual build output. Full redistributed license texts are in `ThirdPartyNotices.txt`.
 
 ---
 

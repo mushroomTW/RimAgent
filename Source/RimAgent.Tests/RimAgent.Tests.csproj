@@ -1,56 +1,69 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
     <RootNamespace>RimAgent.Tests</RootNamespace>
     <AssemblyName>RimAgent.Tests</AssemblyName>
-    <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <IsPackable>false</IsPackable>
-    <DefaultRimWorldManagedDir>C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed</DefaultRimWorldManagedDir>
-    <RimWorldManagedDir Condition="'$(RimWorldManagedDir)' == '' and '$(RIMWORLD_MANAGED_DIR)' != ''">$(RIMWORLD_MANAGED_DIR)</RimWorldManagedDir>
-    <RimWorldManagedDir Condition="'$(RimWorldManagedDir)' == ''">$(DefaultRimWorldManagedDir)</RimWorldManagedDir>
-    <RimLLMDir Condition="'$(RimLLMDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\RimLLM Framework\Assemblies</RimLLMDir>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="NUnit" Version="4.6.1" />
     <PackageReference Include="NUnit3TestAdapter" Version="6.3.0" />
-    <PackageReference Include="coverlet.collector" Version="6.0.4">
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
-    <!-- 與主專案相同的 alias 隔離，避免 Mono mscorlib 與 BCL 套件的 CS0433。 -->
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.12" Aliases="bclasync" />
-    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" Aliases="ste" />
-    <!-- 與主專案同版；測試在真 .NET Framework 上執行，需要 runtime 資產複製到測試輸出。 -->
     <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" />
-    <!-- MCP SDK：RimAgent.dll 的型別掃描（GetTypes）需要它在測試輸出裡（主專案只留編譯期資產）。 -->
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="10.0.12" ExcludeAssets="all" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RimAgent\RimAgent.csproj" />
-    <!-- 測試在真 .NET Framework 上執行，框架 DLL 要複製到測試輸出（Private 預設 true）。 -->
-    <Reference Include="RimLLM Framework">
-      <HintPath>$(RimLLMDir)\RimLLM Framework.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
-  <!-- 與框架測試專案相同：只複製 RimWorld 與 Unity 的實體 DLL，排除 mscorlib / System 等基礎類別庫以免 CLR 衝突。 -->
-  <Target Name="CopyRimWorldAssemblies" AfterTargets="Build" Condition="Exists('$(RimWorldManagedDir)')">
-    <ItemGroup>
-      <RimWorldAssemblies Include="$(RimWorldManagedDir)\Assembly-CSharp*.dll" />
-      <RimWorldAssemblies Include="$(RimWorldManagedDir)\UnityEngine*.dll" />
-      <RimWorldAssemblies Include="$(RimWorldManagedDir)\Unity.*.dll" />
-      <RimWorldAssemblies Include="$(RimWorldManagedDir)\netstandard.dll" />
-    </ItemGroup>
-    <Copy SourceFiles="@(RimWorldAssemblies)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="WarnMissingRimWorldAssemblies" AfterTargets="Build" Condition="!Exists('$(RimWorldManagedDir)')">
-    <Warning Text="RimWorld managed assembly folder not found: $(RimWorldManagedDir). Set RimWorldManagedDir or RIMWORLD_MANAGED_DIR." />
-  </Target>
+  <!-- 1.7 的遊戲組件、Harmony 3.0、框架組件與 SmashTools：直接參考並複製到測試輸出，執行期才找得到。 -->
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(HarmonyDll)</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.ObjectPool">
+      <HintPath>$(RimWorldDir)Microsoft.Extensions.ObjectPool.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RimWorldDir)Assembly-CSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityStubs">
+      <HintPath>$(RimWorldDir)UnityStubs.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Waylith">
+      <HintPath>$(RimWorldDir)Waylith.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="RimLLM Framework">
+      <HintPath>$(RimLLMDir)RimLLM Framework.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.AI">
+      <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.AI.Abstractions">
+      <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.Abstractions.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="CoreLib">
+      <HintPath>$(SmashToolsDir)CoreLib.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="SmashTools">
+      <HintPath>$(SmashToolsDir)SmashTools.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
 </Project>

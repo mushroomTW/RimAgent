@@ -1,0 +1,11 @@
+<Project>
+  <Target Name="CheckRimWorldReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(RimWorldDir)Assembly-CSharp.dll') or !Exists('$(RimWorldDir)UnityStubs.dll') or !Exists('$(RimWorldDir)Waylith.dll')"
+           Text="RimWorld 1.7 assemblies not found. Set RimWorldDir (or RIMWORLD_DIR) to the game root directory." />
+    <Error Condition="!Exists('$(HarmonyDll)')" Text="Harmony 1.7 assembly not found. Set HarmonyDll or WorkshopDir." />
+    <Error Condition="!Exists('$(RimLLMDir)RimLLM Framework.dll')"
+           Text="RimLLM Framework assembly not found at '$(RimLLMDir)RimLLM Framework.dll'. Set RimLLMDir (or RIMLLM_DIR)." />
+    <Error Condition="!Exists('$(SmashToolsDir)SmashTools.dll') or !Exists('$(SmashToolsDir)CoreLib.dll')"
+           Text="SmashTools assemblies not found at '$(SmashToolsDir)'. Set SmashToolsDir (or SMASHTOOLS_DIR), or run Source/Build-Dependencies.ps1." />
+  </Target>
+</Project>
