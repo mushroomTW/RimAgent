@@ -23,26 +23,10 @@
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
-  <!-- 1.7 本機遊戲組件與 Harmony 3.0：直接參考遊戲根目錄的組件，Private=false 不隨 Mod 出貨 -->
+  <!-- RimWorld API 改用 Krafs.Rimworld.Ref (1.7.4982-unstable) 提供的參考組件；Harmony 3.0 仍直接參考 Workshop DLL。 -->
   <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>$(RimWorldDir)Assembly-CSharp.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityStubs">
-      <HintPath>$(RimWorldDir)UnityStubs.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Waylith">
-      <HintPath>$(RimWorldDir)Waylith.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="0Harmony">
       <HintPath>$(HarmonyDll)</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Microsoft.Extensions.ObjectPool">
-      <HintPath>$(RimWorldDir)Microsoft.Extensions.ObjectPool.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
@@ -78,8 +62,8 @@
   <ItemGroup>
     <!-- Microsoft Agent Framework：只用 ChatClientAgent 置換工具迴圈，不碰 Workflows。 -->
     <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" ExcludeAssets="runtime" />
-    <!-- ObjectPool 由 RimWorld 遊戲根目錄提供（1.7 CoreCLR），排除 NuGet 套件資產避免版本衝突 -->
-    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="10.0.12" ExcludeAssets="all" />
+    <!-- RimWorld 參考組件（Krafs.Rimworld.Ref）：提供 Assembly-CSharp/UnityStubs/Waylith/ObjectPool 等編譯參考，執行期由遊戲提供。 -->
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.7.4982-unstable" />
     <!-- 官方 MCP SDK（stdio client）：遊戲內 agent 呼叫本機 MCP 伺服器。執行期 DLL 見下方出貨白名單。 -->
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" ExcludeAssets="runtime" />
   </ItemGroup>
