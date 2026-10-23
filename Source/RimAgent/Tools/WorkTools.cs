@@ -53,16 +53,24 @@ public sealed class WorkTools
         string blocked = ToolText.Blocked(_gate, "would set " + string.Join("; ", changes.Select(c => c.Describe())) + ".");
         if (blocked != null) return blocked;
 
+        // 1/2/4 可能讓遊戲自動開啟手動優先級；先記下來，復原時才不會留下副作用。
+        bool oldUseWorkPriorities = _world.UseWorkPriorities;
         var applied = new List<WorkPriorityChange>();
         var notes = new List<string>();
         string applyError = ApplyWorkPriorityChanges(changes, applied, notes);
-        if (applyError != null) return ToolText.Error(applyError);
+        if (applyError != null)
+        {
+            // 整批回滾時，也把 Agent 為了 1/2/4 打開的手動優先級還原，別留下半套副作用。
+            if (_world.UseWorkPriorities != oldUseWorkPriorities) _world.SetUseWorkPriorities(oldUseWorkPriorities);
+            return ToolText.Error(applyError);
+        }
 
         if (_undo != null)
         {
+            _undo.RecordUseWorkPriorities(oldUseWorkPriorities, _world.UseWorkPriorities);
             foreach (WorkPriorityChange change in applied)
             {
-                _undo.RecordPriority(change.Colonist.Id, change.Work.DefName, change.Previous);
+                _undo.RecordPriority(change.Colonist.Id, change.Work.DefName, change.Previous, change.Priority);
             }
         }
         string suffix = notes.Count == 0 ? string.Empty : " " + string.Join(" ", notes);
@@ -242,7 +250,7 @@ public sealed class WorkTools
                     failures.Add($"{c.Name} hour {hour}: {r.Message}");
                     break;
                 }
-                _undo?.RecordAssignment(c.Id, hour, oldAssignment);
+                _undo?.RecordAssignment(c.Id, hour, oldAssignment, assign.DefName);
             }
         }
     }

@@ -33,16 +33,19 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
     private readonly ToolCategory _category;
     private readonly ToolRisk _risk;
     private readonly ConfirmationGate _gate;
-    private readonly RiskClassifier _classifier;
+    private readonly IRiskChecker _classifier;
     private readonly ToolOutputStore _outputs;
     private readonly PlayerInterjections _interjections;
     private readonly bool _consumesBudget;
     private readonly AgentActivityTracker _activity;
 
+    /// <summary>子代理在自己的非同步流程內指定儲存；主 Agent 則用工具建立時綁定的那一份。</summary>
+    private ToolOutputStore Outputs => ToolOutputStore.Current ?? _outputs;
+
     private bool RequiresExplicitConfirmation =>
         _gate != null && _gate.RequiresExplicitConfirmation(Name);
 
-    public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, RiskClassifier classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true, AgentActivityTracker activity = null)
+    public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, IRiskChecker classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true, AgentActivityTracker activity = null)
         : base(inner)
     {
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -115,7 +118,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             {
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
             }
-            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty, out bool hasFreshGameErrors), _outputs);
+            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty, out bool hasFreshGameErrors), Outputs);
             entry.Result = text;
             entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
             bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
@@ -206,6 +209,15 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
 
     private async Task<object> ExecuteApprovedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
+        // 核准路徑不經過 TryHandlePreInvocation；玩家按下確認後遊戲可能已回到主選單或正在讀檔。
+        string notReady = _world.GetNotReadyReason();
+        if (notReady != null)
+        {
+            string error = ToolText.Error($"the game cannot run tools right now ({notReady}). Tell the player and stop.");
+            _transcript.UpdateToolResult(entry, error, true);
+            return error;
+        }
+
         _gate?.BeginInvocation(Name, _risk);
         _gate?.ForceExecute();
         try
@@ -215,7 +227,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             {
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
             }
-            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), _outputs);
+            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), Outputs);
             // 確認執行是真正的世界寫入：同句的查詢快取作廢。
             _gate?.InvalidateQueryCache();
             _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
@@ -310,6 +322,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             riskCheck = verdict.Authorized ? "low" : "unrequested";
         }
         entry.RiskCheck = riskCheck;
+        entry.RiskCheckSource = string.IsNullOrEmpty(verdict.Source) ? "llm" : verdict.Source;
 
         if (verdict.ShouldReject)
         {

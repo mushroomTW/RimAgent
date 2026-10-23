@@ -457,6 +457,23 @@ public class ColonyAgentSessionTests
     }
 
     [Test]
+    public async Task UndoRefreshesPawnSnapshotBetweenDuplicateWorkPriorityChanges()
+    {
+        _world.SnapshotColonists = true;
+        _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
+               .CallTool("set_work_priorities", new { assignments = "Ali:doctor=2" })
+               .Reply("Done.");
+        ColonyAgentSession session = NewSession();
+        await session.SendAsync("set doctor to 2");
+
+        string summary = session.UndoLast();
+
+        Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority,
+            Is.EqualTo(3), "兩筆修改都要依序還原到最初值，不能把第二筆誤判成玩家改過");
+        Assert.That(summary, Does.Contain("restored 2"));
+    }
+
+    [Test]
     public async Task UndoRestoresWorkPriority()
     {
         _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
@@ -472,6 +489,22 @@ public class ColonyAgentSessionTests
         Assert.That(session.Undo.CanUndo, Is.False);
         Assert.That(session.UndoLast(), Is.Null);
         Assert.That(session.Transcript.Snapshot().Last().Kind, Is.EqualTo(TranscriptKind.Notice));
+    }
+
+    [Test]
+    public async Task UndoDoesNotOverwritePlayerChangedPriority()
+    {
+        _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
+               .Reply("Done.");
+        ColonyAgentSession session = NewSession();
+        await session.SendAsync("set doctor to 1");
+        // 模擬玩家在 Agent 之後手動把優先級改成 4。
+        _world.SetWorkPriority(101, "Doctor", 4);
+
+        string summary = session.UndoLast();
+
+        Assert.That(summary, Does.Contain("changed since RimAgent"));
+        Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(4));
     }
 
     [Test]

@@ -15,7 +15,7 @@ An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in na
 **RimWorld 1.7** &nbsp;·&nbsp; **77 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#prerequisites)
-[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.18.3-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
+[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.20.1-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512bd4.svg?style=flat)](#building)
 
 </div>
@@ -31,7 +31,7 @@ An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in na
 ### Prerequisites
 
 - **RimWorld 1.7**
-- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.10.18.3 or later**, required for native tool calling)
+- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.10.20.1 or later**, required for native tool calling and the decision model)
 - Mod load order: `RimAgent` must be placed and loaded **after** `RimLLM Framework`.
 
 > [!IMPORTANT]
@@ -100,7 +100,7 @@ One setting decides how much the agent may do on its own:
 | --- | --- |
 | **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
 | **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
-| **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery. No background scheduler. |
+| **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery; generic gizmo, right-click and dialog options still ask every time. No background scheduler. |
 | **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model and reasoning under Model roles in mod settings: it follows the agent's current model by default, or you can pin a fallback-chain entry or Fallback. |
 | **Autonomous** | Adds emergency responses, base upkeep, and a fixed-cadence scheduled check. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
 
@@ -108,7 +108,7 @@ One setting decides how much the agent may do on its own:
 
 - **Confirm / Discard:** Confirm executes the captured tool call and arguments without asking the model again. Discard or a new instruction clears pending calls.
 - If a confirmed command fails, later commands remain pending for another confirmation. The failed command is removed because it may have partially taken effect; the log shows how many commands completed and remain.
-- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool` or the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`). Auto still reviews every command.
+- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool`, the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`) or generic options (`use_gizmo`, `use_right_click_option`, `choose_option`). Auto still reviews every command.
 - **MCP calls:** `mcp_call_tool` needs explicit approval in Confirm mode, passes through the classifier in Auto mode, and runs directly in YOLO or Autonomous mode.
 
 > [!WARNING]
@@ -116,6 +116,20 @@ One setting decides how much the agent may do on its own:
 
 > [!CAUTION]
 > MCP servers run as local processes with your user operating system privileges. Only enable local MCP servers that you trust.
+
+---
+
+## Decision Models (Optional)
+
+Set up a decision model in **RimLLM Framework's Decision tab** and RimAgent uses it for a few high-frequency judgements — cases where the set of valid answers is known in advance and no text has to be generated, so these calls are cheaper and faster than a chat model:
+
+- **Auto mode risk checks:** instead of a second chat-model call per command, the decision model answers "how hard is this action to undo" and "did the player ask for this action"; the answer decides whether the command runs or is rejected with a reason. The criteria live in `AgentPack/Prompts/DecisionRisk.md` and you can rewrite them for your own colony.
+- **Goal completion audit:** when the agent claims a `/goal` is complete, the decision model independently checks whether the work really is done, whether the agent still has steps of its own, and whether it is stuck on something only you can provide. A goal that fails the audit keeps running and is asked for evidence instead of being removed.
+- **Task routing:** pick **Auto routing** in the Agent window's model dropdown and every instruction is classified first (observe, routine, build, risky), then sent with that category's model and reasoning level. Categories and their models are edited under Decision routing in mod settings.
+
+Without a decision model none of this is enabled and the agent behaves exactly as before. With one configured but the call failing (timeout, missing key, service offline), that judgement falls back to the ordinary model call instead of stalling the instruction. To turn these features off, set the provider back to Disabled in the framework's Decision tab.
+
+RimAgent can pick which decision provider and model to use (Decision model in mod settings); leaving both empty follows the provider the framework has enabled. Keys and endpoints stay in RimLLM Framework.
 
 ---
 

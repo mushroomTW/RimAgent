@@ -18,10 +18,14 @@ internal sealed class ToolOutputTools
 
     private readonly ToolOutputStore _store;
 
-    public ToolOutputTools(ToolOutputStore store)
+    public ToolOutputTools(ToolOutputStore store = null)
     {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _store = store;
     }
+
+    /// <summary>優先讀子代理目前流程的儲存；沒有才用建立工具時綁定的主 Agent 儲存。</summary>
+    private ToolOutputStore Store =>
+        ToolOutputStore.Current ?? _store ?? throw new InvalidOperationException("tool output store is not configured");
 
     [AgentTool(ToolName, ToolCategory.Observe, ToolRisk.Query)]
     [Description("Reads a capped tool result saved under an id such as out_3: a slice from a character offset, or with find, only the lines containing that text.")]
@@ -30,7 +34,7 @@ internal sealed class ToolOutputTools
         [Description("Character offset to start from; the note gives where the omitted part begins.")] int offset,
         [Description("Optional text; returns matching lines with their offsets instead of a slice.")] string find)
     {
-        if (!_store.TryGet(id, out string text))
+        if (!Store.TryGet(id, out string text))
         {
             return ToolText.Error("no saved output \"" + id + "\". Saved outputs last only for this conversation and only the latest " +
                 ToolOutputStore.Capacity.ToString(CultureInfo.InvariantCulture) + " are kept; run the original tool again.");

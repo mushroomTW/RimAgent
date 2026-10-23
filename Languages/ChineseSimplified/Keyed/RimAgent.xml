@@ -102,7 +102,7 @@
   <RimAgent.Settings.Mode.Confirm>确认</RimAgent.Settings.Mode.Confirm>
   <RimAgent.Settings.Mode.ConfirmDesc>每个指令都需要确认：任何会改变游戏的操作先预览、等你按确认；查询直接执行。</RimAgent.Settings.Mode.ConfirmDesc>
   <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
-  <RimAgent.Settings.Mode.YoloDesc>夹在确认与自动之间，无排程器。受黑名单保护（交易、商队、手术、囚犯等高危工具排除），其余所有操作与 MCP 工具免确认直接执行。</RimAgent.Settings.Mode.YoloDesc>
+  <RimAgent.Settings.Mode.YoloDesc>夹在确认与自动之间，无排程器。受黑名单保护（交易、商队、手术、囚犯等高危工具排除）；通用 gizmo、右键与对话框选项仍需逐次确认；其余操作与 MCP 工具免确认直接执行。</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>自动</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>另起一次模型调用判定每个动作（含 MCP 工具）两件事：动作本身的风险，以及你这句话有没有要求它。只有低风险且你要求的才直接执行，其余等你确认。每个动作多一次请求。</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierModel>分类器模型：</RimAgent.Settings.ClassifierModel>
@@ -110,10 +110,32 @@
   <RimAgent.Settings.CompactModel>/compact 摘要：</RimAgent.Settings.CompactModel>
   <RimAgent.Settings.CompactModelTip>/compact 摘要较旧历史时使用的模型与思考强度，通常用便宜的模型就够。</RimAgent.Settings.CompactModelTip>
   <RimAgent.Settings.SlotReasoningTip>只作用于这一格的思考强度；自动＝沿用框架默认。</RimAgent.Settings.SlotReasoningTip>
+  <RimAgent.Settings.DecisionModelHeader>决策模型（System One）</RimAgent.Settings.DecisionModelHeader>
+  <RimAgent.Settings.DecisionProvider>决策供应商：</RimAgent.Settings.DecisionProvider>
+  <RimAgent.Settings.DecisionProviderTip>用于 Auto 模式风险判定等结构化快速判定的决策模型供应商。留空则沿用 RimLLM Framework 当前启用的供应商。</RimAgent.Settings.DecisionProviderTip>
+  <RimAgent.Settings.DecisionModel>决策模型：</RimAgent.Settings.DecisionModel>
+  <RimAgent.Settings.DecisionModelTip>决策供应商的模型名称。留空则沿用该供应商设置的默认模型。</RimAgent.Settings.DecisionModelTip>
+  <RimAgent.Settings.DecisionStatus>状态：{0}</RimAgent.Settings.DecisionStatus>
+  <RimAgent.Settings.DecisionStatusDisabled>未配置（请至 RimLLM Framework > 决策 分页配置）</RimAgent.Settings.DecisionStatusDisabled>
+  <RimAgent.Settings.DecisionStatusEnabled>已配置（{0} · {1}）</RimAgent.Settings.DecisionStatusEnabled>
+  <RimAgent.Settings.DecisionStatusNoKey>已配置（{0}）— 请至 RimLLM Framework 填写密钥</RimAgent.Settings.DecisionStatusNoKey>
+  <RimAgent.Settings.DecisionDefault>默认（沿用框架设置）</RimAgent.Settings.DecisionDefault>
+  <RimAgent.Settings.DecisionRoutingHeader>决策路由</RimAgent.Settings.DecisionRoutingHeader>
+  <RimAgent.Settings.DecisionFallbackModel>备援模型：</RimAgent.Settings.DecisionFallbackModel>
+  <RimAgent.Settings.DecisionFallbackModelTip>当未启用分流、置信度过低或决策模型不可用时所使用的模型。</RimAgent.Settings.DecisionFallbackModelTip>
+  <RimAgent.Settings.DecisionMinConfidence>分流最小置信度门槛：{0}</RimAgent.Settings.DecisionMinConfidence>
+  <RimAgent.Settings.DecisionMinConfidenceTip>分类置信度低于此门槛的指令将退回使用备援模型。</RimAgent.Settings.DecisionMinConfidenceTip>
+  <RimAgent.Settings.DecisionCategoriesHeader>分流类别</RimAgent.Settings.DecisionCategoriesHeader>
+  <RimAgent.Settings.DecisionCategoryAdd>新增</RimAgent.Settings.DecisionCategoryAdd>
+  <RimAgent.Settings.DecisionCategoryAddCustom>新增自定义类别</RimAgent.Settings.DecisionCategoryAddCustom>
+  <RimAgent.Settings.DecisionCategoryCustomName>自定义类别 {0}</RimAgent.Settings.DecisionCategoryCustomName>
+  <RimAgent.Settings.DecisionCategoryRestore>恢复：{0}（{1}）</RimAgent.Settings.DecisionCategoryRestore>
+  <RimAgent.Settings.DecisionCategoriesReset>重设默认</RimAgent.Settings.DecisionCategoriesReset>
+  <RimAgent.Settings.DecisionCategoryDelete>删除</RimAgent.Settings.DecisionCategoryDelete>
+  <RimAgent.Settings.CategoryModel>模型与思考强度：</RimAgent.Settings.CategoryModel>
   <RimAgent.Settings.Mode.Autonomous>自主</RimAgent.Settings.Mode.Autonomous>
-  <RimAgent.Settings.Mode.AutonomousDesc>选择自主模式后，玩家首次发送对话才会启动后台排程器。之后按排程与突发事件自动行动；玩家仍可随时下达指令。</RimAgent.Settings.Mode.AutonomousDesc>
+  <RimAgent.Settings.Mode.AutonomousDesc>选择自主模式后，玩家首次发送对话才会启动后台排程器。之后按排程与突发事件自动行动；允许的命令（含 MCP）直接执行，不套用 YOLO 黑名单。玩家仍可随时下达指令。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>自主 — Agent 自己行动</RimAgent.Settings.AutonomousHeader>
-  <RimAgent.Settings.AutoInterval>例行巡检间隔：{0} 小时</RimAgent.Settings.AutoInterval>
   <RimAgent.Settings.AutoCooldown>自主任务冷却时间：{0} 分钟</RimAgent.Settings.AutoCooldown>
   <RimAgent.Settings.AutoCooldownOff>自主任务冷却时间：关闭</RimAgent.Settings.AutoCooldownOff>
   <RimAgent.Settings.AutoCooldownTip>两次自主任务之间的最短等待时间。设为 0 代表完全关闭冷却，事件或周期到达立即反应。</RimAgent.Settings.AutoCooldownTip>
@@ -131,6 +153,8 @@
   <RimAgent.Model.Status>模型：{0}</RimAgent.Model.Status>
   <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>按 RimLLM Framework 的备援链选择模型。</RimAgent.Model.DefaultTip>
+  <RimAgent.Model.AutoRouting>自动分流</RimAgent.Model.AutoRouting>
+  <RimAgent.Model.AutoRoutingTip>由决策模型将每句指令分类至任务类别，并以该类别配置的模型与思考强度执行。</RimAgent.Model.AutoRoutingTip>
   <RimAgent.Model.FollowAgent>默认（Agent 当前模型）</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>跟着 Agent 窗口当前选的模型走；在那边换模型，这里会自动跟上，不必分开设置。Agent 窗口是 Fallback 时，这一格也走备援链。</RimAgent.Model.FollowAgentTip>
   <RimAgent.Model.FollowSubagentDefault>跟随子代理默认</RimAgent.Model.FollowSubagentDefault>
@@ -172,6 +196,9 @@
   <RimAgent.Goal.Removed>已删除目标 #{0}：{1}</RimAgent.Goal.Removed>
   <RimAgent.Goal.NoSuch>没有第 {0} 个目标。用 /goal 查看清单。</RimAgent.Goal.NoSuch>
   <RimAgent.Goal.Full>目标数已达上限，先用 /goal remove &lt;n&gt; 删掉几个。</RimAgent.Goal.Full>
+  <RimAgent.Goal.AuditBlocked>目标经决策模型审计暂停（需要玩家介入）：{0}</RimAgent.Goal.AuditBlocked>
+  <RimAgent.Goal.AuditContinuing>决策模型审计判定目标尚未完成，继续执行：{0}</RimAgent.Goal.AuditContinuing>
+  <RimAgent.Goal.AuditCompleted>目标已通过决策模型审计确认完成：{0}</RimAgent.Goal.AuditCompleted>
 
   <RimAgent.Settings.AutoOnEmergencyMedical>响应倒地或流血的殖民者</RimAgent.Settings.AutoOnEmergencyMedical>
   <RimAgent.Settings.AutoOnFire>响应火灾</RimAgent.Settings.AutoOnFire>

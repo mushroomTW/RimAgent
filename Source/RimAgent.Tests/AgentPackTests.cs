@@ -51,6 +51,7 @@ public class AgentPackTests
         File.WriteAllText(Path.Combine(_prompts, "Conduct.md"), "  Be brief.  ");
         File.WriteAllText(Path.Combine(_prompts, "AskMode.md"), "  Ask note.  ");
         File.WriteAllText(Path.Combine(_prompts, "RiskClassifier.md"), "  Judge risk.  ");
+        File.WriteAllText(Path.Combine(_prompts, "DecisionRisk.md"), "  Judge decision risk.  ");
         string dir = Path.Combine(_root, "Skills", "raid-defense");
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "SKILL.md"),
@@ -63,6 +64,7 @@ public class AgentPackTests
         Assert.That(pack.Conduct, Is.EqualTo("Be brief."));
         Assert.That(pack.AskModeNote, Is.EqualTo("Ask note."));
         Assert.That(pack.ClassifierPrompt, Is.EqualTo("Judge risk."));
+        Assert.That(pack.DecisionRiskCriteria, Is.EqualTo("Judge decision risk."));
         AgentSkill skill = pack.Skills.Single();
         Assert.That(skill.Name, Is.EqualTo("raid-defense"));
         Assert.That(skill.Description, Is.EqualTo("fight raids"));

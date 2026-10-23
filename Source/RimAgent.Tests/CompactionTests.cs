@@ -287,7 +287,7 @@ public class CompactionTests
         Assert.That(session.History.Count, Is.EqualTo(before), "失敗時歷史保持不變");
         TranscriptEntry notice = session.Transcript.Snapshot().Last();
         Assert.That(notice.Kind, Is.EqualTo(TranscriptKind.Notice));
-        Assert.That(notice.Text, Does.Contain("Already compact"));
+        Assert.That(notice.Text, Does.Contain("No compaction").And.Contain("summarizer failed"));
         Assert.That(session.IsBusy, Is.False);
     }
 

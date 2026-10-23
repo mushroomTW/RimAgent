@@ -45,6 +45,10 @@ public sealed class AgentPack
     public string AskModeNote { get; set; } = string.Empty;
     /// <summary>自動模式風險分類器的系統提示詞（RiskClassifier.md）。缺檔時分類器 fail-closed。</summary>
     public string ClassifierPrompt { get; set; } = string.Empty;
+    /// <summary>自動模式決策模型的判準檔（DecisionRisk.md）。缺檔時回退 LLM 分類器。</summary>
+    public string DecisionRiskCriteria { get; set; } = string.Empty;
+    /// <summary>目標審計決策模型的判準檔（DecisionGoal.md）。缺檔時目標審計回傳 null。</summary>
+    public string DecisionGoalCriteria { get; set; } = string.Empty;
     /// <summary>自主任務文案（Autonomous.en.md，英文）。缺檔時該輪自主任務跳過。</summary>
     public AutonomousPack Autonomous { get; set; } = new AutonomousPack();
     public IReadOnlyList<AgentSkill> Skills { get; set; } = Array.Empty<AgentSkill>();
@@ -90,6 +94,8 @@ public static class AgentPackLoader
             pack.Conduct = ReadFile(promptsDir, "Conduct.md");
             pack.AskModeNote = ReadFile(promptsDir, "AskMode.md");
             pack.ClassifierPrompt = ReadFile(promptsDir, "RiskClassifier.md");
+            pack.DecisionRiskCriteria = ReadFile(promptsDir, "DecisionRisk.md");
+            pack.DecisionGoalCriteria = ReadFile(promptsDir, "DecisionGoal.md");
             LoadAutonomous(pack, promptsDir);
             pack.Subagents = LoadSubagents(Path.Combine(rootDir, "Agents"));
 

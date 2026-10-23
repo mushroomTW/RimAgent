@@ -31,10 +31,12 @@ public sealed class TranscriptEntryData : IExposable
     public bool toolsStripped;
     public int errorKind;
     public string riskCheck = string.Empty;
+    public string riskCheckSource = string.Empty;
     public bool autonomous;
     public bool goalRun;
     public bool interjection;
     public string agent = string.Empty;
+    public string routedModel = string.Empty;
 #pragma warning restore S1104
 
     public void ExposeData()
@@ -52,10 +54,12 @@ public sealed class TranscriptEntryData : IExposable
         Scribe_Values.Look(ref toolsStripped, "stripped", false);
         Scribe_Values.Look(ref errorKind, "error", 0);
         Scribe_Values.Look(ref riskCheck, "risk", string.Empty);
+        Scribe_Values.Look(ref riskCheckSource, "riskSource", string.Empty);
         Scribe_Values.Look(ref autonomous, "autonomous", false);
         Scribe_Values.Look(ref goalRun, "goalRun", false);
         Scribe_Values.Look(ref interjection, "interjection", false);
         Scribe_Values.Look(ref agent, "agent", string.Empty);
+        Scribe_Values.Look(ref routedModel, "routedModel", string.Empty);
     }
 
     public TranscriptEntry ToEntry()
@@ -75,10 +79,12 @@ public sealed class TranscriptEntryData : IExposable
             ToolsStripped = toolsStripped,
             ErrorKind = (AgentErrorKind)errorKind,
             RiskCheck = riskCheck ?? string.Empty,
+            RiskCheckSource = riskCheckSource ?? string.Empty,
             Autonomous = autonomous,
             GoalRun = goalRun,
             Interjection = interjection,
-            Agent = agent ?? string.Empty
+            Agent = agent ?? string.Empty,
+            RoutedModel = routedModel ?? string.Empty
         };
     }
 
@@ -106,10 +112,12 @@ public sealed class TranscriptEntryData : IExposable
                 toolsStripped = e.ToolsStripped,
                 errorKind = (int)e.ErrorKind,
                 riskCheck = e.RiskCheck ?? string.Empty,
+                riskCheckSource = e.RiskCheckSource ?? string.Empty,
                 autonomous = e.Autonomous,
                 goalRun = e.GoalRun,
                 interjection = e.Interjection,
-                agent = e.Agent ?? string.Empty
+                agent = e.Agent ?? string.Empty,
+                routedModel = Truncate(e.RoutedModel ?? string.Empty)
             });
         }
         return data;

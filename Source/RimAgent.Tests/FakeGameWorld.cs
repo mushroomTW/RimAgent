@@ -270,7 +270,47 @@ internal sealed class FakeGameWorld : IGameWorld
     public IReadOnlyList<ColonistInfo> GetColonists()
     {
         ColonistQueryCount++;
-        return Colonists;
+        // 真實世界每次查詢都回新快照；開啟後讓復原流程的「重新讀取」行為也能被測試。
+        return SnapshotColonists ? Colonists.Select(CloneColonist).ToList() : Colonists;
+    }
+
+    /// <summary>測試用：讓 GetColonists 回傳複本，模擬真實 IGameWorld 的新鮮快照。</summary>
+    public bool SnapshotColonists { get; set; }
+
+    private static ColonistInfo CloneColonist(ColonistInfo c)
+    {
+        return new ColonistInfo
+        {
+            Id = c.Id,
+            Name = c.Name,
+            Nickname = c.Nickname,
+            FullName = c.FullName,
+            Age = c.Age,
+            X = c.X,
+            Z = c.Z,
+            HealthPercent = c.HealthPercent,
+            Downed = c.Downed,
+            MoodPercent = c.MoodPercent,
+            MinorBreakThreshold = c.MinorBreakThreshold,
+            InMentalState = c.InMentalState,
+            MentalStateLabel = c.MentalStateLabel,
+            CurrentActivity = c.CurrentActivity,
+            Drafted = c.Drafted,
+            MedicalCare = c.MedicalCare,
+            Equipment = c.Equipment,
+            Needs = c.Needs,
+            Thoughts = c.Thoughts,
+            Skills = c.Skills,
+            WorkPriorities = c.WorkPriorities?.Select(w => new WorkPriorityInfo
+            {
+                WorkTypeDefName = w.WorkTypeDefName,
+                Label = w.Label,
+                Priority = w.Priority,
+                Disabled = w.Disabled
+            }).ToList() ?? [],
+            Timetable = c.Timetable?.ToList() ?? [],
+            UnreadableParts = c.UnreadableParts
+        };
     }
 
     /// <summary>本局 GetColonists 被呼叫次數：驗證同一句內重複查詢只碰一次世界。</summary>
@@ -467,6 +507,14 @@ internal sealed class FakeGameWorld : IGameWorld
             .ThenBy(t => (t.X - cx) * (t.X - cx) + (t.Z - cz) * (t.Z - cz))
             .Take(query.Limit)];
         return new ThingSearchResult(shown, matches.Count);
+    }
+
+    public bool UseWorkPriorities { get; set; }
+
+    public void SetUseWorkPriorities(bool value)
+    {
+        Calls.Add($"SetUseWorkPriorities({value})");
+        UseWorkPriorities = value;
     }
 
     public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)

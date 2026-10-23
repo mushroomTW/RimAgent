@@ -10,18 +10,23 @@ public sealed class UndoWorkPriority : IExposable
     public int PawnId { get; set; }
     public string WorkTypeDefName { get; set; } = string.Empty;
     public int OldPriority { get; set; }
+    /// <summary>Agent 寫入的新值；復原前用來確認玩家沒有在這之後手動改過。-1 代表舊存檔沒有這個欄位。</summary>
+    public int NewPriority { get; set; } = -1;
 
     public void ExposeData()
     {
         int pawnId = PawnId;
         string workType = WorkTypeDefName;
         int oldPriority = OldPriority;
+        int newPriority = NewPriority;
         Scribe_Values.Look(ref pawnId, "pawnId");
         Scribe_Values.Look(ref workType, "workTypeDefName");
         Scribe_Values.Look(ref oldPriority, "oldPriority");
+        Scribe_Values.Look(ref newPriority, "newPriority", -1);
         PawnId = pawnId;
         WorkTypeDefName = workType ?? string.Empty;
         OldPriority = oldPriority;
+        NewPriority = newPriority;
     }
 }
 
@@ -31,18 +36,23 @@ public sealed class UndoTimeAssignment : IExposable
     public int PawnId { get; set; }
     public int Hour { get; set; }
     public string OldAssignmentDefName { get; set; } = string.Empty;
+    /// <summary>Agent 寫入的新指派；復原前用來確認玩家沒有在這之後手動改過。空字串代表舊存檔沒有這個欄位。</summary>
+    public string NewAssignmentDefName { get; set; } = string.Empty;
 
     public void ExposeData()
     {
         int pawnId = PawnId;
         int hour = Hour;
         string assignment = OldAssignmentDefName;
+        string newAssignment = NewAssignmentDefName;
         Scribe_Values.Look(ref pawnId, "pawnId");
         Scribe_Values.Look(ref hour, "hour");
         Scribe_Values.Look(ref assignment, "oldAssignmentDefName");
+        Scribe_Values.Look(ref newAssignment, "newAssignmentDefName", string.Empty);
         PawnId = pawnId;
         Hour = hour;
         OldAssignmentDefName = assignment ?? string.Empty;
+        NewAssignmentDefName = newAssignment ?? string.Empty;
     }
 }
 
@@ -55,6 +65,9 @@ public sealed class UndoFrame : IExposable
     public string Label { get; set; } = string.Empty;
     public List<UndoWorkPriority> Priorities { get; set; } = [];
     public List<UndoTimeAssignment> Assignments { get; set; } = [];
+    /// <summary>Agent 改優先級前後的全域手動優先級設定；null 代表這一框沒有動到它（或舊存檔）。</summary>
+    public bool? OldUseWorkPriorities { get; set; }
+    public bool? NewUseWorkPriorities { get; set; }
 
     public bool IsEmpty => Priorities.Count == 0 && Assignments.Count == 0;
 
@@ -63,12 +76,22 @@ public sealed class UndoFrame : IExposable
         string label = Label;
         List<UndoWorkPriority> priorities = Priorities;
         List<UndoTimeAssignment> assignments = Assignments;
+        bool hasOldUse = OldUseWorkPriorities.HasValue;
+        bool oldUse = OldUseWorkPriorities ?? false;
+        bool hasNewUse = NewUseWorkPriorities.HasValue;
+        bool newUse = NewUseWorkPriorities ?? false;
         Scribe_Values.Look(ref label, "label");
         Scribe_Collections.Look(ref priorities, "priorities", LookMode.Deep);
         Scribe_Collections.Look(ref assignments, "assignments", LookMode.Deep);
+        Scribe_Values.Look(ref hasOldUse, "hasOldUseWorkPriorities", false);
+        Scribe_Values.Look(ref oldUse, "oldUseWorkPriorities", false);
+        Scribe_Values.Look(ref hasNewUse, "hasNewUseWorkPriorities", false);
+        Scribe_Values.Look(ref newUse, "newUseWorkPriorities", false);
         Label = label ?? string.Empty;
         Priorities = priorities ?? [];
         Assignments = assignments ?? [];
+        OldUseWorkPriorities = hasOldUse ? oldUse : (bool?)null;
+        NewUseWorkPriorities = hasNewUse ? newUse : (bool?)null;
     }
 }
 
@@ -104,7 +127,7 @@ public sealed class WorkUndoStack
         }
     }
 
-    public void RecordPriority(int pawnId, string workTypeDefName, int oldPriority)
+    public void RecordPriority(int pawnId, string workTypeDefName, int oldPriority, int newPriority)
     {
         lock (_gate)
         {
@@ -113,12 +136,13 @@ public sealed class WorkUndoStack
             {
                 PawnId = pawnId,
                 WorkTypeDefName = workTypeDefName,
-                OldPriority = oldPriority
+                OldPriority = oldPriority,
+                NewPriority = newPriority
             });
         }
     }
 
-    public void RecordAssignment(int pawnId, int hour, string oldAssignmentDefName)
+    public void RecordAssignment(int pawnId, int hour, string oldAssignmentDefName, string newAssignmentDefName)
     {
         lock (_gate)
         {
@@ -127,8 +151,20 @@ public sealed class WorkUndoStack
             {
                 PawnId = pawnId,
                 Hour = hour,
-                OldAssignmentDefName = oldAssignmentDefName
+                OldAssignmentDefName = oldAssignmentDefName,
+                NewAssignmentDefName = newAssignmentDefName
             });
+        }
+    }
+
+    /// <summary>記下這框造成的全域手動優先級變化；同一框只保留第一次的舊值與最後一次的新值。</summary>
+    public void RecordUseWorkPriorities(bool oldValue, bool newValue)
+    {
+        lock (_gate)
+        {
+            if (_open == null) return;
+            _open.OldUseWorkPriorities ??= oldValue;
+            _open.NewUseWorkPriorities = newValue;
         }
     }
 
@@ -192,13 +228,17 @@ public sealed class WorkUndoStack
         return new UndoFrame
         {
             Label = frame.Label,
+            OldUseWorkPriorities = frame.OldUseWorkPriorities,
+            NewUseWorkPriorities = frame.NewUseWorkPriorities,
             Priorities = [.. frame.Priorities.Select(p => new UndoWorkPriority
             {
-                PawnId = p.PawnId, WorkTypeDefName = p.WorkTypeDefName, OldPriority = p.OldPriority
+                PawnId = p.PawnId, WorkTypeDefName = p.WorkTypeDefName, OldPriority = p.OldPriority,
+                NewPriority = p.NewPriority
             })],
             Assignments = [.. frame.Assignments.Select(a => new UndoTimeAssignment
             {
-                PawnId = a.PawnId, Hour = a.Hour, OldAssignmentDefName = a.OldAssignmentDefName
+                PawnId = a.PawnId, Hour = a.Hour, OldAssignmentDefName = a.OldAssignmentDefName,
+                NewAssignmentDefName = a.NewAssignmentDefName
             })]
         };
     }

@@ -82,6 +82,9 @@ public sealed class ConfirmationGate
                 return false;
             case AgentMode.Confirm:
                 return invocation?.Risk == ToolRisk.Query || IsApprovedForSession(invocation?.ToolName);
+            case AgentMode.Yolo:
+                // 通用工具（gizmo／右鍵選項／對話選項）在 YOLO 仍需逐次確認，避免名稱固定的工具被當成安全通道。
+                return !AgentToolRegistry.RequiresExplicitConfirmationInYolo(invocation?.ToolName);
             default:
                 return true;
         }
@@ -126,7 +129,8 @@ public sealed class ConfirmationGate
                 approval = _pending[0];
                 _pending.RemoveAt(0);
             }
-            await approval.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            // 核准後會直接執行工具；續行必須留在呼叫端的主線程，否則第二批命令會落到執行緒池碰遊戲狀態。
+            await approval.ExecuteAsync(cancellationToken);
             lock (_gate) _lastApprovalExecutedCount++;
             // 執行成功才記：中途失敗或取消時，沒真的跑過的工具不該被永久放行。
             if (rememberForSession && CanRememberForSession(approval.ToolName))
@@ -155,7 +159,8 @@ public sealed class ConfirmationGate
     {
         return !string.IsNullOrEmpty(toolName)
             && !string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
-            && !AgentToolRegistry.IsYoloForbidden(toolName);
+            && !AgentToolRegistry.IsYoloForbidden(toolName)
+            && !AgentToolRegistry.RequiresExplicitConfirmationInYolo(toolName);
     }
 
     internal bool IsApprovedForSession(string toolName)

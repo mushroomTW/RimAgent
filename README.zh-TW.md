@@ -15,7 +15,7 @@
 **RimWorld 1.7** &nbsp;·&nbsp; **77 項工具** &nbsp;·&nbsp; **自動／自主模式** &nbsp;·&nbsp; **支援 MCP 擴充**
 
 [![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#先決條件)
-[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.18.3-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
+[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.20.1-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512bd4.svg?style=flat)](#建置)
 
 </div>
@@ -31,7 +31,7 @@
 ### 先決條件
 
 - **RimWorld 1.7**
-- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)**（版本需求 **2026.10.18.3 或更高**，以支援原生工具呼叫）
+- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)**（版本需求 **2026.10.20.1 或更高**，以支援原生工具呼叫與決策模型）
 - 模組載入順序：`RimAgent` 必須排列於 `RimLLM Framework` **之後**載入。
 
 > [!IMPORTANT]
@@ -100,7 +100,7 @@
 | --- | --- |
 | **詢問** | 唯讀。模型只看得到查詢工具；切換地圖與截圖會改變狀態，因此不提供。 |
 | **確認** | 查詢直接執行；每個命令先顯示預覽，等待玩家批准。 |
-| **YOLO** | 許可的命令與 MCP 呼叫免確認執行；固定黑名單排除交易、商隊、手術等高風險工具。不啟用背景排程器。 |
+| **YOLO** | 許可的命令與 MCP 呼叫免確認執行；固定黑名單排除交易、商隊、手術等高風險工具，通用 gizmo、右鍵與對話選項仍每次確認。不啟用背景排程器。 |
 | **自動** | 第二個模型會檢查每個命令（含 MCP）的風險，以及玩家是否要求該操作。只有低風險且受請求的操作會執行；高風險、未受請求或無法判定的操作會附理由拒絕，**不會轉成待確認命令**。黑名單上的高危工具直接拒絕，不呼叫分類器。分類器模型與思考強度在模組設定的模型分工挑選：預設跟著 Agent 當前模型走，也可從備援鏈條目指定或選 Fallback。 |
 | **自主** | 加入應急反應、基地狀況處理與固定節奏的定期巡檢。命令直接執行，不受 YOLO 黑名單與每日工具預算限制；冷卻時間可設定。 |
 
@@ -108,7 +108,7 @@
 
 - **確認與捨棄：** 確認會執行預覽時捕捉的工具呼叫及參數，不會再向模型詢問。捨棄或送出新指令會清除待確認命令。
 - 已確認的命令若執行失敗，後續命令仍會等待再次確認。失敗的命令可能已部分生效，因此會從佇列移除；紀錄會顯示已完成與剩餘數量。
-- **本局不再問：** 確認模式可依工具名稱記住符合條件的批准；`/clear` 或重開遊戲後歸零，也不會寫入存檔。`mcp_call_tool` 與高風險黑名單（`execute_trade`、`form_caravan`、`release_prisoner`、`schedule_surgery`、`send_caravan`、`set_prisoner_interaction`、`settle_caravan`）不提供此選項；自動模式仍逐次審查。
+- **本局不再問：** 確認模式可依工具名稱記住符合條件的批准；`/clear` 或重開遊戲後歸零，也不會寫入存檔。`mcp_call_tool`、高風險黑名單（`execute_trade`、`form_caravan`、`release_prisoner`、`schedule_surgery`、`send_caravan`、`set_prisoner_interaction`、`settle_caravan`）與通用選項（`use_gizmo`、`use_right_click_option`、`choose_option`）不提供此選項；自動模式仍逐次審查。
 - **MCP 呼叫：** `mcp_call_tool` 在確認模式需要玩家批准，在自動模式由分類器判定，在 YOLO 或自主模式直接執行。
 
 > [!WARNING]
@@ -116,6 +116,20 @@
 
 > [!CAUTION]
 > 本機 MCP 伺服器是以作業系統目前使用者的本機權限執行。請務必僅啟用與連線至你完全信任的 MCP 伺服器。
+
+---
+
+## 決策模型（選用）
+
+在 **RimLLM Framework 的 Decision 分頁**設定決策模型後，RimAgent 會用它做幾個高頻判定——這些判斷的答案範圍事先已知，不需要生成文字，因此比一般模型便宜也更快：
+
+- **自動模式的風險判定**：每個命令執行前不再另起一次對話模型呼叫，改由決策模型回答「這個動作有多難復原」與「玩家有沒有要求這個動作」，再決定放行或附理由拒絕。判準寫在 `AgentPack/Prompts/DecisionRisk.md`，玩家可以改寫成自己玩法的判準。
+- **目標完成稽核**：agent 宣告 `/goal` 完成時，決策模型會獨立核對是不是真的都做完了、還有沒有 agent 自己能做的步驟、是不是卡在只有玩家能處理的東西上。判定為沒完成時，目標會繼續跑並被要求補驗證，而不是直接被移除。
+- **任務類別分流**：在 Agent 視窗的模型下拉選「自動分流」，每句指令先由決策模型分類（查詢解釋／日常維護／建造生產／高風險規劃），再用該類別對應的模型與思考強度送出。類別與模型的對應在模組設定的「決策路由」調整。
+
+沒有設定決策模型時，以上功能都不啟用，助手的行為與沒有這個功能完全一樣。設定了但呼叫失敗（逾時、缺金鑰、服務離線）時，那一個判定會自動改用原本的模型呼叫，不會讓指令卡住。不想要這些功能時，把框架 Decision 分頁的供應商設回 Disabled 即可。
+
+RimAgent 可以指定要用哪個決策供應商與哪個模型（模組設定的「決策模型」），兩者都留空則沿用框架啟用的那一個。金鑰與端點仍在 RimLLM Framework 設定。
 
 ---
 

@@ -37,6 +37,10 @@
       <HintPath>$(RimWorldDir)Assembly-CSharp.dll</HintPath>
       <Private>true</Private>
     </Reference>
+    <Reference Include="Brutal.Core.Logging">
+      <HintPath>$(RimWorldDir)Brutal.Core.Logging.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
     <Reference Include="UnityStubs">
       <HintPath>$(RimWorldDir)UnityStubs.dll</HintPath>
       <Private>true</Private>
@@ -65,5 +69,15 @@
       <HintPath>$(SmashToolsDir)SmashTools.dll</HintPath>
       <Private>true</Private>
     </Reference>
+    <!-- 決策模型 SDK：測試輸出目錄也要有一份，執行期才找得到。 -->
+    <Reference Include="Kkdev92.Jev">
+      <HintPath>$(RimLLMDir)Kkdev92.Jev.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Krafs.Rimworld.Ref 帶入的 compile-only ref 會抑制 Reference 的 CopyLocal，在此明確複製執行期實體 DLL -->
+    <None Include="$(RimWorldDir)Assembly-CSharp.dll;$(RimWorldDir)UnityStubs.dll;$(RimWorldDir)Waylith.dll;$(RimWorldDir)Brutal*.dll;$(RimWorldDir)Microsoft.Extensions.ObjectPool.dll;$(RimWorldDir)com.rlabrecque.steamworks.net.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 </Project>

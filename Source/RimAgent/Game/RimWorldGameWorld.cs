@@ -23,6 +23,33 @@ internal sealed class RimWorldGameWorld : IGameWorld
     private const string MineDefName = "Mine";
     private const string ColonistNotFound = "colonist not found";
 
+    /// <summary>
+    /// 反射目標在遊戲改版後可能消失；啟動時只警告一次，讓 log 看得出是哪個功能降級，
+    /// 而不是等到玩家按下按鈕才得到模糊的「不支援」。
+    /// </summary>
+    static RimWorldGameWorld()
+    {
+        WarnMissingReflection(ActiveAlertsField, "AlertsReadout.activeAlerts");
+        WarnMissingReflection(DiaOptionTextField, "DiaOption.text");
+        WarnMissingReflection(DiaOptionActivateMethod, "DiaOption.Activate");
+        WarnMissingReflection(NodeTreeCurNodeField, "Dialog_NodeTree.curNode");
+        WarnMissingReflection(NodeTreeTitleField, "Dialog_NodeTree.title");
+        WarnMissingReflection(TargeterActionField, "Targeter.action");
+        WarnMissingReflection(TargeterParamsField, "Targeter.targetParams");
+        WarnMissingReflection(TargeterValidatorField, "Targeter.targetValidator");
+        WarnMissingReflection(LiveMessagesField, "Messages.liveMessages");
+    }
+
+    private static void WarnMissingReflection(object member, string name)
+    {
+        if (member == null)
+        {
+            Log.Warning("RimAgent: RimWorld reflection target " + name +
+                " was not found; the related feature will report itself as unsupported. " +
+                "This usually means the game changed; update RimAgent.");
+        }
+    }
+
     private IReadOnlyList<DefInfo> _workTypes;
     private IReadOnlyList<DefInfo> _buildables;
     private IReadOnlyList<DefInfo> _stuffs;
@@ -2364,15 +2391,25 @@ internal sealed class RimWorldGameWorld : IGameWorld
 
         string note = string.Empty;
         bool needsManualPriorities = priority != 0 && priority != 3;
-        if (needsManualPriorities && !Current.Game.playSettings.useWorkPriorities)
+        if (needsManualPriorities && !UseWorkPriorities)
         {
             // 1/2/4 只有在手動優先級開啟時才有意義；否則遊戲只認勾選／不勾選。
-            Current.Game.playSettings.useWorkPriorities = true;
-            NotifyUseWorkPrioritiesChanged();
+            SetUseWorkPriorities(true);
             note = "Manual work priorities were turned on for the colony.";
         }
         pawn.workSettings.SetPriority(workType, priority);
         return CommandResult.Ok(note);
+    }
+
+    /// <summary>殖民地目前是否使用手動工作優先級；遊戲尚未載入時視為關閉。</summary>
+    public bool UseWorkPriorities => Current.Game?.playSettings?.useWorkPriorities ?? false;
+
+    /// <summary>切換手動工作優先級；值沒變就不通知，避免每次復原都重算全體殖民者。</summary>
+    public void SetUseWorkPriorities(bool value)
+    {
+        if (Current.Game?.playSettings == null || Current.Game.playSettings.useWorkPriorities == value) return;
+        Current.Game.playSettings.useWorkPriorities = value;
+        NotifyUseWorkPrioritiesChanged();
     }
 
     /// <summary>照原版工作分頁的勾選框：切換手動優先級後，每個玩家 pawn 的工作順序快取都要重建。</summary>

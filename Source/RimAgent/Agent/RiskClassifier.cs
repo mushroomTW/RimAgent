@@ -25,6 +25,8 @@ public sealed class RiskVerdict
     public string Reason { get; set; } = string.Empty;
     /// <summary>分類器本身出錯（網路、逾時、回覆解析不了），不是模型判定。</summary>
     public bool Failed { get; set; }
+    /// <summary>判定來源：llm／decision／fallback。</summary>
+    public string Source { get; set; } = "llm";
 
     /// <summary>只有「低風險且玩家明確要求」才執行；其餘由自動模式拒絕。</summary>
     public bool ShouldReject => Failed || Risky || !Authorized;
@@ -38,7 +40,7 @@ public sealed class RiskVerdict
 /// 系統提示詞來自 AgentPack/Prompts/RiskClassifier.md（經建構參數注入）；缺檔不斷言，
 /// 直接回 fail-closed，讓自動模式拒絕命令。
 /// </summary>
-public sealed class RiskClassifier
+public sealed class RiskClassifier : IRiskChecker
 {
     public const float Temperature = 0f;
     public const int MaxOutputTokens = 150;
@@ -77,12 +79,14 @@ public sealed class RiskClassifier
                 new(ChatRole.System, prompt),
                 new(ChatRole.User, Describe(question))
             };
-            string preferredModel = _modelProvider?.Invoke();
+            string preferredModel = _modelProvider?.Invoke()?.Trim();
             var options = new ChatOptions
             {
                 Temperature = Temperature,
                 MaxOutputTokens = MaxOutputTokens,
-                ModelId = string.IsNullOrWhiteSpace(preferredModel) ? null : preferredModel.Trim()
+                ModelId = string.IsNullOrWhiteSpace(preferredModel) || RimAgentSettings.IsModelSentinel(preferredModel)
+                    ? null
+                    : preferredModel
             };
             ChatResponse response = await _client.GetResponseAsync(messages, options, cancellationToken);
             text = response?.Text ?? string.Empty;

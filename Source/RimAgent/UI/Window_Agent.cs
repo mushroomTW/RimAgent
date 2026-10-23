@@ -262,6 +262,10 @@ public class Window_Agent : Window
     public override void PostClose()
     {
         base.PostClose();
+        // 關窗後不該再讓進行中的對話繼續跑；下一次送出會建立新的 CTS。
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
         foreach (Texture2D texture in _screenshotTextures.Values) UnityEngine.Object.Destroy(texture);
         _screenshotTextures.Clear();
         _screenshotOrder.Clear();
@@ -1163,6 +1167,13 @@ public class Window_Agent : Window
                     tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
                 }
             };
+            if (DecisionServiceFactory.GetAvailability()?.Enabled == true)
+            {
+                options.Add(new FloatMenuOption("RimAgent.Model.AutoRouting".Translate(), () => SetModel(settings, RimAgentSettings.AutoRoutingModel))
+                {
+                    tooltip = new TipSignal("RimAgent.Model.AutoRoutingTip".Translate())
+                });
+            }
             foreach (string entry in ConfiguredModels())
             {
                 options.Add(new FloatMenuOption(entry, () => SetModel(settings, entry)));
@@ -1253,6 +1264,8 @@ public class Window_Agent : Window
     /// <summary>按鈕上只顯示模型名；"供應商:模型" 取冒號後，純供應商條目（用該供應商預設模型）顯示供應商名。</summary>
     private static string ModelShortName(string model)
     {
+        if (string.Equals(model, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
+            return "RimAgent.Model.AutoRouting".Translate();
         if (string.IsNullOrWhiteSpace(model)) return "RimAgent.Model.Default".Translate();
         string trimmed = model.Trim();
         int colon = trimmed.IndexOf(':');
@@ -1822,6 +1835,10 @@ public class Window_Agent : Window
     private static bool CheckFunctionCalling()
     {
         string model = RimAgentMod.Settings?.agentModel;
+        if (string.Equals(model, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
+        {
+            model = null;
+        }
         return RimLLMProvider.GetEffectiveCapabilities(string.IsNullOrWhiteSpace(model) ? null : model.Trim()).SupportsFunctionCalling;
     }
 

@@ -65,6 +65,7 @@ public sealed class RunLogRecord
                 Arguments = Limit(entry.Arguments),
                 Result = Limit(entry.Result),
                 Risk = Limit(entry.RiskCheck),
+                RiskSource = Limit(entry.RiskCheckSource),
                 Failed = entry.Failed
             });
         }
@@ -106,6 +107,7 @@ public sealed class RunLogTranscriptStep
     public string Arguments { get; set; } = string.Empty;
     public string Result { get; set; } = string.Empty;
     public string Risk { get; set; } = string.Empty;
+    public string RiskSource { get; set; } = string.Empty;
     public bool Failed { get; set; }
 }
 

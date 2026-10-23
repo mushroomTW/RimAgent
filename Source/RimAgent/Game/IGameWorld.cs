@@ -105,6 +105,10 @@ public interface IGameWorld
     /// <summary>可切換的時間流速目錄（供 set_time_speed 把名稱對到 defName）。</summary>
     IReadOnlyList<DefInfo> TimeSpeeds { get; }
 
+    /// <summary>殖民地目前是否使用手動工作優先級；set_work_priorities 可能為了 1/2/4 自動開啟它，復原時要能還原。</summary>
+    bool UseWorkPriorities { get; }
+    /// <summary>切換手動工作優先級並通知遊戲重算；值相同時不做任何事。</summary>
+    void SetUseWorkPriorities(bool value);
     CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority);
     CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName);
     CommandResult AddDesignationOnCell(int x, int z, string designationDefName);

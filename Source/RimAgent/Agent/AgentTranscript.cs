@@ -55,12 +55,16 @@ public sealed class TranscriptEntry
     public bool BudgetConsumed { get; set; }
     /// <summary>自動模式的分類結果：low／high／unavailable；沒經分類器為空。</summary>
     public string RiskCheck { get; set; } = string.Empty;
+    /// <summary>自動模式風險判定來源：llm／decision／fallback；沒經分類器為空。</summary>
+    public string RiskCheckSource { get; set; } = string.Empty;
     /// <summary>替哪個子代理執行；主 Agent 自己的呼叫為空。</summary>
     public string Agent { get; set; } = string.Empty;
 
     // Assistant / Error 專用
     public bool ToolsStripped { get; set; }
     public AgentErrorKind ErrorKind { get; set; }
+    /// <summary>自動分流生效時記錄實際使用的模型；未啟用分流時為空。</summary>
+    public string RoutedModel { get; set; } = string.Empty;
 }
 
 /// <summary>

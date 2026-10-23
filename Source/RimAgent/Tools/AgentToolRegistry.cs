@@ -63,8 +63,9 @@ public sealed class AgentToolRegistry
 
     private readonly List<Entry> _tools = [];
     private readonly IGameWorld _world;
+    private readonly AgentTranscript _transcript;
     private readonly ConfirmationGate _gate;
-    private readonly RiskClassifier _classifier;
+    private readonly IRiskChecker _classifier;
     private readonly PlayerInterjections _interjections;
     private readonly AgentActivityTracker _activity;
 
@@ -78,12 +79,13 @@ public sealed class AgentToolRegistry
     }
 
 #pragma warning disable S107 // Tool registry aggregates all domain tool implementations
-    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, RiskClassifier classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null)
+    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, IRiskChecker classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null)
 #pragma warning restore S107
     {
         if (world == null) throw new ArgumentNullException(nameof(world));
         if (transcript == null) throw new ArgumentNullException(nameof(transcript));
         _world = world;
+        _transcript = transcript;
         _gate = gate;
         _classifier = classifier;
         _interjections = interjections;
@@ -118,7 +120,7 @@ public sealed class AgentToolRegistry
 
     private readonly Entry _outputReader;
 
-    /// <summary>被截斷的工具結果原文；本登錄的工具共用，對話清除時由會話清空。</summary>
+    /// <summary>主 Agent 被截斷的工具結果原文；子代理各自用自己的 store，避免讀到別人的輸出。</summary>
     internal ToolOutputStore Outputs { get; } = new ToolOutputStore();
 
     private IReadOnlyList<AITool> _allTools;
@@ -178,6 +180,7 @@ public sealed class AgentToolRegistry
     /// <summary>
     /// read_tool_output 只讀已允許工具被截斷的輸出：清單裡有其他工具就一併給，不看類別開關；
     /// 否則關掉觀察類（或子代理沒宣告觀察類）時，截斷說明會指向不存在的工具。
+    /// 子代理的儲存由呼叫流程上的 AsyncLocal 決定，工具實例本身仍只有一個。
     /// </summary>
     private List<Entry> WithOutputReader(IEnumerable<Entry> entries)
     {
@@ -199,6 +202,7 @@ public sealed class AgentToolRegistry
     /// 子代理的工具：玩家權限、模式過濾照 <see cref="Select(ToolPermissions, AgentMode)"/>，
     /// 再限縮到子代理宣告的類別；唯讀子代理只拿查詢工具。
     /// </summary>
+    /// <summary>子代理專用版本；輸出儲存由 <see cref="SubagentTools"/> 在每次任務的呼叫流程上指定。</summary>
     public IList<AITool> SelectForSubagent(ToolPermissions permissions, AgentMode mode, IReadOnlyList<ToolCategory> categories, bool readOnly)
     {
         if (permissions == null) throw new ArgumentNullException(nameof(permissions));
@@ -228,10 +232,29 @@ public sealed class AgentToolRegistry
         return !string.IsNullOrEmpty(name) && YoloForbiddenToolNames.Contains(name);
     }
 
+    /// <summary>
+    /// YOLO 下仍需逐次確認的通用工具：它們只是「按下某個按鈕／某個右鍵選項／回答某個對話」的通道，
+    /// 同一個工具可能執行無害操作，也可能啟動飛船、自毀或吞噬神經強化器；不能因工具名稱固定就整場放行。
+    /// 這些工具仍會出現在工具清單，只是 YOLO 執行時要先走確認預覽。
+    /// </summary>
+    private static readonly HashSet<string> YoloAlwaysConfirmToolNames = new(StringComparer.Ordinal)
+    {
+        "use_gizmo",
+        "use_right_click_option",
+        "choose_option"
+    };
+
+    /// <summary>YOLO 模式是否必須先取得玩家確認（通用高危通道）。</summary>
+    public static bool RequiresExplicitConfirmationInYolo(string name)
+    {
+        return !string.IsNullOrEmpty(name) && YoloAlwaysConfirmToolNames.Contains(name);
+    }
+
     /// <summary>新的一句指令開始時清空分類器的句內判定快取（查詢快取由閘門的額度計數一併清空）。</summary>
     internal void ClearClassifierCache()
     {
-        _classifier?.ClearCache();
+        if (_classifier is RiskClassifier rc) rc.ClearCache();
+        else if (_classifier is DecisionRiskChecker drc) drc.ClearCache();
     }
 
     /// <summary>工具名稱 → 靜態風險（供測試檢查標記）。</summary>

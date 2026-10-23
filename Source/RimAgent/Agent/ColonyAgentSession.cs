@@ -50,6 +50,8 @@ public sealed class ColonyAgentSession
     private readonly IChatClient _inner;
     private readonly TokenTrackingChatClient _tokenUsage;
     private readonly Func<string, int?> _contextWindowLookup;
+    private readonly DecisionModelRouter _router;
+    private string _currentInstructionRoutedModel;
 
     /// <summary>記錄主模型最近一次回報的輸入 token；供應商未回報時維持未知。</summary>
     private sealed class TokenTrackingChatClient : DelegatingChatClient
@@ -173,8 +175,11 @@ public sealed class ColonyAgentSession
     /// <param name="askNote">詢問模式附加註記（AgentPack/Prompts/AskMode.md）；null 則詢問模式不加註。</param>
     /// <param name="subagentsProvider">AgentPack/Agents 載入的子代理；null 或空清單則不提供委派工具。</param>
     /// <param name="routing">分類器、/compact 摘要與子代理的模型槽；null 則全部沿用框架備援鏈與 Auto 思考強度。</param>
+    /// <param name="decisionRiskCriteria">自動模式決策模型的判準檔內容（AgentPack/Prompts/DecisionRisk.md）；null 則不啟用決策模型。</param>
+    /// <param name="decisionService">測試用決策模型服務；null 則透過 DecisionServiceFactory 建立。</param>
+    /// <param name="router">測試用決策模型分流器；null 則透過 DecisionServiceFactory 建立。</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null)
+    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionModelRouter router = null)
     {
         if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
         if (world == null) throw new ArgumentNullException(nameof(world));
@@ -188,9 +193,32 @@ public sealed class ColonyAgentSession
         _instructions = instructions;
         _askNote = askNote;
         // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
-        var classifier = new RiskClassifier(
+        var fallbackClassifier = new RiskClassifier(
             new ModelSlotChatClient(classifierClient ?? innerClient, null, routing?.ClassifierReasoning),
             classifierModel, classifierPrompt);
+
+        IRiskChecker classifier = fallbackClassifier;
+        // 判準檔在才可能有決策模型路徑；決策模型本身在每次判定時才決定要不要用
+        // （玩家可能進遊戲後才去框架設定好，那時下一個命令就該走決策模型）。
+        if (!string.IsNullOrWhiteSpace(decisionRiskCriteria?.Invoke()))
+        {
+            classifier = new DecisionRiskChecker(
+                decisionService,
+                fallbackClassifier,
+                decisionRiskCriteria,
+                () => DecisionServiceFactory.Create(
+                    () => RimAgentMod.Settings?.decisionProvider,
+                    () => RimAgentMod.Settings?.decisionModel));
+        }
+
+        _router = router ?? new DecisionModelRouter(
+            decisionService,
+            () => DecisionServiceFactory.Create(
+                () => RimAgentMod.Settings?.decisionProvider,
+                () => RimAgentMod.Settings?.decisionModel),
+            () => RimAgentMod.Settings,
+            () => History);
+
         _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity);
         // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
         _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity), _registry, Transcript, subagentsProvider, _permissions, () => Mode,
@@ -271,6 +299,20 @@ public sealed class ColonyAgentSession
 
     public bool IsBusy => Volatile.Read(ref _busy) == 1;
 
+    /// <summary>
+    /// 目標審計等「送出後還要處理結果」的工作，用同一個忙碌旗標把 session 留到收尾，
+    /// 避免玩家指令或自主任務在審計途中插入。
+    /// </summary>
+    internal bool TryBeginExclusiveWork()
+    {
+        return Interlocked.CompareExchange(ref _busy, 1, 0) == 0;
+    }
+
+    internal void EndExclusiveWork()
+    {
+        Volatile.Write(ref _busy, 0);
+    }
+
     /// <summary>模型思考強度；每句指令組請求時讀取，改完下一句生效。由 GameComponent 從設定同步。</summary>
     public ReasoningLevel Reasoning { get; set; } = ReasoningLevel.Auto;
 
@@ -347,15 +389,27 @@ public sealed class ColonyAgentSession
         if (!window.HasValue) return false;
         long budget = Math.Min((long)window.Value * Math.Max(1, AutoCompactThreshold) / 100,
             (long)window.Value - MaxOutputTokens);
-        return budget > 0 && index.TotalTokenCount >= budget;
+        // IncludedTokenCount 才是不含排除群組、實際會送進模型的量；TotalTokenCount 會把排除內容也算進去。
+        return budget > 0 && index.IncludedTokenCount >= budget;
     }
 
     private int? GetContextWindow()
     {
         try
         {
-            string model = PreferredModel;
-            if (string.IsNullOrWhiteSpace(model))
+            RimAgentSettings settings = RimAgentMod.Settings;
+            // _currentInstructionRoutedModel 為 null 代表這句還沒分流；空字串代表分流結果要走框架備援鏈。
+            string model = _currentInstructionRoutedModel;
+            if (model == null)
+            {
+                string preferred = PreferredModel;
+                if (string.Equals(preferred, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
+                {
+                    preferred = settings?.decisionFallbackModel;
+                }
+                model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
+            }
+            if (string.IsNullOrWhiteSpace(model) || RimAgentSettings.IsModelSentinel(model))
             {
                 model = RimLLMProvider.GetFallbackChain().FirstOrDefault();
             }
@@ -564,7 +618,8 @@ public sealed class ColonyAgentSession
                 Kind = TranscriptKind.Assistant,
                 Text = goalRun ? GoalProgress.VisibleReply(reply) : reply,
                 InstructionId = instructionId,
-                ToolsStripped = IsToolsStripped(response)
+                ToolsStripped = IsToolsStripped(response),
+                RoutedModel = _currentInstructionRoutedModel ?? string.Empty
             });
             if (hitStepLimit)
             {
@@ -629,10 +684,11 @@ public sealed class ColonyAgentSession
         ReasoningLevel? reasoningOverride,
         CancellationToken cancellationToken)
     {
+        RimLLMChatOptions options = await BuildRunOptionsAsync(text, reasoningOverride, cancellationToken).ConfigureAwait(false);
         try
         {
             return await _agent
-                .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions(reasoningOverride)), cancellationToken)
+                .RunAsync(text, _session, new ChatClientAgentRunOptions(options), cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (Classify(ex) == AgentErrorKind.ContextTooLong)
@@ -652,7 +708,7 @@ public sealed class ColonyAgentSession
                 InstructionId = instructionId
             });
             return await _agent
-                .RunAsync(text, _session, new ChatClientAgentRunOptions(BuildRunOptions(reasoningOverride)), cancellationToken)
+                .RunAsync(text, _session, new ChatClientAgentRunOptions(options), cancellationToken)
                 .ConfigureAwait(false);
         }
     }
@@ -769,7 +825,7 @@ public sealed class ColonyAgentSession
             // （歷史太短，或策略吞掉了摘要失敗），誠實回報而不是謊稱成功。
             if (after.Count >= before.Count)
             {
-                AddNotice($"Already compact: model history has {before.Count} messages, nothing to fold.");
+                AddNotice($"No compaction: model history still has {before.Count} messages. It may already be compact, or the summarizer failed; the history was not changed.");
                 return null;
             }
             provider.SetMessages(_session, [.. after]);
@@ -839,7 +895,8 @@ public sealed class ColonyAgentSession
         {
             Undo.BeginFrame();
             _world.TakeNewGameErrors();
-            int executed = await ConfirmGate.ApprovePendingAsync(cancellationToken, rememberForSession).ConfigureAwait(false);
+            // 不切離主線程：ApprovePendingAsync 會逐批執行工具，工具必須在遊戲主線程碰世界。
+            int executed = await ConfirmGate.ApprovePendingAsync(cancellationToken, rememberForSession);
             Undo.EndFrame(text + " (confirmed)");
             _pendingConfirmation = null;
             _pendingGoalObjective = null;
@@ -1055,12 +1112,28 @@ public sealed class ColonyAgentSession
         UndoFrame frame = Undo.Pop();
         if (frame == null) return null;
 
-        Dictionary<int, string> names = _world.GetColonists().ToDictionary(c => c.Id, c => c.Name);
+        List<ColonistInfo> colonists = _world.GetColonists().ToList();
+        Dictionary<int, string> names = colonists.ToDictionary(c => c.Id, c => c.Name);
+        // 每筆復原前都重新查一次：同一 pawn、同一個工作類型連續改兩次時，
+        // 上一筆寫回舊值後，下一筆若拿第一次抓的快照就會誤判成「玩家改過」。
+        ColonistInfo FindPawn(int pawnId) => _world.GetColonists().FirstOrDefault(c => c.Id == pawnId);
         var failures = new List<string>();
         int restored = 0;
         for (int i = frame.Priorities.Count - 1; i >= 0; i--)
         {
             UndoWorkPriority p = frame.Priorities[i];
+            // 復原只覆寫 Agent 真的寫入的那個值；玩家在這之後手動改過就保留玩家的選擇。
+            if (p.NewPriority >= 0)
+            {
+                ColonistInfo pawn = FindPawn(p.PawnId);
+                WorkPriorityInfo current = pawn?.WorkPriorities?.FirstOrDefault(w =>
+                    string.Equals(w.WorkTypeDefName, p.WorkTypeDefName, StringComparison.Ordinal));
+                if (current == null || current.Priority != p.NewPriority)
+                {
+                    failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: changed since RimAgent; not overwritten.");
+                    continue;
+                }
+            }
             CommandResult r = _world.SetWorkPriority(p.PawnId, p.WorkTypeDefName, p.OldPriority);
             if (r.Success) restored++;
             else failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: {r.Message}");
@@ -1068,12 +1141,41 @@ public sealed class ColonyAgentSession
         for (int i = frame.Assignments.Count - 1; i >= 0; i--)
         {
             UndoTimeAssignment a = frame.Assignments[i];
+            // 同優先級：玩家手動改過那一小時的作息就不覆寫。
+            if (!string.IsNullOrEmpty(a.NewAssignmentDefName))
+            {
+                ColonistInfo pawn = FindPawn(a.PawnId);
+                bool unchanged = pawn?.Timetable != null && a.Hour >= 0 && a.Hour < pawn.Timetable.Count
+                    && string.Equals(pawn.Timetable[a.Hour], a.NewAssignmentDefName, StringComparison.Ordinal);
+                if (!unchanged)
+                {
+                    failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten.");
+                    continue;
+                }
+            }
             CommandResult r = _world.SetTimeAssignment(a.PawnId, a.Hour, a.OldAssignmentDefName);
             if (r.Success) restored++;
             else failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}");
         }
 
+        bool restoredManualPriorities = false;
+        if (frame.OldUseWorkPriorities.HasValue && frame.NewUseWorkPriorities.HasValue
+            && frame.OldUseWorkPriorities.Value != frame.NewUseWorkPriorities.Value)
+        {
+            // Agent 為了 1/2/4 開啟手動優先級：只有目前仍是 Agent 留下的值時才關回去。
+            if (_world.UseWorkPriorities == frame.NewUseWorkPriorities.Value)
+            {
+                _world.SetUseWorkPriorities(frame.OldUseWorkPriorities.Value);
+                restoredManualPriorities = true;
+            }
+            else
+            {
+                failures.Add("manual work priorities changed since RimAgent; left as is.");
+            }
+        }
+
         string summary = $"Undid \"{frame.Label}\": restored {restored} work setting(s).";
+        if (restoredManualPriorities) summary += " Manual work priorities restored.";
         if (failures.Count > 0) summary += " Failures: " + string.Join("; ", failures);
         Transcript.Add(new TranscriptEntry
         {
@@ -1089,7 +1191,39 @@ public sealed class ColonyAgentSession
         return names.TryGetValue(pawnId, out string name) ? name : ("[" + pawnId + "]");
     }
 
+    internal async Task<RimLLMChatOptions> BuildRunOptionsAsync(
+        string text,
+        ReasoningLevel? reasoningOverride = null,
+        CancellationToken cancellationToken = default)
+    {
+        string modelToUse = PreferredModel;
+        ReasoningLevel? effectiveReasoning = reasoningOverride;
+        _currentInstructionRoutedModel = null;
+
+        if (string.Equals(PreferredModel, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
+        {
+            DecisionRoute route = await _router.ResolveAsync(
+                text,
+                RimAgentMod.Settings?.decisionCategories,
+                cancellationToken).ConfigureAwait(false);
+
+            modelToUse = route.Model;
+            _currentInstructionRoutedModel = route.Model ?? string.Empty;
+            if (route.Reasoning != ReasoningLevel.Auto)
+            {
+                effectiveReasoning = route.Reasoning;
+            }
+        }
+
+        return BuildRunOptions(effectiveReasoning, modelToUse);
+    }
+
     internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride = null)
+    {
+        return BuildRunOptions(reasoningOverride, PreferredModel);
+    }
+
+    internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride, string modelToUse)
     {
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, Mode, LoadedPacks());
@@ -1110,7 +1244,12 @@ public sealed class ColonyAgentSession
             MaxOutputTokens = MaxOutputTokens
         };
         ModelSlots.ApplyReasoning(options, reasoningOverride ?? Reasoning);
-        if (!string.IsNullOrWhiteSpace(PreferredModel)) options.ModelId = PreferredModel.Trim();
+        if (!string.IsNullOrWhiteSpace(modelToUse)
+            && !string.Equals(modelToUse, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal)
+            && !string.Equals(modelToUse, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal))
+        {
+            options.ModelId = modelToUse.Trim();
+        }
         string instructions = ComposeRunInstructions(permissions, subagents, packs);
         if (instructions != null) options.Instructions = instructions;
         return options;

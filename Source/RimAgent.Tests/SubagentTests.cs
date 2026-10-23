@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
 using RimAgent.Agent;
+using RimAgent.Game;
 using RimAgent.Tools;
 using RimLLM_Framework;
 
@@ -159,6 +160,35 @@ public class SubagentTests
             Assert.That(d.Risk, Is.EqualTo(ToolRisk.Query), tool.Name);
         }
         Assert.That(full.Select(t => t.Name), Does.Contain("set_research"), "非唯讀子代理拿得到該類別的命令");
+        Assert.That(readOnly.Count(t => t.Name == ToolOutputTools.ToolName), Is.EqualTo(1),
+            "主 Agent 與子代理共用一個 read_tool_output，不能重複公告");
+    }
+
+    [Test]
+    public async Task SubagentToolOutputStoreIsIsolatedFromTheMainAgent()
+    {
+        for (int i = 0; i < 200; i++)
+        {
+            _world.Things.Add(FakeGameWorld.MakeThing(1000 + i, "MineableSteel",
+                "compacted steel deposit with a deliberately long label for this test", ThingKind.Mineable, i % 50, i / 50));
+        }
+        var client = new ScriptedChatClient()
+            .CallTool(SubagentTools.ToolName, new { agent = "scout", tasks = new[] { "Find the steel." } })
+            .CallTool("find_things", new { kind = "mineable", name = "", x1 = -1, z1 = -1, x2 = -1, z2 = -1, limit = 200 })
+            .CallTool(ToolOutputTools.ToolName, new { id = "out_1", offset = 0, find = "(25,1)" })
+            .Reply("Found the steel.")
+            .CallTool(ToolOutputTools.ToolName, new { id = "out_1", offset = 0, find = "" })
+            .Reply("Main agent cannot read the subagent output.");
+        ColonyAgentSession session = NewSession(client,
+            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, new[] { Scout });
+
+        await session.SendAsync("survey the steel");
+
+        TranscriptEntry[] reads = [.. session.Transcript.Snapshot().Where(e => e.ToolName == ToolOutputTools.ToolName)];
+        Assert.That(reads, Has.Length.EqualTo(2));
+        Assert.That(reads[0].Failed, Is.False, "子代理應讀到自己的 out_1");
+        Assert.That(reads[0].Result, Does.Contain("(25,1)"));
+        Assert.That(reads[1].Failed, Is.True, "主 Agent 不應讀到子代理的 out_1");
     }
 
     [Test]

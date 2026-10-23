@@ -18,7 +18,12 @@ public static class ModelSlots
     public static void Apply(ChatOptions options, string model, ReasoningLevel reasoning)
     {
         if (options == null) throw new ArgumentNullException(nameof(options));
-        if (!string.IsNullOrWhiteSpace(model)) options.ModelId = model.Trim();
+        string trimmed = model?.Trim();
+        // 哨兵值不是模型名稱：呼叫端若漏了 ResolveModelSlot，也不能把 =agent／=auto 送進框架。
+        if (!string.IsNullOrWhiteSpace(trimmed) && !RimAgentSettings.IsModelSentinel(trimmed))
+        {
+            options.ModelId = trimmed;
+        }
         ApplyReasoning(options, reasoning);
     }
 

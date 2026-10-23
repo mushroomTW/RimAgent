@@ -10,7 +10,7 @@ public enum AgentMode
     Ask,
     /// <summary>確認：每個指令都需要玩家手動確認。</summary>
     Confirm,
-    /// <summary>YOLO：夾在確認與自動之間，無排程器，受黑名單保護，其餘命令（含 MCP）免確認直接執行。</summary>
+    /// <summary>YOLO：夾在確認與自動之間，無排程器，受黑名單保護；通用 gizmo／右鍵／對話選項仍需逐次確認，其餘命令（含 MCP）免確認直接執行。</summary>
     Yolo,
     /// <summary>自動：每次命令先由分類模型判定，僅核可的低風險命令執行，其餘拒絕並說明原因。</summary>
     Auto,

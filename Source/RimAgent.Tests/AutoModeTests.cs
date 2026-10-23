@@ -37,9 +37,9 @@ public class AutoModeTests
         _permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work, ToolCategory.Trade);
     }
 
-    private ColonyAgentSession NewSession()
+    private ColonyAgentSession NewSession(IDecisionService decisionService = null, string decisionCriteria = null)
     {
-        return new ColonyAgentSession(_agentClient, _world, () => _permissions, 8, () => AgentMode.Auto, null, null, _classifierClient, classifierPrompt: () => "test classifier prompt");
+        return new ColonyAgentSession(_agentClient, _world, () => _permissions, 8, () => AgentMode.Auto, null, null, _classifierClient, classifierPrompt: () => "test classifier prompt", decisionRiskCriteria: decisionCriteria != null ? () => decisionCriteria : null, decisionService: decisionService);
     }
 
     [Test]
@@ -57,6 +57,7 @@ public class AutoModeTests
         Assert.That(_classifierClient.CallCount, Is.EqualTo(1));
         TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
         Assert.That(tool.RiskCheck, Is.EqualTo("low"));
+        Assert.That(tool.RiskCheckSource, Is.EqualTo("llm"));
         Assert.That(tool.Result, Does.StartWith("Set Ali's doctor priority 3 -> 1"));
     }
 
@@ -366,6 +367,28 @@ public class AutoModeTests
         Assert.That(settings.ResolveClassifierModel(), Is.EqualTo(string.Empty));
     }
 
+    [Test]
+    public void AuxiliaryModelSlotsNeverResolveToRoutingSentinels()
+    {
+        var settings = new RimAgentSettings
+        {
+            agentModel = RimAgentSettings.AutoRoutingModel,
+            classifierModel = RimAgentSettings.FollowAgentModel,
+            compactModel = RimAgentSettings.AutoRoutingModel
+        };
+
+        Assert.That(settings.ResolveClassifierModel(), Is.Empty, "Agent 用分流時，跟隨 Agent 的輔助槽要回到框架備援鏈");
+        Assert.That(settings.ResolveModelSlot(settings.compactModel), Is.Empty, "分流哨兵不能當成模型名稱送出");
+
+        settings.agentModel = "openai:gpt-5";
+        settings.classifierModel = RimAgentSettings.AutoRoutingModel;
+        Assert.That(settings.ResolveClassifierModel(), Is.Empty);
+
+        var options = new ChatOptions { ModelId = "existing" };
+        ModelSlots.Apply(options, RimAgentSettings.AutoRoutingModel, ReasoningLevel.Auto);
+        Assert.That(options.ModelId, Is.EqualTo("existing"), "ModelSlots 也要防禦哨兵值");
+    }
+
     /// <summary>換 Agent 模型後，跟隨中的分類器要立刻換過來（每次判定都重讀）。</summary>
     [Test]
     public void FollowingClassifierTracksTheAgentModel()
@@ -395,5 +418,78 @@ public class AutoModeTests
         Assert.That(RimAgentSettings.DefaultAutoCompactThreshold, Is.EqualTo(90), "預設維持 90%");
         Assert.That(RimAgentSettings.MaxAutoCompactThreshold, Is.EqualTo(95), "上限拉到 95%");
         Assert.That(RimAgentSettings.MinAutoCompactThreshold, Is.LessThan(RimAgentSettings.DefaultAutoCompactThreshold));
+    }
+
+    [Test]
+    public async Task DecisionPathLowRiskAuthorizedRunsDirectlyAndRecordsRiskCheckSourceDecision()
+    {
+        _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Done.");
+        var fakeDecision = new FakeDecisionService().Reply(0.2, 0.9, "reversible_colony_change");
+        ColonyAgentSession session = NewSession(fakeDecision, "## risk\n## authorized\n## kind\n");
+
+        string reply = await session.SendAsync("set Ali's doctor to 1");
+
+        Assert.That(reply, Is.EqualTo("Done."));
+        Assert.That(_world.Calls, Is.EqualTo(["SetWorkPriority(101,Doctor,1)"]));
+        Assert.That(_classifierClient.CallCount, Is.EqualTo(0), "決策模型正常執行時不呼叫 LLM 分類器");
+        Assert.That(fakeDecision.EvaluateCount, Is.EqualTo(1));
+        TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+        Assert.That(tool.RiskCheck, Is.EqualTo("low"));
+        Assert.That(tool.RiskCheckSource, Is.EqualTo("decision"));
+    }
+
+    [Test]
+    public async Task DecisionPathHighRiskCommandIsRejectedAndRecordsRiskCheckSourceDecision()
+    {
+        _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Waiting.");
+        var fakeDecision = new FakeDecisionService().Reply(0.8, 0.9, "reversible_colony_change");
+        ColonyAgentSession session = NewSession(fakeDecision, "## risk\n## authorized\n## kind\n");
+
+        await session.SendAsync("set Ali's doctor to 1");
+
+        Assert.That(_world.Calls, Is.Empty);
+        Assert.That(_classifierClient.CallCount, Is.EqualTo(0));
+        Assert.That(fakeDecision.EvaluateCount, Is.EqualTo(1));
+        TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+        Assert.That(tool.RiskCheck, Is.EqualTo("high"));
+        Assert.That(tool.RiskCheckSource, Is.EqualTo("decision"));
+        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix));
+    }
+
+    [Test]
+    public async Task DecisionPathUnrequestedCommandIsRejectedAndRecordsRiskCheckSourceDecision()
+    {
+        _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Waiting.");
+        var fakeDecision = new FakeDecisionService().Reply(0.2, 0.3, "reversible_colony_change");
+        ColonyAgentSession session = NewSession(fakeDecision, "## risk\n## authorized\n## kind\n");
+
+        await session.SendAsync("what is Bob doing?");
+
+        Assert.That(_world.Calls, Is.Empty);
+        Assert.That(_classifierClient.CallCount, Is.EqualTo(0));
+        Assert.That(fakeDecision.EvaluateCount, Is.EqualTo(1));
+        TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+        Assert.That(tool.RiskCheck, Is.EqualTo("unrequested"));
+        Assert.That(tool.RiskCheckSource, Is.EqualTo("decision"));
+        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix));
+    }
+
+    [Test]
+    public async Task DecisionPathFailureFallsBackToLLMClassifierAndRecordsRiskCheckSourceFallback()
+    {
+        _agentClient.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("Done.");
+        var fakeDecision = new FakeDecisionService().Throw(new DecisionUnavailableException("decision offline"));
+        _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"fallback safe\"}");
+        ColonyAgentSession session = NewSession(fakeDecision, "## risk\n## authorized\n## kind\n");
+
+        string reply = await session.SendAsync("set Ali's doctor to 1");
+
+        Assert.That(reply, Is.EqualTo("Done."));
+        Assert.That(_world.Calls, Is.EqualTo(["SetWorkPriority(101,Doctor,1)"]));
+        Assert.That(fakeDecision.EvaluateCount, Is.EqualTo(1));
+        Assert.That(_classifierClient.CallCount, Is.EqualTo(1), "決策模型失敗時回退 LLM 分類器");
+        TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
+        Assert.That(tool.RiskCheck, Is.EqualTo("low"));
+        Assert.That(tool.RiskCheckSource, Is.EqualTo("fallback"));
     }
 }

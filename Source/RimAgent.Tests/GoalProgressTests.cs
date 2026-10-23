@@ -159,6 +159,41 @@ public class GoalProgressTests
     }
 
     [Test]
+    public void AuditEvidenceOnlyIncludesCurrentInstructionToolResults()
+    {
+        var entries = new[]
+        {
+            new TranscriptEntry
+            {
+                Kind = TranscriptKind.Tool, InstructionId = 4, ToolName = "list_colonists",
+                ToolCategory = ToolCategory.Observe, ToolRisk = ToolRisk.Query, Result = "Alice\nBob"
+            },
+            new TranscriptEntry
+            {
+                Kind = TranscriptKind.Tool, InstructionId = 4, ToolName = "web_search",
+                ToolCategory = ToolCategory.Web, ToolRisk = ToolRisk.Query, Result = "web noise"
+            },
+            new TranscriptEntry
+            {
+                Kind = TranscriptKind.Tool, InstructionId = 4, ToolName = "set_work_priorities",
+                ToolCategory = ToolCategory.Work, ToolRisk = ToolRisk.Safe, Failed = true, Result = "not found"
+            },
+            new TranscriptEntry
+            {
+                Kind = TranscriptKind.Tool, InstructionId = 5, ToolName = "list_things",
+                ToolCategory = ToolCategory.Observe, ToolRisk = ToolRisk.Query, Result = "old turn"
+            }
+        };
+
+        string evidence = GoalProgress.BuildAuditEvidence(entries, 4);
+
+        Assert.That(evidence, Does.Contain("list_colonists"));
+        Assert.That(evidence, Does.Contain("FAILED set_work_priorities"));
+        Assert.That(evidence, Does.Not.Contain("web noise"));
+        Assert.That(evidence, Does.Not.Contain("old turn"));
+    }
+
+    [Test]
     public void GoalLifecycleCanEditPauseResumeAndClear()
     {
         var component = new RimAgentGameComponent(null);
@@ -177,5 +212,32 @@ public class GoalProgressTests
         Assert.That(component.GoalPaused, Is.False);
         component.ClearGoals();
         Assert.That(component.Goals, Is.Empty);
+    }
+
+    [Test]
+    public void BuildPromptIncludesAuditNoteWhenProvided()
+    {
+        string prompt = GoalProgress.BuildPrompt(
+            "Research electricity",
+            confirmationReport: null,
+            needsVerification: true,
+            auditNote: "Still missing high-tech research bench & parts <required>");
+
+        Assert.That(prompt, Does.Contain("<audit_note>"));
+        Assert.That(prompt, Does.Contain("Still missing high-tech research bench &amp; parts &lt;required&gt;"));
+        Assert.That(prompt, Does.Contain("An objective decision audit reviewed the previous turn and determined the goal is not yet finished"));
+    }
+
+    [TestCase(0.9, 0.1, 0.0, GoalAuditVerdict.Complete)]
+    [TestCase(0.5, 0.49, 0.49, GoalAuditVerdict.Complete)]
+    [TestCase(0.5, 0.5, 0.0, GoalAuditVerdict.Continue)]
+    [TestCase(0.49, 0.1, 0.0, GoalAuditVerdict.Continue)]
+    [TestCase(0.0, 0.0, 0.0, GoalAuditVerdict.Continue)]
+    [TestCase(0.9, 0.1, 0.5, GoalAuditVerdict.Blocked)]
+    [TestCase(0.9, 0.8, 0.8, GoalAuditVerdict.Blocked)]
+    [TestCase(0.1, 0.9, 0.6, GoalAuditVerdict.Blocked)]
+    public void CombineAuditReturnsExpectedVerdict(double allDone, double remaining, double needsUser, GoalAuditVerdict expected)
+    {
+        Assert.That(GoalProgress.CombineAudit(allDone, remaining, needsUser), Is.EqualTo(expected));
     }
 }

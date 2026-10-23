@@ -34,17 +34,40 @@ public class RimAgentSettings : ModSettings
     /// <summary>子代理名稱 → 模型槽值；沒有鍵的子代理跟隨 <see cref="subagentModel"/>。</summary>
     public Dictionary<string, string> subagentModels = new(StringComparer.Ordinal);
 
+    /// <summary>決策模型供應商 id（留空＝沿用框架設定）。</summary>
+    public string decisionProvider = string.Empty;
+    /// <summary>決策模型名稱（留空＝沿用該供應商設定的模型）。</summary>
+    public string decisionModel = string.Empty;
+
+    /// <summary>自動分流的哨兵值：選它時每句指令由決策模型分類決定模型。</summary>
+    public const string AutoRoutingModel = "=auto";
+
+    public List<DecisionRouteCategory> decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
+    public string decisionFallbackModel = string.Empty;              // 空 = 框架備援鏈
+    public ReasoningLevel decisionFallbackReasoning = ReasoningLevel.Auto;
+    public float decisionRoutingMinConfidence = 0.6f;                // 0 到 1
+
     /// <summary>模型槽的「跟隨 Agent」值。不含冒號，真實模型識別碼都是「供應商:模型」，撞不到。</summary>
     public const string FollowAgentModel = "=agent";
+
+    /// <summary>模型槽的兩個哨兵值：跟隨 Agent、由分流器決定。兩者都不是真正的模型識別碼。</summary>
+    public static bool IsModelSentinel(string value)
+    {
+        return string.Equals(value, FollowAgentModel, StringComparison.Ordinal)
+            || string.Equals(value, AutoRoutingModel, StringComparison.Ordinal);
+    }
 
     /// <summary>把模型槽值解成實際模型識別碼；空白表示交給框架備援鏈。</summary>
     public string ResolveModelSlot(string slot)
     {
         string value = (slot ?? string.Empty).Trim();
         if (value.Length == 0) return string.Empty;
-        if (!string.Equals(value, FollowAgentModel, StringComparison.Ordinal)) return value;
-        // Agent 自己也選了 Fallback 時回空字串，兩邊就一致地走備援鏈。
-        return (agentModel ?? string.Empty).Trim();
+        if (string.Equals(value, FollowAgentModel, StringComparison.Ordinal))
+        {
+            value = (agentModel ?? string.Empty).Trim();
+        }
+        // 分流模型是每句指令才會決定的哨兵，輔助模型槽不能把它當成模型名稱送給框架。
+        return string.Equals(value, AutoRoutingModel, StringComparison.Ordinal) ? string.Empty : value;
     }
 
     /// <summary>分類器實際該用的模型識別碼；空白表示交給框架備援鏈。</summary>
@@ -128,10 +151,18 @@ public class RimAgentSettings : ModSettings
 
     private void EnsureAllows()
     {
-        if (allowByCategory == null || allowByCategory.Length != CategoryKeys.Length)
+        if (allowByCategory == null)
         {
             allowByCategory = DefaultAllows();
+            return;
         }
+        if (allowByCategory.Length == CategoryKeys.Length) return;
+
+        // 舊存檔的分類數較少：保留玩家已關掉的權限，只把新加入的類別補成預設開啟。
+        // 直接重置會讓升級後所有類別悄悄變回開啟。
+        bool[] old = allowByCategory;
+        allowByCategory = DefaultAllows();
+        Array.Copy(old, allowByCategory, Math.Min(old.Length, allowByCategory.Length));
     }
 
     public bool GetAllow(ToolCategory category)
@@ -202,6 +233,14 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref subagentReasoning, "subagentReasoning", ReasoningLevel.Auto);
         Scribe_Collections.Look(ref subagentModels, "subagentModels", LookMode.Value, LookMode.Value);
         if (subagentModels == null) subagentModels = new Dictionary<string, string>(StringComparer.Ordinal);
+        Scribe_Values.Look(ref decisionProvider, "decisionProvider", string.Empty);
+        Scribe_Values.Look(ref decisionModel, "decisionModel", string.Empty);
+        Scribe_Collections.Look(ref decisionCategories, "decisionCategories", LookMode.Deep);
+        if (decisionCategories == null) decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
+        Scribe_Values.Look(ref decisionFallbackModel, "decisionFallbackModel", string.Empty);
+        Scribe_Values.Look(ref decisionFallbackReasoning, "decisionFallbackReasoning", ReasoningLevel.Auto);
+        Scribe_Values.Look(ref decisionRoutingMinConfidence, "decisionRoutingMinConfidence", 0.6f);
+        decisionRoutingMinConfidence = UnityEngine.Mathf.Clamp01(decisionRoutingMinConfidence);
         Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
         Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);

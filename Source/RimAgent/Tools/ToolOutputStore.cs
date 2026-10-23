@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 
 namespace RimAgent.Tools;
 
@@ -19,11 +21,44 @@ internal sealed class ToolOutputStore
     /// </summary>
     public const int MaxTotalChars = 2000000;
 
+    // 子代理與主 Agent 共用同一批工具實例；用呼叫流程上的 AsyncLocal 分流，平行任務不會互相寫入。
+    private static readonly AsyncLocal<ToolOutputStore> Scoped = new();
+
     private readonly object _lock = new();
     private readonly Dictionary<string, string> _outputs = [];
     private readonly List<string> _order = [];
     private int _next;
     private long _totalChars;
+
+    /// <summary>目前呼叫流程專用的輸出儲存；null 代表使用工具原本的（主 Agent）儲存。</summary>
+    public static ToolOutputStore Current => Scoped.Value;
+
+    /// <summary>
+    /// 在這段非同步流程內把工具輸出改寫到指定儲存；離開時還原外層的值。
+    /// 並行子代理各自持有不同執行個體，因此互不覆蓋。
+    /// </summary>
+    public static IDisposable EnterScope(ToolOutputStore store)
+    {
+        if (store == null) throw new ArgumentNullException(nameof(store));
+        ToolOutputStore previous = Scoped.Value;
+        Scoped.Value = store;
+        return new ScopeExit(previous);
+    }
+
+    private sealed class ScopeExit : IDisposable
+    {
+        private readonly ToolOutputStore _previous;
+
+        public ScopeExit(ToolOutputStore previous)
+        {
+            _previous = previous;
+        }
+
+        public void Dispose()
+        {
+            Scoped.Value = _previous;
+        }
+    }
 
     public string Save(string text)
     {

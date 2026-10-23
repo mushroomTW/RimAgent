@@ -45,6 +45,11 @@
       <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.Abstractions.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- 決策模型 SDK（TypeSafe System One / Jev），隨框架出貨；型別只用在方法內，不進欄位。 -->
+    <Reference Include="Kkdev92.Jev">
+      <HintPath>$(RimLLMDir)Kkdev92.Jev.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <!-- SmashTools 編譯期參考（由 RimAgent 隨 Mod 出貨，bundled DLL） -->

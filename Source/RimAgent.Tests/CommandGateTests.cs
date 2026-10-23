@@ -195,6 +195,8 @@ public class CommandGateTests
         foreach (string name in ValidArguments.Keys)
         {
             if (NotRecordedInWorld.Contains(name)) continue;
+            // 通用 gizmo／右鍵／對話選項在 YOLO 仍需逐次確認，另由下一個測試驗證。
+            if (AgentToolRegistry.RequiresExplicitConfirmationInYolo(name)) continue;
             FakeGameWorld world = NewWorld();
             var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Yolo));
             AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == name);
@@ -203,6 +205,22 @@ public class CommandGateTests
 
             Assert.That(text, Does.Not.StartWith(ToolText.ErrorPrefix).And.Not.StartWith(ToolText.ConfirmationPrefix), name + ": " + text);
             Assert.That(world.Calls, Is.Not.Empty, name + " 放行時必須動到世界");
+        }
+    }
+
+    [Test]
+    public async Task YoloModeRequiresConfirmationForGenericTools()
+    {
+        foreach (string name in new[] { "choose_option", "use_gizmo", "use_right_click_option" })
+        {
+            FakeGameWorld world = NewWorld();
+            var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Yolo));
+            AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == name);
+
+            string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments[name])))?.ToString();
+
+            Assert.That(text, Does.StartWith(ToolText.ConfirmationPrefix), name + ": " + text);
+            Assert.That(world.Calls, Is.Empty, name + " 預覽時不可碰世界");
         }
     }
 

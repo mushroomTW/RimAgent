@@ -67,6 +67,8 @@ public class RimAgentGameComponent : GameComponent
     private readonly RimWorldGameWorld _autoWorld = new();
     private string _lastAutoError;
     private CancellationTokenSource _autoCts;
+    /// <summary>新局／讀檔時遞增；舊的自主任務藉此確認自己已不屬於目前這份遊戲。</summary>
+    private int _autoGeneration;
     /// <summary>
     /// 自主任務從起跑到 RecordRun 記完為止。session 的 busy 旗標在背景執行緒就放開，
     /// 早於冷卻記錄；只看 busy 的話，中間落下的訊號檢查會拿舊冷卻再起一輪。
@@ -95,6 +97,18 @@ public class RimAgentGameComponent : GameComponent
     private string _lastCompletedGoal;
     private GoalPauseReason _goalPauseReason;
     private bool _goalNeedsVerification;
+    private string _goalAuditNote;
+    private DecisionGoalAuditor _goalAuditor;
+    internal DecisionGoalAuditor GoalAuditor
+    {
+        get => _goalAuditor ??= new DecisionGoalAuditor(
+            decisionService: null,
+            criteriaProvider: () => _pack?.DecisionGoalCriteria,
+            serviceFactory: () => DecisionServiceFactory.Create(
+                () => RimAgentMod.Settings?.decisionProvider,
+                () => RimAgentMod.Settings?.decisionModel));
+        set => _goalAuditor = value;
+    }
     private DateTime _goalNextRunAt;
     private int _goalGeneration;
     private RunLogWriter _runLogWriter;
@@ -152,6 +166,9 @@ public class RimAgentGameComponent : GameComponent
     public int GoalIdleTurns => _goalIdleTurns;
     public string GoalLastProgress => _goalLastProgress;
     public string LastCompletedGoal => _lastCompletedGoal;
+    public bool GoalNeedsVerification => _goalNeedsVerification;
+    public string GoalAuditNote => _goalAuditNote;
+    public string GoalBlockerKey => _goalBlockerKey;
 
     /// <summary>出貨的 AgentPack 資料夾；測試或缺 mod 資料時為 null。</summary>
     private static string PackRoot
@@ -257,6 +274,7 @@ public class RimAgentGameComponent : GameComponent
             _goalIdleTurns = 0;
             _goalBlockerKey = null;
             _goalNeedsVerification = false;
+            _goalAuditNote = null;
             _goalLastProgress = null;
             _goalPauseReason = GoalPauseReason.None;
             _goalNextRunAt = DateTime.MinValue;
@@ -267,7 +285,13 @@ public class RimAgentGameComponent : GameComponent
     public void RemoveGoalAt(int index)
     {
         if (index < 0 || index >= _goals.Count) return;
-        if (index == 0) _goalCts?.Cancel();
+        if (index == 0)
+        {
+            _goalCts?.Cancel();
+            // 讓正在等待審計的舊回合失效；新回合要等舊回合放開 session 才會開始。
+            _goalGeneration++;
+            _goalRunning = false;
+        }
         _goals.RemoveAt(index);
         if (index == 0)
         {
@@ -277,6 +301,7 @@ public class RimAgentGameComponent : GameComponent
             _goalIdleTurns = 0;
             _goalBlockerKey = null;
             _goalNeedsVerification = false;
+            _goalAuditNote = null;
             _goalLastProgress = null;
             _goalPauseReason = GoalPauseReason.None;
             _goalNextRunAt = DateTime.MinValue;
@@ -287,7 +312,13 @@ public class RimAgentGameComponent : GameComponent
     {
         string trimmed = (objective ?? string.Empty).Trim();
         if (index < 0 || index >= _goals.Count || trimmed.Length == 0 || trimmed.Length > MaxGoalChars) return false;
-        if (index == 0) _goalCts?.Cancel();
+        if (index == 0)
+        {
+            _goalCts?.Cancel();
+            // 同一個字串也算新目標：舊審計結果不能套用到剛編輯過的目標。
+            _goalGeneration++;
+            _goalRunning = false;
+        }
         _goals[index] = trimmed;
         if (index == 0)
         {
@@ -296,6 +327,7 @@ public class RimAgentGameComponent : GameComponent
             _goalIdleTurns = 0;
             _goalBlockerKey = null;
             _goalNeedsVerification = false;
+            _goalAuditNote = null;
             _goalLastProgress = null;
             _goalNextRunAt = DateTime.MinValue;
             if (_goalPauseReason != GoalPauseReason.User)
@@ -310,6 +342,8 @@ public class RimAgentGameComponent : GameComponent
     public void ClearGoals()
     {
         _goalCts?.Cancel();
+        _goalGeneration++;
+        _goalRunning = false;
         _goals.Clear();
         _goalPaused = false;
         _goalPauseReason = GoalPauseReason.None;
@@ -318,6 +352,7 @@ public class RimAgentGameComponent : GameComponent
         _goalIdleTurns = 0;
         _goalBlockerKey = null;
         _goalNeedsVerification = false;
+        _goalAuditNote = null;
         _goalLastProgress = null;
         _lastCompletedGoal = null;
         _goalNextRunAt = DateTime.MinValue;
@@ -340,6 +375,7 @@ public class RimAgentGameComponent : GameComponent
         _goalIdleTurns = 0;
         _goalBlockerKey = null;
         _goalNeedsVerification = false;
+        _goalAuditNote = null;
         _goalTurns = 0;
         _goalNextRunAt = DateTime.MinValue;
     }
@@ -408,6 +444,7 @@ public class RimAgentGameComponent : GameComponent
         Scribe_Values.Look(ref _goalBlockedTurns, "goalBlockedTurns", 0);
         Scribe_Values.Look(ref _goalIdleTurns, "goalIdleTurns", 0);
         Scribe_Values.Look(ref _goalNeedsVerification, "goalNeedsVerification", false);
+        Scribe_Values.Look(ref _goalAuditNote, "goalAuditNote");
         Scribe_Values.Look(ref _goalBlockerKey, "goalBlockerKey");
         Scribe_Values.Look(ref _goalLastProgress, "goalLastProgress");
         Scribe_Values.Look(ref _lastCompletedGoal, "lastCompletedGoal");
@@ -442,12 +479,17 @@ public class RimAgentGameComponent : GameComponent
         _goalCts?.Cancel();
         _goalGeneration++;
         _goalRunning = false;
+        // 舊的自主任務還握著上一個存檔的 session；先取消，再用 generation 擋住它的收尾與排程器寫入。
+        _autoCts?.Cancel();
+        _autoGeneration++;
+        _autoRunning = false;
         _goalPaused = false;
         _goalTurns = 0;
         _goalBlockedTurns = 0;
         _goalIdleTurns = 0;
         _goalBlockerKey = null;
         _goalNeedsVerification = false;
+        _goalAuditNote = null;
         _goalLastProgress = null;
         _lastCompletedGoal = null;
         _goalPauseReason = GoalPauseReason.None;
@@ -466,6 +508,10 @@ public class RimAgentGameComponent : GameComponent
         _goalGeneration++;
         _goalRunning = false;
         _goalNextRunAt = DateTime.MinValue;
+        // 讀檔後舊自主任務的 session 指向舊遊戲；取消並讓它的收尾失效，避免操作到新存檔。
+        _autoCts?.Cancel();
+        _autoGeneration++;
+        _autoRunning = false;
         if (_loadedScheduler != null)
         {
             // 順序要緊：CopyTo 會整片覆蓋 _watch，所以另外 Scribe 的重試表必須套在它之後，
@@ -527,7 +573,7 @@ public class RimAgentGameComponent : GameComponent
 
     private void TryStartGoal()
     {
-        if (_goals.Count == 0 || _goalPaused || _goalRunning || Find.CurrentMap == null
+        if (_goals.Count == 0 || _goalPaused || _goalRunning || _autoRunning || Find.CurrentMap == null
             || DateTime.UtcNow < _goalNextRunAt) return;
         try
         {
@@ -548,23 +594,59 @@ public class RimAgentGameComponent : GameComponent
     {
         var cts = new CancellationTokenSource();
         _goalCts = cts;
+        bool exclusive = false;
         try
         {
             int instructionId = session.Transcript.CurrentInstructionId + 1;
             string confirmationReport = session.PeekGoalConfirmationReport(objective);
             string reply = await session.SendAsync(
-                GoalProgress.BuildPrompt(objective, confirmationReport, _goalNeedsVerification), cts.Token,
+                GoalProgress.BuildPrompt(objective, confirmationReport, _goalNeedsVerification, _goalAuditNote), cts.Token,
                 goalRun: true, displayText: objective);
             if (reply != null && confirmationReport != null) session.TakeGoalConfirmationReport(objective);
-            if (generation != _goalGeneration || cts.IsCancellationRequested
-                || _goals.Count == 0 || _goals[0] != objective || _goalPaused) return;
+            if (!GoalRunIsCurrent(objective, generation, cts)) return;
+
+            // SendAsync 返回前已放開忙碌旗標；設置與審計之間不能有 await，
+            // 先把 session 留在手上，避免玩家指令或自主任務插進審計。
+            if (session.IsBusy || !session.TryBeginExclusiveWork()) return;
+            exclusive = true;
+
+            // 本輪已將 auditNote 送給模型，清空備忘避免跨輪殘留
+            _goalAuditNote = null;
+
             IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
             bool hasToolEvidence = GoalProgress.HasVerificationEvidence(entries, instructionId);
             bool usedTool = HasActiveGoalToolUsage(entries, instructionId);
             GoalTurnDecision decision = GoalProgress.AfterTurn(
                 _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence,
                 _goalBlockerKey, _goalIdleTurns, usedTool);
-            HandleGoalDecision(session, objective, reply, decision);
+
+            GoalAuditResult audit = null;
+            // 審計只能否決完成：沒有工具證據的「完成」在 AfterTurn 就不算完成，也不送審計升級。
+            // 有待確認的命令時目標還沒走完，稽核只會看到半截的結果：不稽核。
+            if (reply != null && !session.HasPendingConfirmation && decision.Complete)
+            {
+                DecisionGoalAuditor auditor = GoalAuditor;
+                if (auditor != null)
+                {
+                    string toolEvidence = GoalProgress.BuildAuditEvidence(entries, instructionId);
+                    // 稽核回來後要繼續在主線程處理目標狀態；切到執行緒池會讓後續的存檔／UI 更新離開主線程。
+                    audit = await auditor.AuditAsync(objective, reply, cts.Token, toolEvidence);
+                }
+            }
+
+            // 等待審計期間玩家可能編輯、刪除或暫停目標；即使是同一個字串也不能沿用舊結果。
+            if (!GoalRunIsCurrent(objective, generation, cts)) return;
+
+            if (audit != null)
+            {
+                GoalAuditVerdict verdict = GoalProgress.CombineAudit(
+                    audit.AllDoneProbability, audit.RemainingProbability, audit.NeedsUserProbability);
+                HandleAuditedGoalDecision(session, objective, reply, decision, audit, verdict);
+            }
+            else
+            {
+                HandleGoalDecision(session, objective, reply, decision);
+            }
         }
         catch (Exception ex)
         {
@@ -586,6 +668,7 @@ public class RimAgentGameComponent : GameComponent
         }
         finally
         {
+            if (exclusive) session.EndExclusiveWork();
             if (ReferenceEquals(_goalCts, cts)) _goalCts = null;
             cts.Dispose();
             if (generation == _goalGeneration)
@@ -594,6 +677,15 @@ public class RimAgentGameComponent : GameComponent
                 _goalNextRunAt = DateTime.UtcNow.AddSeconds(1);
             }
         }
+    }
+
+    private bool GoalRunIsCurrent(string objective, int generation, CancellationTokenSource cts)
+    {
+        return generation == _goalGeneration
+            && !cts.IsCancellationRequested
+            && _goals.Count > 0
+            && string.Equals(_goals[0], objective, StringComparison.Ordinal)
+            && !_goalPaused;
     }
 
     private static bool HasActiveGoalToolUsage(IEnumerable<TranscriptEntry> entries, int instructionId)
@@ -606,7 +698,7 @@ public class RimAgentGameComponent : GameComponent
             && !e.Failed && !(e.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
     }
 
-    private void HandleGoalDecision(ColonyAgentSession session, string objective, string reply, GoalTurnDecision decision)
+    internal void HandleGoalDecision(ColonyAgentSession session, string objective, string reply, GoalTurnDecision decision)
     {
         _goalTurns = decision.Turns;
         _goalBlockedTurns = decision.BlockedTurns;
@@ -627,6 +719,7 @@ public class RimAgentGameComponent : GameComponent
             _goalIdleTurns = 0;
             _goalBlockerKey = null;
             _goalNeedsVerification = false;
+            _goalAuditNote = null;
             _goalLastProgress = null;
             _goalPauseReason = GoalPauseReason.None;
             session.Transcript.Add(new TranscriptEntry
@@ -645,6 +738,110 @@ public class RimAgentGameComponent : GameComponent
                 Text = noticeText
             });
         }
+    }
+
+    internal void HandleAuditedGoalDecision(
+        ColonyAgentSession session,
+        string objective,
+        string reply,
+        GoalTurnDecision decision,
+        GoalAuditResult audit,
+        GoalAuditVerdict verdict)
+    {
+        _goalTurns = decision.Turns;
+        _goalIdleTurns = decision.IdleTurns;
+
+        if (reply != null && !session.HasPendingConfirmation)
+        {
+            _goalLastProgress = TranscriptEntryData.Truncate(GoalProgress.VisibleReply(reply));
+        }
+
+        // 審計只能否決完成，不能把沒有工具證據的回合升級成完成。
+        if (verdict == GoalAuditVerdict.Complete && !decision.Complete)
+        {
+            verdict = GoalAuditVerdict.Continue;
+        }
+
+        switch (verdict)
+        {
+            case GoalAuditVerdict.Blocked:
+                _goalPaused = true;
+                _goalPauseReason = GoalPauseReason.Blocked;
+                _goalBlockedTurns = 1;
+                _goalBlockerKey = "audit-needs-user";
+                _goalNeedsVerification = false;
+                _goalAuditNote = null;
+                session.Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = FormatNotice("RimAgent.Goal.AuditBlocked", "Goal paused by decision audit (player input required): {0}", objective)
+                });
+                break;
+
+            case GoalAuditVerdict.Complete:
+                _lastCompletedGoal = objective;
+                _goals.RemoveAt(0);
+                _goalTurns = 0;
+                _goalBlockedTurns = 0;
+                _goalIdleTurns = 0;
+                _goalBlockerKey = null;
+                _goalNeedsVerification = false;
+                _goalAuditNote = null;
+                _goalLastProgress = null;
+                _goalPauseReason = GoalPauseReason.None;
+                session.Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = FormatNotice("RimAgent.Goal.AuditCompleted", "Goal completed and verified by decision audit: {0}", objective)
+                });
+                break;
+
+            case GoalAuditVerdict.Continue:
+            default:
+                // 稽核否決完成不等於把原本的暫停條件吃掉：回合上限、連續阻礙、連續沒有
+                // 有效工具行動都要照原樣暫停，否則目標可能一直空轉。
+                _goalBlockedTurns = decision.BlockedTurns;
+                _goalBlockerKey = decision.BlockerKey;
+                _goalNeedsVerification = true;
+                _goalAuditNote = audit.Reason;
+                if (decision.Pause)
+                {
+                    _goalPaused = true;
+                    DetermineGoalPauseDetails(decision, reply, objective, out _goalPauseReason, out string pauseNotice);
+                    session.Transcript.Add(new TranscriptEntry
+                    {
+                        Kind = TranscriptKind.Notice,
+                        Text = pauseNotice
+                    });
+                }
+                else
+                {
+                    _goalPaused = false;
+                    _goalPauseReason = GoalPauseReason.None;
+                    session.Transcript.Add(new TranscriptEntry
+                    {
+                        Kind = TranscriptKind.Notice,
+                        Text = FormatNotice("RimAgent.Goal.AuditContinuing", "Decision audit determined the goal is not yet finished; continuing: {0}", objective)
+                    });
+                }
+                break;
+        }
+    }
+
+    private static string FormatNotice(string key, string fallback, string arg)
+    {
+        try
+        {
+            if (key.CanTranslate())
+            {
+                return key.Translate(arg).ToString();
+            }
+        }
+        catch
+        {
+            // Translate may fail off-main-thread or outside game loop
+        }
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, fallback, arg);
     }
 
     private static void DetermineGoalPauseDetails(
@@ -692,8 +889,8 @@ public class RimAgentGameComponent : GameComponent
         try
         {
             ColonyAgentSession session = Session;
-            // 玩家還在忙（上一句沒做完、或有預覽等確認）就不搶。
-            if (_autoRunning || session.IsBusy || session.HasPendingConfirmation) return;
+            // 玩家還在忙、持續目標正在跑或審計，或有預覽等確認就不搶。
+            if (_autoRunning || _goalRunning || session.IsBusy || session.HasPendingConfirmation) return;
             AutonomousConfig config = ToConfig(settings);
             AutonomousSignals signals = GatherSignals();
             AutonomousTrigger trigger = _scheduler.Evaluate(tick, signals, config);
@@ -796,18 +993,22 @@ public class RimAgentGameComponent : GameComponent
 
     private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals)
     {
+        // 收尾只准清掉自己那一代；讀檔後新的一輪可能已經開始，舊的 finally 不能把它的旗標關掉。
+        int generation = _autoGeneration;
         try
         {
-            await RunAutonomousAsync(session, trigger, tick, config, signals);
+            await RunAutonomousAsync(session, trigger, tick, config, signals, generation);
         }
         finally
         {
-            _autoRunning = false;
+            if (generation == _autoGeneration) _autoRunning = false;
         }
     }
 
-    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals)
+    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation)
     {
+        // 起跑前遊戲已被換掉（例如排程器在同一幀觸發後玩家立刻讀檔）：不建立 CTS，也不碰任何狀態。
+        if (generation != _autoGeneration) return;
         _autoCts?.Dispose();
         _autoCts = new CancellationTokenSource();
         CancellationTokenSource cts = _autoCts;
@@ -852,6 +1053,8 @@ public class RimAgentGameComponent : GameComponent
         {
             Log.Warning("RimAgent autonomous run failed: " + ex.Message);
         }
+        // 讀檔／新局已把這個任務作廢：不要用舊遊戲的結果改新遊戲的排程器或冷卻。
+        if (generation != _autoGeneration) return;
         // 冷卻、定期巡視與重試退避都從任務結束起算：一輪在高速下常跑掉十幾個遊戲小時，
         // 從起跑算的話一結束就全部到期，上一輪的效果還沒反映到訊號上就接著再跑。
         // 已回到主線程（上面的 await 沒加 ConfigureAwait(false)），讀得到結束當下的 tick；
@@ -929,6 +1132,7 @@ public class RimAgentGameComponent : GameComponent
             classifierClient: null,
             classifierModel: () => settings?.ResolveClassifierModel(),
             classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
+            decisionRiskCriteria: () => _pack != null ? _pack.DecisionRiskCriteria : string.Empty,
             askNote: () => _pack != null ? _pack.AskModeNote : string.Empty,
             memory: Memory,
             useLocalSearch: () => settings.useLocalSearch,

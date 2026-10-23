@@ -6,6 +6,8 @@ using System.Runtime.CompilerServices;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using RimAgent.UI;
+using RimLLM_Framework;
+using RimLLM_Framework.Manager.Services;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -15,7 +17,7 @@ namespace RimAgent;
 /// <summary>Mod 進入點與設定頁。執行模式由 Agent 視窗切換。</summary>
 public class RimAgentMod : Mod
 {
-    public static RimAgentSettings Settings { get; private set; }
+    public static RimAgentSettings Settings { get; internal set; }
 
     private const float PermissionRowHeight = 28f;
     private const float PermissionColumnGap = 24f;
@@ -73,6 +75,16 @@ public class RimAgentMod : Mod
         }
 
         DrawModelRoles(listing);
+
+        listing.Gap();
+        listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
+        listing.GapLine();
+        DrawDecisionSettings(listing);
+
+        listing.Gap();
+        listing.Label("RimAgent.Settings.DecisionRoutingHeader".Translate());
+        listing.GapLine();
+        DrawDecisionRoutingSettings(listing);
 
         listing.Gap();
         listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
@@ -213,6 +225,254 @@ public class RimAgentMod : Mod
             () => Settings.compactModel, v => Settings.compactModel = v,
             "RimAgent.Settings.CompactModelTip".Translate(),
             () => Settings.compactReasoning, v => Settings.compactReasoning = v);
+    }
+
+    private static void DrawDecisionSettings(Listing_Standard listing)
+    {
+        DecisionAvailability availability = DecisionServiceFactory.GetAvailability();
+        string statusText;
+        if (availability == null || !availability.Enabled)
+        {
+            statusText = "RimAgent.Settings.DecisionStatusDisabled".Translate();
+        }
+        else if (availability.RequiresKey && !availability.HasKey)
+        {
+            statusText = "RimAgent.Settings.DecisionStatusNoKey".Translate(availability.ProviderId);
+        }
+        else
+        {
+            string prov = string.IsNullOrEmpty(Settings.decisionProvider)
+                ? availability.ProviderId
+                : Settings.decisionProvider;
+            string mdl = string.IsNullOrEmpty(Settings.decisionModel)
+                ? (availability.Model ?? "default")
+                : Settings.decisionModel;
+            statusText = "RimAgent.Settings.DecisionStatusEnabled".Translate(prov, mdl);
+        }
+
+        listing.Label("RimAgent.Settings.DecisionStatus".Translate(statusText));
+
+        // 供應商下拉
+        Rect provRow = listing.GetRect(28f);
+        const float labelWidth = 160f;
+        var provLabelRect = new Rect(provRow.x, provRow.y + 3f, labelWidth, 24f);
+        var provDropdownRect = new Rect(provLabelRect.xMax + 4f, provRow.y, provRow.xMax - provLabelRect.xMax - 4f, 26f);
+
+        Text.WordWrap = false;
+        Widgets.Label(provLabelRect, "RimAgent.Settings.DecisionProvider".Translate().Truncate(labelWidth));
+        Text.WordWrap = true;
+
+        string currentProv = Settings.decisionProvider;
+        string shownProv = string.IsNullOrEmpty(currentProv)
+            ? "RimAgent.Settings.DecisionDefault".Translate().ToString()
+            : currentProv;
+
+        if (Widgets.ButtonText(provDropdownRect, shownProv.Truncate(provDropdownRect.width - 12f)))
+        {
+            var options = new List<FloatMenuOption>
+            {
+                new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionProvider = string.Empty)
+            };
+            try
+            {
+                AddDecisionProviderOptions(options);
+            }
+            catch (MissingMethodException)
+            {
+                // 舊版 RimLLM 沒有這個目錄；保留下拉選單的預設項即可。
+            }
+            catch (TypeLoadException)
+            {
+            }
+            Find.WindowStack.Add(new FloatMenu(options));
+        }
+        if (Mouse.IsOver(provDropdownRect) || Mouse.IsOver(provLabelRect))
+        {
+            TooltipHandler.TipRegion(new Rect(provRow.x, provRow.y, provRow.width, provRow.height), "RimAgent.Settings.DecisionProviderTip".Translate());
+        }
+        listing.Gap(6f);
+
+        // 模型下拉
+        Rect modelRow = listing.GetRect(28f);
+        var modelLabelRect = new Rect(modelRow.x, modelRow.y + 3f, labelWidth, 24f);
+        var modelDropdownRect = new Rect(modelLabelRect.xMax + 4f, modelRow.y, modelRow.xMax - modelLabelRect.xMax - 4f, 26f);
+
+        Text.WordWrap = false;
+        Widgets.Label(modelLabelRect, "RimAgent.Settings.DecisionModel".Translate().Truncate(labelWidth));
+        Text.WordWrap = true;
+
+        string currentModel = Settings.decisionModel;
+        string shownModel = string.IsNullOrEmpty(currentModel)
+            ? "RimAgent.Settings.DecisionDefault".Translate().ToString()
+            : currentModel;
+
+        if (Widgets.ButtonText(modelDropdownRect, shownModel.Truncate(modelDropdownRect.width - 12f)))
+        {
+            var options = new List<FloatMenuOption>
+            {
+                new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionModel = string.Empty)
+            };
+            string targetProv = string.IsNullOrEmpty(Settings.decisionProvider)
+                ? availability?.ProviderId
+                : Settings.decisionProvider;
+            try
+            {
+                AddDecisionModelOptions(options, targetProv);
+            }
+            catch (MissingMethodException)
+            {
+                // 舊版 RimLLM 沒有供應商目錄；只留預設模型一項。
+            }
+            catch (TypeLoadException)
+            {
+            }
+            Find.WindowStack.Add(new FloatMenu(options));
+        }
+        if (Mouse.IsOver(modelDropdownRect) || Mouse.IsOver(modelLabelRect))
+        {
+            TooltipHandler.TipRegion(new Rect(modelRow.x, modelRow.y, modelRow.width, modelRow.height), "RimAgent.Settings.DecisionModelTip".Translate());
+        }
+        listing.Gap(6f);
+    }
+
+    /// <summary>RimLLM 的決策供應商目錄可能不存在於舊版；單獨成方法，讓呼叫端能攔截型別載入錯誤。</summary>
+    private static void AddDecisionProviderOptions(List<FloatMenuOption> options)
+    {
+        foreach (RimLLMDecisionProvider provider in RimLLMDecisionProviderCatalog.All)
+        {
+            string id = provider.Id;
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            options.Add(new FloatMenuOption(id, () => Settings.decisionProvider = id));
+        }
+    }
+
+    /// <summary>同上：只把目前供應商提供的預設模型加進選單，目錄不可用時保持預設項。</summary>
+    private static void AddDecisionModelOptions(List<FloatMenuOption> options, string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return;
+        if (!RimLLMDecisionProviderCatalog.TryGet(providerId, out RimLLMDecisionProvider provider)) return;
+        foreach (string model in provider.PresetModels)
+        {
+            string captured = model;
+            options.Add(new FloatMenuOption(captured, () => Settings.decisionModel = captured));
+        }
+    }
+
+    /// <summary>自訂分類的識別碼必須唯一；刪除中間項目後不能再用清單長度 + 1。</summary>
+    internal static string NextCustomCategoryId(IReadOnlyList<DecisionRouteCategory> categories)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (categories != null)
+        {
+            foreach (DecisionRouteCategory category in categories)
+            {
+                if (category != null && !string.IsNullOrWhiteSpace(category.id)) used.Add(category.id.Trim());
+            }
+        }
+        int number = 1;
+        while (used.Contains("custom_" + number)) number++;
+        return "custom_" + number;
+    }
+
+    private static void DrawDecisionRoutingSettings(Listing_Standard listing)
+    {
+        // 備援模型與思考強度
+        DrawModelDropdown(
+            listing,
+            "RimAgent.Settings.DecisionFallbackModel".Translate(),
+            () => Settings.decisionFallbackModel,
+            v => Settings.decisionFallbackModel = v,
+            "RimAgent.Settings.DecisionFallbackModelTip".Translate(),
+            () => Settings.decisionFallbackReasoning,
+            v => Settings.decisionFallbackReasoning = v);
+
+        // 最小信心門檻
+        listing.Label(
+            "RimAgent.Settings.DecisionMinConfidence".Translate(Settings.decisionRoutingMinConfidence.ToString("P0")),
+            -1f,
+            "RimAgent.Settings.DecisionMinConfidenceTip".Translate());
+        Settings.decisionRoutingMinConfidence = listing.Slider(Settings.decisionRoutingMinConfidence, 0f, 1f);
+
+        listing.Gap(6f);
+
+        // 類別清單
+        Rect catHeader = listing.GetRect(28f);
+        const float ActionButtonWidth = 90f;
+        Rect resetRect = new Rect(catHeader.xMax - ActionButtonWidth, catHeader.y, ActionButtonWidth, 26f);
+        Rect addRect = new Rect(resetRect.x - ActionButtonWidth - 6f, catHeader.y, ActionButtonWidth, 26f);
+        Widgets.Label(new Rect(catHeader.x, catHeader.y + 3f, addRect.x - catHeader.x - 8f, 24f), "RimAgent.Settings.DecisionCategoriesHeader".Translate());
+
+        if (Widgets.ButtonText(addRect, "RimAgent.Settings.DecisionCategoryAdd".Translate()))
+        {
+            var options = new List<FloatMenuOption>
+            {
+                new FloatMenuOption("RimAgent.Settings.DecisionCategoryAddCustom".Translate(), () =>
+                {
+                    string id = NextCustomCategoryId(Settings.decisionCategories);
+                    int nextNum = 1;
+                    if (id.Length > "custom_".Length) int.TryParse(id.Substring("custom_".Length), out nextNum);
+                    Settings.decisionCategories.Add(new DecisionRouteCategory(
+                        id,
+                        "RimAgent.Settings.DecisionCategoryCustomName".Translate(nextNum),
+                        "Custom category description"));
+                })
+            };
+
+            foreach (DecisionRouteCategory builtIn in DecisionRouteCategory.CreateDefaultCategories())
+            {
+                if (!Settings.decisionCategories.Any(c => string.Equals(c.id, builtIn.id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    DecisionRouteCategory captured = builtIn;
+                    options.Add(new FloatMenuOption("RimAgent.Settings.DecisionCategoryRestore".Translate(captured.name, captured.id), () =>
+                    {
+                        Settings.decisionCategories.Add(captured);
+                    }));
+                }
+            }
+
+            Find.WindowStack.Add(new FloatMenu(options));
+        }
+
+        if (Widgets.ButtonText(resetRect, "RimAgent.Settings.DecisionCategoriesReset".Translate()))
+        {
+            Settings.decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
+        }
+
+        listing.Gap(4f);
+
+        DecisionRouteCategory toDelete = null;
+        for (int i = 0; i < Settings.decisionCategories.Count; i++)
+        {
+            DecisionRouteCategory cat = Settings.decisionCategories[i];
+            Rect row = listing.GetRect(24f);
+            const float DeleteBtnWidth = 50f;
+            Rect delRect = new Rect(row.xMax - DeleteBtnWidth, row.y, DeleteBtnWidth, 22f);
+            Rect titleRect = new Rect(row.x, row.y + 2f, row.width - DeleteBtnWidth - 6f, 20f);
+
+            Text.Font = GameFont.Tiny;
+            string displayName = string.IsNullOrEmpty(cat.name) ? cat.id : cat.name;
+            Widgets.Label(titleRect, $"{displayName} ({cat.id})");
+            Text.Font = GameFont.Small;
+
+            if (Widgets.ButtonText(delRect, "RimAgent.Settings.DecisionCategoryDelete".Translate()))
+            {
+                toDelete = cat;
+            }
+
+            DrawModelDropdown(
+                listing,
+                "  " + "RimAgent.Settings.CategoryModel".Translate(),
+                () => cat.model,
+                v => cat.model = v,
+                cat.description,
+                () => cat.reasoning,
+                v => cat.reasoning = v);
+        }
+
+        if (toDelete != null)
+        {
+            Settings.decisionCategories.Remove(toDelete);
+        }
     }
 
     /// <summary>
