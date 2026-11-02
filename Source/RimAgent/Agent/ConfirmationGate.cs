@@ -14,7 +14,7 @@ namespace RimAgent.Agent;
 /// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再決定執行或拒絕。
 /// 工具的風險由 <see cref="LoggingAIFunction"/> 在每次呼叫前經 <see cref="BeginInvocation"/> 告知；
 /// 同一輪的多個查詢可並行執行，每條非同步流程各有一份呼叫狀態（AsyncLocal），
-/// 共用狀態（待確認、額度、查詢快取）各自上鎖。
+/// 共用狀態（待確認、額度、失敗紀錄）各自上鎖。
 /// </summary>
 public sealed class ConfirmationGate
 {
@@ -43,8 +43,6 @@ public sealed class ConfirmationGate
     private int _lastApprovalExecutedCount;
     // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
     private int _remainingToolCalls = -1;
-    /// <summary>同一句指令內的查詢結果快取：同樣的唯讀查詢只碰一次世界，之後直接回快取。</summary>
-    private readonly InstructionCache<string> _queryCache = new();
     private readonly InstructionCache<FailedCall> _failedCalls = new();
 
     public ConfirmationGate(Func<AgentMode> mode)
@@ -189,8 +187,7 @@ public sealed class ConfirmationGate
         lock (_gate)
         {
             _remainingToolCalls = maximumCalls.HasValue ? Math.Max(0, maximumCalls.Value) : -1;
-            // 新的一句指令：查詢快取、失敗紀錄與分類器快取（由呼叫端另行清空）都不跨指令。
-            _queryCache.Clear();
+            // 新的一句指令：失敗紀錄與分類器快取（由呼叫端另行清空）都不跨指令。
             _failedCalls.Clear();
         }
     }
@@ -246,32 +243,6 @@ public sealed class ConfirmationGate
             _blocked.Clear();
             return taken;
         }
-    }
-
-    /// <summary>同一句內重複的唯讀查詢是否已有快取；有則呼叫端直接回傳，不碰世界也不扣額度。</summary>
-    internal bool TryGetCachedQuery(string toolName, string arguments, out string result)
-    {
-        return _queryCache.TryGet(QueryCacheKey(toolName, arguments), out result);
-    }
-
-    /// <summary>
-    /// 記下一次成功的查詢結果：錯誤與確認預覽不記（世界可能在同句後續命令中改變，
-    /// 下一次重查才看得到最新狀態）；超過上限就不再記，避免無限成長。
-    /// </summary>
-    internal void StoreCachedQuery(string toolName, string arguments, string result)
-    {
-        if (string.IsNullOrEmpty(result)) return;
-        _queryCache.Store(QueryCacheKey(toolName, arguments), result);
-    }
-
-    /// <summary>
-    /// 同一句內執行了命令（成功、失敗或部分生效皆可能改變世界）：丟掉已記的查詢結果，
-    /// 之後重查才看得到最新狀態。預覽不碰世界，不必失效。
-    /// </summary>
-    /// <summary>對話重來或新局時清空查詢快取（平時由每句的額度計數一併清空）。</summary>
-    internal void InvalidateQueryCache()
-    {
-        _queryCache.Clear();
     }
 
     /// <summary>

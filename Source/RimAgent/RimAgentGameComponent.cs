@@ -54,6 +54,7 @@ public class RimAgentGameComponent : GameComponent
     private AgentMemoryStore _saveMemory = new();
     /// <summary>全域記憶：跨存檔，放在 RimAgent 資料夾；null 代表還沒從磁碟載入。</summary>
     private AgentMemoryStore _globalMemory;
+    private List<AgentMemoryEntry> _pendingGlobalMigration = [];
     /// <summary>agent 實際使用的記憶：兩個範圍的合成視圖。</summary>
     private ScopedMemoryStore _scopedMemory;
     private AgentPack _pack;
@@ -236,6 +237,7 @@ public class RimAgentGameComponent : GameComponent
         try
         {
             GlobalMemoryFile.Save(GlobalMemoryPath, global.Snapshot());
+            _pendingGlobalMigration.Clear();
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
@@ -403,12 +405,8 @@ public class RimAgentGameComponent : GameComponent
     public override void ExposeData()
     {
         base.ExposeData();
-        List<TranscriptEntryData> data = null;
-        // 新局與讀檔時 session 都是 null（延遲建立）；只有玩到一半存檔才有東西可寫。
-        if (Scribe.mode == LoadSaveMode.Saving && _session != null)
-        {
-            data = TranscriptEntryData.FromTranscript(_session.Transcript);
-        }
+        List<TranscriptEntryData> data = Scribe.mode == LoadSaveMode.Saving && _session != null
+            ? TranscriptEntryData.FromTranscript(_session.Transcript) : _loadedTranscript;
         Scribe_Collections.Look(ref data, "transcript", LookMode.Deep);
         // Scribe_Collections 只在 LoadingVars 階段填 list（PostLoadInit 對 Deep 清單什麼都不做），要在這裡接住。
         if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedTranscript = data;
@@ -427,6 +425,7 @@ public class RimAgentGameComponent : GameComponent
         if (_goals == null) _goals = [];
         List<AgentMemoryEntry> memories = Scribe.mode == LoadSaveMode.Saving
             ? _saveMemory.Snapshot() : null;
+        if (memories != null) memories.AddRange(_pendingGlobalMigration);
         Scribe_Collections.Look(ref memories, "agentMemories", LookMode.Deep);
         if (Scribe.mode == LoadSaveMode.LoadingVars)
         {
@@ -435,6 +434,7 @@ public class RimAgentGameComponent : GameComponent
             _saveMemory = new AgentMemoryStore(memories);
             int dropped = _saveMemory.DroppedOnLoad;
             ResetMemory();
+            _pendingGlobalMigration = migrated;
             if (migrated.Count > 0) dropped += MergeIntoGlobalMemory(migrated);
             if (dropped > 0)
                 Log.Warning("RimAgent discarded " + dropped + " saved memory file(s) that exceed the current limits.");
@@ -475,6 +475,7 @@ public class RimAgentGameComponent : GameComponent
         _loadedAgentSession = null;
         _goals = [];
         _saveMemory = new AgentMemoryStore();
+        _pendingGlobalMigration.Clear();
         ResetMemory();
         _goalCts?.Cancel();
         _goalGeneration++;
@@ -502,8 +503,7 @@ public class RimAgentGameComponent : GameComponent
     public override void LoadedGame()
     {
         _session = null;
-        // 全域記憶跟著遊戲之外的檔案走，讀檔時重新載入（玩家或別的存檔可能剛改過）。
-        ResetMemory();
+        // LoadingVars 已重新載入全域記憶；保留未成功寫入的遷移資料。
         _goalCts?.Cancel();
         _goalGeneration++;
         _goalRunning = false;

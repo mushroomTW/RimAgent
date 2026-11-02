@@ -474,6 +474,44 @@ public class ColonyAgentSessionTests
     }
 
     [Test]
+    public async Task UndoPreservesPlayerChangesMatchingEarlierAgentValues()
+    {
+        _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
+               .CallTool("set_work_priorities", new { assignments = "Ali:doctor=2" })
+               .CallTool("set_schedule", new { colonists = "Ali", startHour = 22, endHour = 23, assignment = "sleep" })
+               .CallTool("set_schedule", new { colonists = "Ali", startHour = 22, endHour = 23, assignment = "work" })
+               .Reply("Done.");
+        ColonyAgentSession session = NewSession();
+        await session.SendAsync("change work and schedule");
+        _world.SetWorkPriority(101, "Doctor", 1);
+        _world.SetTimeAssignment(101, 22, "Sleep");
+
+        string summary = session.UndoLast();
+
+        Assert.That(summary, Does.Contain("changed since RimAgent"));
+        Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
+        Assert.That(_world.Colonists[0].Timetable[22], Is.EqualTo("Sleep"));
+    }
+
+    [Test]
+    public void UndoSnapshotIncludesOpenFrameWithoutEndingIt()
+    {
+        var stack = new WorkUndoStack();
+        stack.BeginFrame();
+        stack.RecordPriority(101, "Doctor", 3, 1);
+        List<UndoFrame> snapshot = stack.Snapshot();
+        stack.RecordPriority(101, "Doctor", 1, 2);
+        stack.EndFrame("test");
+
+        Assert.That(snapshot, Has.Count.EqualTo(1));
+        Assert.That(snapshot[0].Priorities.Select(p => p.NewPriority), Is.EqualTo(new[] { 1 }));
+        var restored = new WorkUndoStack();
+        restored.Restore(snapshot);
+        Assert.That(restored.Pop().Priorities[0].OldPriority, Is.EqualTo(3));
+        Assert.That(stack.Pop().Priorities, Has.Count.EqualTo(2));
+    }
+
+    [Test]
     public async Task UndoRestoresWorkPriority()
     {
         _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })

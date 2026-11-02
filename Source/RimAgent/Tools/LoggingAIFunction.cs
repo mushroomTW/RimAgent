@@ -70,7 +70,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             result = await InvokeLoggedAsync(arguments, cancellationToken);
         }
         // 玩家執行中插話：附在主 Agent 這次的工具結果後面送給模型。只附在送回的文字，
-        // 行動紀錄、查詢快取與失敗紀錄都存工具本身的結果。子代理的工具不取，免得話被子代理吃掉。
+        // 行動紀錄與失敗紀錄都存工具本身的結果。子代理的工具不取，免得話被子代理吃掉。
         string interjection = _transcript.CurrentAgent.Length == 0 ? _interjections?.TakeAll() : null;
         return interjection == null ? result : (result?.ToString() ?? string.Empty) + FormatInterjection(interjection);
     }
@@ -118,23 +118,13 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             {
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
             }
-            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty, out bool hasFreshGameErrors), Outputs);
+            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), Outputs);
             entry.Result = text;
             entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
             bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
-            // 命令動過世界（成功、失敗或部分生效皆可能）：同句的查詢快取全部作廢；
-            // 預覽不碰世界，不必失效。
-            if (_risk != ToolRisk.Query && !isPreview) _gate?.InvalidateQueryCache();
-            // 失敗的呼叫記下來擋掉同句的原樣重送；命令成功改了世界則先前的失敗可能已不成立。
-            // 分類器暫時不可用而被擋的不算：下一次重問分類器可能就通過了。
-            if (entry.Failed && entry.RiskCheck != "unavailable") _gate?.StoreFailedCall(Name, callKey, text);
+            // 失敗的呼叫記下來擋掉同句的原樣重送；成功命令後可重新嘗試。
+            if (_risk != ToolRisk.Query && entry.Failed && entry.RiskCheck != "unavailable") _gate?.StoreFailedCall(Name, callKey, text);
             else if (_risk != ToolRisk.Query && !isPreview) _gate?.ClearFailedCalls();
-            // 成功的查詢才進快取：錯誤可能隨同句後續命令改變而消失，
-            // 夾帶遊戲錯誤的結果也不記，免得下一次命中回傳過期的錯誤。
-            if (_risk == ToolRisk.Query && !entry.Failed && !hasFreshGameErrors && !isPreview)
-            {
-                _gate?.StoreCachedQuery(Name, callKey, text);
-            }
             if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
             {
                 // 此閉包保留本次工具呼叫的引數，確認時不會再讓模型選工具或改參數。
@@ -145,8 +135,6 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         catch (Exception ex)
         {
             // 例外那次期間的遊戲錯誤也算這次的，不能留給下一個工具呼叫背鍋。
-            // 命令可能部分生效，同句的查詢快取一併作廢。
-            if (_risk != ToolRisk.Query) _gate?.InvalidateQueryCache();
             entry.Result = AppendGameErrors(ex.GetType().Name + ": " + ex.Message);
             entry.Failed = true;
             throw;
@@ -170,23 +158,12 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             return true;
         }
 
-        if (_gate != null && _gate.TryGetFailedCall(Name, callKey, out string previousError))
+        if (_risk != ToolRisk.Query && _gate != null && _gate.TryGetFailedCall(Name, callKey, out string previousError))
         {
             entry.Result = ToolText.Error("this exact call already failed twice in this instruction and was not run again. " +
                 "Do not repeat it unchanged: use different arguments, try another approach, or stop and tell the player. " +
                 "Previous result: " + previousError);
             entry.Failed = true;
-            entry.BudgetConsumed = false;
-            _transcript.Add(entry);
-            earlyResult = entry.Result;
-            return true;
-        }
-
-        if (_risk == ToolRisk.Query && _gate != null &&
-            _gate.TryGetCachedQuery(Name, callKey, out string cached))
-        {
-            entry.Result = AppendGameErrors(cached);
-            entry.Failed = entry.Result.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
             entry.BudgetConsumed = false;
             _transcript.Add(entry);
             earlyResult = entry.Result;
@@ -228,14 +205,11 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
             }
             string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), Outputs);
-            // 確認執行是真正的世界寫入：同句的查詢快取作廢。
-            _gate?.InvalidateQueryCache();
             _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
             return text;
         }
         catch (Exception ex)
         {
-            _gate?.InvalidateQueryCache();
             _transcript.UpdateToolResult(entry, AppendGameErrors(ex.GetType().Name + ": " + ex.Message), true);
             throw;
         }
@@ -369,7 +343,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
     }
 
     /// <summary>
-    /// 快取與失敗紀錄的鍵：依參數名排序，同一組參數換順序送來仍視為同一個呼叫
+    /// 失敗紀錄的鍵：依參數名排序，同一組參數換順序送來仍視為同一個呼叫
     /// （模型重送時常打亂順序）；顯示用的 <see cref="FormatArguments"/> 保留原順序。
     /// </summary>
     private static string CallKey(AIFunctionArguments arguments)

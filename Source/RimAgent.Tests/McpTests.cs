@@ -55,6 +55,16 @@ internal sealed class FakeMcpServer : IMcpServer
     }
 }
 
+internal sealed class DelayedMcpServer : IMcpServer
+{
+    public string Name => "slow";
+    public bool Disposed { get; private set; }
+    public TaskCompletionSource<IList<McpServerTool>> Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task<IList<McpServerTool>> ListToolsAsync(CancellationToken cancellationToken) => Ready.Task;
+    public Task<string> CallAsync(string tool, string argsJson, CancellationToken cancellationToken) => Task.FromResult("");
+    public void Dispose() => Disposed = true;
+}
+
 [TestFixture]
 public class McpConfigTests
 {
@@ -159,6 +169,23 @@ public class McpManagerTests
             _fake.Name = entry.Name;
             return _fake;
         });
+    }
+
+    [Test]
+    public async Task ShutdownDisposesConnectionThatFinishesAfterShutdown()
+    {
+        string path = Path.Combine(_root, "servers.json");
+        File.WriteAllText(path, "{\"servers\":[{\"name\":\"slow\",\"command\":\"test\",\"enabled\":true}]}");
+        var server = new DelayedMcpServer();
+        var manager = new McpManager(path, _ => server);
+        Task warmup = manager.WarmUpAsync();
+
+        manager.Shutdown();
+        server.Ready.SetResult(new List<McpServerTool>());
+        await warmup;
+
+        Assert.That(server.Disposed, Is.True);
+        Assert.That(manager.Status(), Does.Contain("idle"));
     }
 
     [Test]

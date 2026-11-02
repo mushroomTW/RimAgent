@@ -12,7 +12,7 @@ using RimLLM_Framework;
 
 namespace RimAgent.Tests;
 
-/// <summary>模型呼叫優化：分類器句內快取、查詢結果快取、分任務 reasoning、自主與玩家共用同一模型、技能按需讀取。</summary>
+/// <summary>模型呼叫優化：分類器句內快取、即時查詢、分任務 reasoning、自主與玩家共用同一模型、技能按需讀取。</summary>
 [TestFixture]
 public class ModelCallOptimizationTests
 {
@@ -104,20 +104,21 @@ public class ModelCallOptimizationTests
     }
 
     [Test]
-    public async Task RepeatedQueryHitsWorldOnceButLogsTwice()
+    public async Task RepeatedQueryReadsWorldTwiceAndLogsBoth()
     {
         _client.CallTool("list_colonists", new { })
-               .CallTool("list_colonists", new { })
+               .CallTool("list_colonists", new { }).Do(() => _world.Colonists[0].Name = "Changed by player")
                .Reply("there they are.");
         ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
 
         await session.SendAsync("who is here? who is here?");
 
-        Assert.That(_world.ColonistQueryCount, Is.EqualTo(1), "同樣的查詢只碰一次世界");
+        Assert.That(_world.ColonistQueryCount, Is.EqualTo(2), "重複查詢仍讀取即時世界");
         IReadOnlyList<TranscriptEntry> tools = session.Transcript.Snapshot()
             .Where(e => e.Kind == TranscriptKind.Tool).ToList();
         Assert.That(tools.Count, Is.EqualTo(2), "行動紀錄照記兩次");
-        Assert.That(tools[0].Result, Is.EqualTo(tools[1].Result));
+        Assert.That(tools[0].Result, Does.Not.Contain("Changed by player"));
+        Assert.That(tools[1].Result, Does.Contain("Changed by player"));
         Assert.That(tools.All(t => !t.Failed), Is.True);
     }
 
@@ -134,9 +135,9 @@ public class ModelCallOptimizationTests
 
         IReadOnlyList<TranscriptEntry> tools = session.Transcript.Snapshot()
             .Where(e => e.Kind == TranscriptKind.Tool).ToList();
-        Assert.That(tools.All(t => t.Failed), Is.True, "錯誤不進成功快取");
+        Assert.That(tools.All(t => t.Failed), Is.True, "查詢失敗均有記錄");
         Assert.That(tools[1].Result, Does.Not.Contain("already failed"), "允許原樣重試一次");
-        Assert.That(tools[2].Result, Does.Contain("already failed"), "失敗兩次後的原樣重送直接擋下");
+        Assert.That(tools[2].Result, Does.Not.Contain("already failed"), "查詢失敗後世界仍可能自行變化");
     }
 
     [Test]
@@ -314,7 +315,7 @@ public class ModelCallOptimizationTests
         await session.SendAsync("report then set then report");
 
         Assert.That(_world.ColonistQueryCount, Is.EqualTo(3),
-            "命令執行後快取作廢：兩次查詢各碰一次世界，加上命令解析的一次");
+            "兩次查詢各碰一次世界，加上命令解析的一次");
         Assert.That(session.Transcript.Snapshot()
             .Count(e => e.Kind == TranscriptKind.Tool && e.ToolName == "list_colonists"), Is.EqualTo(2));
     }

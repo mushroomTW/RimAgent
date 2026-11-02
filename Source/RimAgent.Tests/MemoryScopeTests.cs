@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using Verse;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
@@ -214,6 +216,26 @@ public class MemoryScopeTests
         var memory = new ScopedMemoryStore(new AgentMemoryStore(saveEntries), new AgentMemoryStore(globalEntries));
 
         Assert.That(memory.DroppedOnLoad, Is.EqualTo(2), "兩邊各丟一個，各自計數相加");
+    }
+
+    [Test]
+    public void SaveBeforeSessionCreationRetainsTranscriptAndPendingMigration()
+    {
+        Directory.CreateDirectory(_folder);
+        string path = Path.Combine(_folder, "save.xml");
+        var component = new RimAgentGameComponent(null);
+        typeof(RimAgentGameComponent).GetField("_loadedTranscript", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(component, new List<TranscriptEntryData> { new() { text = "saved conversation" } });
+        typeof(RimAgentGameComponent).GetField("_pendingGlobalMigration", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(component, new List<AgentMemoryEntry> { new() { name = "global_pending.md", content = "recover me" } });
+
+        Scribe.saver.InitSaving(path, "Game");
+        try { component.ExposeData(); }
+        finally { Scribe.saver.FinalizeSaving(); }
+
+        string xml = File.ReadAllText(path);
+        Assert.That(xml, Does.Contain("saved conversation"));
+        Assert.That(xml, Does.Contain("global_pending.md").And.Contain("recover me"));
     }
 
     [Test]

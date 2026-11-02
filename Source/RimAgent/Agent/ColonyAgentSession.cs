@@ -569,7 +569,7 @@ public sealed class ColonyAgentSession
     {
         // 新指令取代等待中的確認，先記錄捨棄，再建立新指令的編號。
         DiscardPendingConfirmation();
-        // 句內快取（分類器判定、查詢結果）不跨指令，下一句重來。
+        // 句內分類器判定快取不跨指令，下一句重來。
         ResetInstructionCaches();
         int instructionId = Transcript.BeginInstruction();
         RunLogRecord runLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
@@ -779,11 +779,10 @@ public sealed class ColonyAgentSession
         Undo.Clear();
     }
 
-    /// <summary>句內快取失效的單一入口：分類器判定與查詢結果都不跨指令或跨對話。</summary>
+    /// <summary>清除句內分類器判定快取。</summary>
     private void ResetInstructionCaches()
     {
         _registry.ClearClassifierCache();
-        ConfirmGate.InvalidateQueryCache();
     }
 
     /// <summary>
@@ -1119,9 +1118,13 @@ public sealed class ColonyAgentSession
         ColonistInfo FindPawn(int pawnId) => _world.GetColonists().FirstOrDefault(c => c.Id == pawnId);
         var failures = new List<string>();
         int restored = 0;
+        var blockedPriorities = new HashSet<(int, string)>();
+        var blockedAssignments = new HashSet<(int, int)>();
         for (int i = frame.Priorities.Count - 1; i >= 0; i--)
         {
             UndoWorkPriority p = frame.Priorities[i];
+            var key = (p.PawnId, p.WorkTypeDefName);
+            if (blockedPriorities.Contains(key)) continue;
             // 復原只覆寫 Agent 真的寫入的那個值；玩家在這之後手動改過就保留玩家的選擇。
             if (p.NewPriority >= 0)
             {
@@ -1130,17 +1133,24 @@ public sealed class ColonyAgentSession
                     string.Equals(w.WorkTypeDefName, p.WorkTypeDefName, StringComparison.Ordinal));
                 if (current == null || current.Priority != p.NewPriority)
                 {
+                    blockedPriorities.Add(key);
                     failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: changed since RimAgent; not overwritten.");
                     continue;
                 }
             }
             CommandResult r = _world.SetWorkPriority(p.PawnId, p.WorkTypeDefName, p.OldPriority);
             if (r.Success) restored++;
-            else failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: {r.Message}");
+            else
+            {
+                blockedPriorities.Add(key);
+                failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: {r.Message}");
+            }
         }
         for (int i = frame.Assignments.Count - 1; i >= 0; i--)
         {
             UndoTimeAssignment a = frame.Assignments[i];
+            var key = (a.PawnId, a.Hour);
+            if (blockedAssignments.Contains(key)) continue;
             // 同優先級：玩家手動改過那一小時的作息就不覆寫。
             if (!string.IsNullOrEmpty(a.NewAssignmentDefName))
             {
@@ -1149,13 +1159,18 @@ public sealed class ColonyAgentSession
                     && string.Equals(pawn.Timetable[a.Hour], a.NewAssignmentDefName, StringComparison.Ordinal);
                 if (!unchanged)
                 {
+                    blockedAssignments.Add(key);
                     failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten.");
                     continue;
                 }
             }
             CommandResult r = _world.SetTimeAssignment(a.PawnId, a.Hour, a.OldAssignmentDefName);
             if (r.Success) restored++;
-            else failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}");
+            else
+            {
+                blockedAssignments.Add(key);
+                failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}");
+            }
         }
 
         bool restoredManualPriorities = false;
@@ -1163,14 +1178,14 @@ public sealed class ColonyAgentSession
             && frame.OldUseWorkPriorities.Value != frame.NewUseWorkPriorities.Value)
         {
             // Agent 為了 1/2/4 開啟手動優先級：只有目前仍是 Agent 留下的值時才關回去。
-            if (_world.UseWorkPriorities == frame.NewUseWorkPriorities.Value)
+            if (blockedPriorities.Count == 0 && _world.UseWorkPriorities == frame.NewUseWorkPriorities.Value)
             {
                 _world.SetUseWorkPriorities(frame.OldUseWorkPriorities.Value);
                 restoredManualPriorities = true;
             }
             else
             {
-                failures.Add("manual work priorities changed since RimAgent; left as is.");
+                failures.Add("manual work priorities or a work setting changed since RimAgent; left as is.");
             }
         }
 

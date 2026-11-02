@@ -206,7 +206,15 @@ public sealed class WorkUndoStack
     {
         lock (_gate)
         {
-            return [.. _frames.Select(Clone)];
+            var snapshot = _frames.Select(Clone).ToList();
+            if (_open != null && !_open.IsEmpty)
+            {
+                UndoFrame pending = Clone(_open);
+                pending.Label = "執行中的指令";
+                snapshot.Add(pending);
+                if (snapshot.Count > MaxFrames) snapshot.RemoveAt(0);
+            }
+            return snapshot;
         }
     }
 

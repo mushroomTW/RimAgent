@@ -20,6 +20,7 @@ public sealed class McpManager
     private readonly object _gate = new();
     private List<McpServerEntry> _entries;
     private bool _loaded;
+    private bool _shutdown;
     private string _loadError = string.Empty;
     private readonly Dictionary<string, IMcpServer> _clients =
         new(StringComparer.OrdinalIgnoreCase);
@@ -167,12 +168,19 @@ public sealed class McpManager
     /// <summary>關掉全部 server（不等待行程結束）。</summary>
     public void Shutdown()
     {
-        List<string> names;
+        List<IMcpServer> servers;
         lock (_gate)
         {
-            names = [.. _clients.Keys];
+            _shutdown = true;
+            servers = [.. _clients.Values];
+            _clients.Clear();
+            _lastUsed.Clear();
         }
-        foreach (string name in names) Drop(name);
+        foreach (IMcpServer server in servers)
+        {
+            try { server.Dispose(); }
+            catch (Exception) { /* 關閉失敗不影響遊戲。 */ }
+        }
     }
 
     private List<McpServerEntry> Entries()
@@ -202,6 +210,7 @@ public sealed class McpManager
     {
         lock (_gate)
         {
+            if (_shutdown) throw new ObjectDisposedException(nameof(McpManager));
             IMcpServer running;
             if (_clients.TryGetValue(entry.Name, out running))
             {
@@ -218,6 +227,7 @@ public sealed class McpManager
             IList<McpServerTool> tools = await server.ListToolsAsync(cancellationToken).ConfigureAwait(false);
             lock (_gate)
             {
+                if (_shutdown) throw new ObjectDisposedException(nameof(McpManager));
                 IMcpServer existing;
                 if (_clients.TryGetValue(entry.Name, out existing))
                 {
