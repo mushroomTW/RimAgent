@@ -12,7 +12,7 @@
 
 An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in natural language through 77 tools, with control over when actions require approval.
 
-**RimWorld 1.7** &nbsp;·&nbsp; **77 Tools** &nbsp;·&nbsp; **Autonomous & Auto Modes** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.7** &nbsp;·&nbsp; **77 Tools** &nbsp;·&nbsp; **Proactive Care** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.20.1-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -51,9 +51,9 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 ## Highlights
 
 - **77 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
-- **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
+- **Four execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
-- **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel), and subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
+- **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel); subagents and `/compact` summaries each get their own model and reasoning setting.
 - **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills or subagents, or connect trusted local MCP servers.
 - **Saved progress:** the transcript, model history, scheduler, goals, this save's memories, and `/undo` state persist with the game; global memory lives in the mod folder and is shared by every save.
 
@@ -63,7 +63,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. Everything else is set under **Model roles** in mod settings (after hermes-agent's auxiliary models): the subagent default, each subagent, the Auto-mode classifier and `/compact` summaries each pick a model (**Default (agent's current model)**, **Fallback**, or a fallback-chain entry) and a reasoning level. All of them follow the agent's current model by default. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
+- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. Everything else is set under **Model roles** in mod settings (after hermes-agent's auxiliary models): the subagent default, each subagent and `/compact` summaries each pick a model (**Default (agent's current model)**, **Fallback**, or a fallback-chain entry) and a reasoning level. All of them follow the agent's current model by default. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
 - Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default. Drag across any message to select and copy its text; right-click a tool row to copy it. LaTeX math (`$...$`) is shown as plain readable text.
 - The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
@@ -100,16 +100,15 @@ One setting decides how much the agent may do on its own:
 | --- | --- |
 | **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
 | **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
-| **YOLO** | Permitted commands, including MCP calls, run without confirmation. A fixed blacklist excludes high-risk tools such as trade, caravans, and surgery; generic gizmo, right-click and dialog options still ask every time. No background scheduler. |
-| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model and reasoning under Model roles in mod settings: it follows the agent's current model by default, or you can pin a fallback-chain entry or Fallback. |
-| **Autonomous** | Adds emergency responses, base upkeep, and a fixed-cadence scheduled check. Commands run directly, without the YOLO blacklist or a daily tool budget; cooldown is configurable. |
+| **Execute** | Routine commands run directly; major commands require confirmation. Proactive care has a separate confirmation setting. |
+| **Full access** | Enabled tools, including MCP, run without execution-mode restrictions. Category switches still apply. |
 
 ### Confirmation details
 
 - **Confirm / Discard:** Confirm executes the captured tool call and arguments without asking the model again. Discard or a new instruction clears pending calls.
 - If a confirmed command fails, later commands remain pending for another confirmation. The failed command is removed because it may have partially taken effect; the log shows how many commands completed and remain.
-- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool`, the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`) or generic options (`use_gizmo`, `use_right_click_option`, `choose_option`). Auto still reviews every command.
-- **MCP calls:** `mcp_call_tool` needs explicit approval in Confirm mode, passes through the classifier in Auto mode, and runs directly in YOLO or Autonomous mode.
+- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool`, the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`) or generic options (`use_gizmo`, `use_right_click_option`, `choose_option`).
+- **MCP calls:** In Confirm and Execute modes, MCP calls require approval. Full access runs enabled MCP tools directly; proactive care in Execute mode follows its major-action confirmation setting.
 
 > [!WARNING]
 > Combat orders reach the game several seconds after speaking due to LLM round-trip latency. They are designed for strategic positioning, rally points, and tactical retreats, not split-second micro-control.
@@ -123,7 +122,6 @@ One setting decides how much the agent may do on its own:
 
 Set up a decision model in **RimLLM Framework's Decision tab** and RimAgent uses it for a few high-frequency judgements — cases where the set of valid answers is known in advance and no text has to be generated, so these calls are cheaper and faster than a chat model:
 
-- **Auto mode risk checks:** instead of a second chat-model call per command, the decision model answers "how hard is this action to undo" and "did the player ask for this action"; the answer decides whether the command runs or is rejected with a reason. The criteria live in `AgentPack/Prompts/DecisionRisk.md` and you can rewrite them for your own colony.
 - **Goal completion audit:** when the agent claims a `/goal` is complete, the decision model independently checks whether the work really is done, whether the agent still has steps of its own, and whether it is stuck on something only you can provide. A goal that fails the audit keeps running and is asked for evidence instead of being removed.
 - **Task routing:** pick **Auto routing** in the Agent window's model dropdown and every instruction is classified first (observe, routine, build, risky), then sent with that category's model and reasoning level. Categories and their models are edited under Decision routing in mod settings.
 
@@ -135,13 +133,15 @@ RimAgent can pick which decision provider and model to use (Decision model in mo
 
 ## Autonomy (Autonomous Mode)
 
-Select **Autonomous** from the Agent window's mode dropdown to let the agent act in the background:
+Enable **proactive care** in mod settings to let the agent respond to events and review the colony in the background. It follows the current execution mode. In Execute mode, major proactive actions run without confirmation by default; enable the separate confirmation setting to review them. Full access always runs enabled tools directly. Ask remains read-only and Confirm still asks for every command.
+
+Major actions are identified by each tool's fixed risk label, including trade, surgery, generic buttons and MCP calls; the model does not classify them individually.
 
 - **Event responses:** React to raids beginning or ending, impending mental breaks, food shortages, downed or bleeding colonists, and fires. New choice letters and dialogs are checked every 2 real-time seconds, including while a dialog pauses the game; each choice triggers once.
 - **Base upkeep:** On by default. The agent acts when temperatures become dangerous, a colonist has no bed, beds are outdoors, nothing is running on power, no research project is running, or moods are low but nobody is breaking yet. None of these kill anyone or raise an alert, but left alone they compound into the emergencies above. Turn the whole group off in mod settings.
 - **Retries while unresolved:** A condition that persists is retried with backoff (1 in-game hour, then 2), for three attempts. If it is still unresolved the conversation reports that the agent gave up, and it starts fresh only once the situation clears. Stopping a run from the Agent window (or `/stop`) also stops retries for that condition until it clears; a stopped routine inspection waits a full interval before running again. Older versions asked once and then ignored a fire that kept burning.
-- **Scheduled checks:** When nothing is wrong, push one thing forward every 6 in-game hours (a construction project, a research lead, a crop field, an order). The cadence is fixed and deliberately not configurable: it is the agent's operating rhythm, not a noise preference.
-- **Budget and cooldown:** No daily tool-call limit, but each autonomous run is capped at 20 tool calls to stop background loops. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
+- **Scheduled checks:** Every 6 in-game hours, the agent reviews the colony and decides what to do next.
+- **Budget and cooldown:** Each proactive run has a 20-call limit except in Full access mode. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
 - **Persistent goals:** `/goal` runs independently in any mode and follows that mode's approval policy. Goals can contain up to 4,000 characters; longer objectives are rejected instead of truncated. Goals, status, and progress are saved with the game. Completion requires a successful query after the last change. The goal pauses after the same blocker repeats for three turns, three turns pass without a successful tool action, repeated errors, or 60 turns in one run; `/goal resume` starts a fresh run. Editing does not undo a manual pause.
 
 ---
@@ -172,7 +172,7 @@ Web search connects directly to [Parallel Search MCP](https://docs.parallel.ai/i
 
 Memory uses the Agent Framework's `FileMemoryProvider` in two scopes, chosen by the file name. A name starting with `global_` is **global memory**: it is kept in `Memory/global-memory.json` inside the same RimAgent folder as the run logs and is shared by every save, so it suits the player's standing preferences and rules (`global_preferences.md` by convention). Every other name is **memory for this save**: it is stored in the game save, a new game starts empty, and loading an older save restores its memories. Every instruction receives an index built from both scopes (file names and descriptions of every file in both scopes), and the agent reads a file when it is relevant. Each scope allows 30 files of 4,000 characters; names are limited to 60 characters, and descriptions are flattened to one line of up to 200 characters. Reading, listing and searching are queries; writing, editing and deleting follow the current mode's command policy, so Ask mode can only read memories. Memories named `global_*` that an older save still holds are handed back to global memory when it is loaded.
 
-Subagents follow hermes-agent's `delegate_task`. Each subagent is an `AgentPack/Agents/<name>/AGENT.md` file whose frontmatter declares its tool categories, `read_only`, and optional `reasoning`. The agent passes up to four task briefs per call. Each task runs in a fresh context with the subagent's own prompt, tools and model, and only the final report enters the agent's history. Read-only subagents run their tasks in parallel; others run them in order. A subagent only gets categories that are also allowed in the settings. Its commands pass through the same mode, confirmation, classifier, autonomous budget, `/undo` and action log, and the action log labels its tool calls with its name. Subagents cannot delegate further. The shipped `scout` is read-only reconnaissance across every colony category.
+Subagents follow hermes-agent's `delegate_task`. Each subagent is an `AgentPack/Agents/<name>/AGENT.md` file whose frontmatter declares its tool categories, `read_only`, and optional `reasoning`. The agent passes up to four task briefs per call. Each task runs in a fresh context with the subagent's own prompt, tools and model, and only the final report enters the agent's history. Read-only subagents run their tasks in parallel; others run them in order. A subagent only gets categories that are also allowed in the settings. Its commands pass through the same mode, confirmation, proactive budget, `/undo` and action log, and the action log labels its tool calls with its name. Subagents cannot delegate further. The shipped `scout` is read-only reconnaissance across every colony category.
 
 ---
 

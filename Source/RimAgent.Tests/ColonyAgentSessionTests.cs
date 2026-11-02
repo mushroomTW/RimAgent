@@ -37,6 +37,41 @@ public class ColonyAgentSessionTests
         return new ColonyAgentSession(_client, _world, () => _permissions, maxSteps);
     }
 
+    [TestCase(AgentMode.Execute, false, false, true)]
+    [TestCase(AgentMode.Execute, true, false, false)]
+    [TestCase(AgentMode.Execute, true, true, true)]
+    [TestCase(AgentMode.Confirm, true, false, true)]
+    [TestCase(AgentMode.Autonomous, true, true, false)]
+    public async Task MajorChoiceFollowsModeAndProactiveConfirmation(AgentMode mode, bool proactive, bool confirmMajor, bool blocked)
+    {
+        _world.PendingChoices.Add(new PendingChoiceInfo
+        {
+            Id = "letter-12", Title = "Wanderer joins",
+            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Accept" } }
+        });
+        _client.CallTool("choose_option", new { choiceId = "letter-12", option = 1 }).Reply("done");
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => mode)
+        {
+            ConfirmAutonomousMajor = () => confirmMajor
+        };
+
+        await session.SendAsync("Handle the choice", autonomous: proactive);
+
+        Assert.That(session.HasPendingConfirmation, Is.EqualTo(blocked));
+        Assert.That(_world.Calls.Any(), Is.EqualTo(!blocked));
+        if (mode == AgentMode.Autonomous && proactive)
+            Assert.That(session.Transcript.Snapshot().Single(e => e.ToolName == "choose_option").BudgetConsumed, Is.True);
+    }
+
+    [Test]
+    public void FullAccessStillHonorsDisabledCategories()
+    {
+        var registry = new AgentToolRegistry(_world, new AgentTranscript());
+        var tools = registry.Select(ToolPermissions.For(ToolCategory.Observe), AgentMode.Autonomous);
+        Assert.That(tools.Select(t => t.Name), Does.Not.Contain("mcp_call_tool"));
+        Assert.That(tools.Select(t => t.Name), Does.Not.Contain("set_work_priorities"));
+    }
+
     [Test]
     public async Task ToolCallIsExecutedAgainstWorldAndLogged()
     {
@@ -695,6 +730,26 @@ public class ColonyAgentSessionTests
 
         Assert.That(_world.Calls, Does.Contain("OrderAttack(102,900)"));
         Assert.That(_client.CallCount, Is.EqualTo(3), "The confirmation must not re-run the model tool loop.");
+    }
+
+    [Test]
+    public async Task ErrorResultKeepsRemainingConfirmationVisible()
+    {
+        _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
+               .Reply("Waiting for confirmation.");
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
+        await session.SendAsync("set doctor to 1");
+        session.ConfirmGate.DiscardPendingApprovals();
+        session.ConfirmGate.RegisterPendingApproval("first", _ => Task.FromResult<object>("Error: target disappeared"));
+        int laterCalls = 0;
+        session.ConfirmGate.RegisterPendingApproval("later", _ => { laterCalls++; return Task.FromResult<object>("ok"); });
+
+        Assert.That(await session.ConfirmAsync(rememberForSession: true), Is.Null);
+        Assert.That(session.HasPendingConfirmation, Is.True);
+        Assert.That(session.Transcript.Snapshot().Last().Text, Does.Contain("target disappeared"));
+        Assert.That(laterCalls, Is.Zero);
+        Assert.That(await session.ConfirmAsync(), Does.Contain("Executed 1"));
+        Assert.That(laterCalls, Is.EqualTo(1));
     }
 
     [Test]

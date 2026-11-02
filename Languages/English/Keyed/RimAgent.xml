@@ -101,6 +101,8 @@
   <RimAgent.Settings.Mode.AskDesc>Read-only. The agent can inspect the colony and advise, but has no tools that change it.</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>Confirm</RimAgent.Settings.Mode.Confirm>
   <RimAgent.Settings.Mode.ConfirmDesc>Every command requires confirmation: any state-changing action is previewed and waits for your Confirm; queries run directly.</RimAgent.Settings.Mode.ConfirmDesc>
+  <RimAgent.Settings.Mode.Execute>Execute</RimAgent.Settings.Mode.Execute>
+  <RimAgent.Settings.Mode.ExecuteDesc>Routine actions run directly; major actions require confirmation. A separate setting controls confirmation during proactive care.</RimAgent.Settings.Mode.ExecuteDesc>
   <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
   <RimAgent.Settings.Mode.YoloDesc>Between Confirm and Auto, no scheduler. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); generic gizmo, right-click and dialog options still ask for confirmation; other commands and MCP execute directly without confirmation.</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
@@ -133,9 +135,13 @@
   <RimAgent.Settings.DecisionCategoriesReset>Reset defaults</RimAgent.Settings.DecisionCategoriesReset>
   <RimAgent.Settings.DecisionCategoryDelete>Delete</RimAgent.Settings.DecisionCategoryDelete>
   <RimAgent.Settings.CategoryModel>Model &amp; reasoning:</RimAgent.Settings.CategoryModel>
-  <RimAgent.Settings.Mode.Autonomous>Autonomous</RimAgent.Settings.Mode.Autonomous>
-  <RimAgent.Settings.Mode.AutonomousDesc>After selecting Autonomous mode, the background scheduler starts when the player first sends a chat message. It then acts on routine and events; permitted commands run directly, including MCP, without the YOLO blacklist. Players can still give instructions anytime.</RimAgent.Settings.Mode.AutonomousDesc>
-  <RimAgent.Settings.AutonomousHeader>Autonomy — the agent acts on its own</RimAgent.Settings.AutonomousHeader>
+  <RimAgent.Settings.Mode.Autonomous>Full access</RimAgent.Settings.Mode.Autonomous>
+  <RimAgent.Settings.Mode.AutonomousDesc>Enabled tools, including MCP, run without confirmation. Proactive care is controlled separately in mod settings; category switches still apply.</RimAgent.Settings.Mode.AutonomousDesc>
+  <RimAgent.Settings.AutonomousHeader>Proactive colony care</RimAgent.Settings.AutonomousHeader>
+  <RimAgent.Settings.AutonomousCare>Enable proactive care</RimAgent.Settings.AutonomousCare>
+  <RimAgent.Settings.AutonomousCareTip>Respond to events and periodically review the colony. The current execution mode and tool category switches still apply.</RimAgent.Settings.AutonomousCareTip>
+  <RimAgent.Settings.ConfirmAutonomousMajor>Confirm major actions during proactive care</RimAgent.Settings.ConfirmAutonomousMajor>
+  <RimAgent.Settings.ConfirmAutonomousMajorTip>In Execute mode, proactive actions marked as major by their tool wait for confirmation. Full access ignores this setting; Confirm mode still confirms every action.</RimAgent.Settings.ConfirmAutonomousMajorTip>
   <RimAgent.Settings.AutoCooldown>Autonomous cooldown: {0} minutes</RimAgent.Settings.AutoCooldown>
   <RimAgent.Settings.AutoCooldownOff>Autonomous cooldown: Disabled</RimAgent.Settings.AutoCooldownOff>
   <RimAgent.Settings.AutoCooldownTip>Minimum wait time between two autonomous runs. Set to 0 to completely disable cooldown and react immediately to events and cycles.</RimAgent.Settings.AutoCooldownTip>

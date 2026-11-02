@@ -158,7 +158,8 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             return true;
         }
 
-        if (_risk != ToolRisk.Query && _gate != null && _gate.TryGetFailedCall(Name, callKey, out string previousError))
+        if (_risk != ToolRisk.Query && _gate != null && _gate.Mode != AgentMode.Autonomous
+            && _gate.TryGetFailedCall(Name, callKey, out string previousError))
         {
             entry.Result = ToolText.Error("this exact call already failed twice in this instruction and was not run again. " +
                 "Do not repeat it unchanged: use different arguments, try another approach, or stop and tell the player. " +

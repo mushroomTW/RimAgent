@@ -221,19 +221,18 @@ public class CompactionTests
     }
 
     [Test]
-    public async Task RejectedBusyMessageDoesNotStartAutonomousScheduler()
+    public async Task RejectedBusyMessageDoesNotInvokeAcceptedCallback()
     {
         var client = new GateChatClient();
         var session = new ColonyAgentSession(client, _world, () => _permissions, 8);
-        var component = new RimAgentGameComponent(null);
+        int accepted = 0;
 
-        Task<string> running = session.SendAsync("第一則對話", onAccepted: component.StartAutonomousAfterPlayerMessage);
-        Assert.That(component.AutonomousConversationStarted, Is.True);
-        component.ResetAutonomousConversation();
+        Task<string> running = session.SendAsync("第一則對話", onAccepted: () => accepted++);
+        Assert.That(accepted, Is.EqualTo(1));
 
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await session.SendAsync("忙碌時的對話", onAccepted: component.StartAutonomousAfterPlayerMessage));
-        Assert.That(component.AutonomousConversationStarted, Is.False);
+            await session.SendAsync("忙碌時的對話", onAccepted: () => accepted++));
+        Assert.That(accepted, Is.EqualTo(1));
 
         client.Release("完成");
         await running;

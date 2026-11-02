@@ -147,7 +147,7 @@ public class ModelCallOptimizationTests
                .CallTool("set_schedule", new { endHour = 6, colonists = "Nobody", assignment = "Sleep", startHour = 22 })
                .CallTool("set_schedule", new { assignment = "Sleep", endHour = 6, colonists = "Nobody", startHour = 22 })
                .Reply("gave up.");
-        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Execute);
 
         await session.SendAsync("let Nobody sleep at night");
 
@@ -156,6 +156,22 @@ public class ModelCallOptimizationTests
         Assert.That(tools[1].Result, Does.Not.Contain("already failed"), "換了參數順序的第一次重試照常執行");
         Assert.That(tools[2].Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("already failed").And.Contain("Previous result"));
         Assert.That(tools[2].BudgetConsumed, Is.False, "擋下的重送不扣自主額度");
+    }
+
+    [Test]
+    public async Task FullAccessDoesNotBlockRepeatedFailedCalls()
+    {
+        _client.CallTool("set_schedule", new { colonists = "Nobody", startHour = 22, endHour = 6, assignment = "Sleep" })
+               .CallTool("set_schedule", new { colonists = "Nobody", startHour = 22, endHour = 6, assignment = "Sleep" })
+               .CallTool("set_schedule", new { colonists = "Nobody", startHour = 22, endHour = 6, assignment = "Sleep" })
+               .Reply("done");
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
+
+        await session.SendAsync("let Nobody sleep");
+
+        List<TranscriptEntry> tools = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool)];
+        Assert.That(tools, Has.Count.EqualTo(3));
+        Assert.That(tools[2].Result, Does.Not.Contain("already failed"));
     }
 
     [Test]

@@ -252,6 +252,20 @@ public class CommandGateTests
     }
 
     [Test]
+    public async Task ErrorResultDoesNotRememberApprovalOrConsumeLaterCommands()
+    {
+        var gate = new ConfirmationGate(() => AgentMode.Confirm);
+        gate.RegisterPendingApproval("set_schedule", _ => Task.FromResult<object>("Error: target disappeared"));
+        gate.RegisterPendingApproval("set_work_priorities", _ => Task.FromResult<object>("ok"));
+
+        var error = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await gate.ApprovePendingAsync(CancellationToken.None, rememberForSession: true));
+        Assert.That(error.Message, Does.Contain("target disappeared"));
+        Assert.That(gate.IsApprovedForSession("set_schedule"), Is.False);
+        Assert.That(gate.HasPendingApprovals, Is.True);
+    }
+
+    [Test]
     public async Task ParallelInvocationsKeepTheirOwnConfirmationState()
     {
         var gate = new ConfirmationGate(() => AgentMode.Confirm);

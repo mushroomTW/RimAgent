@@ -43,6 +43,8 @@ public sealed class ConfirmationGate
     private int _lastApprovalExecutedCount;
     // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
     private int _remainingToolCalls = -1;
+    private bool _autonomousRun;
+    private bool _confirmAutonomousMajor;
     private readonly InstructionCache<FailedCall> _failedCalls = new();
 
     public ConfirmationGate(Func<AgentMode> mode)
@@ -80,6 +82,10 @@ public sealed class ConfirmationGate
                 return false;
             case AgentMode.Confirm:
                 return invocation?.Risk == ToolRisk.Query || IsApprovedForSession(invocation?.ToolName);
+            case AgentMode.Execute:
+                return invocation != null && (invocation.Risk != ToolRisk.Confirm
+                    || (_autonomousRun && !_confirmAutonomousMajor)
+                    || IsApprovedForSession(invocation.ToolName));
             case AgentMode.Yolo:
                 // 通用工具（gizmo／右鍵選項／對話選項）在 YOLO 仍需逐次確認，避免名稱固定的工具被當成安全通道。
                 return !AgentToolRegistry.RequiresExplicitConfirmationInYolo(invocation?.ToolName);
@@ -128,7 +134,10 @@ public sealed class ConfirmationGate
                 _pending.RemoveAt(0);
             }
             // 核准後會直接執行工具；續行必須留在呼叫端的主線程，否則第二批命令會落到執行緒池碰遊戲狀態。
-            await approval.ExecuteAsync(cancellationToken);
+            object result = await approval.ExecuteAsync(cancellationToken);
+            // 工具通常以錯誤文字回報失敗而非拋出例外；失敗不可記成永久放行。
+            if ((result?.ToString() ?? string.Empty).StartsWith("Error: ", StringComparison.Ordinal))
+                throw new InvalidOperationException(result.ToString());
             lock (_gate) _lastApprovalExecutedCount++;
             // 執行成功才記：中途失敗或取消時，沒真的跑過的工具不該被永久放行。
             if (rememberForSession && CanRememberForSession(approval.ToolName))
@@ -182,11 +191,13 @@ public sealed class ConfirmationGate
         }
     }
 
-    internal void BeginToolBudget(int? maximumCalls)
+    internal void BeginToolBudget(int? maximumCalls, bool autonomousRun = false, bool confirmAutonomousMajor = false)
     {
         lock (_gate)
         {
             _remainingToolCalls = maximumCalls.HasValue ? Math.Max(0, maximumCalls.Value) : -1;
+            _autonomousRun = autonomousRun;
+            _confirmAutonomousMajor = confirmAutonomousMajor;
             // 新的一句指令：失敗紀錄與分類器快取（由呼叫端另行清空）都不跨指令。
             _failedCalls.Clear();
         }
@@ -197,6 +208,8 @@ public sealed class ConfirmationGate
         lock (_gate)
         {
             _remainingToolCalls = -1;
+            _autonomousRun = false;
+            _confirmAutonomousMajor = false;
         }
     }
 
@@ -219,7 +232,8 @@ public sealed class ConfirmationGate
         {
             if (_remainingToolCalls < 0)
             {
-                consumed = false;
+                // 無上限的背景任務仍要計入使用統計，但不限制呼叫次數。
+                consumed = _autonomousRun;
                 return true;
             }
             if (_remainingToolCalls == 0)

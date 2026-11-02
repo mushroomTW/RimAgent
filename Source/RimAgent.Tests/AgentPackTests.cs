@@ -178,7 +178,7 @@ public class AgentPackTests
 
         Assert.That(pack.Preamble, Does.Contain("You are RimAgent"));
         Assert.That(pack.PlayerNotes, Is.Empty, "AGENTS.md 留給玩家自己設計，出貨必須是空的");
-        Assert.That(pack.Conduct, Does.Contain("Minimal change"));
+        Assert.That(pack.Conduct, Does.Contain("For player instructions"));
         Assert.That(pack.AskModeNote, Does.Contain("Ask mode"));
         Assert.That(pack.ClassifierPrompt, Does.Contain("\"risk\""));
         // 從 enum 推導，不寫死清單：新增觸發卻忘了寫章節時，這裡會直接紅掉。
@@ -190,7 +190,7 @@ public class AgentPackTests
             Assert.That(pack.Autonomous.Tasks.ContainsKey(name), Is.True, name + " 缺章節");
             Assert.That(pack.Autonomous.Tasks[name], Is.Not.Empty, name + " 空章節");
         }
-        // 共用通則同樣不能空：它決定「沒緊急狀況時要不要產出」，空了等於集體退化成分享。
+        // 共用任務說明不能空，模型需要知道這是由它自主處理的事件。
         Assert.That(pack.Autonomous.Preamble, Is.Not.Empty, "Autonomous.en.md 缺少共用通則（第一個 ## 之前）");
         Assert.That(AutonomousPrompts.Build(pack.Autonomous, AutonomousTrigger.Interval),
             Does.StartWith(pack.Autonomous.Preamble.Trim()), "共用通則要真的接在任務前面");

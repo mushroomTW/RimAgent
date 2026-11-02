@@ -20,8 +20,7 @@ internal static class AutonomousPrompts
         {
             return null;
         }
-        // 共用通則一定要跟著送：像「沒緊急狀況也要產出、不要只回報」這種規則
-        // 寫在檔頭比在十三個章節各寫一次好，漏送就等於規則不存在。
+        // 共用任務說明與個別事件一起交給模型；如何處理由模型判斷。
         string preamble = pack.Preamble;
         if (string.IsNullOrWhiteSpace(preamble)) return task;
         return preamble.Trim() + "\n\n" + task;

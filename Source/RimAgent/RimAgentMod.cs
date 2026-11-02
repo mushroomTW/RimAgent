@@ -90,6 +90,13 @@ public class RimAgentMod : Mod
         listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
         listing.GapLine();
 
+        bool careWasEnabled = Settings.autonomousCare;
+        listing.CheckboxLabeled("RimAgent.Settings.AutonomousCare".Translate(), ref Settings.autonomousCare,
+            "RimAgent.Settings.AutonomousCareTip".Translate());
+        if (careWasEnabled && !Settings.autonomousCare) RimAgentGameComponent.Instance?.DisableAutonomousCare();
+        listing.CheckboxLabeled("RimAgent.Settings.ConfirmAutonomousMajor".Translate(), ref Settings.confirmAutonomousMajor,
+            "RimAgent.Settings.ConfirmAutonomousMajorTip".Translate());
+
         TaggedString cooldownLabel = Settings.autonomousCooldownMinutes == 0
             ? "RimAgent.Settings.AutoCooldownOff".Translate()
             : "RimAgent.Settings.AutoCooldown".Translate(Settings.autonomousCooldownMinutes);
@@ -217,10 +224,6 @@ public class RimAgentMod : Mod
                 },
                 "RimAgent.Settings.SubagentModelForTip".Translate(name));
         }
-        DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel".Translate(),
-            () => Settings.classifierModel, v => Settings.classifierModel = v,
-            "RimAgent.Settings.ClassifierModelTip".Translate(),
-            () => Settings.classifierReasoning, v => Settings.classifierReasoning = v);
         DrawModelDropdown(listing, "RimAgent.Settings.CompactModel".Translate(),
             () => Settings.compactModel, v => Settings.compactModel = v,
             "RimAgent.Settings.CompactModelTip".Translate(),

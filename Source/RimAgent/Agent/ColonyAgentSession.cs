@@ -269,6 +269,9 @@ public sealed class ColonyAgentSession
     /// <summary>Agent 此刻實際在做的事，供視窗的執行中提示；不存檔。</summary>
     public AgentActivityTracker Activity { get; } = new AgentActivityTracker();
 
+    /// <summary>背景照顧是否需要確認重大操作；完整權限模式不受影響。</summary>
+    public Func<bool> ConfirmAutonomousMajor { get; set; }
+
     /// <summary>工作設定復原堆疊（工作優先級與時間表）。UI 的復原鍵經此操作。</summary>
     public WorkUndoStack Undo { get; }
 
@@ -624,7 +627,7 @@ public sealed class ColonyAgentSession
         }
         onAccepted?.Invoke();
         Undo.BeginFrame();
-        ConfirmGate.BeginToolBudget(maxToolSteps);
+        ConfirmGate.BeginToolBudget(maxToolSteps, autonomous, ConfirmAutonomousMajor?.Invoke() == true);
         ApplyRunStepLimit(maxToolSteps);
 
         try

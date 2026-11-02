@@ -122,7 +122,7 @@ public abstract class EndgameExperimentBase : GameComponent
         settings.agentModel = FreeModel;
         settings.recordRuns = true;
         settings.mode = autonomous ? AgentMode.Autonomous : AgentMode.Ask;
-        if (autonomous) agent.StartAutonomousAfterPlayerMessage();
+        settings.autonomousCare = autonomous;
         return true;
     }
 

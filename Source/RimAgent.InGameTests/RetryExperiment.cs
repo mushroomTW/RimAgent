@@ -93,6 +93,7 @@ public sealed class RetryExperimentComponent : GameComponent
         }
         // 模型沿用 seed 進來的玩家設定；只在隔離環境的記憶體裡改模式與紀錄開關，不寫回設定檔。
         settings.mode = AgentMode.Autonomous;
+        settings.autonomousCare = true;
         settings.recordRuns = true;
 
         string folder = Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent");
@@ -105,8 +106,6 @@ public sealed class RetryExperimentComponent : GameComponent
 
         // quicktest 地圖開局就有敵對目標，會先觸發襲擊、蓋過基地狀況；清掉讓情境從「沒床」乾淨開始。
         int cleared = ClearHostiles(Find.CurrentMap);
-        // 自主模式要等玩家先講過話才啟動排程器；實驗沒有玩家，直接開。
-        agent.StartAutonomousAfterPlayerMessage();
         Log.Message(LogPrefix + "started at tick " + tick + "; cleared " + cleared + " hostiles; timeline " + _timelinePath + "; folder " + folder);
         Sample(tick, "start, cleared " + cleared + " hostiles");
     }

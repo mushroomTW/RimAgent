@@ -99,6 +99,10 @@ public class RimAgentSettings : ModSettings
     public const int MaxCooldownMinutes = 60;
 
     public int autonomousCooldownMinutes = DefaultCooldownMinutes;
+    /// <summary>是否主動照顧殖民地；獨立於工具執行模式。</summary>
+    public bool autonomousCare = false;
+    /// <summary>主動照顧時重大操作是否需要確認；完整權限模式不受影響。</summary>
+    public bool confirmAutonomousMajor = false;
     public bool autoOnRaid = true;
     public bool autoOnMentalBreak = true;
     public bool autoOnFoodShortage = true;
@@ -223,6 +227,8 @@ public class RimAgentSettings : ModSettings
             Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
         }
         Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
+        if (Scribe.mode == LoadSaveMode.LoadingVars && (mode == AgentMode.Auto || mode == AgentMode.Yolo))
+            mode = AgentMode.Confirm;
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
         Scribe_Values.Look(ref classifierModel, "classifierModel", FollowAgentModel);
@@ -244,6 +250,8 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
         Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
+        Scribe_Values.Look(ref autonomousCare, "autonomousCare", false);
+        Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", false);
         Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);
         Scribe_Values.Look(ref autoOnMentalBreak, "autoOnMentalBreak", true);
         Scribe_Values.Look(ref autoOnFoodShortage, "autoOnFoodShortage", true);

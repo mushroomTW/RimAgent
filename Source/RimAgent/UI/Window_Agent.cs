@@ -1118,7 +1118,7 @@ public class Window_Agent : Window
         if (DrawUnifiedButton(modeRect, modeStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
             var options = new List<FloatMenuOption>();
-            foreach (AgentMode mode in (AgentMode[])Enum.GetValues(typeof(AgentMode)))
+            foreach (AgentMode mode in new[] { AgentMode.Ask, AgentMode.Confirm, AgentMode.Execute, AgentMode.Autonomous })
             {
                 options.Add(new FloatMenuOption(ModeLabel(mode), () => SetMode(settings, mode))
                 {
@@ -1215,6 +1215,7 @@ public class Window_Agent : Window
         {
             case AgentMode.Ask: return "RimAgent.Settings.Mode.Ask".Translate();
             case AgentMode.Confirm: return "RimAgent.Settings.Mode.Confirm".Translate();
+            case AgentMode.Execute: return "RimAgent.Settings.Mode.Execute".Translate();
             case AgentMode.Yolo: return "RimAgent.Settings.Mode.Yolo".Translate();
             case AgentMode.Auto: return "RimAgent.Settings.Mode.Auto".Translate();
             default: return "RimAgent.Settings.Mode.Autonomous".Translate();
@@ -1228,6 +1229,7 @@ public class Window_Agent : Window
         {
             case AgentMode.Ask: return "RimAgent.Settings.Mode.AskDesc".Translate();
             case AgentMode.Confirm: return "RimAgent.Settings.Mode.ConfirmDesc".Translate();
+            case AgentMode.Execute: return "RimAgent.Settings.Mode.ExecuteDesc".Translate();
             case AgentMode.Yolo: return "RimAgent.Settings.Mode.YoloDesc".Translate();
             case AgentMode.Auto: return "RimAgent.Settings.Mode.AutoDesc".Translate();
             default: return "RimAgent.Settings.Mode.AutonomousDesc".Translate();
@@ -1242,7 +1244,6 @@ public class Window_Agent : Window
     private static void SetMode(RimAgentSettings settings, AgentMode mode)
     {
         if (settings == null || settings.mode == mode) return;
-        RimAgentGameComponent.Instance?.ResetAutonomousConversation();
         settings.mode = mode;
         settings.Write();
     }
@@ -1807,13 +1808,7 @@ public class Window_Agent : Window
         }
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
-        Observe(session, session.SendAsync(text, _cts.Token, onAccepted: () =>
-        {
-            if (RimAgentMod.Settings != null && RimAgentMod.Settings.mode == AgentMode.Autonomous)
-            {
-                RimAgentGameComponent.Instance?.StartAutonomousAfterPlayerMessage();
-            }
-        }));
+        Observe(session, session.SendAsync(text, _cts.Token));
     }
 
     private void ProbeCapabilities()
