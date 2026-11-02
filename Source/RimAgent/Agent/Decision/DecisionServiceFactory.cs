@@ -38,6 +38,17 @@ public static class DecisionServiceFactory
         }
     }
 
+    /// <summary>指定供應商可獨立於框架預設供應商啟用。</summary>
+    public static bool CanUseDecisionModel(string providerId)
+    {
+        return CanUseDecisionModel(GetAvailability(), providerId);
+    }
+
+    internal static bool CanUseDecisionModel(DecisionAvailability availability, string providerId)
+    {
+        return availability != null && (availability.Enabled || !string.IsNullOrWhiteSpace(providerId));
+    }
+
     /// <summary>
     /// 建立決策服務；沒有任何可用的決策供應商時回 null（呼叫端據此走備援路徑）。
     /// </summary>
@@ -49,7 +60,7 @@ public static class DecisionServiceFactory
         // 玩家可能只在那個供應商上設了金鑰，所以指定供應商也算有設定。
         DecisionAvailability availability = GetAvailability();
         string provider = providerId?.Invoke();
-        if (availability == null || (!availability.Enabled && string.IsNullOrWhiteSpace(provider)))
+        if (!CanUseDecisionModel(availability, provider))
         {
             return null;
         }

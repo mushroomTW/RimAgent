@@ -1130,7 +1130,7 @@ public class RimAgentGameComponent : GameComponent
             ComposeInstructions,
             _mcp,
             classifierClient: null,
-            classifierModel: () => settings?.ResolveClassifierModel(),
+            classifierModel: () => settings?.ResolveClassifierModel(_session?.CurrentAgentModel),
             classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
             decisionRiskCriteria: () => _pack != null ? _pack.DecisionRiskCriteria : string.Empty,
             askNote: () => _pack != null ? _pack.AskModeNote : string.Empty,
@@ -1142,9 +1142,9 @@ public class RimAgentGameComponent : GameComponent
             routing: new ModelRouting
             {
                 ClassifierReasoning = () => settings.classifierReasoning,
-                CompactModel = () => settings.ResolveModelSlot(settings.compactModel),
+                CompactModel = () => settings.ResolveModelSlot(settings.compactModel, _session?.CurrentAgentModel),
                 CompactReasoning = () => settings.compactReasoning,
-                SubagentModel = settings.ResolveSubagentModel,
+                SubagentModel = name => settings.ResolveSubagentModel(name, _session?.CurrentAgentModel),
                 SubagentReasoning = () => settings.subagentReasoning
             });
         session.Reasoning = settings.reasoning;

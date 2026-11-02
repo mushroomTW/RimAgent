@@ -27,6 +27,12 @@ internal sealed class ScriptedChatClient : IChatClient
         return this;
     }
 
+    public ScriptedChatClient ReplyWithModel(string text, string modelId)
+    {
+        _script.Add((_, __) => new ChatResponse(new ChatMessage(ChatRole.Assistant, text)) { ModelId = modelId });
+        return this;
+    }
+
     public ScriptedChatClient ReplyWithUsage(string text, long inputTokens)
     {
         _script.Add((_, __) => new ChatResponse(new ChatMessage(ChatRole.Assistant, text))

@@ -171,6 +171,7 @@ public class Window_Agent : Window
     private AgentTranscript _linesTranscript;
     private readonly HashSet<int> _combatNoted = [];
     private string _capabilityWarning;
+    private DateTime _nextCapabilityProbe;
     private CancellationTokenSource _cts;
     private int _slashIndex;
     private bool _posInitialized;
@@ -235,6 +236,7 @@ public class Window_Agent : Window
         base.WindowUpdate();
         DrainObservedTask();
         LoadPendingScreenshot();
+        if (DateTime.UtcNow >= _nextCapabilityProbe) ProbeCapabilities();
         if (!_posInitialized) return;
 
         // 小於可讀尺寸時保留玩家正在調整的大小，不跳回預設寬高。
@@ -1167,7 +1169,7 @@ public class Window_Agent : Window
                     tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
                 }
             };
-            if (DecisionServiceFactory.GetAvailability()?.Enabled == true)
+            if (DecisionServiceFactory.CanUseDecisionModel(settings?.decisionProvider))
             {
                 options.Add(new FloatMenuOption("RimAgent.Model.AutoRouting".Translate(), () => SetModel(settings, RimAgentSettings.AutoRoutingModel))
                 {
@@ -1786,6 +1788,11 @@ public class Window_Agent : Window
                 return;
             }
         }
+        if (!interjected && text[0] != '/')
+        {
+            ProbeCapabilities();
+            if (_capabilityWarning != null) return;
+        }
         _input = string.Empty;
         RememberInput(text);
         _historyIndex = -1;
@@ -1798,8 +1805,6 @@ public class Window_Agent : Window
             else Notice(session, "RimAgent.Slash.Unknown".Translate(text));
             return;
         }
-        if (_capabilityWarning != null) return;
-
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         Observe(session, session.SendAsync(text, _cts.Token, onAccepted: () =>
@@ -1813,6 +1818,7 @@ public class Window_Agent : Window
 
     private void ProbeCapabilities()
     {
+        _nextCapabilityProbe = DateTime.UtcNow.AddSeconds(2);
         try
         {
             _capabilityWarning = CheckFunctionCalling() ? null : "RimAgent.NoFunctionCalling".Translate().ToString();

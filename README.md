@@ -84,7 +84,7 @@ Drag the window to move it or its lower-right corner to resize it. RimAgent reme
 | `/compact` | Compact context: summarize older model history with one LLM call, keeping only recent turns (visible log kept) |
 | `/stop` | Immediately abort the currently running instruction |
 
-> **Context compaction:** Before a request, Agent Framework estimates history tokens. At the configured share of the model context limit supplied by RimLLM Framework (30–95%, 90% by default, with output tokens reserved), older tool output is folded without another model call. Auto-fold is unavailable if the model limit is unknown. Stored history is separately trimmed after 120 messages to about 60; the visible transcript remains. `/compact` requests a deeper, model-generated summary.
+> **Context compaction:** Before a request, Agent Framework estimates history tokens. At the configured share of the smallest known context limit among the selected model and fallback-chain entries (30–95%, 90% by default, with output tokens reserved), older tool output is folded without another model call. Unknown limits are skipped, so a fallback with an unknown or smaller actual limit can still exceed its window; auto-fold is unavailable if no limit is known. Stored history is separately trimmed after 120 messages to about 60; the visible transcript remains. `/compact` requests a deeper, model-generated summary.
 
 > **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB; the settings page can open the log folder directly.
 

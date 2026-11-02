@@ -456,6 +456,47 @@ public class DecisionRoutingTests
     }
 
     [Test]
+    public void AuxiliarySlotsFollowTheCurrentRoutedModel()
+    {
+        _settings.agentModel = RimAgentSettings.AutoRoutingModel;
+        _settings.classifierModel = RimAgentSettings.FollowAgentModel;
+        _settings.compactModel = RimAgentSettings.FollowAgentModel;
+        _settings.subagentModel = RimAgentSettings.FollowAgentModel;
+        Assert.That(_settings.ResolveClassifierModel("provider:routed"), Is.EqualTo("provider:routed"));
+        Assert.That(_settings.ResolveModelSlot(_settings.compactModel, "provider:routed"), Is.EqualTo("provider:routed"));
+        Assert.That(_settings.ResolveSubagentModel("scout", "provider:routed"), Is.EqualTo("provider:routed"));
+        Assert.That(_settings.ResolveModelSlot("provider:explicit", "provider:routed"), Is.EqualTo("provider:explicit"));
+    }
+
+    [Test]
+    public async Task FollowingModelUsesActualFallbackAndResetsWhenSelectionChanges()
+    {
+        _client.ReplyWithModel("done", "provider:actual-fallback");
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8)
+        {
+            PreferredModel = "provider:preferred"
+        };
+        await session.SendAsync("hello");
+        _settings.agentModel = session.PreferredModel;
+        Assert.That(_settings.ResolveModelSlot(RimAgentSettings.FollowAgentModel, session.CurrentAgentModel),
+            Is.EqualTo("provider:actual-fallback"));
+
+        session.PreferredModel = "provider:new";
+        _settings.agentModel = session.PreferredModel;
+        Assert.That(_settings.ResolveModelSlot(RimAgentSettings.FollowAgentModel, session.CurrentAgentModel),
+            Is.EqualTo("provider:new"));
+    }
+
+    [Test]
+    public void ExplicitDecisionProviderIsAvailableEvenWhenFrameworkDefaultIsDisabled()
+    {
+        var disabled = new DecisionAvailability { Enabled = false };
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled, "provider"), Is.True);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled, ""), Is.False);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(null, "provider"), Is.False);
+    }
+
+    [Test]
     public async Task ContextWindowUsesTheRoutedModelOfTheCurrentInstruction()
     {
         _fakeDecision.ReplyRoute("build", 0.92);

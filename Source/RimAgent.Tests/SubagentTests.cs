@@ -192,6 +192,23 @@ public class SubagentTests
     }
 
     [Test]
+    public async Task DelegateRejectsReportWhenProviderStripsTools()
+    {
+        var client = new ScriptedChatClient()
+            .CallTool(SubagentTools.ToolName, new { agent = "scout", tasks = new[] { "Who lives here?" } })
+            .ReplyWithToolsStripped("There are ten colonists.")
+            .Reply("Could not inspect the colony.");
+        ColonyAgentSession session = NewSession(client,
+            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, new[] { Scout });
+
+        await session.SendAsync("survey the colony");
+
+        TranscriptEntry delegated = session.Transcript.Snapshot().Single(e => e.ToolName == SubagentTools.ToolName);
+        Assert.That(delegated.Failed, Is.True);
+        Assert.That(delegated.Result, Does.Contain("could not use tools").And.Not.Contain("ten colonists"));
+    }
+
+    [Test]
     public async Task DelegateRunsSubagentInFreshContextWithItsModelAndLabelsItsTools()
     {
         var client = new ScriptedChatClient()

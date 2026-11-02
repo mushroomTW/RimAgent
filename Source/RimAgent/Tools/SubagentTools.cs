@@ -219,6 +219,8 @@ public sealed class SubagentTools
         {
             ChatResponse response = await _client.AsMainThreadFunctionInvokingClient(steps)
                 .GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            if (response.WereToolsStripped())
+                return ToolText.Error("subagent " + subagent.Name + " could not use tools because the selected provider does not support tool calling; its report was discarded.");
             string report = ColonyAgentSession.FinalAssistantText(response.Messages, response.Text);
             bool hitStepLimit = ColonyAgentSession.HitStepLimit(response.Messages, steps);
             if (hitStepLimit) report = ColonyAgentSession.StripToolCallMarkup(report);

@@ -58,32 +58,32 @@ public class RimAgentSettings : ModSettings
     }
 
     /// <summary>把模型槽值解成實際模型識別碼；空白表示交給框架備援鏈。</summary>
-    public string ResolveModelSlot(string slot)
+    public string ResolveModelSlot(string slot, string currentAgentModel = null)
     {
         string value = (slot ?? string.Empty).Trim();
         if (value.Length == 0) return string.Empty;
         if (string.Equals(value, FollowAgentModel, StringComparison.Ordinal))
         {
-            value = (agentModel ?? string.Empty).Trim();
+            value = (currentAgentModel ?? agentModel ?? string.Empty).Trim();
         }
         // 分流模型是每句指令才會決定的哨兵，輔助模型槽不能把它當成模型名稱送給框架。
         return string.Equals(value, AutoRoutingModel, StringComparison.Ordinal) ? string.Empty : value;
     }
 
     /// <summary>分類器實際該用的模型識別碼；空白表示交給框架備援鏈。</summary>
-    public string ResolveClassifierModel()
+    public string ResolveClassifierModel(string currentAgentModel = null)
     {
-        return ResolveModelSlot(classifierModel);
+        return ResolveModelSlot(classifierModel, currentAgentModel);
     }
 
     /// <summary>指定子代理實際該用的模型識別碼：有個別設定用個別的，否則用子代理預設槽。</summary>
-    public string ResolveSubagentModel(string name)
+    public string ResolveSubagentModel(string name, string currentAgentModel = null)
     {
         if (name != null && subagentModels != null && subagentModels.TryGetValue(name, out string own))
         {
-            return ResolveModelSlot(own);
+            return ResolveModelSlot(own, currentAgentModel);
         }
-        return ResolveModelSlot(subagentModel);
+        return ResolveModelSlot(subagentModel, currentAgentModel);
     }
     /// <summary>選用本機 SearXNG；預設改用免設定的 Parallel 匿名搜尋。</summary>
     public bool useLocalSearch = false;

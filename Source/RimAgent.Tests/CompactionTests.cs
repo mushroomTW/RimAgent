@@ -57,6 +57,15 @@ public class CompactionTests
     }
 
     [Test]
+    public void ContextWindowUsesSmallestKnownCandidate()
+    {
+        var windows = new Dictionary<string, int?> { ["p:preferred"] = 128000, ["p:backup"] = 16000, ["p:unknown"] = null };
+        int? result = ColonyAgentSession.MinimumKnownContextWindow(
+            new[] { "p:preferred", "p:backup", "p:unknown" }, model => windows[model]);
+        Assert.That(result, Is.EqualTo(16000));
+    }
+
+    [Test]
     public async Task ContextStatusCountsHistory()
     {
         _client.Reply("ok");

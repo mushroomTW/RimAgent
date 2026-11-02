@@ -57,6 +57,9 @@ public sealed class ColonyAgentSession
     private sealed class TokenTrackingChatClient : DelegatingChatClient
     {
         private long _lastInputTokens = -1;
+        private string _lastModel;
+        public string LastModel => Volatile.Read(ref _lastModel);
+        public void ResetModel() => Volatile.Write(ref _lastModel, null);
         public Action<ChatResponse> ResponseObserved { get; set; }
 
         public TokenTrackingChatClient(IChatClient innerClient) : base(innerClient) { }
@@ -73,6 +76,7 @@ public sealed class ColonyAgentSession
         public void Reset()
         {
             Interlocked.Exchange(ref _lastInputTokens, -1);
+            ResetModel();
         }
 
         public override async Task<ChatResponse> GetResponseAsync(
@@ -81,6 +85,7 @@ public sealed class ColonyAgentSession
             CancellationToken cancellationToken = default)
         {
             ChatResponse response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            Volatile.Write(ref _lastModel, response?.ModelId);
             long? tokens = response?.Usage?.InputTokenCount;
             Interlocked.Exchange(ref _lastInputTokens, tokens.HasValue && tokens.Value >= 0 ? tokens.Value : -1);
             try { ResponseObserved?.Invoke(response); }
@@ -256,6 +261,9 @@ public sealed class ColonyAgentSession
 #pragma warning restore MAAI001
     }
 
+    /// <summary>本次主模型實際回應的模型；尚無回應時使用分流結果。</summary>
+    public string CurrentAgentModel => _tokenUsage.LastModel ?? _currentInstructionRoutedModel;
+
     public AgentTranscript Transcript { get; }
 
     /// <summary>Agent 此刻實際在做的事，供視窗的執行中提示；不存檔。</summary>
@@ -320,7 +328,18 @@ public sealed class ColonyAgentSession
     /// 優先使用的模型（"供應商:模型"）；空白代表交給框架備援鏈。每句指令組請求時讀取，由 GameComponent 從設定同步。
     /// 玩家指令、自主任務與 <c>/compact</c> 摘要共用它；風險分類器另走自己的設定。
     /// </summary>
-    public string PreferredModel { get; set; }
+    private string _preferredModel;
+    public string PreferredModel
+    {
+        get => _preferredModel;
+        set
+        {
+            if (string.Equals(_preferredModel, value, StringComparison.Ordinal)) return;
+            _preferredModel = value;
+            _currentInstructionRoutedModel = null;
+            _tokenUsage?.ResetModel();
+        }
+    }
 
     /// <summary>本局 DLC 啟用狀況的一行說明，交給子代理提示詞；主提示詞由 GameComponent 自己組。建立會話時在主線程設定一次。</summary>
     public string SubagentExpansions
@@ -409,17 +428,28 @@ public sealed class ColonyAgentSession
                 }
                 model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
             }
-            if (string.IsNullOrWhiteSpace(model) || RimAgentSettings.IsModelSentinel(model))
-            {
-                model = RimLLMProvider.GetFallbackChain().FirstOrDefault();
-            }
-            return _contextWindowLookup(model?.Trim());
+            List<string> candidates;
+            try { candidates = RimLLMProvider.GetFallbackChain(); }
+            catch (InvalidOperationException) { candidates = []; }
+            if (!string.IsNullOrWhiteSpace(model) && !RimAgentSettings.IsModelSentinel(model))
+                candidates.Insert(0, model.Trim());
+            return MinimumKnownContextWindow(candidates, _contextWindowLookup);
         }
         catch (InvalidOperationException)
         {
             // 框架尚未初始化時，視窗上限暫不可用。
             return null;
         }
+    }
+    internal static int? MinimumKnownContextWindow(IEnumerable<string> candidates, Func<string, int?> lookup)
+    {
+        int? minimum = null;
+        foreach (string model in candidates.Where(m => !string.IsNullOrWhiteSpace(m)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            int? window = lookup(model.Trim());
+            if (window > 0 && (!minimum.HasValue || window.Value < minimum.Value)) minimum = window;
+        }
+        return minimum;
     }
 #pragma warning restore MAAI001
 
@@ -1214,6 +1244,7 @@ public sealed class ColonyAgentSession
         string modelToUse = PreferredModel;
         ReasoningLevel? effectiveReasoning = reasoningOverride;
         _currentInstructionRoutedModel = null;
+        _tokenUsage.ResetModel();
 
         if (string.Equals(PreferredModel, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
         {
