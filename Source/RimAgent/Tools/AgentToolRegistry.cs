@@ -133,19 +133,13 @@ public sealed class AgentToolRegistry
     public IReadOnlyList<AgentToolDescriptor> Descriptors =>
         _descriptors ?? (_descriptors = _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk)).ToList());
 
-    /// <summary>依權限挑選完整工具清單；未指定模式時採確認模式，不套用自主模式的禁止清單。</summary>
+    /// <summary>依權限挑選完整工具清單；模式只管怎麼執行，不影響清單。</summary>
     public IList<AITool> Select(ToolPermissions permissions)
     {
-        return Select(permissions, AgentMode.Confirm);
+        return [.. WithOutputReader(Allowed(permissions)).Select(t => t.Tool)];
     }
 
-    /// <summary>依權限與模式挑選：YOLO 模式排除黑名單工具，命令工具連 schema 都不送給模型。</summary>
-    public IList<AITool> Select(ToolPermissions permissions, AgentMode mode)
-    {
-        return [.. WithOutputReader(Allowed(permissions, mode)).Select(t => t.Tool)];
-    }
-
-    /// <summary>主 Agent 一次請求的工具，依權限與模式一次分好。</summary>
+    /// <summary>主 Agent 一次請求的工具，依權限一次分好。</summary>
     internal sealed class MainAgentTools
     {
         /// <summary>放進 ChatOptions.Tools 公告給模型的：常駐工具加上已展開的包。</summary>
@@ -156,10 +150,10 @@ public sealed class AgentToolRegistry
         public IReadOnlyList<ToolPacks.Pack> Packs = Array.Empty<ToolPacks.Pack>();
     }
 
-    internal MainAgentTools SelectForMainAgent(ToolPermissions permissions, AgentMode mode, ICollection<string> loadedPacks)
+    internal MainAgentTools SelectForMainAgent(ToolPermissions permissions, ICollection<string> loadedPacks)
     {
         var result = new MainAgentTools();
-        foreach (Entry t in WithOutputReader(Allowed(permissions, mode)))
+        foreach (Entry t in WithOutputReader(Allowed(permissions)))
         {
             if (t.Pack != null)
             {
@@ -189,20 +183,18 @@ public sealed class AgentToolRegistry
         return list;
     }
 
-    private IEnumerable<Entry> Allowed(ToolPermissions permissions, AgentMode mode)
+    private IEnumerable<Entry> Allowed(ToolPermissions permissions)
     {
         if (permissions == null) throw new ArgumentNullException(nameof(permissions));
-        return _tools
-            .Where(t => permissions.Allows(t.Category))
-            .Where(t => mode != AgentMode.Yolo || !IsYoloForbidden(t.Name));
+        return _tools.Where(t => permissions.Allows(t.Category));
     }
 
     /// <summary>
-    /// 子代理的工具：玩家權限、模式過濾照 <see cref="Select(ToolPermissions, AgentMode)"/>，
+    /// 子代理的工具：玩家權限照 <see cref="Select(ToolPermissions)"/>，
     /// 再限縮到子代理宣告的類別；唯讀子代理只拿查詢工具。
     /// </summary>
     /// <summary>子代理專用版本；輸出儲存由 <see cref="SubagentTools"/> 在每次任務的呼叫流程上指定。</summary>
-    public IList<AITool> SelectForSubagent(ToolPermissions permissions, AgentMode mode, IReadOnlyList<ToolCategory> categories, bool readOnly)
+    public IList<AITool> SelectForSubagent(ToolPermissions permissions, IReadOnlyList<ToolCategory> categories, bool readOnly)
     {
         if (permissions == null) throw new ArgumentNullException(nameof(permissions));
         var scoped = new ToolPermissions();
@@ -211,10 +203,10 @@ public sealed class AgentToolRegistry
             scoped.Set(category, permissions.Allows(category));
         }
         // 讀取器在唯讀過濾之後才補：沒有其他可用工具的子代理仍視為不可用。
-        return [.. WithOutputReader(Allowed(scoped, mode).Where(t => !readOnly || t.Risk == ToolRisk.Query)).Select(t => t.Tool)];
+        return [.. WithOutputReader(Allowed(scoped).Where(t => !readOnly || t.Risk == ToolRisk.Query)).Select(t => t.Tool)];
     }
 
-    private static readonly HashSet<string> YoloForbiddenToolNames = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> HighRiskBlacklistedToolNames = new(StringComparer.Ordinal)
     {
         "execute_trade",
         "form_caravan",
@@ -225,28 +217,27 @@ public sealed class AgentToolRegistry
         "settle_caravan"
     };
 
-    /// <summary>YOLO 模式下受保護的黑名單工具（不可直接執行的重大高危操作）。</summary>
-    public static bool IsYoloForbidden(string name)
+    /// <summary>高危黑名單（重大不可逆操作）：自動模式直接拒絕，也不能記成「本局不再問」。</summary>
+    public static bool IsHighRiskBlacklisted(string name)
     {
-        return !string.IsNullOrEmpty(name) && YoloForbiddenToolNames.Contains(name);
+        return !string.IsNullOrEmpty(name) && HighRiskBlacklistedToolNames.Contains(name);
     }
 
     /// <summary>
-    /// YOLO 下仍需逐次確認的通用工具：它們只是「按下某個按鈕／某個右鍵選項／回答某個對話」的通道，
+    /// 通用按鈕通道：它們只是「按下某個按鈕／某個右鍵選項／回答某個對話」的通道，
     /// 同一個工具可能執行無害操作，也可能啟動飛船、自毀或吞噬神經強化器；不能因工具名稱固定就整場放行。
-    /// 這些工具仍會出現在工具清單，只是 YOLO 執行時要先走確認預覽。
     /// </summary>
-    private static readonly HashSet<string> YoloAlwaysConfirmToolNames = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> GenericActionToolNames = new(StringComparer.Ordinal)
     {
         "use_gizmo",
         "use_right_click_option",
         "choose_option"
     };
 
-    /// <summary>YOLO 模式是否必須先取得玩家確認（通用高危通道）。</summary>
-    public static bool RequiresExplicitConfirmationInYolo(string name)
+    /// <summary>是否為通用按鈕通道；這類工具不能記成「本局不再問」。</summary>
+    public static bool IsGenericActionTool(string name)
     {
-        return !string.IsNullOrEmpty(name) && YoloAlwaysConfirmToolNames.Contains(name);
+        return !string.IsNullOrEmpty(name) && GenericActionToolNames.Contains(name);
     }
 
     /// <summary>新的一句指令開始時清空分類器的句內判定快取（查詢快取由閘門的額度計數一併清空）。</summary>

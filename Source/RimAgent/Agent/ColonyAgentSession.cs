@@ -190,7 +190,7 @@ public sealed class ColonyAgentSession
 
         Transcript = new AgentTranscript();
         Undo = new WorkUndoStack();
-        ConfirmGate = new ConfirmationGate(mode ?? (() => AgentMode.Autonomous));
+        ConfirmGate = new ConfirmationGate(mode);
         _world = world;
         _memory = memory ?? new AgentMemoryStore();
         _instructions = instructions;
@@ -223,7 +223,7 @@ public sealed class ColonyAgentSession
 
         _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity);
         // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
-        _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity), _registry, Transcript, subagentsProvider, _permissions, () => Mode,
+        _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity), _registry, Transcript, subagentsProvider, _permissions,
             routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);
         _tokenUsage = new TokenTrackingChatClient(innerClient);
         _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
@@ -1274,14 +1274,14 @@ public sealed class ColonyAgentSession
     internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride, string modelToUse)
     {
         ToolPermissions permissions = _permissions();
-        AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, Mode, LoadedPacks());
+        AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, LoadedPacks());
         IList<AITool> tools = selected.Advertised;
         IReadOnlyList<ToolPacks.Pack> packs = selected.Packs;
         if (packs.Count > 0) tools.Add(_toolPackLoader);
         // 包內工具照常可執行、只是不公告；同樣受權限與模式過濾，每輪依當下設定重設。
         _invoking?.AdditionalTools = [.. selected.PackTools.Values.SelectMany(t => t)];
         IReadOnlyList<AgentSubagent> subagents = permissions.Allows(ToolCategory.Agents)
-            ? _subagents.Available(permissions, Mode)
+            ? _subagents.Available(permissions)
             : Array.Empty<AgentSubagent>();
         if (subagents.Count > 0) tools.Add(_subagents.Function);
         var options = new RimLLMChatOptions
@@ -1307,8 +1307,7 @@ public sealed class ColonyAgentSession
     private string LoadToolPack(string pack)
     {
         ToolPermissions permissions = _permissions();
-        AgentMode mode = Mode;
-        AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, mode, null);
+        AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, null);
         IReadOnlyList<ToolPacks.Pack> available = selected.Packs;
         string wanted = (pack ?? string.Empty).Trim();
         ToolPacks.Pack match = available.FirstOrDefault(p => string.Equals(p.Id, wanted, StringComparison.OrdinalIgnoreCase));

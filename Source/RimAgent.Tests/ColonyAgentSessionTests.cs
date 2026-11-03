@@ -34,7 +34,7 @@ public class ColonyAgentSessionTests
 
     private ColonyAgentSession NewSession(int maxSteps = 8)
     {
-        return new ColonyAgentSession(_client, _world, () => _permissions, maxSteps);
+        return new ColonyAgentSession(_client, _world, () => _permissions, maxSteps, () => AgentMode.Autonomous);
     }
 
     [TestCase(AgentMode.Execute, false, false, true)]
@@ -67,7 +67,7 @@ public class ColonyAgentSessionTests
     public void FullAccessStillHonorsDisabledCategories()
     {
         var registry = new AgentToolRegistry(_world, new AgentTranscript());
-        var tools = registry.Select(ToolPermissions.For(ToolCategory.Observe), AgentMode.Autonomous);
+        var tools = registry.Select(ToolPermissions.For(ToolCategory.Observe));
         Assert.That(tools.Select(t => t.Name), Does.Not.Contain("mcp_call_tool"));
         Assert.That(tools.Select(t => t.Name), Does.Not.Contain("set_work_priorities"));
     }
@@ -901,7 +901,6 @@ public class ColonyAgentSessionTests
 
     [TestCase(AgentMode.Autonomous, false)]
     [TestCase(AgentMode.Confirm, true)]
-    [TestCase(AgentMode.Yolo, false)]
     public async Task McpExecutionRespectsModeConfirmationPolicy(AgentMode mode, bool expectsConfirmation)
     {
         _permissions = ToolPermissions.For(ToolCategory.Mcp);
@@ -943,20 +942,6 @@ public class ColonyAgentSessionTests
     }
 
     [Test]
-    public async Task YoloModeRunsPermittedToolDirectly()
-    {
-        _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
-               .Reply("Done.");
-        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Yolo);
-
-        await session.SendAsync("set doctor to 1");
-
-        Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(1));
-        Assert.That(session.HasPendingConfirmation, Is.False);
-        Assert.That(session.Undo.CanUndo, Is.True);
-    }
-
-    [Test]
     public async Task AutonomousModeRunsIrreversibleToolDirectly()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
@@ -968,27 +953,6 @@ public class ColonyAgentSessionTests
 
         Assert.That(_world.Calls, Does.Contain("OrderAttack(102,900)"));
         Assert.That(session.HasPendingConfirmation, Is.False);
-    }
-
-    [Test]
-    public void YoloModeExcludesForbiddenTools()
-    {
-        var session = new ColonyAgentSession(_client, _world, () => ToolPermissions.All, 8, () => AgentMode.Yolo);
-
-        List<string> advertised = [.. session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name)];
-        // 包內工具不公告，完整的允許集合看登錄表（會話用同一套過濾）。
-        List<string> names = [.. new AgentToolRegistry(_world, new AgentTranscript())
-            .Select(ToolPermissions.All, AgentMode.Yolo).Select(t => t.Name)];
-
-        Assert.That(advertised, Does.Contain("set_work_priorities"));
-        Assert.That(names, Does.Not.Contain("execute_trade"));
-        Assert.That(names, Does.Not.Contain("form_caravan"));
-        Assert.That(names, Does.Not.Contain("release_prisoner"));
-        Assert.That(names, Does.Not.Contain("schedule_surgery"));
-        Assert.That(names, Does.Not.Contain("set_prisoner_interaction"));
-        Assert.That(names, Does.Contain("set_work_priorities"));
-        Assert.That(names, Does.Contain("order_attack"));
-        Assert.That(names, Does.Contain("mcp_call_tool"));
     }
 
     [Test]

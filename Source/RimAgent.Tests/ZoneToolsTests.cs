@@ -146,7 +146,7 @@ public class ZoneToolsTests
     {
         var client = new ScriptedChatClient();
         client.CallTool("add_zone", new { kind = "growing", x1 = 20, z1 = 20, x2 = 24, z2 = 24, plant = "rice" }).Reply("Done.");
-        var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Zone), 8);
+        var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Zone), 8, () => AgentMode.Autonomous);
 
         await session.SendAsync("在東邊開一塊 5x5 稻田");
 

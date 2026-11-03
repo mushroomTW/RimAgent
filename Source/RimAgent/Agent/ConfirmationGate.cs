@@ -47,9 +47,10 @@ public sealed class ConfirmationGate
     private bool _confirmAutonomousMajor;
     private readonly InstructionCache<FailedCall> _failedCalls = new();
 
+    /// <param name="mode">未提供時採最保守的確認模式。</param>
     public ConfirmationGate(Func<AgentMode> mode)
     {
-        _mode = mode ?? (() => AgentMode.Autonomous);
+        _mode = mode ?? (() => AgentMode.Confirm);
     }
 
     public AgentMode Mode => _mode();
@@ -84,9 +85,6 @@ public sealed class ConfirmationGate
                 return invocation != null && (invocation.Risk != ToolRisk.Confirm
                     || (_autonomousRun && !_confirmAutonomousMajor)
                     || IsApprovedForSession(invocation.ToolName));
-            case AgentMode.Yolo:
-                // 通用工具（gizmo／右鍵選項／對話選項）在 YOLO 仍需逐次確認，避免名稱固定的工具被當成安全通道。
-                return !AgentToolRegistry.RequiresExplicitConfirmationInYolo(invocation?.ToolName);
             default:
                 return true;
         }
@@ -157,15 +155,15 @@ public sealed class ConfirmationGate
     /// <summary>
     /// MCP 以使用者權限執行本機程式，每次的 server／tool／args 都可能不同，
     /// 記住「工具名稱」等於對之後所有外部呼叫放行，因此永遠不記。
-    /// YOLO 黑名單上的重大不可逆操作同理：那份清單的意思是「絕不免確認執行」，
-    /// 一顆按鍵不該把它整場遊戲關掉。
+    /// 高危黑名單上的重大不可逆操作同理：那份清單的意思是「絕不免確認執行」，
+    /// 一顆按鍵不該把它整場遊戲關掉；通用按鈕通道每次按的東西都不同，也不記。
     /// </summary>
     private static bool CanRememberForSession(string toolName)
     {
         return !string.IsNullOrEmpty(toolName)
             && !string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
-            && !AgentToolRegistry.IsYoloForbidden(toolName)
-            && !AgentToolRegistry.RequiresExplicitConfirmationInYolo(toolName);
+            && !AgentToolRegistry.IsHighRiskBlacklisted(toolName)
+            && !AgentToolRegistry.IsGenericActionTool(toolName);
     }
 
     internal bool IsApprovedForSession(string toolName)
@@ -307,7 +305,7 @@ public sealed class ConfirmationGate
             && _mode() == AgentMode.Confirm;
     }
 
-    /// <summary>這次工具呼叫是否要先問分類器：自動模式且是命令，且玩家沒說過這個工具不必再問。</summary>
+    /// <summary>這次工具呼叫是否要先問分類器：自動模式且是命令。</summary>
     internal bool NeedsClassification(ToolRisk risk)
     {
         return _mode() == AgentMode.Auto

@@ -213,11 +213,11 @@ public class RimAgentSettings : ModSettings
         {
             Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
         }
-        // 以名稱存取：已移除的詢問模式不在列舉中，直接解析會報錯；它與 YOLO 舊設定都改回確認。
+        // 以名稱存取：已移除的詢問與 YOLO 模式不在列舉中，直接解析會報錯，改回確認。
         string modeName = mode.ToString();
         Scribe_Values.Look(ref modeName, "mode", nameof(AgentMode.Confirm));
         if (Scribe.mode == LoadSaveMode.LoadingVars)
-            mode = Enum.TryParse(modeName, out AgentMode parsed) && Enum.IsDefined(typeof(AgentMode), parsed) && parsed != AgentMode.Yolo
+            mode = Enum.TryParse(modeName, out AgentMode parsed) && Enum.IsDefined(typeof(AgentMode), parsed)
                 ? parsed
                 : AgentMode.Confirm;
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);

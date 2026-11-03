@@ -101,8 +101,6 @@
   <RimAgent.Settings.Mode.ConfirmDesc>每个指令都需要确认：任何会改变游戏的操作先预览、等你按确认；查询直接执行。</RimAgent.Settings.Mode.ConfirmDesc>
   <RimAgent.Settings.Mode.Execute>执行</RimAgent.Settings.Mode.Execute>
   <RimAgent.Settings.Mode.ExecuteDesc>一般操作直接执行，重大操作先确认。主动照顾的重大操作由模组设置决定是否确认。</RimAgent.Settings.Mode.ExecuteDesc>
-  <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
-  <RimAgent.Settings.Mode.YoloDesc>夹在确认与自动之间，无排程器。受黑名单保护（交易、商队、手术、囚犯等高危工具排除）；通用 gizmo、右键与对话框选项仍需逐次确认；其余操作与 MCP 工具免确认直接执行。</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>自动</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>另起一次模型调用判定每个动作（含 MCP 工具）两件事：动作本身的风险，以及你这句话有没有要求它。只有低风险且你要求的才直接执行，其余等你确认。每个动作多一次请求。</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierModel>分类器模型：</RimAgent.Settings.ClassifierModel>

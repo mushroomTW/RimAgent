@@ -1248,20 +1248,18 @@ public class Window_Agent : Window
         {
             case AgentMode.Confirm: return "RimAgent.Settings.Mode.Confirm".Translate();
             case AgentMode.Execute: return "RimAgent.Settings.Mode.Execute".Translate();
-            case AgentMode.Yolo: return "RimAgent.Settings.Mode.Yolo".Translate();
             case AgentMode.Auto: return "RimAgent.Settings.Mode.Auto".Translate();
             default: return "RimAgent.Settings.Mode.Autonomous".Translate();
         }
     }
 
-    /// <summary>模式說明（含 YOLO／自主的風險提醒）；設定頁不再列模式，改在下拉選單與按鈕的提示顯示。</summary>
+    /// <summary>模式說明（含自動／完整權限的風險提醒）；設定頁不再列模式，改在下拉選單與按鈕的提示顯示。</summary>
     private static string ModeDescription(AgentMode mode)
     {
         switch (mode)
         {
             case AgentMode.Confirm: return "RimAgent.Settings.Mode.ConfirmDesc".Translate();
             case AgentMode.Execute: return "RimAgent.Settings.Mode.ExecuteDesc".Translate();
-            case AgentMode.Yolo: return "RimAgent.Settings.Mode.YoloDesc".Translate();
             case AgentMode.Auto: return "RimAgent.Settings.Mode.AutoDesc".Translate();
             default: return "RimAgent.Settings.Mode.AutonomousDesc".Translate();
         }

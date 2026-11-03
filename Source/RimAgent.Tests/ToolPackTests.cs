@@ -144,7 +144,7 @@ public class ToolPackTests
     {
         var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
 
-        IEnumerable<string> names = registry.SelectForSubagent(ToolPermissions.All, AgentMode.Autonomous,
+        IEnumerable<string> names = registry.SelectForSubagent(ToolPermissions.All,
             new[] { ToolCategory.Combat }, readOnly: false).Select(t => t.Name);
 
         Assert.That(names, Does.Contain("draft"));

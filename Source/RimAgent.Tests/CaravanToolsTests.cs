@@ -47,8 +47,8 @@ public class CaravanToolsTests
         Assert.That(registry.RiskOf("plan_caravan"), Is.EqualTo(ToolRisk.Query));
         Assert.That(registry.RiskOf("form_caravan"), Is.EqualTo(ToolRisk.Confirm));
         Assert.That(registry.RiskOf("cancel_forming_caravan"), Is.EqualTo(ToolRisk.Safe));
-        Assert.That(AgentToolRegistry.IsYoloForbidden("form_caravan"), Is.True);
-        Assert.That(AgentToolRegistry.IsYoloForbidden("plan_caravan"), Is.False);
+        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("form_caravan"), Is.True);
+        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("plan_caravan"), Is.False);
     }
 
     // ---- plan_caravan ----

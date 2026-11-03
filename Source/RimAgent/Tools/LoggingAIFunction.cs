@@ -248,7 +248,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
     private async Task<object> InvokeClassifiedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
         // 高危黑名單在自動模式永遠是高風險：直接拒絕，不必再燒一次分類器模型。
-        if (AgentToolRegistry.IsYoloForbidden(Name))
+        if (AgentToolRegistry.IsHighRiskBlacklisted(Name))
         {
             entry.RiskCheck = "high";
             return ToolText.Error("safety review rejected " + Name + " (high): " +

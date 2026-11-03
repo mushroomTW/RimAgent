@@ -125,7 +125,7 @@ public class ProductionToolsTests
     {
         var client = new ScriptedChatClient();
         client.CallTool("add_bill", new { table = "501", recipe = "component", count = 5 }).Reply("Done.");
-        var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Production), 8);
+        var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Production), 8, () => AgentMode.Autonomous);
 
         await session.SendAsync("做 5 個零件");
 

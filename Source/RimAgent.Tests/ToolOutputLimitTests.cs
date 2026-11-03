@@ -155,8 +155,8 @@ public class ToolOutputLimitTests
     {
         var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
 
-        var builder = registry.SelectForSubagent(ToolPermissions.All, AgentMode.Autonomous, new[] { ToolCategory.Build }, readOnly: false).Select(t => t.Name).ToList();
-        var readOnlyCombat = registry.SelectForSubagent(ToolPermissions.All, AgentMode.Autonomous, new[] { ToolCategory.Combat }, readOnly: true);
+        var builder = registry.SelectForSubagent(ToolPermissions.All, new[] { ToolCategory.Build }, readOnly: false).Select(t => t.Name).ToList();
+        var readOnlyCombat = registry.SelectForSubagent(ToolPermissions.All, new[] { ToolCategory.Combat }, readOnly: true);
 
         Assert.That(builder, Does.Contain("place_blueprint").And.Contain(ToolOutputTools.ToolName));
         Assert.That(readOnlyCombat, Is.Empty, "沒有其他可用工具時不補讀取器");

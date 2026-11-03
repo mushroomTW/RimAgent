@@ -168,7 +168,7 @@ public class TimeToolsTests
               .Reply("done.");
         _world.EventAtTick = 2500;
         _world.OnEvent = () => _world.Overview.Hour = 15;
-        var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Time), 8);
+        var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Time), 8, () => AgentMode.Autonomous);
 
         await session.SendAsync("wait an hour");
 

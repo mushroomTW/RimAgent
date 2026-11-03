@@ -540,7 +540,7 @@ public class AutonomousToolsTests
     public void AutonomousModeIncludesAllToolsWithoutBlacklist()
     {
         var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
-        var tools = registry.Select(ToolPermissions.All, AgentMode.Autonomous).OfType<AIFunction>().Select(f => f.Name).ToList();
+        var tools = registry.Select(ToolPermissions.All).OfType<AIFunction>().Select(f => f.Name).ToList();
 
         foreach (string name in HighRiskTools)
         {

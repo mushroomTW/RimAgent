@@ -149,8 +149,8 @@ public class SubagentTests
         var permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Build);
 
         List<AgentToolDescriptor> byName = [.. registry.Descriptors];
-        IList<AITool> readOnly = registry.SelectForSubagent(permissions, AgentMode.Confirm, new[] { ToolCategory.Observe, ToolCategory.Work }, true);
-        IList<AITool> full = registry.SelectForSubagent(permissions, AgentMode.Confirm, new[] { ToolCategory.Observe }, false);
+        IList<AITool> readOnly = registry.SelectForSubagent(permissions, new[] { ToolCategory.Observe, ToolCategory.Work }, true);
+        IList<AITool> full = registry.SelectForSubagent(permissions, new[] { ToolCategory.Observe }, false);
 
         Assert.That(readOnly, Is.Not.Empty);
         foreach (AITool tool in readOnly)

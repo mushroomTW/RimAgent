@@ -101,8 +101,6 @@
   <RimAgent.Settings.Mode.ConfirmDesc>Every command requires confirmation: any state-changing action is previewed and waits for your Confirm; queries run directly.</RimAgent.Settings.Mode.ConfirmDesc>
   <RimAgent.Settings.Mode.Execute>Execute</RimAgent.Settings.Mode.Execute>
   <RimAgent.Settings.Mode.ExecuteDesc>Routine actions run directly; major actions require confirmation. A separate setting controls confirmation during proactive care.</RimAgent.Settings.Mode.ExecuteDesc>
-  <RimAgent.Settings.Mode.Yolo>YOLO</RimAgent.Settings.Mode.Yolo>
-  <RimAgent.Settings.Mode.YoloDesc>Between Confirm and Auto, no scheduler. Protected by a blacklist (high-risk tools like trade, caravans, surgery excluded); generic gizmo, right-click and dialog options still ask for confirmation; other commands and MCP execute directly without confirmation.</RimAgent.Settings.Mode.YoloDesc>
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools) on two axes: how risky it is, and whether your instruction asked for it. Only low-risk actions you asked for run directly; the rest wait for your Confirm. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
   <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>

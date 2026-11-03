@@ -190,42 +190,22 @@ public class CommandGateTests
     }
 
     [Test]
-    public async Task YoloModeRunsAllPermittedCommandsDirectly()
+    public async Task MissingModeFallsBackToConfirm()
     {
-        foreach (string name in ValidArguments.Keys)
-        {
-            if (NotRecordedInWorld.Contains(name)) continue;
-            // 通用 gizmo／右鍵／對話選項在 YOLO 仍需逐次確認，另由下一個測試驗證。
-            if (AgentToolRegistry.RequiresExplicitConfirmationInYolo(name)) continue;
-            FakeGameWorld world = NewWorld();
-            var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Yolo));
-            AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == name);
+        var gate = new ConfirmationGate(null);
+        Assert.That(gate.Mode, Is.EqualTo(AgentMode.Confirm));
 
-            string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments[name])))?.ToString();
+        FakeGameWorld world = NewWorld();
+        var registry = new AgentToolRegistry(world, new AgentTranscript(), null, gate);
+        AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == "set_work_priorities");
 
-            Assert.That(text, Does.Not.StartWith(ToolText.ErrorPrefix).And.Not.StartWith(ToolText.ConfirmationPrefix), name + ": " + text);
-            Assert.That(world.Calls, Is.Not.Empty, name + " 放行時必須動到世界");
-        }
-    }
+        string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments["set_work_priorities"])))?.ToString();
 
-    [Test]
-    public async Task YoloModeRequiresConfirmationForGenericTools()
-    {
-        foreach (string name in new[] { "choose_option", "use_gizmo", "use_right_click_option" })
-        {
-            FakeGameWorld world = NewWorld();
-            var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Yolo));
-            AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == name);
-
-            string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments[name])))?.ToString();
-
-            Assert.That(text, Does.StartWith(ToolText.ConfirmationPrefix), name + ": " + text);
-            Assert.That(world.Calls, Is.Empty, name + " 預覽時不可碰世界");
-        }
+        Assert.That(text, Does.StartWith(ToolText.ConfirmationPrefix));
+        Assert.That(world.Calls, Is.Empty);
     }
 
     [TestCase(AgentMode.Autonomous, "mcp_call_tool", false)]
-    [TestCase(AgentMode.Yolo, "mcp_call_tool", false)]
     [TestCase(AgentMode.Confirm, "mcp_call_tool", true)]
     [TestCase(AgentMode.Auto, "mcp_call_tool", false)]
     [TestCase(AgentMode.Confirm, "set_work_priorities", false)]

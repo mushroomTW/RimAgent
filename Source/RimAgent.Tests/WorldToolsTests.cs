@@ -511,14 +511,12 @@ public class WorldToolsTests
     }
 
     [Test]
-    public void YoloModeKeepsSendingAndSettlingCaravansOutOfReach()
+    public void SendingAndSettlingCaravansAreHighRiskBlacklisted()
     {
-        var registry = new AgentToolRegistry(_world, new AgentTranscript());
-        List<string> yolo = [.. registry.Select(ToolPermissions.All, AgentMode.Yolo).OfType<AIFunction>().Select(f => f.Name)];
-        List<string> autonomous = [.. registry.Select(ToolPermissions.All, AgentMode.Autonomous).OfType<AIFunction>().Select(f => f.Name)];
-
-        Assert.That(yolo, Does.Not.Contain("send_caravan").And.Not.Contain("settle_caravan").And.Contain("set_caravan_movement").And.Contain("list_caravans"));
-        Assert.That(autonomous, Does.Contain("send_caravan").And.Contain("settle_caravan"));
+        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("send_caravan"), Is.True);
+        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("settle_caravan"), Is.True);
+        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("set_caravan_movement"), Is.False);
+        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("list_caravans"), Is.False);
     }
 
     // ---- 解析與格式 ----

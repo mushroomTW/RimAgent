@@ -33,7 +33,6 @@ public sealed class SubagentTools
     private readonly AgentTranscript _transcript;
     private readonly Func<IReadOnlyList<AgentSubagent>> _subagents;
     private readonly Func<ToolPermissions> _permissions;
-    private readonly Func<AgentMode> _mode;
     private readonly Func<string, string> _model;
     private readonly Func<ReasoningLevel> _reasoning;
     private readonly Func<int?> _remainingBudget;
@@ -45,7 +44,7 @@ public sealed class SubagentTools
     /// <param name="responseObserved">子代理每次模型回應的觀察者（執行紀錄）；並行任務會從不同執行緒呼叫。</param>
 #pragma warning disable S107 // Subagent execution context requires dependencies injected for agent dispatching
     public SubagentTools(IChatClient client, AgentToolRegistry registry, AgentTranscript transcript,
-        Func<IReadOnlyList<AgentSubagent>> subagents, Func<ToolPermissions> permissions, Func<AgentMode> mode,
+        Func<IReadOnlyList<AgentSubagent>> subagents, Func<ToolPermissions> permissions,
         Func<string, string> model = null, Func<ReasoningLevel> reasoning = null,
         Func<int?> remainingBudget = null, Action<ChatResponse> responseObserved = null)
 #pragma warning restore S107
@@ -55,7 +54,6 @@ public sealed class SubagentTools
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
         _subagents = subagents ?? (() => Array.Empty<AgentSubagent>());
         _permissions = permissions ?? throw new ArgumentNullException(nameof(permissions));
-        _mode = mode ?? throw new ArgumentNullException(nameof(mode));
         _model = model;
         _reasoning = reasoning;
         _remainingBudget = remainingBudget;
@@ -73,11 +71,11 @@ public sealed class SubagentTools
     /// <summary>目前載入的子代理；沒有就不必把委派工具交給模型。</summary>
     public IReadOnlyList<AgentSubagent> Subagents => _subagents() ?? Array.Empty<AgentSubagent>();
 
-    /// <summary>在目前權限與模式下至少拿得到一個工具的子代理；拿不到工具的不必列給模型，免得白白委派一次。</summary>
-    public IReadOnlyList<AgentSubagent> Available(ToolPermissions permissions, AgentMode mode)
+    /// <summary>在目前權限下至少拿得到一個工具的子代理；拿不到工具的不必列給模型，免得白白委派一次。</summary>
+    public IReadOnlyList<AgentSubagent> Available(ToolPermissions permissions)
     {
         return Subagents
-            .Where(s => s != null && _registry.SelectForSubagent(permissions, mode, s.Categories, s.ReadOnly).Count > 0)
+            .Where(s => s != null && _registry.SelectForSubagent(permissions, s.Categories, s.ReadOnly).Count > 0)
             .ToList();
     }
 
@@ -131,10 +129,10 @@ public sealed class SubagentTools
             return error;
         }
 
-        IList<AITool> tools = _registry.SelectForSubagent(_permissions(), _mode(), subagent.Categories, subagent.ReadOnly);
+        IList<AITool> tools = _registry.SelectForSubagent(_permissions(), subagent.Categories, subagent.ReadOnly);
         if (tools.Count == 0)
         {
-            entry.Result = ToolText.Error("subagent " + subagent.Name + " has no tools allowed under the player's current permissions and mode.");
+            entry.Result = ToolText.Error("subagent " + subagent.Name + " has no tools allowed under the player's current permissions.");
             entry.Failed = true;
             _transcript.Add(entry);
             return entry.Result;
