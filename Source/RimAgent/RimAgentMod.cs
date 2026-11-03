@@ -224,6 +224,10 @@ public class RimAgentMod : Mod
                 },
                 "RimAgent.Settings.SubagentModelForTip".Translate(name));
         }
+        DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel".Translate(),
+            () => Settings.classifierModel, v => Settings.classifierModel = v,
+            "RimAgent.Settings.ClassifierModelTip".Translate(),
+            () => Settings.classifierReasoning, v => Settings.classifierReasoning = v);
         DrawModelDropdown(listing, "RimAgent.Settings.CompactModel".Translate(),
             () => Settings.compactModel, v => Settings.compactModel = v,
             "RimAgent.Settings.CompactModelTip".Translate(),

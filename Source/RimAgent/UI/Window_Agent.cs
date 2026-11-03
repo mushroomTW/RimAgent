@@ -41,7 +41,7 @@ public class Window_Agent : Window
     private const float BubbleMaxRatio = 0.8f;
     private const float BubblePadX = 8f;
     private const float BubblePadY = 4f;
-    private const float BubbleRadius = 8f;
+    private const int BubbleRadius = 12;
     /// <summary>捲動位置離底部多近仍算「停在底部」，新內容來時自動跟隨。</summary>
     private const float StickToBottomSlack = 4f;
     private const float JumpButtonWidth = 130f;
@@ -557,8 +557,7 @@ public class Window_Agent : Window
             case LineKind.PlayerBubble:
                 float bubbleRight = Mathf.Min(lineRect.xMax, visibleWidth);
                 var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
-                GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleColor, 0f, BubbleRadius);
-                GUI.DrawTexture(bubble, BaseContent.WhiteTex, ScaleMode.StretchToFill, true, 0f, BubbleBorderColor, 1f, BubbleRadius);
+                GUI.Box(bubble, GUIContent.none, GetBubbleStyle());
                 DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
                 break;
             case LineKind.ToolHeader:
@@ -602,6 +601,38 @@ public class Window_Agent : Window
         return unchecked(now - _settlingSince) >= ReflowDelayMs;
     }
 
+    private static GUIStyle _bubbleStyle;
+
+    /// <summary>以九宮格貼圖保留圓角，避免介面材質不支援 GUI.DrawTexture 的圓角參數。</summary>
+    private static GUIStyle GetBubbleStyle()
+    {
+        if (_bubbleStyle != null) return _bubbleStyle;
+        int size = BubbleRadius * 2 + 1;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+        var pixels = new Color[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float dx = Mathf.Max(0f, Mathf.Abs(x - BubbleRadius) - 0.5f);
+            float dy = Mathf.Max(0f, Mathf.Abs(y - BubbleRadius) - 0.5f);
+            float distance = Mathf.Sqrt(dx * dx + dy * dy);
+            float coverage = Mathf.Clamp01(BubbleRadius + 0.5f - distance);
+            float border = Mathf.Clamp01(distance - BubbleRadius + 1.5f);
+            Color color = Color.Lerp(BubbleColor, BubbleBorderColor, border);
+            color.a *= coverage;
+            pixels[y * size + x] = color;
+        }
+        texture.SetPixels(pixels);
+        texture.Apply();
+        _bubbleStyle = new GUIStyle { border = new RectOffset(BubbleRadius, BubbleRadius, BubbleRadius, BubbleRadius) };
+        _bubbleStyle.normal.background = texture;
+        return _bubbleStyle;
+    }
+
     /// <summary>框選層樣式快取（按字體）：平時文字透明、只看到底下的彩色 Label；取得焦點才顯示純文字，複製不到顏色標籤。</summary>
     private static readonly Dictionary<GameFont, GUIStyle> SelectableStyles = [];
 
@@ -636,10 +667,12 @@ public class Window_Agent : Window
             // GUIStyleState 是參考型別，收進陣列迴圈賦值仍會寫回樣式本體。
             foreach (GUIStyleState state in new[] { style.normal, style.hover, style.onNormal, style.onHover })
             {
+                state.background = null;
                 state.textColor = Color.clear;
             }
             foreach (GUIStyleState state in new[] { style.active, style.focused, style.onActive, style.onFocused })
             {
+                state.background = null;
                 state.textColor = plain;
             }
             SelectableStyles[font] = style;
@@ -1118,7 +1151,7 @@ public class Window_Agent : Window
         if (DrawUnifiedButton(modeRect, modeStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
             var options = new List<FloatMenuOption>();
-            foreach (AgentMode mode in new[] { AgentMode.Ask, AgentMode.Confirm, AgentMode.Execute, AgentMode.Autonomous })
+            foreach (AgentMode mode in new[] { AgentMode.Ask, AgentMode.Confirm, AgentMode.Execute, AgentMode.Auto, AgentMode.Autonomous })
             {
                 options.Add(new FloatMenuOption(ModeLabel(mode), () => SetMode(settings, mode))
                 {

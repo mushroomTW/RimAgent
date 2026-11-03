@@ -12,7 +12,7 @@ public enum AgentMode
     Confirm,
     /// <summary>舊版設定值；載入時改為確認模式。</summary>
     Yolo,
-    /// <summary>舊版設定值；載入時改為確認模式。</summary>
+    /// <summary>自動：每次命令先由分類模型判定，僅核可的低風險命令執行，其餘拒絕並說明原因。</summary>
     Auto,
     /// <summary>完整權限：已啟用的工具不受模式限制。背景照顧另行設定。</summary>
     Autonomous,

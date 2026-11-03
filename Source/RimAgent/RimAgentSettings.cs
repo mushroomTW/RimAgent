@@ -227,7 +227,7 @@ public class RimAgentSettings : ModSettings
             Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
         }
         Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
-        if (Scribe.mode == LoadSaveMode.LoadingVars && (mode == AgentMode.Auto || mode == AgentMode.Yolo))
+        if (Scribe.mode == LoadSaveMode.LoadingVars && mode == AgentMode.Yolo)
             mode = AgentMode.Confirm;
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);

@@ -416,7 +416,7 @@ public class ColonyAgentSessionTests
         string reply = await session.SendAsync("stop me", cts.Token);
 
         Assert.That(reply, Is.Null);
-        Assert.That(session.Transcript.Snapshot().Last().ErrorKind, Is.EqualTo(AgentErrorKind.Cancelled));
+        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Error), Is.False);
         Assert.That(session.History, Is.Empty);
     }
 

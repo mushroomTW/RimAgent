@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.11.03.1</modVersion>
+  <modVersion>2026.11.03.3</modVersion>
   <supportedVersions>
     <li>1.7</li>
   </supportedVersions>
@@ -13,15 +13,15 @@ Open the Agent tab and give a natural-language instruction. RimAgent reads the c
 
 Requires RimLLM Framework 2026.10.20.1 or later. Configure providers, API keys, models and fallback chains in RimLLM Framework; RimAgent supplies colony tools and per-category permissions.
 
-Optionally, a decision model configured in RimLLM Framework audits goal completion and routes instructions to category-specific models.
+Optionally, a decision model configured in RimLLM Framework takes over the Auto mode risk review, audits goal completion and routes instructions to category-specific models.
 
 All tool categories are enabled by default and configurable in mod settings: observation, work, build, combat, trade, medical, prisoners, animals, zones, production, time, MCP, web search, memory and subagents. Web search uses Parallel Search MCP anonymously by default, with optional local SearXNG; neither needs an API key. Web search follows the current mode's command policy. Memories are short files in two scopes: names starting with `global_` are shared by every save (kept in the RimAgent data folder), the rest are saved with one game; each instruction receives their index and the agent reads files when relevant. Observation includes colonist wellbeing (needs, thoughts and equipment); work supports batch priorities; build includes hunting designations.
 
-Modes are selected in the Agent window: Ask is read-only; Confirm previews every command; Execute runs routine actions and confirms major actions; Full access runs enabled tools directly. Proactive colony care is a separate setting and is disabled by default. In Execute mode its major actions run without confirmation by default; the player can enable confirmation. Full access ignores that confirmation setting.
+Modes are selected in the Agent window: Ask is read-only; Confirm previews every command; Execute runs routine actions and confirms major actions; Auto runs only low-risk, requested commands after an LLM safety review and rejects the rest with a reason; Full access runs enabled tools directly. Proactive colony care is a separate setting and is disabled by default. In Execute mode its major actions run without confirmation by default; the player can enable confirmation. Full access ignores that confirmation setting.
 
 Older tool results are compacted automatically. The resizable conversation distinguishes player messages, agent replies and tool results, shows inline screenshot previews, and reports provider-supplied input tokens for the latest main-model request when available. Goals run independently of proactive care, continue until verified complete or paused, and obey the current command mode. Optional run-history logging is off by default and stores up to 500 JSONL records or 16 MiB in a separate file. The visible transcript, compacted model session, goal state, autonomous scheduler state, this save's memories and work undo history are saved with the game; global memory is kept outside the save in the RimAgent data folder. Proactive care aggregates every map and reacts to raids starting or ending, mental-break risk, food shortages, downed or bleeding colonists and fire.
 
-MCP tools run as local processes with your user privileges. Confirm and Execute modes require approval, except proactive care in Execute mode when major-action confirmation is disabled; Full access calls enabled MCP tools directly.]]></description>
+MCP tools run as local processes with your user privileges. Confirm and Execute modes require approval and Auto mode reviews each call, except proactive care in Execute mode when major-action confirmation is disabled; Full access calls enabled MCP tools directly.]]></description>
   <modDependencies>
     <li>
       <packageId>GreenMushroom.RimLLMFramework</packageId>

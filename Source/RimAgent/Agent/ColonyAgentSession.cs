@@ -685,10 +685,12 @@ public sealed class ColonyAgentSession
             runOutcome = ex is OperationCanceledException ? "cancelled" : "error";
             // 失敗那句可能只做了一半，但做了的部分仍該能復原；空框會被 EndFrame 丟掉。
             Undo.EndFrame(text + " (failed)");
-            Transcript.Add(new TranscriptEntry
+            AgentErrorKind errorKind = Classify(ex);
+            if (!(cancellationToken.IsCancellationRequested && errorKind == AgentErrorKind.Cancelled))
+                Transcript.Add(new TranscriptEntry
             {
                 Kind = TranscriptKind.Error,
-                ErrorKind = Classify(ex),
+                ErrorKind = errorKind,
                 Text = ex.Message,
                 InstructionId = instructionId
             });

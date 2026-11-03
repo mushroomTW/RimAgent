@@ -51,9 +51,9 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 ## Highlights
 
 - **77 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
-- **Four execution modes:** start read-only, require approval, or let the agent act under the selected policy.
+- **Five execution modes:** start read-only, require approval, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
-- **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel); subagents and `/compact` summaries each get their own model and reasoning setting.
+- **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel); subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
 - **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills or subagents, or connect trusted local MCP servers.
 - **Saved progress:** the transcript, model history, scheduler, goals, this save's memories, and `/undo` state persist with the game; global memory lives in the mod folder and is shared by every save.
 
@@ -63,7 +63,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
 
-- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. Everything else is set under **Model roles** in mod settings (after hermes-agent's auxiliary models): the subagent default, each subagent and `/compact` summaries each pick a model (**Default (agent's current model)**, **Fallback**, or a fallback-chain entry) and a reasoning level. All of them follow the agent's current model by default. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
+- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. Everything else is set under **Model roles** in mod settings (after hermes-agent's auxiliary models): the subagent default, each subagent, the Auto-mode classifier and `/compact` summaries each pick a model (**Default (agent's current model)**, **Fallback**, or a fallback-chain entry) and a reasoning level. All of them follow the agent's current model by default. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
 - The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
 - Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default. Drag across any message to select and copy its text; right-click a tool row to copy it. LaTeX math (`$...$`) is shown as plain readable text.
 - The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
@@ -101,6 +101,7 @@ One setting decides how much the agent may do on its own:
 | **Ask** | Read-only. The model sees query tools only; map switching and screenshots are excluded because they change state. |
 | **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
 | **Execute** | Routine commands run directly; major commands require confirmation. Proactive care has a separate confirmation setting. |
+| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model and reasoning under Model roles in mod settings: it follows the agent's current model by default, or you can pin a fallback-chain entry or Fallback. |
 | **Full access** | Enabled tools, including MCP, run without execution-mode restrictions. Category switches still apply. |
 
 ### Confirmation details
@@ -108,7 +109,7 @@ One setting decides how much the agent may do on its own:
 - **Confirm / Discard:** Confirm executes the captured tool call and arguments without asking the model again. Discard or a new instruction clears pending calls.
 - If a confirmed command fails, later commands remain pending for another confirmation. The failed command is removed because it may have partially taken effect; the log shows how many commands completed and remain.
 - **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool`, the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`) or generic options (`use_gizmo`, `use_right_click_option`, `choose_option`).
-- **MCP calls:** In Confirm and Execute modes, MCP calls require approval. Full access runs enabled MCP tools directly; proactive care in Execute mode follows its major-action confirmation setting.
+- **MCP calls:** In Confirm and Execute modes, MCP calls require approval. Auto mode passes them through the classifier. Full access runs enabled MCP tools directly; proactive care in Execute mode follows its major-action confirmation setting.
 
 > [!WARNING]
 > Combat orders reach the game several seconds after speaking due to LLM round-trip latency. They are designed for strategic positioning, rally points, and tactical retreats, not split-second micro-control.
@@ -122,6 +123,7 @@ One setting decides how much the agent may do on its own:
 
 Set up a decision model in **RimLLM Framework's Decision tab** and RimAgent uses it for a few high-frequency judgements — cases where the set of valid answers is known in advance and no text has to be generated, so these calls are cheaper and faster than a chat model:
 
+- **Auto mode risk checks:** instead of a second chat-model call per command, the decision model answers "how hard is this action to undo" and "did the player ask for this action"; the answer decides whether the command runs or is rejected with a reason. The criteria live in `AgentPack/Prompts/DecisionRisk.md` and you can rewrite them for your own colony.
 - **Goal completion audit:** when the agent claims a `/goal` is complete, the decision model independently checks whether the work really is done, whether the agent still has steps of its own, and whether it is stuck on something only you can provide. A goal that fails the audit keeps running and is asked for evidence instead of being removed.
 - **Task routing:** pick **Auto routing** in the Agent window's model dropdown and every instruction is classified first (observe, routine, build, risky), then sent with that category's model and reasoning level. Categories and their models are edited under Decision routing in mod settings.
 
