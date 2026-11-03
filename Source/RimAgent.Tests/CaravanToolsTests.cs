@@ -274,7 +274,7 @@ public class CaravanToolsTests
     [Test]
     public void ConfirmationPreviewListsTheTripAndWarningsWithoutTouchingTheWorld()
     {
-        var gated = new CaravanTools(_world, new ConfirmationGate(() => AgentMode.Ask));
+        var gated = new CaravanTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
         string text = gated.FormCaravan("Ali, Bob", "Rex", "silver x500", tile: 4600);
 

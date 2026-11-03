@@ -6,8 +6,6 @@ namespace RimAgent.Agent;
 /// </summary>
 public enum AgentMode
 {
-    /// <summary>唯讀：只有查詢工具交給模型，命令工具不存在。</summary>
-    Ask,
     /// <summary>確認：每個指令都需要玩家手動確認。</summary>
     Confirm,
     /// <summary>舊版設定值；載入時改為確認模式。</summary>

@@ -31,8 +31,8 @@ public class RimAgentMod : Mod
     private static LoadedLanguage _permissionLanguage;
     private static float _permissionLabelWidth = -1f;
 
-    // 設定頁要列出每個子代理的模型槽，但主選單時沒有遊戲元件可問；自己讀一次擴充包，關頁時丟掉。
-    private IReadOnlyList<AgentSubagent> _subagents;
+    // 進階設定預設收合；只在本次遊戲期間記住，不寫入設定檔。
+    private static bool _showAdvanced;
 
     private Vector2 _settingsScrollPosition = Vector2.zero;
     private float _settingsHeight = 960f;
@@ -74,18 +74,6 @@ public class RimAgentMod : Mod
             Settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), Settings.searxngUrl ?? string.Empty);
         }
 
-        DrawModelRoles(listing);
-
-        listing.Gap();
-        listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
-        listing.GapLine();
-        DrawDecisionSettings(listing);
-
-        listing.Gap();
-        listing.Label("RimAgent.Settings.DecisionRoutingHeader".Translate());
-        listing.GapLine();
-        DrawDecisionRoutingSettings(listing);
-
         listing.Gap();
         listing.Label("RimAgent.Settings.AutonomousHeader".Translate());
         listing.GapLine();
@@ -103,12 +91,29 @@ public class RimAgentMod : Mod
         listing.Label(cooldownLabel, -1f, "RimAgent.Settings.AutoCooldownTip".Translate());
         Settings.autonomousCooldownMinutes = Mathf.RoundToInt(listing.Slider(Settings.autonomousCooldownMinutes, RimAgentSettings.MinCooldownMinutes, RimAgentSettings.MaxCooldownMinutes));
 
-        listing.CheckboxLabeled("RimAgent.Settings.AutoOnRaid".Translate(), ref Settings.autoOnRaid, "RimAgent.Settings.AutoOnRaidTip".Translate());
-        listing.CheckboxLabeled("RimAgent.Settings.AutoOnMentalBreak".Translate(), ref Settings.autoOnMentalBreak, "RimAgent.Settings.AutoOnMentalBreakTip".Translate());
-        listing.CheckboxLabeled("RimAgent.Settings.AutoOnFoodShortage".Translate(), ref Settings.autoOnFoodShortage, "RimAgent.Settings.AutoOnFoodShortageTip".Translate());
-        listing.CheckboxLabeled("RimAgent.Settings.AutoOnEmergencyMedical".Translate(), ref Settings.autoOnEmergencyMedical, "RimAgent.Settings.AutoOnEmergencyMedicalTip".Translate());
-        listing.CheckboxLabeled("RimAgent.Settings.AutoOnFire".Translate(), ref Settings.autoOnFire, "RimAgent.Settings.AutoOnFireTip".Translate());
-        listing.CheckboxLabeled("RimAgent.Settings.AutoOnUpkeep".Translate(), ref Settings.autoOnUpkeep, "RimAgent.Settings.AutoOnUpkeepTip".Translate());
+        listing.Gap();
+        listing.GapLine();
+        listing.CheckboxLabeled("RimAgent.Settings.ShowAdvanced".Translate(), ref _showAdvanced, "RimAgent.Settings.ShowAdvancedTip".Translate());
+        if (_showAdvanced) DrawAdvanced(listing);
+
+        listing.Gap();
+        listing.Label("RimAgent.Settings.FrameworkNote".Translate());
+
+        listing.End();
+        _settingsHeight = Mathf.Max(listing.CurHeight + 24f, inRect.height);
+        Widgets.EndScrollView();
+    }
+
+    /// <summary>進階設定：模型分工、決策模型（含分流）、上下文壓縮與執行紀錄。</summary>
+    private static void DrawAdvanced(Listing_Standard listing)
+    {
+        DrawModelRoles(listing);
+
+        listing.Gap();
+        listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
+        listing.GapLine();
+        // 分流靠決策模型分類，沒有可用的決策模型時細項沒有作用，不顯示。
+        if (DrawDecisionSettings(listing)) DrawDecisionRoutingSettings(listing);
 
         listing.Gap();
         listing.Label("RimAgent.Settings.CompactionHeader".Translate());
@@ -142,13 +147,6 @@ public class RimAgentMod : Mod
                 OpenFolder(logFolder);
             }
         }
-
-        listing.Gap();
-        listing.Label("RimAgent.Settings.FrameworkNote".Translate());
-
-        listing.End();
-        _settingsHeight = Mathf.Max(listing.CurHeight + 24f, inRect.height);
-        Widgets.EndScrollView();
     }
 
     /// <summary>十五類工具權限：標題列右側一鍵全開／全關，勾選框排成兩欄（先填滿左欄再換右欄）。</summary>
@@ -191,18 +189,11 @@ public class RimAgentMod : Mod
         }
     }
 
-    public override void WriteSettings()
-    {
-        base.WriteSettings();
-        // 關閉設定頁時觸發：下次打開重讀擴充包，玩家新增的子代理才看得到。
-        _subagents = null;
-    }
-
     /// <summary>
     /// 模型分工（參照 hermes-agent 的 auxiliary 模型）：Agent 主模型在 Agent 視窗切換，
-    /// 其餘每種模型呼叫各一格，預設跟隨 Agent 模型；子代理另可逐一覆寫模型。
+    /// 其餘每種模型呼叫各一格，預設跟隨 Agent 模型；所有子代理共用同一格。
     /// </summary>
-    private void DrawModelRoles(Listing_Standard listing)
+    private static void DrawModelRoles(Listing_Standard listing)
     {
         listing.Gap();
         listing.Label("RimAgent.Settings.ModelRolesHeader".Translate());
@@ -211,19 +202,6 @@ public class RimAgentMod : Mod
             () => Settings.subagentModel, v => Settings.subagentModel = v,
             "RimAgent.Settings.SubagentModelTip".Translate(),
             () => Settings.subagentReasoning, v => Settings.subagentReasoning = v);
-        if (_subagents == null) _subagents = AgentPackLoader.LoadSubagentsOnly(Path.Combine(Content.RootDir, "AgentPack"));
-        foreach (string name in _subagents.Select(s => s.Name))
-        {
-            // 沒有鍵＝跟隨子代理預設；AGENT.md 寫了 reasoning 就以它為準，這裡只管模型。
-            DrawModelDropdown(listing, "RimAgent.Settings.SubagentModelFor".Translate(name),
-                () => Settings.subagentModels.TryGetValue(name, out string own) ? own : null,
-                v =>
-                {
-                    if (v == null) Settings.subagentModels.Remove(name);
-                    else Settings.subagentModels[name] = v;
-                },
-                "RimAgent.Settings.SubagentModelForTip".Translate(name));
-        }
         DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel".Translate(),
             () => Settings.classifierModel, v => Settings.classifierModel = v,
             "RimAgent.Settings.ClassifierModelTip".Translate(),
@@ -234,7 +212,8 @@ public class RimAgentMod : Mod
             () => Settings.compactReasoning, v => Settings.compactReasoning = v);
     }
 
-    private static void DrawDecisionSettings(Listing_Standard listing)
+    /// <summary>畫決策模型的狀態與選單；回傳框架是否已啟用決策模型。</summary>
+    private static bool DrawDecisionSettings(Listing_Standard listing)
     {
         DecisionAvailability availability = DecisionServiceFactory.GetAvailability();
         string statusText;
@@ -340,6 +319,7 @@ public class RimAgentMod : Mod
             TooltipHandler.TipRegion(new Rect(modelRow.x, modelRow.y, modelRow.width, modelRow.height), "RimAgent.Settings.DecisionModelTip".Translate());
         }
         listing.Gap(6f);
+        return availability != null && availability.Enabled;
     }
 
     /// <summary>RimLLM 的決策供應商目錄可能不存在於舊版；單獨成方法，讓呼叫端能攔截型別載入錯誤。</summary>
@@ -486,7 +466,6 @@ public class RimAgentMod : Mod
     /// 一格模型槽：模型下拉（跟隨 Agent／Fallback／備援鏈條目，選項與 Agent 視窗的模型選單相同）
     /// 加上選用的思考強度下拉。
     /// </summary>
-    /// <param name="current">目前的槽值；回傳 null 表示「跟隨子代理預設」（只有個別子代理的列會這樣）。</param>
     /// <param name="reasoning">思考強度的讀取；null 表示這列不顯示思考強度。</param>
     private static void DrawModelDropdown(
         Listing_Standard listing, string label, Func<string> current, Action<string> set, string tip,
@@ -503,10 +482,10 @@ public class RimAgentMod : Mod
         Widgets.Label(labelRect, label.Truncate(labelWidth));
         Text.WordWrap = true;
         string raw = current();
-        string shown = GetModelDropdownDisplayText(raw, reasoning != null);
+        string shown = GetModelDropdownDisplayText(raw);
         if (Widgets.ButtonText(dropdownRect, shown.Truncate(dropdownRect.width - 12f)))
         {
-            ShowModelDropdownMenu(set, reasoning == null);
+            ShowModelDropdownMenu(set);
         }
         if (Mouse.IsOver(dropdownRect) || Mouse.IsOver(labelRect))
         {
@@ -524,12 +503,8 @@ public class RimAgentMod : Mod
         listing.Gap(6f);
     }
 
-    private static string GetModelDropdownDisplayText(string raw, bool hasReasoning)
+    private static string GetModelDropdownDisplayText(string raw)
     {
-        if (raw == null && !hasReasoning)
-        {
-            return "RimAgent.Model.FollowSubagentDefault".Translate().ToString();
-        }
         string value = (raw ?? string.Empty).Trim();
         if (value.Length == 0)
         {
@@ -542,16 +517,9 @@ public class RimAgentMod : Mod
         return value;
     }
 
-    private static void ShowModelDropdownMenu(Action<string> set, bool allowFollowSubagentDefault)
+    private static void ShowModelDropdownMenu(Action<string> set)
     {
         var options = new List<FloatMenuOption>();
-        if (allowFollowSubagentDefault)
-        {
-            options.Add(new FloatMenuOption("RimAgent.Model.FollowSubagentDefault".Translate(), () => set(null))
-            {
-                tooltip = new TipSignal("RimAgent.Model.FollowSubagentDefaultTip".Translate())
-            });
-        }
         options.Add(new FloatMenuOption("RimAgent.Model.FollowAgent".Translate(), () => set(RimAgentSettings.FollowAgentModel))
         {
             tooltip = new TipSignal("RimAgent.Model.FollowAgentTip".Translate())

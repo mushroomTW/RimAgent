@@ -1151,7 +1151,7 @@ public class Window_Agent : Window
         if (DrawUnifiedButton(modeRect, modeStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
             var options = new List<FloatMenuOption>();
-            foreach (AgentMode mode in new[] { AgentMode.Ask, AgentMode.Confirm, AgentMode.Execute, AgentMode.Auto, AgentMode.Autonomous })
+            foreach (AgentMode mode in new[] { AgentMode.Confirm, AgentMode.Execute, AgentMode.Auto, AgentMode.Autonomous })
             {
                 options.Add(new FloatMenuOption(ModeLabel(mode), () => SetMode(settings, mode))
                 {
@@ -1246,7 +1246,6 @@ public class Window_Agent : Window
     {
         switch (mode)
         {
-            case AgentMode.Ask: return "RimAgent.Settings.Mode.Ask".Translate();
             case AgentMode.Confirm: return "RimAgent.Settings.Mode.Confirm".Translate();
             case AgentMode.Execute: return "RimAgent.Settings.Mode.Execute".Translate();
             case AgentMode.Yolo: return "RimAgent.Settings.Mode.Yolo".Translate();
@@ -1260,7 +1259,6 @@ public class Window_Agent : Window
     {
         switch (mode)
         {
-            case AgentMode.Ask: return "RimAgent.Settings.Mode.AskDesc".Translate();
             case AgentMode.Confirm: return "RimAgent.Settings.Mode.ConfirmDesc".Translate();
             case AgentMode.Execute: return "RimAgent.Settings.Mode.ExecuteDesc".Translate();
             case AgentMode.Yolo: return "RimAgent.Settings.Mode.YoloDesc".Translate();

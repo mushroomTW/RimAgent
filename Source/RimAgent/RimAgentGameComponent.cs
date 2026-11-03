@@ -945,12 +945,13 @@ public class RimAgentGameComponent : GameComponent
             IntervalTicks = AutonomousScheduler.HeartbeatTicks,
             WindowTicks = 60000,
             CooldownTicks = UnityEngine.Mathf.RoundToInt(settings.autonomousCooldownMinutes * (2500f / 60f)),
-            OnRaid = settings.autoOnRaid,
-            OnMentalBreak = settings.autoOnMentalBreak,
-            OnFoodShortage = settings.autoOnFoodShortage,
-            OnEmergencyMedical = settings.autoOnEmergencyMedical,
-            OnFire = settings.autoOnFire,
-            OnUpkeep = settings.autoOnUpkeep
+            // 主動照顧一律回應所有事件，不再逐項開關。
+            OnRaid = true,
+            OnMentalBreak = true,
+            OnFoodShortage = true,
+            OnEmergencyMedical = true,
+            OnFire = true,
+            OnUpkeep = true
         };
     }
 
@@ -1124,7 +1125,6 @@ public class RimAgentGameComponent : GameComponent
             classifierModel: () => settings?.ResolveClassifierModel(_session?.CurrentAgentModel),
             classifierPrompt: () => _pack != null ? _pack.ClassifierPrompt : string.Empty,
             decisionRiskCriteria: () => _pack != null ? _pack.DecisionRiskCriteria : string.Empty,
-            askNote: () => _pack != null ? _pack.AskModeNote : string.Empty,
             memory: Memory,
             useLocalSearch: () => settings.useLocalSearch,
             searxngUrl: () => settings.searxngUrl,
@@ -1135,7 +1135,7 @@ public class RimAgentGameComponent : GameComponent
                 ClassifierReasoning = () => settings.classifierReasoning,
                 CompactModel = () => settings.ResolveModelSlot(settings.compactModel, _session?.CurrentAgentModel),
                 CompactReasoning = () => settings.compactReasoning,
-                SubagentModel = name => settings.ResolveSubagentModel(name, _session?.CurrentAgentModel),
+                SubagentModel = _ => settings.ResolveSubagentModel(_session?.CurrentAgentModel),
                 SubagentReasoning = () => settings.subagentReasoning
             });
         session.Reasoning = settings.reasoning;

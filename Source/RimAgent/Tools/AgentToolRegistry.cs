@@ -139,7 +139,7 @@ public sealed class AgentToolRegistry
         return Select(permissions, AgentMode.Confirm);
     }
 
-    /// <summary>依權限與模式挑選：詢問模式只留查詢工具，YOLO 模式排除黑名單工具，命令工具連 schema 都不送給模型。</summary>
+    /// <summary>依權限與模式挑選：YOLO 模式排除黑名單工具，命令工具連 schema 都不送給模型。</summary>
     public IList<AITool> Select(ToolPermissions permissions, AgentMode mode)
     {
         return [.. WithOutputReader(Allowed(permissions, mode)).Select(t => t.Tool)];
@@ -194,7 +194,6 @@ public sealed class AgentToolRegistry
         if (permissions == null) throw new ArgumentNullException(nameof(permissions));
         return _tools
             .Where(t => permissions.Allows(t.Category))
-            .Where(t => mode != AgentMode.Ask || t.Risk == ToolRisk.Query)
             .Where(t => mode != AgentMode.Yolo || !IsYoloForbidden(t.Name));
     }
 

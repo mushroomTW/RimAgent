@@ -140,8 +140,8 @@ public class CommandGateTests
     [Test]
     public async Task BlockedCommandToolsPreviewWithoutTouchingWorld()
     {
-        // 詢問模式的閘門擋下一切，正好用來驗證每個命令工具都有預覽分支。
-        var registry = new AgentToolRegistry(_world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Ask));
+        // 確認模式的閘門擋下所有命令，正好用來驗證每個命令工具都有預覽分支。
+        var registry = new AgentToolRegistry(_world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Confirm));
 
         foreach (AIFunction tool in registry.All.OfType<AIFunction>())
         {
@@ -228,7 +228,6 @@ public class CommandGateTests
     [TestCase(AgentMode.Yolo, "mcp_call_tool", false)]
     [TestCase(AgentMode.Confirm, "mcp_call_tool", true)]
     [TestCase(AgentMode.Auto, "mcp_call_tool", false)]
-    [TestCase(AgentMode.Ask, "mcp_call_tool", false)]
     [TestCase(AgentMode.Confirm, "set_work_priorities", false)]
     public void RequiresExplicitConfirmationTests(AgentMode mode, string toolName, bool expected)
     {

@@ -92,13 +92,11 @@
   <RimAgent.Settings.MemoryTip>Allow the agent to read, write, edit and delete up to 30 memory files in this game's save file.</RimAgent.Settings.MemoryTip>
   <RimAgent.Settings.Agents>Subagents — delegate tasks</RimAgent.Settings.Agents>
   <RimAgent.Settings.AgentsTip>Allow the agent to hand self-contained tasks to the subagents in AgentPack/Agents (delegate_task). Each subagent still only gets the tool categories you allow here, and its commands follow the current mode.</RimAgent.Settings.AgentsTip>
+  <RimAgent.Settings.ShowAdvanced>Show advanced settings</RimAgent.Settings.ShowAdvanced>
+  <RimAgent.Settings.ShowAdvancedTip>Model roles, decision model and routing, context compaction and run history.</RimAgent.Settings.ShowAdvancedTip>
   <RimAgent.Settings.ModelRolesHeader>Model roles</RimAgent.Settings.ModelRolesHeader>
   <RimAgent.Settings.SubagentModel>Subagent default:</RimAgent.Settings.SubagentModel>
   <RimAgent.Settings.SubagentModelTip>Model and reasoning used by subagents that have no model of their own below. A subagent whose AGENT.md sets reasoning keeps that reasoning.</RimAgent.Settings.SubagentModelTip>
-  <RimAgent.Settings.SubagentModelFor>Subagent {0}:</RimAgent.Settings.SubagentModelFor>
-  <RimAgent.Settings.SubagentModelForTip>Model for the {0} subagent only.</RimAgent.Settings.SubagentModelForTip>
-  <RimAgent.Settings.Mode.Ask>Ask</RimAgent.Settings.Mode.Ask>
-  <RimAgent.Settings.Mode.AskDesc>Read-only. The agent can inspect the colony and advise, but has no tools that change it.</RimAgent.Settings.Mode.AskDesc>
   <RimAgent.Settings.Mode.Confirm>Confirm</RimAgent.Settings.Mode.Confirm>
   <RimAgent.Settings.Mode.ConfirmDesc>Every command requires confirmation: any state-changing action is previewed and waits for your Confirm; queries run directly.</RimAgent.Settings.Mode.ConfirmDesc>
   <RimAgent.Settings.Mode.Execute>Execute</RimAgent.Settings.Mode.Execute>
@@ -122,7 +120,6 @@
   <RimAgent.Settings.DecisionStatusEnabled>Configured ({0} · {1})</RimAgent.Settings.DecisionStatusEnabled>
   <RimAgent.Settings.DecisionStatusNoKey>Configured ({0}) — API key required in RimLLM Framework</RimAgent.Settings.DecisionStatusNoKey>
   <RimAgent.Settings.DecisionDefault>Default (follow framework)</RimAgent.Settings.DecisionDefault>
-  <RimAgent.Settings.DecisionRoutingHeader>Decision routing</RimAgent.Settings.DecisionRoutingHeader>
   <RimAgent.Settings.DecisionFallbackModel>Fallback model:</RimAgent.Settings.DecisionFallbackModel>
   <RimAgent.Settings.DecisionFallbackModelTip>Model used when auto routing is inactive, confidence is low, or decision model is unavailable.</RimAgent.Settings.DecisionFallbackModelTip>
   <RimAgent.Settings.DecisionMinConfidence>Routing min confidence: {0}</RimAgent.Settings.DecisionMinConfidence>
@@ -145,10 +142,6 @@
   <RimAgent.Settings.AutoCooldown>Autonomous cooldown: {0} minutes</RimAgent.Settings.AutoCooldown>
   <RimAgent.Settings.AutoCooldownOff>Autonomous cooldown: Disabled</RimAgent.Settings.AutoCooldownOff>
   <RimAgent.Settings.AutoCooldownTip>Minimum wait time between two autonomous runs. Set to 0 to completely disable cooldown and react immediately to events and cycles.</RimAgent.Settings.AutoCooldownTip>
-  <RimAgent.Settings.AutoOnRaid>React to raids</RimAgent.Settings.AutoOnRaid>
-  <RimAgent.Settings.AutoOnMentalBreak>React to colonists near mental break</RimAgent.Settings.AutoOnMentalBreak>
-  <RimAgent.Settings.AutoOnFoodShortage>React to food shortages</RimAgent.Settings.AutoOnFoodShortage>
-  <RimAgent.Settings.AutoOnUpkeep>React to base upkeep problems</RimAgent.Settings.AutoOnUpkeep>
   <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>
 
   <!-- Status strip and slash commands -->
@@ -163,8 +156,6 @@
   <RimAgent.Model.AutoRoutingTip>Use the decision model to classify each instruction into a task category and route it to the configured model and reasoning effort.</RimAgent.Model.AutoRoutingTip>
   <RimAgent.Model.FollowAgent>Default (agent's current model)</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, this role follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
-  <RimAgent.Model.FollowSubagentDefault>Subagent default</RimAgent.Model.FollowSubagentDefault>
-  <RimAgent.Model.FollowSubagentDefaultTip>Use the subagent default above.</RimAgent.Model.FollowSubagentDefaultTip>
   <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>
@@ -206,14 +197,6 @@
   <RimAgent.Goal.AuditContinuing>Decision audit determined the goal is not yet finished; continuing: {0}</RimAgent.Goal.AuditContinuing>
   <RimAgent.Goal.AuditCompleted>Goal completed and verified by decision audit: {0}</RimAgent.Goal.AuditCompleted>
 
-  <RimAgent.Settings.AutoOnEmergencyMedical>Respond to downed or bleeding colonists</RimAgent.Settings.AutoOnEmergencyMedical>
-  <RimAgent.Settings.AutoOnFire>Respond to fires</RimAgent.Settings.AutoOnFire>
-  <RimAgent.Settings.AutoOnRaidTip>Runs once when enemies actively threatening the colony appear on any map, and once more after they are all gone.</RimAgent.Settings.AutoOnRaidTip>
-  <RimAgent.Settings.AutoOnMentalBreakTip>Runs when any colonist's mood drops below their minor mental break threshold.</RimAgent.Settings.AutoOnMentalBreakTip>
-  <RimAgent.Settings.AutoOnFoodShortageTip>Runs when total human-edible nutrition falls below 4 per colonist (about 2.5 days of food). It also runs as food keeps dropping, not only at the first crossing.</RimAgent.Settings.AutoOnFoodShortageTip>
-  <RimAgent.Settings.AutoOnUpkeepTip>Runs when the colony is slowly going bad rather than in danger: dangerous temperatures, colonists with no bed, beds outdoors, nothing running on power, no research project, or moods low but nobody breaking yet. Turning this off leaves the colony reacting only to emergencies.</RimAgent.Settings.AutoOnUpkeepTip>
-  <RimAgent.Settings.AutoOnEmergencyMedicalTip>Runs when any colonist is downed or bleeding.</RimAgent.Settings.AutoOnEmergencyMedicalTip>
-  <RimAgent.Settings.AutoOnFireTip>Runs when fire appears on any map.</RimAgent.Settings.AutoOnFireTip>
   <RimAgent.Settings.CompactionHeader>Context compaction</RimAgent.Settings.CompactionHeader>
   <RimAgent.Settings.AutoCompact>Auto-fold older tool output</RimAgent.Settings.AutoCompact>
   <RimAgent.Settings.AutoCompactTip>When model history exceeds the threshold, older tool results are folded automatically before each request at no extra model cost; once history reaches twice the threshold, the oldest complete turns are dropped until it is back within the threshold (the visible log is kept). Manual /compact runs a separate LLM summary and is not affected by this switch.</RimAgent.Settings.AutoCompactTip>

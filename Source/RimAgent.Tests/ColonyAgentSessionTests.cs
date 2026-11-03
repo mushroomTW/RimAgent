@@ -971,22 +971,6 @@ public class ColonyAgentSessionTests
     }
 
     [Test]
-    public void AskModeOffersOnlyQueryTools()
-    {
-        var session = new ColonyAgentSession(_client, _world, () => ToolPermissions.All, 8, () => AgentMode.Ask);
-
-        List<string> names = [.. session.BuildRunOptions().Tools.OfType<AIFunction>().Select(t => t.Name)];
-        // 包內工具不公告，完整的允許集合看登錄表（會話用同一套過濾）。
-        List<string> allowed = [.. new AgentToolRegistry(_world, new AgentTranscript())
-            .Select(ToolPermissions.All, AgentMode.Ask).Select(t => t.Name)];
-
-        Assert.That(names, Does.Contain("list_colonists"));
-        Assert.That(names, Does.Not.Contain("set_work_priorities"));
-        Assert.That(allowed, Does.Contain("get_health").And.Contain("mcp_list_tools"));
-        Assert.That(allowed, Does.Not.Contain("execute_trade").And.Not.Contain("mcp_call_tool"));
-    }
-
-    [Test]
     public void YoloModeExcludesForbiddenTools()
     {
         var session = new ColonyAgentSession(_client, _world, () => ToolPermissions.All, 8, () => AgentMode.Yolo);
@@ -1005,23 +989,6 @@ public class ColonyAgentSessionTests
         Assert.That(names, Does.Contain("set_work_priorities"));
         Assert.That(names, Does.Contain("order_attack"));
         Assert.That(names, Does.Contain("mcp_call_tool"));
-    }
-
-    [Test]
-    public void AskModeAppendsReadOnlyNoteToInstructions()
-    {
-        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Ask, () => "COMPOSED PROMPT", askNote: () => "ASK NOTE");
-
-        Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT\n\nASK NOTE"));
-        Assert.That(NewSession().BuildRunOptions().Instructions, Is.Null, "非詢問模式不動 Instructions");
-    }
-
-    [Test]
-    public void AskModeWithoutNoteLeavesInstructionsAlone()
-    {
-        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Ask, () => "COMPOSED PROMPT");
-
-        Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT"), "缺檔就不加註");
     }
 
     [Test]

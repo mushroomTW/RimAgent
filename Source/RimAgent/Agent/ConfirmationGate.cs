@@ -78,8 +78,6 @@ public sealed class ConfirmationGate
         if (invocation?.Forced.HasValue == true) return invocation.Forced.Value;
         switch (_mode())
         {
-            case AgentMode.Ask:
-                return false;
             case AgentMode.Confirm:
                 return invocation?.Risk == ToolRisk.Query || IsApprovedForSession(invocation?.ToolName);
             case AgentMode.Execute:

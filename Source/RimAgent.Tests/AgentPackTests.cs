@@ -49,7 +49,6 @@ public class AgentPackTests
         File.WriteAllText(Path.Combine(_prompts, "Briefing.md"), "  You are RimAgent.  ");
         File.WriteAllText(Path.Combine(_root, "AGENTS.md"), "  Play tall, not wide.  ");
         File.WriteAllText(Path.Combine(_prompts, "Conduct.md"), "  Be brief.  ");
-        File.WriteAllText(Path.Combine(_prompts, "AskMode.md"), "  Ask note.  ");
         File.WriteAllText(Path.Combine(_prompts, "RiskClassifier.md"), "  Judge risk.  ");
         File.WriteAllText(Path.Combine(_prompts, "DecisionRisk.md"), "  Judge decision risk.  ");
         string dir = Path.Combine(_root, "Skills", "raid-defense");
@@ -62,7 +61,6 @@ public class AgentPackTests
         Assert.That(pack.Preamble, Is.EqualTo("You are RimAgent."));
         Assert.That(pack.PlayerNotes, Is.EqualTo("Play tall, not wide."));
         Assert.That(pack.Conduct, Is.EqualTo("Be brief."));
-        Assert.That(pack.AskModeNote, Is.EqualTo("Ask note."));
         Assert.That(pack.ClassifierPrompt, Is.EqualTo("Judge risk."));
         Assert.That(pack.DecisionRiskCriteria, Is.EqualTo("Judge decision risk."));
         AgentSkill skill = pack.Skills.Single();
@@ -79,7 +77,6 @@ public class AgentPackTests
         Assert.That(pack.Preamble, Is.Empty);
         Assert.That(pack.PlayerNotes, Is.Empty);
         Assert.That(pack.Conduct, Is.Empty);
-        Assert.That(pack.AskModeNote, Is.Empty);
         Assert.That(pack.ClassifierPrompt, Is.Empty);
         Assert.That(pack.Autonomous.Tasks, Is.Empty);
     }
@@ -169,7 +166,7 @@ public class AgentPackTests
     public void ShippedPromptFilesAreComplete()
     {
         string root = FindAgentPack();
-        foreach (string file in new[] { "Briefing.md", "Conduct.md", "AskMode.md", "RiskClassifier.md", "Autonomous.en.md" })
+        foreach (string file in new[] { "Briefing.md", "Conduct.md", "RiskClassifier.md", "Autonomous.en.md" })
         {
             Assert.That(File.Exists(Path.Combine(root, "Prompts", file)), Is.True, file + " 未放在 Prompts/");
             Assert.That(File.Exists(Path.Combine(root, file)), Is.False, file + " 不應留在 AgentPack/ 根目錄");
@@ -179,7 +176,6 @@ public class AgentPackTests
         Assert.That(pack.Preamble, Does.Contain("You are RimAgent"));
         Assert.That(pack.PlayerNotes, Is.Empty, "AGENTS.md 留給玩家自己設計，出貨必須是空的");
         Assert.That(pack.Conduct, Does.Contain("For player instructions"));
-        Assert.That(pack.AskModeNote, Does.Contain("Ask mode"));
         Assert.That(pack.ClassifierPrompt, Does.Contain("\"risk\""));
         // 從 enum 推導，不寫死清單：新增觸發卻忘了寫章節時，這裡會直接紅掉。
         // （少了章節不會壞掉，只會靜靜退回 Interval —— 正是最難發現的那種 bug。）

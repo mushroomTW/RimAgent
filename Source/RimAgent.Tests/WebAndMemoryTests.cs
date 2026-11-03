@@ -161,28 +161,6 @@ public class WebAndMemoryTests
     }
 
     [Test]
-    public async Task AskModeGetsReadOnlyMemoryInstructions()
-    {
-        var client = new ScriptedChatClient().Reply("done");
-        var session = new ColonyAgentSession(client, new FakeGameWorld(),
-            () => ToolPermissions.For(ToolCategory.Memory), 4, () => AgentMode.Ask, memory: new AgentMemoryStore());
-
-        await session.SendAsync("what do you remember?");
-
-        Assert.That(client.ReceivedOptions[0].Instructions, Does.Contain("read-only in Ask mode").And.Not.Contain("Save only durable facts"));
-    }
-
-    [Test]
-    public void AskModeOnlyExposesReadOnlyMemoryTools()
-    {
-        var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Ask));
-        IEnumerable<string> names = registry.Select(ToolPermissions.For(ToolCategory.Memory), AgentMode.Ask).Select(t => t.Name);
-
-        // read_tool_output 跟著任何可用工具一起給（讀截斷的結果），不屬於記憶權限。
-        Assert.That(names, Is.EquivalentTo(new[] { "file_memory_read", "file_memory_ls", "file_memory_grep", ToolOutputTools.ToolName }));
-    }
-
-    [Test]
     public async Task SessionAddsMemoryInstructionsAndIndexOnlyWhenMemoryIsAllowed()
     {
         var memory = new AgentMemoryStore();

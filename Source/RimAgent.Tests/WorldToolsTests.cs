@@ -474,7 +474,7 @@ public class WorldToolsTests
     [Test]
     public void BlockedCommandsPreviewAndTouchNothing()
     {
-        var gate = new ConfirmationGate(() => AgentMode.Ask);
+        var gate = new ConfirmationGate(() => AgentMode.Confirm);
         var tools = new WorldTools(_world, gate);
         _world.Caravans[0].Moving = true;
 
@@ -508,8 +508,6 @@ public class WorldToolsTests
             Assert.That(descriptor.Category, Is.EqualTo(ToolCategory.Trade), pair.Key);
             Assert.That(ToolPacks.PackOf(pair.Key, descriptor.Category), Is.EqualTo("trade"), pair.Key);
         }
-        Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Trade), AgentMode.Ask).OfType<AIFunction>().Select(t => t.Name),
-            Does.Contain("list_caravans").And.Contain("get_world_tile").And.Not.Contain("send_caravan"), "詢問模式只留查詢工具");
     }
 
     [Test]

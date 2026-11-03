@@ -5,7 +5,6 @@ Built-in prompts live in `AgentPack/Prompts/`, player instructions in `AgentPack
 - `Prompts/Briefing.md` — The preamble: the agent's RimWorld role, the observe-act-report loop, and the tool result protocol. This is the first layer of each request.
 - `AGENTS.md` — Your own instructions. It ships empty. Put gameplay preferences, restrictions, or tone here; the agent reads it after the preamble and before the conduct rules.
 - `Prompts/Conduct.md` — Persistent conduct rules, including minimal changes, explaining irreversible actions, clarifying ambiguity, and prioritizing colony survival.
-- `Prompts/AskMode.md` — The note added in Ask mode: use query tools only and give advice instead of taking actions.
 - `Prompts/RiskClassifier.md` — The system prompt for risk classification in Auto mode. It defines the two-axis decision and JSON response contract; keep that format intact.
 - `Prompts/Autonomous.en.md` — Autonomous task instructions in English. Each trigger has a `##` section: Raid, RaidEnded, EmergencyMedical, Fire, MentalBreak, FoodShortage, Choice, or Interval. Persistent goals run through a separate flow.
 - `Skills/<skill>/SKILL.md` — An optional skill pack. Each request carries only a skill index (names and descriptions); the agent loads a full skill text on demand with `read_skill`. Use this format:

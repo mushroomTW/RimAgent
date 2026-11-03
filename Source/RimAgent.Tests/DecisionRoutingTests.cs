@@ -464,7 +464,7 @@ public class DecisionRoutingTests
         _settings.subagentModel = RimAgentSettings.FollowAgentModel;
         Assert.That(_settings.ResolveClassifierModel("provider:routed"), Is.EqualTo("provider:routed"));
         Assert.That(_settings.ResolveModelSlot(_settings.compactModel, "provider:routed"), Is.EqualTo("provider:routed"));
-        Assert.That(_settings.ResolveSubagentModel("scout", "provider:routed"), Is.EqualTo("provider:routed"));
+        Assert.That(_settings.ResolveSubagentModel("provider:routed"), Is.EqualTo("provider:routed"));
         Assert.That(_settings.ResolveModelSlot("provider:explicit", "provider:routed"), Is.EqualTo("provider:explicit"));
     }
 

@@ -98,19 +98,19 @@ public class ToolPackTests
     }
 
     [Test]
-    public async Task PacksFollowPermissionsAndMode()
+    public async Task PacksFollowPermissions()
     {
         var client = new ScriptedChatClient()
             .CallTool(ToolPackTools.ToolName, new { pack = "medical" })
             .Reply("ok");
-        ColonyAgentSession session = NewSession(client, ToolPermissions.All, AgentMode.Ask);
+        ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Medical), AgentMode.Confirm);
 
         await session.SendAsync("how is Ali's health?");
 
         string instructions = client.ReceivedOptions[0].Instructions;
-        Assert.That(instructions, Does.Contain("- medical:"), "詢問模式下醫療包仍有查詢工具");
-        Assert.That(instructions, Does.Not.Contain("- combat:"), "戰鬥包在詢問模式沒有可用工具");
-        Assert.That(ToolNames(client.ReceivedOptions[1]), Does.Contain("get_health").And.Not.Contain("schedule_surgery"));
+        Assert.That(instructions, Does.Contain("- medical:"), "允許醫療類別時列出醫療包");
+        Assert.That(instructions, Does.Not.Contain("- combat:"), "未允許戰鬥類別時不列出戰鬥包");
+        Assert.That(ToolNames(client.ReceivedOptions[1]), Does.Contain("get_health").And.Not.Contain("order_attack"));
     }
 
     [Test]

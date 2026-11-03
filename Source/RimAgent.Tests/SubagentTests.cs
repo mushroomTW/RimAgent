@@ -387,23 +387,20 @@ public class SubagentTests
     }
 
     [Test]
-    public void SubagentModelResolvesOverrideDefaultAndFollow()
+    public void SubagentModelResolvesSlotAndFollow()
     {
         var settings = new RimAgentSettings { agentModel = "openai:gpt-5" };
 
         Assert.That(settings.subagentModel, Is.EqualTo(RimAgentSettings.FollowAgentModel), "預設跟隨 Agent");
         Assert.That(settings.classifierModel, Is.EqualTo(RimAgentSettings.FollowAgentModel));
         Assert.That(settings.compactModel, Is.EqualTo(RimAgentSettings.FollowAgentModel));
-        Assert.That(settings.ResolveSubagentModel("scout"), Is.EqualTo("openai:gpt-5"));
+        Assert.That(settings.ResolveSubagentModel(), Is.EqualTo("openai:gpt-5"));
 
         settings.subagentModel = "google:flash";
-        Assert.That(settings.ResolveSubagentModel("scout"), Is.EqualTo("google:flash"), "沒有個別設定用子代理預設");
+        Assert.That(settings.ResolveSubagentModel(), Is.EqualTo("google:flash"));
 
-        settings.subagentModels["scout"] = string.Empty;
-        Assert.That(settings.ResolveSubagentModel("scout"), Is.EqualTo(string.Empty), "個別設成 Fallback");
-        settings.subagentModels["scout"] = RimAgentSettings.FollowAgentModel;
-        Assert.That(settings.ResolveSubagentModel("scout"), Is.EqualTo("openai:gpt-5"));
-        Assert.That(settings.ResolveSubagentModel("other"), Is.EqualTo("google:flash"));
+        settings.subagentModel = string.Empty;
+        Assert.That(settings.ResolveSubagentModel(), Is.EqualTo(string.Empty), "設成 Fallback");
     }
 
     [TestCase("yes", true)]

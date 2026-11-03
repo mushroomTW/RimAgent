@@ -41,8 +41,6 @@ public sealed class AgentPack
     public string PlayerNotes { get; set; } = string.Empty;
     /// <summary>常駐行為準則（Conduct.md）。</summary>
     public string Conduct { get; set; } = string.Empty;
-    /// <summary>詢問模式附加註記（AskMode.md）。</summary>
-    public string AskModeNote { get; set; } = string.Empty;
     /// <summary>自動模式風險分類器的系統提示詞（RiskClassifier.md）。缺檔時分類器 fail-closed。</summary>
     public string ClassifierPrompt { get; set; } = string.Empty;
     /// <summary>自動模式決策模型的判準檔（DecisionRisk.md）。缺檔時回退 LLM 分類器。</summary>
@@ -92,7 +90,6 @@ public static class AgentPackLoader
             pack.Preamble = ReadFile(promptsDir, "Briefing.md");
             pack.PlayerNotes = ReadFile(rootDir, "AGENTS.md");
             pack.Conduct = ReadFile(promptsDir, "Conduct.md");
-            pack.AskModeNote = ReadFile(promptsDir, "AskMode.md");
             pack.ClassifierPrompt = ReadFile(promptsDir, "RiskClassifier.md");
             pack.DecisionRiskCriteria = ReadFile(promptsDir, "DecisionRisk.md");
             pack.DecisionGoalCriteria = ReadFile(promptsDir, "DecisionGoal.md");

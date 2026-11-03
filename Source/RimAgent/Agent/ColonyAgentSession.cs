@@ -132,7 +132,6 @@ public sealed class ColonyAgentSession
     private readonly AgentMemoryStore _memory;
     private readonly PlayerInterjections _interjections = new();
     private readonly Func<string> _instructions;
-    private readonly Func<string> _askNote;
     private AgentSession _session;
     private string _serializedSession;
     /// <summary>每句指令結束時備妥的存檔內容；存檔直接取用，不在主線程序列化，也不因忙碌而漏存。</summary>
@@ -177,14 +176,13 @@ public sealed class ColonyAgentSession
         }
     }
 
-    /// <param name="askNote">詢問模式附加註記（AgentPack/Prompts/AskMode.md）；null 則詢問模式不加註。</param>
     /// <param name="subagentsProvider">AgentPack/Agents 載入的子代理；null 或空清單則不提供委派工具。</param>
     /// <param name="routing">分類器、/compact 摘要與子代理的模型槽；null 則全部沿用框架備援鏈與 Auto 思考強度。</param>
     /// <param name="decisionRiskCriteria">自動模式決策模型的判準檔內容（AgentPack/Prompts/DecisionRisk.md）；null 則不啟用決策模型。</param>
     /// <param name="decisionService">測試用決策模型服務；null 則透過 DecisionServiceFactory 建立。</param>
     /// <param name="router">測試用決策模型分流器；null 則透過 DecisionServiceFactory 建立。</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string> askNote = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionModelRouter router = null)
+    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionModelRouter router = null)
     {
         if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
         if (world == null) throw new ArgumentNullException(nameof(world));
@@ -196,7 +194,6 @@ public sealed class ColonyAgentSession
         _world = world;
         _memory = memory ?? new AgentMemoryStore();
         _instructions = instructions;
-        _askNote = askNote;
         // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
         var fallbackClassifier = new RiskClassifier(
             new ModelSlotChatClient(classifierClient ?? innerClient, null, routing?.ClassifierReasoning),
@@ -1346,16 +1343,6 @@ public sealed class ColonyAgentSession
             string composed = _instructions();
             if (!string.IsNullOrWhiteSpace(composed)) instructions = composed;
         }
-        if (Mode == AgentMode.Ask)
-        {
-            // 詢問模式：命令工具根本不在清單裡，跟模型講清楚免得它道歉說類別被關掉。
-            // 註記來自 AgentPack/Prompts/AskMode.md；缺檔就不加，模式本身的工具限制不受影響。
-            string note = _askNote?.Invoke();
-            if (!string.IsNullOrWhiteSpace(note))
-            {
-                instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + note.Trim();
-            }
-        }
         if (packs.Count > 0)
         {
             // 包索引只隨權限與模式改變，展開與否不影響，放在易變的記憶索引之前。
@@ -1370,7 +1357,7 @@ public sealed class ColonyAgentSession
         {
             // 索引只在寫入或刪除記憶時改變，放在系統提示不會讓每句都失去前綴快取。
             instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n"
-                + (Mode == AgentMode.Ask ? MemoryTools.ReadOnlyInstructions : MemoryTools.Instructions);
+                + MemoryTools.Instructions;
             // 檔名與描述是模型先前寫的（可能源自網頁）；儲存層已壓成單行，這裡再標明它只是資料。
             string index = _memory.Index;
             if (!string.IsNullOrWhiteSpace(index))

@@ -121,7 +121,7 @@ public abstract class EndgameExperimentBase : GameComponent
         }
         settings.agentModel = FreeModel;
         settings.recordRuns = true;
-        settings.mode = autonomous ? AgentMode.Autonomous : AgentMode.Ask;
+        settings.mode = autonomous ? AgentMode.Autonomous : AgentMode.Confirm;
         settings.autonomousCare = autonomous;
         return true;
     }

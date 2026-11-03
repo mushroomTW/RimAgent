@@ -291,20 +291,10 @@ public class ObserveToolsTests
     }
 
     [Test]
-    public void AskModeExcludesSetCurrentMapAndTakeScreenshot()
-    {
-        var registry = new AgentToolRegistry(_world, new AgentTranscript());
-        var tools = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(System.Linq.Enumerable.OfType<Microsoft.Extensions.AI.AIFunction>(registry.Select(ToolPermissions.All, AgentMode.Ask)), f => f.Name));
-        Assert.That(tools, Does.Not.Contain("set_current_map"));
-        Assert.That(tools, Does.Not.Contain("take_screenshot"));
-        Assert.That(tools, Does.Contain("get_colony_overview"));
-    }
-
-    [Test]
     public void BlockedGateReturnsPreviewForMapAndScreenshot()
     {
         _world.Maps.Add(new MapInfo { Id = 2, Label = "Outpost" });
-        var gate = new ConfirmationGate(() => AgentMode.Ask);
+        var gate = new ConfirmationGate(() => AgentMode.Confirm);
         var tools = new ObserveTools(_world, gate);
 
         string mapResult = tools.SetCurrentMap("2");

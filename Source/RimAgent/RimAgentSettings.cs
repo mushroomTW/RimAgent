@@ -28,11 +28,9 @@ public class RimAgentSettings : ModSettings
     /// <summary>手動 /compact 摘要的模型槽。</summary>
     public string compactModel = FollowAgentModel;
     public ReasoningLevel compactReasoning = ReasoningLevel.Auto;
-    /// <summary>子代理的預設模型槽；個別子代理可在 <see cref="subagentModels"/> 覆寫模型。</summary>
+    /// <summary>所有子代理共用的模型槽。</summary>
     public string subagentModel = FollowAgentModel;
     public ReasoningLevel subagentReasoning = ReasoningLevel.Auto;
-    /// <summary>子代理名稱 → 模型槽值；沒有鍵的子代理跟隨 <see cref="subagentModel"/>。</summary>
-    public Dictionary<string, string> subagentModels = new(StringComparer.Ordinal);
 
     /// <summary>決策模型供應商 id（留空＝沿用框架設定）。</summary>
     public string decisionProvider = string.Empty;
@@ -76,13 +74,9 @@ public class RimAgentSettings : ModSettings
         return ResolveModelSlot(classifierModel, currentAgentModel);
     }
 
-    /// <summary>指定子代理實際該用的模型識別碼：有個別設定用個別的，否則用子代理預設槽。</summary>
-    public string ResolveSubagentModel(string name, string currentAgentModel = null)
+    /// <summary>子代理實際該用的模型識別碼。</summary>
+    public string ResolveSubagentModel(string currentAgentModel = null)
     {
-        if (name != null && subagentModels != null && subagentModels.TryGetValue(name, out string own))
-        {
-            return ResolveModelSlot(own, currentAgentModel);
-        }
         return ResolveModelSlot(subagentModel, currentAgentModel);
     }
     /// <summary>選用本機 SearXNG；預設改用免設定的 Parallel 匿名搜尋。</summary>
@@ -103,13 +97,6 @@ public class RimAgentSettings : ModSettings
     public bool autonomousCare = false;
     /// <summary>主動照顧時重大操作是否需要確認；完整權限模式不受影響。</summary>
     public bool confirmAutonomousMajor = false;
-    public bool autoOnRaid = true;
-    public bool autoOnMentalBreak = true;
-    public bool autoOnFoodShortage = true;
-    public bool autoOnEmergencyMedical = true;
-    public bool autoOnFire = true;
-    /// <summary>基地狀況開關（受寒、沒床、露宿、停電、停研、心情低落），預設開。</summary>
-    public bool autoOnUpkeep = true;
 
     // 上下文壓縮：依模型視窗的百分比自動折疊較舊工具輸出（不多花模型呼叫）；
     // 手動 /compact 另走一次 LLM 摘要，不受此開關影響。
@@ -226,9 +213,13 @@ public class RimAgentSettings : ModSettings
         {
             Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
         }
-        Scribe_Values.Look(ref mode, "mode", AgentMode.Confirm);
-        if (Scribe.mode == LoadSaveMode.LoadingVars && mode == AgentMode.Yolo)
-            mode = AgentMode.Confirm;
+        // 以名稱存取：已移除的詢問模式不在列舉中，直接解析會報錯；它與 YOLO 舊設定都改回確認。
+        string modeName = mode.ToString();
+        Scribe_Values.Look(ref modeName, "mode", nameof(AgentMode.Confirm));
+        if (Scribe.mode == LoadSaveMode.LoadingVars)
+            mode = Enum.TryParse(modeName, out AgentMode parsed) && Enum.IsDefined(typeof(AgentMode), parsed) && parsed != AgentMode.Yolo
+                ? parsed
+                : AgentMode.Confirm;
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
         Scribe_Values.Look(ref classifierModel, "classifierModel", FollowAgentModel);
@@ -237,8 +228,6 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref compactReasoning, "compactReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref subagentModel, "subagentModel", FollowAgentModel);
         Scribe_Values.Look(ref subagentReasoning, "subagentReasoning", ReasoningLevel.Auto);
-        Scribe_Collections.Look(ref subagentModels, "subagentModels", LookMode.Value, LookMode.Value);
-        if (subagentModels == null) subagentModels = new Dictionary<string, string>(StringComparer.Ordinal);
         Scribe_Values.Look(ref decisionProvider, "decisionProvider", string.Empty);
         Scribe_Values.Look(ref decisionModel, "decisionModel", string.Empty);
         Scribe_Collections.Look(ref decisionCategories, "decisionCategories", LookMode.Deep);
@@ -252,12 +241,6 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
         Scribe_Values.Look(ref autonomousCare, "autonomousCare", false);
         Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", false);
-        Scribe_Values.Look(ref autoOnRaid, "autoOnRaid", true);
-        Scribe_Values.Look(ref autoOnMentalBreak, "autoOnMentalBreak", true);
-        Scribe_Values.Look(ref autoOnFoodShortage, "autoOnFoodShortage", true);
-        Scribe_Values.Look(ref autoOnEmergencyMedical, "autoOnEmergencyMedical", true);
-        Scribe_Values.Look(ref autoOnFire, "autoOnFire", true);
-        Scribe_Values.Look(ref autoOnUpkeep, "autoOnUpkeep", true);
         Scribe_Values.Look(ref autoCompact, "autoCompact", true);
         Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
         Scribe_Values.Look(ref recordRuns, "recordRuns", false);
