@@ -92,6 +92,8 @@
   <RimAgent.Settings.MemoryTip>允许 Agent 在本存档中读取、写入、编辑和删除最多 30 个记忆文件。</RimAgent.Settings.MemoryTip>
   <RimAgent.Settings.Agents>子代理 — 委派任务</RimAgent.Settings.Agents>
   <RimAgent.Settings.AgentsTip>允许 Agent 把自足的任务交给 AgentPack/Agents 里的子代理（delegate_task）。子代理仍只拿得到这里允许的工具类别，命令按当前模式把关。</RimAgent.Settings.AgentsTip>
+  <RimAgent.Settings.Save>存档 — 检查点与死亡后读档重来</RimAgent.Settings.Save>
+  <RimAgent.Settings.SaveTip>默认关闭。殖民地安全时每个游戏日存一份检查点（只保留最新 5 份），并允许 Agent 存档（save_game）与读回这一局的检查点或自动存档（load_save）。开启主动照顾时，殖民者死亡后由 Agent 决定要不要读档。每份存档最多读回 3 次，之后接受损失。硬核模式无法读档。</RimAgent.Settings.SaveTip>
   <RimAgent.Settings.ShowAdvanced>显示高级设置</RimAgent.Settings.ShowAdvanced>
   <RimAgent.Settings.ShowAdvancedTip>模型分工、决策模型与分流、上下文压缩和运行记录。</RimAgent.Settings.ShowAdvancedTip>
   <RimAgent.Settings.ModelRolesHeader>模型分工</RimAgent.Settings.ModelRolesHeader>

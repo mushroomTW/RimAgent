@@ -1049,3 +1049,29 @@ public sealed class ScreenshotInfo
     public int Height { get; set; }
     public string Error { get; set; } = string.Empty;
 }
+
+/// <summary>存讀檔工具需要的這一局狀態。</summary>
+public sealed class SaveContext
+{
+    /// <summary>這一局的 RimAgent 殖民地代號（寫在每份存檔裡，用來認出同一局的 autosave）。</summary>
+    public string ColonyId { get; set; } = string.Empty;
+    public int Tick { get; set; }
+    /// <summary>死亡模式（只有一份會被覆寫的存檔）：不能存讀檔重來。</summary>
+    public bool Permadeath { get; set; }
+    /// <summary>現在不能存檔的原因（選地塊、對話框禁止存檔、過場中）；可以存時為 null。</summary>
+    public string SavingBlockedReason { get; set; }
+}
+
+/// <summary>一份可能屬於這一局的存檔：RimAgent 檢查點或遊戲 autosave。</summary>
+public sealed class SaveSlotInfo
+{
+    /// <summary>存檔名（不含副檔名），讀檔用。</summary>
+    public string Name { get; set; } = string.Empty;
+    public bool Checkpoint { get; set; }
+    /// <summary>存檔裡記的殖民地代號；沒有代號（本功能之前的存檔）為空字串。</summary>
+    public string ColonyId { get; set; } = string.Empty;
+    /// <summary>存檔時的遊戲 tick。</summary>
+    public int Tick { get; set; }
+    /// <summary>檔案最後寫入時間（UTC ticks）：autosave 會輪流覆寫，名稱加上它才是同一份存檔。</summary>
+    public long WrittenUtcTicks { get; set; }
+}

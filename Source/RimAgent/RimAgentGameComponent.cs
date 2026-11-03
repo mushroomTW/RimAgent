@@ -113,12 +113,26 @@ public class RimAgentGameComponent : GameComponent
     private int _goalGeneration;
     private RunLogWriter _runLogWriter;
 
+    /// <summary>殖民地代號：寫進每份存檔，讀檔重來靠它認出同一局的 autosave；本功能之前的存檔第一次取用時補上。</summary>
+    private string _colonyId;
+    /// <summary>上一次自動檢查點的 tick（跟存檔走）。</summary>
+    private int _lastCheckpointTick;
+    private const int CheckpointIntervalTicks = 60000;
+    /// <summary>上次檢查時還活著的殖民者；不存檔，讀檔後重新點名。</summary>
+    private readonly Dictionary<int, Pawn> _trackedColonists = [];
+    /// <summary>死了但還沒交給 agent 處理的殖民者名字。</summary>
+    private readonly List<string> _pendingDeaths = [];
+    /// <summary>剛讀檔重來：要交給讀回來的這一局的那次讀檔紀錄。</summary>
+    private ReloadRecord _pendingReload;
+
     // RimAgent.Game 命名空間會遮蔽 Verse.Game，這裡要寫全名。
     public RimAgentGameComponent(Verse.Game game)
     {
     }
 
     public static RimAgentGameComponent Instance => Current.Game?.GetComponent<RimAgentGameComponent>();
+
+    public string ColonyId => _colonyId ??= Guid.NewGuid().ToString("N").Substring(0, 8);
 
     /// <summary>延遲建立：框架的 client 要等 mod 全部載入完才拿得到。</summary>
     public ColonyAgentSession Session
@@ -435,6 +449,10 @@ public class RimAgentGameComponent : GameComponent
         Scribe_Values.Look(ref _goalLastProgress, "goalLastProgress");
         Scribe_Values.Look(ref _lastCompletedGoal, "lastCompletedGoal");
         Scribe_Values.Look(ref _goalPauseReason, "goalPauseReason", GoalPauseReason.None);
+        string colonyId = Scribe.mode == LoadSaveMode.Saving ? ColonyId : _colonyId;
+        Scribe_Values.Look(ref colonyId, SaveFileScanner.ColonyIdNode);
+        if (Scribe.mode == LoadSaveMode.LoadingVars) _colonyId = colonyId;
+        Scribe_Values.Look(ref _lastCheckpointTick, "lastCheckpointTick", 0);
 
         // 重試表住在唯讀陣列裡，Scribe 過不了：存檔前攤平成清單，讀檔後灌回排程器。
         if (Scribe.mode == LoadSaveMode.Saving) _schedulerWatch = [.. _scheduler.CaptureWatch()];
@@ -482,6 +500,8 @@ public class RimAgentGameComponent : GameComponent
         ResetMcp();
         _scheduler.Reset();
         _schedulerWatch = [];
+        _colonyId = null;
+        _lastCheckpointTick = 0;
     }
 
     public override void LoadedGame()
@@ -506,6 +526,21 @@ public class RimAgentGameComponent : GameComponent
         }
         _schedulerWatch = [];
         ResetMcp();
+        _pendingReload = SaveLedger.Shared.TakePending(ColonyId);
+    }
+
+    /// <summary>
+    /// load_save 排入讀檔前呼叫：停掉這一局的自主任務與持續目標，讓它們的收尾失效。
+    /// 玩家指令的那一輪由會話的遊戲綁定擋住（見 RimWorldGameWorld.GetNotReadyReason）。
+    /// </summary>
+    public void PrepareForReload()
+    {
+        _goalCts?.Cancel();
+        _goalGeneration++;
+        _goalRunning = false;
+        _autoCts?.Cancel();
+        _autoGeneration++;
+        _autoRunning = false;
     }
 
     /// <summary>關掉 MCP server 並丟掉擴充包快取（開新局／讀檔時重抓）。</summary>
@@ -520,9 +555,106 @@ public class RimAgentGameComponent : GameComponent
     public override void GameComponentUpdate()
     {
         base.GameComponentUpdate();
+        // 讀檔重來與死亡最優先：讀檔後遊戲常是暫停的，所以放在 Update 而不是 Tick。
+        TryStartRecoveryRun();
         // 抉擇先於持續目標：暫停遊戲的對話框不處理，目標也推進不了。
         TryStartChoiceRun();
         TryStartGoal();
+    }
+
+    /// <summary>
+    /// 剛讀檔重來就先把教訓交給 agent；有殖民者死亡就讓 agent 決定要不要讀檔（需開啟存檔權限）。
+    /// 主動照顧關閉時讀檔重來只留通知，死亡不起任務。
+    /// </summary>
+    private void TryStartRecoveryRun()
+    {
+        if (_pendingReload == null && _pendingDeaths.Count == 0) return;
+        if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
+        RimAgentSettings settings = RimAgentMod.Settings;
+        try
+        {
+            ColonyAgentSession session = Session;
+            if (session.IsBusy || session.HasPendingConfirmation) return;
+            bool care = settings != null && settings.autonomousCare;
+            if (_pendingReload != null)
+            {
+                ReloadRecord reload = _pendingReload;
+                _pendingReload = null;
+                session.Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = "Reloaded " + reload.SaveName + " (attempt " + reload.Attempt + "/" + SaveLedger.MaxLoadsPerSave + "): " + reload.Lesson
+                });
+                if (!care) return;
+                _autoRunning = true;
+                _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Reloaded, Find.TickManager.TicksGame, ToConfig(settings), null,
+                    DescribeReloads(SaveLedger.Shared.HistoryOf(ColonyId)));
+                return;
+            }
+            if (!care || !settings.GetAllow(ToolCategory.Save))
+            {
+                _pendingDeaths.Clear();
+                return;
+            }
+            string died = "Died: " + string.Join(", ", _pendingDeaths) + ".";
+            _pendingDeaths.Clear();
+            _autoRunning = true;
+            _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.ColonistDied, Find.TickManager.TicksGame, ToConfig(settings), null, died);
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("RimAgent recovery run could not start: " + ex.Message);
+        }
+    }
+
+    /// <summary>這一局到目前為止每次讀檔重來的教訓，由舊到新。</summary>
+    private static string DescribeReloads(IReadOnlyList<ReloadRecord> reloads)
+    {
+        var sb = new System.Text.StringBuilder("Reloads of this colony so far (oldest first):");
+        foreach (ReloadRecord r in reloads)
+        {
+            sb.Append("\n- ").Append(r.SaveName).Append(", attempt ").Append(r.Attempt).Append('/').Append(SaveLedger.MaxLoadsPerSave)
+                .Append(": ").Append(r.Lesson);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>點名殖民者：上次還活著、這次不在名單且確實死亡的記下來。離開地圖、被綁架等不算。</summary>
+    private void TrackColonistDeaths()
+    {
+        foreach (KeyValuePair<int, Pawn> tracked in _trackedColonists)
+        {
+            if (tracked.Value.Dead) _pendingDeaths.Add(tracked.Value.LabelShort);
+        }
+        _trackedColonists.Clear();
+        foreach (Pawn pawn in RimWorld.PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoSuspended)
+        {
+            _trackedColonists[pawn.thingIDNumber] = pawn;
+        }
+    }
+
+    /// <summary>每個遊戲日存一份檢查點，只在安全時存：檢查點不能一開始就身陷危險。</summary>
+    private void TryCheckpoint(int tick)
+    {
+        if (tick - _lastCheckpointTick < CheckpointIntervalTicks || _pendingDeaths.Count > 0 || _autoRunning) return;
+        var tools = new SaveTools(_autoWorld);
+        SaveContext context = _autoWorld.GetSaveContext();
+        if (tools.SaveRefusal(context) != null) return;
+        _lastCheckpointTick = tick;
+        _ = CheckpointGuardedAsync(tools, context);
+    }
+
+    private async Task CheckpointGuardedAsync(SaveTools tools, SaveContext context)
+    {
+        try
+        {
+            string result = await tools.CreateCheckpointAsync(context);
+            if (result.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal)) WarnOnce("RimAgent checkpoint failed: " + result);
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("RimAgent checkpoint failed: " + ex.Message);
+        }
     }
 
     /// <summary>
@@ -864,9 +996,22 @@ public class RimAgentGameComponent : GameComponent
     {
         base.GameComponentTick();
         RimAgentSettings settings = RimAgentMod.Settings;
-        if (settings == null || !settings.autonomousCare) return;
+        if (settings == null) return;
         int tick = Find.TickManager.TicksGame;
         if (tick % SignalCheckIntervalTicks != 0) return;
+        if (settings.GetAllow(ToolCategory.Save))
+        {
+            try
+            {
+                TrackColonistDeaths();
+                TryCheckpoint(tick);
+            }
+            catch (Exception ex)
+            {
+                WarnOnce("RimAgent save check failed: " + ex.Message);
+            }
+        }
+        if (!settings.autonomousCare) return;
         if (Find.CurrentMap == null) return;
         if (tick < _autoHoldUntilTick) return;
 
@@ -983,13 +1128,14 @@ public class RimAgentGameComponent : GameComponent
         _seenChoices.Clear();
     }
 
-    private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals)
+    /// <param name="detail">接在任務文案後面的這一次的具體情況（誰死了、讀檔教訓）；沒有就是 null。</param>
+    private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, string detail = null)
     {
         // 收尾只准清掉自己那一代；讀檔後新的一輪可能已經開始，舊的 finally 不能把它的旗標關掉。
         int generation = _autoGeneration;
         try
         {
-            await RunAutonomousAsync(session, trigger, tick, config, signals, generation);
+            await RunAutonomousAsync(session, trigger, tick, config, signals, generation, detail);
         }
         finally
         {
@@ -997,7 +1143,7 @@ public class RimAgentGameComponent : GameComponent
         }
     }
 
-    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation)
+    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation, string detail)
     {
         // 起跑前遊戲已被換掉（例如排程器在同一幀觸發後玩家立刻讀檔）：不建立 CTS，也不碰任何狀態。
         if (generation != _autoGeneration) return;
@@ -1022,6 +1168,7 @@ public class RimAgentGameComponent : GameComponent
                 WarnOnce("RimAgent autonomous run skipped: Prompts/Autonomous.en.md is missing or has no task for " + trigger);
                 return;
             }
+            if (!string.IsNullOrEmpty(detail)) instruction += "\n\n" + detail;
             // 不加 ConfigureAwait(false)：收尾的 RecordRun 要回主線程，
             // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
             await session.SendAsync(
@@ -1115,7 +1262,7 @@ public class RimAgentGameComponent : GameComponent
         RimAgentSettings settings = RimAgentMod.Settings;
         var session = new ColonyAgentSession(
             client,
-            new RimWorldGameWorld(),
+            new RimWorldGameWorld(Current.Game),
             () => settings.ToPermissions(),
             int.MaxValue,
             () => settings.mode,

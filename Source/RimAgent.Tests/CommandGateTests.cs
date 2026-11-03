@@ -59,6 +59,8 @@ public class CommandGateTests
         ["set_research"] = Args(("project", "batteries")),
         ["set_time_speed"] = Args(("speed", "Fast")),
         ["wait_for_time"] = Args(("hours", 2)),
+        ["save_game"] = Args(),
+        ["load_save"] = Args(("save", "Autosave-1"), ("lesson", "build walls before the raid")),
         ["set_current_map"] = Args(("map", "2")),
         ["take_screenshot"] = Args(("name", "test_shot")),
         ["mcp_call_tool"] = Args(("server", "fetch"), ("tool", "fetch"), ("args", "{}")),
@@ -104,6 +106,8 @@ public class CommandGateTests
         _world.TableBills[800] = [new() { Index = 1, Label = "Make component", Repeat = "2x" }];
         _world.Research = new ResearchInfo { Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } } };
         _world.Maps.Add(new MapInfo { Id = 2, Label = "Outpost", Tile = 999, ColonistCount = 0 });
+        // 讀檔次數記在行程共用的紀錄裡：每個世界的存檔用不同寫入時間，算成不同的存檔。
+        _world.SaveFiles.Add(new SaveSlotInfo { Name = "Autosave-1", ColonyId = "colony1", Tick = 1000, WrittenUtcTicks = DateTime.UtcNow.Ticks });
         _world.Things.Add(FakeGameWorld.MakeThing(302, "Gun_Revolver", "revolver", ThingKind.Item, 12, 12));
         _world.Things[2].Forbidden = true;
         _world.Gizmos[300] = [new() { Number = 1, Label = "Launch ship" }];

@@ -23,6 +23,14 @@ internal sealed class RimWorldGameWorld : IGameWorld
     private const string MineDefName = "Mine";
     private const string ColonistNotFound = "colonist not found";
 
+    /// <summary>綁定的遊戲；不為 null 時，換成別的遊戲（讀檔）後一律不可執行工具。</summary>
+    private readonly Verse.Game _boundGame;
+
+    public RimWorldGameWorld(Verse.Game boundGame = null)
+    {
+        _boundGame = boundGame;
+    }
+
     /// <summary>
     /// 反射目標在遊戲改版後可能消失；啟動時只警告一次，讓 log 看得出是哪個功能降級，
     /// 而不是等到玩家按下按鈕才得到模糊的「不支援」。
@@ -1801,6 +1809,8 @@ internal sealed class RimWorldGameWorld : IGameWorld
         // 讀檔期間 ProgramState 會先變成 MapInitializing，這一條已經擋住；不看長事件，
         // 自動存檔排入的那一幀與背景生成新地圖期間當前地圖都還能碰，擋了只會誤殺指令。
         if (Current.Game == null || Current.ProgramState != ProgramState.Playing) return "no game is being played";
+        // 讀檔後舊對話可能還有模型呼叫在路上：它的工具不能動到換上來的新遊戲。
+        if (_boundGame != null && !ReferenceEquals(Current.Game, _boundGame)) return "the game was reloaded; this conversation belonged to the previous game";
         if (Find.CurrentMap == null) return "there is no current map";
         return null;
     }
@@ -4070,5 +4080,87 @@ internal sealed class RimWorldGameWorld : IGameWorld
                 Error = ex.Message
             };
         }
+    }
+
+    public SaveContext GetSaveContext()
+    {
+        return new SaveContext
+        {
+            ColonyId = RimAgentGameComponent.Instance?.ColonyId ?? string.Empty,
+            Tick = Find.TickManager.TicksGame,
+            Permadeath = Find.GameInfo.permadeathMode,
+            SavingBlockedReason = GameDataSaveLoader.SavingIsTemporarilyDisabled ? "a window or the world tile picker prevents saving" : null
+        };
+    }
+
+    public async System.Threading.Tasks.Task<IReadOnlyList<SaveSlotInfo>> GetSaveFilesAsync()
+    {
+        // 列檔案在主線程（GenFilePaths 會建資料夾）；開 autosave 讀代號交給背景執行緒。
+        var files = GenFilePaths.AllSavedGameFiles
+            .Select(f => new { Name = System.IO.Path.GetFileNameWithoutExtension(f.Name), f.FullName, Written = f.LastWriteTimeUtc.Ticks })
+            .Where(f => f.Name.StartsWith(Tools.SaveTools.CheckpointPrefix, StringComparison.OrdinalIgnoreCase)
+                || f.Name.StartsWith(GameDataSaveLoader.AutosavePrefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return await System.Threading.Tasks.Task.Run(() => (IReadOnlyList<SaveSlotInfo>)files.Select(f =>
+        {
+            var info = new SaveSlotInfo { Name = f.Name, WrittenUtcTicks = f.Written };
+            if (TryParseCheckpointName(f.Name, out string colonyId, out int tick))
+            {
+                info.Checkpoint = true;
+                info.ColonyId = colonyId;
+                info.Tick = tick;
+            }
+            else if (f.Name.StartsWith(GameDataSaveLoader.AutosavePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                SaveFileScanner.Scan scan = SaveFileScanner.Read(f.FullName, f.Written);
+                info.ColonyId = scan.ColonyId;
+                info.Tick = scan.Tick;
+            }
+            return info;
+        }).ToList());
+    }
+
+    /// <summary>檢查點名稱是「前綴＋代號＋-＋tick」；代號本身不含連字號。</summary>
+    private static bool TryParseCheckpointName(string name, out string colonyId, out int tick)
+    {
+        colonyId = string.Empty;
+        tick = 0;
+        if (!name.StartsWith(Tools.SaveTools.CheckpointPrefix, StringComparison.OrdinalIgnoreCase)) return false;
+        string rest = name.Substring(Tools.SaveTools.CheckpointPrefix.Length);
+        int dash = rest.LastIndexOf('-');
+        if (dash <= 0 || !int.TryParse(rest.Substring(dash + 1), out tick)) return false;
+        colonyId = rest.Substring(0, dash);
+        return true;
+    }
+
+    public CommandResult SaveGame(string saveName)
+    {
+        // 同原版存檔視窗：排成長事件，在下一幀、離開目前的更新流程後才寫檔。
+        LongEventHandler.QueueLongEvent(() => GameDataSaveLoader.SaveGame(saveName), "SavingLongEvent", false, null);
+        return CommandResult.Ok();
+    }
+
+    public CommandResult DeleteCheckpoint(string saveName)
+    {
+        if (!TryParseCheckpointName(saveName, out _, out _)) return CommandResult.Fail("not a RimAgent checkpoint: " + saveName);
+        try
+        {
+            System.IO.File.Delete(GenFilePaths.FilePathForSavedGame(saveName));
+            return CommandResult.Ok();
+        }
+        catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
+        {
+            Log.Warning("RimAgent could not delete checkpoint " + saveName + ": " + ex.Message);
+            return CommandResult.Fail(ex.Message);
+        }
+    }
+
+    public CommandResult LoadGame(string saveName)
+    {
+        if (!SaveGameFilesUtility.SavedGameNamedExists(saveName)) return CommandResult.Fail("save not found: " + saveName);
+        RimAgentGameComponent.Instance?.PrepareForReload();
+        // 讀檔會當場 Dispose 目前的遊戲：排成長事件，等這一幀的遊戲更新跑完才換掉。
+        LongEventHandler.QueueLongEvent(() => GameDataSaveLoader.LoadGame(saveName), "LoadingLongEvent", false, null);
+        return CommandResult.Ok();
     }
 }

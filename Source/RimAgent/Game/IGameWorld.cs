@@ -255,4 +255,18 @@ public interface IGameWorld
     CommandResult SetTimeSpeed(string speedDefName);
     /// <summary>擷取當前遊戲畫面並存檔。filename 為可選檔名（不含路徑與副檔名）；空值則自動以時間戳記命名。</summary>
     ScreenshotInfo TakeScreenshot(string filename = null);
+
+    /// <summary>存讀檔工具需要的這一局狀態。</summary>
+    SaveContext GetSaveContext();
+    /// <summary>
+    /// RimAgent 檢查點與遊戲 autosave 的清單（含存檔裡的殖民地代號與 tick）；
+    /// 讀不出代號的 autosave 照樣列出、代號為空。讀檔案在背景執行緒，不卡主線程。
+    /// </summary>
+    System.Threading.Tasks.Task<IReadOnlyList<SaveSlotInfo>> GetSaveFilesAsync();
+    /// <summary>排入存檔（下一幀寫入，同原版存檔視窗）。</summary>
+    CommandResult SaveGame(string saveName);
+    /// <summary>刪除一份 RimAgent 檢查點（只接受檢查點名稱）。</summary>
+    CommandResult DeleteCheckpoint(string saveName);
+    /// <summary>停掉這一局的 agent 工作並排入讀檔；回傳後整場遊戲會在下一幀被換掉。</summary>
+    CommandResult LoadGame(string saveName);
 }

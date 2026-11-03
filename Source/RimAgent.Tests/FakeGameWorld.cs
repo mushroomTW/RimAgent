@@ -170,6 +170,36 @@ internal sealed class FakeGameWorld : IGameWorld
         Height = 1080
     };
 
+    public SaveContext SaveContext { get; set; } = new SaveContext { ColonyId = "colony1", Tick = 300000 };
+    /// <summary>存檔資料夾：SaveGame 直接加進來（真實遊戲下一幀才寫檔，測試不必等）。</summary>
+    public List<SaveSlotInfo> SaveFiles { get; } = [];
+    public string LoadedSave { get; private set; }
+
+    public SaveContext GetSaveContext() => SaveContext;
+
+    public Task<IReadOnlyList<SaveSlotInfo>> GetSaveFilesAsync() => Task.FromResult<IReadOnlyList<SaveSlotInfo>>(SaveFiles.ToList());
+
+    public CommandResult SaveGame(string saveName)
+    {
+        Calls.Add($"SaveGame({saveName})");
+        SaveFiles.Add(new SaveSlotInfo { Name = saveName, Checkpoint = true, ColonyId = SaveContext.ColonyId, Tick = SaveContext.Tick, WrittenUtcTicks = SaveFiles.Count + 1 });
+        return CommandResult.Ok();
+    }
+
+    public CommandResult DeleteCheckpoint(string saveName)
+    {
+        Calls.Add($"DeleteCheckpoint({saveName})");
+        SaveFiles.RemoveAll(s => s.Checkpoint && s.Name == saveName);
+        return CommandResult.Ok();
+    }
+
+    public CommandResult LoadGame(string saveName)
+    {
+        Calls.Add($"LoadGame({saveName})");
+        LoadedSave = saveName;
+        return CommandResult.Ok();
+    }
+
     public ScreenshotInfo TakeScreenshot(string filename = null)
     {
         Calls.Add($"TakeScreenshot({filename ?? "null"})");

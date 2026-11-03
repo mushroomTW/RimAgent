@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  讀檔重來遊戲內檢查的啟動標記（ReloadCheck.cs 的 ReloadCheckComponent）。
+  run_test_cycle 的 seed_config 只需帶入本檔；不需要模型與金鑰。
+  結果是 "[RimAgent.InGameTests] ReloadCheck PASS/FAIL" 警告。
+-->
+<RimAgentReloadCheck />

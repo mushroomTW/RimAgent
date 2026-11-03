@@ -127,16 +127,17 @@ public class RimAgentSettings : ModSettings
     [
         "allowObserve", "allowWork", "allowBuild", "allowCombat", "allowTrade", "allowMedical",
         "allowPrisoner", "allowAnimal", "allowZone", "allowProduction", "allowTime", "allowMCP",
-        "allowWeb", "allowMemory", "allowAgents"
+        "allowWeb", "allowMemory", "allowAgents", "allowSave"
     ];
 
     private static bool[] DefaultAllows()
     {
+        // 存檔與讀檔重來會換掉整場遊戲，預設關閉。
         return
         [
             true, true, true, true, true, true,
             true, true, true, true, true, true,
-            true, true, true
+            true, true, true, false
         ];
     }
 
@@ -209,9 +210,10 @@ public class RimAgentSettings : ModSettings
     {
         base.ExposeData();
         EnsureAllows();
+        bool[] defaults = DefaultAllows();
         for (int i = 0; i < CategoryKeys.Length; i++)
         {
-            Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
+            Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], defaults[i]);
         }
         // 以名稱存取：已移除的詢問與 YOLO 模式不在列舉中，直接解析會報錯，改回確認。
         string modeName = mode.ToString();

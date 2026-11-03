@@ -1026,7 +1026,7 @@ public class ColonyAgentSessionTests
     public void RegistryExposesAllTools()
     {
         var registry = new AgentToolRegistry(_world, new AgentTranscript());
-        Assert.That(registry.All.Count, Is.EqualTo(76));
+        Assert.That(registry.All.Count, Is.EqualTo(79));
         var observeOnly = new ToolPermissions();
         observeOnly.Set(ToolCategory.Observe, true);
         Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(21));

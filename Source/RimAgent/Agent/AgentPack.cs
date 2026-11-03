@@ -284,8 +284,9 @@ public static class AgentPackLoader
             case "categories":
                 foreach (string token in value.Split(','))
                 {
+                    // 子代理不委派、也不能讀檔換掉整場遊戲。
                     if (TryParseName(token, out ToolCategory category) && category != ToolCategory.Agents
-                        && !categories.Contains(category))
+                        && category != ToolCategory.Save && !categories.Contains(category))
                     {
                         categories.Add(category);
                     }

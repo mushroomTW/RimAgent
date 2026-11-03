@@ -92,6 +92,8 @@
   <RimAgent.Settings.MemoryTip>Allow the agent to read, write, edit and delete up to 30 memory files in this game's save file.</RimAgent.Settings.MemoryTip>
   <RimAgent.Settings.Agents>Subagents — delegate tasks</RimAgent.Settings.Agents>
   <RimAgent.Settings.AgentsTip>Allow the agent to hand self-contained tasks to the subagents in AgentPack/Agents (delegate_task). Each subagent still only gets the tool categories you allow here, and its commands follow the current mode.</RimAgent.Settings.AgentsTip>
+  <RimAgent.Settings.Save>Save — checkpoints and reload after a death</RimAgent.Settings.Save>
+  <RimAgent.Settings.SaveTip>Off by default. Saves a checkpoint each in-game day while the colony is safe (only the newest 5 are kept) and lets the agent save (save_game) and reload this colony's checkpoints or autosaves (load_save). With background care on, the agent decides after a colonist dies whether to reload. Each save can be reloaded 3 times; after that the loss stands. Commitment mode cannot be reloaded.</RimAgent.Settings.SaveTip>
   <RimAgent.Settings.ShowAdvanced>Show advanced settings</RimAgent.Settings.ShowAdvanced>
   <RimAgent.Settings.ShowAdvancedTip>Model roles, decision model and routing, context compaction and run history.</RimAgent.Settings.ShowAdvancedTip>
   <RimAgent.Settings.ModelRolesHeader>Model roles</RimAgent.Settings.ModelRolesHeader>

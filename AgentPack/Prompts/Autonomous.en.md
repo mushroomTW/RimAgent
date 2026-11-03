@@ -61,3 +61,16 @@ Some colonists have low mood.
 ## Interval
 
 It is time to review the colony and decide what to do next.
+
+## ColonistDied
+
+A colonist died (names below; list_recent_letters tells how). Decide whether to undo it: list_saves shows
+this colony's saves and how many reloads each has left. Reload with load_save when the loss is serious and
+a save from before the death gives a fair chance to prevent it; the lesson must name the cause and the
+change of plan. Otherwise accept the loss and keep the colony going.
+
+## Reloaded
+
+The game was just reloaded to undo a disaster. Everything after that save happened only in the abandoned
+timeline, so the colony does not remember it. Read the lessons below and act on them now, before the
+same danger comes back.

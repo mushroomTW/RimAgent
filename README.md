@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in natural language through 77 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in natural language through 80 tools, with control over when actions require approval.
 
-**RimWorld 1.7** &nbsp;·&nbsp; **77 Tools** &nbsp;·&nbsp; **Proactive Care** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.7** &nbsp;·&nbsp; **80 Tools** &nbsp;·&nbsp; **Proactive Care** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.20.1-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,7 +50,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **77 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
+- **80 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
 - **Four execution modes:** require approval, run routine actions, pass a safety review, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel); subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
@@ -149,7 +149,7 @@ Major actions are identified by each tool's fixed risk label, including trade, s
 
 ## What It Can Do
 
-All 15 categories are enabled by default and can be switched off individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
+All 16 categories except Save are enabled by default and can be switched individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
 
 | Category | Examples |
 | --- | --- |
@@ -168,8 +168,11 @@ All 15 categories are enabled by default and can be switched off individually in
 | Web | `web_search` uses Parallel Search MCP anonymously by default; a local SearXNG server is optional |
 | Memory | `file_memory_*` tools read, list, search, write, edit and delete memory files; names starting with `global_` are shared by every save, the rest belong to one save (30 files in each scope) |
 | Subagents | `delegate_task` hands self-contained tasks to the subagents in `AgentPack/Agents/` |
+| Save | Checkpoints and reloading this colony's checkpoints or autosaves after a colonist dies (off by default) |
 
 Web search connects directly to [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) by default, without an API key or local server. Anonymous requests have lower rate limits; search queries are sent to Parallel. To use a local source instead, enable **Use local SearXNG** in RimAgent settings and enter its URL (`http://127.0.0.1:8888` by default). The server must be running with JSON output enabled; [free-web-search](https://github.com/vksco/free-web-search) provides one setup. Local searches request Google, DuckDuckGo and Qwant engines and exclude Bing results. Results are external text and should be checked before use. Because queries leave the game, web search follows the current mode's command policy.
+
+Save is off by default. While it is on, RimAgent saves a checkpoint (`RimAgent-<colony>-<tick>`) once an in-game day when no hostiles, downed or bleeding colonists or fires are on the map, and keeps the newest 5. `list_saves` shows this colony's checkpoints and autosaves; autosaves are matched to the colony by an id RimAgent writes into each save. With proactive care on, a colonist's death starts a task in which the agent decides whether to reload with `load_save`, giving a lesson that the reloaded game receives. Each save can be reloaded 3 times; after that, it and every older save are locked and the loss stands. Loading an older save discards newer checkpoints. Reload counts last until the game is closed. Commitment-mode games cannot be saved or reloaded this way.
 
 Memory uses the Agent Framework's `FileMemoryProvider` in two scopes, chosen by the file name. A name starting with `global_` is **global memory**: it is kept in `Memory/global-memory.json` inside the same RimAgent folder as the run logs and is shared by every save, so it suits the player's standing preferences and rules (`global_preferences.md` by convention). Every other name is **memory for this save**: it is stored in the game save, a new game starts empty, and loading an older save restores its memories. Every instruction receives an index built from both scopes (file names and descriptions of every file in both scopes), and the agent reads a file when it is relevant. Each scope allows 30 files of 4,000 characters; names are limited to 60 characters, and descriptions are flattened to one line of up to 200 characters. Reading, listing and searching are queries; writing, editing and deleting follow the current mode's command policy. Memories named `global_*` that an older save still holds are handed back to global memory when it is loaded.
 

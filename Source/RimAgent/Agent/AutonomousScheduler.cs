@@ -31,7 +31,12 @@ public enum AutonomousTrigger
     /// <summary>沒有進行中的研究項目。</summary>
     Research,
     /// <summary>心情低落但尚未逼近崩潰。</summary>
-    LowMood
+    LowMood,
+    // 以下由 GameComponent 在 Update 起跑，不經排程器（需開啟存檔權限）。
+    /// <summary>有殖民者死亡：由模型決定要不要讀檔重來。</summary>
+    ColonistDied,
+    /// <summary>剛讀檔重來：把教訓交給讀回來的這一局。</summary>
+    Reloaded
 }
 
 /// <summary>排程器做判斷用的殖民地訊號（呼叫端在主線程收集的純資料）。</summary>
