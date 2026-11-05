@@ -219,6 +219,23 @@ public sealed class BuildTools
         return failures.Count == 0 ? summary : summary + $" {failures.Count} failed: " + string.Join("; ", failures.Take(5));
     }
 
+    [AgentTool("remove_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
+    [Description("Cancels the player's blueprints and unfinished construction frames touching a rectangle (x1,z1)-(x2,z2), like the game's cancel command; frames refund their materials. Use it to move something placed in the wrong spot, then place_blueprint again. Finished buildings are not affected (designate_area deconstruct).")]
+    public string RemoveBlueprint(
+        [Description("Rectangle corner x.")] int x1,
+        [Description("Rectangle corner z.")] int z1,
+        [Description("Opposite corner x; same as x1 for one cell.")] int x2,
+        [Description("Opposite corner z; same as z1 for one cell.")] int z2)
+    {
+        CellRectSpec rect = CellRectSpec.FromCorners(x1, z1, x2, z2);
+        string blocked = ToolText.Blocked(_gate, $"would cancel blueprints and frames in {rect}.");
+        if (blocked != null) return blocked;
+        IReadOnlyList<string> removed = _world.RemoveBlueprints(rect);
+        if (removed.Count == 0) return ToolText.Error($"no blueprints or frames in {rect}.");
+        return $"Cancelled {removed.Count}: " + string.Join("; ", removed.Take(MaxFootprintsListed))
+            + (removed.Count > MaxFootprintsListed ? $"; +{removed.Count - MaxFootprintsListed} more." : ".");
+    }
+
     /// <summary>最多逐一列出幾個藍圖的佔格；更多的只報數量。</summary>
     private const int MaxFootprintsListed = 5;
 
@@ -312,7 +329,7 @@ public sealed class BuildTools
             sb.Append("Placement: ").AppendLine(string.Join("; ", b.PlaceWorkers.Select(w =>
                 PlaceWorkerRules.TryGetValue(w, out string rule) ? w + " -> " + rule : w)));
         }
-        if (b.ShipPart) sb.AppendLine("Ship part: counts toward the starship (must connect to the others).");
+        if (b.ShipPart) sb.AppendLine("Ship part: counts toward the starship (must touch the others edge to edge; check_ship_layout verifies).");
         if (b.PowerWatts > 0) sb.Append("Power: uses ").Append(ToolText.Num(b.PowerWatts)).AppendLine(" W.");
         else if (b.PowerWatts < 0) sb.Append("Power: produces ").Append(ToolText.Num(-b.PowerWatts)).AppendLine(" W.");
         if (b.InteractionOffsets.Count > 0)

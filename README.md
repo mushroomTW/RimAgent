@@ -10,9 +10,9 @@
 
 **Run your RimWorld colony in natural language.**
 
-An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in natural language through 80 tools, with control over when actions require approval.
+An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in natural language through 82 tools, with control over when actions require approval.
 
-**RimWorld 1.7** &nbsp;·&nbsp; **80 Tools** &nbsp;·&nbsp; **Proactive Care** &nbsp;·&nbsp; **MCP Extensible**
+**RimWorld 1.7** &nbsp;·&nbsp; **82 Tools** &nbsp;·&nbsp; **Proactive Care** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#prerequisites)
 [![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.20.1-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
@@ -50,7 +50,7 @@ The agent uses tools to inspect the current map and carry out permitted actions.
 
 ## Highlights
 
-- **80 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
+- **82 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
 - **Four execution modes:** require approval, run routine actions, pass a safety review, or let the agent act under the selected policy.
 - **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
 - **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel); subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.

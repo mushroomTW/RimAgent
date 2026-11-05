@@ -2568,6 +2568,69 @@ internal sealed class RimWorldGameWorld : IGameWorld
         return " (blocked by: " + string.Join("; ", parts) + (extra > 0 ? $"; +{extra} more" : string.Empty) + ")";
     }
 
+    public IReadOnlyList<string> RemoveBlueprints(CellRectSpec rect)
+    {
+        Map map = Map;
+        var removed = new List<string>();
+        CellRect area = CellRect.FromLimits(rect.MinX, rect.MinZ, rect.MaxX, rect.MaxZ).ClipInsideMap(map);
+        List<Thing> targets = area.Cells
+            .SelectMany(c => c.GetThingList(map))
+            .Where(t => (t is Blueprint || t is Frame) && t.Faction == Faction.OfPlayer)
+            .Distinct()
+            .ToList();
+        foreach (Thing t in targets)
+        {
+            CellRect r = t.OccupiedRect();
+            removed.Add($"{t.LabelNoCount} ({r.minX},{r.minZ})-({r.maxX},{r.maxZ})");
+            t.Destroy(DestroyMode.Cancel);
+        }
+        return removed;
+    }
+
+    public IReadOnlyList<ShipPartInfo> GetShipParts()
+    {
+        Map map = Map;
+        var parts = new List<ShipPartInfo>();
+        foreach (Thing t in map.listerThings.AllThings)
+        {
+            // 藍圖與框架的 def 是自己的，真正要蓋的東西在 entityDefToBuild。
+            ThingDef def = t is Blueprint || t is Frame ? t.def.entityDefToBuild as ThingDef : t.def;
+            if (def?.building == null || !def.building.shipPart) continue;
+            CellRect r = t.OccupiedRect();
+            var info = new ShipPartInfo
+            {
+                Id = t.thingIDNumber,
+                DefName = def.defName,
+                Label = def.label ?? def.defName,
+                State = t is Blueprint ? ShipPartState.Blueprint : t is Frame ? ShipPartState.Frame : ShipPartState.Built,
+                Rect = new CellRectSpec(r.minX, r.minZ, r.maxX, r.maxZ)
+            };
+            if (def.hasInteractionCell)
+            {
+                IntVec3 cell = ThingUtility.InteractionCellWhenAt(def, t.Position, t.Rotation, map);
+                info.InteractionCell = (cell.x, cell.z);
+                info.InteractionBlockedBy = InteractionBlocker(cell, map);
+            }
+            parts.Add(info);
+        }
+        return parts;
+    }
+
+    private static string InteractionBlocker(IntVec3 cell, Map map)
+    {
+        if (!cell.InBounds(map)) return "the map edge";
+        if (!cell.Impassable(map)) return null;
+        Thing blocker = cell.GetThingList(map).FirstOrDefault(t => t.def.passability == Traversability.Impassable);
+        return blocker?.LabelNoCount ?? cell.GetTerrain(map).label;
+    }
+
+    public IReadOnlyList<ShipPartRequirement> GetRequiredShipParts()
+    {
+        return ShipUtility.RequiredParts()
+            .Select(p => new ShipPartRequirement { DefName = p.Key.defName, Label = p.Key.label ?? p.Key.defName, Count = p.Value })
+            .ToList();
+    }
+
     public BuildingInfo GetBuildingInfo(string buildableDefName)
     {
         BuildableDef def = (BuildableDef)DefDatabase<ThingDef>.GetNamedSilentFail(buildableDefName)

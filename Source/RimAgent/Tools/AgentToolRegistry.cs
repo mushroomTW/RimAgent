@@ -97,6 +97,7 @@ public sealed class AgentToolRegistry
         Register(new QuestTools(world, gate), transcript);
         Register(new WorkTools(world, undo ?? new WorkUndoStack(), gate), transcript);
         Register(new BuildTools(world, gate), transcript);
+        Register(new ShipTools(world), transcript);
         Register(new GizmoTools(world, gate), transcript);
         Register(new FloatMenuTools(world, gate), transcript);
         Register(new CombatTools(world, gate), transcript);

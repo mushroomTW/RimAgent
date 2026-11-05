@@ -816,6 +816,19 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         TestHelpers.AssertNone(failures, "ship parts");
     }
 
+    [Test]
+    public void ShipLayoutCheckMatchesVanillaConnectivity()
+    {
+        if (TestHelpers.SkipWithoutMap(nameof(ShipLayoutCheckMatchesVanillaConnectivity))) return;
+        List<string> failures = ShipLayoutCheck.Run(_world, out string skipReason);
+        if (skipReason != null)
+        {
+            TestHelpers.Skip(nameof(ShipLayoutCheckMatchesVanillaConnectivity), skipReason);
+            return;
+        }
+        TestHelpers.AssertNone(failures, "ship layout");
+    }
+
     private static void ExpectGlyph(Dictionary<int, string> rows, CellRect rect, IntVec3 cell, char expected, string what, List<string> failures)
     {
         char actual = GlyphAt(rows, rect, cell);

@@ -27,6 +27,7 @@ public class CommandGateTests
         ["set_schedule"] = Args(("colonists", "Ali"), ("startHour", 22), ("endHour", 6), ("assignment", "sleep")),
         ["designate_area"] = Args(("kind", "mine"), ("useSelection", false), ("x1", 0), ("z1", 0), ("x2", 30), ("z2", 30), ("filter", "")),
         ["cancel_designation"] = Args(("kind", "mine"), ("useSelection", false), ("x1", 0), ("z1", 0), ("x2", 30), ("z2", 30)),
+        ["remove_blueprint"] = Args(("x1", 5), ("z1", 5), ("x2", 5), ("z2", 5)),
         ["place_blueprint"] = Args(("building", "wall"), ("shape", "single"), ("x", 5), ("z", 5), ("x2", 5), ("z2", 5), ("rotation", 0), ("stuff", "wood")),
         ["draft"] = Args(("colonists", "Ali"), ("drafted", true)),
         ["order_move"] = Args(("colonists", "Ali"), ("x", 12), ("z", 12)),
@@ -86,6 +87,7 @@ public class CommandGateTests
     private static FakeGameWorld NewWorld()
     {
         var _world = new FakeGameWorld();
+        _world.RemovableBlueprints.Add("wall (5,5)-(5,5)");
         _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
         _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
         _world.Things.Add(FakeGameWorld.MakeThing(300, "MineableSteel", "compacted steel", ThingKind.Mineable, 10, 10));

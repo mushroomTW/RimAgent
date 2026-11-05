@@ -1004,6 +1004,33 @@ public sealed class BuildingInfo
     public IReadOnlyList<(int X, int Z)> InteractionOffsets { get; set; } = Array.Empty<(int X, int Z)>();
 }
 
+public enum ShipPartState
+{
+    Built,
+    Frame,
+    Blueprint
+}
+
+public sealed class ShipPartInfo
+{
+    public int Id { get; set; }
+    public string DefName { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public ShipPartState State { get; set; }
+    public CellRectSpec Rect { get; set; }
+    /// <summary>殖民者操作的站位（休眠艙從這格進入）；沒有就是 null。</summary>
+    public (int X, int Z)? InteractionCell { get; set; }
+    /// <summary>站位目前被什麼擋住（地圖邊界或不可通行的東西）；沒擋住是 null。</summary>
+    public string InteractionBlockedBy { get; set; }
+}
+
+public sealed class ShipPartRequirement
+{
+    public string DefName { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
 public sealed class DefInfo
 {
     public DefInfo()

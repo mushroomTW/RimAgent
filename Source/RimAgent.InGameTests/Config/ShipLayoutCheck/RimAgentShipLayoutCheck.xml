@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  飛船佈局遊戲內檢查的啟動標記（ShipLayoutCheck.cs 的 ShipLayoutCheckComponent）。
+  run_test_cycle 的 seed_config 只需帶入本檔；不需要模型與金鑰。
+  結果是 "[RimAgent.InGameTests] ShipLayoutCheck PASS/FAIL" 警告。
+-->
+<ShipLayoutCheck />

@@ -119,6 +119,12 @@ public interface IGameWorld
     BuildingInfo GetBuildingInfo(string buildableDefName);
     /// <summary>內含可放置檢查；失敗訊息帶遊戲給的原因（空間被占用時附上占用者與其範圍）。</summary>
     CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName);
+    /// <summary>取消範圍內玩家的藍圖與框架（同原版取消指令，框架退回材料）；回傳被取消者的名稱與範圍。</summary>
+    IReadOnlyList<string> RemoveBlueprints(CellRectSpec rect);
+    /// <summary>目前地圖上的飛船零件，含藍圖與框架。</summary>
+    IReadOnlyList<ShipPartInfo> GetShipParts();
+    /// <summary>原版發射檢查要求的零件與數量。</summary>
+    IReadOnlyList<ShipPartRequirement> GetRequiredShipParts();
     CommandResult SetDrafted(int pawnId, bool drafted);
     CommandResult OrderMoveTo(int pawnId, int x, int z);
     CommandResult OrderAttack(int pawnId, int targetId);

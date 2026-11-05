@@ -620,6 +620,24 @@ internal sealed class FakeGameWorld : IGameWorld
         return CommandResult.Ok();
     }
 
+    public List<string> RemovableBlueprints { get; } = new List<string>();
+    public CellRectSpec? LastRemovedArea { get; private set; }
+
+    public IReadOnlyList<string> RemoveBlueprints(CellRectSpec rect)
+    {
+        Calls.Add($"RemoveBlueprints({rect})");
+        LastRemovedArea = rect;
+        return RemovableBlueprints;
+    }
+
+    public List<ShipPartInfo> ShipParts { get; } = new List<ShipPartInfo>();
+
+    public IReadOnlyList<ShipPartInfo> GetShipParts() => ShipParts;
+
+    public List<ShipPartRequirement> RequiredShipParts { get; } = new List<ShipPartRequirement>();
+
+    public IReadOnlyList<ShipPartRequirement> GetRequiredShipParts() => RequiredShipParts;
+
     public CommandResult SetDrafted(int pawnId, bool drafted)
     {
         Calls.Add($"SetDrafted({pawnId},{drafted})");

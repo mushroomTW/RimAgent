@@ -67,6 +67,8 @@
   <ItemGroup>
     <!-- Microsoft Agent Framework：只用 ChatClientAgent 置換工具迴圈，不碰 Workflows。 -->
     <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" ExcludeAssets="runtime" />
+    <!-- MEAI 版本跟框架出貨的 DLL 一致；Agent Framework 只間接要求較舊的版本，編譯時會與框架衝突（CS1705）。 -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" ExcludeAssets="runtime" />
     <!-- RimWorld 參考組件（Krafs.Rimworld.Ref）：提供 Assembly-CSharp/UnityStubs/Waylith/ObjectPool 等編譯參考，執行期由遊戲提供。 -->
     <PackageReference Include="Krafs.Rimworld.Ref" Version="1.7.4982-unstable" />
     <!-- 官方 MCP SDK（stdio client）：遊戲內 agent 呼叫本機 MCP 伺服器。執行期 DLL 見下方出貨白名單。 -->
