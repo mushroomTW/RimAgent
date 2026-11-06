@@ -161,4 +161,12 @@ public class GizmoToolsTests
         Assert.That(gated.UseGizmo(40, "5", targetX: 30, targetZ: 25), Does.StartWith("Needs confirmation:").And.Contain("aimed at cell (30,25)"));
         Assert.That(_world.Calls, Is.Empty);
     }
+
+    [Test]
+    public void ListStartsWithTheStatusTextWhenThereIsOne()
+    {
+        _world.InspectTexts[40] = "Needs 7 entities discovered";
+
+        Assert.That(_tools.ListGizmos(40), Does.StartWith("Status of [40]: Needs 7 entities discovered\nCommand buttons of [40]:"));
+    }
 }

@@ -120,7 +120,7 @@ public sealed class WorldTools
         TravelEstimateInfo estimate = TravelByTile(originId, new[] { tileId }).Values.FirstOrDefault();
 
         var sb = new StringBuilder();
-        sb.Append("Tile ").Append(info.Tile).Append(": ").Append(info.Biome).Append(", ").Append(info.Hilliness);
+        sb.Append("Tile ").Append(string.IsNullOrEmpty(info.TileLayer) ? string.Empty : info.TileLayer + ":").Append(info.Tile).Append(": ").Append(info.Biome).Append(", ").Append(info.Hilliness);
         if (!string.IsNullOrEmpty(info.Feature)) sb.Append(" | feature: ").Append(info.Feature);
         if (!string.IsNullOrEmpty(info.Landmark)) sb.Append(" | landmark: ").Append(info.Landmark);
         if (info.Mutators.Count > 0) sb.Append(" | ").Append(string.Join(", ", info.Mutators.ToArray()));
@@ -408,7 +408,7 @@ public sealed class WorldTools
         sb.Append('[').Append(o.Id).Append("] ").Append(o.Label).Append(" (").Append(o.Kind);
         if (!string.IsNullOrEmpty(o.Faction)) sb.Append(", ").Append(o.Faction);
         if (o.Hostile) sb.Append(", hostile");
-        sb.Append("), tile ").Append(o.Tile);
+        sb.Append("), tile ").Append(string.IsNullOrEmpty(o.TileLayer) ? string.Empty : o.TileLayer + ":").Append(o.Tile);
         if (o.HasMap) sb.Append(", has a map");
         if (!string.IsNullOrEmpty(o.Detail)) sb.Append(", ").Append(o.Detail);
         if (o.ExpiresInTicks >= 0) sb.Append(", gone in ").Append(Duration(o.ExpiresInTicks));

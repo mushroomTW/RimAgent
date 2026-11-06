@@ -654,9 +654,13 @@ internal sealed class FakeGameWorld : IGameWorld
         return Colonists.Any(c => c.Id == pawnId) ? CommandResult.Ok() : CommandResult.Fail("pawn not found");
     }
 
-    public CommandResult ChooseOption(string choiceId, int option)
+    public Dictionary<int, string> InspectTexts { get; } = new Dictionary<int, string>();
+
+    public string GetInspectText(int thingId) => InspectTexts.TryGetValue(thingId, out string text) ? text : string.Empty;
+
+    public CommandResult ChooseOption(string choiceId, int option, string input = null)
     {
-        Calls.Add($"ChooseOption({choiceId},{option})");
+        Calls.Add(input == null ? $"ChooseOption({choiceId},{option})" : $"ChooseOption({choiceId},{option},{input})");
         PendingChoiceInfo choice = PendingChoices.FirstOrDefault(c => c.Id == choiceId);
         ChoiceOptionInfo picked = choice?.Options.FirstOrDefault(o => o.Number == option);
         if (picked == null) return CommandResult.Fail("choice not found");

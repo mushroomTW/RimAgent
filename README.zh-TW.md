@@ -88,7 +88,7 @@
 
 > **執行紀錄：** 在模組設定開啟「記錄 Agent 運行過程」後，指令、工具呼叫、安全判定與結果會寫入 `RimWorld save data/RimAgent/RimAgent-runs.jsonl`。預設關閉，最多保留 500 次執行或 16 MiB；設定頁可直接開啟紀錄檔所在資料夾。
 
-> **提示詞可編輯：** `AgentPack/Prompts/` 放內建提示詞，`AgentPack/Skills/` 放自選技能（預設附九個技能：八個啟發式遊戲技能（防禦襲擊、防禦建設、糧食安全、心情管理、工作分配、醫療分級、季節準備、殖民地發展）與飛船發射結局路線）；`AgentPack/Agents/` 放子代理（預設附一個唯讀的 `scout`）；`AgentPack/AGENTS.md` 出貨是空的，可寫入自己的指示。修改後需重新讀取存檔或開新局，不必重編譯。每輪只會附上技能索引，技能全文需要時才經 `read_skill` 讀取。詳見[技能設定](AgentPack/Skills/README.md)與 [MCP 設定](AgentPack/MCP/README.md)。
+> **提示詞可編輯：** `AgentPack/Prompts/` 放內建提示詞，`AgentPack/Skills/` 放自選技能（預設附十四個技能：八個啟發式遊戲技能（防禦襲擊、防禦建設、糧食安全、心情管理、工作分配、醫療分級、季節準備、殖民地發展）與六條結局路線：飛船發射、旅程邀約、古樞紐、皇家飛升、虛空與機巢）；`AgentPack/Agents/` 放子代理（預設附一個唯讀的 `scout`）；`AgentPack/AGENTS.md` 出貨是空的，可寫入自己的指示。修改後需重新讀取存檔或開新局，不必重編譯。每輪只會附上技能索引，技能全文需要時才經 `read_skill` 讀取。詳見[技能設定](AgentPack/Skills/README.md)與 [MCP 設定](AgentPack/MCP/README.md)。
 
 ---
 

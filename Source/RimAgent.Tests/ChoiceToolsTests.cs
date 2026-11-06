@@ -85,6 +85,16 @@ public class ChoiceToolsTests
     }
 
     [Test]
+    public void BlockedChoiceShowsTheInputAndTheList()
+    {
+        var gated = new ChoiceTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
+
+        string text = gated.ChooseOption("letter-12", 1, "1,2");
+
+        Assert.That(text, Does.Contain("Input: 1,2.").And.Contain("A wanderer named Kim wants to join."));
+    }
+
+    [Test]
     public void BlockedChoiceReturnsPreviewWithoutTouchingWorld()
     {
         var gated = new ChoiceTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
@@ -93,5 +103,23 @@ public class ChoiceToolsTests
 
         Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("Wanderer joins").And.Contain("Reject"));
         Assert.That(_world.Calls, Is.Empty);
+    }
+
+    [Test]
+    public void ChoosePassesTheInputAndShowsWhatItShouldBe()
+    {
+        _world.PendingChoices.Add(new PendingChoiceInfo
+        {
+            Id = "dialog-tile",
+            Title = "Choose a tile",
+            InputHint = "a tile id",
+            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Use the tile" } }
+        });
+
+        Assert.That(_tools.ListPendingChoices(), Does.Contain("Input: a tile id").And.Contain("Options: 1) Use the tile"));
+
+        _tools.ChooseOption("dialog-tile", 1, "Orbit:45");
+
+        Assert.That(_world.Calls, Does.Contain("ChooseOption(dialog-tile,1,Orbit:45)"));
     }
 }

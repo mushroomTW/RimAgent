@@ -364,5 +364,25 @@ public class ObserveToolsTests
         Assert.That(_tools.InspectArea(0, 0, 49, 49), Does.StartWith("Area (0,0)-(49,49): 2500 cells"));
         Assert.That(_tools.InspectArea(0, 0, 100, 5), Does.StartWith("Error:"));
     }
-}
 
+    [Test]
+    public void OverviewListsFactionsOnlyWhenThereAreAny()
+    {
+        Assert.That(_tools.GetColonyOverview(), Does.Not.Contain("Factions:"));
+
+        _world.Overview.Factions = ["Empire +40 (Neutral)"];
+
+        Assert.That(_tools.GetColonyOverview(), Does.Contain("Factions: Empire +40 (Neutral)\nAlerts:"));
+    }
+
+    [Test]
+    public void ColonistsShowARoyalTitleOnlyWhenTheyHaveOne()
+    {
+        _world.Colonists[0].RoyalStatus = "Empire: Knight, honor 3";
+
+        string text = _tools.ListColonists();
+
+        Assert.That(text, Does.Contain(", Empire: Knight, honor 3"));
+        Assert.That(text.IndexOf("Empire"), Is.EqualTo(text.LastIndexOf("Empire")), "只有第一位殖民者有頭銜");
+    }
+}

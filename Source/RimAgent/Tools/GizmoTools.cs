@@ -27,14 +27,16 @@ public sealed class GizmoTools
     }
 
     [AgentTool("list_gizmos", ToolCategory.Build, ToolRisk.Query)]
-    [Description("Lists the command buttons (gizmos) shown when a building, item or pawn is selected: number, label, kind (action, toggle with its state, target with the kinds of target it accepts, or unsupported), whether it is disabled and why, and what it does. Ship reactor startup and ship launch are gizmos. use_gizmo presses them. A target button (turret force-target, abilities) needs a thing id or a cell. Some buttons listed as action (for example activating the void monolith or an interactable) also start targeting when pressed; use_gizmo then reports what target they want.")]
+    [Description("Shows what the game displays when a building, item or pawn is selected: its status text (progress, what it waits for) and its command buttons (gizmos): number, label, kind (action, toggle with its state, target with the kinds of target it accepts, or unsupported), whether it is disabled and why, and what it does. Ship reactor startup and ship launch are gizmos. use_gizmo presses them. A target button (turret force-target, abilities) needs a thing id or a cell. Some buttons listed as action (for example activating the void monolith or an interactable) also start targeting when pressed; use_gizmo then reports what target they want.")]
     public string ListGizmos(
         [Description("Thing id from find_things, list_colonists or list_threats.")] int thingId)
     {
         IReadOnlyList<GizmoInfo> gizmos = _world.GetGizmos(thingId);
         if (gizmos == null) return NotFound(thingId);
-        if (gizmos.Count == 0) return $"[{thingId}] has no command buttons.";
-        return $"Command buttons of [{thingId}]:\n" + string.Join("\n", gizmos.Select(Format));
+        string inspect = _world.GetInspectText(thingId);
+        string status = string.IsNullOrEmpty(inspect) ? string.Empty : $"Status of [{thingId}]: {inspect}\n";
+        if (gizmos.Count == 0) return status + $"[{thingId}] has no command buttons.";
+        return status + $"Command buttons of [{thingId}]:\n" + string.Join("\n", gizmos.Select(Format));
     }
 
     [AgentTool("use_gizmo", ToolCategory.Build, ToolRisk.Confirm)]

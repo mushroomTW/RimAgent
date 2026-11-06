@@ -22,6 +22,8 @@ public sealed class ColonyOverview
     public int HostileCount { get; set; }
     /// <summary>心情已低於輕微崩潰門檻的殖民者人數。</summary>
     public int ColonistsNearMentalBreak { get; set; }
+    /// <summary>看得到的派系與對玩家的好感。</summary>
+    public IReadOnlyList<string> Factions { get; set; } = Array.Empty<string>();
 }
 
 public sealed class SkillInfo
@@ -45,6 +47,8 @@ public sealed class WorkPriorityInfo
 
 public sealed class ColonistInfo
 {
+    /// <summary>帝國頭銜與榮譽；沒有是空字串。</summary>
+    public string RoyalStatus { get; set; } = string.Empty;
     public int Id { get; set; }
     /// <summary>顯示用短名（綽號優先）。</summary>
     public string Name { get; set; } = string.Empty;
@@ -117,6 +121,8 @@ public sealed class PendingChoiceInfo
     /// <summary>信件還剩幾 tick 過期；不會過期為 null。</summary>
     public int? ExpiresInTicks { get; set; }
     public IReadOnlyList<ChoiceOptionInfo> Options { get; set; } = Array.Empty<ChoiceOptionInfo>();
+    /// <summary>回答時要附的輸入格式（世界格子、地圖目標、選取項目）；不用輸入是空字串。</summary>
+    public string InputHint { get; set; } = string.Empty;
 }
 
 /// <summary>選取物件時畫面下方的指令按鈕（gizmo）。</summary>
@@ -455,6 +461,8 @@ public sealed class WorldObjectQuestLink
 /// <summary>世界地圖上的一個物件（定居點、據點、營地…）。</summary>
 public sealed class WorldObjectInfo
 {
+    /// <summary>不在地表時的星球圖層（例如 Orbit）；在地表是空字串。</summary>
+    public string TileLayer { get; set; } = string.Empty;
     public const string PlayerSettlementKind = "player settlement";
     public const string FactionSettlementKind = "faction settlement";
     public const string SiteKind = "site";
@@ -506,6 +514,8 @@ public sealed class TravelEstimateInfo
 /// <summary>世界地圖上一格的地形資料。</summary>
 public sealed class WorldTileInfo
 {
+    /// <summary>不在地表時的星球圖層（例如 Orbit）；在地表是空字串。</summary>
+    public string TileLayer { get; set; } = string.Empty;
     /// <summary>非空代表這一格查不到（編號超出範圍…），內容是原因。</summary>
     public string Error { get; set; } = string.Empty;
     public int Tile { get; set; }

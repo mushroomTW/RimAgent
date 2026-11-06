@@ -45,7 +45,7 @@ public sealed class FloatMenuTools
     }
 
     [AgentTool("use_right_click_option", ToolCategory.Build, ToolRisk.Confirm)]
-    [Description("Runs one right-click menu option for a colonist on a target, exactly like clicking it in the game menu. The menu is rebuilt first and the option number must still match its label, so list it again with list_right_click_menu if anything changed. Some options are irreversible (using a neuroformer, entering a ship, activating a monolith). When the option asks for confirmation, the reply lists the dialog; answer it with choose_option. Options that open a further target picker or window are cancelled and reported as unsupported.")]
+    [Description("Runs one right-click menu option for a colonist on a target, exactly like clicking it in the game menu. The menu is rebuilt first and the option number must still match its label, so list it again with list_right_click_menu if anything changed. Some options are irreversible (using a neuroformer, entering a ship, activating a monolith). When the option asks for confirmation, the reply lists the dialog; answer it with choose_option. An option that asks for a further target or opens a selection screen stays open; the reply lists it and choose_option answers it.")]
     public string UseRightClickOption(
         [Description("Colonist name, nickname or id.")] string colonist,
         [Description("Option number or label from list_right_click_menu.")] string option,

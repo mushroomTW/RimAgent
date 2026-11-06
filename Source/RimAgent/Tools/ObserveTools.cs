@@ -39,6 +39,7 @@ public sealed class ObserveTools
                $" | Time speed: {speed} | Weather: {o.Weather} | Outdoor temp: {ToolText.Num(o.OutdoorTemperatureC)}°C | Wealth: {ToolText.Num(o.Wealth)}" +
                $" | Hostiles on map: {o.HostileCount} | Colonists near mental break: {o.ColonistsNearMentalBreak}\n" +
                $"Power: {power.NetworkCount} network(s), net watts {ToolText.Num(power.NetWatts)}, stored battery energy {ToolText.Num(power.StoredEnergy)}\n" +
+               (o.Factions.Count == 0 ? string.Empty : "Factions: " + string.Join("; ", o.Factions) + "\n") +
                "Alerts: " + (alerts.Count == 0 ? "none" : string.Join("; ", alerts.Select(a => "[" + a.Priority + "] " + a.Label)));
     }
 
@@ -56,6 +57,7 @@ public sealed class ObserveTools
               .Append(", at ").Append(ToolText.Cell(c.X, c.Z))
               .Append(", health ").Append(ToolText.Pct(c.HealthPercent));
             if (c.Downed) sb.Append(" DOWNED");
+            if (!string.IsNullOrEmpty(c.RoyalStatus)) sb.Append(", ").Append(c.RoyalStatus);
             sb.Append(", mood ").Append(ToolText.Pct(c.MoodPercent))
               .Append(" (break below ").Append(ToolText.Pct(c.MinorBreakThreshold)).Append(')');
             if (c.InMentalState) sb.Append(", MENTAL STATE: ").Append(c.MentalStateLabel);

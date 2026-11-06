@@ -132,7 +132,9 @@ public interface IGameWorld
     /// 回應一個抉擇：信件照玩家流程先打開再按選項；option 為 1 起的序號。
     /// 成功時 Message 為選到的選項文字；對話框可能接著出現下一段（再查 GetPendingChoices）。
     /// </summary>
-    CommandResult ChooseOption(string choiceId, int option);
+    CommandResult ChooseOption(string choiceId, int option, string input = null);
+    /// <summary>選取物件時資訊面板的文字（狀態、進度、原因）；找不到是空字串。</summary>
+    string GetInspectText(int thingId);
     /// <summary>
     /// 任務分頁的任務：可接受（含被拒絕、不含已過期）與進行中，不含已結束與隱藏的。
     /// </summary>

@@ -18,7 +18,7 @@ namespace RimAgent.Game;
 /// 只做 RimWorld API 呼叫與純資料轉換，不含決策邏輯；假設呼叫者已在 Unity 主線程
 /// （由框架的 AsMainThreadFunctionInvokingClient 保證）。這一層只能在遊戲內驗證。
 /// </summary>
-internal sealed class RimWorldGameWorld : IGameWorld
+internal sealed partial class RimWorldGameWorld : IGameWorld
 {
     private const string MineDefName = "Mine";
     private const string ColonistNotFound = "colonist not found";
@@ -87,6 +87,8 @@ internal sealed class RimWorldGameWorld : IGameWorld
             Weather = map.weatherManager.curWeather?.label ?? string.Empty,
             OutdoorTemperatureC = map.mapTemperature.OutdoorTemp,
             Wealth = map.wealthWatcher.WealthTotal,
+            Factions = [.. Find.FactionManager.AllFactionsVisible.Where(f => !f.IsPlayer)
+                .Select(f => $"{f.Name} {f.PlayerGoodwill:+0;-0;0} ({f.PlayerRelationKind.GetLabel()})")],
             HostileCount = CountHostiles(map),
             ColonistsNearMentalBreak = colonists.Count(IsNearMentalBreak)
         };
@@ -475,7 +477,7 @@ internal sealed class RimWorldGameWorld : IGameWorld
 
     public IReadOnlyList<PendingChoiceInfo> GetPendingChoices()
     {
-        var result = new List<PendingChoiceInfo>();
+        List<PendingChoiceInfo> result = [.. PendingUiChoices()];
         foreach (Dialog_NodeTree dialog in Find.WindowStack.Windows.OfType<Dialog_NodeTree>())
         {
             DiaNode node = CurrentNode(dialog);
@@ -515,9 +517,8 @@ internal sealed class RimWorldGameWorld : IGameWorld
         return result;
     }
 
-    public CommandResult ChooseOption(string choiceId, int option)
+    private static CommandResult AnswerDialogOrLetter(string id, int option)
     {
-        string id = choiceId?.Trim() ?? string.Empty;
         if (TryParseChoiceId(id, DialogChoicePrefix, out int windowId))
         {
             Window window = Find.WindowStack.Windows.FirstOrDefault(w => w.ID == windowId);
@@ -864,6 +865,13 @@ internal sealed class RimWorldGameWorld : IGameWorld
     }
 
     #pragma warning disable S1168 // null 代表未在地圖上找到該實體
+    public string GetInspectText(int thingId)
+    {
+        Thing thing = FindThing(thingId);
+        if (thing == null || thing.Fogged()) return string.Empty;
+        return LimitChoiceText(thing.GetInspectString()?.StripTags().Trim());
+    }
+
     public IReadOnlyList<GizmoInfo> GetGizmos(int thingId)
     {
         Thing thing = FindThing(thingId);
@@ -897,8 +905,13 @@ internal sealed class RimWorldGameWorld : IGameWorld
     private static string DetermineGizmoKind(Command command, out string targetHint)
     {
         targetHint = string.Empty;
+        if (command is Designator_Install)
+        {
+            targetHint = "a cell";
+            return GizmoInfo.TargetKind;
+        }
         if (command is Command_Toggle) return GizmoInfo.ToggleKind;
-        if (command is Command_Action) return GizmoInfo.ActionKind;
+        if (command is Command_Action or Command_LoadToTransporter) return GizmoInfo.ActionKind;
         if (command is Command_Ability abilityCommand)
         {
             AbilityDef def = abilityCommand.Ability?.def;
@@ -1040,6 +1053,7 @@ internal sealed class RimWorldGameWorld : IGameWorld
 
         var localTarget = LocalTargetInfo.Invalid;
         if (target != null && !TryResolveTarget(target, out localTarget, out string targetError)) return CommandResult.Fail(targetError);
+        if (command is Designator_Install install) return UseInstallButton(thing, install, label, localTarget);
 
         // 先收掉殘留的選目標狀態，之後 IsTargeting 才代表「這顆按鈕開始選目標」。
         StopAllTargeting();
@@ -1066,9 +1080,10 @@ internal sealed class RimWorldGameWorld : IGameWorld
         askedForTarget = false;
         if (Find.WorldTargeter.IsTargeting)
         {
+            // 留著等 choose_option 給世界地圖的格子。
             askedForTarget = true;
-            Find.WorldTargeter.StopTargeting();
-            return CommandResult.Fail($"\"{label}\" asks for a target on the world map, which is not supported yet; it was cancelled");
+            _agentWorldTarget = true;
+            return CommandResult.Ok(WithGameMessages($"\"{label}\" waits for a destination", watch));
         }
         Targeter targeter = Find.Targeter;
         if (!targeter.IsTargeting) return null;
@@ -1185,6 +1200,8 @@ internal sealed class RimWorldGameWorld : IGameWorld
     {
         if (Find.Targeter.IsTargeting) Find.Targeter.StopTargeting();
         if (Find.WorldTargeter.IsTargeting) Find.WorldTargeter.StopTargeting();
+        _agentWorldTarget = false;
+        _agentMapTarget = false;
     }
 
     private static CommandResult ValidateGizmoCommand(Thing thing, int gizmoNumber, string label, List<Command> commands, out Command command)
@@ -1201,8 +1218,9 @@ internal sealed class RimWorldGameWorld : IGameWorld
 
     private static CommandResult CloseUnsupportedWindows(HashSet<Window> beforeWindows, string label)
     {
+        AdoptOpenedWindows(beforeWindows);
         List<Window> opened = [.. Find.WindowStack.Windows.Where(w => !beforeWindows.Contains(w))];
-        List<Window> unsupported = [.. opened.Where(w => w is not Dialog_NodeTree && w is not Dialog_MessageBox)];
+        List<Window> unsupported = [.. opened.Where(w => !IsAnswerableWindow(w) && !RunsOnItsOwn(w))];
         foreach (Window window in unsupported) window.Close(false);
         if (unsupported.Count > 0)
         {
@@ -1267,12 +1285,16 @@ internal sealed class RimWorldGameWorld : IGameWorld
             return CommandResult.Fail($"\"{label}\" failed in the game: {ex.Message}");
         }
 
-        // 選項若接著要再選一個目標或開別的視窗，這裡沒辦法回應，收掉並回報。
-        bool targeting = Find.Targeter.IsTargeting || Find.WorldTargeter.IsTargeting;
-        StopAllTargeting();
+        // 選項若接著要再選目標就留著，由 choose_option 回應；回答不了的視窗才收掉並回報。
+        _agentMapTarget = Find.Targeter.IsTargeting;
+        _agentWorldTarget = Find.WorldTargeter.IsTargeting;
+        KeepCasterSelected();
         CommandResult windowFailure = CloseUnsupportedWindows(before, label);
-        if (targeting) return CommandResult.Fail($"\"{label}\" asks for a further target, which is not supported yet; it was cancelled");
-        if (windowFailure != null) return windowFailure;
+        if (windowFailure != null)
+        {
+            StopAllTargeting();
+            return windowFailure;
+        }
         return CommandResult.Ok(WithGameMessages(string.Empty, watch));
     }
 
@@ -1302,7 +1324,12 @@ internal sealed class RimWorldGameWorld : IGameWorld
         try
         {
             // GetOptions 會改動傳入的清單，所以給一份新的。
-            List<FloatMenuOption> options = FloatMenuMakerMap.GetOptions([pawn], clickPosition, out FloatMenuContext _);
+            List<FloatMenuOption> options = FloatMenuMakerMap.GetOptions([pawn], clickPosition, out FloatMenuContext _) ?? [];
+            // 原版只在多選時問這一份，有些東西（古樞紐核心）的選項只放在這裡，只選一人就看不到。
+            foreach (FloatMenuOption extra in clickPosition.ToIntVec3().GetThingList(pawn.Map).ToList().SelectMany(t => t.GetMultiSelectFloatMenuOptions([pawn])))
+            {
+                if (options.All(o => o.Label != extra.Label)) options.Add(extra);
+            }
             return [.. (options ?? [])
                 .OrderByDescending(o => o.Priority).ThenByDescending(o => o.orderInPriority)];
         }
@@ -1317,11 +1344,14 @@ internal sealed class RimWorldGameWorld : IGameWorld
     /// <summary>選取時會畫出來的指令按鈕；純狀態顯示的 gizmo（護盾條之類）與開發者模式按鈕不算。</summary>
     private static List<Command> VisibleCommands(Thing thing)
     {
-        return [.. thing.GetGizmos().OfType<Command>().Where(c => c.Visible && !IsDevLabel(CommandLabel(c)))];
+        // 安裝鈕的 Visible 要有選取才成立；這裡沒有選取，一律列出，按下時才選。
+        return [.. thing.GetGizmos().OfType<Command>().Where(c => (c is Designator_Install || c.Visible) && !IsDevLabel(CommandLabel(c)))];
     }
 
     private static string CommandLabel(Command command)
     {
+        // 原版的安裝鈕標籤要看目前選取，這裡沒有選取，固定一個才不會按前按後不同。
+        if (command is Designator_Install) return "Install or reinstall";
         return command.LabelCap ?? string.Empty;
     }
 
@@ -3543,6 +3573,7 @@ internal sealed class RimWorldGameWorld : IGameWorld
             Label = obj.LabelCap,
             DefName = obj.def.defName,
             Tile = obj.Tile.tileId,
+            TileLayer = obj.Tile.Layer == Find.WorldGrid.Surface ? string.Empty : obj.Tile.Layer.Def.defName,
             Faction = faction?.Name ?? string.Empty,
             Hostile = faction != null && faction != Faction.OfPlayer && faction.HostileTo(Faction.OfPlayer),
             HasMap = obj is MapParent mapParent && mapParent.HasMap,
@@ -3624,6 +3655,7 @@ internal sealed class RimWorldGameWorld : IGameWorld
         return new WorldTileInfo
         {
             Tile = tile,
+            TileLayer = pt.Layer == Find.WorldGrid.Surface ? string.Empty : pt.Layer.Def.defName,
             Biome = data.PrimaryBiome.LabelCap,
             Hilliness = data.hilliness.GetLabelCap(),
             TemperatureC = data.temperature,
@@ -3921,6 +3953,7 @@ internal sealed class RimWorldGameWorld : IGameWorld
             Name = pawn.LabelShort,
             Nickname = hasDistinctNick ? nick : string.Empty,
             FullName = pawn.Name?.ToStringFull ?? pawn.LabelShort,
+            RoyalStatus = RoyalStatusOf(pawn),
             Age = pawn.ageTracker?.AgeBiologicalYears ?? 0,
             X = pawn.Position.x,
             Z = pawn.Position.z,
@@ -4041,6 +4074,16 @@ internal sealed class RimWorldGameWorld : IGameWorld
         if (thing is Building) return ThingKind.Building;
         if (thing.def.category == ThingCategory.Item) return ThingKind.Item;
         return null;
+    }
+
+    private static string RoyalStatusOf(Pawn pawn)
+    {
+        Faction empire = Faction.OfEmpire;
+        if (pawn.royalty == null || empire == null) return string.Empty;
+        RoyalTitleDef title = pawn.royalty.GetCurrentTitle(empire);
+        int honor = pawn.royalty.GetFavor(empire);
+        if (title == null && honor == 0) return string.Empty;
+        return $"{empire.Name}: {title?.GetLabelFor(pawn) ?? "no title"}, honor {honor}";
     }
 
     private static ThingInfo ToThing(Thing thing, Map map)

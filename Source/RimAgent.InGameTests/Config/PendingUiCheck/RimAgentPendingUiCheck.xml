@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  待回應介面遊戲內檢查的啟動標記（PendingUiCheck.cs 的 PendingUiCheckComponent）。
+  run_test_cycle 的 seed_config 只需帶入本檔；不需要模型與金鑰。
+  結果是 "[RimAgent.InGameTests] PendingUiCheck PASS/FAIL" 警告。
+-->
+<PendingUiCheck />

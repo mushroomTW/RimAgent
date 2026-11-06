@@ -86,6 +86,8 @@ public class RimAgentGameComponent : GameComponent
     private readonly HashSet<string> _seenChoices = [];
     private DateTime _nextChoiceCheckAt;
     private const double ChoiceCheckSeconds = 2;
+    private DateTime _nextDialogRetryAt;
+    private const double DialogRetrySeconds = 60;
     private CancellationTokenSource _goalCts;
     private bool _goalRunning;
     private bool _goalPaused;
@@ -677,7 +679,10 @@ public class RimAgentGameComponent : GameComponent
             bool fresh = false;
             foreach (PendingChoiceInfo choice in choices) fresh |= _seenChoices.Add(choice.Id);
             _seenChoices.RemoveWhere(id => choices.All(c => c.Id != id));
-            if (!fresh) return;
+            // 開著的畫面可能讓遊戲一直暫停，tick 觸發不會來：上一輪沒答完就隔一陣子再叫一次。
+            bool dialogLeft = choices.Any(c => c.Id.StartsWith(ChoiceTools.DialogIdPrefix, StringComparison.OrdinalIgnoreCase));
+            if (!fresh && (!dialogLeft || DateTime.UtcNow < _nextDialogRetryAt)) return;
+            _nextDialogRetryAt = DateTime.UtcNow.AddSeconds(DialogRetrySeconds);
             _autoRunning = true;
             _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Choice, Find.TickManager.TicksGame, ToConfig(settings), null);
         }
