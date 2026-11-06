@@ -907,6 +907,15 @@ public class Window_Agent : Window
         _linesEntryCount = entries.Count;
     }
 
+    private static readonly GUIContent MeasureContent = new();
+
+    /// <summary>Text.CalcHeight 會先去掉標籤，量不到放大的標題與變寬的粗體，回覆尾端因此被裁切；這裡連標籤一起量。</summary>
+    private static float MeasureRichHeight(string richText, float width)
+    {
+        MeasureContent.text = richText;
+        return Text.CurFontStyle.CalcHeight(MeasureContent, width);
+    }
+
     /// <summary>把一筆紀錄排成若干行加到 <paramref name="into"/>，回傳佔用的總高度（含間距）。</summary>
     private float BuildEntryLines(TranscriptEntry entry, float width, bool turnStart, List<TranscriptLine> into)
     {
@@ -925,7 +934,7 @@ public class Window_Agent : Window
             }
             else
             {
-                line.Height = Text.CalcHeight(text, width);
+                line.Height = MeasureRichHeight(text, width);
             }
             into.Add(line);
             total += line.Height + EntryGap + (turnStart ? TurnGap : 0f);
@@ -1043,7 +1052,7 @@ public class Window_Agent : Window
 
     private static IEnumerable<string> RenderAssistant(TranscriptEntry entry)
     {
-        string reply = RenderReply(EscapeRichText(entry.Text));
+        string reply = RenderReply(ReplyMarkdown.EscapeAngleBrackets(entry.Text));
         string replyText = reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply;
         string agentTag = ColorTagPrefix + AutoActionHex + ">" + "RimAgent.Tag.Agent".Translate() + ColorTagCloseSpace;
         yield return agentTag + ColorTagPrefix + TextHex + ">" + replyText + ColorTagClose;
