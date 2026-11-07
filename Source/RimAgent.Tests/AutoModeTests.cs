@@ -367,28 +367,6 @@ public class AutoModeTests
         Assert.That(settings.ResolveClassifierModel(), Is.EqualTo(string.Empty));
     }
 
-    [Test]
-    public void AuxiliaryModelSlotsNeverResolveToRoutingSentinels()
-    {
-        var settings = new RimAgentSettings
-        {
-            agentModel = RimAgentSettings.AutoRoutingModel,
-            classifierModel = RimAgentSettings.FollowAgentModel,
-            compactModel = RimAgentSettings.AutoRoutingModel
-        };
-
-        Assert.That(settings.ResolveClassifierModel(), Is.Empty, "Agent 用分流時，跟隨 Agent 的輔助槽要回到框架備援鏈");
-        Assert.That(settings.ResolveModelSlot(settings.compactModel), Is.Empty, "分流哨兵不能當成模型名稱送出");
-
-        settings.agentModel = "openai:gpt-5";
-        settings.classifierModel = RimAgentSettings.AutoRoutingModel;
-        Assert.That(settings.ResolveClassifierModel(), Is.Empty);
-
-        var options = new ChatOptions { ModelId = "existing" };
-        ModelSlots.Apply(options, RimAgentSettings.AutoRoutingModel, ReasoningLevel.Auto);
-        Assert.That(options.ModelId, Is.EqualTo("existing"), "ModelSlots 也要防禦哨兵值");
-    }
-
     /// <summary>換 Agent 模型後，跟隨中的分類器要立刻換過來（每次判定都重讀）。</summary>
     [Test]
     public void FollowingClassifierTracksTheAgentModel()

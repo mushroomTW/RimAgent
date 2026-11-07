@@ -50,8 +50,7 @@ public sealed class ColonyAgentSession
     private readonly IChatClient _inner;
     private readonly TokenTrackingChatClient _tokenUsage;
     private readonly Func<string, int?> _contextWindowLookup;
-    private readonly DecisionModelRouter _router;
-    private string _currentInstructionRoutedModel;
+    private readonly DecisionReasoningRouter _router;
 
     /// <summary>記錄主模型最近一次回報的輸入 token；供應商未回報時維持未知。</summary>
     private sealed class TokenTrackingChatClient : DelegatingChatClient
@@ -182,7 +181,7 @@ public sealed class ColonyAgentSession
     /// <param name="decisionService">測試用決策模型服務；null 則透過 DecisionServiceFactory 建立。</param>
     /// <param name="router">測試用決策模型分流器；null 則透過 DecisionServiceFactory 建立。</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionModelRouter router = null)
+    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionReasoningRouter router = null)
     {
         if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
         if (world == null) throw new ArgumentNullException(nameof(world));
@@ -213,7 +212,7 @@ public sealed class ColonyAgentSession
                     () => RimAgentMod.Settings?.decisionModel));
         }
 
-        _router = router ?? new DecisionModelRouter(
+        _router = router ?? new DecisionReasoningRouter(
             decisionService,
             () => DecisionServiceFactory.Create(
                 () => RimAgentMod.Settings?.decisionProvider,
@@ -258,8 +257,8 @@ public sealed class ColonyAgentSession
 #pragma warning restore MAAI001
     }
 
-    /// <summary>本次主模型實際回應的模型；尚無回應時使用分流結果。</summary>
-    public string CurrentAgentModel => _tokenUsage.LastModel ?? _currentInstructionRoutedModel;
+    /// <summary>本次主模型實際回應的模型；尚無回應時為 null。</summary>
+    public string CurrentAgentModel => _tokenUsage.LastModel;
 
     public AgentTranscript Transcript { get; }
 
@@ -324,6 +323,9 @@ public sealed class ColonyAgentSession
     /// <summary>模型思考強度；每句指令組請求時讀取，改完下一句生效。由 GameComponent 從設定同步。</summary>
     public ReasoningLevel Reasoning { get; set; } = ReasoningLevel.Auto;
 
+    /// <summary>思考強度自動分流；開啟時每句指令由決策模型決定思考強度。由 GameComponent 從設定同步。</summary>
+    public bool ReasoningRouting { get; set; }
+
     /// <summary>
     /// 優先使用的模型（"供應商:模型"）；空白代表交給框架備援鏈。每句指令組請求時讀取，由 GameComponent 從設定同步。
     /// 玩家指令、自主任務與 <c>/compact</c> 摘要共用它；風險分類器另走自己的設定。
@@ -336,7 +338,6 @@ public sealed class ColonyAgentSession
         {
             if (string.Equals(_preferredModel, value, StringComparison.Ordinal)) return;
             _preferredModel = value;
-            _currentInstructionRoutedModel = null;
             _tokenUsage?.ResetModel();
         }
     }
@@ -417,17 +418,8 @@ public sealed class ColonyAgentSession
         try
         {
             RimAgentSettings settings = RimAgentMod.Settings;
-            // _currentInstructionRoutedModel 為 null 代表這句還沒分流；空字串代表分流結果要走框架備援鏈。
-            string model = _currentInstructionRoutedModel;
-            if (model == null)
-            {
-                string preferred = PreferredModel;
-                if (string.Equals(preferred, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
-                {
-                    preferred = settings?.decisionFallbackModel;
-                }
-                model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
-            }
+            string preferred = PreferredModel;
+            string model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
             List<string> candidates;
             try { candidates = RimLLMProvider.GetFallbackChain(); }
             catch (InvalidOperationException) { candidates = []; }
@@ -648,8 +640,7 @@ public sealed class ColonyAgentSession
                 Kind = TranscriptKind.Assistant,
                 Text = goalRun ? GoalProgress.VisibleReply(reply) : reply,
                 InstructionId = instructionId,
-                ToolsStripped = IsToolsStripped(response),
-                RoutedModel = _currentInstructionRoutedModel ?? string.Empty
+                ToolsStripped = IsToolsStripped(response)
             });
             if (hitStepLimit)
             {
@@ -1243,27 +1234,23 @@ public sealed class ColonyAgentSession
         ReasoningLevel? reasoningOverride = null,
         CancellationToken cancellationToken = default)
     {
-        string modelToUse = PreferredModel;
         ReasoningLevel? effectiveReasoning = reasoningOverride;
-        _currentInstructionRoutedModel = null;
         _tokenUsage.ResetModel();
 
-        if (string.Equals(PreferredModel, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
+        if (ReasoningRouting)
         {
             DecisionRoute route = await _router.ResolveAsync(
                 text,
                 RimAgentMod.Settings?.decisionCategories,
                 cancellationToken).ConfigureAwait(false);
 
-            modelToUse = route.Model;
-            _currentInstructionRoutedModel = route.Model ?? string.Empty;
             if (route.Reasoning != ReasoningLevel.Auto)
             {
                 effectiveReasoning = route.Reasoning;
             }
         }
 
-        return BuildRunOptions(effectiveReasoning, modelToUse);
+        return BuildRunOptions(effectiveReasoning, PreferredModel);
     }
 
     internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride = null)
@@ -1293,7 +1280,6 @@ public sealed class ColonyAgentSession
         };
         ModelSlots.ApplyReasoning(options, reasoningOverride ?? Reasoning);
         if (!string.IsNullOrWhiteSpace(modelToUse)
-            && !string.Equals(modelToUse, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal)
             && !string.Equals(modelToUse, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal))
         {
             options.ModelId = modelToUse.Trim();

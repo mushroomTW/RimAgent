@@ -165,6 +165,7 @@ public class RimAgentGameComponent : GameComponent
             else if (RimAgentMod.Settings != null)
             {
                 _session.Reasoning = RimAgentMod.Settings.reasoning;
+                _session.ReasoningRouting = RimAgentMod.Settings.reasoningRouting;
                 _session.PreferredModel = RimAgentMod.Settings.agentModel;
                 _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
             }
@@ -1291,6 +1292,7 @@ public class RimAgentGameComponent : GameComponent
                 SubagentReasoning = () => settings.subagentReasoning
             });
         session.Reasoning = settings.reasoning;
+        session.ReasoningRouting = settings.reasoningRouting;
         session.ConfirmAutonomousMajor = () => settings.confirmAutonomousMajor;
         session.PreferredModel = settings.agentModel;
         _expansions = ExpansionsLine();

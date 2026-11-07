@@ -8,11 +8,10 @@ using Microsoft.Extensions.AI;
 
 namespace RimAgent.Agent;
 
-/// <summary>一句指令分流後的結果：要用哪個模型、哪個思考強度。</summary>
+/// <summary>一句指令分流後的結果：要用哪個思考強度。模型一律沿用 Agent 視窗選的那一個。</summary>
 public sealed class DecisionRoute
 {
     public string CategoryId { get; init; } = string.Empty;
-    public string Model { get; init; } = string.Empty;      // 已解析；空 = 用備援
     public ReasoningLevel Reasoning { get; init; }
     public double Confidence { get; init; }
     public string Reason { get; init; } = string.Empty;
@@ -20,10 +19,10 @@ public sealed class DecisionRoute
 }
 
 /// <summary>
-/// 決策模型分流器：每一句指令由決策模型進行 choice 分類，
-/// 再用該類別對應的模型與思考強度執行。
+/// 思考強度分流器：每一句指令由決策模型進行 choice 分類，
+/// 再用該類別對應的思考強度執行。
 /// </summary>
-public sealed class DecisionModelRouter
+public sealed class DecisionReasoningRouter
 {
     public const string QuestionId = "category";
     public const int UserTextHeadChars = 600;
@@ -37,7 +36,7 @@ public sealed class DecisionModelRouter
     private readonly Func<IReadOnlyList<ChatMessage>> _historyProvider;
     private IDecisionService _service;
 
-    public DecisionModelRouter(
+    public DecisionReasoningRouter(
         IDecisionService decisionService = null,
         Func<IDecisionService> serviceFactory = null,
         Func<RimAgentSettings> settingsProvider = null,
@@ -49,7 +48,7 @@ public sealed class DecisionModelRouter
         _historyProvider = historyProvider;
     }
 
-    /// <summary>解析指令該分流至哪個類別、模型與思考強度。</summary>
+    /// <summary>解析指令該分流至哪個類別與思考強度。</summary>
     public async Task<DecisionRoute> ResolveAsync(
         string request,
         IReadOnlyList<DecisionRouteCategory> categories,
@@ -58,13 +57,12 @@ public sealed class DecisionModelRouter
         RimAgentSettings settings = _settingsProvider?.Invoke();
         // 設定頁可在模型呼叫期間改類別；先複製一份，await 回來後只使用這份快照。
         List<DecisionRouteCategory> activeCategories = SnapshotCategories(categories ?? settings?.decisionCategories);
-        string fallbackModel = ResolveFallbackModel(settings);
         ReasoningLevel fallbackReasoning = settings?.decisionFallbackReasoning ?? ReasoningLevel.Auto;
         float minConfidence = settings != null ? settings.decisionRoutingMinConfidence : 0.6f;
 
         if (activeCategories.Count == 0)
         {
-            return FallbackRoute(fallbackModel, fallbackReasoning, "No categories configured.");
+            return FallbackRoute(fallbackReasoning, "No categories configured.");
         }
 
         var options = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -78,13 +76,13 @@ public sealed class DecisionModelRouter
 
         if (options.Count == 0)
         {
-            return FallbackRoute(fallbackModel, fallbackReasoning, "No valid category options available.");
+            return FallbackRoute(fallbackReasoning, "No valid category options available.");
         }
 
         IDecisionService service = _decisionService ?? ResolveService();
         if (service == null)
         {
-            return FallbackRoute(fallbackModel, fallbackReasoning, "Decision model service is unavailable or not configured.");
+            return FallbackRoute(fallbackReasoning, "Decision model service is unavailable or not configured.");
         }
 
         var question = DecisionQuestion.Choice(QuestionId, "Classify the instruction into the most appropriate category.", options);
@@ -102,18 +100,18 @@ public sealed class DecisionModelRouter
         }
         catch (Exception ex)
         {
-            return FallbackRoute(fallbackModel, fallbackReasoning, "Decision model evaluation failed: " + ex.Message);
+            return FallbackRoute(fallbackReasoning, "Decision model evaluation failed: " + ex.Message);
         }
 
         if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || string.IsNullOrWhiteSpace(answer?.Value))
         {
-            return FallbackRoute(fallbackModel, fallbackReasoning, "Decision model returned no category answer.");
+            return FallbackRoute(fallbackReasoning, "Decision model returned no category answer.");
         }
 
         double confidence = answer.Confidence ?? answer.Probability ?? 0d;
         if (confidence < minConfidence)
         {
-            return FallbackRoute(fallbackModel, fallbackReasoning,
+            return FallbackRoute(fallbackReasoning,
                 $"Decision confidence {confidence:F2} is below threshold {minConfidence:F2}.");
         }
 
@@ -123,10 +121,8 @@ public sealed class DecisionModelRouter
 
         if (matched == null)
         {
-            return FallbackRoute(fallbackModel, fallbackReasoning, $"Selected category '{selectedId}' not found in categories.");
+            return FallbackRoute(fallbackReasoning, $"Selected category '{selectedId}' not found in categories.");
         }
-
-        string resolvedModel = ResolveCategoryModel(matched.model, fallbackModel);
 
         ReasoningLevel resolvedReasoning = matched.reasoning != ReasoningLevel.Auto
             ? matched.reasoning
@@ -135,19 +131,17 @@ public sealed class DecisionModelRouter
         return new DecisionRoute
         {
             CategoryId = matched.id,
-            Model = resolvedModel,
             Reasoning = resolvedReasoning,
             Confidence = confidence,
             Reason = $"Routed to category '{matched.id}' with confidence {confidence:F2}."
         };
     }
 
-    private static DecisionRoute FallbackRoute(string fallbackModel, ReasoningLevel fallbackReasoning, string reason)
+    private static DecisionRoute FallbackRoute(ReasoningLevel fallbackReasoning, string reason)
     {
         return new DecisionRoute
         {
             CategoryId = string.Empty,
-            Model = fallbackModel,
             Reasoning = fallbackReasoning,
             Confidence = 0,
             Reason = reason
@@ -165,41 +159,9 @@ public sealed class DecisionModelRouter
                 category.id,
                 category.name,
                 category.description,
-                category.model,
                 category.reasoning));
         }
         return copy;
-    }
-
-    /// <summary>
-    /// 備援模型的槽值解析：「跟隨 Agent」在分流模式下沒有意義（Agent 當前模型就是分流器本身），
-    /// 一律當成空字串，交給框架備援鏈決定。
-    /// </summary>
-    private static string ResolveFallbackModel(RimAgentSettings settings)
-    {
-        string value = (settings?.decisionFallbackModel ?? string.Empty).Trim();
-        if (string.Equals(value, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal)
-            || string.Equals(value, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
-        {
-            return string.Empty;
-        }
-        return value;
-    }
-
-    /// <summary>
-    /// 類別的模型槽值解析：空白或「跟隨 Agent」都用備援模型。
-    /// 「跟隨 Agent」在分流模式下指向分流器自己，送給框架會是無效的模型名。
-    /// </summary>
-    private static string ResolveCategoryModel(string slot, string fallbackModel)
-    {
-        string value = (slot ?? string.Empty).Trim();
-        if (value.Length == 0
-            || string.Equals(value, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal)
-            || string.Equals(value, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
-        {
-            return fallbackModel ?? string.Empty;
-        }
-        return value;
     }
 
     private IDecisionService ResolveService()

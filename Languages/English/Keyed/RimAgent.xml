@@ -120,10 +120,10 @@
   <RimAgent.Settings.DecisionStatusEnabled>Configured ({0} · {1})</RimAgent.Settings.DecisionStatusEnabled>
   <RimAgent.Settings.DecisionStatusNoKey>Configured ({0}) — API key required in RimLLM Framework</RimAgent.Settings.DecisionStatusNoKey>
   <RimAgent.Settings.DecisionDefault>Default (follow framework)</RimAgent.Settings.DecisionDefault>
-  <RimAgent.Settings.DecisionFallbackModel>Fallback model:</RimAgent.Settings.DecisionFallbackModel>
-  <RimAgent.Settings.DecisionFallbackModelTip>Model used when auto routing is inactive, confidence is low, or decision model is unavailable.</RimAgent.Settings.DecisionFallbackModelTip>
+  <RimAgent.Settings.DecisionFallbackReasoning>Fallback reasoning:</RimAgent.Settings.DecisionFallbackReasoning>
+  <RimAgent.Settings.DecisionFallbackReasoningTip>Reasoning effort used when confidence is low or the decision model is unavailable.</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>Routing min confidence: {0}</RimAgent.Settings.DecisionMinConfidence>
-  <RimAgent.Settings.DecisionMinConfidenceTip>Instructions classified with confidence below this threshold use the fallback model.</RimAgent.Settings.DecisionMinConfidenceTip>
+  <RimAgent.Settings.DecisionMinConfidenceTip>Instructions classified with confidence below this threshold use the fallback reasoning.</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.DecisionCategoriesHeader>Route categories</RimAgent.Settings.DecisionCategoriesHeader>
   <RimAgent.Settings.DecisionCategoryAdd>Add</RimAgent.Settings.DecisionCategoryAdd>
   <RimAgent.Settings.DecisionCategoryAddCustom>Add custom category</RimAgent.Settings.DecisionCategoryAddCustom>
@@ -131,7 +131,7 @@
   <RimAgent.Settings.DecisionCategoryRestore>Restore: {0} ({1})</RimAgent.Settings.DecisionCategoryRestore>
   <RimAgent.Settings.DecisionCategoriesReset>Reset defaults</RimAgent.Settings.DecisionCategoriesReset>
   <RimAgent.Settings.DecisionCategoryDelete>Delete</RimAgent.Settings.DecisionCategoryDelete>
-  <RimAgent.Settings.CategoryModel>Model &amp; reasoning:</RimAgent.Settings.CategoryModel>
+  <RimAgent.Settings.CategoryReasoning>Reasoning:</RimAgent.Settings.CategoryReasoning>
   <RimAgent.Settings.Mode.Autonomous>Full access</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>Enabled tools, including MCP, run without confirmation. Proactive care is controlled separately in mod settings; category switches still apply.</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>Proactive colony care</RimAgent.Settings.AutonomousHeader>
@@ -152,8 +152,6 @@
   <RimAgent.Model.Status>Model: {0}</RimAgent.Model.Status>
   <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>Use the RimLLM Framework fallback chain.</RimAgent.Model.DefaultTip>
-  <RimAgent.Model.AutoRouting>Auto routing</RimAgent.Model.AutoRouting>
-  <RimAgent.Model.AutoRoutingTip>Use the decision model to classify each instruction into a task category and route it to the configured model and reasoning effort.</RimAgent.Model.AutoRoutingTip>
   <RimAgent.Model.FollowAgent>Default (agent's current model)</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, this role follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
   <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
@@ -162,6 +160,8 @@
   <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>Medium</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>High</RimAgent.Reasoning.High>
+  <RimAgent.Reasoning.Routing>Auto routing</RimAgent.Reasoning.Routing>
+  <RimAgent.Reasoning.RoutingTip>Use the decision model to classify each instruction into a task category and run it with that category's reasoning effort. The model stays the one selected in the model menu.</RimAgent.Reasoning.RoutingTip>
   <RimAgent.Slash.Goal>Persistent goals: list, add, edit, clear, pause, resume</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>Undo the work settings changed by the last instruction</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>Clear the conversation</RimAgent.Slash.Clear>

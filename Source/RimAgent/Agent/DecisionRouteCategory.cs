@@ -4,13 +4,12 @@ using Verse;
 
 namespace RimAgent.Agent;
 
-/// <summary>一個分流類別：說明是決策模型看的判準，模型與思考強度是這一類要用的。</summary>
+/// <summary>一個分流類別：說明是決策模型看的判準，思考強度是這一類要用的。</summary>
 public sealed class DecisionRouteCategory : IExposable
 {
     public string id = string.Empty;          // 穩定識別碼
     public string name = string.Empty;        // 顯示名稱
     public string description = string.Empty; // 判準：這一類包含什麼、不包含什麼
-    public string model = string.Empty;       // 模型槽值（空 = 用備援模型）
     public ReasoningLevel reasoning = ReasoningLevel.Auto;
 
     public DecisionRouteCategory() { }
@@ -19,13 +18,11 @@ public sealed class DecisionRouteCategory : IExposable
         string id,
         string name,
         string description,
-        string model = "",
         ReasoningLevel reasoning = ReasoningLevel.Auto)
     {
         this.id = id ?? string.Empty;
         this.name = name ?? string.Empty;
         this.description = description ?? string.Empty;
-        this.model = model ?? string.Empty;
         this.reasoning = reasoning;
     }
 
@@ -34,7 +31,6 @@ public sealed class DecisionRouteCategory : IExposable
         Scribe_Values.Look(ref id, "id", string.Empty);
         Scribe_Values.Look(ref name, "name", string.Empty);
         Scribe_Values.Look(ref description, "description", string.Empty);
-        Scribe_Values.Look(ref model, "model", string.Empty);
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
     }
 

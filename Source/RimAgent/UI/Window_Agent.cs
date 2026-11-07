@@ -148,7 +148,7 @@ public class Window_Agent : Window
     // 每個 IMGUI 事件都會重畫；帶參數的翻譯字串只在值變了才重組，免得每幀配置一堆字串。
     private readonly TextCache<long?> _tokenLabel = new();
     private readonly TextCache<AgentMode> _modeLabel = new();
-    private readonly TextCache<ReasoningLevel> _reasoningLabel = new();
+    private readonly TextCache<int> _reasoningLabel = new();
     private TextCache<string> _modelLabel = new();
     private float _modelLabelWidth = -1f;
     private readonly TextCache<int> _autoUsageLabel = new();
@@ -1175,10 +1175,20 @@ public class Window_Agent : Window
     private void DrawReasoningButton(Rect reasoningRect, bool enabled, RimAgentSettings settings)
     {
         ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
-        string reasoningStatus = _reasoningLabel.Get(current, level => "RimAgent.Reasoning.Status".Translate(ReasoningLabel(level)).ToString());
+        bool routing = settings != null && settings.reasoningRouting;
+        // 快取鍵：分流時用 -1，其餘用列舉值。
+        string reasoningStatus = _reasoningLabel.Get(routing ? -1 : (int)current, key => "RimAgent.Reasoning.Status".Translate(
+            key < 0 ? "RimAgent.Reasoning.Routing".Translate().ToString() : ReasoningLabel((ReasoningLevel)key)).ToString());
         if (DrawUnifiedButton(reasoningRect, reasoningStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
             var options = new List<FloatMenuOption>();
+            if (DecisionServiceFactory.CanUseDecisionModel(settings?.decisionProvider))
+            {
+                options.Add(new FloatMenuOption("RimAgent.Reasoning.Routing".Translate(), () => SetReasoningRouting(settings))
+                {
+                    tooltip = new TipSignal("RimAgent.Reasoning.RoutingTip".Translate())
+                });
+            }
             foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
             {
                 options.Add(new FloatMenuOption(ReasoningLabel(level), () => SetReasoning(settings, level)));
@@ -1211,13 +1221,6 @@ public class Window_Agent : Window
                     tooltip = new TipSignal("RimAgent.Model.DefaultTip".Translate())
                 }
             };
-            if (DecisionServiceFactory.CanUseDecisionModel(settings?.decisionProvider))
-            {
-                options.Add(new FloatMenuOption("RimAgent.Model.AutoRouting".Translate(), () => SetModel(settings, RimAgentSettings.AutoRoutingModel))
-                {
-                    tooltip = new TipSignal("RimAgent.Model.AutoRoutingTip".Translate())
-                });
-            }
             foreach (string entry in ConfiguredModels())
             {
                 options.Add(new FloatMenuOption(entry, () => SetModel(settings, entry)));
@@ -1288,8 +1291,16 @@ public class Window_Agent : Window
 
     private static void SetReasoning(RimAgentSettings settings, ReasoningLevel level)
     {
-        if (settings == null || settings.reasoning == level) return;
+        if (settings == null || (settings.reasoning == level && !settings.reasoningRouting)) return;
         settings.reasoning = level;
+        settings.reasoningRouting = false;
+        settings.Write();
+    }
+
+    private static void SetReasoningRouting(RimAgentSettings settings)
+    {
+        if (settings == null || settings.reasoningRouting) return;
+        settings.reasoningRouting = true;
         settings.Write();
     }
 
@@ -1305,8 +1316,6 @@ public class Window_Agent : Window
     /// <summary>按鈕上只顯示模型名；"供應商:模型" 取冒號後，純供應商條目（用該供應商預設模型）顯示供應商名。</summary>
     private static string ModelShortName(string model)
     {
-        if (string.Equals(model, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
-            return "RimAgent.Model.AutoRouting".Translate();
         if (string.IsNullOrWhiteSpace(model)) return "RimAgent.Model.Default".Translate();
         string trimmed = model.Trim();
         int colon = trimmed.IndexOf(':');
@@ -1874,10 +1883,6 @@ public class Window_Agent : Window
     private static bool CheckFunctionCalling()
     {
         string model = RimAgentMod.Settings?.agentModel;
-        if (string.Equals(model, RimAgentSettings.AutoRoutingModel, StringComparison.Ordinal))
-        {
-            model = null;
-        }
         return RimLLMProvider.GetEffectiveCapabilities(string.IsNullOrWhiteSpace(model) ? null : model.Trim()).SupportsFunctionCalling;
     }
 

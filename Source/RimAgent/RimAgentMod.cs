@@ -363,15 +363,13 @@ public class RimAgentMod : Mod
 
     private static void DrawDecisionRoutingSettings(Listing_Standard listing)
     {
-        // 備援模型與思考強度
-        DrawModelDropdown(
+        // 備援思考強度
+        DrawReasoningRow(
             listing,
-            "RimAgent.Settings.DecisionFallbackModel".Translate(),
-            () => Settings.decisionFallbackModel,
-            v => Settings.decisionFallbackModel = v,
-            "RimAgent.Settings.DecisionFallbackModelTip".Translate(),
+            "RimAgent.Settings.DecisionFallbackReasoning".Translate(),
             () => Settings.decisionFallbackReasoning,
-            v => Settings.decisionFallbackReasoning = v);
+            v => Settings.decisionFallbackReasoning = v,
+            "RimAgent.Settings.DecisionFallbackReasoningTip".Translate());
 
         // 最小信心門檻
         listing.Label(
@@ -446,14 +444,12 @@ public class RimAgentMod : Mod
                 toDelete = cat;
             }
 
-            DrawModelDropdown(
+            DrawReasoningRow(
                 listing,
-                "  " + "RimAgent.Settings.CategoryModel".Translate(),
-                () => cat.model,
-                v => cat.model = v,
-                cat.description,
+                "  " + "RimAgent.Settings.CategoryReasoning".Translate(),
                 () => cat.reasoning,
-                v => cat.reasoning = v);
+                v => cat.reasoning = v,
+                cat.description);
         }
 
         if (toDelete != null)
@@ -534,6 +530,29 @@ public class RimAgentMod : Mod
             options.Add(new FloatMenuOption(captured, () => set(captured)));
         }
         Find.WindowStack.Add(new FloatMenu(options));
+    }
+
+    /// <summary>只有思考強度下拉的一列：分流類別與備援思考強度用。</summary>
+    private static void DrawReasoningRow(
+        Listing_Standard listing,
+        string label,
+        Func<ReasoningLevel> reasoning,
+        Action<ReasoningLevel> setReasoning,
+        string tip)
+    {
+        Rect row = listing.GetRect(28f);
+        const float ReasoningWidth = 90f;
+        var labelRect = new Rect(row.x, row.y + 3f, row.width - ReasoningWidth - 8f, 24f);
+        var reasoningRect = new Rect(row.xMax - ReasoningWidth, row.y, ReasoningWidth, 26f);
+        Text.WordWrap = false;
+        Widgets.Label(labelRect, label.Truncate(labelRect.width));
+        Text.WordWrap = true;
+        if (Widgets.ButtonText(reasoningRect, ReasoningKey(reasoning()).Translate()))
+        {
+            ShowReasoningDropdownMenu(setReasoning);
+        }
+        if (Mouse.IsOver(row)) TooltipHandler.TipRegion(row, tip);
+        listing.Gap(6f);
     }
 
     private static void ShowReasoningDropdownMenu(Action<ReasoningLevel> setReasoning)

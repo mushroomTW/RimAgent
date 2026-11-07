@@ -120,10 +120,10 @@
   <RimAgent.Settings.DecisionStatusEnabled>已設定（{0} · {1}）</RimAgent.Settings.DecisionStatusEnabled>
   <RimAgent.Settings.DecisionStatusNoKey>已設定（{0}）— 請至 RimLLM Framework 填寫金鑰</RimAgent.Settings.DecisionStatusNoKey>
   <RimAgent.Settings.DecisionDefault>預設（沿用框架設定）</RimAgent.Settings.DecisionDefault>
-  <RimAgent.Settings.DecisionFallbackModel>備援模型：</RimAgent.Settings.DecisionFallbackModel>
-  <RimAgent.Settings.DecisionFallbackModelTip>當未啟用分流、信心過低或決策模型不可用時所使用的模型。</RimAgent.Settings.DecisionFallbackModelTip>
+  <RimAgent.Settings.DecisionFallbackReasoning>備援思考強度：</RimAgent.Settings.DecisionFallbackReasoning>
+  <RimAgent.Settings.DecisionFallbackReasoningTip>信心過低或決策模型不可用時所使用的思考強度。</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>分流最小信心門檻：{0}</RimAgent.Settings.DecisionMinConfidence>
-  <RimAgent.Settings.DecisionMinConfidenceTip>分類信心低於此門檻的指令將退回使用備援模型。</RimAgent.Settings.DecisionMinConfidenceTip>
+  <RimAgent.Settings.DecisionMinConfidenceTip>分類信心低於此門檻的指令將退回使用備援思考強度。</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.DecisionCategoriesHeader>分流類別</RimAgent.Settings.DecisionCategoriesHeader>
   <RimAgent.Settings.DecisionCategoryAdd>新增</RimAgent.Settings.DecisionCategoryAdd>
   <RimAgent.Settings.DecisionCategoryAddCustom>新增自訂類別</RimAgent.Settings.DecisionCategoryAddCustom>
@@ -131,7 +131,7 @@
   <RimAgent.Settings.DecisionCategoryRestore>恢復：{0}（{1}）</RimAgent.Settings.DecisionCategoryRestore>
   <RimAgent.Settings.DecisionCategoriesReset>重設預設</RimAgent.Settings.DecisionCategoriesReset>
   <RimAgent.Settings.DecisionCategoryDelete>刪除</RimAgent.Settings.DecisionCategoryDelete>
-  <RimAgent.Settings.CategoryModel>模型與思考強度：</RimAgent.Settings.CategoryModel>
+  <RimAgent.Settings.CategoryReasoning>思考強度：</RimAgent.Settings.CategoryReasoning>
   <RimAgent.Settings.Mode.Autonomous>完整權限</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>已啟用的工具（包括 MCP）不經確認直接執行。主動照顧另由模組設定開關；工具類別開關仍生效。</RimAgent.Settings.Mode.AutonomousDesc>
   <RimAgent.Settings.AutonomousHeader>主動照顧殖民地</RimAgent.Settings.AutonomousHeader>
@@ -152,8 +152,6 @@
   <RimAgent.Model.Status>模型：{0}</RimAgent.Model.Status>
   <RimAgent.Model.Default>Fallback</RimAgent.Model.Default>
   <RimAgent.Model.DefaultTip>依 RimLLM Framework 的備援鏈選擇模型。</RimAgent.Model.DefaultTip>
-  <RimAgent.Model.AutoRouting>自動分流</RimAgent.Model.AutoRouting>
-  <RimAgent.Model.AutoRoutingTip>由決策模型將每句指令分類至任務類別，並以該類別設定的模型與思考強度執行。</RimAgent.Model.AutoRoutingTip>
   <RimAgent.Model.FollowAgent>默認（Agent 當前模型）</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>跟著 Agent 視窗當前選的模型走；在那邊換模型，這裡會自動跟上，不必分開設定。Agent 視窗是 Fallback 時，這一格也走備援鏈。</RimAgent.Model.FollowAgentTip>
   <RimAgent.Model.Tip>優先使用：{0}&#10;失敗時由框架依備援鏈改用其他模型。</RimAgent.Model.Tip>
@@ -162,6 +160,8 @@
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>中</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>高</RimAgent.Reasoning.High>
+  <RimAgent.Reasoning.Routing>自動分流</RimAgent.Reasoning.Routing>
+  <RimAgent.Reasoning.RoutingTip>由決策模型將每句指令分類至任務類別，並以該類別設定的思考強度執行；模型維持模型選單所選的那一個。</RimAgent.Reasoning.RoutingTip>
   <RimAgent.Slash.Goal>持續目標（列出、新增、修改、清空、暫停與恢復）</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>復原上一句指令改的工作設定</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>清除對話</RimAgent.Slash.Clear>

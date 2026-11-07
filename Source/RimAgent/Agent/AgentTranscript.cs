@@ -63,8 +63,6 @@ public sealed class TranscriptEntry
     // Assistant / Error 專用
     public bool ToolsStripped { get; set; }
     public AgentErrorKind ErrorKind { get; set; }
-    /// <summary>自動分流生效時記錄實際使用的模型；未啟用分流時為空。</summary>
-    public string RoutedModel { get; set; } = string.Empty;
 }
 
 /// <summary>

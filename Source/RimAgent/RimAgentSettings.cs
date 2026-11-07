@@ -16,6 +16,8 @@ public class RimAgentSettings : ModSettings
     public AgentMode mode = AgentMode.Confirm;
     /// <summary>模型思考強度，見 <see cref="ReasoningLevel"/>；Auto 沿用框架預設。</summary>
     public ReasoningLevel reasoning = ReasoningLevel.Auto;
+    /// <summary>思考強度自動分流：開啟時每句指令由決策模型分類決定思考強度，<see cref="reasoning"/> 暫不套用。</summary>
+    public bool reasoningRouting;
     /// <summary>Agent 優先使用的模型（"供應商:模型"，在 Agent 視窗切換）；留空則沿用框架備援鏈。</summary>
     public string agentModel = string.Empty;
     // 模型槽（參照 hermes-agent 的 auxiliary 模型）：Agent 以外的每一種模型呼叫各有一格，
@@ -37,22 +39,17 @@ public class RimAgentSettings : ModSettings
     /// <summary>決策模型名稱（留空＝沿用該供應商設定的模型）。</summary>
     public string decisionModel = string.Empty;
 
-    /// <summary>自動分流的哨兵值：選它時每句指令由決策模型分類決定模型。</summary>
-    public const string AutoRoutingModel = "=auto";
-
     public List<DecisionRouteCategory> decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
-    public string decisionFallbackModel = string.Empty;              // 空 = 框架備援鏈
     public ReasoningLevel decisionFallbackReasoning = ReasoningLevel.Auto;
     public float decisionRoutingMinConfidence = 0.6f;                // 0 到 1
 
     /// <summary>模型槽的「跟隨 Agent」值。不含冒號，真實模型識別碼都是「供應商:模型」，撞不到。</summary>
     public const string FollowAgentModel = "=agent";
 
-    /// <summary>模型槽的兩個哨兵值：跟隨 Agent、由分流器決定。兩者都不是真正的模型識別碼。</summary>
+    /// <summary>模型槽的哨兵值「跟隨 Agent」不是真正的模型識別碼。</summary>
     public static bool IsModelSentinel(string value)
     {
-        return string.Equals(value, FollowAgentModel, StringComparison.Ordinal)
-            || string.Equals(value, AutoRoutingModel, StringComparison.Ordinal);
+        return string.Equals(value, FollowAgentModel, StringComparison.Ordinal);
     }
 
     /// <summary>把模型槽值解成實際模型識別碼；空白表示交給框架備援鏈。</summary>
@@ -64,8 +61,7 @@ public class RimAgentSettings : ModSettings
         {
             value = (currentAgentModel ?? agentModel ?? string.Empty).Trim();
         }
-        // 分流模型是每句指令才會決定的哨兵，輔助模型槽不能把它當成模型名稱送給框架。
-        return string.Equals(value, AutoRoutingModel, StringComparison.Ordinal) ? string.Empty : value;
+        return value;
     }
 
     /// <summary>分類器實際該用的模型識別碼；空白表示交給框架備援鏈。</summary>
@@ -223,7 +219,14 @@ public class RimAgentSettings : ModSettings
                 ? parsed
                 : AgentMode.Confirm;
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
+        Scribe_Values.Look(ref reasoningRouting, "reasoningRouting", false);
         Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
+        // 舊版的「自動分流」是模型選單裡的 "=auto" 哨兵；改為思考強度分流後，模型回到預設並開啟思考強度分流。
+        if (Scribe.mode == LoadSaveMode.LoadingVars && string.Equals(agentModel, "=auto", StringComparison.Ordinal))
+        {
+            agentModel = string.Empty;
+            reasoningRouting = true;
+        }
         Scribe_Values.Look(ref classifierModel, "classifierModel", FollowAgentModel);
         Scribe_Values.Look(ref classifierReasoning, "classifierReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref compactModel, "compactModel", FollowAgentModel);
@@ -234,7 +237,6 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref decisionModel, "decisionModel", string.Empty);
         Scribe_Collections.Look(ref decisionCategories, "decisionCategories", LookMode.Deep);
         if (decisionCategories == null) decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
-        Scribe_Values.Look(ref decisionFallbackModel, "decisionFallbackModel", string.Empty);
         Scribe_Values.Look(ref decisionFallbackReasoning, "decisionFallbackReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref decisionRoutingMinConfidence, "decisionRoutingMinConfidence", 0.6f);
         decisionRoutingMinConfidence = UnityEngine.Mathf.Clamp01(decisionRoutingMinConfidence);

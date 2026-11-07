@@ -36,7 +36,6 @@ public sealed class TranscriptEntryData : IExposable
     public bool goalRun;
     public bool interjection;
     public string agent = string.Empty;
-    public string routedModel = string.Empty;
 #pragma warning restore S1104
 
     public void ExposeData()
@@ -59,7 +58,6 @@ public sealed class TranscriptEntryData : IExposable
         Scribe_Values.Look(ref goalRun, "goalRun", false);
         Scribe_Values.Look(ref interjection, "interjection", false);
         Scribe_Values.Look(ref agent, "agent", string.Empty);
-        Scribe_Values.Look(ref routedModel, "routedModel", string.Empty);
     }
 
     public TranscriptEntry ToEntry()
@@ -83,8 +81,7 @@ public sealed class TranscriptEntryData : IExposable
             Autonomous = autonomous,
             GoalRun = goalRun,
             Interjection = interjection,
-            Agent = agent ?? string.Empty,
-            RoutedModel = routedModel ?? string.Empty
+            Agent = agent ?? string.Empty
         };
     }
 
@@ -116,8 +113,7 @@ public sealed class TranscriptEntryData : IExposable
                 autonomous = e.Autonomous,
                 goalRun = e.GoalRun,
                 interjection = e.Interjection,
-                agent = e.Agent ?? string.Empty,
-                routedModel = Truncate(e.RoutedModel ?? string.Empty)
+                agent = e.Agent ?? string.Empty
             });
         }
         return data;
