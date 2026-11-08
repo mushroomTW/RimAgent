@@ -95,7 +95,9 @@ public class Window_Agent : Window
         ToolHeader,
         /// <summary>每句指令一次的戰鬥延遲提醒；畫法同 Text，重排該筆時要讓它重新出現。</summary>
         CombatNote,
-        Screenshot
+        Screenshot,
+        /// <summary>回覆裡的頂層表格：逐格繪製，Text 是表格原文。</summary>
+        Table
     }
 
     private struct TranscriptLine
@@ -113,6 +115,10 @@ public class Window_Agent : Window
         public TranscriptEntry Entry;
         /// <summary>回合開頭：上方多留 <see cref="TurnGap"/> 並畫分隔線。</summary>
         public bool TurnStart;
+        /// <summary>Table 專用：已轉成 rich text 的儲存格（第一列為表頭）與排好的欄寬、列高。</summary>
+        public string[][] Cells;
+        public float[] ColumnWidths;
+        public float[] RowHeights;
     }
 
     /// <summary>整局共用、關掉視窗也保留；最新的在最後。</summary>
@@ -560,6 +566,10 @@ public class Window_Agent : Window
                 GUI.Box(bubble, GUIContent.none, GetBubbleStyle());
                 DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
                 break;
+            case LineKind.Table:
+                if (!mouseOnJump) CopyToolHeaderOnRightClick(lineRect, line.PlainText);
+                DrawTable(lineRect, line);
+                break;
             case LineKind.ToolHeader:
                 if (!mouseOnJump)
                 {
@@ -916,6 +926,13 @@ public class Window_Agent : Window
         return Text.CurFontStyle.CalcHeight(MeasureContent, width);
     }
 
+    /// <summary>同 <see cref="MeasureRichHeight"/>：Text.CalcSize 也會先去掉標籤。</summary>
+    private static float MeasureRichWidth(string richText)
+    {
+        MeasureContent.text = richText;
+        return Text.CurFontStyle.CalcSize(MeasureContent).x;
+    }
+
     /// <summary>把一筆紀錄排成若干行加到 <paramref name="into"/>，回傳佔用的總高度（含間距）。</summary>
     private float BuildEntryLines(TranscriptEntry entry, float width, bool turnStart, List<TranscriptLine> into)
     {
@@ -924,7 +941,11 @@ public class Window_Agent : Window
         {
             var line = new TranscriptLine { Kind = kind, Text = text, Entry = entry, TurnStart = turnStart };
             line.PlainText = text.StripTags();
-            if (kind == LineKind.PlayerBubble)
+            if (kind == LineKind.Table)
+            {
+                LayoutTable(ref line, width);
+            }
+            else if (kind == LineKind.PlayerBubble)
             {
                 // 短句貼齊字寬，長句到上限就換行。CalcSize 不換行，量到的是最長一行的寬度。
                 float maxInner = width * BubbleMaxRatio - BubblePadX * 2f;
@@ -1015,7 +1036,7 @@ public class Window_Agent : Window
                 break;
 
             case TranscriptKind.Assistant:
-                foreach (var line in RenderAssistant(entry)) yield return (line, LineKind.Text);
+                foreach (var line in RenderAssistant(entry)) yield return line;
                 break;
 
             case TranscriptKind.Tool:
@@ -1050,15 +1071,154 @@ public class Window_Agent : Window
         return false;
     }
 
-    private static IEnumerable<string> RenderAssistant(TranscriptEntry entry)
+    private static IEnumerable<(string Text, LineKind Kind)> RenderAssistant(TranscriptEntry entry)
     {
-        string reply = RenderReply(ReplyMarkdown.EscapeAngleBrackets(entry.Text));
-        string replyText = reply.Length == 0 ? "RimAgent.EmptyReply".Translate().ToString() : reply;
         string agentTag = ColorTagPrefix + AutoActionHex + ">" + "RimAgent.Tag.Agent".Translate() + ColorTagCloseSpace;
-        yield return agentTag + ColorTagPrefix + TextHex + ">" + replyText + ColorTagClose;
+        bool tagged = false;
+        foreach (ReplyMarkdown.Segment segment in SplitReply(ReplyMarkdown.EscapeAngleBrackets(entry.Text)))
+        {
+            if (segment.Rows != null)
+            {
+                // 表格不能帶前綴標籤；回覆以表格開頭時，標籤自成一行。
+                if (!tagged) yield return (agentTag, LineKind.Text);
+                tagged = true;
+                yield return (segment.Markdown, LineKind.Table);
+                continue;
+            }
+            string reply = RenderReply(segment.Markdown);
+            if (reply.Length == 0) continue;
+            yield return ((tagged ? string.Empty : agentTag) + ColorTagPrefix + TextHex + ">" + reply + ColorTagClose, LineKind.Text);
+            tagged = true;
+        }
+        if (!tagged)
+        {
+            yield return (agentTag + ColorTagPrefix + TextHex + ">" + "RimAgent.EmptyReply".Translate() + ColorTagClose, LineKind.Text);
+        }
         if (entry.ToolsStripped)
         {
-            yield return ColorTagPrefix + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + ColorTagClose;
+            yield return (ColorTagPrefix + NoticeHex + ">" + "RimAgent.ToolsStripped".Translate() + ColorTagClose, LineKind.Text);
+        }
+    }
+
+    /// <summary>載入的框架缺 Markdig 時，整段照舊交給 <see cref="RenderReply"/>。</summary>
+    private static List<ReplyMarkdown.Segment> SplitReply(string reply)
+    {
+        try
+        {
+            return ReplyMarkdown.SplitTables(reply);
+        }
+        catch (Exception)
+        {
+            return [new ReplyMarkdown.Segment(reply, null)];
+        }
+    }
+
+    private const float TableCellPadX = 6f;
+    private const float TableCellPadY = 2f;
+    private static readonly Color TableHeaderColor = new(1f, 1f, 1f, 0.08f);
+    private static readonly Color TableStripeColor = new(1f, 1f, 1f, 0.03f);
+    private static readonly Color TableGridColor = new(0.45f, 0.52f, 0.60f, 0.45f);
+
+    /// <summary>
+    /// 欄寬取該欄最寬的內容；加總超過可用寬度時等比例壓縮，長的格子換行、整列跟著變高。
+    /// 格子以框架轉成 rich text，並另存「tab 分欄、換行分列」的純文字供右鍵複製。
+    /// </summary>
+    private static void LayoutTable(ref TranscriptLine line, float width)
+    {
+        List<string[]> rows = ReplyMarkdown.SplitTables(line.Text)[0].Rows;
+        int columns = rows.Max(row => row.Length);
+        var cells = new string[rows.Count][];
+        var natural = new float[columns];
+        for (int r = 0; r < rows.Count; r++)
+        {
+            cells[r] = new string[columns];
+            for (int c = 0; c < columns; c++)
+            {
+                string raw = c < rows[r].Length ? rows[r][c] : string.Empty;
+                string rich = ColorTagPrefix + TextHex + ">" + RenderCell(raw) + ColorTagClose;
+                cells[r][c] = rich;
+                natural[c] = Mathf.Max(natural[c], Mathf.Ceil(MeasureRichWidth(rich)) + 1f + TableCellPadX * 2f);
+            }
+        }
+        float[] widths = FitColumns(natural, width);
+        var heights = new float[rows.Count];
+        for (int r = 0; r < rows.Count; r++)
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                float inner = Mathf.Max(1f, widths[c] - TableCellPadX * 2f);
+                heights[r] = Mathf.Max(heights[r], MeasureRichHeight(cells[r][c], inner) + TableCellPadY * 2f);
+            }
+        }
+        line.Cells = cells;
+        line.ColumnWidths = widths;
+        line.RowHeights = heights;
+        line.Height = heights.Sum();
+        line.PlainText = string.Join("\n", cells.Select(row => string.Join("\t", row.Select(cell => cell.StripTags()))));
+    }
+
+    /// <summary>
+    /// 放不下時只壓縮長欄：比平分寬度窄的欄照原寬，剩下的空間再平分給其餘欄，反覆到穩定；
+    /// 等比例壓縮會連短欄一起壓，把「colony-progression」這種名稱拆成好幾行。
+    /// </summary>
+    internal static float[] FitColumns(float[] natural, float width)
+    {
+        var widths = new float[natural.Length];
+        if (natural.Sum() <= width)
+        {
+            Array.Copy(natural, widths, natural.Length);
+            return widths;
+        }
+        var open = new List<int>(Enumerable.Range(0, natural.Length));
+        float remaining = width;
+        bool settled = false;
+        while (!settled && open.Count > 0)
+        {
+            settled = true;
+            float share = remaining / open.Count;
+            foreach (int c in open.Where(c => natural[c] <= share).ToList())
+            {
+                widths[c] = natural[c];
+                remaining -= natural[c];
+                open.Remove(c);
+                settled = false;
+            }
+        }
+        foreach (int c in open) widths[c] = Mathf.Floor(remaining / open.Count);
+        return widths;
+    }
+
+    private static void DrawTable(Rect rect, TranscriptLine line)
+    {
+        float tableWidth = line.ColumnWidths.Sum();
+        float y = rect.y;
+        for (int r = 0; r < line.Cells.Length; r++)
+        {
+            var rowRect = new Rect(rect.x, y, tableWidth, line.RowHeights[r]);
+            if (r == 0) Widgets.DrawBoxSolid(rowRect, TableHeaderColor);
+            else if (r % 2 == 0) Widgets.DrawBoxSolid(rowRect, TableStripeColor);
+            float x = rect.x;
+            for (int c = 0; c < line.ColumnWidths.Length; c++)
+            {
+                var cellRect = new Rect(x + TableCellPadX, y + TableCellPadY, line.ColumnWidths[c] - TableCellPadX * 2f, line.RowHeights[r] - TableCellPadY * 2f);
+                Widgets.Label(cellRect, line.Cells[r][c]);
+                x += line.ColumnWidths[c];
+            }
+            y += line.RowHeights[r];
+        }
+        var tableRect = new Rect(rect.x, rect.y, tableWidth, y - rect.y);
+        DrawThinBox(tableRect, TableGridColor);
+        float lineX = rect.x;
+        for (int c = 0; c < line.ColumnWidths.Length - 1; c++)
+        {
+            lineX += line.ColumnWidths[c];
+            Widgets.DrawBoxSolid(new Rect(lineX, rect.y, 1f, tableRect.height), TableGridColor);
+        }
+        float lineY = rect.y;
+        for (int r = 0; r < line.RowHeights.Length - 1; r++)
+        {
+            lineY += line.RowHeights[r];
+            Widgets.DrawBoxSolid(new Rect(rect.x, lineY, tableWidth, 1f), TableGridColor);
         }
     }
 
@@ -1910,6 +2070,33 @@ public class Window_Agent : Window
             return text;
         }
     }
+
+    private static bool? _cellRenderAvailable;
+
+    /// <summary>
+    /// 表格格子交給框架的格子轉換（保留「射擊 12**」這類熱情星號）；
+    /// 舊版框架沒有這支 API 時退回一般 Markdown 轉換。
+    /// </summary>
+    private static string RenderCell(string cell)
+    {
+        if (_cellRenderAvailable != false)
+        {
+            try
+            {
+                string rich = CellToRichText(LatexMath.ConvertMath(cell));
+                _cellRenderAvailable = true;
+                return rich;
+            }
+            catch (Exception ex) when (ex is MissingMethodException || ex is TypeLoadException)
+            {
+                _cellRenderAvailable = false;
+            }
+        }
+        return RenderReply(cell);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static string CellToRichText(string cell) => RimLLM_Framework.Mod.RimLLMMarkdown.CellToRichText(cell);
 
     /// <summary>記住上一次的輸入值與組好的字串；值沒變就直接回傳，不重新翻譯與格式化。</summary>
     private sealed class TextCache<TKey>
