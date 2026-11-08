@@ -96,6 +96,8 @@ public class Window_Agent : Window
         /// <summary>每句指令一次的戰鬥延遲提醒；畫法同 Text，重排該筆時要讓它重新出現。</summary>
         CombatNote,
         Screenshot,
+        /// <summary>連續工具呼叫的摘要列（「已執行 N 個工具」）：點一下展開或收合整組。</summary>
+        ToolGroupHeader,
         /// <summary>回覆裡的頂層表格：逐格繪製，Text 是表格原文。</summary>
         Table
     }
@@ -113,6 +115,8 @@ public class Window_Agent : Window
         public string ImagePath;
         /// <summary>這行屬於哪筆紀錄；ToolHeader 點擊時靠它找出同一筆的所有行，只重排那一筆。</summary>
         public TranscriptEntry Entry;
+        /// <summary>ToolGroupHeader 專用：這組的第一筆工具紀錄，同時是展開狀態的鍵。</summary>
+        public TranscriptEntry GroupFirst;
         /// <summary>回合開頭：上方多留 <see cref="TurnGap"/> 並畫分隔線。</summary>
         public bool TurnStart;
         /// <summary>Table 專用：已轉成 rich text 的儲存格（第一列為表頭）與排好的欄寬、列高。</summary>
@@ -138,6 +142,14 @@ public class Window_Agent : Window
     private string _historyDraft = string.Empty;
     /// <summary>玩家親手設定過的工具展開狀態（true＝展開）；以參考比對，沒設定的走預設。</summary>
     private readonly Dictionary<TranscriptEntry, bool> _toolExpanded = [];
+    /// <summary>玩家親手展開或收合過的工具群組（以群組第一筆為鍵）；沒設定的收合，除非組內有等待確認的預覽。</summary>
+    private readonly Dictionary<TranscriptEntry, bool> _groupExpanded = [];
+    // 逐步排版時正在累積的連續工具群組；逐字稿重排時歸零。
+    private TranscriptEntry _groupFirst;
+    private int _groupHeaderIndex = -1;
+    private int _groupCount;
+    private int _groupFailed;
+    private bool _groupPending;
 
     // 渲染快取
     private readonly List<TranscriptLine> _lines = [];
@@ -180,6 +192,7 @@ public class Window_Agent : Window
     private DateTime _nextCapabilityProbe;
     private CancellationTokenSource _cts;
     private int _slashIndex;
+    private int _skillIndex;
     private bool _posInitialized;
     // 發射後不管的請求：async 方法的 throw 變成 faulted Task，同步 try/catch 抓不到，
     // 這裡在主線程逐幀收割，faulted 才補忙碌提示（Translate 只能在主線程呼叫）。
@@ -334,6 +347,7 @@ public class Window_Agent : Window
         DrawStatusStrip(autoStrip, component, session);
         DrawBottomBar(bottom, session);
         DrawSlashPopup(bottom, session);
+        DrawSkillPopup(bottom);
         DrawResizeHint(inRect);
     }
 
@@ -436,6 +450,7 @@ public class Window_Agent : Window
         Widgets.BeginScrollView(outRect, ref _scroll, scrollLayout.ViewRect);
         float y = 0f;
         TranscriptEntry clickedTool = null;
+        TranscriptEntry clickedGroup = null;
         foreach (TranscriptLine line in _lines)
         {
             if (line.TurnStart)
@@ -448,7 +463,7 @@ public class Window_Agent : Window
             }
             if (y + line.Height >= visibleTop && y <= visibleBottom)
             {
-                DrawTranscriptLine(line, y, lineWidth, width, scrollLayout.MouseOnJump, ref clickedTool);
+                DrawTranscriptLine(line, y, lineWidth, width, scrollLayout.MouseOnJump, ref clickedTool, ref clickedGroup);
             }
             y += line.Height + EntryGap;
         }
@@ -463,6 +478,12 @@ public class Window_Agent : Window
         {
             _toolExpanded[clickedTool] = !IsToolExpanded(clickedTool);
             RelayoutEntry(clickedTool);
+        }
+        if (clickedGroup != null)
+        {
+            _groupExpanded[clickedGroup] = !IsGroupExpanded(clickedGroup);
+            // 群組展開會增減整串行：直接下一幀整份重排，比逐筆修補簡單。
+            _linesTranscript = null;
         }
 
         if (scrollLayout.ShowJump)
@@ -552,7 +573,8 @@ public class Window_Agent : Window
         float lineWidth,
         float visibleWidth,
         bool mouseOnJump,
-        ref TranscriptEntry clickedTool)
+        ref TranscriptEntry clickedTool,
+        ref TranscriptEntry clickedGroup)
     {
         var lineRect = new Rect(0f, y, lineWidth, line.Height);
         switch (line.Kind)
@@ -565,6 +587,19 @@ public class Window_Agent : Window
                 var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
                 GUI.Box(bubble, GUIContent.none, GetBubbleStyle());
                 DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
+                break;
+            case LineKind.ToolGroupHeader:
+                if (!mouseOnJump)
+                {
+                    if (Mouse.IsOver(lineRect))
+                    {
+                        Widgets.DrawHighlight(lineRect);
+                        if (_toolGroupToggleTip == null) _toolGroupToggleTip = "RimAgent.ToolGroup.ToggleTip".Translate();
+                        TooltipHandler.TipRegion(lineRect, _toolGroupToggleTip);
+                    }
+                    if (Widgets.ButtonInvisible(lineRect)) clickedGroup = line.GroupFirst;
+                }
+                Widgets.Label(lineRect, line.Text);
                 break;
             case LineKind.Table:
                 if (!mouseOnJump) CopyToolHeaderOnRightClick(lineRect, line.PlainText);
@@ -891,6 +926,8 @@ public class Window_Agent : Window
     {
         _lines.Clear();
         _linesTotal = 0f;
+        _groupFirst = null;
+        _groupHeaderIndex = -1;
         _combatNoted.Clear();
         PruneToolExpanded(entries);
         AppendLines(entries, 0, width);
@@ -903,6 +940,7 @@ public class Window_Agent : Window
         var live = new HashSet<TranscriptEntry>(entries);
         List<TranscriptEntry> stale = [.. _toolExpanded.Keys.Where(entry => !live.Contains(entry))];
         foreach (TranscriptEntry entry in stale) _toolExpanded.Remove(entry);
+        foreach (TranscriptEntry entry in _groupExpanded.Keys.Where(entry => !live.Contains(entry)).ToList()) _groupExpanded.Remove(entry);
     }
 
     private void AppendLines(IReadOnlyList<TranscriptEntry> entries, int from, float width)
@@ -912,9 +950,80 @@ public class Window_Agent : Window
             TranscriptEntry entry = entries[i];
             // 每句 User 紀錄開啟新回合（插話屬於進行中的回合）；第一行上面不畫分隔線。
             bool turnStart = entry.Kind == TranscriptKind.User && !entry.Interjection && _lines.Count > 0;
-            _linesTotal += BuildEntryLines(entry, width, turnStart, _lines);
+            bool collapsed = false;
+            if (entry.Kind == TranscriptKind.Tool)
+            {
+                collapsed = !TrackToolGroup(entry, i > 0 && entries[i - 1].Kind == TranscriptKind.Tool, width);
+            }
+            else
+            {
+                _groupFirst = null;
+            }
+            _linesTotal += BuildEntryLines(entry, width, turnStart, _lines, collapsed);
         }
         _linesEntryCount = entries.Count;
+    }
+
+    private string _toolGroupToggleTip;
+
+    /// <summary>
+    /// 把這筆工具紀錄記進連續工具群組並更新（或新建）群組摘要列，回傳該組目前是否展開。
+    /// 摘要列在組內第一筆工具時加入，之後每多一筆就改寫它的數字。
+    /// </summary>
+    private bool TrackToolGroup(TranscriptEntry entry, bool continuesPrevious, float width)
+    {
+        if (!continuesPrevious || _groupFirst == null)
+        {
+            _groupFirst = entry;
+            _groupCount = 0;
+            _groupFailed = 0;
+            _groupPending = false;
+            _groupHeaderIndex = -1;
+        }
+        _groupCount++;
+        if (entry.Failed) _groupFailed++;
+        if (entry.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) _groupPending = true;
+
+        bool expanded = IsGroupExpanded(_groupFirst);
+        string text = GroupHeaderText(_groupCount, _groupFailed, expanded);
+        var header = new TranscriptLine
+        {
+            Kind = LineKind.ToolGroupHeader,
+            Text = text,
+            PlainText = text.StripTags(),
+            GroupFirst = _groupFirst,
+            Height = MeasureRichHeight(text, width)
+        };
+        if (_groupHeaderIndex < 0)
+        {
+            _groupHeaderIndex = _lines.Count;
+            _lines.Add(header);
+            _linesTotal += header.Height + EntryGap;
+        }
+        else
+        {
+            _linesTotal += header.Height - _lines[_groupHeaderIndex].Height;
+            _lines[_groupHeaderIndex] = header;
+        }
+        return expanded;
+    }
+
+    /// <summary>群組預設收合；組內有等待確認的預覽時預設展開（玩家要看得到確認的是什麼）；玩家親手設定過的照玩家的。</summary>
+    private bool IsGroupExpanded(TranscriptEntry first)
+    {
+        if (_groupExpanded.TryGetValue(first, out bool expanded)) return expanded;
+        return ReferenceEquals(first, _groupFirst) && _groupPending;
+    }
+
+    private static string GroupHeaderText(int count, int failed, bool expanded)
+    {
+        string arrow = ColorTagPrefix + SubTextHex + ">" + (expanded ? "▾" : "▸") + ColorTagCloseSpace;
+        string summary = ColorTagPrefix + TextHex + ">" + "RimAgent.ToolGroup.Summary".Translate(count) + ColorTagClose;
+        if (failed > 0)
+        {
+            summary += " " + ColorTagPrefix + EmergencyHex + ">" + "RimAgent.ToolGroup.Failed".Translate(failed) + ColorTagClose;
+        }
+        return arrow + summary;
     }
 
     private static readonly GUIContent MeasureContent = new();
@@ -934,11 +1043,13 @@ public class Window_Agent : Window
     }
 
     /// <summary>把一筆紀錄排成若干行加到 <paramref name="into"/>，回傳佔用的總高度（含間距）。</summary>
-    private float BuildEntryLines(TranscriptEntry entry, float width, bool turnStart, List<TranscriptLine> into)
+    private float BuildEntryLines(TranscriptEntry entry, float width, bool turnStart, List<TranscriptLine> into, bool collapsedGroup = false)
     {
         float total = 0f;
         foreach ((string text, LineKind kind) in Render(entry, IsToolExpanded(entry), _combatNoted))
         {
+            // 群組收合時只留戰鬥提醒，其餘工具行藏在摘要列後面。
+            if (collapsedGroup && kind != LineKind.CombatNote) continue;
             var line = new TranscriptLine { Kind = kind, Text = text, Entry = entry, TurnStart = turnStart };
             line.PlainText = text.StripTags();
             if (kind == LineKind.Table)
@@ -961,7 +1072,7 @@ public class Window_Agent : Window
             total += line.Height + EntryGap + (turnStart ? TurnGap : 0f);
             turnStart = false;
         }
-        string screenshotPath = TranscriptScreenshot.TryGetPath(entry, GenFilePaths.ScreenshotFolderPath);
+        string screenshotPath = collapsedGroup ? null : TranscriptScreenshot.TryGetPath(entry, GenFilePaths.ScreenshotFolderPath);
         if (screenshotPath != null)
         {
             float imageHeight = Mathf.Clamp(width * 0.5625f, 120f, 320f);
@@ -1294,7 +1405,8 @@ public class Window_Agent : Window
         RimAgentSettings settings = RimAgentMod.Settings;
         var modeRect = new Rect(rect.x, rect.y, DropdownWidth, rect.height);
         var reasoningRect = new Rect(modeRect.xMax + 6f, rect.y, DropdownWidth, rect.height);
-        bool enabled = !session.IsBusy && settings != null;
+        // 執行或思考中也能切換：模式、思考強度與模型都是即時同步，下一次呼叫生效。
+        bool enabled = settings != null;
 
         DrawModeButton(modeRect, enabled, settings, session);
         DrawReasoningButton(reasoningRect, enabled, settings);
@@ -1519,7 +1631,7 @@ public class Window_Agent : Window
         var inputRect = new Rect(rect.x, rect.y, rect.width - ButtonWidth - 6f, rect.height);
         var buttonRect = new Rect(rect.xMax - ButtonWidth, rect.y, ButtonWidth, rect.height);
 
-        bool enterPressed = !HandleHistoryKeys() && !HandleSlashKeys(session) &&
+        bool enterPressed = !HandleHistoryKeys() && !HandleSlashKeys(session) && !HandleSkillKeys() &&
                             Event.current.type == EventType.KeyDown &&
                             (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
@@ -1595,7 +1707,7 @@ public class Window_Agent : Window
         KeyCode key = Event.current.keyCode;
         if (key != KeyCode.UpArrow && key != KeyCode.DownArrow) return false;
         if (GUI.GetNameOfFocusedControl() != InputControlName) return false;
-        if (_historyIndex < 0 && SlashCommands.Match(_input).Count > 0) return false;
+        if (_historyIndex < 0 && (SlashCommands.Match(_input).Count > 0 || SkillMatches().Count > 0)) return false;
 
         if (key == KeyCode.UpArrow)
         {
@@ -1661,6 +1773,88 @@ public class Window_Agent : Window
         }
         Event.current.Use();
         return true;
+    }
+
+    /// <summary>輸入尾端正在打 $ 時符合的技能名稱。</summary>
+    private List<string> SkillMatches()
+    {
+        IReadOnlyList<AgentSkill> skills = RimAgentGameComponent.Instance?.Skills;
+        if (skills == null || skills.Count == 0) return [];
+        return SlashCommands.MatchSkills(_input, skills.Where(s => s != null).Select(s => s.Name));
+    }
+
+    private bool HandleSkillKeys()
+    {
+        if (Event.current.type != EventType.KeyDown) return false;
+        List<string> matches = SkillMatches();
+        if (matches.Count == 0) return false;
+        _skillIndex = Mathf.Clamp(_skillIndex, 0, matches.Count - 1);
+        switch (Event.current.keyCode)
+        {
+            case KeyCode.UpArrow:
+                _skillIndex = (_skillIndex + matches.Count - 1) % matches.Count;
+                break;
+            case KeyCode.DownArrow:
+                _skillIndex = (_skillIndex + 1) % matches.Count;
+                break;
+            case KeyCode.Return:
+            case KeyCode.KeypadEnter:
+            case KeyCode.Tab:
+                AcceptSkill(matches[_skillIndex]);
+                break;
+            default:
+                return false;
+        }
+        Event.current.Use();
+        return true;
+    }
+
+    private void AcceptSkill(string name)
+    {
+        SlashCommands.TryGetSkillToken(_input, out _, out int start);
+        SetInput(_input.Substring(0, start) + "$" + name + " ");
+    }
+
+    private void DrawSkillPopup(Rect bottom)
+    {
+        List<string> matches = SkillMatches();
+        if (matches.Count == 0) return;
+        _skillIndex = Mathf.Clamp(_skillIndex, 0, matches.Count - 1);
+
+        const int maxRows = 8;
+        int shown = Mathf.Min(matches.Count, maxRows);
+        float height = shown * SlashRowHeight + 8f;
+        var popup = new Rect(bottom.x, bottom.y - height - 4f, Mathf.Min(SlashPopupWidth, bottom.width), height);
+        Widgets.DrawBoxSolid(popup, BgColor);
+        DrawThinBox(popup, BorderColor);
+
+        IReadOnlyList<AgentSkill> skills = RimAgentGameComponent.Instance?.Skills ?? [];
+        Text.Anchor = TextAnchor.MiddleLeft;
+        Text.WordWrap = false;
+        // 選中項超出可見列數時，視窗跟著捲動。
+        int first = Mathf.Clamp(_skillIndex - maxRows + 1, 0, matches.Count - shown);
+        for (int i = 0; i < shown; i++)
+        {
+            string name = matches[first + i];
+            var row = new Rect(popup.x + 4f, popup.y + 4f + i * SlashRowHeight, popup.width - 8f, SlashRowHeight);
+            Widgets.DrawHighlightIfMouseover(row);
+            if (first + i == _skillIndex) Widgets.DrawHighlightSelected(row);
+
+            string label = "$" + name;
+            float nameWidth = Text.CalcSize(label).x;
+            GUI.color = ToolActionColor;
+            Widgets.Label(new Rect(row.x + 6f, row.y, nameWidth, row.height), label);
+
+            AgentSkill skill = skills.FirstOrDefault(s => s != null && string.Equals((s.Name ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
+            var descRect = new Rect(row.x + 6f + nameWidth + 10f, row.y, row.width - nameWidth - 22f, row.height);
+            GUI.color = ToolTextColor;
+            Widgets.Label(descRect, (skill?.Description ?? string.Empty).Truncate(descRect.width));
+            GUI.color = Color.white;
+
+            if (Widgets.ButtonInvisible(row)) AcceptSkill(name);
+        }
+        Text.WordWrap = true;
+        Text.Anchor = TextAnchor.UpperLeft;
     }
 
     private void AcceptSlash(ColonyAgentSession session, SlashCommand command)

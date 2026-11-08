@@ -12,6 +12,9 @@
   <RimAgent.Tag.Goal>[Goal]</RimAgent.Tag.Goal>
   <RimAgent.Tool.Arguments>Arguments:</RimAgent.Tool.Arguments>
   <RimAgent.Tool.Result>Result:</RimAgent.Tool.Result>
+  <RimAgent.ToolGroup.Summary>Ran {0} tool(s)</RimAgent.ToolGroup.Summary>
+  <RimAgent.ToolGroup.Failed>{0} failed</RimAgent.ToolGroup.Failed>
+  <RimAgent.ToolGroup.ToggleTip>Click to expand or collapse this run of tool calls.</RimAgent.ToolGroup.ToggleTip>
   <RimAgent.Tool.ToggleTip>Click to show or hide the arguments and result. Drag the conversation text to select it, right-click a tool row to copy it.</RimAgent.Tool.ToggleTip>
   <RimAgent.Scroll.Latest>↓ Jump to latest</RimAgent.Scroll.Latest>
   <RimAgent.Scroll.NewMessages>↓ New messages</RimAgent.Scroll.NewMessages>
@@ -22,7 +25,7 @@
   <RimAgent.Screenshot.Pending>The screenshot has not been written yet, or the file was moved.</RimAgent.Screenshot.Pending>
   <RimAgent.Window.ResizeTip>Drag the bottom-right corner to resize the window</RimAgent.Window.ResizeTip>
   <RimAgent.Close>Close</RimAgent.Close>
-  <RimAgent.Placeholder>Tell the agent what to do, or type / for commands</RimAgent.Placeholder>
+  <RimAgent.Placeholder>Tell the agent what to do. Type / for commands, $ to pick a skill</RimAgent.Placeholder>
   <RimAgent.PlaceholderBusy>Working… type here and press Enter to add to the current task</RimAgent.PlaceholderBusy>
   <RimAgent.Send>Send</RimAgent.Send>
   <RimAgent.Stop>Stop</RimAgent.Stop>
@@ -119,6 +122,13 @@
   <RimAgent.Settings.DecisionStatusDisabled>Not configured (RimLLM Framework > Decision tab)</RimAgent.Settings.DecisionStatusDisabled>
   <RimAgent.Settings.DecisionStatusEnabled>Configured ({0} · {1})</RimAgent.Settings.DecisionStatusEnabled>
   <RimAgent.Settings.DecisionStatusNoKey>Configured ({0}) — API key required in RimLLM Framework</RimAgent.Settings.DecisionStatusNoKey>
+  <RimAgent.Settings.DecisionTest>Test decision model</RimAgent.Settings.DecisionTest>
+  <RimAgent.Settings.DecisionTestRunning>Testing…</RimAgent.Settings.DecisionTestRunning>
+  <RimAgent.Settings.DecisionTestTip>Sends one simple multiple-choice question using the provider and model selected above, to confirm the decision model answers correctly.</RimAgent.Settings.DecisionTestTip>
+  <RimAgent.Settings.DecisionTestOk>Passed: {0}</RimAgent.Settings.DecisionTestOk>
+  <RimAgent.Settings.DecisionTestFailed>Failed: {0}</RimAgent.Settings.DecisionTestFailed>
+  <RimAgent.Settings.DecisionTestUnavailable>Cannot test: no decision provider is available.</RimAgent.Settings.DecisionTestUnavailable>
+  <RimAgent.Settings.DecisionTestNoAnswer>The model returned no answer.</RimAgent.Settings.DecisionTestNoAnswer>
   <RimAgent.Settings.DecisionDefault>Default (follow framework)</RimAgent.Settings.DecisionDefault>
   <RimAgent.Settings.DecisionFallbackReasoning>Fallback reasoning:</RimAgent.Settings.DecisionFallbackReasoning>
   <RimAgent.Settings.DecisionFallbackReasoningTip>Reasoning effort used when confidence is low or the decision model is unavailable.</RimAgent.Settings.DecisionFallbackReasoningTip>
@@ -143,6 +153,8 @@
   <RimAgent.Settings.AutonomousHeader>Proactive colony care</RimAgent.Settings.AutonomousHeader>
   <RimAgent.Settings.AutonomousCare>Enable proactive care</RimAgent.Settings.AutonomousCare>
   <RimAgent.Settings.AutonomousCareTip>Respond to events and periodically review the colony. The current execution mode and tool category switches still apply.</RimAgent.Settings.AutonomousCareTip>
+  <RimAgent.Settings.AutoTimeSpeed>Auto-adjust game speed on quiet days</RimAgent.Settings.AutoTimeSpeed>
+  <RimAgent.Settings.AutoTimeSpeedTip>When on, speeds the game up while there are no hostiles, fires or medical emergencies (the decision model picks how fast; without one it uses Fast) and drops back to Normal the moment something happens. It never touches the game while you have it paused, and backs off for 5 minutes after you change the speed yourself. Not applied while the Agent is running. Off by default.</RimAgent.Settings.AutoTimeSpeedTip>
   <RimAgent.Settings.ConfirmAutonomousMajor>Confirm major actions during proactive care</RimAgent.Settings.ConfirmAutonomousMajor>
   <RimAgent.Settings.ConfirmAutonomousMajorTip>In Execute mode, proactive actions marked as major by their tool wait for confirmation. Full access ignores this setting; Confirm mode still confirms every action.</RimAgent.Settings.ConfirmAutonomousMajorTip>
   <RimAgent.Settings.AutoCooldown>Autonomous cooldown: {0} minutes</RimAgent.Settings.AutoCooldown>
@@ -161,12 +173,12 @@
   <RimAgent.Model.FollowAgent>Default (agent's current model)</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, this role follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
   <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
-  <RimAgent.Reasoning.Auto>Auto</RimAgent.Reasoning.Auto>
+  <RimAgent.Reasoning.Auto>Default</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>Medium</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>High</RimAgent.Reasoning.High>
-  <RimAgent.Reasoning.Routing>Auto routing</RimAgent.Reasoning.Routing>
+  <RimAgent.Reasoning.Routing>Auto</RimAgent.Reasoning.Routing>
   <RimAgent.Reasoning.RoutingTip>Use the decision model to classify each instruction into a task category and run it with that category's reasoning effort. The model stays the one selected in the model menu.</RimAgent.Reasoning.RoutingTip>
   <RimAgent.Slash.Goal>Persistent goals: list, add, edit, clear, pause, resume</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>Undo the work settings changed by the last instruction</RimAgent.Slash.Undo>

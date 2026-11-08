@@ -12,6 +12,9 @@
   <RimAgent.Tag.Goal>[目标]</RimAgent.Tag.Goal>
   <RimAgent.Tool.Arguments>参数：</RimAgent.Tool.Arguments>
   <RimAgent.Tool.Result>结果：</RimAgent.Tool.Result>
+  <RimAgent.ToolGroup.Summary>已执行 {0} 个工具</RimAgent.ToolGroup.Summary>
+  <RimAgent.ToolGroup.Failed>{0} 个失败</RimAgent.ToolGroup.Failed>
+  <RimAgent.ToolGroup.ToggleTip>点一下展开或收合这一串工具调用。</RimAgent.ToolGroup.ToggleTip>
   <RimAgent.Tool.ToggleTip>点一下显示或隐藏参数与结果；对话文字可直接拖选复制，工具行可按右键复制。</RimAgent.Tool.ToggleTip>
   <RimAgent.Scroll.Latest>↓ 回到最新</RimAgent.Scroll.Latest>
   <RimAgent.Scroll.NewMessages>↓ 有新消息</RimAgent.Scroll.NewMessages>
@@ -22,7 +25,7 @@
   <RimAgent.Screenshot.Pending>截图尚未写入磁盘，或文件已移动。</RimAgent.Screenshot.Pending>
   <RimAgent.Window.ResizeTip>拖动右下角调整窗口大小</RimAgent.Window.ResizeTip>
   <RimAgent.Close>关闭</RimAgent.Close>
-  <RimAgent.Placeholder>告诉 Agent 要做什么，或输入 / 使用指令</RimAgent.Placeholder>
+  <RimAgent.Placeholder>告诉 Agent 要做什么，输入 / 使用指令，输入 $ 指定技能</RimAgent.Placeholder>
   <RimAgent.PlaceholderBusy>执行中…在此输入并按 Enter，可补充或改变当前的任务</RimAgent.PlaceholderBusy>
   <RimAgent.Send>发送</RimAgent.Send>
   <RimAgent.Stop>停止</RimAgent.Stop>
@@ -93,7 +96,7 @@
   <RimAgent.Settings.Agents>子代理 — 委派任务</RimAgent.Settings.Agents>
   <RimAgent.Settings.AgentsTip>允许 Agent 把自足的任务交给 AgentPack/Agents 里的子代理（delegate_task）。子代理仍只拿得到这里允许的工具类别，命令按当前模式把关。</RimAgent.Settings.AgentsTip>
   <RimAgent.Settings.Save>存档 — 检查点与死亡后读档重来</RimAgent.Settings.Save>
-  <RimAgent.Settings.SaveTip>默认关闭。殖民地安全时每个游戏日存一份检查点（只保留最新 5 份），并允许 Agent 存档（save_game）与读回这一局的检查点或自动存档（load_save）。开启主动照顾时，殖民者死亡后由 Agent 决定要不要读档。每份存档最多读回 3 次，之后接受损失。硬核模式无法读档。</RimAgent.Settings.SaveTip>
+  <RimAgent.Settings.SaveTip>殖民地安全时每个游戏日存一份检查点（只保留最新 5 份），并允许 Agent 存档（save_game）与读回这一局的检查点或自动存档（load_save）。开启主动照顾时，殖民者死亡后由 Agent 决定要不要读档。每份存档最多读回 3 次，之后接受损失。硬核模式无法读档。</RimAgent.Settings.SaveTip>
   <RimAgent.Settings.ShowAdvanced>显示高级设置</RimAgent.Settings.ShowAdvanced>
   <RimAgent.Settings.ShowAdvancedTip>模型分工、决策模型与分流、上下文压缩和运行记录。</RimAgent.Settings.ShowAdvancedTip>
   <RimAgent.Settings.ModelRolesHeader>模型分工</RimAgent.Settings.ModelRolesHeader>
@@ -109,7 +112,7 @@
   <RimAgent.Settings.ClassifierModelTip>自动模式判定风险时使用的模型与思考强度。</RimAgent.Settings.ClassifierModelTip>
   <RimAgent.Settings.CompactModel>/compact 摘要：</RimAgent.Settings.CompactModel>
   <RimAgent.Settings.CompactModelTip>/compact 摘要较旧历史时使用的模型与思考强度，通常用便宜的模型就够。</RimAgent.Settings.CompactModelTip>
-  <RimAgent.Settings.SlotReasoningTip>只作用于这一格的思考强度；自动＝沿用框架默认。</RimAgent.Settings.SlotReasoningTip>
+  <RimAgent.Settings.SlotReasoningTip>只作用于这一格的思考强度；默认＝沿用框架默认。</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.DecisionModelHeader>决策模型（System One）</RimAgent.Settings.DecisionModelHeader>
   <RimAgent.Settings.DecisionProvider>决策供应商：</RimAgent.Settings.DecisionProvider>
   <RimAgent.Settings.DecisionProviderTip>用于 Auto 模式风险判定等结构化快速判定的决策模型供应商。留空则沿用 RimLLM Framework 当前启用的供应商。</RimAgent.Settings.DecisionProviderTip>
@@ -119,6 +122,13 @@
   <RimAgent.Settings.DecisionStatusDisabled>未配置（请至 RimLLM Framework > 决策 分页配置）</RimAgent.Settings.DecisionStatusDisabled>
   <RimAgent.Settings.DecisionStatusEnabled>已配置（{0} · {1}）</RimAgent.Settings.DecisionStatusEnabled>
   <RimAgent.Settings.DecisionStatusNoKey>已配置（{0}）— 请至 RimLLM Framework 填写密钥</RimAgent.Settings.DecisionStatusNoKey>
+  <RimAgent.Settings.DecisionTest>测试决策模型</RimAgent.Settings.DecisionTest>
+  <RimAgent.Settings.DecisionTestRunning>测试中…</RimAgent.Settings.DecisionTestRunning>
+  <RimAgent.Settings.DecisionTestTip>以上方选定的供应商与模型发送一道简单的选项题，确认决策模型能正常回答。</RimAgent.Settings.DecisionTestTip>
+  <RimAgent.Settings.DecisionTestOk>通过：{0}</RimAgent.Settings.DecisionTestOk>
+  <RimAgent.Settings.DecisionTestFailed>失败：{0}</RimAgent.Settings.DecisionTestFailed>
+  <RimAgent.Settings.DecisionTestUnavailable>无法测试：没有可用的决策供应商。</RimAgent.Settings.DecisionTestUnavailable>
+  <RimAgent.Settings.DecisionTestNoAnswer>模型没有返回答案。</RimAgent.Settings.DecisionTestNoAnswer>
   <RimAgent.Settings.DecisionDefault>默认（沿用框架设置）</RimAgent.Settings.DecisionDefault>
   <RimAgent.Settings.DecisionFallbackReasoning>备援思考强度：</RimAgent.Settings.DecisionFallbackReasoning>
   <RimAgent.Settings.DecisionFallbackReasoningTip>置信度过低或决策模型不可用时所使用的思考强度。</RimAgent.Settings.DecisionFallbackReasoningTip>
@@ -143,6 +153,8 @@
   <RimAgent.Settings.AutonomousHeader>主动照顾殖民地</RimAgent.Settings.AutonomousHeader>
   <RimAgent.Settings.AutonomousCare>启用主动照顾</RimAgent.Settings.AutonomousCare>
   <RimAgent.Settings.AutonomousCareTip>按事件与定期巡查主动处理殖民地，仍遵守当前执行模式和工具类别开关。</RimAgent.Settings.AutonomousCareTip>
+  <RimAgent.Settings.AutoTimeSpeed>日常自动调整游戏速度</RimAgent.Settings.AutoTimeSpeed>
+  <RimAgent.Settings.AutoTimeSpeedTip>开启后，没有敌人、火灾与急诊时自动加速（要开几倍由决策模型判断，没设置决策模型就用加速）；一出事立刻降回正常。你自己改速度或暂停时不会介入，改速度后 5 分钟内也不会调整。Agent 运行中不会调整。默认关闭。</RimAgent.Settings.AutoTimeSpeedTip>
   <RimAgent.Settings.ConfirmAutonomousMajor>主动照顾的重大操作需要确认</RimAgent.Settings.ConfirmAutonomousMajor>
   <RimAgent.Settings.ConfirmAutonomousMajorTip>在执行模式中，依据工具的固定风险标记判断重大操作并等待确认。完整权限模式不受此设置限制；确认模式仍确认所有操作。</RimAgent.Settings.ConfirmAutonomousMajorTip>
   <RimAgent.Settings.AutoCooldown>自主任务冷却时间：{0} 分钟</RimAgent.Settings.AutoCooldown>
@@ -161,12 +173,12 @@
   <RimAgent.Model.FollowAgent>默认（Agent 当前模型）</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>跟着 Agent 窗口当前选的模型走；在那边换模型，这里会自动跟上，不必分开设置。Agent 窗口是 Fallback 时，这一格也走备援链。</RimAgent.Model.FollowAgentTip>
   <RimAgent.Model.Tip>优先使用：{0}&#10;失败时由框架按备援链改用其他模型。</RimAgent.Model.Tip>
-  <RimAgent.Reasoning.Auto>自动</RimAgent.Reasoning.Auto>
+  <RimAgent.Reasoning.Auto>默认</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>关闭</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>
   <RimAgent.Reasoning.Medium>中</RimAgent.Reasoning.Medium>
   <RimAgent.Reasoning.High>高</RimAgent.Reasoning.High>
-  <RimAgent.Reasoning.Routing>自动分流</RimAgent.Reasoning.Routing>
+  <RimAgent.Reasoning.Routing>自动</RimAgent.Reasoning.Routing>
   <RimAgent.Reasoning.RoutingTip>由决策模型将每句指令分类至任务类别，并以该类别配置的思考强度执行；模型维持模型菜单所选的那一个。</RimAgent.Reasoning.RoutingTip>
   <RimAgent.Slash.Goal>持续目标（列出、新增、修改、清空、暂停与恢复）</RimAgent.Slash.Goal>
   <RimAgent.Slash.Undo>撤销上一句指令改的工作设置</RimAgent.Slash.Undo>

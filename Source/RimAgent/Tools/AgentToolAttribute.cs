@@ -20,7 +20,7 @@ public enum ToolCategory
     Memory,
     /// <summary>委派子代理（delegate_task）；子代理自己的工具仍各依其類別過濾。</summary>
     Agents,
-    /// <summary>存檔與讀檔重來；預設關閉，子代理永遠拿不到。</summary>
+    /// <summary>存檔與讀檔重來；子代理永遠拿不到。</summary>
     Save
 }
 

@@ -99,6 +99,8 @@ public class RimAgentSettings : ModSettings
     public bool autonomousCare = false;
     /// <summary>主動照顧時重大操作是否需要確認；完整權限模式不受影響。</summary>
     public bool confirmAutonomousMajor = false;
+    /// <summary>日常自動調整遊戲速度：安全時加速，出事降回正常；預設關閉。</summary>
+    public bool autoTimeSpeed = false;
 
     // 上下文壓縮：依模型視窗的百分比自動折疊較舊工具輸出（不多花模型呼叫）；
     // 手動 /compact 另走一次 LLM 摘要，不受此開關影響。
@@ -134,12 +136,11 @@ public class RimAgentSettings : ModSettings
 
     private static bool[] DefaultAllows()
     {
-        // 存檔與讀檔重來會換掉整場遊戲，預設關閉。
         return
         [
             true, true, true, true, true, true,
             true, true, true, true, true, true,
-            true, true, true, false
+            true, true, true, true
         ];
     }
 
@@ -254,6 +255,7 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
         Scribe_Values.Look(ref autonomousCare, "autonomousCare", false);
         Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", false);
+        Scribe_Values.Look(ref autoTimeSpeed, "autoTimeSpeed", false);
         Scribe_Values.Look(ref autoCompact, "autoCompact", true);
         Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
         Scribe_Values.Look(ref recordRuns, "recordRuns", false);

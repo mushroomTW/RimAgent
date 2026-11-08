@@ -78,6 +78,32 @@ public static class SlashCommands
         return true;
     }
 
+    /// <summary>
+    /// 輸入尾端是否正在打 $技能名稱（最後一個詞以 $ 開頭且尚無空白）。
+    /// 是則回傳前綴（不含 $）與該詞在輸入中的起點；否則回傳 false。
+    /// </summary>
+    public static bool TryGetSkillToken(string input, out string prefix, out int start)
+    {
+        prefix = string.Empty;
+        start = -1;
+        if (string.IsNullOrEmpty(input)) return false;
+        int space = input.LastIndexOfAny([' ', (char)9, (char)10]);
+        start = space + 1;
+        if (start >= input.Length || input[start] != '$') return false;
+        prefix = input.Substring(start + 1);
+        return true;
+    }
+
+    /// <summary>依 $ 後的前綴篩選技能名稱；不在打 $ 時回傳空清單。</summary>
+    public static List<string> MatchSkills(string input, IEnumerable<string> skillNames)
+    {
+        if (!TryGetSkillToken(input, out string prefix, out _) || skillNames == null) return [];
+        return [.. skillNames
+            .Where(n => !string.IsNullOrWhiteSpace(n) && n.Trim().IndexOfAny([' ', (char)9]) < 0
+                        && n.Trim().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(n => n.Trim())];
+    }
+
     /// <summary>解析 /goal 的參數；Remove 時 <paramref name="index"/> 為 1 起算的序號（解析失敗為 0）。</summary>
     public static GoalAction ParseGoal(string args, out int index, out string text)
     {

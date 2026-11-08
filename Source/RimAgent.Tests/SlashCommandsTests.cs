@@ -71,4 +71,17 @@ public class SlashCommandsTests
         Assert.That(SlashCommands.ParseGoal("edit", out index, out _), Is.EqualTo(GoalAction.Edit));
         Assert.That(index, Is.Zero);
     }
+
+    [Test]
+    public void MatchSkillsFiltersByDollarPrefixOnLastWord()
+    {
+        string[] names = ["raid-defense", "food-security", "Raid-extra", "has space"];
+        Assert.That(SlashCommands.MatchSkills("$", names), Is.EqualTo(["raid-defense", "food-security", "Raid-extra"]));
+        Assert.That(SlashCommands.MatchSkills("build $ra", names), Is.EqualTo(["raid-defense", "Raid-extra"]));
+        Assert.That(SlashCommands.MatchSkills("$raid-defense ", names), Is.Empty, "打了空白代表名稱已定");
+        Assert.That(SlashCommands.MatchSkills("hello", names), Is.Empty);
+        Assert.That(SlashCommands.TryGetSkillToken("use $foo", out string prefix, out int start), Is.True);
+        Assert.That(prefix, Is.EqualTo("foo"));
+        Assert.That(start, Is.EqualTo(4));
+    }
 }

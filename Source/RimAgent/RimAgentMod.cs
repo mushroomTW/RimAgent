@@ -85,6 +85,9 @@ public class RimAgentMod : Mod
         listing.CheckboxLabeled("RimAgent.Settings.ConfirmAutonomousMajor".Translate(), ref Settings.confirmAutonomousMajor,
             "RimAgent.Settings.ConfirmAutonomousMajorTip".Translate());
 
+        listing.CheckboxLabeled("RimAgent.Settings.AutoTimeSpeed".Translate(), ref Settings.autoTimeSpeed,
+            "RimAgent.Settings.AutoTimeSpeedTip".Translate());
+
         TaggedString cooldownLabel = Settings.autonomousCooldownMinutes == 0
             ? "RimAgent.Settings.AutoCooldownOff".Translate()
             : "RimAgent.Settings.AutoCooldown".Translate(Settings.autonomousCooldownMinutes);
@@ -247,6 +250,7 @@ public class RimAgentMod : Mod
         }
 
         listing.Label("RimAgent.Settings.DecisionStatus".Translate(statusText));
+        DrawDecisionTest(listing);
 
         // 供應商下拉
         Rect provRow = listing.GetRect(28f);
@@ -330,6 +334,49 @@ public class RimAgentMod : Mod
         }
         listing.Gap(6f);
         return availability != null && availability.Enabled;
+    }
+
+    /// <summary>測試按鈕與最近一次結果；送出的是設定頁目前選的供應商與模型。</summary>
+    private static void DrawDecisionTest(Listing_Standard listing)
+    {
+        Rect row = listing.GetRect(28f);
+        const float buttonWidth = 130f;
+        var buttonRect = new Rect(row.x, row.y, buttonWidth, 26f);
+        bool running = DecisionModelTester.Running;
+        string buttonLabel = running
+            ? "RimAgent.Settings.DecisionTestRunning".Translate().ToString()
+            : "RimAgent.Settings.DecisionTest".Translate().ToString();
+        if (Widgets.ButtonText(buttonRect, buttonLabel) && !running)
+        {
+            DecisionModelTester.Start();
+        }
+        TooltipHandler.TipRegion(buttonRect, "RimAgent.Settings.DecisionTestTip".Translate());
+
+        string result;
+        switch (DecisionModelTester.Outcome)
+        {
+            case DecisionModelTester.TestOutcome.Ok:
+                result = "RimAgent.Settings.DecisionTestOk".Translate(DecisionModelTester.Detail);
+                break;
+            case DecisionModelTester.TestOutcome.Unavailable:
+                result = "RimAgent.Settings.DecisionTestUnavailable".Translate();
+                break;
+            case DecisionModelTester.TestOutcome.NoAnswer:
+                result = "RimAgent.Settings.DecisionTestNoAnswer".Translate();
+                break;
+            case DecisionModelTester.TestOutcome.Failed:
+                result = "RimAgent.Settings.DecisionTestFailed".Translate(DecisionModelTester.Detail);
+                break;
+            default:
+                result = string.Empty;
+                break;
+        }
+        var resultRect = new Rect(buttonRect.xMax + 8f, row.y + 3f, row.xMax - buttonRect.xMax - 8f, 24f);
+        Text.WordWrap = false;
+        Widgets.Label(resultRect, result.Truncate(resultRect.width));
+        Text.WordWrap = true;
+        TooltipHandler.TipRegion(resultRect, result);
+        listing.Gap(6f);
     }
 
     /// <summary>RimLLM 的決策供應商目錄可能不存在於舊版；單獨成方法，讓呼叫端能攔截型別載入錯誤。</summary>

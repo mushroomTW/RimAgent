@@ -58,6 +58,8 @@ public class RimAgentGameComponent : GameComponent
     /// <summary>agent 實際使用的記憶：兩個範圍的合成視圖。</summary>
     private ScopedMemoryStore _scopedMemory;
     private AgentPack _pack;
+    /// <summary>目前載入的技能；輸入列用 $ 補全技能名稱。擴充包還沒載入時為空。</summary>
+    public IReadOnlyList<AgentSkill> Skills => (_pack ??= AgentPackLoader.Load(PackRoot))?.Skills ?? System.Array.Empty<AgentSkill>();
     /// <summary>DLC 啟用狀況；模組清單要重開遊戲才會變，建立會話時在主線程算一次。</summary>
     private string _expansions;
     private McpManager _mcp;
@@ -86,6 +88,12 @@ public class RimAgentGameComponent : GameComponent
     private readonly HashSet<string> _seenChoices = [];
     private DateTime _nextChoiceCheckAt;
     private const double ChoiceCheckSeconds = 2;
+    private const double SpeedCheckSeconds = 3;
+    private DateTime _nextSpeedCheckAt;
+    private readonly AutoTimeSpeed _autoSpeed = new(
+        () => DecisionServiceFactory.Create(
+            () => RimAgentMod.Settings?.decisionProvider,
+            () => RimAgentMod.Settings?.decisionModel));
     private DateTime _nextDialogRetryAt;
     private const double DialogRetrySeconds = 60;
     private CancellationTokenSource _goalCts;
@@ -582,6 +590,33 @@ public class RimAgentGameComponent : GameComponent
         // 抉擇先於持續目標：暫停遊戲的對話框不處理，目標也推進不了。
         TryStartChoiceRun();
         TryStartGoal();
+        TickAutoTimeSpeed();
+    }
+
+    /// <summary>
+    /// 日常自動調速：規則判定安全才加速（要開幾倍問決策模型），出事降回正常。
+    /// Agent 或目標正在跑時不碰，速度由它們自己管。
+    /// </summary>
+    private void TickAutoTimeSpeed()
+    {
+        RimAgentSettings settings = RimAgentMod.Settings;
+        if (settings == null || !settings.autoTimeSpeed || DateTime.UtcNow < _nextSpeedCheckAt) return;
+        _nextSpeedCheckAt = DateTime.UtcNow.AddSeconds(SpeedCheckSeconds);
+        if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
+        try
+        {
+            ColonyAgentSession session = Session;
+            if (session.IsBusy || session.HasPendingConfirmation) return;
+            bool safe = AutoTimeSpeed.IsSafe(
+                _autoWorld.GetHostileCount(), _autoWorld.GetFireCount(), _autoWorld.GetColonistsInMedicalEmergency().Count);
+            string target = _autoSpeed.Step(
+                _autoWorld.GetTimeSpeed().Current, safe, DateTime.UtcNow, () => ObserveTools.FormatOverview(_autoWorld));
+            if (target != null) _autoWorld.SetTimeSpeed(target);
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("RimAgent auto time speed failed: " + ex.Message);
+        }
     }
 
     /// <summary>
