@@ -123,6 +123,12 @@
   <RimAgent.Settings.DecisionFallbackReasoning>Fallback reasoning:</RimAgent.Settings.DecisionFallbackReasoning>
   <RimAgent.Settings.DecisionFallbackReasoningTip>Reasoning effort used when confidence is low or the decision model is unavailable.</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>Routing min confidence: {0}</RimAgent.Settings.DecisionMinConfidence>
+  <RimAgent.Settings.DecisionAnswerChoices>System One answers events and dialogs</RimAgent.Settings.DecisionAnswerChoices>
+  <RimAgent.Settings.DecisionAnswerChoicesTip>With background care on, the decision model answers choice letters and dialogs by itself when it is confident and the current mode would let the agent answer without confirmation (Auto mode also asks the risk check). Choices that need a map or world target, or that it is unsure about, still go to the main model. Every answer is shown in the chat and passed to the main model.</RimAgent.Settings.DecisionAnswerChoicesTip>
+  <RimAgent.Settings.DecisionTriageUpkeep>System One screens colony upkeep tasks</RimAgent.Settings.DecisionTriageUpkeep>
+  <RimAgent.Settings.DecisionTriageUpkeepTip>Before waking the main model for cold, missing beds, beds outdoors, power outages, idle research or low mood, the decision model checks whether the last run already put a fix in motion. If so, it waits an hour and checks again. Raids, fires, medical emergencies, mental breaks, food shortages and regular check-ins always run.</RimAgent.Settings.DecisionTriageUpkeepTip>
+  <RimAgent.Settings.DecisionPreloadPacks>System One preloads tool packs</RimAgent.Settings.DecisionPreloadPacks>
+  <RimAgent.Settings.DecisionPreloadPacksTip>For each instruction, the decision model loads the tool packs it expects the main model to need, saving a load_toolpack step. Packs it misses can still be loaded by the main model.</RimAgent.Settings.DecisionPreloadPacksTip>
   <RimAgent.Settings.DecisionMinConfidenceTip>Instructions classified with confidence below this threshold use the fallback reasoning.</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.DecisionCategoriesHeader>Route categories</RimAgent.Settings.DecisionCategoriesHeader>
   <RimAgent.Settings.DecisionCategoryAdd>Add</RimAgent.Settings.DecisionCategoryAdd>

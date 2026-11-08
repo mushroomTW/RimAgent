@@ -113,7 +113,17 @@ public class RimAgentMod : Mod
         listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
         listing.GapLine();
         // 分流靠決策模型分類，沒有可用的決策模型時細項沒有作用，不顯示。
-        if (DrawDecisionSettings(listing)) DrawDecisionRoutingSettings(listing);
+        if (DrawDecisionSettings(listing))
+        {
+            listing.CheckboxLabeled("RimAgent.Settings.DecisionAnswerChoices".Translate(), ref Settings.decisionAnswerChoices,
+                "RimAgent.Settings.DecisionAnswerChoicesTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.DecisionTriageUpkeep".Translate(), ref Settings.decisionTriageUpkeep,
+                "RimAgent.Settings.DecisionTriageUpkeepTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.DecisionPreloadPacks".Translate(), ref Settings.decisionPreloadPacks,
+                "RimAgent.Settings.DecisionPreloadPacksTip".Translate());
+            listing.Gap(6f);
+            DrawDecisionRoutingSettings(listing);
+        }
 
         listing.Gap();
         listing.Label("RimAgent.Settings.CompactionHeader".Translate());

@@ -123,6 +123,12 @@
   <RimAgent.Settings.DecisionFallbackReasoning>備援思考強度：</RimAgent.Settings.DecisionFallbackReasoning>
   <RimAgent.Settings.DecisionFallbackReasoningTip>信心過低或決策模型不可用時所使用的思考強度。</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>分流最小信心門檻：{0}</RimAgent.Settings.DecisionMinConfidence>
+  <RimAgent.Settings.DecisionAnswerChoices>System One 代答事件與對話框</RimAgent.Settings.DecisionAnswerChoices>
+  <RimAgent.Settings.DecisionAnswerChoicesTip>開啟背景照顧時，決策模型有把握、且目前模式本來就允許免確認回答時，自己回覆抉擇信件與對話框（自動模式另經風險檢查）。需要選地圖或世界目標、或沒把握的抉擇仍交給主模型。每次代答都會顯示在對話中並轉告主模型。</RimAgent.Settings.DecisionAnswerChoicesTip>
+  <RimAgent.Settings.DecisionTriageUpkeep>System One 篩選基地狀況任務</RimAgent.Settings.DecisionTriageUpkeep>
+  <RimAgent.Settings.DecisionTriageUpkeepTip>因受寒、沒床、露宿、停電、停研或心情低落叫醒主模型前，先由決策模型判斷上一輪是否已在處理；是的話等一小時再看。襲擊、火災、急救、精神崩潰、缺糧與定期巡檢一律照跑。</RimAgent.Settings.DecisionTriageUpkeepTip>
+  <RimAgent.Settings.DecisionPreloadPacks>System One 預載工具包</RimAgent.Settings.DecisionPreloadPacks>
+  <RimAgent.Settings.DecisionPreloadPacksTip>每句指令由決策模型先載入主模型可能用到的工具包，省下一步 load_toolpack。沒預載到的包主模型仍可自行載入。</RimAgent.Settings.DecisionPreloadPacksTip>
   <RimAgent.Settings.DecisionMinConfidenceTip>分類信心低於此門檻的指令將退回使用備援思考強度。</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.DecisionCategoriesHeader>分流類別</RimAgent.Settings.DecisionCategoriesHeader>
   <RimAgent.Settings.DecisionCategoryAdd>新增</RimAgent.Settings.DecisionCategoryAdd>

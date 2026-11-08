@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  System One 遊戲端流程檢查的啟動標記（SystemOneCheck.cs 的 SystemOneCheckComponent）。
+  run_test_cycle 的 seed_config 只需帶入本檔；不需要模型與金鑰（決策模型以假服務替代）。
+  結果是 "[RimAgent.InGameTests] SystemOneCheck PASS/FAIL" 警告。
+-->
+<SystemOneCheck />

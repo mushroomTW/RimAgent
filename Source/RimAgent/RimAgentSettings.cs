@@ -42,6 +42,12 @@ public class RimAgentSettings : ModSettings
     public List<DecisionRouteCategory> decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
     public ReasoningLevel decisionFallbackReasoning = ReasoningLevel.Auto;
     public float decisionRoutingMinConfidence = 0.6f;                // 0 到 1
+    /// <summary>System One 代答抉擇信件與對話框（背景照顧開啟時）；信心不足或要額外輸入的仍交給主 LLM。</summary>
+    public bool decisionAnswerChoices = true;
+    /// <summary>System One 先篩基地狀況觸發，判定不必處理就不叫主 LLM。</summary>
+    public bool decisionTriageUpkeep = true;
+    /// <summary>System One 每句指令預載用得到的工具包。</summary>
+    public bool decisionPreloadPacks = true;
 
     /// <summary>模型槽的「跟隨 Agent」值。不含冒號，真實模型識別碼都是「供應商:模型」，撞不到。</summary>
     public const string FollowAgentModel = "=agent";
@@ -240,6 +246,9 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref decisionFallbackReasoning, "decisionFallbackReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref decisionRoutingMinConfidence, "decisionRoutingMinConfidence", 0.6f);
         decisionRoutingMinConfidence = UnityEngine.Mathf.Clamp01(decisionRoutingMinConfidence);
+        Scribe_Values.Look(ref decisionAnswerChoices, "decisionAnswerChoices", true);
+        Scribe_Values.Look(ref decisionTriageUpkeep, "decisionTriageUpkeep", true);
+        Scribe_Values.Look(ref decisionPreloadPacks, "decisionPreloadPacks", true);
         Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
         Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);

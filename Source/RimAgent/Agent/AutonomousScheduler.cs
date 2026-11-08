@@ -379,6 +379,21 @@ public sealed class AutonomousScheduler : IExposable
         w.GaveUp = true;
     }
 
+    /// <summary>
+    /// System One 判定這次觸發暫不需要主 LLM：退回這次嘗試，不吃重試次數也不吃冷卻，
+    /// 從 <paramref name="tick"/> 起等第一次重試的間隔（1 遊戲小時）再問一次。
+    /// 沒觸發過的條件、定期巡視與抉擇不走重試表，不受影響。
+    /// </summary>
+    public void Defer(AutonomousTrigger trigger, long tick)
+    {
+        int index = (int)trigger;
+        if (index < 0 || index >= WatcherCount) return;
+        ref Watcher w = ref _watch[index];
+        if (!w.Fired) return;
+        w.Attempts = Math.Max(0, w.Attempts - 1);
+        w.LastTick = tick;
+    }
+
     /// <summary>自主任務結束後記錄：推進冷卻、累計本次消耗的工具呼叫次數。<paramref name="tick"/> 傳任務結束的時刻，冷卻與定期巡視都從這裡起算。</summary>
     public void RecordRun(long tick, int toolCalls, AutonomousConfig config)
     {

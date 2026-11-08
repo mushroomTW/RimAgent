@@ -67,6 +67,13 @@ public sealed class FakeDecisionService : IDecisionService
         return this;
     }
 
+    /// <summary>任意題目 id 的答案；給代答、篩選與預載工具包的測試用。</summary>
+    public FakeDecisionService ReplyAnswers(IReadOnlyDictionary<string, DecisionAnswer> answers)
+    {
+        _responses.Enqueue((state, plan) => new DecisionResult(answers));
+        return this;
+    }
+
     public FakeDecisionService Throw(Exception ex)
     {
         _responses.Enqueue((state, plan) => throw ex);

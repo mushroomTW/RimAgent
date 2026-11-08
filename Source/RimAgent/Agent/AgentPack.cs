@@ -47,6 +47,10 @@ public sealed class AgentPack
     public string DecisionRiskCriteria { get; set; } = string.Empty;
     /// <summary>目標審計決策模型的判準檔（DecisionGoal.md）。缺檔時目標審計回傳 null。</summary>
     public string DecisionGoalCriteria { get; set; } = string.Empty;
+    /// <summary>System One 代答抉擇的判準檔（DecisionChoice.md）。缺檔時抉擇照舊交給主 LLM。</summary>
+    public string DecisionChoiceCriteria { get; set; } = string.Empty;
+    /// <summary>System One 篩選基地狀況自主任務的判準檔（DecisionTriage.md）。缺檔時照舊叫主 LLM。</summary>
+    public string DecisionTriageCriteria { get; set; } = string.Empty;
     /// <summary>自主任務文案（Autonomous.en.md，英文）。缺檔時該輪自主任務跳過。</summary>
     public AutonomousPack Autonomous { get; set; } = new AutonomousPack();
     public IReadOnlyList<AgentSkill> Skills { get; set; } = Array.Empty<AgentSkill>();
@@ -93,6 +97,8 @@ public static class AgentPackLoader
             pack.ClassifierPrompt = ReadFile(promptsDir, "RiskClassifier.md");
             pack.DecisionRiskCriteria = ReadFile(promptsDir, "DecisionRisk.md");
             pack.DecisionGoalCriteria = ReadFile(promptsDir, "DecisionGoal.md");
+            pack.DecisionChoiceCriteria = ReadFile(promptsDir, "DecisionChoice.md");
+            pack.DecisionTriageCriteria = ReadFile(promptsDir, "DecisionTriage.md");
             LoadAutonomous(pack, promptsDir);
             pack.Subagents = LoadSubagents(Path.Combine(rootDir, "Agents"));
 

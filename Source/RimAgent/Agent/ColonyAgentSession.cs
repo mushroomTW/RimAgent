@@ -51,6 +51,8 @@ public sealed class ColonyAgentSession
     private readonly TokenTrackingChatClient _tokenUsage;
     private readonly Func<string, int?> _contextWindowLookup;
     private readonly DecisionReasoningRouter _router;
+    private readonly DecisionToolPackSelector _packSelector;
+    private readonly IRiskChecker _classifier;
 
     /// <summary>記錄主模型最近一次回報的輸入 token；供應商未回報時維持未知。</summary>
     private sealed class TokenTrackingChatClient : DelegatingChatClient
@@ -220,6 +222,13 @@ public sealed class ColonyAgentSession
             () => RimAgentMod.Settings,
             () => History);
 
+        _packSelector = new DecisionToolPackSelector(
+            decisionService,
+            () => DecisionServiceFactory.Create(
+                () => RimAgentMod.Settings?.decisionProvider,
+                () => RimAgentMod.Settings?.decisionModel));
+        _classifier = classifier;
+
         _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity);
         // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
         _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity), _registry, Transcript, subagentsProvider, _permissions,
@@ -325,6 +334,18 @@ public sealed class ColonyAgentSession
 
     /// <summary>思考強度自動分流；開啟時每句指令由決策模型決定思考強度。由 GameComponent 從設定同步。</summary>
     public bool ReasoningRouting { get; set; }
+
+    /// <summary>每句指令先由 System One 預載用得到的工具包。由 GameComponent 從設定同步。</summary>
+    public bool PreloadToolPacks { get; set; }
+
+    /// <summary>System One 自己動手做過的事；下一句指令開頭交給主 LLM。</summary>
+    public DecisionReports DecisionReports { get; } = new();
+
+    /// <summary>用自動模式同一個風險分類器判定一個不經主 LLM 的動作（System One 代答抉擇用）。</summary>
+    internal Task<RiskVerdict> ClassifyRiskAsync(RiskQuestion question, CancellationToken cancellationToken = default)
+    {
+        return _classifier.ClassifyAsync(question, cancellationToken);
+    }
 
     /// <summary>
     /// 優先使用的模型（"供應商:模型"）；空白代表交給框架備援鏈。每句指令組請求時讀取，由 GameComponent 從設定同步。
@@ -708,10 +729,12 @@ public sealed class ColonyAgentSession
         CancellationToken cancellationToken)
     {
         RimLLMChatOptions options = await BuildRunOptionsAsync(text, reasoningOverride, cancellationToken).ConfigureAwait(false);
+        // System One 的操作回報只給主 LLM 看：分流與預載判斷看的是原指令。
+        string modelText = DecisionReports.Prepend(DecisionReports.TakeAll(), text);
         try
         {
             return await _agent
-                .RunAsync(text, _session, new ChatClientAgentRunOptions(options), cancellationToken)
+                .RunAsync(modelText, _session, new ChatClientAgentRunOptions(options), cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (Classify(ex) == AgentErrorKind.ContextTooLong)
@@ -731,7 +754,7 @@ public sealed class ColonyAgentSession
                 InstructionId = instructionId
             });
             return await _agent
-                .RunAsync(text, _session, new ChatClientAgentRunOptions(options), cancellationToken)
+                .RunAsync(modelText, _session, new ChatClientAgentRunOptions(options), cancellationToken)
                 .ConfigureAwait(false);
         }
     }
@@ -1237,20 +1260,46 @@ public sealed class ColonyAgentSession
         ReasoningLevel? effectiveReasoning = reasoningOverride;
         _tokenUsage.ResetModel();
 
-        if (ReasoningRouting)
-        {
-            DecisionRoute route = await _router.ResolveAsync(
-                text,
-                RimAgentMod.Settings?.decisionCategories,
-                cancellationToken).ConfigureAwait(false);
+        // 分流與預載工具包各問一次 System One，兩者互不相依，同時送出。
+        Task<DecisionRoute> routing = ReasoningRouting
+            ? _router.ResolveAsync(text, RimAgentMod.Settings?.decisionCategories, cancellationToken)
+            : null;
+        Task<IReadOnlyList<string>> preload = PreloadToolPacks ? SelectToolPacksAsync(text, cancellationToken) : null;
 
+        if (routing != null)
+        {
+            DecisionRoute route = await routing.ConfigureAwait(false);
             if (route.Reasoning != ReasoningLevel.Auto)
             {
                 effectiveReasoning = route.Reasoning;
             }
         }
+        if (preload != null)
+        {
+            IReadOnlyList<string> packs = await preload.ConfigureAwait(false);
+            if (packs.Count > 0)
+            {
+                lock (_loadedPacks) _loadedPacks.UnionWith(packs);
+                Transcript.Add(new TranscriptEntry
+                {
+                    Kind = TranscriptKind.Notice,
+                    Text = "System One preloaded tool packs: " + string.Join(", ", packs) + ".",
+                    InstructionId = Transcript.CurrentInstructionId
+                });
+            }
+        }
 
         return BuildRunOptions(effectiveReasoning, PreferredModel);
+    }
+
+    /// <summary>System One 挑選這句用得到、目前可用但還沒載入的工具包。</summary>
+    private Task<IReadOnlyList<string>> SelectToolPacksAsync(string text, CancellationToken cancellationToken)
+    {
+        List<string> loaded = LoadedPacks();
+        List<ToolPacks.Pack> candidates = [.. _registry.SelectForMainAgent(_permissions(), loaded).Packs
+            .Where(p => !loaded.Contains(p.Id))];
+        if (candidates.Count == 0) return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        return _packSelector.SelectAsync(DecisionReasoningRouter.Describe(text, History), candidates, cancellationToken);
     }
 
     internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride = null)

@@ -112,6 +112,24 @@ public class RimAgentGameComponent : GameComponent
         set => _goalAuditor = value;
     }
     private DateTime _goalNextRunAt;
+    private DecisionChoiceResponder _choiceResponder;
+    private DecisionChoiceResponder ChoiceResponder => _choiceResponder ??= new DecisionChoiceResponder(
+        decisionService: null,
+        criteriaProvider: () => _pack?.DecisionChoiceCriteria,
+        serviceFactory: () => DecisionServiceFactory.Create(
+            () => RimAgentMod.Settings?.decisionProvider,
+            () => RimAgentMod.Settings?.decisionModel));
+    private DecisionAutonomousTriage _triage;
+    private DecisionAutonomousTriage Triage => _triage ??= new DecisionAutonomousTriage(
+        decisionService: null,
+        criteriaProvider: () => _pack?.DecisionTriageCriteria,
+        serviceFactory: () => DecisionServiceFactory.Create(
+            () => RimAgentMod.Settings?.decisionProvider,
+            () => RimAgentMod.Settings?.decisionModel));
+    /// <summary>每種基地狀況上一輪自主任務的回覆與結束 tick；System One 篩選時看它判斷是不是已在處理。不存檔。</summary>
+    private readonly Dictionary<AutonomousTrigger, (string Reply, int Tick)> _lastAutoReplies = new();
+    /// <summary>已告知玩家「System One 判定先等」的條件；同一段等待只提示一次，真的跑了再清掉。</summary>
+    private readonly HashSet<AutonomousTrigger> _triageNoticed = new();
     private int _goalGeneration;
     private RunLogWriter _runLogWriter;
 
@@ -166,6 +184,7 @@ public class RimAgentGameComponent : GameComponent
             {
                 _session.Reasoning = RimAgentMod.Settings.reasoning;
                 _session.ReasoningRouting = RimAgentMod.Settings.reasoningRouting;
+                _session.PreloadToolPacks = RimAgentMod.Settings.decisionPreloadPacks;
                 _session.PreferredModel = RimAgentMod.Settings.agentModel;
                 _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
             }
@@ -685,7 +704,8 @@ public class RimAgentGameComponent : GameComponent
             if (!fresh && (!dialogLeft || DateTime.UtcNow < _nextDialogRetryAt)) return;
             _nextDialogRetryAt = DateTime.UtcNow.AddSeconds(DialogRetrySeconds);
             _autoRunning = true;
-            _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Choice, Find.TickManager.TicksGame, ToConfig(settings), null);
+            // 傳快照：代答後要拿「原本有哪些抉擇」比對剩下的，不能被即時清單改掉。
+            _ = RunChoiceGuardedAsync(session, [.. choices], Find.TickManager.TicksGame, ToConfig(settings));
         }
         catch (Exception ex)
         {
@@ -1141,11 +1161,134 @@ public class RimAgentGameComponent : GameComponent
         int generation = _autoGeneration;
         try
         {
+            if (signals.HasValue && await TriageSkipsAsync(session, trigger, signals.Value, tick, generation)) return;
+            if (generation != _autoGeneration) return;
             await RunAutonomousAsync(session, trigger, tick, config, signals, generation, detail);
         }
         finally
         {
             if (generation == _autoGeneration) _autoRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// 抉擇先交給 System One 代答；它答不了（要額外輸入、信心不足、自動模式風險檢查不放行）
+    /// 或沒設定決策模型的，照舊起一輪主 LLM 的抉擇任務。代答後才冒出的新對話框留給下一次檢查。
+    /// </summary>
+    private async Task RunChoiceGuardedAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int tick, AutonomousConfig config)
+    {
+        int generation = _autoGeneration;
+        try
+        {
+            HashSet<string> answered = await AnswerChoicesWithSystemOneAsync(session, choices, generation);
+            if (generation != _autoGeneration) return;
+            bool leftover = _autoWorld.GetPendingChoices().Any(c => choices.Any(o => o.Id == c.Id) && !answered.Contains(c.Id));
+            if (answered.Count > 0 && !leftover) return;
+            await RunAutonomousAsync(session, AutonomousTrigger.Choice, tick, config, null, generation, null);
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("RimAgent choice run failed: " + ex.Message);
+        }
+        finally
+        {
+            if (generation == _autoGeneration) _autoRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// System One 代答：模式要跟主 LLM 一樣能免確認按選項（完整權限、執行模式且未要求自主重大動作確認），
+    /// 自動模式另經同一個風險分類器放行。每個成功的代答都寫進對話、執行紀錄，並在下一句交給主 LLM。
+    /// 回傳成功代答的抉擇 id。
+    /// </summary>
+    private async Task<HashSet<string>> AnswerChoicesWithSystemOneAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int generation)
+    {
+        var answered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        RimAgentSettings settings = RimAgentMod.Settings;
+        if (settings == null || !settings.decisionAnswerChoices) return answered;
+        AgentMode mode = session.Mode;
+        bool autoMode = mode == AgentMode.Auto;
+        bool allowed = mode == AgentMode.Autonomous || autoMode
+            || (mode == AgentMode.Execute && !settings.confirmAutonomousMajor);
+        if (!allowed) return answered;
+
+        string colonyState = DecisionAutonomousTriage.DescribeSignals(GatherSignals());
+        IReadOnlyList<ChoiceDecision> decisions = await ChoiceResponder.DecideAsync(choices, colonyState);
+        if (generation != _autoGeneration) return answered;
+        string authorization = autoMode ? AutonomousPrompts.Build(_pack?.Autonomous, AutonomousTrigger.Choice) : null;
+        foreach (ChoiceDecision decision in decisions)
+        {
+            PendingChoiceInfo choice = decision.Choice;
+            // 前一個代答可能已讓這個抉擇消失（同一串對話框）：只答還在的。
+            if (!_autoWorld.GetPendingChoices().Any(c => string.Equals(c.Id, choice.Id, StringComparison.OrdinalIgnoreCase))) continue;
+            string preview = $"would answer \"{choice.Title}\" with option {decision.Option.Number}: {decision.Option.Text}.";
+            if (autoMode)
+            {
+                RiskVerdict verdict = await session.ClassifyRiskAsync(new RiskQuestion
+                {
+                    Instruction = authorization ?? string.Empty,
+                    ToolName = "choose_option",
+                    Arguments = System.Text.Json.JsonSerializer.Serialize(new { choiceId = choice.Id, option = decision.Option.Number }),
+                    Preview = preview
+                });
+                if (generation != _autoGeneration) return answered;
+                if (verdict == null || verdict.ShouldReject) continue;
+            }
+            CommandResult result = _autoWorld.ChooseOption(choice.Id, decision.Option.Number);
+            if (!result.Success) continue;
+            answered.Add(choice.Id);
+            string chosen = string.IsNullOrEmpty(result.Message) ? decision.Option.Text : result.Message;
+            session.DecisionReports.Add($"Answered \"{choice.Title}\" with \"{chosen}\".");
+            string notice = $"System One answered \"{choice.Title}\" with \"{chosen}\" (confidence {ToolText.Pct((float)decision.Confidence)}).";
+            session.Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Notice, Text = notice });
+            LogSystemOne("choice", notice);
+        }
+        return answered;
+    }
+
+    /// <summary>
+    /// 基地狀況觸發先問 System One；判定不必處理就退回這次嘗試、稍後再問，不叫主 LLM。
+    /// 決策模型不可用時回傳 false（照常叫主 LLM）。
+    /// </summary>
+    private async Task<bool> TriageSkipsAsync(ColonyAgentSession session, AutonomousTrigger trigger, AutonomousSignals signals, int tick, int generation)
+    {
+        RimAgentSettings settings = RimAgentMod.Settings;
+        if (settings == null || !settings.decisionTriageUpkeep || !DecisionAutonomousTriage.IsTriaged(trigger)) return false;
+        string lastReply = null;
+        float? hoursAgo = null;
+        if (_lastAutoReplies.TryGetValue(trigger, out (string Reply, int Tick) last))
+        {
+            lastReply = last.Reply;
+            hoursAgo = Math.Max(0, tick - last.Tick) / 2500f;
+        }
+        TriageVerdict verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo);
+        if (generation != _autoGeneration || verdict == null || !verdict.Skip) return false;
+        _scheduler.Defer(trigger, Current.Game != null ? Find.TickManager.TicksGame : tick);
+        string notice = $"System One judged that {DescribeGiveUp(trigger)} needs no action yet " +
+                        $"(need {ToolText.Pct((float)verdict.Probability)}); it will check again in an hour.";
+        if (_triageNoticed.Add(trigger)) session.Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Notice, Text = notice });
+        LogSystemOne("triage", notice);
+        return true;
+    }
+
+    /// <summary>System One 不經主 LLM 的判斷也記進執行紀錄（開啟執行紀錄時），之後才量得出準確率。</summary>
+    private void LogSystemOne(string kind, string text)
+    {
+        if (RimAgentMod.Settings?.recordRuns != true) return;
+        try
+        {
+            _session?.RunLogSink?.Invoke(new RunLogRecord
+            {
+                Source = "system_one",
+                Mode = _session.Mode.ToString(),
+                Instruction = kind,
+                Outcome = RunLogRecord.Limit(text),
+                FinishedUtc = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("RimAgent run log failed: " + ex.Message);
         }
     }
 
@@ -1177,13 +1320,18 @@ public class RimAgentGameComponent : GameComponent
             if (!string.IsNullOrEmpty(detail)) instruction += "\n\n" + detail;
             // 不加 ConfigureAwait(false)：收尾的 RecordRun 要回主線程，
             // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
-            await session.SendAsync(
+            string reply = await session.SendAsync(
                 instruction,
                 cts.Token,
                 autonomous: true,
                 maxToolSteps: session.Mode == AgentMode.Autonomous ? null : AutonomousRunMaxSteps,
                 reasoningOverride: ReasoningLevel.Low,
                 autonomousInfo: RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(trigger, tick, signals) : null);
+            if (DecisionAutonomousTriage.IsTriaged(trigger) && generation == _autoGeneration && Current.Game != null)
+            {
+                _lastAutoReplies[trigger] = (reply ?? string.Empty, Find.TickManager.TicksGame);
+                _triageNoticed.Remove(trigger);
+            }
         }
         catch (InvalidOperationException)
         {
@@ -1293,6 +1441,7 @@ public class RimAgentGameComponent : GameComponent
             });
         session.Reasoning = settings.reasoning;
         session.ReasoningRouting = settings.reasoningRouting;
+        session.PreloadToolPacks = settings.decisionPreloadPacks;
         session.ConfirmAutonomousMajor = () => settings.confirmAutonomousMajor;
         session.PreferredModel = settings.agentModel;
         _expansions = ExpansionsLine();
