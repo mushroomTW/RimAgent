@@ -22,7 +22,7 @@ An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in na
 
 ---
 
-**Jump to:** [Quick start](#getting-started) · [Modes](#modes--safety) · [Autonomy](#autonomy-autonomous-mode) · [Tools](#what-it-can-do) · [Build and tests](#building)
+**Jump to:** [Quick start](#getting-started) · [Modes & safety](#modes--safety) · [Decision models](#decision-models-optional) · [Autonomy](#autonomy-autonomous-mode) · [Tool categories](#what-it-can-do) · [Build and tests](#building)
 
 ---
 
@@ -31,152 +31,176 @@ An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in na
 ### Prerequisites
 
 - **RimWorld 1.7**
-- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.10.20.1 or later**, required for native tool calling and the decision model)
-- Mod load order: `RimAgent` must be placed and loaded **after** `RimLLM Framework`.
+- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.10.20.1 or later**, required for native tool calling and decision models)
+- **Mod load order:** `RimAgent` must be placed and loaded **after** `RimLLM Framework`.
 
 > [!IMPORTANT]
-> All LLM plumbing (provider selection, API key, model selection, fallback chains, and token budget) is configured in **RimLLM Framework**. RimAgent adds colony tools and per-category tool permissions.
+> All LLM plumbing (provider selection, API key, model selection, fallback chains, and token budget) is configured in **RimLLM Framework**. RimAgent provides colony tools and per-category tool permissions.
 
 ### Quick Start
 
-1. Install and enable **RimLLM Framework** and **RimAgent**, with RimAgent later in the mod load order.
-2. In **Mod Settings > RimLLM Framework**, configure a supported model provider and its credentials.
-3. Load a game and click the compact **Agent** icon on the bottom bar. Start with **Confirm** to preview every command before it runs.
-4. Enter a request such as `How is the colony doing?`, `Set Alice's Doctor priority to 1`, or `Draft everyone and move to (25, 30)`, then press **Send** or Enter.
+1. Install and enable **RimLLM Framework** and **RimAgent**, ensuring RimAgent loads after the framework.
+2. In **Mod Settings > RimLLM Framework**, configure a supported model provider and its API credentials.
+3. Load a save or start a new game, then click the compact **Agent** icon on the bottom navigation bar. Start with **Confirm** mode to preview every command before it takes effect.
+4. Enter an instruction such as `How is the colony doing?`, `Set Alice's Doctor priority to 1`, or `Draft everyone and move to (25, 30)`, then press **Send** or Enter.
 
-The agent uses tools to inspect the current map and carry out permitted actions. In Confirm mode, review each command preview before approving it.
+The agent uses tools to inspect the current map and execute authorized actions. In Confirm mode, review each command preview before granting approval.
 
 ---
 
 ## Highlights
 
-- **82 tools:** inspect the colony, issue orders, search the web, and manage global and per-save memories.
-- **Four execution modes:** require approval, run routine actions, pass a safety review, or let the agent act under the selected policy.
-- **Autonomous events and goals:** run scheduled checks, respond to urgent events and pending choices, or queue a persistent `/goal`.
-- **Subagents and model roles:** the agent can hand self-contained tasks to subagents with their own tools and model (read-only ones run in parallel); subagents, the Auto-mode classifier and `/compact` summaries each get their own model and reasoning setting.
-- **Editable and extensible:** customize prompts in `AgentPack/Prompts/`, add skills or subagents, or connect trusted local MCP servers.
-- **Saved progress:** the transcript, model history, scheduler, goals, this save's memories, and `/undo` state persist with the game; global memory lives in the mod folder and is shared by every save.
+- **82 Tools:** Comprehensive capabilities to inspect colony state, issue real-time orders, search the web, and manage dual-scope memories (global and save-specific).
+- **Four execution modes:** Select from strict step-by-step confirmation, routine actions with major action gating, automated AI safety classification (Auto mode), or unrestricted autonomous execution.
+- **Autonomous events and goals:** Proactively handle emergencies, manage routine base upkeep, perform scheduled patrols, or queue multi-step persistent tasks via `/goal`.
+- **Subagents and model roles:** Delegate self-contained missions to subagents with isolated tools and contexts (read-only tasks run in parallel); assign dedicated models and reasoning levels to subagents, the Auto-mode classifier, and `/compact` summaries.
+- **Customizable and MCP-extensible:** Edit prompts in `AgentPack/Prompts/`, add custom skills or subagents, or connect local external tools via the official Model Context Protocol (MCP).
+- **Persistent progress:** Full conversation transcripts, model history, scheduler state, persistent goals, colony memories, and `/undo` history persist with your save; global memories are shared across all saves in the mod data directory.
 
 ---
 
 ## Window Interface & Slash Commands
 
-Drag the window to move it or its lower-right corner to resize it. RimAgent remembers the position and size.
+Drag the window title bar to move it, or drag the lower-right corner to resize it. RimAgent automatically remembers its position and size.
 
-- Select the execution **mode**, model **reasoning effort**, and **model** from the Agent window dropdowns; hover a mode to see what it does and its risks. The model list shows the entries in your RimLLM Framework fallback chain; the chosen model is tried first for player instructions and autonomous runs, and **Fallback** follows the fallback chain. Everything else is set under **Model roles** in the mod settings' advanced section (after hermes-agent's auxiliary models): subagents (one shared slot), the Auto-mode classifier and `/compact` summaries each pick a model (**Default (agent's current model)**, **Fallback**, or a fallback-chain entry) and a reasoning level. All of them follow the agent's current model by default. **Send** changes to **Stop** while a request is running. A player instruction has no configured tool-call limit.
-- The title shows input tokens reported for the last model request, or "unavailable" if the provider supplied no usage. Hover to see the model-history message count and automatic compaction threshold.
-- Your messages appear in right-aligned bubbles, and each instruction starts a new turn separated by a divider. Tool calls show a one-line summary; click one to show its arguments and result. Previews awaiting confirmation are expanded by default. Drag across any message to select and copy its text; right-click a tool row to copy it. LaTeX math (`$...$`) is shown as plain readable text.
-- The conversation follows new messages only while you are at the bottom. If you scroll up to read history, a **Jump to latest / New messages** button appears.
-- With the input box focused, ↑↓ recall previously sent input.
-- Type `/` for slash-command completion (↑↓ to navigate, Tab or Enter to select):
+### Controls & Model Selection
+
+- **Mode and Model Dropdowns:** Switch execution **mode**, model **reasoning effort**, and active **model** directly from the Agent window. Hover over any mode to view its operational behavior and safety implications. The model list reflects entries in your RimLLM Framework fallback chain; the selected model is prioritized for player commands and autonomous routines, while **Fallback** follows the chain sequentially.
+- **Model Roles Configuration:** In the advanced section of mod settings (**Model roles**, inspired by hermes-agent auxiliary models), assign specialized models and reasoning levels for subagents (shared slot), the Auto-mode classifier, and `/compact` summaries. Options include **Default (agent's current model)**, **Fallback**, or specific fallback-chain entries. All default to following the agent's current model.
+- **Execution State:** While a request is running, the **Send** button dynamically toggles to **Stop**. Direct player instructions have no configured tool-call limit.
+- **Token Counter & Telemetry:** The title bar displays the input token count reported from the latest model request (or "unavailable" if not reported by the provider). Hovering displays total history count and the auto-compaction threshold.
+- **Conversation Flow:** Player messages appear in right-aligned bubbles, each instruction initiating a distinct turn separated by a divider. Tool calls display clean one-line summaries; click any row to inspect full arguments and results. Previews awaiting confirmation expand by default. Text can be selected and copied freely; right-click any tool row to copy its summary. LaTeX math notation (`$...$`) is rendered as readable plain text.
+- **Smart Auto-Scroll:** The view follows incoming messages automatically when scrolled to the bottom. If you scroll up to inspect history, scrolling is decoupled, and a **Jump to latest / New messages** button appears.
+- **Input History:** With the text input focused, press ↑ / ↓ to cycle through previously submitted commands.
+- **Slash Command Autocompletion:** Type `/` at the prompt to invoke the command menu (navigate with ↑ / ↓, select with Tab or Enter):
 
 | Command | Description |
 | --- | --- |
-| `/goal <text>` | Queue a persistent goal that starts shortly after creation and follows the current mode's command policy |
-| `/goal` | Show queued goals, status, turn counts, latest progress, and the last completed goal |
-| `/goal show <n>` | Show the full text of goal `n` |
-| `/goal edit <n> <text>` | Edit goal `n`; editing the active goal resets its progress while preserving a manual pause |
-| `/goal remove <n>` | Delete goal `n` |
-| `/goal clear` | Clear all goals and the last completed record |
+| `/goal <text>` | Queue a persistent goal that starts promptly and adheres to current mode safety policies |
+| `/goal` | List queued goals, operational status, turn counts, latest progress, and last completed goal |
+| `/goal show <n>` | Display the full text and progress details of goal `n` |
+| `/goal edit <n> <text>` | Edit goal `n`; updating the active goal recalculates progress while retaining manual pause state |
+| `/goal remove <n>` | Remove goal `n` from the queue |
+| `/goal clear` | Clear all queued goals and recent completion history |
 | `/goal pause` / `/goal resume` | Pause or resume persistent goal execution |
-| `/undo` | Restore the work priorities and schedules modified by the last instruction |
-| `/clear` | Clear the visible conversation transcript |
-| `/compact` | Compact context: summarize older model history with one LLM call, keeping only recent turns (visible log kept) |
-| `/stop` | Immediately abort the currently running instruction |
+| `/undo` | Revert work priorities and daily schedules altered by the previous instruction |
+| `/clear` | Clear the visible conversation transcript in the window |
+| `/compact` | Compact context: trigger an LLM summarization call to fold older model history into a concise briefing (visible log is preserved) |
+| `/stop` | Immediately terminate the currently running instruction and active tool calls |
 
-> **Context compaction:** Before a request, Agent Framework estimates history tokens. At the configured share of the smallest known context limit among the selected model and fallback-chain entries (30–95%, 90% by default, with output tokens reserved), older tool output is folded without another model call. Unknown limits are skipped, so a fallback with an unknown or smaller actual limit can still exceed its window; auto-fold is unavailable if no limit is known. Stored history is separately trimmed after 120 messages to about 60; the visible transcript remains. `/compact` requests a deeper, model-generated summary.
+### Context Management & Run History
 
-> **Run history:** Enable **Record Agent runs** in mod settings to write instructions, tool calls, safety decisions, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. It is off by default and keeps at most 500 runs or 16 MiB; the settings page can open the log folder directly.
+> **Context Compaction:**
+> 1. **Auto-fold:** Prior to each model invocation, Agent Framework estimates total history tokens. When reaching a configured threshold (configurable from 30% to 95%, default 90% with reserved output headroom) of the smallest known context limit among the chosen model and fallback entries, older tool outputs are folded automatically without additional LLM calls. If no limit is known, auto-fold is skipped.
+> 2. **History Trimming:** Stored model message history exceeding 120 messages is pruned back to approximately 60 messages to preserve memory; visible transcript logs remain untouched.
+> 3. **Deep Semantic Compact:** Trigger `/compact` at any time to invoke a dedicated model summarization pass, condensing extended dialogue history into an actionable summary.
 
-> **Prompts are editable:** `AgentPack/Prompts/` contains the built-in prompts, `AgentPack/Skills/` holds optional skills (fourteen skills ship by default: eight heuristic gameplay skills (raid defense, defense building, food security, mood, work assignment, medical triage, seasonal prep and colony progression) and six ending routes: ship launch, journey offer, archonexus, royal ascent, void and mechhive), `AgentPack/Agents/` holds subagents (one read-only `scout` ships by default), and `AgentPack/AGENTS.md` ships empty for your own instructions. Reload the save or start a new game after editing; no rebuild is needed. The agent only receives a skill index each turn; full skill texts load on demand through `read_skill`. See [skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
+> **Run History Logging:**
+> Enable **Record Agent runs** in mod settings to log all instructions, tool invocations, safety assessments, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. Off by default; retains up to 500 runs or 16 MiB. A shortcut button in settings opens the log directory directly.
+
+> **Prompt & Extensibility Architecture:**
+> - `AgentPack/Prompts/`: Houses built-in system prompts.
+> - `AgentPack/Skills/`: Holds optional skills (ships with fourteen built-in skills: eight heuristic gameplay skills for raid defense, defense building, food security, mood management, work assignment, medical triage, seasonal prep, and colony progression; plus six ending questlines: ship launch, journey offer, archonexus, royal ascent, void, and mechhive). Requests contain only a skill index; full skill texts are loaded on demand via `read_skill`.
+> - `AgentPack/Agents/`: Contains subagent definitions (includes a default read-only reconnaissance agent, `scout`).
+> - `AgentPack/AGENTS.md`: An empty file reserved for user gameplay rules and standing orders.
+> - Modifications take effect immediately upon reloading a save or starting a new game—no compilation required. See [Skill setup](AgentPack/Skills/README.md) and [MCP setup](AgentPack/MCP/README.md).
 
 ---
 
 ## Modes & Safety
 
-One setting decides how much the agent may do on its own:
+A single execution mode configuration governs the autonomy and safety boundaries of the agent:
 
 | Mode | Behavior |
 | --- | --- |
-| **Confirm** | Queries run directly. Every command is previewed and waits for your approval. |
-| **Execute** | Routine commands run directly; major commands require confirmation. Proactive care has a separate confirmation setting. |
-| **Auto** | A secondary model checks each command, including MCP calls, for risk and whether you requested it. Only low-risk, requested actions run. High-risk, unrequested, or unclassifiable actions are rejected with a reason; they do not become confirmation prompts. Blacklisted high-risk tools are rejected directly without a classifier call. Pick the classifier model and reasoning under Model roles in mod settings: it follows the agent's current model by default, or you can pin a fallback-chain entry or Fallback. |
-| **Full access** | Enabled tools, including MCP, run without execution-mode restrictions. Category switches still apply. |
+| **Confirm** | Read-only queries run immediately. Any command altering game state generates a preview and awaits explicit player approval. |
+| **Execute** | Routine commands execute immediately; high-impact commands (such as surgery, trade, or caravans) require confirmation. Proactive care major actions follow a dedicated setting. |
+| **Auto** | Each command is evaluated beforehand by a secondary classifier model or decision model for risk and player intent. Low-risk, explicitly requested actions proceed automatically; high-risk, unrequested, or ambiguous actions are rejected with a clear explanation, **without generating confirmation prompts**. Blacklisted high-hazard tools are rejected immediately without invoking the classifier. Classifier model and reasoning are customizable under Model Roles. |
+| **Full access** | All enabled tools (including MCP) execute directly without execution-mode gates. Category permission toggles remain in effect. |
 
-### Confirmation details
+### Confirmation Details
 
-- **Confirm / Discard:** Confirm executes the captured tool call and arguments without asking the model again. Discard or a new instruction clears pending calls.
-- If a confirmed command fails, later commands remain pending for another confirmation. The failed command is removed because it may have partially taken effect; the log shows how many commands completed and remain.
-- **Always allow:** In Confirm mode, eligible tools can be allowed for the current session by name. This is reset by `/clear` or a restart and never applies to `mcp_call_tool`, the high-risk blacklist (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`) or generic options (`use_gizmo`, `use_right_click_option`, `choose_option`).
-- **MCP calls:** In Confirm and Execute modes, MCP calls require approval. Auto mode passes them through the classifier. Full access runs enabled MCP tools directly; proactive care in Execute mode follows its major-action confirmation setting.
+- **Confirm / Discard:** Approving a preview executes the exact captured tool call and arguments without querying the model again, preventing unintended repeated executions. Discarding or submitting a new prompt clears pending calls.
+- **Failure Gating:** If a confirmed command in a multi-step sequence fails, subsequent pending commands remain paused awaiting re-confirmation. The failed command is removed from the queue (as partial game-state mutations may have occurred), and the log indicates completed versus remaining operations.
+- **Always Allow (Session Whitelist):** In Confirm mode, eligible tools can be whitelisted by name for the remainder of the game session. This whitelist resets upon `/clear` or restarting RimWorld and is never written to saves. It never applies to `mcp_call_tool`, high-risk blacklist tools (`execute_trade`, `form_caravan`, `release_prisoner`, `schedule_surgery`, `send_caravan`, `set_prisoner_interaction`, `settle_caravan`), or generic UI interactors (`use_gizmo`, `use_right_click_option`, `choose_option`).
+- **MCP Invocations:** In Confirm and Execute modes, MCP calls require explicit player approval. In Auto mode, they are evaluated by the safety classifier. In Full access mode, enabled MCP tools execute directly. Proactive care in Execute mode obeys the major-action confirmation setting.
 
 > [!WARNING]
-> Combat orders reach the game several seconds after speaking due to LLM round-trip latency. They are designed for strategic positioning, rally points, and tactical retreats, not split-second micro-control.
+> Combat commands experience several seconds of latency due to LLM round-trip inference. They are designed for macro-level positioning, rally points, and tactical retreats rather than split-second micro-control.
 
 > [!CAUTION]
-> MCP servers run as local processes with your user operating system privileges. Only enable local MCP servers that you trust.
+> Local MCP servers run as background processes with your current operating system user privileges. Only install and enable MCP servers that you thoroughly trust.
 
 ---
 
 ## Decision Models (Optional)
 
-Set up a decision model in **RimLLM Framework's Decision tab** and RimAgent uses it for a few high-frequency judgements — cases where the set of valid answers is known in advance and no text has to be generated, so these calls are cheaper and faster than a chat model:
+Configure a dedicated decision model in **RimLLM Framework's Decision tab** to delegate high-frequency, low-latency categorical evaluations to specialized, lightweight models. Because outputs are constrained to known option sets without generating freeform text, these calls are significantly faster and cheaper:
 
-- **Auto mode risk checks:** instead of a second chat-model call per command, the decision model answers "how hard is this action to undo" and "did the player ask for this action"; the answer decides whether the command runs or is rejected with a reason. The criteria live in `AgentPack/Prompts/DecisionRisk.md` and you can rewrite them for your own colony.
-- **Goal completion audit:** when the agent claims a `/goal` is complete, the decision model independently checks whether the work really is done, whether the agent still has steps of its own, and whether it is stuck on something only you can provide. A goal that fails the audit keeps running and is asked for evidence instead of being removed.
-- **Task routing:** pick **Auto routing** in the Agent window's model dropdown and every instruction is classified first (observe, routine, build, risky), then sent with that category's model and reasoning level. Categories and their models are edited in the Decision model section of the advanced mod settings, shown once a decision model is enabled.
+- **Auto Mode Risk Evaluation:** Replaces secondary chat-model invocations by evaluating "how difficult is this action to reverse" and "did the player explicitly request this action". Evaluation criteria are defined in `AgentPack/Prompts/DecisionRisk.md` and can be customized to match your playstyle.
+- **Goal Completion Audit:** When the agent reports a `/goal` as completed, the decision model independently verifies whether all tasks were truly fulfilled, whether remaining autonomous steps exist, or whether the agent is blocked by requirements only the player can provide. Unverified goals continue running and request evidence rather than prematurely closing.
+- **Task Category Routing:** Selecting **Auto routing** in the Agent window model dropdown routes each incoming player command through the decision model to classify it (observation, routine upkeep, construction, or high-risk planning), subsequently executing it with the designated model and reasoning level. Category-to-model mappings can be configured in the Decision Model section of advanced mod settings.
 
-Without a decision model none of this is enabled and the agent behaves exactly as before. With one configured but the call failing (timeout, missing key, service offline), that judgement falls back to the ordinary model call instead of stalling the instruction. To turn these features off, set the provider back to Disabled in the framework's Decision tab.
-
-RimAgent can pick which decision provider and model to use (Decision model in mod settings); leaving both empty follows the provider the framework has enabled. Keys and endpoints stay in RimLLM Framework.
+> [!NOTE]
+> If no decision model is configured, these features remain disabled and the agent behaves identically to previous versions. If a configured decision call fails (due to timeout, missing credentials, or offline service), RimAgent gracefully falls back to a standard model invocation without blocking execution. To disable completely, set the provider to Disabled in the framework's Decision tab.
 
 ---
 
 ## Autonomy (Autonomous Mode)
 
-Enable **proactive care** in mod settings to let the agent respond to events and review the colony in the background. It follows the current execution mode. In Execute mode, major proactive actions run without confirmation by default; enable the separate confirmation setting to review them. Full access always runs enabled tools directly. Confirm still asks for every command.
+Enable **proactive care** in mod settings to allow the agent to monitor events and maintain the colony in the background, strictly adhering to the selected execution mode. In Execute mode, major proactive actions execute without confirmation by default; enable the dedicated confirmation setting to review them. Full access always executes enabled tools directly. Confirm mode always requires approval for every action.
 
-Major actions are identified by each tool's fixed risk label, including trade, surgery, generic buttons and MCP calls; the model does not classify them individually.
+Major actions are determined by static risk metadata on each tool (including trade, surgery, generic gizmos, and MCP calls) rather than dynamic LLM estimation.
 
-- **Event responses:** React to raids beginning or ending, impending mental breaks, food shortages, downed or bleeding colonists, and fires. New choice letters and dialogs are checked every 2 real-time seconds, including while a dialog pauses the game; each choice triggers once.
-- **Base upkeep:** On by default. The agent acts when temperatures become dangerous, a colonist has no bed, beds are outdoors, nothing is running on power, no research project is running, or moods are low but nobody is breaking yet. None of these kill anyone or raise an alert, but left alone they compound into the emergencies above. Turn the whole group off in mod settings.
-- **Retries while unresolved:** A condition that persists is retried with backoff (1 in-game hour, then 2), for three attempts. If it is still unresolved the conversation reports that the agent gave up, and it starts fresh only once the situation clears. Stopping a run from the Agent window (or `/stop`) also stops retries for that condition until it clears; a stopped routine inspection waits a full interval before running again. Older versions asked once and then ignored a fire that kept burning.
-- **Scheduled checks:** Every 6 in-game hours, the agent reviews the colony and decides what to do next.
-- **Budget and cooldown:** Each proactive run has a 20-call limit except in Full access mode. A 0–60 minute cooldown can be set in mod settings and is disabled by default.
-- **Persistent goals:** `/goal` runs independently in any mode and follows that mode's approval policy. Goals can contain up to 4,000 characters; longer objectives are rejected instead of truncated. Goals, status, and progress are saved with the game. Completion requires a successful query after the last change. The goal pauses after the same blocker repeats for three turns, three turns pass without a successful tool action, repeated errors, or 60 turns in one run; `/goal resume` starts a fresh run. Editing does not undo a manual pause.
+- **Emergency Event Responses:** Monitors and reacts to raid start and end events, impending mental breaks, food shortages, downed or bleeding colonists, and fires. Game choice letters and dialogs are inspected every 2 real-time seconds (even while dialogs pause the game); each choice prompts an action only once.
+- **Base Upkeep:** Enabled by default. Proactively remedies hazardous room temperatures, unassigned beds, outdoor sleeping, unpowered grids, idle research benches, and declining mood levels. While not immediately lethal, unattended upkeep issues compound into severe crises. The entire upkeep group can be toggled off in mod settings.
+- **Exponential Backoff Retries:** Persistent unresolved conditions trigger retries with exponential backoff (waiting 1 in-game hour, then 2), up to three attempts. If unresolved, the conversation logs an explicit surrender message and resets tracking only after the condition clears, eliminating repeated loops while ensuring persistent issues are not permanently ignored. Aborting a run via the window stop button or `/stop` also pauses retries until cleared; aborted scheduled patrols wait a full interval before re-running.
+- **Scheduled Patrols:** Every 6 in-game hours, the agent conducts a holistic review of colony operations to prioritize upcoming tasks.
+- **Call Budget and Cooldown:** Each proactive cycle is capped at 20 tool calls (except in Full access mode). A customizable cooldown of 0 to 60 minutes can be set in mod settings (disabled by default).
+- **Persistent Goals (`/goal`):** Runs independently across any execution mode and respects the active approval policy. Supports detailed instructions up to 4,000 characters (exceeding lengths are rejected rather than silently truncated). Goal state, step-by-step progress, and completion logs persist with the save file. Completion requires an explicit verification query after the final modification. Goals automatically pause if the same blocker recurs for three turns, if three turns elapse without successful tool operations, after consecutive errors, or upon reaching 60 turns in a single run; resume execution anytime with `/goal resume`. Manual pause states are preserved when editing.
 
 ---
 
 ## What It Can Do
 
-All 16 categories except Save are enabled by default and can be switched individually in mod settings, or all at once with Allow all / Deny all. The selected mode determines how their commands run.
+All 16 tool categories except Save are enabled by default and can be toggled individually in mod settings, or simultaneously with Allow All / Deny All. The selected execution mode governs how commands are evaluated and run.
 
-| Category | Examples |
+| Category | Capabilities & Examples |
 | --- | --- |
-| Observe | Colony status, resources, threats, research, maps, objects, areas, character-grid map views, screenshots, skill texts, pending choices, and quests (list, accept, dismiss) |
-| Work | Work priorities and daily schedules (undoable) |
-| Build | Designations, blueprints (single, line, fill, or outline; up to 400 cells), forbidden items, gizmo buttons (including ones that need a target), and right-click menu options |
-| Combat | Draft, move, attack, rescue, capture, tend, strip, equip, and enter cryptosleep caskets |
-| Trade | Orbital and visiting traders, buy/sell transactions, planning and forming caravans (pack animals, food, cargo; cancel while forming), and the world map (world objects and tiles, sending caravans with arrival orders, pause/stop, settling) |
-| Medical | Health, medicine levels, and surgery |
-| Prisoner | Prisoner status, interaction modes, and release |
-| Animal | Animals, taming, training, and allowed areas |
-| Zone | Stockpiles, growing zones, and storage filters |
-| Production | Work tables and bills |
-| Time | Pause, game speed, and waiting for in-game time to pass |
-| MCP | Tools from configured local MCP servers |
-| Web | `web_search` uses Parallel Search MCP anonymously by default; a local SearXNG server is optional |
-| Memory | `file_memory_*` tools read, list, search, write, edit and delete memory files; names starting with `global_` are shared by every save, the rest belong to one save (30 files in each scope) |
-| Subagents | `delegate_task` hands self-contained tasks to the subagents in `AgentPack/Agents/` |
-| Save | Checkpoints and reloading this colony's checkpoints or autosaves after a colonist dies (off by default) |
+| **Observe** | Comprehensive colony overview, resources, threat assessment, research progress, maps, object lookups, allowed areas, ASCII character-grid map representations, real-time screenshots, skill index/body retrieval, pending choices, and quest management (list, accept, dismiss) |
+| **Work** | Individual and batch work priority adjustments, 24-hour daily schedules (fully reversible with `/undo`) |
+| **Build** | Designations (mine, cut, harvest, hunt, deconstruct, haul), blueprint placement (single cell, line, rectangle fill, outline; up to 400 cells), item forbidden toggles, gizmo command triggers (including targeted commands), and right-click context menu actions |
+| **Combat** | Colonist drafting, tactical movement, attack targeting, casualty rescue, enemy capture, emergency medical tending, equipment stripping, weapon/gear equipping, and entering cryptosleep caskets |
+| **Trade** | Orbital and visiting trader interactions, buying and selling transactions, caravan preparation (pack animal assignment, rations, cargo loading, cancellation during packing), and world map operations (inspecting world objects and tiles, dispatching caravans with arrival directives, pause/resume movement, settling new colonies) |
+| **Medical** | Colonist health triage, care/medicine level policies, and surgical procedure scheduling |
+| **Prisoner** | Prisoner physical and mental status, interaction modes (recruit, enslave, etc.), and unconditional release |
+| **Animal** | Livestock and wild animal rosters, taming designations, training regimes, and assigned zones |
+| **Zone** | Stockpile and dumping zones, growing zone crop selection, and storage filter criteria |
+| **Production** | Crafting bench inspection, bill creation, recipe configuration, and workload prioritization |
+| **Time** | Game pause, speed multiplier adjustment (1x, 2x, 3x, 4x), and precise waiting for in-game time intervals |
+| **MCP** | Dynamic discovery and execution of external tools from connected local MCP servers |
+| **Web** | `web_search` queries online RimWorld documentation and guides via anonymous Parallel Search MCP by default; optional self-hosted SearXNG integration |
+| **Memory** | `file_memory_*` suite reads, lists, searches, writes, edits, and deletes memory notes; files prefixed with `global_` are shared across all saves, while others belong strictly to the active save (up to 30 files per scope) |
+| **Subagents** | `delegate_task` delegates self-contained sub-tasks to specialized subagents defined in `AgentPack/Agents/` |
+| **Save** | Automatic checkpoint creation and death-triggered save recovery using checkpoints or autosaves (disabled by default) |
 
-Web search connects directly to [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) by default, without an API key or local server. Anonymous requests have lower rate limits; search queries are sent to Parallel. To use a local source instead, enable **Use local SearXNG** in RimAgent settings and enter its URL (`http://127.0.0.1:8888` by default). The server must be running with JSON output enabled; [free-web-search](https://github.com/vksco/free-web-search) provides one setup. Local searches request Google, DuckDuckGo and Qwant engines and exclude Bing results. Results are external text and should be checked before use. Because queries leave the game, web search follows the current mode's command policy.
+### Core Subsystems
 
-Save is off by default. While it is on, RimAgent saves a checkpoint (`RimAgent-<colony>-<tick>`) once an in-game day when no hostiles, downed or bleeding colonists or fires are on the map, and keeps the newest 5. `list_saves` shows this colony's checkpoints and autosaves; autosaves are matched to the colony by an id RimAgent writes into each save. With proactive care on, a colonist's death starts a task in which the agent decides whether to reload with `load_save`, giving a lesson that the reloaded game receives. Each save can be reloaded 3 times; after that, it and every older save are locked and the loss stands. Loading an older save discards newer checkpoints. Reload counts last until the game is closed. Commitment-mode games cannot be saved or reloaded this way.
+#### Web Search
+`web_search` connects out-of-the-box to [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) anonymously without requiring an API key or local setup. To use a local provider, enable **Use local SearXNG** in RimAgent settings and specify its URL (`http://127.0.0.1:8888` by default, with JSON output enabled; see [free-web-search](https://github.com/vksco/free-web-search)). Local queries aggregate Google, DuckDuckGo, and Qwant while filtering out Bing results. Search queries exit the game environment and strictly adhere to the active execution mode policy.
 
-Memory uses the Agent Framework's `FileMemoryProvider` in two scopes, chosen by the file name. A name starting with `global_` is **global memory**: it is kept in `Memory/global-memory.json` inside the same RimAgent folder as the run logs and is shared by every save, so it suits the player's standing preferences and rules (`global_preferences.md` by convention). Every other name is **memory for this save**: it is stored in the game save, a new game starts empty, and loading an older save restores its memories. Every instruction receives an index built from both scopes (file names and descriptions of every file in both scopes), and the agent reads a file when it is relevant. Each scope allows 30 files of 4,000 characters; names are limited to 60 characters, and descriptions are flattened to one line of up to 200 characters. Reading, listing and searching are queries; writing, editing and deleting follow the current mode's command policy. Memories named `global_*` that an older save still holds are handed back to global memory when it is loaded.
+#### Save Checkpoints & Automatic Recovery
+The Save category is off by default. When enabled, RimAgent creates a safe daily checkpoint (`RimAgent-<colony>-<tick>`) once per in-game day provided no hostiles, bleeding/downed colonists, or active fires are on the map, retaining the newest 5 checkpoints. `list_saves` displays checkpoints and autosaves belonging to the current colony (correlated via an internal colony identifier). If proactive care is enabled, the death of a colonist initiates an autonomous evaluation where the agent decides whether to invoke `load_save` to revert to an earlier save, passing lessons learned into the reloaded timeline. Each save can be reloaded up to 3 times, after which older saves are locked to enforce permanent consequences. Loading an older save purges newer checkpoints. Reload counts persist until the game process exits. Note that Commitment mode prohibits save/reload interventions.
 
-Subagents follow hermes-agent's `delegate_task`. Each subagent is an `AgentPack/Agents/<name>/AGENT.md` file whose frontmatter declares its tool categories, `read_only`, and optional `reasoning`. The agent passes up to four task briefs per call. Each task runs in a fresh context with the subagent's own prompt, tools and model, and only the final report enters the agent's history. Read-only subagents run their tasks in parallel; others run them in order. A subagent only gets categories that are also allowed in the settings. Its commands pass through the same mode, confirmation, proactive budget, `/undo` and action log, and the action log labels its tool calls with its name. Subagents cannot delegate further. The shipped `scout` is read-only reconnaissance across every colony category.
+#### Dual-Scope Memory Architecture
+Memory management utilizes Agent Framework's `FileMemoryProvider` across two scopes determined by filename prefixes:
+- **Global Memory:** Files prefixed with `global_` are persisted in `Memory/global-memory.json` within the RimAgent data folder. These files are shared across all saves, making them ideal for standing player preferences, playstyles, and colony rules (`global_preferences.md` by convention).
+- **Save Memory:** All other memory files are serialized directly into the RimWorld save file. New games start with clean save memory, and loading an older save restores memories from that point in time.
+- **Index & Constraints:** Each turn automatically injects a unified index summarizing filenames and descriptions from both scopes; the agent retrieves full contents on demand. Each scope allows up to 30 files of 4,000 characters each; filenames are limited to 60 characters and descriptions are truncated to 200 characters single-line.
+
+#### Subagent Collaboration
+Subagents follow the hermes-agent `delegate_task` paradigm. Subagents are defined in `AgentPack/Agents/<name>/AGENT.md` using YAML frontmatter to declare permitted tool categories, `read_only` status, and optional `reasoning` levels.
+The primary agent can delegate up to four distinct task briefs per invocation. Each brief executes in an isolated context with its own prompt, tool pack, and assigned model, returning only its final summary report to the primary agent's history. Read-only subagents execute concurrently in parallel; state-altering subagents run sequentially. Subagents inherit only tool categories enabled in global mod settings, and all actions remain bound by the current execution mode, confirmation gates, proactive budget limits, `/undo` stacks, and run logs. The default `scout` subagent provides comprehensive read-only reconnaissance across all categories.
 
 ---
 
@@ -186,12 +210,12 @@ Subagents follow hermes-agent's `delegate_task`. Each subagent is an `AgentPack/
 Player request → ColonyAgentSession → RimLLM Framework model → colony tools → IGameWorld → RimWorld
 ```
 
-The model receives tools selected for the current mode and category permissions. With the Subagents category on, it also gets `delegate_task`, which runs a subagent through the same tools on a separate model call. Two interfaces keep most behavior testable without starting RimWorld:
+Available tools are dynamically filtered based on current mode and category permissions. When the Subagents category is active, `delegate_task` is exposed to invoke subagents via separate model calls. Two core abstractions ensure extensive testability without booting RimWorld:
 
-- **`IChatClient`** lets tests use scripted model responses without network calls.
-- **`IGameWorld`** lets tool tests use an in-memory world; `RimWorldGameWorld` connects those tools to the game.
+- **`IChatClient`:** Enables offline unit testing with pre-recorded or scripted model responses without network traffic.
+- **`IGameWorld`:** Provides an in-memory mock game world for comprehensive tool validation; `RimWorldGameWorld` bridges calls to the actual RimWorld engine in-game.
 
-UI text and the Agent main-button label are localized in English, Traditional Chinese, and Simplified Chinese.
+All UI text and the Agent main-button label are fully localized in English, Traditional Chinese, and Simplified Chinese.
 
 ---
 
@@ -201,12 +225,12 @@ UI text and the Agent main-button label are localized in English, Traditional Ch
 dotnet build "Source/RimAgent/RimAgent.csproj" -c Release
 ```
 
-Release compilation writes `Assemblies/RimAgent.dll` plus bundled SmashTools assemblies and standalone assemblies required by the mod that are not provided by the base game or framework:
+Release compilation outputs `Assemblies/RimAgent.dll`, alongside bundled SmashTools and required standalone assemblies not supplied by the base game or framework:
 
-- **Bundled SmashTools**: `SmashTools.dll`, `CoreLib.dll`.
-- **Agent Framework & MCP SDK**: `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.AI.Evaluation`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.ML.Tokenizers`, `Google.Protobuf`, `ModelContextProtocol.Core`.
+- **Bundled SmashTools Assemblies:** `SmashTools.dll`, `CoreLib.dll`.
+- **Agent Framework & MCP SDK Assemblies:** `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.AI.Evaluation`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.ML.Tokenizers`, `Google.Protobuf`, `ModelContextProtocol.Core`.
 
-RimWorld 1.7 provides `System.Collections.Immutable`, `Microsoft.Bcl.Memory`, and `Microsoft.Extensions.ObjectPool`; `HashCode` is part of .NET 10 itself. RimWorld scans assemblies on startup with `Assembly.GetTypes()` and `GetFields()`, requiring all base and referenced field types to resolve cleanly. The project references RimLLM Framework assemblies from `../RimLLM Framework/Assemblies` (override with `/p:RimLLMDir=<path>` if installed elsewhere).
+RimWorld 1.7 natively supplies `System.Collections.Immutable`, `Microsoft.Bcl.Memory`, and `Microsoft.Extensions.ObjectPool`; `HashCode` is provided by the .NET 10 runtime. Because RimWorld inspects types via `Assembly.GetTypes()` and `GetFields()` during startup, all base and referenced types resolve cleanly. The project references RimLLM Framework assemblies from `../RimLLM Framework/Assemblies` (override with `/p:RimLLMDir=<path>` if installed elsewhere).
 
 ---
 
@@ -218,16 +242,21 @@ RimWorld 1.7 provides `System.Collections.Immutable`, `Microsoft.Bcl.Memory`, an
 dotnet test "Source/RimAgent.Tests/RimAgent.Tests.csproj"
 ```
 
-The NUnit suite runs on .NET 10 without launching RimWorld. It covers tool behavior, confirmation previews, save/load state, risk classification, and the tool count shown in both READMEs.
+The NUnit test suite runs on .NET 10 without launching RimWorld. It covers tool execution, confirmation gate logic, save/load state persistence, risk classification, and documentation tool count validation.
 
 ### In-Game Integration Tests
 
-In-game integration tests live in `Source/RimAgent.InGameTests/` and use SmashPhil DevTools. They compile to the development-only companion mod `Source/RimAgent.InGameTests/Mod/Assemblies/` and are not distributed to players.
+In-game integration tests reside in `Source/RimAgent.InGameTests/` and use SmashPhil DevTools. They compile into a development-only companion mod at `Source/RimAgent.InGameTests/Mod/Assemblies/` and are not distributed to players.
 
-Build all projects with `dotnet build Source/RimAgent.slnx -c Release`, then load the companion mod alongside RimAgent and its dependencies. Use the DevTools Test Explorer, or launch the game with `--pid GreenMushroom.RimAgent.InGameTests --test --where "namespace =~ RimAgent.InGameTests" --exit`. Save progress first: tests create a colony and switch scenes. Results are written to `Test.log` and `test-report.md` in the game's persistent data directory; `Mod/Configs/UnitTestConfig.xml` can set a separate log folder. The suite includes startup checks, colony operations, and SmashTools initialization and thread dispatch. Marker-based model experiments are separate and require explicit configuration.
+1. Build all projects with `dotnet build Source/RimAgent.slnx -c Release`.
+2. Load the companion test mod alongside RimAgent and its prerequisites.
+3. Run tests via the DevTools Test Explorer UI, or launch RimWorld with `--pid GreenMushroom.RimAgent.InGameTests --test --where "namespace =~ RimAgent.InGameTests" --exit`.
+4. Integration tests create a live colony and cycle game scenes; save your progress before running. Results are logged to `Test.log` and `test-report.md` in the game's persistent data directory (or a custom path defined in `Mod/Configs/UnitTestConfig.xml`). The suite validates startup sequences, colony mutations, SmashTools lifecycle, and multi-threaded dispatch. Marker-enabled live model experiments are isolated and require explicit API key configuration.
 
-Third-party DLL sources are pinned under `Source/Libs/`. To rebuild them, use PowerShell 7: `pwsh -File Source/Build-Dependencies.ps1`. The script retains source in `.scratch/` and prints hashes of the actual build output. Full redistributed license texts are in `ThirdPartyNotices.txt`.
+Third-party dependencies are pinned under `Source/Libs/`. Rebuild them using PowerShell 7 with `pwsh -File Source/Build-Dependencies.ps1`. The script caches sources in `.scratch/` and validates output binary SHA-256 hashes. Full license notices are available in `ThirdPartyNotices.txt`.
 
 ---
+
+## License
 
 This project is licensed under the [MIT License](LICENSE).

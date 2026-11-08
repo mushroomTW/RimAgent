@@ -1,43 +1,99 @@
-# RimAgent prompt layout
+# RimAgent Prompt, Skill & Subagent Architecture
 
-Built-in prompts live in `AgentPack/Prompts/`, player instructions in `AgentPack/AGENTS.md`, optional skills in `AgentPack/Skills/`, and optional subagents in `AgentPack/Agents/`. Reload the save or start a new game after editing; no DLL rebuild is needed.
+RimAgent features an open and customizable prompt architecture. All system prompts, custom instructions, gameplay skills, and autonomous subagents live in plain Markdown files under the `AgentPack/` directory.
 
-- `Prompts/Briefing.md` — The preamble: the agent's RimWorld role, the observe-act-report loop, and the tool result protocol. This is the first layer of each request.
-- `AGENTS.md` — Your own instructions. It ships empty. Put gameplay preferences, restrictions, or tone here; the agent reads it after the preamble and before the conduct rules.
-- `Prompts/Conduct.md` — Persistent conduct rules, including minimal changes, explaining irreversible actions, clarifying ambiguity, and prioritizing colony survival.
-- `Prompts/RiskClassifier.md` — The system prompt for risk classification in Auto mode. It defines the two-axis decision and JSON response contract; keep that format intact.
-- `Prompts/Autonomous.en.md` — Autonomous task instructions in English. Each trigger has a `##` section: Raid, RaidEnded, EmergencyMedical, Fire, MentalBreak, FoodShortage, Choice, or Interval. Persistent goals run through a separate flow.
-- `Skills/<skill>/SKILL.md` — An optional skill pack. Each request carries only a skill index (names and descriptions); the agent loads a full skill text on demand with `read_skill`. Use this format:
+Any changes made here take effect immediately upon reloading a save or starting a new game—**no code compilation is required**.
+
+---
+
+## Directory Overview
+
+```text
+AgentPack/
+├── AGENTS.md                  # User-defined standing instructions and gameplay preferences
+├── Prompts/                   # Core system prompts (preamble, conduct, safety, and autonomous rules)
+│   ├── Briefing.md            # Foundational preamble and tool calling protocol
+│   ├── Conduct.md             # Core behavioral rules and colony survival priorities
+│   ├── Autonomous.en.md       # Autonomous trigger rules (raids, medical emergencies, fires, etc.)
+│   ├── RiskClassifier.md      # Auto-mode LLM safety risk classification prompt
+│   ├── DecisionRisk.md        # Lightweight decision model risk evaluation criteria
+│   ├── DecisionGoal.md        # Lightweight decision model goal completion audit prompt
+│   └── DecisionRouting.md     # Decision model task category routing prompt
+├── Skills/                    # On-demand modular gameplay skills
+└── Agents/                    # Delegated autonomous subagent profiles
+```
+
+---
+
+## Prompt Composition Order
+
+Every model instruction turn layers prompts in the following sequence:
+
+1. **`Prompts/Briefing.md` (Preamble):** Establishes the agent's identity, RimWorld operational role, the observe-act-report loop, and the tool invocation protocol.
+2. **`AGENTS.md` (Player Instructions):** Empty by default. Add your personal colony guidelines, roleplay rules, aesthetic preferences, or banned actions here. Loaded immediately after the preamble.
+3. **`Prompts/Conduct.md` (Conduct Rules):** Non-negotiable behavioral boundaries, emphasizing minimal necessary disruption, clear explanation of irreversible actions, clarifying ambiguity, and prioritizing colonist survival.
+4. **Tool & Skill Index:** Injects the active tool descriptors, dual-scope memory index, and the concise skill catalog (names and descriptions only). Full skill bodies are loaded on demand via `read_skill`.
+
+---
+
+## Authoring Skills (`Skills/<skill>/SKILL.md`)
+
+Skills provide specialized domain knowledge and strategic heuristics. To conserve model context, turn instructions only contain a skill index; the agent retrieves the complete skill guide on demand using `read_skill`.
+
+Each skill must be placed in its own folder containing a `SKILL.md` file:
 
 ```markdown
 ---
 name: my-skill
-description: A sentence explaining when to use this skill
+description: A concise sentence explaining exactly when this skill applies.
 ---
 
-# My skill
+# My Skill Title
 
-Instructions the agent follows when this skill applies.
-Keep it concise: a skill is truncated after 3,000 characters,
-and all skills together have an 8,000-character limit.
+Detailed instructions and heuristics for the agent to follow when this skill is relevant.
+Keep guidance concise and actionable.
 ```
 
-- `Agents/<agent>/AGENT.md` — An optional subagent. The agent hands self-contained tasks to it with `delegate_task`; each task runs in a fresh context with the subagent's own tools and model, and only its final report comes back. Use this format:
+### Constraints & Default Skills
+- **Length Limit:** Individual skill texts are truncated after 3,000 characters; combined active skills across a session are capped at 8,000 characters.
+- **Folder Names:** If frontmatter is omitted, the containing folder name is used as the skill name. Folders without a `SKILL.md` are ignored.
+- **14 Built-in Skills:**
+  - **8 Heuristic Gameplay Skills:** `raid-defense`, `defense-building`, `food-security`, `mood-management`, `work-assignment`, `medical-triage`, `seasonal-prep`, `colony-progression`.
+  - **6 Endgame Questlines:** `endgame-ship`, `endgame-journey`, `endgame-archonexus`, `endgame-royal`, `endgame-void`, `endgame-mechhive`.
+
+---
+
+## Authoring Subagents (`Agents/<agent>/AGENT.md`)
+
+Subagents allow the primary agent to delegate self-contained tasks using `delegate_task`. Each subagent executes in a completely clean context with its own system prompt, isolated tool subset, and designated model.
+
+Subagents are defined in `AgentPack/Agents/<name>/AGENT.md`:
 
 ```markdown
 ---
-name: my-agent
-description: A sentence telling the main agent when to delegate to it
-categories: Observe, Build, Zone
-read_only: false
+name: scout
+description: Conducts comprehensive, read-only reconnaissance across the entire colony.
+categories: Observe
+read_only: true
 reasoning: Low
 ---
 
-The subagent's own instructions. Truncated after 4,000 characters.
+You are a colony scout. Inspect maps, colonists, and threats, then return a structured situation report.
 ```
 
-  `categories` lists tool categories (Observe, Work, Build, Combat, Trade, Medical, Prisoner, Animal, Zone, Production, Time, Mcp, Web, Memory); the subagent still only gets the ones allowed in the settings, and its commands follow the current mode. `read_only: true` keeps only query tools and lets several tasks run in parallel. `reasoning` (Auto, Off, Low, Medium, High) overrides the subagent default in the settings; the model is picked per subagent in the settings. Subagents cannot delegate further. The shipped `Agents/` folder has one read-only subagent, `scout`.
-- A folder without `SKILL.md` is not a skill. Unrecognized files are ignored.
-- Without frontmatter, the folder name becomes the skill name.
-- The shipped `Skills/` folder has fourteen skills: eight heuristic gameplay skills (`raid-defense`, `defense-building`, `food-security`, `mood-management`, `work-assignment`, `medical-triage`, `seasonal-prep` and `colony-progression`) and six ending routes (`endgame-ship`, `endgame-journey`, `endgame-archonexus`, `endgame-royal`, `endgame-void` and `endgame-mechhive`). Edit or delete them freely, or add your own alongside.
-- Missing or unreadable prompt files are treated as empty. The game continues: a missing preamble uses a one-line fallback, and a missing classifier prompt makes Auto mode ask before every action.
+### Frontmatter Schema
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` | string | Identifier used by `delegate_task` |
+| `description` | string | Guidance indicating to the main agent when this subagent should be chosen |
+| `categories` | string | Comma-separated allowed tool categories (e.g. `Observe, Work, Build`) |
+| `read_only` | boolean | Set to `true` to restrict to query tools and enable parallel execution |
+| `reasoning` | enum | Optional reasoning effort override (`Auto`, `Off`, `Low`, `Medium`, `High`) |
+
+### Operational Rules
+- **Category Filter:** Subagents can only access tool categories that are also permitted in the main mod settings.
+- **Safety Policy:** All state-altering commands issued by subagents adhere strictly to the active execution mode and confirmation gate.
+- **Parallelism:** Read-only subagents (`read_only: true`) execute multiple task briefs in parallel; state-altering subagents execute sequentially.
+- **Delegation Limit:** Subagents cannot delegate tasks further.
+- **Default Agent:** Includes `scout`, a read-only reconnaissance specialist covering all colony observation tools.
