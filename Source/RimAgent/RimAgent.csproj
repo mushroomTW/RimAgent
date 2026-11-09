@@ -45,11 +45,6 @@
       <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.Abstractions.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- Markdig 隨框架出貨：回覆裡的表格要切出來逐格繪製。 -->
-    <Reference Include="Markdig">
-      <HintPath>$(RimLLMDir)Markdig.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <!-- 決策模型 SDK（TypeSafe System One / Jev），隨框架出貨；型別只用在方法內，不進欄位。 -->
     <Reference Include="Kkdev92.Jev">
       <HintPath>$(RimLLMDir)Kkdev92.Jev.dll</HintPath>

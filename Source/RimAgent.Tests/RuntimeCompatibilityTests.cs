@@ -29,7 +29,6 @@ public class RuntimeCompatibilityTests
         "RimAgent.UI.Window_Agent.DrawSelectableLine",     // 對話框選層
         "RimAgent.UI.Window_Agent.GetSelectableStyle",     // 對話框選層樣式
         "RimAgent.UI.Window_Agent.MeasureRichHeight",      // 對話行高（含 rich text 標籤）
-        "RimAgent.UI.Window_Agent.MeasureRichWidth",       // 表格欄寬（含 rich text 標籤）
         "RimAgent.UI.Window_Agent.CopyToolHeaderOnRightClick", // 工具列右鍵複製
         "RimAgent.RimAgentMod.OpenFolder",                 // 設定頁開啟紀錄資料夾
         "RimAgent.Game.RimWorldGameWorld.TakeScreenshot",  // 截圖
