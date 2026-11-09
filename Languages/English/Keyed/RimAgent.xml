@@ -24,6 +24,10 @@
   <RimAgent.Risk.Unavailable>Review unavailable</RimAgent.Risk.Unavailable>
   <RimAgent.Screenshot.Pending>The screenshot has not been written yet, or the file was moved.</RimAgent.Screenshot.Pending>
   <RimAgent.Window.ResizeTip>Drag the bottom-right corner to resize the window</RimAgent.Window.ResizeTip>
+  <RimAgent.Window.CollapseTip>Collapse to a desktop assistant (the conversation keeps running)</RimAgent.Window.CollapseTip>
+  <RimAgent.Window.ExpandTip>RimAgent: click to expand, drag to move</RimAgent.Window.ExpandTip>
+  <RimAgent.Window.AvatarPending>Waiting for your confirmation</RimAgent.Window.AvatarPending>
+  <RimAgent.Window.AvatarUnread>New messages, click to view</RimAgent.Window.AvatarUnread>
   <RimAgent.Close>Close</RimAgent.Close>
   <RimAgent.Placeholder>Tell the agent what to do. Type / for commands, $ to pick a skill</RimAgent.Placeholder>
   <RimAgent.PlaceholderBusy>Working… type here and press Enter to add to the current task</RimAgent.PlaceholderBusy>
@@ -114,6 +118,8 @@
   <RimAgent.Settings.CompactModelTip>Model and reasoning used when /compact summarizes older history. A cheaper model is usually fine here.</RimAgent.Settings.CompactModelTip>
   <RimAgent.Settings.SlotReasoningTip>Reasoning level for this role only; Auto keeps the framework default.</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.DecisionModelHeader>Decision model (System One)</RimAgent.Settings.DecisionModelHeader>
+  <RimAgent.Settings.DecisionEnabled>Enable decision model</RimAgent.Settings.DecisionEnabled>
+  <RimAgent.Settings.DecisionEnabledTip>When off, the decision model is never called: risk checks use the classifier, reasoning routing uses the fallback reasoning level, daily auto time speed always uses "fast", and answering choices, upkeep triage, tool pack preloading and goal audits are disabled and left to the main model.</RimAgent.Settings.DecisionEnabledTip>
   <RimAgent.Settings.DecisionProvider>Decision provider:</RimAgent.Settings.DecisionProvider>
   <RimAgent.Settings.DecisionProviderTip>Decision model provider used for fast, typed classifications like Auto mode risk checks. Leave empty to follow RimLLM Framework's active decision provider.</RimAgent.Settings.DecisionProviderTip>
   <RimAgent.Settings.DecisionModel>Decision model:</RimAgent.Settings.DecisionModel>
@@ -226,11 +232,27 @@
   <RimAgent.Settings.OpenLogFolder>Open folder</RimAgent.Settings.OpenLogFolder>
   <RimAgent.Settings.OpenLogFolderFailed>Could not open the log folder: {0}</RimAgent.Settings.OpenLogFolderFailed>
   <RimAgent.Settings.RecordRunsTip>Writes instructions, model response summaries, tool arguments, and results to a separate JSONL file under RimWorld save data/RimAgent/RimAgent-runs.jsonl. Limited to 500 runs or 16 MiB; older records are removed. The file may contain player input and tool arguments. Internal reasoning that the model does not expose is unavailable.</RimAgent.Settings.RecordRunsTip>
-  <RimAgent.Context.InputTokens>Last input {0} tokens</RimAgent.Context.InputTokens>
-  <RimAgent.Context.Unavailable>Input tokens unavailable</RimAgent.Context.Unavailable>
   <RimAgent.Context.CompactOn>Model history: {0} messages; auto-fold threshold: {1}% of context window.</RimAgent.Context.CompactOn>
   <RimAgent.Context.CompactOff>Model history: {0} messages; auto-fold is off.</RimAgent.Context.CompactOff>
   <RimAgent.Context.WindowKnown>Model context limit: {0} tokens.</RimAgent.Context.WindowKnown>
   <RimAgent.Context.WindowUnknown>Model context limit: unknown.</RimAgent.Context.WindowUnknown>
   <RimAgent.Context.Tooltip>Input tokens for the latest main-model request are reported by the provider; unavailable if not reported.&#10;{0}&#10;{1}</RimAgent.Context.Tooltip>
+  <RimAgent.ContextPanel.Title>Context breakdown</RimAgent.ContextPanel.Title>
+  <RimAgent.ContextPanel.Used>{0}% used</RimAgent.ContextPanel.Used>
+  <RimAgent.ContextPanel.WindowUnknown>Model context limit unknown</RimAgent.ContextPanel.WindowUnknown>
+  <RimAgent.ContextPanel.Free>Free space</RimAgent.ContextPanel.Free>
+  <RimAgent.ContextPanel.CompactAt>Auto-compact threshold: {0}% ({1}); {2} tokens until auto-compact.</RimAgent.ContextPanel.CompactAt>
+  <RimAgent.ContextPanel.CompactOff>Auto-compact is off.</RimAgent.ContextPanel.CompactOff>
+  <RimAgent.ContextPanel.CompactUnknown>Auto-compact threshold {0}%; the model limit is unknown, so it will not trigger.</RimAgent.ContextPanel.CompactUnknown>
+  <RimAgent.ContextPanel.NoteScaled>Each category is estimated from character counts, then scaled to the total reported by the provider. Use it for proportions; actual counts differ.</RimAgent.ContextPanel.NoteScaled>
+  <RimAgent.ContextPanel.NoteEstimated>The provider has not reported tokens yet; every category is a character-based estimate.</RimAgent.ContextPanel.NoteEstimated>
+  <RimAgent.ContextPanel.Part.SystemPrompt>System prompt</RimAgent.ContextPanel.Part.SystemPrompt>
+  <RimAgent.ContextPanel.Part.Tools>Tool definitions</RimAgent.ContextPanel.Part.Tools>
+  <RimAgent.ContextPanel.Part.ToolPacks>Tool pack index</RimAgent.ContextPanel.Part.ToolPacks>
+  <RimAgent.ContextPanel.Part.Subagents>Subagents</RimAgent.ContextPanel.Part.Subagents>
+  <RimAgent.ContextPanel.Part.Memory>Memory</RimAgent.ContextPanel.Part.Memory>
+  <RimAgent.ContextPanel.Part.UserMessages>Player messages</RimAgent.ContextPanel.Part.UserMessages>
+  <RimAgent.ContextPanel.Part.AssistantMessages>Agent replies</RimAgent.ContextPanel.Part.AssistantMessages>
+  <RimAgent.ContextPanel.Part.ToolCalls>Tool calls</RimAgent.ContextPanel.Part.ToolCalls>
+  <RimAgent.ContextPanel.Part.ToolResults>Tool results</RimAgent.ContextPanel.Part.ToolResults>
 </LanguageData>

@@ -393,7 +393,7 @@ public class AutoModeTests
     [Test]
     public void AutoCompactThresholdDefaultAndCeiling()
     {
-        Assert.That(RimAgentSettings.DefaultAutoCompactThreshold, Is.EqualTo(90), "預設維持 90%");
+        Assert.That(RimAgentSettings.DefaultAutoCompactThreshold, Is.EqualTo(60), "預設 60%");
         Assert.That(RimAgentSettings.MaxAutoCompactThreshold, Is.EqualTo(95), "上限拉到 95%");
         Assert.That(RimAgentSettings.MinAutoCompactThreshold, Is.LessThan(RimAgentSettings.DefaultAutoCompactThreshold));
     }

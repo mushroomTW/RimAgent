@@ -91,7 +91,7 @@ Drag the window title bar to move it, or drag the lower-right corner to resize i
 ### Context Management & Run History
 
 > **Context Compaction:**
-> 1. **Auto-fold:** Prior to each model invocation, Agent Framework estimates total history tokens. When reaching a configured threshold (configurable from 30% to 95%, default 90% with reserved output headroom) of the smallest known context limit among the chosen model and fallback entries, older tool outputs are folded automatically without additional LLM calls. If no limit is known, auto-fold is skipped.
+> 1. **Auto-fold:** Prior to each model invocation, Agent Framework estimates total history tokens. When reaching a configured threshold (configurable from 30% to 95%, default 60% with reserved output headroom) of the smallest known context limit among the chosen model and fallback entries, older tool outputs are folded automatically without additional LLM calls. If no limit is known, auto-fold is skipped.
 > 2. **History Trimming:** Stored model message history exceeding 120 messages is pruned back to approximately 60 messages to preserve memory; visible transcript logs remain untouched.
 > 3. **Deep Semantic Compact:** Trigger `/compact` at any time to invoke a dedicated model summarization pass, condensing extended dialogue history into an actionable summary.
 

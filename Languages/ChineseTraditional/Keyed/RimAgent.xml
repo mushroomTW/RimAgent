@@ -24,6 +24,10 @@
   <RimAgent.Risk.Unavailable>審核失敗</RimAgent.Risk.Unavailable>
   <RimAgent.Screenshot.Pending>截圖尚未寫入磁碟，或檔案已移動。</RimAgent.Screenshot.Pending>
   <RimAgent.Window.ResizeTip>拖曳右下角調整視窗大小</RimAgent.Window.ResizeTip>
+  <RimAgent.Window.CollapseTip>縮成桌面小助手（對話繼續進行）</RimAgent.Window.CollapseTip>
+  <RimAgent.Window.ExpandTip>RimAgent：點一下展開，拖曳移動位置</RimAgent.Window.ExpandTip>
+  <RimAgent.Window.AvatarPending>等你確認一下～</RimAgent.Window.AvatarPending>
+  <RimAgent.Window.AvatarUnread>有新訊息，點我看看</RimAgent.Window.AvatarUnread>
   <RimAgent.Close>關閉</RimAgent.Close>
   <RimAgent.Placeholder>告訴 Agent 要做什麼，輸入 / 使用指令，輸入 $ 指定技能</RimAgent.Placeholder>
   <RimAgent.PlaceholderBusy>執行中…在此輸入並按 Enter，可補充或改變目前的任務</RimAgent.PlaceholderBusy>
@@ -114,6 +118,8 @@
   <RimAgent.Settings.CompactModelTip>/compact 摘要較舊歷史時使用的模型與思考強度，通常用便宜的模型就夠。</RimAgent.Settings.CompactModelTip>
   <RimAgent.Settings.SlotReasoningTip>只套用在這一格的思考強度；預設＝沿用框架預設。</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.DecisionModelHeader>決策模型（System One）</RimAgent.Settings.DecisionModelHeader>
+  <RimAgent.Settings.DecisionEnabled>啟用決策模型</RimAgent.Settings.DecisionEnabled>
+  <RimAgent.Settings.DecisionEnabledTip>關閉後不再呼叫決策模型：風險判定改用分類器，思考強度分流改用備援思考強度，日常自動調速固定用「加速」，代答抉擇、篩選基地狀況、預載工具包與目標審計都停用，交給主模型處理。</RimAgent.Settings.DecisionEnabledTip>
   <RimAgent.Settings.DecisionProvider>決策供應商：</RimAgent.Settings.DecisionProvider>
   <RimAgent.Settings.DecisionProviderTip>用於 Auto 模式風險判定等結構化快速判定的決策模型供應商。留空則沿用 RimLLM Framework 當前啟用的供應商。</RimAgent.Settings.DecisionProviderTip>
   <RimAgent.Settings.DecisionModel>決策模型：</RimAgent.Settings.DecisionModel>
@@ -226,11 +232,27 @@
   <RimAgent.Settings.OpenLogFolder>開啟資料夾</RimAgent.Settings.OpenLogFolder>
   <RimAgent.Settings.OpenLogFolderFailed>無法開啟紀錄資料夾：{0}</RimAgent.Settings.OpenLogFolderFailed>
   <RimAgent.Settings.RecordRunsTip>將指令、模型回應摘要、工具參數與結果寫入獨立 JSONL：RimWorld 存檔資料夾/RimAgent/RimAgent-runs.jsonl。最多 500 筆或 16 MiB，較舊紀錄會移除。檔案可能包含玩家輸入與工具參數；不包含模型未提供的內部推理。</RimAgent.Settings.RecordRunsTip>
-  <RimAgent.Context.InputTokens>上次輸入 {0} token</RimAgent.Context.InputTokens>
-  <RimAgent.Context.Unavailable>輸入 token 未回報</RimAgent.Context.Unavailable>
   <RimAgent.Context.CompactOn>模型歷史 {0} 則；自動折疊門檻為模型視窗的 {1}%。</RimAgent.Context.CompactOn>
   <RimAgent.Context.CompactOff>模型歷史 {0} 則；自動折疊已關閉。</RimAgent.Context.CompactOff>
   <RimAgent.Context.WindowKnown>模型上下文上限：{0} token。</RimAgent.Context.WindowKnown>
   <RimAgent.Context.WindowUnknown>模型上下文上限：未知。</RimAgent.Context.WindowUnknown>
   <RimAgent.Context.Tooltip>最近一次主模型請求的輸入 token 由供應商回報；未提供時顯示未回報。&#10;{0}&#10;{1}</RimAgent.Context.Tooltip>
+  <RimAgent.ContextPanel.Title>上下文分布</RimAgent.ContextPanel.Title>
+  <RimAgent.ContextPanel.Used>已使用 {0}%</RimAgent.ContextPanel.Used>
+  <RimAgent.ContextPanel.WindowUnknown>模型上下文上限未知</RimAgent.ContextPanel.WindowUnknown>
+  <RimAgent.ContextPanel.Free>剩餘空間</RimAgent.ContextPanel.Free>
+  <RimAgent.ContextPanel.CompactAt>自動壓縮門檻：{0}%（{1}），距離自動壓縮還有 {2} token。</RimAgent.ContextPanel.CompactAt>
+  <RimAgent.ContextPanel.CompactOff>自動壓縮已關閉。</RimAgent.ContextPanel.CompactOff>
+  <RimAgent.ContextPanel.CompactUnknown>自動壓縮門檻 {0}%；模型上限未知，不會自動壓縮。</RimAgent.ContextPanel.CompactUnknown>
+  <RimAgent.ContextPanel.NoteScaled>各類別依字元估算，再按供應商回報的總量等比例分配；看分布用，與實際計數會有落差。</RimAgent.ContextPanel.NoteScaled>
+  <RimAgent.ContextPanel.NoteEstimated>供應商尚未回報 token；各類別都是依字元估算的近似值。</RimAgent.ContextPanel.NoteEstimated>
+  <RimAgent.ContextPanel.Part.SystemPrompt>系統提示</RimAgent.ContextPanel.Part.SystemPrompt>
+  <RimAgent.ContextPanel.Part.Tools>工具定義</RimAgent.ContextPanel.Part.Tools>
+  <RimAgent.ContextPanel.Part.ToolPacks>工具包索引</RimAgent.ContextPanel.Part.ToolPacks>
+  <RimAgent.ContextPanel.Part.Subagents>子代理說明</RimAgent.ContextPanel.Part.Subagents>
+  <RimAgent.ContextPanel.Part.Memory>記憶</RimAgent.ContextPanel.Part.Memory>
+  <RimAgent.ContextPanel.Part.UserMessages>玩家訊息</RimAgent.ContextPanel.Part.UserMessages>
+  <RimAgent.ContextPanel.Part.AssistantMessages>Agent 回覆</RimAgent.ContextPanel.Part.AssistantMessages>
+  <RimAgent.ContextPanel.Part.ToolCalls>工具呼叫</RimAgent.ContextPanel.Part.ToolCalls>
+  <RimAgent.ContextPanel.Part.ToolResults>工具結果</RimAgent.ContextPanel.Part.ToolResults>
 </LanguageData>

@@ -94,6 +94,13 @@ public class RimAgentMod : Mod
         listing.Label(cooldownLabel, -1f, "RimAgent.Settings.AutoCooldownTip".Translate());
         Settings.autonomousCooldownMinutes = Mathf.RoundToInt(listing.Slider(Settings.autonomousCooldownMinutes, RimAgentSettings.MinCooldownMinutes, RimAgentSettings.MaxCooldownMinutes));
 
+        // 總開關放在主頁自己的分類；供應商、模型與各項細節留在進階設定。
+        listing.Gap();
+        listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
+        listing.GapLine();
+        listing.CheckboxLabeled("RimAgent.Settings.DecisionEnabled".Translate(), ref Settings.decisionEnabled,
+            "RimAgent.Settings.DecisionEnabledTip".Translate());
+
         listing.Gap();
         listing.GapLine();
         listing.CheckboxLabeled("RimAgent.Settings.ShowAdvanced".Translate(), ref _showAdvanced, "RimAgent.Settings.ShowAdvancedTip".Translate());
@@ -112,11 +119,15 @@ public class RimAgentMod : Mod
     {
         DrawModelRoles(listing);
 
-        listing.Gap();
-        listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
-        listing.GapLine();
-        // 分流靠決策模型分類，沒有可用的決策模型時細項沒有作用，不顯示。
-        if (DrawDecisionSettings(listing))
+        // 主頁關掉決策模型時，這些細節都沒有作用，整段不顯示；
+        // 分流靠決策模型分類，沒有可用的決策模型時細項也不顯示。
+        if (Settings.decisionEnabled)
+        {
+            listing.Gap();
+            listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
+            listing.GapLine();
+        }
+        if (Settings.decisionEnabled && DrawDecisionSettings(listing))
         {
             listing.CheckboxLabeled("RimAgent.Settings.DecisionAnswerChoices".Translate(), ref Settings.decisionAnswerChoices,
                 "RimAgent.Settings.DecisionAnswerChoicesTip".Translate());

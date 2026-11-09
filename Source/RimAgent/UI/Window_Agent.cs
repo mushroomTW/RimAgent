@@ -19,7 +19,7 @@ namespace RimAgent.UI;
 /// 包含雙色標籤決策日誌串流、模式/思考切換、輸入列與斜線指令。
 /// </summary>
 #pragma warning disable S101 // RimWorld Window 類別命名慣例
-public class Window_Agent : Window
+public partial class Window_Agent : Window
 {
     private const string ColorTagPrefix = "<color=#";
     private const string ColorTagClose = "</color>";
@@ -59,6 +59,17 @@ public class Window_Agent : Window
     private const int ScreenshotRetryMs = 1000;
     /// <summary>視窗寬度要停住多久才重排對話（毫秒）。</summary>
     private const int ReflowDelayMs = 150;
+    /// <summary>收合成桌面小助手時的頭像邊長。</summary>
+    private const float AvatarSize = 76f;
+    private const float AvatarBubbleHeight = 32f;
+    private const float AvatarBubbleGap = 4f;
+    private const float AvatarBubbleMaxWidth = 260f;
+    /// <summary>按下到放開之間圖標移動不超過這個距離才算點擊（展開），否則是拖曳。</summary>
+    private const float IconClickSlack = 4f;
+    /// <summary>視窗與彈出選單的圓角半徑。</summary>
+    private const float WindowRadius = 10f;
+    /// <summary>按鈕、輸入框等控制項的圓角半徑。</summary>
+    private const float ControlRadius = 6f;
     /// <summary>上下文用量到達幾成時標題列計量變黃預警。</summary>
 
     // 圖片風格配色
@@ -125,6 +136,30 @@ public class Window_Agent : Window
 
     /// <summary>整局共用、關掉視窗也保留；最新的在最後。</summary>
     private static readonly List<string> InputHistory = [];
+    private static Texture2D _iconTex;
+    private static Texture2D _discTex;
+    /// <summary>小助手頭像沿用 About/ModIcon.png（由遊戲的模組中繼資料載入）。</summary>
+    private static Texture2D IconTex => _iconTex ??= LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.Icon
+        ?? ContentFinder<Texture2D>.Get("UI/Buttons/MainButtons/RimAgent");
+
+    /// <summary>收合成桌面小助手：對話照常進行，只是不佔畫面。</summary>
+    private bool _collapsed;
+    /// <summary>這次點圓盤的按下動作已經把面板關掉，放開時不再重開。</summary>
+    private bool _gaugeClosedPanel;
+    /// <summary>收合當下的逐字稿 Version；之後變了就在圖標角落亮提示點。</summary>
+    private int _collapsedVersion;
+    private bool _iconPressed;
+    private Vector2 _iconPressPos;
+    /// <summary>頭像左上角的螢幕座標；視窗會因泡泡伸縮，頭像才是位置的錨點。</summary>
+    private Vector2 _avatarPos;
+    /// <summary>上次排版設定的視窗位置；和現在的位置不同代表玩家拖動了。</summary>
+    private Vector2 _laidOutPos;
+    private bool _bubbleOnLeft = true;
+    private string _bubbleText;
+    private int _bubbleState = -1;
+    private AgentActivity _bubbleActivity;
+    private string _bubbleMeasuredText;
+    private float _bubbleWidth;
 
     private string _input = string.Empty;
     private Vector2 _scroll;
@@ -162,9 +197,9 @@ public class Window_Agent : Window
     private string _readingScreenshot;
     private Task<byte[]> _screenshotRead;
     // 每個 IMGUI 事件都會重畫；帶參數的翻譯字串只在值變了才重組，免得每幀配置一堆字串。
-    private readonly TextCache<long?> _tokenLabel = new();
     private readonly TextCache<AgentMode> _modeLabel = new();
     private readonly TextCache<int> _reasoningLabel = new();
+    private float _reasoningLabelWidth = DropdownWidth;
     private TextCache<string> _modelLabel = new();
     private float _modelLabelWidth = -1f;
     private readonly TextCache<int> _autoUsageLabel = new();
@@ -209,6 +244,8 @@ public class Window_Agent : Window
         draggable = true;
         resizeable = true;
         doWindowBackground = false;
+        // 原生陰影是方形，會在圓角框外露出一條黑邊。
+        drawShadow = false;
         closeOnClickedOutside = false;
         absorbInputAroundWindow = false;
         closeOnAccept = false;
@@ -223,7 +260,11 @@ public class Window_Agent : Window
     public static void Toggle()
     {
         Window_Agent existing = Find.WindowStack.WindowOfType<Window_Agent>();
-        if (existing != null)
+        if (existing is { _collapsed: true })
+        {
+            existing.Expand();
+        }
+        else if (existing != null)
         {
             existing.Close();
         }
@@ -255,6 +296,11 @@ public class Window_Agent : Window
         LoadPendingScreenshot();
         if (DateTime.UtcNow >= _nextCapabilityProbe) ProbeCapabilities();
         if (!_posInitialized) return;
+        if (_collapsed)
+        {
+            UpdateCollapsedIcon();
+            return;
+        }
 
         // 小於可讀尺寸時保留玩家正在調整的大小，不跳回預設寬高。
         windowRect.width = Mathf.Max(RimAgentSettings.MinWindowWidth, windowRect.width);
@@ -281,6 +327,7 @@ public class Window_Agent : Window
     public override void PostClose()
     {
         base.PostClose();
+        Find.WindowStack.WindowOfType<ContextPanel>()?.Close(false);
         // 關窗後不該再讓進行中的對話繼續跑；下一次送出會建立新的 CTS。
         _cts?.Cancel();
         _cts?.Dispose();
@@ -294,13 +341,203 @@ public class Window_Agent : Window
         _screenshotRead = null;
         if (RimAgentMod.Settings != null)
         {
-            RimAgentMod.Settings.UpdateBounds(windowRect);
+            // 收合時 windowRect 是圖標大小，設定裡留的展開尺寸才是要記住的。
+            if (!_collapsed) RimAgentMod.Settings.UpdateBounds(windowRect);
             RimAgentMod.Settings.Write();
+        }
+    }
+
+    private void Collapse(ColonyAgentSession session)
+    {
+        RimAgentMod.Settings?.UpdateBounds(windowRect);
+        Find.WindowStack.WindowOfType<ContextPanel>()?.Close(false);
+        _collapsed = true;
+        resizeable = false;
+        _iconPressed = false;
+        _collapsedVersion = session.Transcript.Version;
+        _bubbleState = -1;
+        _bubbleText = null;
+        _bubbleMeasuredText = null;
+        _bubbleWidth = 0f;
+        _bubbleOnLeft = true;
+        // 頭像放在視窗右上角；展開時反過來以頭像位置推回視窗，兩者一起移動。
+        windowRect = new Rect(Mathf.Round(windowRect.xMax - AvatarSize - 8f), Mathf.Round(windowRect.y), AvatarSize, AvatarSize);
+        _avatarPos = windowRect.position;
+        _laidOutPos = windowRect.position;
+        UpdateCollapsedIcon();
+    }
+
+    private void Expand()
+    {
+        _collapsed = false;
+        resizeable = true;
+        _iconPressed = false;
+        Vector2 size = InitialSize;
+        float x = _avatarPos.x + AvatarSize + 8f - size.x;
+        float y = _avatarPos.y;
+        windowRect = new Rect(
+            Mathf.Clamp(x, 0f, Mathf.Max(0f, Verse.UI.screenWidth - size.x)),
+            Mathf.Clamp(y, 0f, Mathf.Max(0f, Verse.UI.screenHeight - size.y)),
+            size.x, size.y);
+        RimAgentMod.Settings?.UpdateBounds(windowRect);
+    }
+
+    /// <summary>
+    /// 以頭像為錨點排版：頭像整個留在螢幕內，泡泡預設在左側、左邊放不下就換到右側。
+    /// 按下後頭像沒被拖動就放開視為點擊，展開視窗。
+    /// </summary>
+    private void UpdateCollapsedIcon()
+    {
+        // 頭像位置只跟著拖曳的位移走；不從視窗寬度反推，否則每幀 Rounded() 的誤差會累積成漂移。
+        Vector2 dragged = windowRect.position - _laidOutPos;
+        if (dragged != Vector2.zero) _avatarPos += dragged;
+        float avatarX = Mathf.Round(Mathf.Clamp(_avatarPos.x, 0f, Verse.UI.screenWidth - AvatarSize));
+        float avatarY = Mathf.Round(Mathf.Clamp(_avatarPos.y, 0f, Verse.UI.screenHeight - AvatarSize));
+        _avatarPos = new Vector2(avatarX, avatarY);
+
+        UpdateBubbleText();
+        float extra = _bubbleText != null && _bubbleWidth > 0f ? Mathf.Ceil(_bubbleWidth) + AvatarBubbleGap : 0f;
+        _bubbleOnLeft = avatarX >= extra;
+        windowRect = _bubbleOnLeft
+            ? new Rect(avatarX - extra, avatarY, extra + AvatarSize, AvatarSize)
+            : new Rect(avatarX, avatarY, AvatarSize + extra, AvatarSize);
+        _laidOutPos = windowRect.position;
+
+        if (!_iconPressed || !Input.GetMouseButtonUp(0)) return;
+        _iconPressed = false;
+        if (Vector2.Distance(_avatarPos, _iconPressPos) <= IconClickSlack) Expand();
+    }
+
+    /// <summary>泡泡只在有話要說時出現：等待確認 > 執行中的動作 > 有新訊息。</summary>
+    private void UpdateBubbleText()
+    {
+        ColonyAgentSession session = RimAgentGameComponent.Instance?.Session;
+        if (session == null)
+        {
+            _bubbleText = null;
+            return;
+        }
+        AgentActivity activity = session.Activity.Current;
+        int state = session.HasPendingConfirmation ? 1
+            : session.IsBusy ? 2
+            : session.Transcript.Version != _collapsedVersion ? 3
+            : 0;
+        if (state == _bubbleState && (state != 2 || activity == _bubbleActivity)) return;
+        _bubbleState = state;
+        _bubbleActivity = activity;
+        _bubbleText = state switch
+        {
+            1 => "RimAgent.Window.AvatarPending".Translate().ToString(),
+            2 => ActivityText(activity),
+            3 => "RimAgent.Window.AvatarUnread".Translate().ToString(),
+            _ => null
+        };
+    }
+
+    private static Texture2D DiscTex
+    {
+        get
+        {
+            if (_discTex != null) return _discTex;
+            const int size = 128;
+            const float radius = size / 2f;
+            _discTex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x + 0.5f - radius;
+                float dy = y + 0.5f - radius;
+                float coverage = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy));
+                pixels[y * size + x] = new Color(1f, 1f, 1f, coverage);
+            }
+            _discTex.SetPixels(pixels);
+            _discTex.Apply();
+            return _discTex;
+        }
+    }
+
+    private void DrawCollapsedIcon(Rect inRect)
+    {
+        ColonyAgentSession session = RimAgentGameComponent.Instance?.Session;
+        bool busy = session?.IsBusy == true;
+        bool pending = session?.HasPendingConfirmation == true;
+        bool unread = session != null && session.Transcript.Version != _collapsedVersion;
+        float time = Time.realtimeSinceStartup;
+        float pulse = Mathf.PingPong(time * 2f, 1f);
+
+        // 頭像：圓形底盤 + 外環，閒置時緩慢上下浮動，工作時浮得快一點。
+        float bob = Mathf.Sin(time * (busy ? 5f : 2f)) * 2.5f;
+        var avatarSlot = new Rect(_bubbleOnLeft ? inRect.xMax - AvatarSize : inRect.x, inRect.y, AvatarSize, AvatarSize);
+        // 內縮要容得下外光暈 4px 加浮動 2.5px，否則上下會被視窗邊界截掉。
+        Rect avatar = new Rect(avatarSlot.x, avatarSlot.y + bob, AvatarSize, AvatarSize).ContractedBy(7f);
+        bool hover = Mouse.IsOver(avatarSlot);
+        Color ring = pending ? PauseColor : busy ? Color.Lerp(BorderColor, ToolActionColor, pulse) : BorderColor;
+
+        if (busy || pending || hover)
+        {
+            GUI.color = new Color(ring.r, ring.g, ring.b, busy || pending ? 0.18f + 0.22f * pulse : 0.22f);
+            GUI.DrawTexture(avatar.ExpandedBy(4f), DiscTex);
+        }
+        GUI.color = ring;
+        GUI.DrawTexture(avatar, DiscTex);
+        GUI.color = new Color(0.06f, 0.09f, 0.12f, 0.96f);
+        GUI.DrawTexture(avatar.ContractedBy(2.5f), DiscTex);
+        GUI.color = hover ? Color.white : new Color(1f, 1f, 1f, 0.88f);
+        GUI.DrawTexture(avatar.ContractedBy(8f), IconTex);
+        if (unread)
+        {
+            var dot = new Rect(avatar.xMax - 15f, avatar.y + 1f, 13f, 13f);
+            GUI.color = new Color(0.06f, 0.09f, 0.12f, 1f);
+            GUI.DrawTexture(dot.ExpandedBy(1.5f), DiscTex);
+            GUI.color = NoticeColor;
+            GUI.DrawTexture(dot, DiscTex);
+        }
+        GUI.color = Color.white;
+        TooltipHandler.TipRegion(avatarSlot, "RimAgent.Window.ExpandTip".Translate());
+
+        // 泡泡寬度只能在 OnGUI 量；量好留給 WindowUpdate 排版（GUI.Window 會覆蓋這裡改的 windowRect）。
+        Text.Font = GameFont.Small;
+        if (_bubbleText != _bubbleMeasuredText)
+        {
+            _bubbleMeasuredText = _bubbleText;
+            _bubbleWidth = _bubbleText == null ? 0f : Mathf.Min(Text.CalcSize(_bubbleText).x + 24f, AvatarBubbleMaxWidth);
+        }
+        if (_bubbleText != null && inRect.width > AvatarSize + AvatarBubbleGap)
+        {
+            var bubble = new Rect(
+                _bubbleOnLeft ? inRect.x : inRect.x + AvatarSize + AvatarBubbleGap,
+                inRect.y + (AvatarSize - AvatarBubbleHeight) / 2f,
+                inRect.width - AvatarSize - AvatarBubbleGap, AvatarBubbleHeight);
+            if (Event.current.type == EventType.Repaint) GetBubbleStyle().Draw(bubble, false, false, false, false);
+            Text.Anchor = TextAnchor.MiddleLeft;
+            GUI.color = new Color(0.90f, 0.93f, 0.96f);
+            Rect labelRect = bubble.ContractedBy(12f, 0f);
+            Widgets.Label(labelRect, _bubbleText.Truncate(labelRect.width));
+            GUI.color = Color.white;
+            Text.Anchor = TextAnchor.UpperLeft;
+        }
+
+        // 不吃掉事件：交給視窗本身的 DragWindow 處理拖曳，放開時在 WindowUpdate 判斷是不是點擊。
+        if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && Mouse.IsOver(inRect))
+        {
+            _iconPressed = true;
+            _iconPressPos = _avatarPos;
         }
     }
 
     public override void DoWindowContents(Rect inRect)
     {
+        if (_collapsed)
+        {
+            DrawCollapsedIcon(inRect);
+            return;
+        }
+
         DrawCustomWindowFrame(inRect);
 
         RimAgentGameComponent component = RimAgentGameComponent.Instance;
@@ -328,8 +565,7 @@ public class Window_Agent : Window
         {
             float warnHeight = Text.CalcHeight(_capabilityWarning, contentRect.width - 8f) + 8f;
             var banner = new Rect(contentRect.x, top, contentRect.width, warnHeight);
-            Widgets.DrawBoxSolid(banner, new Color(0.45f, 0.12f, 0.12f, 0.75f));
-            DrawThinBox(banner, EmergencyColor);
+            DrawRoundedBox(banner, new Color(0.45f, 0.12f, 0.12f, 0.75f), EmergencyColor);
             GUI.color = EmergencyColor;
             Widgets.Label(banner.ContractedBy(4f), _capabilityWarning);
             GUI.color = Color.white;
@@ -364,24 +600,193 @@ public class Window_Agent : Window
 
     private static void DrawCustomWindowFrame(Rect inRect)
     {
-        Widgets.DrawBoxSolid(inRect, BgColor);
-        DrawThinBox(inRect, BorderColor);
+        // 視窗最右、最下一排像素會被裁掉（截圖量得右框整條消失、下框變暗），外框右下各內縮 1px 才畫得完整。
+        DrawRoundedBox(new Rect(inRect.x, inRect.y, inRect.width - 1f, inRect.height - 1f), BgColor, BorderColor, WindowRadius);
     }
 
-    private static void DrawThinBox(Rect rect, Color color)
+    // 圓角貼圖（白色，用 GUI.color 上色）：鍵是半徑像素。Unity 內建的圓角 DrawTexture 在遊戲裡不生效，只能自己產生。
+    private static readonly Dictionary<int, Texture2D> RoundedFillTex = [];
+    private static readonly Dictionary<int, Texture2D> RoundedRingTex = [];
+
+    /// <summary>圓角底色加 1px 圓角外框；顏色傳 clear 就略過該層。</summary>
+    private static void DrawRoundedBox(Rect rect, Color fill, Color border, float radius = ControlRadius)
     {
+        if (Event.current.type != EventType.Repaint) return;
+        int r = Mathf.Max(1, Mathf.RoundToInt(radius));
         Color oldColor = GUI.color;
-        GUI.color = color;
-        Widgets.DrawBox(rect, 1);
+        if (fill.a > 0f)
+        {
+            GUI.color = fill;
+            DrawNineSlice(rect, GetRoundedTex(RoundedFillTex, r, false), r);
+        }
+        if (border.a > 0f)
+        {
+            GUI.color = border;
+            DrawNineSlice(rect, GetRoundedTex(RoundedRingTex, r, true), r);
+        }
         GUI.color = oldColor;
+    }
+
+    /// <summary>邊長 2r+2 的圓角方塊：四角各 r 像素原尺寸繪製，中間 2 像素拉伸成邊與內部。</summary>
+    private static Texture2D GetRoundedTex(Dictionary<int, Texture2D> cache, int r, bool ring)
+    {
+        if (cache.TryGetValue(r, out Texture2D cached)) return cached;
+        int size = r * 2 + 2;
+        float half = size / 2f;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+        var pixels = new Color[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float dx = Mathf.Max(0f, Mathf.Abs(x + 0.5f - half) - (half - r));
+            float dy = Mathf.Max(0f, Mathf.Abs(y + 0.5f - half) - (half - r));
+            float distance = Mathf.Sqrt(dx * dx + dy * dy);
+            float alpha = Mathf.Clamp01(r + 0.5f - distance);
+            // 外框：以 1px 線條中心算覆蓋率再開根號；弧線像素的覆蓋天生較低，弧段稍加粗補亮，直邊仍是完整 1px。
+            if (ring)
+            {
+                float reach = dx > 0f && dy > 0f ? 1.3f : 1f;
+                alpha = Mathf.Sqrt(Mathf.Clamp01(reach - Mathf.Abs(distance - (r - 0.5f))));
+            }
+            pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+        }
+        texture.SetPixels(pixels);
+        texture.Apply();
+        cache[r] = texture;
+        return texture;
+    }
+
+    /// <summary>
+    /// 手動九宮格，顏色取自 GUI.color。GUIStyle 的 border 九宮格在接縫處會重疊約 1px，
+    /// 半透明底色因此在離邊 r 像素處多疊一條暗線，所以改成九塊互不重疊的貼圖。
+    /// UV 的 v 由下往上：畫面上排對應 v 靠 1 的那段、下排對應靠 0 的那段，圓角方向才不會反。
+    /// </summary>
+    private static void DrawNineSlice(Rect rect, Texture2D texture, int r)
+    {
+        float c = Mathf.Min(r, Mathf.Floor(Mathf.Min(rect.width, rect.height) / 2f));
+        float k = (float)r / texture.width;
+        float m = 2f / texture.width;
+        // UI 縮放不是 1 時切線落在半像素上，Unity 各自把每塊對齊像素，相鄰兩塊會重疊 1px（半透明底色疊兩層變暗線）。
+        // 先把每條切線對齊到裝置像素，相鄰兩塊共用同一個座標。
+        // 換算參數整個九宮格共用一份，不必每條切線各算一次。
+        Vector2 origin = GUIUtility.GUIToScreenPoint(Vector2.zero);
+        Vector2 unit = GUIUtility.GUIToScreenPoint(Vector2.one) - origin;
+        float sx = PixelScale(unit.x, GUI.matrix.m00), sy = PixelScale(unit.y, GUI.matrix.m11);
+        float x0 = AlignToPixel(rect.x, origin.x, unit.x, sx), x1 = AlignToPixel(rect.x + c, origin.x, unit.x, sx);
+        float x2 = AlignToPixel(rect.xMax - c, origin.x, unit.x, sx), x3 = AlignToPixel(rect.xMax, origin.x, unit.x, sx);
+        float y0 = AlignToPixel(rect.y, origin.y, unit.y, sy), y1 = AlignToPixel(rect.y + c, origin.y, unit.y, sy);
+        float y2 = AlignToPixel(rect.yMax - c, origin.y, unit.y, sy), y3 = AlignToPixel(rect.yMax, origin.y, unit.y, sy);
+        float midW = x2 - x1, midH = y2 - y1;
+        // 四角
+        GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x0, y0, x1, y1), texture, new Rect(0f, 1f - k, k, k));
+        GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x2, y0, x3, y1), texture, new Rect(1f - k, 1f - k, k, k));
+        GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x0, y2, x1, y3), texture, new Rect(0f, 0f, k, k));
+        GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x2, y2, x3, y3), texture, new Rect(1f - k, 0f, k, k));
+        // 四邊與中心（取貼圖中間 2px 拉伸）
+        if (midW > 0f)
+        {
+            GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x1, y0, x2, y1), texture, new Rect(k, 1f - k, m, k));
+            GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x1, y2, x2, y3), texture, new Rect(k, 0f, m, k));
+        }
+        if (midH > 0f)
+        {
+            GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x0, y1, x1, y2), texture, new Rect(0f, k, k, m));
+            GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x2, y1, x3, y2), texture, new Rect(1f - k, k, k, m));
+        }
+        if (midW > 0f && midH > 0f)
+            GUI.DrawTextureWithTexCoords(Rect.MinMaxRect(x1, y1, x2, y2), texture, new Rect(k, k, m, m));
+    }
+
+    /// <summary>把 GUI 座標對齊到裝置像素（UI 縮放下每個 GUI 單位不一定是整數像素）。</summary>
+    /// <summary>
+    /// GUIToScreenPoint 是否已含 GUI.matrix 的縮放不確定：量得 1 個 GUI 單位剛好 1 螢幕單位時，
+    /// 縮放還沒算進去，用當下 GUI.matrix 的縮放（而非全域 UI 縮放，子矩陣另外縮放時才不會錯）。
+    /// </summary>
+    private static float PixelScale(float perUnit, float matrixScale)
+    {
+        return Mathf.Abs(perUnit - 1f) < 0.001f && matrixScale > 0f ? matrixScale : 1f;
+    }
+
+    /// <summary>換到螢幕座標後四捨五入到整數像素再換回來。</summary>
+    private static float AlignToPixel(float v, float origin, float perUnit, float scale)
+    {
+        float pixel = Mathf.Round((origin + v * perUnit) * scale);
+        return (pixel / scale - origin) / perUnit;
+    }
+
+    // 上下文圓盤：每個百分比一張環形貼圖（0～100，用到才產生）。
+    private const int GaugeTexSize = 34;
+    private static readonly Dictionary<int, Texture2D> GaugeArcTex = [];
+
+    /// <summary>
+    /// 最近一次輸入 token 佔模型上下文上限的比例，畫成順時針填滿的圓環。
+    /// 到自動壓縮門檻變黃、90% 以上變紅；上限或用量未知時只畫底環。
+    /// </summary>
+    private static void DrawContextGauge(Rect rect, ColonyAgentSession.ContextStatus status)
+    {
+        if (Event.current.type != EventType.Repaint) return;
+        Color old = GUI.color;
+        GUI.color = new Color(DividerColor.r, DividerColor.g, DividerColor.b, 0.55f);
+        GUI.DrawTexture(rect, GetGaugeArc(100));
+        if (status.LastInputTokens.HasValue && status.ContextWindow is > 0)
+        {
+            float ratio = Mathf.Clamp01((float)status.LastInputTokens.Value / status.ContextWindow.Value);
+            int percent = Mathf.Clamp(Mathf.CeilToInt(ratio * 100f), ratio > 0f ? 1 : 0, 100);
+            GUI.color = percent >= 90 ? EmergencyColor
+                : status.AutoCompactEnabled && percent >= status.Threshold ? PauseColor
+                : ToolActionColor;
+            if (percent > 0) GUI.DrawTexture(rect, GetGaugeArc(percent));
+        }
+        GUI.color = old;
+    }
+
+    private static Texture2D GetGaugeArc(int percent)
+    {
+        if (GaugeArcTex.TryGetValue(percent, out Texture2D cached)) return cached;
+        const int size = GaugeTexSize;
+        const float half = size / 2f;
+        const float outer = half - 1f;
+        const float inner = outer - 5f;
+        float limit = percent / 100f;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+        var pixels = new Color[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float dx = x + 0.5f - half;
+            float dy = y + 0.5f - half; // 貼圖 y 向上
+            float distance = Mathf.Sqrt(dx * dx + dy * dy);
+            float alpha = Mathf.Clamp01(outer + 0.5f - distance) * Mathf.Clamp01(distance - inner + 0.5f);
+            // 從正上方開始順時針。
+            float angle = Mathf.Atan2(dx, dy);
+            if (angle < 0f) angle += Mathf.PI * 2f;
+            if (angle / (Mathf.PI * 2f) > limit) alpha = 0f;
+            pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+        }
+        texture.SetPixels(pixels);
+        texture.Apply();
+        GaugeArcTex[percent] = texture;
+        return texture;
     }
 
     private void DrawTitleBar(Rect titleRect, ColonyAgentSession session)
     {
         var bgRect = new Rect(titleRect.x + 1f, titleRect.y + 1f, titleRect.width - 2f, titleRect.height - 1f);
-        Widgets.DrawBoxSolid(bgRect, new Color(0.08f, 0.11f, 0.14f, 0.6f));
+        // 只圓上面兩角：在標題列範圍內裁切一個往下延伸的圓角塊，下緣的圓角被裁掉。
+        Widgets.BeginGroup(bgRect);
+        DrawRoundedBox(new Rect(0f, 0f, bgRect.width, bgRect.height + WindowRadius * 2f),
+            new Color(0.08f, 0.11f, 0.14f, 0.6f), Color.clear, WindowRadius - 1f);
+        Widgets.EndGroup();
 
-        var labelRect = new Rect(titleRect.x + 12f, titleRect.y + 4f, titleRect.width - 250f, titleRect.height - 4f);
+        var labelRect = new Rect(titleRect.x + 12f, titleRect.y + 4f, titleRect.width - 100f, titleRect.height - 4f);
         Text.Font = GameFont.Small;
         Text.Anchor = TextAnchor.MiddleLeft;
         GUI.color = TitleColor;
@@ -392,16 +797,18 @@ public class Window_Agent : Window
         // 只顯示供應商實際回報的最近一次主模型輸入 token；
         // 訊息數與折疊門檻放在提示中，避免把訊息數誤標成 token 或視窗容量。
         ColonyAgentSession.ContextStatus status = session.GetContextStatus();
-        var contextRect = new Rect(titleRect.xMax - 228f, titleRect.y + 4f, 196f, titleRect.height - 4f);
-        Text.Font = GameFont.Tiny;
-        Text.Anchor = TextAnchor.MiddleRight;
-        GUI.color = status.LastInputTokens.HasValue ? ToolTextColor : ControlBorderColor;
-        string tokenLabel = _tokenLabel.Get(status.LastInputTokens, tokens => tokens.HasValue
-            ? "RimAgent.Context.InputTokens".Translate(tokens.Value.ToString("N0")).ToString()
-            : "RimAgent.Context.Unavailable".Translate().ToString());
-        Widgets.Label(contextRect, tokenLabel);
+        var gaugeRect = new Rect(titleRect.xMax - 73f, titleRect.y + 7f, 17f, 17f);
+        DrawContextGauge(gaugeRect, status);
+        if (Mouse.IsOver(gaugeRect)) DrawRoundedBox(gaugeRect.ExpandedBy(2f), new Color(1f, 1f, 1f, 0.10f), Color.clear, 4f);
+        // 面板開著時點圓盤：按下就被「點外面關閉」關掉，放開時按鈕才觸發，不擋會立刻又開回來。
+        if (Event.current.type == EventType.MouseDown && Mouse.IsOver(gaugeRect.ExpandedBy(2f)))
+            _gaugeClosedPanel = ContextPanel.ClosedThisFrame;
+        if (Widgets.ButtonInvisible(gaugeRect.ExpandedBy(2f)) && !_gaugeClosedPanel)
+        {
+            ContextPanel.Toggle(session, new Vector2(windowRect.x + gaugeRect.xMax + 2f, windowRect.y + gaugeRect.yMax + 6f));
+        }
         // 提示字串只在滑鼠停在上面時才組。
-        if (Mouse.IsOver(contextRect))
+        if (Mouse.IsOver(gaugeRect))
         {
             string compact = status.AutoCompactEnabled
                 ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
@@ -409,7 +816,7 @@ public class Window_Agent : Window
             string window = status.ContextWindow.HasValue
                 ? "RimAgent.Context.WindowKnown".Translate(status.ContextWindow.Value.ToString("N0"))
                 : "RimAgent.Context.WindowUnknown".Translate();
-            TooltipHandler.TipRegion(contextRect, "RimAgent.Context.Tooltip".Translate(window, compact));
+            TooltipHandler.TipRegion(gaugeRect,"RimAgent.Context.Tooltip".Translate(window, compact));
         }
         GUI.color = Color.white;
         Text.Anchor = TextAnchor.UpperLeft;
@@ -418,7 +825,7 @@ public class Window_Agent : Window
         var closeRect = new Rect(titleRect.xMax - 26f, titleRect.y + 4f, 20f, 20f);
         if (Mouse.IsOver(closeRect))
         {
-            Widgets.DrawBoxSolid(closeRect, CloseButHoverColor);
+            DrawRoundedBox(closeRect, CloseButHoverColor, Color.clear, 4f);
         }
         Text.Anchor = TextAnchor.MiddleCenter;
         GUI.color = Mouse.IsOver(closeRect) ? EmergencyColor : BorderColor;
@@ -429,6 +836,24 @@ public class Window_Agent : Window
         if (Widgets.ButtonInvisible(closeRect))
         {
             Close();
+            return;
+        }
+
+        var collapseRect = new Rect(closeRect.x - 24f, closeRect.y, 20f, 20f);
+        if (Mouse.IsOver(collapseRect))
+        {
+            DrawRoundedBox(collapseRect, new Color(1f, 1f, 1f, 0.12f), Color.clear, 4f);
+        }
+        Text.Anchor = TextAnchor.MiddleCenter;
+        GUI.color = Mouse.IsOver(collapseRect) ? TitleColor : BorderColor;
+        Widgets.Label(collapseRect, "—");
+        GUI.color = Color.white;
+        Text.Anchor = TextAnchor.UpperLeft;
+        TooltipHandler.TipRegion(collapseRect, "RimAgent.Window.CollapseTip".Translate());
+
+        if (Widgets.ButtonInvisible(collapseRect))
+        {
+            Collapse(session);
         }
     }
 
@@ -737,8 +1162,7 @@ public class Window_Agent : Window
 
     private void DrawScreenshotPreview(Rect rect, string path)
     {
-        Widgets.DrawBoxSolid(rect, ControlBgColor);
-        DrawThinBox(rect, ControlBorderColor);
+        DrawRoundedBox(rect, ControlBgColor, ControlBorderColor);
         Texture2D texture = GetScreenshotTexture(path);
         if (texture != null)
         {
@@ -1282,12 +1706,11 @@ public class Window_Agent : Window
     {
         RimAgentSettings settings = RimAgentMod.Settings;
         var modeRect = new Rect(rect.x, rect.y, DropdownWidth, rect.height);
-        var reasoningRect = new Rect(modeRect.xMax + 6f, rect.y, DropdownWidth, rect.height);
         // 執行或思考中也能切換：模式、思考強度與模型都是即時同步，下一次呼叫生效。
         bool enabled = settings != null;
 
         DrawModeButton(modeRect, enabled, settings, session);
-        DrawReasoningButton(reasoningRect, enabled, settings);
+        Rect reasoningRect = DrawReasoningButton(new Rect(modeRect.xMax + 6f, rect.y, DropdownWidth, rect.height), enabled, settings);
 
         var modelRect = new Rect(reasoningRect.xMax + 6f, rect.y, Mathf.Clamp(rect.xMax - reasoningRect.xMax - 6f, 0f, ModelDropdownWidth), rect.height);
         DrawModelButton(modelRect, enabled, settings);
@@ -1322,13 +1745,29 @@ public class Window_Agent : Window
         if (Mouse.IsOver(modeRect)) TooltipHandler.TipRegion(modeRect, ModeDescription(session.Mode));
     }
 
-    private void DrawReasoningButton(Rect reasoningRect, bool enabled, RimAgentSettings settings)
+    /// <summary>按鈕寬度貼合文字（「推理：高」很短，固定寬度會留一大片空白）；回傳實際使用的範圍。</summary>
+    private Rect DrawReasoningButton(Rect reasoningRect, bool enabled, RimAgentSettings settings)
     {
         ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
         bool routing = settings != null && settings.reasoningRouting;
-        // 快取鍵：分流時用 -1，其餘用列舉值。
-        string reasoningStatus = _reasoningLabel.Get(routing ? -1 : (int)current, key => "RimAgent.Reasoning.Status".Translate(
-            key < 0 ? "RimAgent.Reasoning.Routing".Translate().ToString() : ReasoningLabel((ReasoningLevel)key)).ToString());
+        // 快取鍵：分流時用 -1，其餘用列舉值。文字變了才重新量寬度。
+        string reasoningStatus = _reasoningLabel.Get(routing ? -1 : (int)current, key =>
+        {
+            string label = "RimAgent.Reasoning.Status".Translate(
+                key < 0 ? "RimAgent.Reasoning.Routing".Translate().ToString() : ReasoningLabel((ReasoningLevel)key)).ToString();
+            GameFont oldFont = Text.Font;
+            Text.Font = GameFont.Tiny;
+            _reasoningLabelWidth = Mathf.Ceil(Text.CalcSize(label).x) + 24f;
+            Text.Font = oldFont;
+            return label;
+        });
+        reasoningRect.width = Mathf.Min(reasoningRect.width, _reasoningLabelWidth);
+        DrawReasoningMenu(reasoningRect, reasoningStatus, enabled, settings);
+        return reasoningRect;
+    }
+
+    private void DrawReasoningMenu(Rect reasoningRect, string reasoningStatus, bool enabled, RimAgentSettings settings)
+    {
         if (DrawUnifiedButton(reasoningRect, reasoningStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
             var options = new List<FloatMenuOption>();
@@ -1385,18 +1824,15 @@ public class Window_Agent : Window
     private static bool DrawUnifiedButton(Rect rect, string label, Color borderColor, Color textColor, bool enabled, GameFont font = GameFont.Small)
     {
         Color bg = enabled ? ControlBgColor : new Color(0.05f, 0.07f, 0.09f, 0.5f);
-        Widgets.DrawBoxSolid(rect, bg);
-        DrawThinBox(rect, enabled ? borderColor : ControlBorderColor);
-
-        if (Mouse.IsOver(rect) && enabled)
-        {
-            Widgets.DrawHighlight(rect);
-        }
+        bool hover = Mouse.IsOver(rect) && enabled;
+        if (hover) bg = Color.Lerp(bg, Color.white, 0.10f);
+        DrawRoundedBox(rect, bg, enabled ? borderColor : ControlBorderColor);
 
         Text.Anchor = TextAnchor.MiddleCenter;
         Text.Font = font;
         GUI.color = enabled ? textColor : new Color(0.45f, 0.45f, 0.45f);
-        Widgets.Label(rect, label);
+        // 遊戲字型的中文字形偏上約 2px（截圖量得），文字框下移補正才會視覺置中。
+        Widgets.Label(new Rect(rect.x, rect.y + 2f, rect.width, rect.height), label);
         GUI.color = Color.white;
         Text.Font = GameFont.Small;
         Text.Anchor = TextAnchor.UpperLeft;
@@ -1550,15 +1986,35 @@ public class Window_Agent : Window
         if (component?.IsGoalRunning == true) component.PauseGoal();
     }
 
+    private static GUIStyle _bareTextFieldStyle;
+
+    /// <summary>沿用遊戲輸入框的字型與游標，但拿掉方形底圖，改由外面畫的圓角框當背景。</summary>
+    private static GUIStyle GetBareTextFieldStyle()
+    {
+        if (_bareTextFieldStyle != null) return _bareTextFieldStyle;
+        GameFont old = Text.Font;
+        Text.Font = GameFont.Small;
+        _bareTextFieldStyle = new GUIStyle(Text.CurTextFieldStyle);
+        Text.Font = old;
+        foreach (GUIStyleState state in new[]
+                 {
+                     _bareTextFieldStyle.normal, _bareTextFieldStyle.hover, _bareTextFieldStyle.focused, _bareTextFieldStyle.active,
+                     _bareTextFieldStyle.onNormal, _bareTextFieldStyle.onHover, _bareTextFieldStyle.onFocused, _bareTextFieldStyle.onActive
+                 })
+        {
+            state.background = null;
+        }
+        return _bareTextFieldStyle;
+    }
+
     private void DrawInputField(Rect inputRect, bool busy)
     {
-        Widgets.DrawBoxSolid(inputRect, ControlBgColor);
-        DrawThinBox(inputRect, ControlBorderColor);
+        DrawRoundedBox(inputRect, ControlBgColor, ControlBorderColor);
 
         GUI.SetNextControlName(InputControlName);
         var innerInputRect = inputRect.ContractedBy(4f, 2f);
         string before = _input;
-        _input = Widgets.TextField(innerInputRect, _input);
+        _input = GUI.TextField(innerInputRect, _input ?? string.Empty, GetBareTextFieldStyle());
         // 玩家自己改了內容就不算在瀏覽歷史：↓ 不會拿舊草稿蓋掉新字，打 / 也讓方向鍵回到斜線選單。
         if (_input != before) _historyIndex = -1;
 
@@ -1703,8 +2159,7 @@ public class Window_Agent : Window
         int shown = Mathf.Min(matches.Count, maxRows);
         float height = shown * SlashRowHeight + 8f;
         var popup = new Rect(bottom.x, bottom.y - height - 4f, Mathf.Min(SlashPopupWidth, bottom.width), height);
-        Widgets.DrawBoxSolid(popup, BgColor);
-        DrawThinBox(popup, BorderColor);
+        DrawRoundedBox(popup, BgColor, BorderColor, WindowRadius);
 
         IReadOnlyList<AgentSkill> skills = RimAgentGameComponent.Instance?.Skills ?? [];
         Text.Anchor = TextAnchor.MiddleLeft;
@@ -1764,8 +2219,7 @@ public class Window_Agent : Window
         float height = matches.Count * SlashRowHeight + 8f;
         var popup = new Rect(bottom.x, bottom.y - height - 4f, Mathf.Min(SlashPopupWidth, bottom.width), height);
 
-        Widgets.DrawBoxSolid(popup, BgColor);
-        DrawThinBox(popup, BorderColor);
+        DrawRoundedBox(popup, BgColor, BorderColor, WindowRadius);
 
         Text.Anchor = TextAnchor.MiddleLeft;
         Text.WordWrap = false;
@@ -2093,6 +2547,9 @@ public class Window_Agent : Window
     private void ProbeCapabilities()
     {
         _nextCapabilityProbe = DateTime.UtcNow.AddSeconds(2);
+        // 框架換掉模型後，清掉 RimAgent 殘留的舊指定，免得繼續打不存在的模型。
+        RimAgentSettings settings = RimAgentMod.Settings;
+        if (settings != null && settings.ClearAgentModelIfMissing(ConfiguredModels())) settings.Write();
         try
         {
             _capabilityWarning = CheckFunctionCalling() ? null : "RimAgent.NoFunctionCalling".Translate().ToString();

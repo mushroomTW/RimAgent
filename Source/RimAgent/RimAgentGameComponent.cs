@@ -1478,6 +1478,7 @@ public class RimAgentGameComponent : GameComponent
         session.ReasoningRouting = settings.reasoningRouting;
         session.PreloadToolPacks = settings.decisionPreloadPacks;
         session.ConfirmAutonomousMajor = () => settings.confirmAutonomousMajor;
+        if (settings.ClearAgentModelIfMissing(UI.Window_Agent.ConfiguredModels())) settings.Write();
         session.PreferredModel = settings.agentModel;
         _expansions = ExpansionsLine();
         session.SubagentExpansions = _expansions;

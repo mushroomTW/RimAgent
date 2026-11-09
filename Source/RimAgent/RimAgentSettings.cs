@@ -34,6 +34,8 @@ public class RimAgentSettings : ModSettings
     public string subagentModel = FollowAgentModel;
     public ReasoningLevel subagentReasoning = ReasoningLevel.Auto;
 
+    /// <summary>總開關：關掉時所有決策模型功能都不呼叫，一律走主 LLM／規則的備援路徑。</summary>
+    public bool decisionEnabled = true;
     /// <summary>決策模型供應商 id（留空＝沿用框架設定）。</summary>
     public string decisionProvider = string.Empty;
     /// <summary>決策模型名稱（留空＝沿用該供應商設定的模型）。</summary>
@@ -104,7 +106,7 @@ public class RimAgentSettings : ModSettings
 
     // 上下文壓縮：依模型視窗的百分比自動折疊較舊工具輸出（不多花模型呼叫）；
     // 手動 /compact 另走一次 LLM 摘要，不受此開關影響。
-    public const int DefaultAutoCompactThreshold = 90;
+    public const int DefaultAutoCompactThreshold = 60;
     public const int MinAutoCompactThreshold = 30;
     // 上限 95：留一點輸出空間給模型，100% 會讓它在回應途中就撞到視窗天花板。
     public const int MaxAutoCompactThreshold = 95;
@@ -170,6 +172,23 @@ public class RimAgentSettings : ModSettings
     {
         EnsureAllows();
         allowByCategory[(int)category] = value;
+    }
+
+    /// <summary>
+    /// 指定的 Agent 模型已不在框架的模型清單（備援鏈）時清回預設，改為跟隨框架。
+    /// 玩家在框架換掉模型後，RimAgent 不該還留著舊模型字串繼續用。清單為空（框架未就緒）時不動。
+    /// </summary>
+    /// <returns>有清掉時回 true，呼叫端負責寫回設定檔。</returns>
+    public bool ClearAgentModelIfMissing(IReadOnlyCollection<string> configuredModels)
+    {
+        string current = agentModel?.Trim();
+        if (string.IsNullOrEmpty(current) || configuredModels == null || configuredModels.Count == 0) return false;
+        foreach (string model in configuredModels)
+        {
+            if (string.Equals(model?.Trim(), current, StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        agentModel = string.Empty;
+        return true;
     }
 
     public UnityEngine.Vector2 WindowSize => new(
@@ -240,6 +259,7 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref compactReasoning, "compactReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref subagentModel, "subagentModel", FollowAgentModel);
         Scribe_Values.Look(ref subagentReasoning, "subagentReasoning", ReasoningLevel.Auto);
+        Scribe_Values.Look(ref decisionEnabled, "decisionEnabled", true);
         Scribe_Values.Look(ref decisionProvider, "decisionProvider", string.Empty);
         Scribe_Values.Look(ref decisionModel, "decisionModel", string.Empty);
         Scribe_Collections.Look(ref decisionCategories, "decisionCategories", LookMode.Deep);

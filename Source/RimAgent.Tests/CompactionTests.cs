@@ -33,11 +33,11 @@ public class CompactionTests
 
 #pragma warning disable MAAI001 // AF 1.21 壓縮 API 評估中；測試直接覆蓋觸發條件。
     [Test]
-    public void AutoCompactDefaultsToEnabledAtNinetyPercent()
+    public void AutoCompactDefaultsToEnabledAtDefaultPercent()
     {
         ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
         Assert.That(session.AutoCompactEnabled, Is.True);
-        Assert.That(session.AutoCompactThreshold, Is.EqualTo(90));
+        Assert.That(session.AutoCompactThreshold, Is.EqualTo(RimAgentSettings.DefaultAutoCompactThreshold));
     }
 
     [Test]
