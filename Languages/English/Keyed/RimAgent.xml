@@ -297,7 +297,7 @@
   <RimAgent.Settings.CooldownHint>In game time. Fewer actions cost less AI money.</RimAgent.Settings.CooldownHint>
   <RimAgent.Settings.CooldownCustom>Currently {0} minutes.</RimAgent.Settings.CooldownCustom>
   <RimAgent.Settings.Section3Title>Quick helper</RimAgent.Settings.Section3Title>
-  <RimAgent.Settings.Section3Hint>A cheap, fast AI handles small choices (confirm or not, speed up or not), so the Agent is faster and cheaper.</RimAgent.Settings.Section3Hint>
+  <RimAgent.Settings.Section3Hint>A cheap, fast AI handles small choices (confirm or not, speed up or not), so the Agent is faster and cheaper.\nRequires a decision model set up in the Decision tab of RimLLM Framework.</RimAgent.Settings.Section3Hint>
   <RimAgent.Settings.DecisionEnabledDesc>You can play without it; it is just a bit slower and costs a bit more.</RimAgent.Settings.DecisionEnabledDesc>
   <RimAgent.Settings.HideAdvanced>Hide advanced settings</RimAgent.Settings.HideAdvanced>
   <RimAgent.Settings.ResetDefaults>Reset to defaults</RimAgent.Settings.ResetDefaults>

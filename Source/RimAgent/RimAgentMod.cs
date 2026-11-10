@@ -101,9 +101,14 @@ public class RimAgentMod : Mod
 
         // 總開關與連線狀態放在主頁；供應商、模型與各項細節留在進階設定。
         DrawSectionHeader(listing, 3, "RimAgent.Settings.Section3Title".Translate(), "RimAgent.Settings.Section3Hint".Translate());
-        DrawToggleRow(listing, ref Settings.decisionEnabled, "RimAgent.Settings.DecisionEnabled".Translate(),
-            "RimAgent.Settings.DecisionEnabledDesc".Translate(), "RimAgent.Settings.DecisionEnabledTip".Translate(), 0f);
-        if (Settings.decisionEnabled) DrawDecisionStatus(listing);
+        // 決策模型沒設定好時開關變灰、點不動，下方說明原因並給前往按鈕；存檔裡的值不動，設定好後照原值生效。
+        DecisionAvailability decision = DecisionServiceFactory.GetAvailability();
+        bool decisionReady = IsDecisionReady(decision);
+        bool decisionOn = decisionReady && Settings.decisionEnabled;
+        DrawToggleRow(listing, ref decisionOn, "RimAgent.Settings.DecisionEnabled".Translate(),
+            "RimAgent.Settings.DecisionEnabledDesc".Translate(), "RimAgent.Settings.DecisionEnabledTip".Translate(), 0f, !decisionReady);
+        if (decisionReady) Settings.decisionEnabled = decisionOn;
+        if (!decisionReady || decisionOn) DrawDecisionStatus(listing, decision);
 
         listing.Gap(20f);
         if (DrawExpandButton(listing, _showAdvanced, "RimAgent.Settings.ShowAdvanced".Translate(), "RimAgent.Settings.HideAdvanced".Translate(),
@@ -409,9 +414,13 @@ public class RimAgentMod : Mod
     }
 
     /// <summary>決策模型的連線狀態一行，沒設定時附「前往」按鈕；下方是測試按鈕。</summary>
-    private static void DrawDecisionStatus(Listing_Standard listing)
+    private static bool IsDecisionReady(DecisionAvailability availability)
     {
-        DecisionAvailability availability = DecisionServiceFactory.GetAvailability();
+        return availability != null && availability.Enabled && (!availability.RequiresKey || availability.HasKey);
+    }
+
+    private static void DrawDecisionStatus(Listing_Standard listing, DecisionAvailability availability)
+    {
         string statusText;
         bool ok = false;
         if (availability == null || !availability.Enabled)
@@ -443,7 +452,7 @@ public class RimAgentMod : Mod
         {
             OpenFrameworkSettings();
         }
-        DrawDecisionTest(listing, SubIndent);
+        if (ok) DrawDecisionTest(listing, SubIndent);
     }
 
     /// <summary>大開關卡片：整張可點，開啟時綠框。</summary>
@@ -473,7 +482,8 @@ public class RimAgentMod : Mod
     }
 
     /// <summary>一列勾選：名稱下面直接一行小字說明，整列可點；完整說明在提示。</summary>
-    private static void DrawToggleRow(Listing_Standard listing, ref bool value, string label, string desc, string tip, float indent)
+    /// <param name="disabled">true 時勾選框與文字變灰、點了不會切換。</param>
+    private static void DrawToggleRow(Listing_Standard listing, ref bool value, string label, string desc, string tip, float indent, bool disabled = false)
     {
         float textX = indent + 34f;
         float textWidth = listing.ColumnWidth - textX;
@@ -482,19 +492,20 @@ public class RimAgentMod : Mod
         Text.Font = GameFont.Small;
         Rect row = listing.GetRect(24f + descHeight + 6f);
         var hit = new Rect(row.x + indent, row.y, row.width - indent, row.height);
-        Widgets.CheckboxDraw(hit.x + 4f, row.y + 2f, value, false);
+        Widgets.CheckboxDraw(hit.x + 4f, row.y + 2f, value, disabled);
+        GUI.color = disabled ? Dim : Color.white;
         Widgets.Label(new Rect(row.x + textX, row.y + 1f, textWidth, 24f), label);
         Text.Font = GameFont.Tiny;
-        GUI.color = Dim;
+        GUI.color = disabled ? new Color(Dim.r, Dim.g, Dim.b, 0.6f) : Dim;
         Widgets.Label(new Rect(row.x + textX, row.y + 24f, textWidth, descHeight), desc);
         GUI.color = Color.white;
         Text.Font = GameFont.Small;
         if (Mouse.IsOver(hit))
         {
-            Widgets.DrawHighlight(hit);
+            if (!disabled) Widgets.DrawHighlight(hit);
             if (!string.IsNullOrEmpty(tip)) TooltipHandler.TipRegion(hit, tip);
         }
-        if (Widgets.ButtonInvisible(hit)) value = !value;
+        if (!disabled && Widgets.ButtonInvisible(hit)) value = !value;
         listing.Gap(4f);
     }
 
@@ -502,7 +513,16 @@ public class RimAgentMod : Mod
     private static bool DrawExpandButton(Listing_Standard listing, bool expanded, string showLabel, string hideLabel, string tip)
     {
         Rect row = listing.GetRect(30f);
-        bool clicked = Widgets.ButtonText(row, (expanded ? "[ − ]  " + hideLabel : "[ + ]  " + showLabel), true, true, true, TextAnchor.MiddleLeft);
+        // ButtonText 靠左對齊時文字貼著框線；按鈕只畫底，文字另外留邊距畫，放不下就截斷。
+        bool clicked = Widgets.ButtonText(row, string.Empty);
+        const float Padding = 10f;
+        var labelRect = new Rect(row.x + Padding, row.y, row.width - Padding * 2f, row.height);
+        string label = expanded ? "[ − ]  " + hideLabel : "[ + ]  " + showLabel;
+        Text.Anchor = TextAnchor.MiddleLeft;
+        Text.WordWrap = false;
+        Widgets.Label(labelRect, label.Truncate(labelRect.width));
+        Text.WordWrap = true;
+        Text.Anchor = TextAnchor.UpperLeft;
         if (!string.IsNullOrEmpty(tip)) TooltipHandler.TipRegion(row, tip);
         return clicked;
     }

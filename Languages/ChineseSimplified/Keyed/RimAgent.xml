@@ -297,7 +297,7 @@
   <RimAgent.Settings.CooldownHint>按游戏内时间计算。次数越少，花的 AI 费用越少。</RimAgent.Settings.CooldownHint>
   <RimAgent.Settings.CooldownCustom>目前是 {0} 分钟。</RimAgent.Settings.CooldownCustom>
   <RimAgent.Settings.Section3Title>快速判断小帮手</RimAgent.Settings.Section3Title>
-  <RimAgent.Settings.Section3Hint>用一个便宜又快的 AI 处理小事（要不要确认、要不要快进），让 Agent 反应更快、更省钱。</RimAgent.Settings.Section3Hint>
+  <RimAgent.Settings.Section3Hint>用一个便宜又快的 AI 处理小事（要不要确认、要不要快进），让 Agent 反应更快、更省钱。\n需要先在 RimLLM Framework 的「决策」分页设置决策模型才能用。</RimAgent.Settings.Section3Hint>
   <RimAgent.Settings.DecisionEnabledDesc>关掉也能玩，只是会慢一点、多花一点钱。</RimAgent.Settings.DecisionEnabledDesc>
   <RimAgent.Settings.HideAdvanced>收起高级设置</RimAgent.Settings.HideAdvanced>
   <RimAgent.Settings.ResetDefaults>恢复默认</RimAgent.Settings.ResetDefaults>
