@@ -62,49 +62,46 @@
 
   <!-- Settings -->
   <RimAgent.Settings.Category>RimAgent</RimAgent.Settings.Category>
-  <RimAgent.Settings.PermissionsHeader>What the agent is allowed to do</RimAgent.Settings.PermissionsHeader>
-  <RimAgent.Settings.AllowAll>Allow all</RimAgent.Settings.AllowAll>
-  <RimAgent.Settings.DenyAll>Deny all</RimAgent.Settings.DenyAll>
-  <RimAgent.Settings.Observe>Observe — read colony state</RimAgent.Settings.Observe>
+  <RimAgent.Settings.Observe>Look at the colony</RimAgent.Settings.Observe>
   <RimAgent.Settings.ObserveTip>Colony overview, colonists, resources, threats, research (status and switching), maps (listing and switching), map object search and game screenshots.</RimAgent.Settings.ObserveTip>
-  <RimAgent.Settings.Work>Work — priorities and schedules</RimAgent.Settings.Work>
+  <RimAgent.Settings.Work>Plan work</RimAgent.Settings.Work>
   <RimAgent.Settings.WorkTip>Change work priorities and daily schedules. Easy to undo by hand.</RimAgent.Settings.WorkTip>
-  <RimAgent.Settings.Build>Build — designations and blueprints</RimAgent.Settings.Build>
+  <RimAgent.Settings.Build>Build things</RimAgent.Settings.Build>
   <RimAgent.Settings.BuildTip>Mark things for mining, cutting, harvesting, deconstruction, hauling and hunting, and place blueprints.</RimAgent.Settings.BuildTip>
-  <RimAgent.Settings.Combat>Combat — draft, move and attack orders</RimAgent.Settings.Combat>
+  <RimAgent.Settings.Combat>Fight</RimAgent.Settings.Combat>
   <RimAgent.Settings.CombatTip>Draft colonists and give move or attack orders. The model needs several seconds to respond, so this is for positioning and retreats, not real-time control.</RimAgent.Settings.CombatTip>
-  <RimAgent.Settings.Trade>Trade — list stock, buy and sell, player caravans</RimAgent.Settings.Trade>
+  <RimAgent.Settings.Trade>Buy and sell</RimAgent.Settings.Trade>
   <RimAgent.Settings.TradeTip>List what orbital traders and visiting caravans are selling, buy or sell in a single deal with the game's trade prices, and form player caravans.</RimAgent.Settings.TradeTip>
-  <RimAgent.Settings.Medical>Medical — health and care levels</RimAgent.Settings.Medical>
+  <RimAgent.Settings.Medical>Doctor</RimAgent.Settings.Medical>
   <RimAgent.Settings.MedicalTip>Check colonist health (injuries, diseases, bleeding, operations) and change medical care levels.</RimAgent.Settings.MedicalTip>
-  <RimAgent.Settings.Prisoner>Prisoners — interaction and release</RimAgent.Settings.Prisoner>
+  <RimAgent.Settings.Prisoner>Prisoners</RimAgent.Settings.Prisoner>
   <RimAgent.Settings.PrisonerTip>List prisoners and set their interaction mode (recruit, release, execution); recruitment and daily care still run through the game's warden mechanics.</RimAgent.Settings.PrisonerTip>
-  <RimAgent.Settings.Animal>Animals — taming, training and areas</RimAgent.Settings.Animal>
+  <RimAgent.Settings.Animal>Animals</RimAgent.Settings.Animal>
   <RimAgent.Settings.AnimalTip>List animals, mark wild ones for taming, switch training on and off, and assign allowed areas. Taming and training run through the game's mechanics.</RimAgent.Settings.AnimalTip>
-  <RimAgent.Settings.Zone>Zones — stockpiles, fields and filters</RimAgent.Settings.Zone>
+  <RimAgent.Settings.Zone>Zones</RimAgent.Settings.Zone>
   <RimAgent.Settings.ZoneTip>List zones, add stockpile and growing zones, delete zones, and change what stockpiles accept.</RimAgent.Settings.ZoneTip>
-  <RimAgent.Settings.Production>Production — work tables and bills</RimAgent.Settings.Production>
+  <RimAgent.Settings.Production>Workbench bills</RimAgent.Settings.Production>
   <RimAgent.Settings.ProductionTip>List work tables and their bills, add bills with a repeat count, and delete bills.</RimAgent.Settings.ProductionTip>
-  <RimAgent.Settings.Time>Time — pause and flow speed</RimAgent.Settings.Time>
+  <RimAgent.Settings.Time>Pause and speed</RimAgent.Settings.Time>
   <RimAgent.Settings.TimeTip>Check the current time flow speed, pause the game, or switch between normal and fast speeds.</RimAgent.Settings.TimeTip>
-  <RimAgent.Settings.MCP>MCP — external tools via local servers</RimAgent.Settings.MCP>
+  <RimAgent.Settings.MCP>Outside programs (MCP)</RimAgent.Settings.MCP>
   <RimAgent.Settings.MCPTip>Let the agent call tools from local MCP servers configured in AgentPack/MCP/servers.json. Servers run with your user privileges; only enable ones you trust.</RimAgent.Settings.MCPTip>
-  <RimAgent.Settings.Web>Web — search public websites</RimAgent.Settings.Web>
+  <RimAgent.Settings.Web>Search the web</RimAgent.Settings.Web>
   <RimAgent.Settings.WebTip>Allow live web search through Parallel Search MCP by default, or a local SearXNG server when selected below. Neither needs an API key.</RimAgent.Settings.WebTip>
-  <RimAgent.Settings.WebSearchHeader>Web search source</RimAgent.Settings.WebSearchHeader>
-  <RimAgent.Settings.UseLocalSearch>Use local SearXNG instead of Parallel</RimAgent.Settings.UseLocalSearch>
+  <RimAgent.Settings.WebSearchHeader>Web search</RimAgent.Settings.WebSearchHeader>
+  <RimAgent.Settings.UseLocalSearch>Use SearXNG on my own computer (most people leave this off)</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>Requires a running SearXNG server with JSON output enabled. Leave off to use Parallel's anonymous free tier without local setup.</RimAgent.Settings.UseLocalSearchTip>
   <RimAgent.Settings.SearxngUrl>SearXNG server URL</RimAgent.Settings.SearxngUrl>
-  <RimAgent.Settings.Memory>Memory — save facts per game</RimAgent.Settings.Memory>
+  <RimAgent.Settings.Memory>Remember things</RimAgent.Settings.Memory>
   <RimAgent.Settings.MemoryTip>Allow the agent to read, write, edit and delete up to 30 memory files in this game's save file.</RimAgent.Settings.MemoryTip>
-  <RimAgent.Settings.Agents>Subagents — delegate tasks</RimAgent.Settings.Agents>
+  <RimAgent.Settings.Agents>Send helpers</RimAgent.Settings.Agents>
   <RimAgent.Settings.AgentsTip>Allow the agent to hand self-contained tasks to the subagents in AgentPack/Agents (delegate_task). Each subagent still only gets the tool categories you allow here, and its commands follow the current mode.</RimAgent.Settings.AgentsTip>
-  <RimAgent.Settings.Save>Save — checkpoints and reload after a death</RimAgent.Settings.Save>
+  <RimAgent.Settings.Save>Save and load</RimAgent.Settings.Save>
   <RimAgent.Settings.SaveTip>Off by default. Saves a checkpoint each in-game day while the colony is safe (only the newest 5 are kept) and lets the agent save (save_game) and reload this colony's checkpoints or autosaves (load_save). With background care on, the agent decides after a colonist dies whether to reload. Each save can be reloaded 3 times; after that the loss stands. Commitment mode cannot be reloaded.</RimAgent.Settings.SaveTip>
-  <RimAgent.Settings.ShowAdvanced>Show advanced settings</RimAgent.Settings.ShowAdvanced>
+  <RimAgent.Settings.ShowAdvanced>Advanced settings (most players never need these; "Reset to defaults" at the bottom fixes mistakes)</RimAgent.Settings.ShowAdvanced>
   <RimAgent.Settings.ShowAdvancedTip>Model roles, decision model and routing, context compaction and run history.</RimAgent.Settings.ShowAdvancedTip>
-  <RimAgent.Settings.ModelRolesHeader>Model roles</RimAgent.Settings.ModelRolesHeader>
-  <RimAgent.Settings.SubagentModel>Subagent default:</RimAgent.Settings.SubagentModel>
+  <RimAgent.Settings.ModelRolesHeader>Which AI does which job</RimAgent.Settings.ModelRolesHeader>
+  <RimAgent.Settings.SubagentModel>Helpers sent out:</RimAgent.Settings.SubagentModel>
   <RimAgent.Settings.SubagentModelTip>Model and reasoning used by subagents that have no model of their own below. A subagent whose AGENT.md sets reasoning keeps that reasoning.</RimAgent.Settings.SubagentModelTip>
   <RimAgent.Settings.Mode.Confirm>Confirm</RimAgent.Settings.Mode.Confirm>
   <RimAgent.Settings.Mode.ConfirmDesc>Every command requires confirmation: any state-changing action is previewed and waits for your Confirm; queries run directly.</RimAgent.Settings.Mode.ConfirmDesc>
@@ -112,26 +109,25 @@
   <RimAgent.Settings.Mode.ExecuteDesc>Routine actions run directly; major actions require confirmation. A separate setting controls confirmation during proactive care.</RimAgent.Settings.Mode.ExecuteDesc>
   <RimAgent.Settings.Mode.Auto>Auto</RimAgent.Settings.Mode.Auto>
   <RimAgent.Settings.Mode.AutoDesc>A second model call judges each action (including MCP tools) on two axes: how risky it is, and whether your instruction asked for it. Only low-risk actions you asked for run directly; the rest wait for your Confirm. One extra request per action.</RimAgent.Settings.Mode.AutoDesc>
-  <RimAgent.Settings.ClassifierModel>Classifier model:</RimAgent.Settings.ClassifierModel>
+  <RimAgent.Settings.ClassifierModel>Judging risk:</RimAgent.Settings.ClassifierModel>
   <RimAgent.Settings.ClassifierModelTip>Model and reasoning used by Auto mode for risk classification.</RimAgent.Settings.ClassifierModelTip>
-  <RimAgent.Settings.CompactModel>/compact summary:</RimAgent.Settings.CompactModel>
+  <RimAgent.Settings.CompactModel>Tidying old chat:</RimAgent.Settings.CompactModel>
   <RimAgent.Settings.CompactModelTip>Model and reasoning used when /compact summarizes older history. A cheaper model is usually fine here.</RimAgent.Settings.CompactModelTip>
   <RimAgent.Settings.SlotReasoningTip>Reasoning level for this role only; Auto keeps the framework default.</RimAgent.Settings.SlotReasoningTip>
-  <RimAgent.Settings.DecisionModelHeader>Decision model (System One)</RimAgent.Settings.DecisionModelHeader>
-  <RimAgent.Settings.DecisionEnabled>Enable decision model</RimAgent.Settings.DecisionEnabled>
+  <RimAgent.Settings.DecisionModelHeader>Quick helper details</RimAgent.Settings.DecisionModelHeader>
+  <RimAgent.Settings.DecisionEnabled>Use the quick helper</RimAgent.Settings.DecisionEnabled>
   <RimAgent.Settings.DecisionEnabledTip>When off, the decision model is never called: risk checks use the classifier, reasoning routing uses the fallback reasoning level, daily auto time speed always uses "fast", and answering choices, upkeep triage, tool pack preloading and goal audits are disabled and left to the main model.</RimAgent.Settings.DecisionEnabledTip>
-  <RimAgent.Settings.DecisionProvider>Decision provider:</RimAgent.Settings.DecisionProvider>
+  <RimAgent.Settings.DecisionProvider>Which AI service:</RimAgent.Settings.DecisionProvider>
   <RimAgent.Settings.DecisionProviderTip>Decision model provider used for fast, typed classifications like Auto mode risk checks. Leave empty to follow RimLLM Framework's active decision provider.</RimAgent.Settings.DecisionProviderTip>
-  <RimAgent.Settings.DecisionModel>Decision model:</RimAgent.Settings.DecisionModel>
+  <RimAgent.Settings.DecisionModel>Which model:</RimAgent.Settings.DecisionModel>
   <RimAgent.Settings.DecisionModelTip>Model name for the decision provider. Leave empty to use the provider's default model.</RimAgent.Settings.DecisionModelTip>
-  <RimAgent.Settings.DecisionStatus>Status: {0}</RimAgent.Settings.DecisionStatus>
-  <RimAgent.Settings.DecisionStatusDisabled>Not configured (RimLLM Framework > Decision tab)</RimAgent.Settings.DecisionStatusDisabled>
-  <RimAgent.Settings.DecisionStatusEnabled>Configured ({0} · {1})</RimAgent.Settings.DecisionStatusEnabled>
-  <RimAgent.Settings.DecisionStatusNoKey>Configured ({0}) — API key required in RimLLM Framework</RimAgent.Settings.DecisionStatusNoKey>
-  <RimAgent.Settings.DecisionTest>Test decision model</RimAgent.Settings.DecisionTest>
+  <RimAgent.Settings.DecisionStatusDisabled>Not set up: set it in the Decision tab of RimLLM Framework</RimAgent.Settings.DecisionStatusDisabled>
+  <RimAgent.Settings.DecisionStatusEnabled>Connected: {0} · {1}</RimAgent.Settings.DecisionStatusEnabled>
+  <RimAgent.Settings.DecisionStatusNoKey>No key yet: enter a key for {0} in RimLLM Framework</RimAgent.Settings.DecisionStatusNoKey>
+  <RimAgent.Settings.DecisionTest>Try it</RimAgent.Settings.DecisionTest>
   <RimAgent.Settings.DecisionTestRunning>Testing…</RimAgent.Settings.DecisionTestRunning>
   <RimAgent.Settings.DecisionTestTip>Sends one simple multiple-choice question using the provider and model selected above, to confirm the decision model answers correctly.</RimAgent.Settings.DecisionTestTip>
-  <RimAgent.Settings.DecisionTestOk>Passed: {0}</RimAgent.Settings.DecisionTestOk>
+  <RimAgent.Settings.DecisionTestOk>Works: {0}</RimAgent.Settings.DecisionTestOk>
   <RimAgent.Settings.DecisionTestFailed>Failed: {0}</RimAgent.Settings.DecisionTestFailed>
   <RimAgent.Settings.DecisionTestUnavailable>Cannot test: no decision provider is available.</RimAgent.Settings.DecisionTestUnavailable>
   <RimAgent.Settings.DecisionTestNoAnswer>The model returned no answer.</RimAgent.Settings.DecisionTestNoAnswer>
@@ -139,11 +135,11 @@
   <RimAgent.Settings.DecisionFallbackReasoning>Fallback reasoning:</RimAgent.Settings.DecisionFallbackReasoning>
   <RimAgent.Settings.DecisionFallbackReasoningTip>Reasoning effort used when confidence is low or the decision model is unavailable.</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>Routing min confidence: {0}</RimAgent.Settings.DecisionMinConfidence>
-  <RimAgent.Settings.DecisionAnswerChoices>System One answers events and dialogs</RimAgent.Settings.DecisionAnswerChoices>
+  <RimAgent.Settings.DecisionAnswerChoices>Answer simple event choices itself</RimAgent.Settings.DecisionAnswerChoices>
   <RimAgent.Settings.DecisionAnswerChoicesTip>With background care on, the decision model answers choice letters and dialogs by itself when it is confident and the current mode would let the agent answer without confirmation (Auto mode also asks the risk check). Choices that need a map or world target, or that it is unsure about, still go to the main model. Every answer is shown in the chat and passed to the main model.</RimAgent.Settings.DecisionAnswerChoicesTip>
-  <RimAgent.Settings.DecisionTriageUpkeep>System One screens colony upkeep tasks</RimAgent.Settings.DecisionTriageUpkeep>
+  <RimAgent.Settings.DecisionTriageUpkeep>Decide whether small problems need the Agent</RimAgent.Settings.DecisionTriageUpkeep>
   <RimAgent.Settings.DecisionTriageUpkeepTip>Before waking the main model for cold, missing beds, beds outdoors, power outages, idle research or low mood, the decision model checks whether the last run already put a fix in motion. If so, it waits an hour and checks again. Raids, fires, medical emergencies, mental breaks, food shortages and regular check-ins always run.</RimAgent.Settings.DecisionTriageUpkeepTip>
-  <RimAgent.Settings.DecisionPreloadPacks>System One preloads tool packs</RimAgent.Settings.DecisionPreloadPacks>
+  <RimAgent.Settings.DecisionPreloadPacks>Get tools ready for the Agent</RimAgent.Settings.DecisionPreloadPacks>
   <RimAgent.Settings.DecisionPreloadPacksTip>For each instruction, the decision model loads the tool packs it expects the main model to need, saving a load_toolpack step. Packs it misses can still be loaded by the main model.</RimAgent.Settings.DecisionPreloadPacksTip>
   <RimAgent.Settings.DecisionMinConfidenceTip>Instructions classified with confidence below this threshold use the fallback reasoning.</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.DecisionCategoriesHeader>Route categories</RimAgent.Settings.DecisionCategoriesHeader>
@@ -156,17 +152,14 @@
   <RimAgent.Settings.CategoryReasoning>Reasoning:</RimAgent.Settings.CategoryReasoning>
   <RimAgent.Settings.Mode.Autonomous>Full access</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>Enabled tools, including MCP, run without confirmation. Proactive care is controlled separately in mod settings; category switches still apply.</RimAgent.Settings.Mode.AutonomousDesc>
-  <RimAgent.Settings.AutonomousHeader>Proactive colony care</RimAgent.Settings.AutonomousHeader>
-  <RimAgent.Settings.AutonomousCare>Enable proactive care</RimAgent.Settings.AutonomousCare>
+  <RimAgent.Settings.AutonomousCare>Let the Agent look after the colony</RimAgent.Settings.AutonomousCare>
   <RimAgent.Settings.AutonomousCareTip>Respond to events and periodically review the colony. The current execution mode and tool category switches still apply.</RimAgent.Settings.AutonomousCareTip>
-  <RimAgent.Settings.AutoTimeSpeed>Auto-adjust game speed on quiet days</RimAgent.Settings.AutoTimeSpeed>
+  <RimAgent.Settings.AutoTimeSpeed>Speed up when nothing is happening</RimAgent.Settings.AutoTimeSpeed>
   <RimAgent.Settings.AutoTimeSpeedTip>When on, speeds the game up while there are no hostiles, fires or medical emergencies (the decision model picks how fast; without one it uses Fast) and drops back to Normal the moment something happens. It never touches the game while you have it paused, and backs off for 5 minutes after you change the speed yourself. Not applied while the Agent is running. Off by default.</RimAgent.Settings.AutoTimeSpeedTip>
-  <RimAgent.Settings.ConfirmAutonomousMajor>Confirm major actions during proactive care</RimAgent.Settings.ConfirmAutonomousMajor>
+  <RimAgent.Settings.ConfirmAutonomousMajor>Ask me before big actions</RimAgent.Settings.ConfirmAutonomousMajor>
   <RimAgent.Settings.ConfirmAutonomousMajorTip>In Execute mode, proactive actions marked as major by their tool wait for confirmation. Full access ignores this setting; Confirm mode still confirms every action.</RimAgent.Settings.ConfirmAutonomousMajorTip>
-  <RimAgent.Settings.AutoCooldown>Autonomous cooldown: {0} minutes</RimAgent.Settings.AutoCooldown>
-  <RimAgent.Settings.AutoCooldownOff>Autonomous cooldown: Disabled</RimAgent.Settings.AutoCooldownOff>
   <RimAgent.Settings.AutoCooldownTip>Minimum wait time between two autonomous runs. Set to 0 to completely disable cooldown and react immediately to events and cycles.</RimAgent.Settings.AutoCooldownTip>
-  <RimAgent.Settings.FrameworkNote>Provider, API key, model and fallback chain are configured in RimLLM Framework's settings.</RimAgent.Settings.FrameworkNote>
+  <RimAgent.Settings.FrameworkNote>AI keys and which AI to use are in the RimLLM Framework settings.</RimAgent.Settings.FrameworkNote>
 
   <!-- Status strip and slash commands -->
   <RimAgent.Auto.StatusOn>{0}/{1} used today</RimAgent.Auto.StatusOn>
@@ -221,13 +214,13 @@
   <RimAgent.Goal.AuditContinuing>Decision audit determined the goal is not yet finished; continuing: {0}</RimAgent.Goal.AuditContinuing>
   <RimAgent.Goal.AuditCompleted>Goal completed and verified by decision audit: {0}</RimAgent.Goal.AuditCompleted>
 
-  <RimAgent.Settings.CompactionHeader>Context compaction</RimAgent.Settings.CompactionHeader>
-  <RimAgent.Settings.AutoCompact>Auto-fold older tool output</RimAgent.Settings.AutoCompact>
+  <RimAgent.Settings.CompactionHeader>When the chat gets long</RimAgent.Settings.CompactionHeader>
+  <RimAgent.Settings.AutoCompact>Tidy up old tool results automatically</RimAgent.Settings.AutoCompact>
   <RimAgent.Settings.AutoCompactTip>When model history exceeds the threshold, older tool results are folded automatically before each request at no extra model cost; once history reaches twice the threshold, the oldest complete turns are dropped until it is back within the threshold (the visible log is kept). Manual /compact runs a separate LLM summary and is not affected by this switch.</RimAgent.Settings.AutoCompactTip>
-  <RimAgent.Settings.AutoCompactThreshold>Auto-compact threshold: {0}% of context window</RimAgent.Settings.AutoCompactThreshold>
+  <RimAgent.Settings.AutoCompactThreshold>Tidy up at {0}% of the AI's memory limit</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>Uses the framework's model context limit and estimated history tokens. Auto-fold is unavailable when the limit is unknown.</RimAgent.Settings.AutoCompactThresholdTip>
-  <RimAgent.Settings.RunLogHeader>Run history</RimAgent.Settings.RunLogHeader>
-  <RimAgent.Settings.RecordRuns>Record Agent runs</RimAgent.Settings.RecordRuns>
+  <RimAgent.Settings.RunLogHeader>Debug log</RimAgent.Settings.RunLogHeader>
+  <RimAgent.Settings.RecordRuns>Write everything the Agent does to a file (only for bug reports)</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>Log file: {0}</RimAgent.Settings.RunLogPath>
   <RimAgent.Settings.OpenLogFolder>Open folder</RimAgent.Settings.OpenLogFolder>
   <RimAgent.Settings.OpenLogFolderFailed>Could not open the log folder: {0}</RimAgent.Settings.OpenLogFolderFailed>
@@ -255,4 +248,58 @@
   <RimAgent.ContextPanel.Part.AssistantMessages>Agent replies</RimAgent.ContextPanel.Part.AssistantMessages>
   <RimAgent.ContextPanel.Part.ToolCalls>Tool calls</RimAgent.ContextPanel.Part.ToolCalls>
   <RimAgent.ContextPanel.Part.ToolResults>Tool results</RimAgent.ContextPanel.Part.ToolResults>
+  <RimAgent.Settings.ObserveDesc>Colonists, items, threats and the map</RimAgent.Settings.ObserveDesc>
+  <RimAgent.Settings.WorkDesc>Work priorities and schedules</RimAgent.Settings.WorkDesc>
+  <RimAgent.Settings.BuildDesc>Mine, chop, harvest, deconstruct, place blueprints</RimAgent.Settings.BuildDesc>
+  <RimAgent.Settings.CombatDesc>Draft colonists, move, attack</RimAgent.Settings.CombatDesc>
+  <RimAgent.Settings.TradeDesc>Trade with traders, send caravans</RimAgent.Settings.TradeDesc>
+  <RimAgent.Settings.MedicalDesc>Check injuries, set medical care</RimAgent.Settings.MedicalDesc>
+  <RimAgent.Settings.PrisonerDesc>Recruit, release or execute</RimAgent.Settings.PrisonerDesc>
+  <RimAgent.Settings.AnimalDesc>Tame, train, allowed areas</RimAgent.Settings.AnimalDesc>
+  <RimAgent.Settings.ZoneDesc>Stockpiles, growing zones, what to store</RimAgent.Settings.ZoneDesc>
+  <RimAgent.Settings.ProductionDesc>Add or delete production bills</RimAgent.Settings.ProductionDesc>
+  <RimAgent.Settings.TimeDesc>Control game speed</RimAgent.Settings.TimeDesc>
+  <RimAgent.Settings.MCPDesc>Run programs set up on your computer</RimAgent.Settings.MCPDesc>
+  <RimAgent.Settings.WebDesc>Look up guides and the wiki</RimAgent.Settings.WebDesc>
+  <RimAgent.Settings.MemoryDesc>Keep notes in this save</RimAgent.Settings.MemoryDesc>
+  <RimAgent.Settings.AgentsDesc>Hand work to other AIs</RimAgent.Settings.AgentsDesc>
+  <RimAgent.Settings.SaveDesc>Load an earlier save when someone dies</RimAgent.Settings.SaveDesc>
+  <RimAgent.Settings.ReadyTitle>Ready! Press the Agent button on the bottom bar to start chatting</RimAgent.Settings.ReadyTitle>
+  <RimAgent.Settings.ReadyDetail>AI model: {0}</RimAgent.Settings.ReadyDetail>
+  <RimAgent.Settings.NotReadyTitle>One more step: the Agent has no AI model yet</RimAgent.Settings.NotReadyTitle>
+  <RimAgent.Settings.NotReadyDetail>Enter an AI key and pick a model in RimLLM Framework, then you are set.</RimAgent.Settings.NotReadyDetail>
+  <RimAgent.Settings.GoToFramework>Open RimLLM Framework →</RimAgent.Settings.GoToFramework>
+  <RimAgent.Settings.GoShort>Open →</RimAgent.Settings.GoShort>
+  <RimAgent.Settings.FrameworkNotFound>Could not find the RimLLM Framework settings. Make sure it is enabled.</RimAgent.Settings.FrameworkNotFound>
+  <RimAgent.Settings.Section1Title>What can the Agent touch?</RimAgent.Settings.Section1Title>
+  <RimAgent.Settings.Section1Hint>Pick one. Not sure? Pick "Recommended".</RimAgent.Settings.Section1Hint>
+  <RimAgent.Settings.Preset.LookOnly>Look only</RimAgent.Settings.Preset.LookOnly>
+  <RimAgent.Settings.Preset.LookOnlyDesc>Only looks and answers questions.\nNever changes your colony.</RimAgent.Settings.Preset.LookOnlyDesc>
+  <RimAgent.Settings.Preset.Recommended>Run my colony</RimAgent.Settings.Preset.Recommended>
+  <RimAgent.Settings.Preset.RecommendedDesc>Can build, plan work, treat and fight.\nNo outside programs.</RimAgent.Settings.Preset.RecommendedDesc>
+  <RimAgent.Settings.Preset.All>Everything</RimAgent.Settings.Preset.All>
+  <RimAgent.Settings.Preset.AllDesc>Can do anything,\nincluding outside programs (MCP).</RimAgent.Settings.Preset.AllDesc>
+  <RimAgent.Settings.PresetTagRecommended>Recommended</RimAgent.Settings.PresetTagRecommended>
+  <RimAgent.Settings.PresetCustomNote>You changed some items, so this is "Custom". Click a card above to go back to a preset.</RimAgent.Settings.PresetCustomNote>
+  <RimAgent.Settings.PermissionListShow>Pick items one by one (you can skip this)</RimAgent.Settings.PermissionListShow>
+  <RimAgent.Settings.PermissionListHide>Hide the list</RimAgent.Settings.PermissionListHide>
+  <RimAgent.Settings.PermissionGroupGreen>Green: only looks, very safe</RimAgent.Settings.PermissionGroupGreen>
+  <RimAgent.Settings.PermissionGroupYellow>Yellow: changes the game, but you can change it back</RimAgent.Settings.PermissionGroupYellow>
+  <RimAgent.Settings.PermissionGroupRed>Red: big effects, think before turning on</RimAgent.Settings.PermissionGroupRed>
+  <RimAgent.Settings.Section2Title>Should the Agent look after the colony by itself?</RimAgent.Settings.Section2Title>
+  <RimAgent.Settings.Section2Hint>Off: it only acts when you ask. On: when something happens (raids, fires, injuries) it handles it.</RimAgent.Settings.Section2Hint>
+  <RimAgent.Settings.AutonomousCareDesc>Keeps an eye on the colony even when you are away.</RimAgent.Settings.AutonomousCareDesc>
+  <RimAgent.Settings.ConfirmAutonomousMajorDesc>Like trading, releasing prisoners, surgery, deconstructing, attacking. Recommended for new players.</RimAgent.Settings.ConfirmAutonomousMajorDesc>
+  <RimAgent.Settings.AutoTimeSpeedDesc>Goes back to normal speed right away on enemies, fires or someone needing first aid.</RimAgent.Settings.AutoTimeSpeedDesc>
+  <RimAgent.Settings.CooldownQuestion>How often may it act on its own?</RimAgent.Settings.CooldownQuestion>
+  <RimAgent.Settings.CooldownNow>Any time</RimAgent.Settings.CooldownNow>
+  <RimAgent.Settings.CooldownEvery>Every {0} min</RimAgent.Settings.CooldownEvery>
+  <RimAgent.Settings.CooldownHint>In game time. Fewer actions cost less AI money.</RimAgent.Settings.CooldownHint>
+  <RimAgent.Settings.CooldownCustom>Currently {0} minutes.</RimAgent.Settings.CooldownCustom>
+  <RimAgent.Settings.Section3Title>Quick helper</RimAgent.Settings.Section3Title>
+  <RimAgent.Settings.Section3Hint>A cheap, fast AI handles small choices (confirm or not, speed up or not), so the Agent is faster and cheaper.</RimAgent.Settings.Section3Hint>
+  <RimAgent.Settings.DecisionEnabledDesc>You can play without it; it is just a bit slower and costs a bit more.</RimAgent.Settings.DecisionEnabledDesc>
+  <RimAgent.Settings.HideAdvanced>Hide advanced settings</RimAgent.Settings.HideAdvanced>
+  <RimAgent.Settings.ResetDefaults>Reset to defaults</RimAgent.Settings.ResetDefaults>
+  <RimAgent.Settings.ResetDefaultsConfirm>Reset every setting on this page to its default?\n\nThe model and mode chosen in the Agent window stay the same.</RimAgent.Settings.ResetDefaultsConfirm>
 </LanguageData>

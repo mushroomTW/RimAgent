@@ -303,7 +303,13 @@ internal sealed class StartupTests
         {
             string key = RimAgentMod.PermissionKey(category);
             yield return key;
+            yield return key + "Desc";
             yield return key + "Tip";
+        }
+        foreach (RimAgentSettings.PermissionPreset preset in (RimAgentSettings.PermissionPreset[])Enum.GetValues(typeof(RimAgentSettings.PermissionPreset)))
+        {
+            yield return RimAgentMod.PresetKey(preset);
+            yield return RimAgentMod.PresetKey(preset) + "Desc";
         }
     }
 

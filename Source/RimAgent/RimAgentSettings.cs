@@ -99,8 +99,8 @@ public class RimAgentSettings : ModSettings
     public int autonomousCooldownMinutes = DefaultCooldownMinutes;
     /// <summary>是否主動照顧殖民地；獨立於工具執行模式。</summary>
     public bool autonomousCare = false;
-    /// <summary>主動照顧時重大操作是否需要確認；完整權限模式不受影響。</summary>
-    public bool confirmAutonomousMajor = false;
+    /// <summary>主動照顧時重大操作是否需要確認；完整權限模式不受影響。新安裝預設開啟（Scribe 預設值見 <see cref="ExposeData"/>）。</summary>
+    public bool confirmAutonomousMajor = true;
     /// <summary>日常自動調整遊戲速度：安全時加速，出事降回正常；預設關閉。</summary>
     public bool autoTimeSpeed = false;
 
@@ -136,14 +136,90 @@ public class RimAgentSettings : ModSettings
         "allowWeb", "allowMemory", "allowAgents", "allowSave"
     ];
 
+    /// <summary>新安裝的權限＝「推薦」方案：除了 MCP 全開。</summary>
     private static bool[] DefaultAllows()
     {
-        return
-        [
-            true, true, true, true, true, true,
-            true, true, true, true, true, true,
-            true, true, true, true
-        ];
+        bool[] allows = new bool[CategoryKeys.Length];
+        for (int i = 0; i < allows.Length; i++) allows[i] = PresetAllows(PermissionPreset.Recommended, (ToolCategory)i);
+        return allows;
+    }
+
+    /// <summary>設定頁的三種權限方案。</summary>
+    public enum PermissionPreset
+    {
+        /// <summary>只看不動：只能查看、記筆記與上網查資料。</summary>
+        LookOnly,
+        /// <summary>幫我管家：除了外部程式（MCP）全開。</summary>
+        Recommended,
+        /// <summary>全部交給它。</summary>
+        All
+    }
+
+    public static bool PresetAllows(PermissionPreset preset, ToolCategory category)
+    {
+        switch (preset)
+        {
+            case PermissionPreset.LookOnly:
+                return category == ToolCategory.Observe || category == ToolCategory.Memory || category == ToolCategory.Web;
+            case PermissionPreset.Recommended:
+                return category != ToolCategory.Mcp;
+            default:
+                return true;
+        }
+    }
+
+    public void ApplyPreset(PermissionPreset preset)
+    {
+        EnsureAllows();
+        for (int i = 0; i < allowByCategory.Length; i++) allowByCategory[i] = PresetAllows(preset, (ToolCategory)i);
+    }
+
+    /// <summary>目前的權限符合哪個方案；手動調過不符合任何方案時回 null（自訂）。</summary>
+    public PermissionPreset? MatchPreset()
+    {
+        EnsureAllows();
+        foreach (PermissionPreset preset in (PermissionPreset[])Enum.GetValues(typeof(PermissionPreset)))
+        {
+            bool match = true;
+            for (int i = 0; i < allowByCategory.Length && match; i++)
+                match = allowByCategory[i] == PresetAllows(preset, (ToolCategory)i);
+            if (match) return preset;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 設定頁的「恢復預設」：權限、主動照顧、決策模型、模型分工、壓縮、搜尋與紀錄回到新安裝的值。
+    /// Agent 視窗裡選的模型、思考強度、執行模式與視窗位置不在設定頁，保留不動。
+    /// </summary>
+    public void ResetToDefaults()
+    {
+        var fresh = new RimAgentSettings();
+        allowByCategory = fresh.allowByCategory;
+        classifierModel = fresh.classifierModel;
+        classifierReasoning = fresh.classifierReasoning;
+        compactModel = fresh.compactModel;
+        compactReasoning = fresh.compactReasoning;
+        subagentModel = fresh.subagentModel;
+        subagentReasoning = fresh.subagentReasoning;
+        decisionEnabled = fresh.decisionEnabled;
+        decisionProvider = fresh.decisionProvider;
+        decisionModel = fresh.decisionModel;
+        decisionCategories = fresh.decisionCategories;
+        decisionFallbackReasoning = fresh.decisionFallbackReasoning;
+        decisionRoutingMinConfidence = fresh.decisionRoutingMinConfidence;
+        decisionAnswerChoices = fresh.decisionAnswerChoices;
+        decisionTriageUpkeep = fresh.decisionTriageUpkeep;
+        decisionPreloadPacks = fresh.decisionPreloadPacks;
+        useLocalSearch = fresh.useLocalSearch;
+        searxngUrl = fresh.searxngUrl;
+        autonomousCooldownMinutes = fresh.autonomousCooldownMinutes;
+        autonomousCare = fresh.autonomousCare;
+        confirmAutonomousMajor = fresh.confirmAutonomousMajor;
+        autoTimeSpeed = fresh.autoTimeSpeed;
+        autoCompact = fresh.autoCompact;
+        autoCompactThreshold = fresh.autoCompactThreshold;
+        recordRuns = fresh.recordRuns;
     }
 
     private void EnsureAllows()
@@ -232,10 +308,12 @@ public class RimAgentSettings : ModSettings
     {
         base.ExposeData();
         EnsureAllows();
-        bool[] defaults = DefaultAllows();
+        // Scribe 預設值刻意維持舊版的「全部開啟」：設定檔不寫入等於預設值的欄位，
+        // 若跟著新的推薦預設改成關，老玩家沒寫進檔的 MCP 會在升級後悄悄被關掉。
+        // 新安裝沒有設定檔、不經過這裡，直接用欄位初始值（推薦方案）。
         for (int i = 0; i < CategoryKeys.Length; i++)
         {
-            Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], defaults[i]);
+            Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
         }
         // 以名稱存取：已移除的詢問與 YOLO 模式不在列舉中，直接解析會報錯，改回確認。
         string modeName = mode.ToString();
@@ -274,6 +352,7 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
         Scribe_Values.Look(ref autonomousCare, "autonomousCare", false);
+        // 同上：舊版預設為關，Scribe 預設值維持 false，老玩家升級後不變。
         Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", false);
         Scribe_Values.Look(ref autoTimeSpeed, "autoTimeSpeed", false);
         Scribe_Values.Look(ref autoCompact, "autoCompact", true);

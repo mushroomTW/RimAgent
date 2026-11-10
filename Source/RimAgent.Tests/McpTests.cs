@@ -267,10 +267,39 @@ public class McpToolsTests
     }
 
     [Test]
-    public void McpPermissionOffUntilGrantedButSettingsDefaultOn()
+    public void McpPermissionOffUntilGrantedAndOffInRecommendedDefault()
     {
         Assert.That(new ToolPermissions().Allows(ToolCategory.Mcp), Is.False);
-        Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Mcp), Is.True, "設定頁預設全開");
+        Assert.That(new RimAgentSettings().ToPermissions().Allows(ToolCategory.Mcp), Is.False, "新安裝預設為「推薦」，不含 MCP");
+    }
+
+    [Test]
+    public void PermissionPresetsMatchTheirOwnSelection()
+    {
+        var settings = new RimAgentSettings();
+        Assert.That(settings.MatchPreset(), Is.EqualTo(RimAgentSettings.PermissionPreset.Recommended));
+        foreach (RimAgentSettings.PermissionPreset preset in (RimAgentSettings.PermissionPreset[])System.Enum.GetValues(typeof(RimAgentSettings.PermissionPreset)))
+        {
+            settings.ApplyPreset(preset);
+            Assert.That(settings.MatchPreset(), Is.EqualTo(preset));
+        }
+        settings.ApplyPreset(RimAgentSettings.PermissionPreset.LookOnly);
+        Assert.That(settings.GetAllow(ToolCategory.Build), Is.False);
+        settings.SetAllow(ToolCategory.Build, true);
+        Assert.That(settings.MatchPreset(), Is.Null, "手動調過就是自訂");
+    }
+
+    [Test]
+    public void ResetToDefaultsKeepsAgentWindowChoices()
+    {
+        var settings = new RimAgentSettings { agentModel = "openai:gpt-5", mode = RimAgent.Agent.AgentMode.Auto, autonomousCooldownMinutes = 30, decisionEnabled = false };
+        settings.SetAllow(ToolCategory.Mcp, true);
+        settings.ResetToDefaults();
+        Assert.That(settings.agentModel, Is.EqualTo("openai:gpt-5"));
+        Assert.That(settings.mode, Is.EqualTo(RimAgent.Agent.AgentMode.Auto));
+        Assert.That(settings.autonomousCooldownMinutes, Is.EqualTo(RimAgentSettings.DefaultCooldownMinutes));
+        Assert.That(settings.decisionEnabled, Is.True);
+        Assert.That(settings.MatchPreset(), Is.EqualTo(RimAgentSettings.PermissionPreset.Recommended));
     }
 
     [Test]
