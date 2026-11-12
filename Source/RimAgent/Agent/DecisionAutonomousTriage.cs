@@ -51,8 +51,13 @@ public sealed class DecisionAutonomousTriage
             or AutonomousTrigger.PowerOutage or AutonomousTrigger.Research or AutonomousTrigger.LowMood;
     }
 
+    /// <summary>評估指定的自主任務觸發是否需要執行或略過。</summary>
+    /// <param name="trigger">自主任務觸發類型。</param>
+    /// <param name="signals">目前的自主任務信號。</param>
     /// <param name="lastRunReply">上一輪同類任務的回覆；沒有則為 null。</param>
     /// <param name="hoursSinceLastRun">距上一輪結束幾個遊戲小時；沒有上一輪為 null。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>分流裁決結果；不需分流或無服務時回傳 null。</returns>
     public async Task<TriageVerdict> EvaluateAsync(
         AutonomousTrigger trigger,
         AutonomousSignals signals,

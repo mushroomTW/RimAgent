@@ -28,8 +28,11 @@ internal sealed class DecisionToolPackSelector
         _serviceFactory = serviceFactory;
     }
 
+    /// <summary>利用決策模型依目前對話狀態選取需要的工具包。</summary>
     /// <param name="state">指令與最近幾輪對話（<see cref="DecisionReasoningRouter.Describe"/>）。</param>
     /// <param name="candidates">目前可用但尚未載入的包。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>應載入的工具包 ID 清單。</returns>
     public async Task<IReadOnlyList<string>> SelectAsync(
         string state,
         IReadOnlyList<ToolPacks.Pack> candidates,

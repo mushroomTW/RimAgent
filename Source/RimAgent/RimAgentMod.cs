@@ -482,6 +482,12 @@ public class RimAgentMod : Mod
     }
 
     /// <summary>一列勾選：名稱下面直接一行小字說明，整列可點；完整說明在提示。</summary>
+    /// <param name="listing">介面繪製清單控制項。</param>
+    /// <param name="value">勾選狀態布林變數參考。</param>
+    /// <param name="label">選項名稱標籤。</param>
+    /// <param name="desc">選項下方簡短說明文字。</param>
+    /// <param name="tip">工具提示文字。</param>
+    /// <param name="indent">左側縮排距離。</param>
     /// <param name="disabled">true 時勾選框與文字變灰、點了不會切換。</param>
     private static void DrawToggleRow(Listing_Standard listing, ref bool value, string label, string desc, string tip, float indent, bool disabled = false)
     {
@@ -868,7 +874,13 @@ public class RimAgentMod : Mod
     /// 一格模型槽：模型下拉（跟隨 Agent／Fallback／備援鏈條目，選項與 Agent 視窗的模型選單相同）
     /// 加上選用的思考強度下拉。
     /// </summary>
+    /// <param name="listing">介面繪製清單控制項。</param>
+    /// <param name="label">模型槽標籤文字。</param>
+    /// <param name="current">取得當前選定模型識別碼的委派。</param>
+    /// <param name="set">設定選定模型識別碼的回呼。</param>
+    /// <param name="tip">工具提示文字。</param>
     /// <param name="reasoning">思考強度的讀取；null 表示這列不顯示思考強度。</param>
+    /// <param name="setReasoning">設定思考強度的回呼；null 表示不提供修改。</param>
     private static void DrawModelDropdown(
         Listing_Standard listing, string label, Func<string> current, Action<string> set, string tip,
         Func<ReasoningLevel> reasoning = null, Action<ReasoningLevel> setReasoning = null)

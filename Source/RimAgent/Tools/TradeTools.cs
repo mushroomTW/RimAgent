@@ -175,7 +175,10 @@ public sealed class TradeTools
         return social != null ? social.Level : 0;
     }
 
+    /// <summary>格式化商人清單文字。</summary>
+    /// <param name="traders">商人資訊清單。</param>
     /// <param name="kindLabel">單數稱謂，必含完整詞彙（orbital trader／visiting caravan），不單用 caravan。</param>
+    /// <returns>格式化後的商人清單字串。</returns>
     private static string FormatTraders(List<TraderInfo> traders, string kindLabel)
     {
         var sb = new StringBuilder();

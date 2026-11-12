@@ -103,6 +103,8 @@ internal sealed class ModelSlotChatClient : DelegatingChatClient
     private readonly Func<string> _model;
     private readonly Func<ReasoningLevel> _reasoning;
 
+    /// <summary>初始化模型槽包裝 Client。</summary>
+    /// <param name="innerClient">底層實際執行的 IChatClient。</param>
     /// <param name="model">已解析的模型識別碼；null 或回傳空白則保留呼叫端的 ModelId。</param>
     /// <param name="reasoning">思考強度；null 視為 Auto。</param>
     public ModelSlotChatClient(IChatClient innerClient, Func<string> model, Func<ReasoningLevel> reasoning)

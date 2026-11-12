@@ -73,7 +73,7 @@ internal static class LatexMath
         RegexOptions.Compiled,
         RegexTimeout);
 
-    /// <summary>\left \right 只是排版提示；\, \; \: \! 與 \<空白\>、\quad 只是間距。</summary>
+    // \left \right 只是排版提示；\, \; \: \! 與 <空白>、\quad 只是間距。
     private static readonly Regex SpacingPattern = new(
         @"\\(?:left|right)\s*|\\(?:quad|qquad)|\\[,;:\s!]",
         RegexOptions.Compiled,

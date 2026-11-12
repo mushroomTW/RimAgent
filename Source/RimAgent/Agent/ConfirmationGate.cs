@@ -110,7 +110,10 @@ public sealed class ConfirmationGate
         }
     }
 
+    /// <summary>批准並依序執行目前等待確認的所有工具呼叫。</summary>
+    /// <param name="cancellationToken">取消語彙基元。</param>
     /// <param name="rememberForSession">把這批工具記成「本局不再問」；MCP 工具不記（見 <see cref="CanRememberForSession"/>）。</param>
+    /// <returns>成功執行的工具呼叫數量。</returns>
     internal async Task<int> ApprovePendingAsync(CancellationToken cancellationToken, bool rememberForSession = false)
     {
         lock (_gate) _lastApprovalExecutedCount = 0;

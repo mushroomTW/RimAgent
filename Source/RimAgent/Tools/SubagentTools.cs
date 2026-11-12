@@ -37,7 +37,12 @@ public sealed class SubagentTools
     private readonly Func<ReasoningLevel> _reasoning;
     private readonly Func<int?> _remainingBudget;
 
+    /// <summary>初始化子代理工具集與執行環境。</summary>
     /// <param name="client">框架交出的原始 client（不經主 Agent 的 token 計量）；每個任務另包一層主線程工具迴圈。</param>
+    /// <param name="registry">Agent 工具註冊表。</param>
+    /// <param name="transcript">對話與活動紀錄。</param>
+    /// <param name="subagents">可用的子代理清單提供者。</param>
+    /// <param name="permissions">工具權限提供者。</param>
     /// <param name="model">子代理名稱 → 已解析的模型識別碼；null 或空白走框架備援鏈。</param>
     /// <param name="reasoning">子代理預設思考強度；AGENT.md 有寫 reasoning 時以它為準。</param>
     /// <param name="remainingBudget">本輪剩餘的工具額度（null 表示不限制）；子代理的迴圈夾在額度內。</param>

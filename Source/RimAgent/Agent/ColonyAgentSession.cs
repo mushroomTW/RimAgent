@@ -18,7 +18,7 @@ namespace RimAgent.Agent;
 
 /// <summary>
 /// 一場遊戲期間的對話：歷史交給 Agent Framework 的 session，行動紀錄寫進 transcript，
-/// 「送出一句指令」即一次 <see cref="ChatClientAgent.RunAsync"/>。
+/// 「送出一句指令」即一次 <see cref="ChatClientAgent.RunAsync(string, AgentSession, ChatClientAgentRunOptions, CancellationToken)"/>。
 /// 多輪工具呼叫仍由框架的主線程包裝（inner）在單次 GetResponseAsync 內跑完；
 /// ChatClientAgent 以 UseProvidedChatClientAsIs 持有 inner，只做歷史拼接與回覆包裝，不另起工具迴圈。
 /// 同一時間只允許一個請求在飛。
@@ -127,34 +127,6 @@ public sealed class ColonyAgentSession
         }
     }
 
-    /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
-    private readonly IChatClient _summarizer;
-    private readonly IGameWorld _world;
-    private readonly AgentMemoryStore _memory;
-    private readonly PlayerInterjections _interjections = new();
-    private readonly Func<string> _instructions;
-    private AgentSession _session;
-    private string _serializedSession;
-    /// <summary>每句指令結束時備妥的存檔內容；存檔直接取用，不在主線程序列化，也不因忙碌而漏存。</summary>
-    private string _saveSnapshot;
-    private bool _snapshotWarningShown;
-    private int _busy;
-    private int _maxSteps;
-    private RunLogRecord _activeRunLog;
-    private bool _runLogWarningShown;
-
-    /// <summary>可選的獨立執行紀錄；預設不記錄，由遊戲設定決定。</summary>
-    public Func<bool> RunLoggingEnabled { get; set; }
-    public Action<RunLogRecord> RunLogSink { get; set; }
-
-    /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
-    /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
-    /// <param name="mode">執行模式；同樣每次送出時讀取。null 視為 <see cref="AgentMode.Autonomous"/>（命令全放行；排程器不在這層）。</param>
-    /// <param name="instructions">每句送出時組裝的完整系統提示詞；null 則沿用核心提示詞。</param>
-    /// <param name="mcp">MCP 管理器；null 則用停用的預設管理器。</param>
-    /// <param name="classifierClient">自動模式分類器用的 client；null 則與 innerClient 共用（測試可另給假 client）。</param>
-    /// <param name="classifierModel">自動模式分類器指定使用的模型識別碼 provider；null 則沿用框架預設。</param>
-    /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
     /// <summary>等模型回覆期間把活動標成思考中；主 Agent 與子代理的模型呼叫都經過它。</summary>
     private sealed class ThinkingActivityClient : DelegatingChatClient
     {
@@ -177,6 +149,42 @@ public sealed class ColonyAgentSession
         }
     }
 
+    /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
+    private readonly IChatClient _summarizer;
+    private readonly IGameWorld _world;
+    private readonly AgentMemoryStore _memory;
+    private readonly PlayerInterjections _interjections = new();
+    private readonly Func<string> _instructions;
+    private AgentSession _session;
+    private string _serializedSession;
+    /// <summary>每句指令結束時備妥的存檔內容；存檔直接取用，不在主線程序列化，也不因忙碌而漏存。</summary>
+    private string _saveSnapshot;
+    private bool _snapshotWarningShown;
+    private int _busy;
+    private int _maxSteps;
+    private RunLogRecord _activeRunLog;
+    private bool _runLogWarningShown;
+
+    /// <summary>可選的獨立執行紀錄；預設不記錄，由遊戲設定決定。</summary>
+    public Func<bool> RunLoggingEnabled { get; set; }
+    public Action<RunLogRecord> RunLogSink { get; set; }
+
+    /// <summary>初始化殖民地 Agent 對話工作階段與各項依賴。</summary>
+    /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
+    /// <param name="world">遊戲世界介面（提供地圖、殖民者與遊戲狀態存取）。</param>
+    /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
+    /// <param name="maxSteps">單輪工具呼叫的最大步數上限。</param>
+    /// <param name="mode">執行模式；同樣每次送出時讀取。null 視為 <see cref="AgentMode.Autonomous"/>（命令全放行；排程器不在這層）。</param>
+    /// <param name="instructions">每句送出時組裝的完整系統提示詞；null 則沿用核心提示詞。</param>
+    /// <param name="mcp">MCP 管理器；null 則用停用的預設管理器。</param>
+    /// <param name="classifierClient">自動模式分類器用的 client；null 則與 innerClient 共用（測試可另給假 client）。</param>
+    /// <param name="classifierModel">自動模式分類器指定使用的模型識別碼 provider；null 則沿用框架預設。</param>
+    /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
+    /// <param name="contextWindowLookup">依模型識別碼查詢上下文視窗上限的委派；null 則使用預設值。</param>
+    /// <param name="memory">記憶儲存庫；null 則建立新的預設實例。</param>
+    /// <param name="useLocalSearch">是否啟用本機/SearXNG 搜尋的委派。</param>
+    /// <param name="searxngUrl">SearXNG 伺服器網址提供者。</param>
+    /// <param name="skillsProvider">載入之技能清單的提供者。</param>
     /// <param name="subagentsProvider">AgentPack/Agents 載入的子代理；null 或空清單則不提供委派工具。</param>
     /// <param name="routing">分類器、/compact 摘要與子代理的模型槽；null 則全部沿用框架備援鏈與 Auto 思考強度。</param>
     /// <param name="decisionRiskCriteria">自動模式決策模型的判準檔內容（AgentPack/Prompts/DecisionRisk.md）；null 則不啟用決策模型。</param>
@@ -617,10 +625,16 @@ public sealed class ColonyAgentSession
     /// （AF 的 ChatHistoryProvider 在例外時略過儲存，等同以往的手動回滾）。
     /// 執行中沒趕上工具結果的插話（<see cref="Interject"/>）會接著跑完才返回，回傳值仍是這句的回覆。
     /// </summary>
+    /// <param name="userText">玩家輸入的指令文字。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
     /// <param name="autonomous">這句是排程器起的自主任務；只影響對話裡的標示，模型看到的內容相同。</param>
     /// <param name="maxToolSteps">本輪額外步數上限；自主排程器用它把單輪呼叫夾在剩餘每日預算內。</param>
+    /// <param name="goalRun">是否為 /goal 長期目標的執行輪次。</param>
+    /// <param name="displayText">自訂顯示於對話介面的文字；null 則顯示 userText。</param>
+    /// <param name="reasoningOverride">覆寫本次呼叫的思考強度；null 則沿用預設。</param>
     /// <param name="onAccepted">玩家訊息寫入對話後的通知；忙碌而拒收時不呼叫。</param>
     /// <param name="autonomousInfo">自主任務的起跑脈絡，只寫進執行紀錄；帶了就視為自主任務。</param>
+    /// <returns>模型最後回覆的文字內容；發生錯誤或文字為空白時回傳 null。</returns>
     public async Task<string> SendAsync(
         string userText,
         CancellationToken cancellationToken = default,
@@ -713,7 +727,18 @@ public sealed class ColonyAgentSession
         });
     }
 
+    /// <summary>執行指令的核心非同步處理流程。</summary>
+    /// <param name="text">要送給模型的指令文字。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <param name="autonomous">是否為自主任務。</param>
+    /// <param name="maxToolSteps">工具呼叫上限步數。</param>
+    /// <param name="goalRun">是否為長期目標任務。</param>
+    /// <param name="displayText">顯示於對話介面的文字。</param>
+    /// <param name="reasoningOverride">覆寫思考強度。</param>
+    /// <param name="onAccepted">接受訊息後的通知回呼。</param>
     /// <param name="echo">false 代表這句已經以插話顯示在對話裡，不再寫一次。</param>
+    /// <param name="autonomousInfo">自主任務的脈絡資訊。</param>
+    /// <returns>模型最後回覆的文字內容；發生錯誤或文字為空白時回傳 null。</returns>
     private async Task<string> RunInstructionAsync(
         string text,
         CancellationToken cancellationToken,
@@ -1031,10 +1056,12 @@ public sealed class ColonyAgentSession
     /// 執行等待中的確認：執行預覽當下捕捉的原工具呼叫與引數，不再重送模型。
     /// 沒有等待中的確認回傳 null。
     /// </summary>
+    /// <param name="cancellationToken">取消語彙基元。</param>
     /// <param name="rememberForSession">
     /// 把這批工具記成「本局不再問」：之後確認模式下同名工具直接執行。
     /// 只記工具名稱，重開遊戲即失效；MCP 工具永遠不記。
     /// </param>
+    /// <returns>執行結果文字；若無等待中的確認則為 null。</returns>
     public async Task<string> ConfirmAsync(CancellationToken cancellationToken = default, bool rememberForSession = false)
     {
         string text = _pendingConfirmation;

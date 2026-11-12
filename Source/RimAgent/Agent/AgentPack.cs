@@ -168,7 +168,7 @@ public static class AgentPackLoader
         {
             string line = lines[i];
             // 註解留給編輯提示詞的人看，不該餵給模型。註解可跨多行，一路略過到含 --> 的那行
-            //（該行 --> 之後的文字一併略過）；註解中的 ## 也不算標題。
+            // （該行 --> 之後的文字一併略過）；註解中的 ## 也不算標題。
             // 忘了收尾的註解只略過開頭那一行，免得整份檔案後面的章節無聲消失。
             if (inComment || line.StartsWith("<!--", StringComparison.Ordinal))
             {

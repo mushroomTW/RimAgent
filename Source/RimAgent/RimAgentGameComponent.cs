@@ -1016,7 +1016,7 @@ public class RimAgentGameComponent : GameComponent
         }
         catch
         {
-            // Translate may fail off-main-thread or outside game loop
+            // Translate 在非主執行緒或遊戲迴圈外可能拋出例外
         }
         return string.Format(System.Globalization.CultureInfo.InvariantCulture, fallback, arg);
     }
@@ -1189,6 +1189,12 @@ public class RimAgentGameComponent : GameComponent
         _seenChoices.Clear();
     }
 
+    /// <summary>具備分流檢查與防護機制的自主任務非同步執行進入點。</summary>
+    /// <param name="session">當前殖民地 Agent 對話工作階段。</param>
+    /// <param name="trigger">自主任務觸發類型。</param>
+    /// <param name="tick">觸發時的遊戲 tick。</param>
+    /// <param name="config">自主任務設定。</param>
+    /// <param name="signals">自主任務信號；可為 null。</param>
     /// <param name="detail">接在任務文案後面的這一次的具體情況（誰死了、讀檔教訓）；沒有就是 null。</param>
     private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, string detail = null)
     {
