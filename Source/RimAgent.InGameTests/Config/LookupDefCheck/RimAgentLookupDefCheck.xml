@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  lookup_def 遊戲內檢查的啟動標記（LookupDefCheck.cs 的 LookupDefCheckComponent）。
+  run_test_cycle 的 seed_config 只需帶入本檔；不需要模型與金鑰。
+  結果是 "[RimAgent.InGameTests] LookupDefCheck PASS/FAIL" 警告，各查詢的完整回覆以訊息輸出。
+-->
+<LookupDefCheck />

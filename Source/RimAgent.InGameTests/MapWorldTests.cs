@@ -546,7 +546,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
     }
 
     /// <summary>
-    /// get_building_info 的資料對照 ThingDef／TerrainDef 欄位：反應爐 6x7、需要 Heavy 地基、不能在屋頂下、是船艙零件；
+    /// 建築規格（lookup_def 的 Building 段）對照 ThingDef／TerrainDef 欄位：反應爐 6x7、需要 Heavy 地基、不能在屋頂下、是船艙零件；
     /// 並對照所有可建造項目的佔格公式（BuildTools.OccupiedRect）與原版 GenAdj.OccupiedRect：各種尺寸、四個朝向、偶數與奇數邊長都涵蓋。
     /// 不需要地圖，只讀 Def。
     /// </summary>
@@ -578,7 +578,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         if (info.Costs.Sum(c => c.Count) != reactor.costList.Sum(c => c.count) || info.Costs.Count != reactor.costList.Count) failures.Add("costs");
         if (Math.Abs(info.PowerWatts - reactor.GetCompProperties<CompProperties_Power>().PowerConsumption) > 0.01f) failures.Add("power " + info.PowerWatts);
 
-        string text = new RimAgent.Tools.BuildTools(_world).GetBuildingInfo("Ship_Reactor");
+        string text = new RimAgent.Tools.BuildTools(_world).LookupDef("Ship_Reactor");
         foreach (string want in new[] { "Size: 6x7", "makes it 7x6", "Heavy support", "must not be under a roof", "Ship part" })
         {
             if (!text.Contains(want)) failures.Add($"tool text lacks '{want}': {text}");
@@ -611,7 +611,14 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
                     failures.Add($"{d.defName} {d.size} rot {rot}: ours {mine}, vanilla ({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})");
             }
         }
-        TestHelpers.AssertNone(failures, "get_building_info vs vanilla defs");
+        TestHelpers.AssertNone(failures, "building info vs vanilla defs");
+    }
+
+    /// <summary>lookup_def 對原版 Def 的知識內容（見 LookupDefCheck）。</summary>
+    [Test]
+    public void LookupDefReportsVanillaKnowledge()
+    {
+        TestHelpers.AssertNone(LookupDefCheck.Run(_world, logReplies: false), "lookup_def vs vanilla defs");
     }
 
     /// <summary>藍圖在字元網格裡是 b，不是成品；拆掉後那一格回到原樣。</summary>

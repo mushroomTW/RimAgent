@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using RimAgent.Agent;
@@ -308,9 +309,10 @@ public class BuildToolsTests
     {
         AddShipParts();
 
-        string text = _tools.GetBuildingInfo("ship reactor");
+        string text = LookupBuilding("ship reactor");
 
-        Assert.That(text, Does.StartWith("ship reactor (Ship_Reactor)"));
+        Assert.That(text, Does.StartWith("ship reactor (Ship_Reactor), thing"));
+        Assert.That(text, Does.Contain("Building:\nSize: 6x7").Or.Contain("Building:\r\nSize: 6x7"));
         Assert.That(text, Does.Contain("Size: 6x7 (x by z, facing north). Rotation 1 or 3 (east/west) makes it 7x6."));
         Assert.That(text, Does.Contain("place_blueprint x,z is the center cell"));
         Assert.That(text, Does.Contain("Cost: steel x350, plasteel x280"));
@@ -342,7 +344,7 @@ public class BuildToolsTests
             InteractionOffsets = new[] { (0, -1) }
         };
 
-        string text = _tools.GetBuildingInfo("Bed");
+        string text = LookupBuilding("Bed");
 
         Assert.That(text, Does.Contain("Cost: cloth x5, 40 of a material (metallic, woody)"));
         Assert.That(text, Does.Contain("Ground: needs Light support under every covered cell (may depend on the material)."));
@@ -358,7 +360,7 @@ public class BuildToolsTests
     {
         _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", Label = "wall" };
 
-        string text = _tools.GetBuildingInfo("wall");
+        string text = LookupBuilding("wall");
 
         Assert.That(text, Does.Contain("Size: 1x1 (x by z, facing north). Rotation does not change the footprint."));
         Assert.That(text, Does.Contain("Cost: none"));
@@ -366,20 +368,83 @@ public class BuildToolsTests
     }
 
     [Test]
-    public void BuildingInfoErrorsForUnknownNamesAndMissingData()
+    public void LookupErrorsForUnknownNamesKindsAndMissingData()
     {
-        Assert.That(_tools.GetBuildingInfo("teleporter"), Does.StartWith("Error:").And.Contain("buildable"));
-        Assert.That(_tools.GetBuildingInfo("wall"), Does.StartWith("Error:").And.Contain("Wall"));
+        _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = "Steel", Label = "steel" });
+
+        Assert.That(_tools.LookupDef("teleporter"), Does.StartWith("Error:").And.Contain("def"));
+        Assert.That(_tools.LookupDef("steel", "spell"), Does.StartWith("Error: unknown kind \"spell\""));
+        Assert.That(_tools.LookupDef("steel", "research"), Does.StartWith("Error:").And.Contain("research"));
     }
 
     [Test]
-    public void BuildingInfoIsAnAlwaysLoadedQueryTool()
+    public void LookupShowsDescriptionStatsFactsAndListsHiddenStatGroups()
+    {
+        var stats = new List<DefStatEntry>
+        {
+            new() { Category = "Basics", CategoryLabel = "Basics", Label = "Market value", Value = "33" },
+            new() { Category = "BasicsNonPawn", CategoryLabel = "Basics", Label = "Mass", Value = "0.6 kg" }
+        };
+        for (int i = 0; i < 40; i++) stats.Add(new DefStatEntry { Category = "StuffStatFactors", CategoryLabel = "Stuff stat factors", Label = "Factor " + i, Value = "x1" });
+        _world.AddLookup(new DefLookupInfo
+        {
+            Kind = DefLookupKind.Thing,
+            DefName = "ComponentIndustrial",
+            Label = "component",
+            Description = "Basic mechanical parts.",
+            Stats = stats,
+            Facts = new[] { "Made by \"make component\" (at fabrication bench) -> 1." }
+        });
+
+        string text = _tools.LookupDef("component");
+
+        Assert.That(text, Does.StartWith("component (ComponentIndustrial), thing"));
+        Assert.That(text, Does.Contain("Basic mechanical parts."));
+        Assert.That(text, Does.Contain("[Basics] Market value: 33; Mass: 0.6 kg"));
+        Assert.That(text, Does.Not.Contain("Factor 0"));
+        Assert.That(text, Does.Contain("More stat groups (pass detail=<name> or \"all\"): Stuff stat factors (40)."));
+        Assert.That(text, Does.Contain("- Made by \"make component\" (at fabrication bench) -> 1."));
+        Assert.That(text, Does.Not.Contain("Building:"));
+
+        string detail = _tools.LookupDef("component", "", "stuff stat factors");
+        Assert.That(detail, Does.Contain("Factor 39").And.Not.Contain("Market value"));
+        Assert.That(detail, Does.Contain("More stat groups (pass detail=<name> or \"all\"): Basics (2)."));
+        Assert.That(_tools.LookupDef("component", "", "all"), Does.Contain("Factor 39").And.Contain("Market value").And.Not.Contain("More stat groups"));
+        Assert.That(_tools.LookupDef("component", "", "Weapon"), Does.Contain("No stat group \"Weapon\"."));
+    }
+
+    [Test]
+    public void LookupSearchesAllKindsAndKindNarrowsTheSearch()
+    {
+        _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Hediff, DefName = "Plague", Label = "plague" });
+        _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Research, DefName = "PlagueStudies", Label = "plague studies" });
+
+        Assert.That(_tools.LookupDef("plague"), Does.StartWith("plague (Plague), hediff"));
+        Assert.That(_tools.LookupDef("plague", "research"), Does.StartWith("plague studies (PlagueStudies), research"));
+    }
+
+    [Test]
+    public void LookupIsAnAlwaysLoadedQueryTool()
     {
         var registry = new AgentToolRegistry(_world, new AgentTranscript());
 
-        Assert.That(registry.RiskOf("get_building_info"), Is.EqualTo(ToolRisk.Query));
-        Assert.That(registry.Descriptors.Single(d => d.Name == "get_building_info").Category, Is.EqualTo(ToolCategory.Observe));
-        Assert.That(ToolPacks.PackOf("get_building_info", ToolCategory.Observe), Is.Null);
+        Assert.That(registry.RiskOf("lookup_def"), Is.EqualTo(ToolRisk.Query));
+        Assert.That(registry.Descriptors.Single(d => d.Name == "lookup_def").Category, Is.EqualTo(ToolCategory.Observe));
+        Assert.That(ToolPacks.PackOf("lookup_def", ToolCategory.Observe), Is.Null);
+        Assert.That(registry.Descriptors.Any(d => d.Name == "get_building_info"), Is.False);
+    }
+
+    /// <summary>把已登記的建築規格同時登記成 lookup_def 的 thing，再查詢。</summary>
+    private string LookupBuilding(string name)
+    {
+        foreach (BuildingInfo b in _world.BuildingInfos.Values)
+        {
+            if (_world.LookupDef(DefLookupKind.Thing, b.DefName) == null)
+            {
+                _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = b.DefName, Label = b.Label });
+            }
+        }
+        return _tools.LookupDef(name);
     }
 
     [Test]

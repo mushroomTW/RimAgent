@@ -1057,6 +1057,39 @@ public sealed class DefInfo
     public string Label { get; set; } = string.Empty;
 }
 
+/// <summary>lookup_def 可查的 Def 種類。</summary>
+public static class DefLookupKind
+{
+    public const string Thing = "thing";
+    public const string Terrain = "terrain";
+    public const string Research = "research";
+    public const string Hediff = "hediff";
+
+    public static readonly IReadOnlyList<string> All = [Thing, Terrain, Research, Hediff];
+}
+
+/// <summary>一個 Def 的資訊卡內容（同遊戲「i」資訊卡）加上種類專屬的事實（取得方式、研究狀態等）。</summary>
+public sealed class DefLookupInfo
+{
+    public string Kind { get; set; } = string.Empty;
+    public string DefName { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    /// <summary>資訊卡數值，已依遊戲顯示順序排好（類別順序 → 類別內優先度）。</summary>
+    public IReadOnlyList<DefStatEntry> Stats { get; set; } = [];
+    /// <summary>種類專屬事實，每則一行（如製作配方、收成來源、研究前置與解鎖項目）。</summary>
+    public IReadOnlyList<string> Facts { get; set; } = [];
+}
+
+public sealed class DefStatEntry
+{
+    /// <summary>StatCategoryDef 的 defName（detail 參數可用它或 CategoryLabel 篩選）。</summary>
+    public string Category { get; set; } = string.Empty;
+    public string CategoryLabel { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+}
+
 /// <summary>命令型操作的結果。失敗時 Message 說明原因，供工具轉述給模型。</summary>
 public sealed class CommandResult : Result<string>
 {

@@ -162,7 +162,7 @@ public sealed class BuildTools
     }
 
     [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: get_building_info. Max 400 cells per call.")]
+    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
 #pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
     public string PlaceBlueprint(
         [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
@@ -285,21 +285,110 @@ public sealed class BuildTools
         ["PlaceWorker_OnSteamGeyser"] = "must sit on a steam geyser"
     };
 
-    [AgentTool("get_building_info", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Looks up a buildable by name or defName (same names as place_blueprint) and reports its size and how rotation changes it, cost, material needs, terrain support needed (H/m/l in view_map_grid layer=build), research and construction skill, placement rules (e.g. not under a roof), ship part, power and interaction cell. Use it before planning a layout.")]
-    public string GetBuildingInfo([Description("Name or defName, e.g. \"ship reactor\", \"Ship_Engine\", \"solar generator\".")] string building)
+    /// <summary>預設輸出的數值列上限；整個類別放得下才放，其餘只列類別名稱讓模型用 detail 再查。</summary>
+    private const int DefaultStatBudget = 30;
+    private const int MaxDescriptionChars = 800;
+
+    [AgentTool("lookup_def", ToolCategory.Observe, ToolRisk.Query)]
+    [Description("Game encyclopedia, including modded content: looks up an item, weapon, apparel, building, plant, animal, floor, research project or health condition by name or defName. Reports its description and info-card stats; how to get it (recipes with workbench, ingredients, skill and research; harvest, mining, animals, traders); what it is an ingredient of or used to build; research status, prerequisites and unlocks; hediff stages and lethality. Buildables also get size and rotation, cost, ground support needed (H/m/l in view_map_grid layer=build), builder skill, placement rules, ship part, power and interaction cell: use it before planning a layout.")]
+    public string LookupDef(
+        [Description("Name or defName, e.g. \"component\", \"ship reactor\", \"Ship_Engine\", \"plague\", \"microelectronics\".")] string name,
+        [Description("Optional: thing, terrain, research or hediff to narrow the search. Empty searches all four.")] string kind = "",
+        [Description("Optional: a stat group to show in full, named as listed under \"More stat groups\", or \"all\". Empty shows the main groups.")] string detail = "")
     {
-        Result<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
+        string wanted = (kind ?? string.Empty).Trim().ToLowerInvariant();
+        if (wanted.Length > 0 && !DefLookupKind.All.Contains(wanted))
+        {
+            return ToolText.Error($"unknown kind \"{kind}\"; use {string.Join(", ", DefLookupKind.All)} or leave it empty.");
+        }
+
+        // 各種類的目錄合併後一起比對，名稱層級（精確 → 前綴 → 包含）才是全域的；再以參考對回種類。
+        var kindOf = new Dictionary<DefInfo, string>();
+        var candidates = new List<DefInfo>();
+        foreach (string k in wanted.Length > 0 ? new[] { wanted } : DefLookupKind.All)
+        {
+            foreach (DefInfo d in _world.GetLookupCatalog(k))
+            {
+                kindOf[d] = k;
+                candidates.Add(d);
+            }
+        }
+        Result<DefInfo> def = DefResolver.Resolve(name, candidates, wanted.Length > 0 ? wanted : "def");
         if (!def.Success) return def.Error;
-        BuildingInfo info = _world.GetBuildingInfo(def.Value.DefName);
+        string resolvedKind = kindOf[def.Value];
+        DefLookupInfo info = _world.LookupDef(resolvedKind, def.Value.DefName);
         if (info == null) return ToolText.Error($"no data for {def.Value.DefName}.");
-        return FormatBuildingInfo(info);
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(info.Label).Append(" (").Append(info.DefName).Append("), ").AppendLine(resolvedKind);
+        if (info.Description.Length > 0)
+        {
+            sb.AppendLine(info.Description.Length > MaxDescriptionChars ? info.Description.Substring(0, MaxDescriptionChars) + "…" : info.Description);
+        }
+        AppendStats(sb, info.Stats, (detail ?? string.Empty).Trim());
+        if (info.Facts.Count > 0)
+        {
+            sb.AppendLine("Facts:");
+            foreach (string fact in info.Facts) sb.Append("- ").AppendLine(fact);
+        }
+        if (resolvedKind is DefLookupKind.Thing or DefLookupKind.Terrain && _world.Buildables.Any(b => b.DefName == info.DefName))
+        {
+            BuildingInfo building = _world.GetBuildingInfo(info.DefName);
+            if (building != null) sb.AppendLine("Building:").AppendLine(FormatBuildingInfo(building));
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>
+    /// 依類別分行輸出數值。detail 空白時依序放整個類別直到超過預算（第一個類別一定放）；
+    /// 指定類別（defName 或顯示名稱）只放那一類；all 全放。沒放的類別列在最後。
+    /// </summary>
+    private static void AppendStats(System.Text.StringBuilder sb, IReadOnlyList<DefStatEntry> stats, string detail)
+    {
+        if (stats.Count == 0) return;
+        // 以顯示名稱分組：原版的 Basics、BasicsImportant、BasicsNonPawn 等類別同名，分開列會重複出現好幾行。
+        List<IGrouping<string, DefStatEntry>> groups = [.. stats.GroupBy(s => s.CategoryLabel)];
+        bool all = string.Equals(detail, "all", StringComparison.OrdinalIgnoreCase);
+        var shown = new List<IGrouping<string, DefStatEntry>>();
+        if (all) shown.AddRange(groups);
+        else if (detail.Length > 0)
+        {
+            shown.AddRange(groups.Where(g => string.Equals(g.Key, detail, StringComparison.OrdinalIgnoreCase) ||
+                                             g.Any(s => string.Equals(s.Category, detail, StringComparison.OrdinalIgnoreCase))));
+            if (shown.Count == 0) sb.Append("No stat group \"").Append(detail).AppendLine("\".");
+        }
+        else
+        {
+            int used = 0;
+            foreach (IGrouping<string, DefStatEntry> g in groups)
+            {
+                int n = g.Count();
+                if (shown.Count > 0 && used + n > DefaultStatBudget) continue;
+                shown.Add(g);
+                used += n;
+            }
+        }
+
+        if (shown.Count > 0)
+        {
+            sb.AppendLine("Stats:");
+            foreach (IGrouping<string, DefStatEntry> g in shown)
+            {
+                sb.Append('[').Append(g.Key).Append("] ")
+                  .AppendLine(string.Join("; ", g.Select(s => s.Value.Length > 0 ? $"{s.Label}: {s.Value}" : s.Label)));
+            }
+        }
+        List<IGrouping<string, DefStatEntry>> hidden = [.. groups.Where(g => !shown.Contains(g))];
+        if (hidden.Count > 0)
+        {
+            sb.Append("More stat groups (pass detail=<name> or \"all\"): ")
+              .AppendLine(string.Join(", ", hidden.Select(g => $"{g.Key} ({g.Count()})")) + ".");
+        }
     }
 
     private static string FormatBuildingInfo(BuildingInfo b)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append(b.Label).Append(" (").Append(b.DefName).AppendLine(")");
         sb.Append("Size: ").Append(b.Width).Append('x').Append(b.Height).Append(" (x by z, facing north). ");
         sb.AppendLine(b.Width == b.Height
             ? "Rotation does not change the footprint."

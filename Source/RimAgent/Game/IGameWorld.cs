@@ -117,6 +117,10 @@ public interface IGameWorld
     CommandResult RemoveDesignationOnThing(int thingId, string designationDefName);
     /// <summary>某個可建造項目的規格；defName 不存在回傳 null。</summary>
     BuildingInfo GetBuildingInfo(string buildableDefName);
+    /// <summary>lookup_def 的名稱目錄（kind 見 DefLookupKind）；未知 kind 回傳空表。</summary>
+    IReadOnlyList<DefInfo> GetLookupCatalog(string kind);
+    /// <summary>一個 Def 的資訊卡與事實；不存在回傳 null。</summary>
+    DefLookupInfo LookupDef(string kind, string defName);
     /// <summary>內含可放置檢查；失敗訊息帶遊戲給的原因（空間被占用時附上占用者與其範圍）。</summary>
     CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName);
     /// <summary>取消範圍內玩家的藍圖與框架（同原版取消指令，框架退回材料）；回傳被取消者的名稱與範圍。</summary>

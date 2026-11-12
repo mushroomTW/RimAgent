@@ -612,6 +612,27 @@ internal sealed class FakeGameWorld : IGameWorld
         return BuildingInfos.TryGetValue(buildableDefName ?? string.Empty, out BuildingInfo info) ? info : null;
     }
 
+    /// <summary>lookup_def 的資料（以 kind 分組）；目錄由這裡的 defName 與 Label 自動產生。</summary>
+    public Dictionary<string, List<DefLookupInfo>> LookupInfos { get; } = new Dictionary<string, List<DefLookupInfo>>(StringComparer.OrdinalIgnoreCase);
+
+    public void AddLookup(DefLookupInfo info)
+    {
+        if (!LookupInfos.TryGetValue(info.Kind, out List<DefLookupInfo> list)) LookupInfos[info.Kind] = list = new List<DefLookupInfo>();
+        list.Add(info);
+    }
+
+    public IReadOnlyList<DefInfo> GetLookupCatalog(string kind)
+    {
+        return LookupInfos.TryGetValue(kind ?? string.Empty, out List<DefLookupInfo> list)
+            ? list.Select(i => new DefInfo(i.DefName, i.Label)).ToList()
+            : new List<DefInfo>();
+    }
+
+    public DefLookupInfo LookupDef(string kind, string defName)
+    {
+        return LookupInfos.TryGetValue(kind ?? string.Empty, out List<DefLookupInfo> list) ? list.FirstOrDefault(i => i.DefName == defName) : null;
+    }
+
     public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName)
     {
         Calls.Add($"TryPlaceBlueprint({buildableDefName},{x},{z},{rotation},{stuffDefName})");

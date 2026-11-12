@@ -25,7 +25,7 @@ AI persona core: buy from an exotic orbital trader (list_traders), get it as a q
 - Every part must touch the ship edge to edge (directly or through beams): corners do not connect and no beam fits a one-cell gap.
 - No roof over any part. Each casket's head must sit on a beam; keep its entry cell free.
 - Pick an open, unroofed area about 20x20 inside the defenses: view_map_grid layer=build must show only H there (# = taken), then roof and map layers.
-- place_blueprint one part at a time, shape single, x,z = its center. The reply gives the covered rectangle. Refusals name what blocks. get_building_info: size, cost, rules.
+- place_blueprint one part at a time, shape single, x,z = its center. The reply gives the covered rectangle. Refusals name what blocks. lookup_def: size, cost, rules.
 - After each part run check_ship_layout (blueprints count as built) and fix what it lists at once: remove_blueprint cancels a misplaced part.
 
 ## 4. Startup: 14 days of raids
