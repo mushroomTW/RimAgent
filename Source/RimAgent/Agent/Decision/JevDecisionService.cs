@@ -81,8 +81,13 @@ public sealed class JevDecisionService : IDecisionService
         JevResult result;
         try
         {
-            result = await _client
-                .EvaluateWithProviderAsync(state, jevPlan, _providerId?.Invoke(), _model?.Invoke(), cancellationToken)
+            string provider = _providerId?.Invoke();
+            string model = _model?.Invoke();
+            // 未指定供應商時走 EvaluateAsync，才能使用 RimLLM Framework 的決策備援鏈；
+            // 呼叫端明確指定供應商時才走 EvaluateWithProviderAsync（依框架契約不換家）。
+            result = await (string.IsNullOrWhiteSpace(provider)
+                ? _client.EvaluateAsync(state, jevPlan, model, cancellationToken)
+                : _client.EvaluateWithProviderAsync(state, jevPlan, provider, model, cancellationToken))
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
