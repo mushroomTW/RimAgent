@@ -1086,8 +1086,9 @@ public class RimAgentGameComponent : GameComponent
             AutonomousTrigger trigger = _scheduler.Evaluate(tick, signals, config);
             ReportGiveUps(session);
             if (trigger == AutonomousTrigger.None) return;
+            string detail = FormatRetryDetail(trigger, _scheduler.AttemptOf(trigger), signals);
             _autoRunning = true;
-            _ = RunAutonomousGuardedAsync(session, trigger, tick, config, signals);
+            _ = RunAutonomousGuardedAsync(session, trigger, tick, config, signals, detail);
             _lastAutoError = null;
         }
         catch (Exception ex)
@@ -1420,6 +1421,28 @@ public class RimAgentGameComponent : GameComponent
             GameTick = tick,
             Signals = signals
         };
+    }
+
+    /// <summary>
+    /// 自主任務重試時注入具體客觀訊號診斷，讓模型在自我改進閉環中得知前次處置之成效。
+    /// 首次觸發（attempt <= 1）回傳 null。
+    /// </summary>
+    internal static string FormatRetryDetail(AutonomousTrigger trigger, int attempt, AutonomousSignals signals)
+    {
+        if (attempt <= 1) return null;
+        string diagnostic = trigger switch
+        {
+            AutonomousTrigger.Fire =>
+                $"active fires. There are still {signals.FireCount} fire(s) burning after previous orders. Check if assigned colonists are drafting/extinguishing, or assign more colonists.",
+            AutonomousTrigger.Cold =>
+                $"hypothermia risks. {signals.ColdColonistCount} colonist(s) remain dangerously cold. Check indoor heaters, fuel/power, or warm clothing.",
+            AutonomousTrigger.EmergencyMedical =>
+                $"medical emergencies. {signals.DownedOrBleedingCount} colonist(s) remain downed or bleeding. Ensure doctors are prioritized and medicine is accessible.",
+            AutonomousTrigger.FoodShortage =>
+                $"food shortage. Current food per colonist is {(signals.FoodNutrition / Math.Max(1, signals.ColonistCount)):F1} nutrition.",
+            _ => $"condition: {trigger}."
+        };
+        return $"This is retry #{attempt} for {diagnostic}";
     }
 
     private void HoldAfterConfigurationError(ColonyAgentSession session, int instructionId, int tick)

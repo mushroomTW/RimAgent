@@ -549,3 +549,43 @@ public class AutonomousToolsTests
         Assert.That(tools, Does.Contain("set_work_priorities"));
     }
 }
+
+[TestFixture]
+public class AutonomousRetryDetailTests
+{
+    [Test]
+    public void InitialAttemptReturnsNull()
+    {
+        var signals = new AutonomousSignals { FireCount = 2, ColdColonistCount = 1 };
+        Assert.That(RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Fire, 1, signals), Is.Null);
+        Assert.That(RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Cold, 0, signals), Is.Null);
+    }
+
+    [Test]
+    public void RetryAttemptsIncludeSpecificDiagnostics()
+    {
+        var signals = new AutonomousSignals
+        {
+            FireCount = 3,
+            ColdColonistCount = 2,
+            DownedOrBleedingCount = 1,
+            FoodNutrition = 12f,
+            ColonistCount = 3
+        };
+
+        string fireDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Fire, 2, signals);
+        Assert.That(fireDetail, Does.Contain("retry #2").And.Contain("3 fire(s) burning"));
+
+        string coldDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Cold, 3, signals);
+        Assert.That(coldDetail, Does.Contain("retry #3").And.Contain("2 colonist(s) remain dangerously cold"));
+
+        string medDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.EmergencyMedical, 2, signals);
+        Assert.That(medDetail, Does.Contain("retry #2").And.Contain("1 colonist(s) remain downed or bleeding"));
+
+        string foodDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.FoodShortage, 2, signals);
+        Assert.That(foodDetail, Does.Contain("retry #2").And.Contain("4.0 nutrition"));
+
+        string fallbackDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Research, 2, signals);
+        Assert.That(fallbackDetail, Does.Contain("retry #2").And.Contain("condition: Research."));
+    }
+}
