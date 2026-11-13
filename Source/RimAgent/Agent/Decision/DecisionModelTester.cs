@@ -38,9 +38,7 @@ public static class DecisionModelTester
         var timer = Stopwatch.StartNew();
         try
         {
-            IDecisionService service = DecisionServiceFactory.Create(
-                () => RimAgentMod.Settings?.decisionProvider,
-                () => RimAgentMod.Settings?.decisionModel);
+            IDecisionService service = DecisionServiceFactory.Create();
             if (service == null)
             {
                 _outcome = TestOutcome.Unavailable;

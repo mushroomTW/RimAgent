@@ -217,24 +217,18 @@ public sealed class ColonyAgentSession
                 decisionService,
                 fallbackClassifier,
                 decisionRiskCriteria,
-                () => DecisionServiceFactory.Create(
-                    () => RimAgentMod.Settings?.decisionProvider,
-                    () => RimAgentMod.Settings?.decisionModel));
+                () => DecisionServiceFactory.Create());
         }
 
         _router = router ?? new DecisionReasoningRouter(
             decisionService,
-            () => DecisionServiceFactory.Create(
-                () => RimAgentMod.Settings?.decisionProvider,
-                () => RimAgentMod.Settings?.decisionModel),
+            () => DecisionServiceFactory.Create(),
             () => RimAgentMod.Settings,
             () => History);
 
         _packSelector = new DecisionToolPackSelector(
             decisionService,
-            () => DecisionServiceFactory.Create(
-                () => RimAgentMod.Settings?.decisionProvider,
-                () => RimAgentMod.Settings?.decisionModel));
+            () => DecisionServiceFactory.Create());
         _classifier = classifier;
 
         _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity,

@@ -450,10 +450,10 @@ public class DecisionRoutingTests
         var disabled = new DecisionAvailability { Enabled = false };
         var noModel = new DecisionAvailability { Enabled = true, Model = "" };
         var ready = new DecisionAvailability { Enabled = true, Model = "small-model" };
-        Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled, "provider"), Is.False);
-        Assert.That(DecisionServiceFactory.CanUseDecisionModel(noModel, "provider"), Is.False);
-        Assert.That(DecisionServiceFactory.CanUseDecisionModel(null, "provider"), Is.False);
-        Assert.That(DecisionServiceFactory.CanUseDecisionModel(ready, ""), Is.True);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled), Is.False);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(noModel), Is.False);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(null), Is.False);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(ready), Is.True);
     }
 
     [Test]

@@ -182,7 +182,7 @@ public sealed class SubagentTools
             throw;
         }
 
-        string result = ToolOutputLimit.Apply(Combine(subagent.Name, reports), _registry.Outputs);
+        string result = ToolOutputLimit.Apply(Combine(subagent.Name, reports), store: _registry.Outputs);
         _transcript.UpdateToolResult(entry, result, reports.All(r => r.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal)));
         return result;
     }

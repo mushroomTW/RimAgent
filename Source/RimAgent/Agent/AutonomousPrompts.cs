@@ -12,14 +12,8 @@ internal static class AutonomousPrompts
     /// <summary>建構自主任務指令：有專屬章節用專屬，否則退回 Interval；共用通則接在每個任務前。</summary>
     public static string Build(AutonomousPack pack, AutonomousTrigger trigger)
     {
-        if (pack == null) return null;
-        string task;
-        if (pack.Tasks == null
-            || ((!pack.Tasks.TryGetValue(trigger.ToString(), out task) || string.IsNullOrWhiteSpace(task))
-                && (!pack.Tasks.TryGetValue(AutonomousTrigger.Interval.ToString(), out task) || string.IsNullOrWhiteSpace(task))))
-        {
-            return null;
-        }
+        if (!HasTask(pack, trigger) && !HasTask(pack, AutonomousTrigger.Interval)) return null;
+        string task = pack.Tasks[(HasTask(pack, trigger) ? trigger : AutonomousTrigger.Interval).ToString()];
         // 共用任務說明與個別事件一起交給模型；如何處理由模型判斷。
         string preamble = pack.Preamble;
         if (string.IsNullOrWhiteSpace(preamble)) return task;

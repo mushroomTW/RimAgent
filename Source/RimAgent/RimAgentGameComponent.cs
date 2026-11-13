@@ -91,9 +91,7 @@ public class RimAgentGameComponent : GameComponent
     private const double SpeedCheckSeconds = 3;
     private DateTime _nextSpeedCheckAt;
     private readonly AutoTimeSpeed _autoSpeed = new(
-        () => DecisionServiceFactory.Create(
-            () => RimAgentMod.Settings?.decisionProvider,
-            () => RimAgentMod.Settings?.decisionModel));
+        () => DecisionServiceFactory.Create());
     private DateTime _nextDialogRetryAt;
     private const double DialogRetrySeconds = 60;
     private CancellationTokenSource _goalCts;
@@ -114,9 +112,7 @@ public class RimAgentGameComponent : GameComponent
         get => _goalAuditor ??= new DecisionGoalAuditor(
             decisionService: null,
             criteriaProvider: () => _pack?.DecisionGoalCriteria,
-            serviceFactory: () => DecisionServiceFactory.Create(
-                () => RimAgentMod.Settings?.decisionProvider,
-                () => RimAgentMod.Settings?.decisionModel));
+            serviceFactory: () => DecisionServiceFactory.Create());
         set => _goalAuditor = value;
     }
     private DateTime _goalNextRunAt;
@@ -124,16 +120,12 @@ public class RimAgentGameComponent : GameComponent
     private DecisionChoiceResponder ChoiceResponder => _choiceResponder ??= new DecisionChoiceResponder(
         decisionService: null,
         criteriaProvider: () => _pack?.DecisionChoiceCriteria,
-        serviceFactory: () => DecisionServiceFactory.Create(
-            () => RimAgentMod.Settings?.decisionProvider,
-            () => RimAgentMod.Settings?.decisionModel));
+        serviceFactory: () => DecisionServiceFactory.Create());
     private DecisionAutonomousTriage _triage;
     private DecisionAutonomousTriage Triage => _triage ??= new DecisionAutonomousTriage(
         decisionService: null,
         criteriaProvider: () => _pack?.DecisionTriageCriteria,
-        serviceFactory: () => DecisionServiceFactory.Create(
-            () => RimAgentMod.Settings?.decisionProvider,
-            () => RimAgentMod.Settings?.decisionModel));
+        serviceFactory: () => DecisionServiceFactory.Create());
     /// <summary>每種基地狀況上一輪自主任務的回覆與結束 tick；System One 篩選時看它判斷是不是已在處理。不存檔。</summary>
     private readonly Dictionary<AutonomousTrigger, (string Reply, int Tick)> _lastAutoReplies = new();
     /// <summary>已告知玩家「System One 判定先等」的條件；同一段等待只提示一次，真的跑了再清掉。</summary>

@@ -118,7 +118,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             {
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
             }
-            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), Outputs);
+            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), store: Outputs);
             entry.Result = text;
             entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
             bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
@@ -205,7 +205,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             {
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
             }
-            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), Outputs);
+            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), store: Outputs);
             _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
             return text;
         }

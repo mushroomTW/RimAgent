@@ -14,23 +14,11 @@ internal static class ToolOutputLimit
     /// <summary>單次工具結果保留的字元數（約 2000 token）：一輪可能呼叫好幾個工具，還要留空間給歷史與回覆。</summary>
     public const int MaxResultChars = 8000;
 
-    public static string Apply(string text)
-    {
-        return Apply(text, MaxResultChars);
-    }
-
-    public static string Apply(string text, ToolOutputStore store)
-    {
-        return Apply(text, MaxResultChars, store);
-    }
-
     /// <summary>保留的內容以 <paramref name="maxChars"/> 為上限；另加一行固定長度的省略說明。</summary>
-    internal static string Apply(string text, int maxChars)
-    {
-        return Apply(text, maxChars, null);
-    }
-
-    internal static string Apply(string text, int maxChars, ToolOutputStore store)
+    /// <param name="text">工具原始結果。</param>
+    /// <param name="maxChars">保留字元上限，預設為 <see cref="MaxResultChars"/>。</param>
+    /// <param name="store">提供時保存完整原文，並在接縫處附上續讀代號；null 表示不保存。</param>
+    public static string Apply(string text, int maxChars = MaxResultChars, ToolOutputStore store = null)
     {
         if (string.IsNullOrEmpty(text) || text.Length <= maxChars) return text;
 

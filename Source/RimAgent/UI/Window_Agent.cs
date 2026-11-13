@@ -1771,7 +1771,7 @@ public partial class Window_Agent : Window
         if (DrawUnifiedButton(reasoningRect, reasoningStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
             var options = new List<FloatMenuOption>();
-            if (DecisionServiceFactory.CanUseDecisionModel(settings?.decisionProvider))
+            if (DecisionServiceFactory.CanUseDecisionModel())
             {
                 options.Add(new FloatMenuOption("RimAgent.Reasoning.Routing".Translate(), () => SetReasoningRouting(settings))
                 {

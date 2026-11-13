@@ -39,39 +39,39 @@ public static class DecisionServiceFactory
     }
 
     /// <summary>指定供應商可獨立於框架預設供應商啟用。</summary>
-    public static bool CanUseDecisionModel(string providerId)
+    public static bool CanUseDecisionModel()
     {
-        return IsEnabledInSettings && CanUseDecisionModel(GetAvailability(), providerId);
+        return IsEnabledInSettings && CanUseDecisionModel(GetAvailability());
     }
 
     /// <summary>RimAgent 設定的總開關；設定還沒載入（如單元測試）時視為開啟。</summary>
     private static bool IsEnabledInSettings => RimAgentMod.Settings?.decisionEnabled != false;
 
     /// <summary>框架沒有啟用決策模型時一律不可用；RimAgent 另外指定供應商也不例外。</summary>
-    internal static bool CanUseDecisionModel(DecisionAvailability availability, string providerId)
+    internal static bool CanUseDecisionModel(DecisionAvailability availability)
     {
         return availability != null && availability.Enabled && !string.IsNullOrWhiteSpace(availability.Model);
     }
 
     /// <summary>
     /// 建立決策服務；沒有任何可用的決策供應商時回 null（呼叫端據此走備援路徑）。
+    /// 供應商與模型每次呼叫時從 RimAgent 設定讀取，留空代表沿用框架啟用的那一個。
     /// </summary>
-    /// <param name="providerId">決策供應商 id；null 或空字串代表沿用框架啟用的那一個。</param>
-    /// <param name="model">模型名稱；null 或空字串代表沿用該供應商設定的模型。</param>
-    public static IDecisionService Create(Func<string> providerId = null, Func<string> model = null)
+    public static IDecisionService Create()
     {
         // 框架沒有決策模型、或玩家在設定裡關掉決策模型時一律回 null，各功能照常走備援路徑。
         if (!IsEnabledInSettings) return null;
-        DecisionAvailability availability = GetAvailability();
-        string provider = providerId?.Invoke();
-        if (!CanUseDecisionModel(availability, provider))
+        if (!CanUseDecisionModel(GetAvailability()))
         {
             return null;
         }
         try
         {
             RimLLMDecisionClient client = RimLLMProvider.CreateDecisionService(ColonyAgentSession.ModId);
-            return new JevDecisionService(client, providerId, model);
+            return new JevDecisionService(
+                client,
+                () => RimAgentMod.Settings?.decisionProvider,
+                () => RimAgentMod.Settings?.decisionModel);
         }
         catch (InvalidOperationException)
         {
