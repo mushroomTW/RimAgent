@@ -1,5 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.AI;
 using NUnit.Framework;
 using RimAgent.Agent;
 using RimAgent.Game;
@@ -186,11 +187,11 @@ public class BuildToolsTests
         _world.LayoutList.Add(new LayoutInfo { DefName = "RimAgent_Tiny", Label = "tiny room", Description = "test room", Width = 3, Height = 3 });
         _world.LayoutPieces["RimAgent_Tiny"] =
         [
-            new LayoutPiece { DefName = "Wall", X = 0, Z = 0 },
-            new LayoutPiece { DefName = "Wall", X = 2, Z = 0 },
-            new LayoutPiece { DefName = "Door", X = 1, Z = 2, Rotation = 0 },
+            new LayoutPiece { DefName = "Wall", Part = LayoutPart.Wall, X = 0, Z = 0 },
+            new LayoutPiece { DefName = "Wall", Part = LayoutPart.Wall, X = 2, Z = 0 },
+            new LayoutPiece { DefName = "Door", Part = LayoutPart.Wall, X = 1, Z = 2, Rotation = 0 },
             new LayoutPiece { DefName = "Bed", StuffDefName = "WoodLog", X = 1, Z = 1 },
-            new LayoutPiece { DefName = "WoodPlankFloor", X = 1, Z = 1 }
+            new LayoutPiece { DefName = "WoodPlankFloor", Part = LayoutPart.Floor, X = 1, Z = 1 }
         ];
     }
 
@@ -223,10 +224,63 @@ public class BuildToolsTests
 
         string text = _tools.PlaceBlueprint("RimAgent_Tiny", "layout", 10, 10, 0, 0, 0, "granite blocks");
 
-        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("Kept their own material (refused BlocksGranite): bed."));
+        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("Kept the layout's own material or floor (the requested one was refused): bed."));
         Assert.That(_world.Blueprints, Does.Contain(("Wall", 9, 9, 0, "BlocksGranite")));
         Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "WoodLog")));
         Assert.That(_world.Blueprints, Does.Contain(("WoodPlankFloor", 10, 10, 0, "")));
+    }
+
+    /// <summary>牆（含門）、地板、家具各自指定材料。</summary>
+    [Test]
+    public void LayoutSetsWallsFloorAndFurnitureIndependently()
+    {
+        AddTinyLayout();
+        AddFloorAndStuffInfos();
+
+        string text = _tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "walls=granite blocks; floor=steel tile; furniture=steel");
+
+        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("walls BlocksGranite, floor MetalTile, furniture Steel"));
+        Assert.That(_world.Blueprints, Does.Contain(("Wall", 9, 9, 0, "BlocksGranite")));
+        Assert.That(_world.Blueprints, Does.Contain(("Door", 10, 11, 0, "BlocksGranite")));
+        Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "Steel")));
+        Assert.That(_world.Blueprints, Does.Contain(("MetalTile", 10, 10, 0, "")));
+    }
+
+    [Test]
+    public void LayoutKeepsOmittedPartsAndFallsBackWhenFloorIsRefused()
+    {
+        AddTinyLayout();
+        AddFloorAndStuffInfos();
+        _world.BlockedStuff[("MetalTile", "")] = "steel tile needs heavy support";
+
+        string text = _tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "floor: steel tile");
+
+        Assert.That(text, Does.Contain("Kept the layout's own material or floor"));
+        Assert.That(_world.Blueprints, Does.Contain(("Wall", 9, 9, 0, "")));
+        Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "WoodLog")));
+        Assert.That(_world.Blueprints, Does.Contain(("WoodPlankFloor", 10, 10, 0, "")));
+    }
+
+    [Test]
+    public void LayoutRejectsUnknownPartsAndNonFloors()
+    {
+        AddTinyLayout();
+        AddFloorAndStuffInfos();
+
+        Assert.That(_tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "roof=steel"), Does.StartWith("Error:").And.Contain("unknown part"));
+        Assert.That(_tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "floor=bed"), Does.StartWith("Error:").And.Contain("not a floor"));
+        Assert.That(_tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "walls=unobtainium"), Does.StartWith("Error:"));
+        Assert.That(_world.Blueprints, Is.Empty);
+    }
+
+    private void AddFloorAndStuffInfos()
+    {
+        _world.Buildables = [.. _world.Buildables, new DefInfo("MetalTile", "steel tile"), new DefInfo("WoodPlankFloor", "wood floor")];
+        _world.BuildingInfos["MetalTile"] = new BuildingInfo { DefName = "MetalTile", Label = "steel tile", IsTerrain = true };
+        _world.BuildingInfos["WoodPlankFloor"] = new BuildingInfo { DefName = "WoodPlankFloor", Label = "wood floor", IsTerrain = true };
+        _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", Label = "wall", StuffCount = 5 };
+        _world.BuildingInfos["Door"] = new BuildingInfo { DefName = "Door", Label = "door", StuffCount = 5 };
+        _world.BuildingInfos["Bed"] = new BuildingInfo { DefName = "Bed", Label = "bed", StuffCount = 45 };
     }
 
     [Test]
@@ -257,6 +311,16 @@ public class BuildToolsTests
         var off = new BuildTools(_world, layoutsEnabled: () => false);
         Assert.That(off.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, ""), Does.StartWith("Error:").And.Contain("turned off"));
         Assert.That(_world.Blueprints, Is.Empty);
+    }
+
+    [Test]
+    public void BlueprintDescriptionOmitsLayoutWhenTurnedOff()
+    {
+        string Description(bool enabled) => new AgentToolRegistry(_world, new AgentTranscript(), null, null, layoutsEnabled: () => enabled)
+            .All.OfType<AIFunction>().Single(f => f.Name == "place_blueprint").Description;
+
+        Assert.That(Description(true), Does.Contain("layout"));
+        Assert.That(Description(false), Does.Not.Contain("layout").And.Contain("outline"));
     }
 
     [Test]

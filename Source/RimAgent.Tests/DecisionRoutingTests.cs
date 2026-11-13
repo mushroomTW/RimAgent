@@ -445,12 +445,15 @@ public class DecisionRoutingTests
     }
 
     [Test]
-    public void ExplicitDecisionProviderIsAvailableEvenWhenFrameworkDefaultIsDisabled()
+    public void DecisionModelIsUnavailableWithoutFrameworkDecisionModel()
     {
         var disabled = new DecisionAvailability { Enabled = false };
-        Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled, "provider"), Is.True);
-        Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled, ""), Is.False);
+        var noModel = new DecisionAvailability { Enabled = true, Model = "" };
+        var ready = new DecisionAvailability { Enabled = true, Model = "small-model" };
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled, "provider"), Is.False);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(noModel, "provider"), Is.False);
         Assert.That(DecisionServiceFactory.CanUseDecisionModel(null, "provider"), Is.False);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(ready, ""), Is.True);
     }
 
     [Test]

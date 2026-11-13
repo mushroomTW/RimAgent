@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -421,7 +421,8 @@ public class RimAgentMod : Mod
     /// <summary>決策模型的連線狀態一行，沒設定時附「前往」按鈕；下方是測試按鈕。</summary>
     private static bool IsDecisionReady(DecisionAvailability availability)
     {
-        return availability != null && availability.Enabled && (!availability.RequiresKey || availability.HasKey);
+        return availability != null && availability.Enabled && !string.IsNullOrWhiteSpace(availability.Model)
+            && (!availability.RequiresKey || availability.HasKey);
     }
 
     private static void DrawDecisionStatus(Listing_Standard listing, DecisionAvailability availability)
@@ -629,21 +630,13 @@ public class RimAgentMod : Mod
 
         if (Widgets.ButtonText(provDropdownRect, shownProv.Truncate(provDropdownRect.width - 12f)))
         {
+            // 供應商一律沿用框架啟用的那一個；這裡只讓玩家選擇「本模組不使用決策模型」。
+            // 關掉後整段隱藏，可在主頁的決策模型開關重新啟用。
             var options = new List<FloatMenuOption>
             {
-                new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionProvider = string.Empty)
+                new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionProvider = string.Empty),
+                new FloatMenuOption("RimAgent.Settings.DecisionProviderNone".Translate(), () => Settings.decisionEnabled = false)
             };
-            try
-            {
-                AddDecisionProviderOptions(options);
-            }
-            catch (MissingMethodException)
-            {
-                // 舊版 RimLLM 沒有這個目錄；保留下拉選單的預設項即可。
-            }
-            catch (TypeLoadException)
-            {
-            }
             Find.WindowStack.Add(new FloatMenu(options));
         }
         if (Mouse.IsOver(provDropdownRect) || Mouse.IsOver(provLabelRect))
@@ -668,11 +661,16 @@ public class RimAgentMod : Mod
 
         if (Widgets.ButtonText(modelDropdownRect, shownModel.Truncate(modelDropdownRect.width - 12f)))
         {
-            // RimLLM 已不提供預設模型（模型由玩家從伺服器清單選），這裡只留「預設」一項。
+            // 只列框架給出的模型（玩家在 RimLLM 決策分頁設定的那個），不另外向伺服器拉清單。
             var options = new List<FloatMenuOption>
             {
                 new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionModel = string.Empty)
             };
+            string frameworkModel = availability?.Enabled == true ? availability.Model : null;
+            if (!string.IsNullOrEmpty(frameworkModel))
+            {
+                options.Add(new FloatMenuOption(frameworkModel, () => Settings.decisionModel = frameworkModel));
+            }
             Find.WindowStack.Add(new FloatMenu(options));
         }
         if (Mouse.IsOver(modelDropdownRect) || Mouse.IsOver(modelLabelRect))
@@ -724,17 +722,6 @@ public class RimAgentMod : Mod
         Text.WordWrap = true;
         TooltipHandler.TipRegion(resultRect, result);
         listing.Gap(6f);
-    }
-
-    /// <summary>RimLLM 的決策供應商目錄可能不存在於舊版；單獨成方法，讓呼叫端能攔截型別載入錯誤。</summary>
-    private static void AddDecisionProviderOptions(List<FloatMenuOption> options)
-    {
-        foreach (RimLLMDecisionProvider provider in RimLLMDecisionProviderCatalog.All)
-        {
-            string id = provider.Id;
-            if (string.IsNullOrWhiteSpace(id)) continue;
-            options.Add(new FloatMenuOption(id, () => Settings.decisionProvider = id));
-        }
     }
 
     /// <summary>自訂分類的識別碼必須唯一；刪除中間項目後不能再用清單長度 + 1。</summary>

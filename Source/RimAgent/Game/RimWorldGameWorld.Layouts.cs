@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using RimWorld;
@@ -48,6 +48,7 @@ internal sealed partial class RimWorldGameWorld
             pieces.Add(new LayoutPiece
             {
                 DefName = data.def.defName,
+                Part = data.def.IsWall || data.def.IsDoor ? LayoutPart.Wall : LayoutPart.Furniture,
                 StuffDefName = data.stuff?.defName ?? string.Empty,
                 X = cell.x,
                 Z = cell.z,
@@ -61,7 +62,7 @@ internal sealed partial class RimWorldGameWorld
         {
             IntVec3 cell = root + PrefabUtility.GetAdjustedLocalPosition(local, rot);
             if (noFloor.Contains(cell)) continue;
-            pieces.Add(new LayoutPiece { DefName = data.def.defName, X = cell.x, Z = cell.z });
+            pieces.Add(new LayoutPiece { DefName = data.def.defName, Part = LayoutPart.Floor, X = cell.x, Z = cell.z });
         }
 
         // 範圍和地板用同一套換算（GetRoot + GetAdjustedLocalPosition），偶數邊長旋轉時才不會差一格。

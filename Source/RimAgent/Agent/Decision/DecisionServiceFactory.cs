@@ -47,9 +47,10 @@ public static class DecisionServiceFactory
     /// <summary>RimAgent 設定的總開關；設定還沒載入（如單元測試）時視為開啟。</summary>
     private static bool IsEnabledInSettings => RimAgentMod.Settings?.decisionEnabled != false;
 
+    /// <summary>框架沒有啟用決策模型時一律不可用；RimAgent 另外指定供應商也不例外。</summary>
     internal static bool CanUseDecisionModel(DecisionAvailability availability, string providerId)
     {
-        return availability != null && (availability.Enabled || !string.IsNullOrWhiteSpace(providerId));
+        return availability != null && availability.Enabled && !string.IsNullOrWhiteSpace(availability.Model);
     }
 
     /// <summary>
@@ -59,9 +60,7 @@ public static class DecisionServiceFactory
     /// <param name="model">模型名稱；null 或空字串代表沿用該供應商設定的模型。</param>
     public static IDecisionService Create(Func<string> providerId = null, Func<string> model = null)
     {
-        // 框架的可用狀態只反映「啟用中的那一個供應商」；RimAgent 指定了別的供應商時，
-        // 玩家可能只在那個供應商上設了金鑰，所以指定供應商也算有設定。
-        // 玩家在設定裡關掉決策模型時一律回 null，各功能照常走備援路徑。
+        // 框架沒有決策模型、或玩家在設定裡關掉決策模型時一律回 null，各功能照常走備援路徑。
         if (!IsEnabledInSettings) return null;
         DecisionAvailability availability = GetAvailability();
         string provider = providerId?.Invoke();

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
 
   <!-- Agent 窗口 -->
@@ -121,7 +121,8 @@
   <RimAgent.Settings.DecisionEnabled>使用快速判断小帮手</RimAgent.Settings.DecisionEnabled>
   <RimAgent.Settings.DecisionEnabledTip>关闭后不再调用决策模型：风险判定改用分类器，思考强度分流改用备用思考强度，日常自动调速固定用「加速」，代答抉择、筛选基地状况、预载工具包与目标审计都停用，交给主模型处理。</RimAgent.Settings.DecisionEnabledTip>
   <RimAgent.Settings.DecisionProvider>用哪家 AI：</RimAgent.Settings.DecisionProvider>
-  <RimAgent.Settings.DecisionProviderTip>用于 Auto 模式风险判定等结构化快速判定的决策模型供应商。留空则沿用 RimLLM Framework 当前启用的供应商。</RimAgent.Settings.DecisionProviderTip>
+  <RimAgent.Settings.DecisionProviderTip>用于 Auto 模式风险判定等结构化快速判定的决策模型。供应商与模型沿用 RimLLM Framework 的决策设置；不想让本模组使用决策模型时选“不使用”。</RimAgent.Settings.DecisionProviderTip>
+  <RimAgent.Settings.DecisionProviderNone>不使用决策模型</RimAgent.Settings.DecisionProviderNone>
   <RimAgent.Settings.DecisionModel>用哪个模型：</RimAgent.Settings.DecisionModel>
   <RimAgent.Settings.DecisionModelTip>决策供应商的模型名称。留空则沿用该供应商设置的默认模型。</RimAgent.Settings.DecisionModelTip>
   <RimAgent.Settings.DecisionStatusDisabled>还没设置：到 RimLLM Framework 的「决策」分页设置</RimAgent.Settings.DecisionStatusDisabled>

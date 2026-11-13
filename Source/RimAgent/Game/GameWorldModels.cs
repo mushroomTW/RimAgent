@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using RimAgent.Tools;
 
@@ -1067,10 +1067,22 @@ public sealed class LayoutInfo
     public int Height { get; set; }
 }
 
+/// <summary>房型裡的一件屬於哪一類，決定套用哪一種指定材料。</summary>
+public enum LayoutPart
+{
+    /// <summary>牆與門以外的建築（家具、燈、工作台等）。</summary>
+    Furniture,
+    /// <summary>牆與門。</summary>
+    Wall,
+    /// <summary>地板（地形）。</summary>
+    Floor
+}
+
 /// <summary>房型展開後的一件建築或地板；座標與朝向已套用房型的位置與旋轉。</summary>
 public sealed class LayoutPiece
 {
     public string DefName { get; set; } = string.Empty;
+    public LayoutPart Part { get; set; }
     /// <summary>房型指定的材料；空字串表示用預設材料。</summary>
     public string StuffDefName { get; set; } = string.Empty;
     public int X { get; set; }

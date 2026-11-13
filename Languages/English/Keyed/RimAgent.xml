@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
 
   <!-- Agent window -->
@@ -121,7 +121,8 @@
   <RimAgent.Settings.DecisionEnabled>Use the quick helper</RimAgent.Settings.DecisionEnabled>
   <RimAgent.Settings.DecisionEnabledTip>When off, the decision model is never called: risk checks use the classifier, reasoning routing uses the fallback reasoning level, daily auto time speed always uses "fast", and answering choices, upkeep triage, tool pack preloading and goal audits are disabled and left to the main model.</RimAgent.Settings.DecisionEnabledTip>
   <RimAgent.Settings.DecisionProvider>Which AI service:</RimAgent.Settings.DecisionProvider>
-  <RimAgent.Settings.DecisionProviderTip>Decision model provider used for fast, typed classifications like Auto mode risk checks. Leave empty to follow RimLLM Framework's active decision provider.</RimAgent.Settings.DecisionProviderTip>
+  <RimAgent.Settings.DecisionProviderTip>Decision model used for fast structured checks such as Auto-mode risk review. The provider and model come from RimLLM Framework's decision settings; choose "Don't use" to stop RimAgent from using the decision model.</RimAgent.Settings.DecisionProviderTip>
+  <RimAgent.Settings.DecisionProviderNone>Don't use the decision model</RimAgent.Settings.DecisionProviderNone>
   <RimAgent.Settings.DecisionModel>Which model:</RimAgent.Settings.DecisionModel>
   <RimAgent.Settings.DecisionModelTip>Model name for the decision provider. Leave empty to use the provider's default model.</RimAgent.Settings.DecisionModelTip>
   <RimAgent.Settings.DecisionStatusDisabled>Not set up: set it in the Decision tab of RimLLM Framework</RimAgent.Settings.DecisionStatusDisabled>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -263,8 +263,10 @@ public sealed class AgentToolRegistry
             var attribute = method.GetCustomAttribute<AgentToolAttribute>();
             if (attribute == null) continue;
 
-            // 說明交給 AIFunctionFactory 從 [Description] 讀取（description 傳 null）。
-            AIFunction function = AIFunctionFactory.Create(method, target, attribute.Name, null, null);
+            // 說明交給 AIFunctionFactory 從 [Description] 讀取（description 傳 null）；
+            // 建造工具在房型開關關掉時另給一段不提 layout 的說明。
+            string description = (target as BuildTools)?.DescriptionOverride(attribute.Name);
+            AIFunction function = AIFunctionFactory.Create(method, target, attribute.Name, description, null);
             Add(function, attribute.Category, attribute.Risk, transcript);
         }
     }

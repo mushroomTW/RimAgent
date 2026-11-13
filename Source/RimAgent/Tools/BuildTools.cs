@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -23,6 +23,20 @@ public sealed class BuildTools
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
         _layoutsEnabled = layoutsEnabled ?? (() => true);
+    }
+
+    /// <summary>
+    /// 房型開關關掉時 <c>place_blueprint</c> 改用的說明：拿掉 layout，免得模型每蓋一間房都先試一次被拒。
+    /// 內容與 <see cref="PlaceBlueprint"/> 的 <see cref="DescriptionAttribute"/> 相同，只少了 layout 那段。
+    /// </summary>
+    private const string PlaceBlueprintWithoutLayoutsDescription = "Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.";
+
+    /// <summary>註冊工具時取代 <see cref="DescriptionAttribute"/> 的說明；不需取代時回 null。</summary>
+    /// <param name="toolName">工具名稱。</param>
+    /// <returns>取代用的說明，或 null 表示沿用屬性上的說明。</returns>
+    internal string DescriptionOverride(string toolName)
+    {
+        return toolName == "place_blueprint" && !_layoutsEnabled() ? PlaceBlueprintWithoutLayoutsDescription : null;
     }
 
     /// <summary>模型看到的標記種類 → 要找的物件種類、標記 defName、標記是掛在格子還是物件上。</summary>
@@ -165,11 +179,11 @@ public sealed class BuildTools
     }
 
     [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = material for walls, doors and furniture; an empty building lists the layouts). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
+    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = one material for walls, doors and furniture, or set each part: \"walls=granite blocks; floor=fine granite tile; furniture=steel\" (any material or floor in the game, modded ones too; omitted parts keep the layout's own); an empty building lists the layouts). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
 #pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
     public string PlaceBlueprint(
         [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
-        [Description("single, line, fill or outline.")] string shape,
+        [Description("One of the shapes listed in the tool description.")] string shape,
         int x,
         int z,
         [Description("Line end or opposite corner; ignored for single.")] int x2,
@@ -229,7 +243,7 @@ public sealed class BuildTools
 
     /// <summary>
     /// 整組放一個房型：先建築後地板，逐件走一般藍圖放置（同樣的放置檢查與失敗原因）。
-    /// 指定材料時套用到能用該材料的每一件；不能用的退回房型自己的材料。
+    /// 牆（含門）、地板、家具可各自指定材料；不能用的那件退回房型原本的設計。
     /// </summary>
     private string PlaceLayout(string layout, int x, int z, int rotation, string stuff)
     {
@@ -247,8 +261,8 @@ public sealed class BuildTools
         if (!chosen.Success) return chosen.Error + " Layouts: " + string.Join("; ", layouts.Select(l => $"{l.Label} {l.Width}x{l.Height}")) + ".";
 
         if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
-        Result<string> stuffResult = ResolveStuffDefName(stuff);
-        if (!stuffResult.Success) return stuffResult.Error;
+        Result<LayoutMaterials> materials = ResolveLayoutMaterials(stuff);
+        if (!materials.Success) return materials.Error;
 
         LayoutPlan plan = _world.GetLayoutPlan(chosen.Value.DefName, x, z, rotation);
         if (plan == null) return ToolText.Error($"no data for layout {chosen.Value.DefName}.");
@@ -258,7 +272,8 @@ public sealed class BuildTools
             return ToolText.Error($"{chosen.Value.Label} centered at {ToolText.Cell(x, z)} would cover {plan.Rect}, which leaves the map.");
         }
 
-        string what = chosen.Value.Label + (stuffResult.Value.Length > 0 ? $" ({stuffResult.Value})" : string.Empty);
+        string chosenMaterials = materials.Value.Describe();
+        string what = chosen.Value.Label + (chosenMaterials.Length > 0 ? $" ({chosenMaterials})" : string.Empty);
         string blocked = ToolText.Blocked(_gate, $"would place the {what} layout: {plan.Pieces.Count} blueprints covering {plan.Rect}.");
         if (blocked != null) return blocked;
 
@@ -269,7 +284,7 @@ public sealed class BuildTools
         BuildingInfo Info(string defName) => infos.TryGetValue(defName, out BuildingInfo i) ? i : infos[defName] = _world.GetBuildingInfo(defName);
         foreach (LayoutPiece piece in plan.Pieces)
         {
-            CommandResult r = PlaceLayoutPiece(piece, stuffResult.Value, Info(piece.DefName), out bool usedOwnStuff);
+            CommandResult r = PlaceLayoutPiece(piece, materials.Value.For(piece.Part), Info(piece.DefName), out bool usedOwnStuff);
             string label = Info(piece.DefName)?.Label ?? piece.DefName;
             if (r.Success)
             {
@@ -286,24 +301,109 @@ public sealed class BuildTools
             return ToolText.Error($"could not place any part of the {what} layout in {plan.Rect}. " + FormatLayoutFailures(failures));
         }
         string summary = $"Placed {placed} of {plan.Pieces.Count} blueprints of the {what} layout, covering {plan.Rect}.";
-        if (fellBack.Count > 0) summary += $" Kept their own material (refused {stuffResult.Value}): " + FormatLayoutFailures(fellBack);
+        if (fellBack.Count > 0) summary += " Kept the layout's own material or floor (the requested one was refused): " + FormatLayoutFailures(fellBack);
         return failures.Count == 0 ? summary : summary + " Not placed: " + FormatLayoutFailures(failures);
     }
 
-    /// <param name="usedOwnStuff">指定的材料被拒、改用房型原本的材料放成功時為 true。</param>
-    private CommandResult PlaceLayoutPiece(LayoutPiece piece, string stuffOverride, BuildingInfo info, out bool usedOwnStuff)
+    /// <summary>放一件房型內容；有指定替換時先試替換，被拒再退回房型原本的設計。</summary>
+    /// <param name="piece">要放的一件。</param>
+    /// <param name="replacement">這一類指定的材料 defName（地板則是地板 defName）；空字串表示不替換。</param>
+    /// <param name="info">這件的建造資訊；查不到時為 null。</param>
+    /// <param name="usedOwnStuff">指定的替換被拒、改用房型原本的設計放成功時為 true。</param>
+    /// <returns>放置結果；替換與原設計都失敗時回替換的失敗原因。</returns>
+    private CommandResult PlaceLayoutPiece(LayoutPiece piece, string replacement, BuildingInfo info, out bool usedOwnStuff)
     {
         usedOwnStuff = false;
-        if (stuffOverride.Length == 0 || stuffOverride == piece.StuffDefName || info == null || info.StuffCount == 0)
-        {
-            return _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName);
-        }
-        // 指定的材料這件不能用（例如某些家具不收石磚）時，退回房型原本的材料。
-        CommandResult r = _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, stuffOverride);
+        bool floor = piece.Part == LayoutPart.Floor;
+        bool skip = replacement.Length == 0
+            || (floor ? replacement == piece.DefName : replacement == piece.StuffDefName || info == null || info.StuffCount == 0);
+        if (skip) return _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName);
+
+        // 指定的材料或地板這件不能用（例如某些家具不收石磚、重地板要承重地基）時，退回房型原本的設計。
+        CommandResult r = floor
+            ? _world.TryPlaceBlueprint(replacement, piece.X, piece.Z, piece.Rotation, string.Empty)
+            : _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, replacement);
         if (r.Success) return r;
         CommandResult own = _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName);
         usedOwnStuff = own.Success;
         return own.Success ? own : r;
+    }
+
+    /// <summary>房型三類各自指定的替換；空字串表示該類照房型原本的設計。</summary>
+    private sealed class LayoutMaterials
+    {
+        public string Walls = string.Empty;
+        public string Floor = string.Empty;
+        public string Furniture = string.Empty;
+
+        public string For(LayoutPart part) => part switch
+        {
+            LayoutPart.Wall => Walls,
+            LayoutPart.Floor => Floor,
+            _ => Furniture
+        };
+
+        /// <summary>回覆與確認訊息用，只列有指定的類別。</summary>
+        public string Describe()
+        {
+            var parts = new List<string>();
+            if (Walls.Length > 0) parts.Add("walls " + Walls);
+            if (Floor.Length > 0) parts.Add("floor " + Floor);
+            if (Furniture.Length > 0) parts.Add("furniture " + Furniture);
+            return string.Join(", ", parts);
+        }
+    }
+
+    /// <summary>
+    /// 解析房型的 stuff：單一材料同時套用到牆與家具（地板不變）；
+    /// 或用 <c>walls=…; floor=…; furniture=…</c> 各自指定，省略的類別照房型原本的設計。
+    /// 材料從遊戲全部可用材料、地板從全部可建地板中解析，模組加入的也算。
+    /// </summary>
+    /// <param name="stuff">模型給的 stuff 參數。</param>
+    /// <returns>解析好的三類替換，或第一個解析失敗的錯誤。</returns>
+    private Result<LayoutMaterials> ResolveLayoutMaterials(string stuff)
+    {
+        var result = new LayoutMaterials();
+        string text = stuff?.Trim() ?? string.Empty;
+        if (text.IndexOfAny(['=', ':']) < 0)
+        {
+            Result<string> both = ResolveStuffDefName(text);
+            if (!both.Success) return Result<LayoutMaterials>.Fail(both.Error);
+            result.Walls = result.Furniture = both.Value;
+            return Result<LayoutMaterials>.Ok(result);
+        }
+
+        foreach (string entry in text.Split([';', ','], StringSplitOptions.RemoveEmptyEntries))
+        {
+            int sep = entry.IndexOfAny(['=', ':']);
+            string key = sep < 0 ? string.Empty : entry.Substring(0, sep).Trim().ToLowerInvariant();
+            string value = sep < 0 ? string.Empty : entry.Substring(sep + 1).Trim();
+            switch (key)
+            {
+                case "wall":
+                case "walls":
+                case "furniture":
+                    Result<string> material = ResolveStuffDefName(value);
+                    if (!material.Success) return Result<LayoutMaterials>.Fail(material.Error);
+                    if (key == "furniture") result.Furniture = material.Value;
+                    else result.Walls = material.Value;
+                    break;
+                case "floor":
+                case "floors":
+                    if (value.Length == 0) break;
+                    Result<DefInfo> floor = DefResolver.Resolve(value, _world.Buildables, "floor");
+                    if (!floor.Success) return Result<LayoutMaterials>.Fail(floor.Error);
+                    if (_world.GetBuildingInfo(floor.Value.DefName)?.IsTerrain != true)
+                    {
+                        return Result<LayoutMaterials>.Fail(ToolText.Error($"{floor.Value.Label} is not a floor."));
+                    }
+                    result.Floor = floor.Value.DefName;
+                    break;
+                default:
+                    return Result<LayoutMaterials>.Fail(ToolText.Error($"unknown part \"{entry.Trim()}\" in stuff; use walls=...; floor=...; furniture=..."));
+            }
+        }
+        return Result<LayoutMaterials>.Ok(result);
     }
 
     private static string FormatLayoutFailures(Dictionary<string, int> failures)

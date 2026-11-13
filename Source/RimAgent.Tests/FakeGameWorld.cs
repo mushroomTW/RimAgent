@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -659,7 +659,7 @@ internal sealed class FakeGameWorld : IGameWorld
         return new LayoutPlan
         {
             Rect = new CellRectSpec(minX, minZ, minX + info.Width - 1, minZ + info.Height - 1),
-            Pieces = local.Select(p => new LayoutPiece { DefName = p.DefName, StuffDefName = p.StuffDefName, X = minX + p.X, Z = minZ + p.Z, Rotation = p.Rotation }).ToList()
+            Pieces = local.Select(p => new LayoutPiece { DefName = p.DefName, Part = p.Part, StuffDefName = p.StuffDefName, X = minX + p.X, Z = minZ + p.Z, Rotation = p.Rotation }).ToList()
         };
     }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -158,6 +158,8 @@ internal static class LayoutCheck
         }
         Log.Message(TestHelpers.LogPrefix + $"LayoutCheck imported layouts checked: {imported}");
 
+        CheckPartMaterials(world, tools, map, Specs[0].Layout, m => failures.Add("materials " + m));
+
         // 挑幾個蓋起來截圖，和原模組的預覽圖比對。
         foreach (string layout in Showcase.Where(l => DefDatabase<PrefabDef>.GetNamedSilentFail(l) != null))
         {
@@ -189,6 +191,46 @@ internal static class LayoutCheck
             }
             world.RemoveBlueprints(new CellRectSpec(center.x - 6, center.z - 6, center.x + 6, center.z + 6));
         }
+    }
+
+    /// <summary>
+    /// 牆、地板、家具各自指定材料：牆與門要是花崗岩磚、地板全換成花崗岩石板、
+    /// 能用鋼鐵的家具要是鋼鐵（不能用的允許退回原材料，但回覆要說明）。
+    /// </summary>
+    private static void CheckPartMaterials(RimWorldGameWorld world, BuildTools tools, Map map, string layout, Action<string> fail)
+    {
+        CellRect? area = FindClearArea(map);
+        if (area == null) { fail("no clear area"); return; }
+        IntVec3 center = area.Value.CenterCell;
+        int total = world.GetLayoutPlan(layout, center.x, center.z, 0).Pieces.Count;
+        string reply = tools.PlaceBlueprint(layout, "layout", center.x, center.z, 0, 0, 0, "walls=BlocksGranite; floor=FlagstoneGranite; furniture=Steel");
+        Log.Message(TestHelpers.LogPrefix + $"LayoutCheck materials: {reply}");
+        if (!reply.StartsWith($"Placed {total} of {total}", StringComparison.Ordinal)) fail(reply);
+
+        CellRect rect = CellRect.CenteredOn(center, 6);
+        int walls = 0, floors = 0, steel = 0;
+        foreach (Blueprint bp in map.listerThings.ThingsInGroup(ThingRequestGroup.Blueprint).OfType<Blueprint>().Where(b => rect.Contains(b.Position)))
+        {
+            BuildableDef built = bp.def.entityDefToBuild;
+            ThingDef stuff = bp.EntityToBuildStuff();
+            if (built is TerrainDef terrain)
+            {
+                floors++;
+                if (terrain.defName != "FlagstoneGranite") fail($"floor {terrain.defName} at {bp.Position}");
+            }
+            else if (built is ThingDef thing && (thing.IsWall || thing.IsDoor))
+            {
+                walls++;
+                if (stuff?.defName != "BlocksGranite") fail($"{thing.defName} made of {stuff?.defName ?? "nothing"} at {bp.Position}");
+            }
+            else if (stuff?.defName == "Steel")
+            {
+                steel++;
+            }
+        }
+        Log.Message(TestHelpers.LogPrefix + $"LayoutCheck materials: walls {walls}, floors {floors}, steel furniture {steel}");
+        if (walls == 0 || floors == 0 || steel == 0) fail($"expected walls, floors and steel furniture, got {walls}/{floors}/{steel}");
+        world.RemoveBlueprints(new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ));
     }
 
     /// <summary>地板藍圖沒放上去的格子，列出那格上有什麼，方便查衝突。</summary>
