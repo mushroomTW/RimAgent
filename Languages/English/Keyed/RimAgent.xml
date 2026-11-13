@@ -88,6 +88,9 @@
   <RimAgent.Settings.MCPTip>Let the agent call tools from local MCP servers configured in AgentPack/MCP/servers.json. Servers run with your user privileges; only enable ones you trust.</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.Web>Search the web</RimAgent.Settings.Web>
   <RimAgent.Settings.WebTip>Allow live web search through Parallel Search MCP by default, or a local SearXNG server when selected below. Neither needs an API key.</RimAgent.Settings.WebTip>
+  <RimAgent.Settings.LayoutsHeader>Building</RimAgent.Settings.LayoutsHeader>
+  <RimAgent.Settings.Layouts>Modular room layouts</RimAgent.Settings.Layouts>
+  <RimAgent.Settings.LayoutsTip>Lets the agent place a whole predesigned 13x13 room (walls, door, furniture and floor blueprints) in one step. Turn off to make it build everything piece by piece.</RimAgent.Settings.LayoutsTip>
   <RimAgent.Settings.WebSearchHeader>Web search</RimAgent.Settings.WebSearchHeader>
   <RimAgent.Settings.UseLocalSearch>Use SearXNG on my own computer (most people leave this off)</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>Requires a running SearXNG server with JSON output enabled. Leave off to use Parallel's anonymous free tier without local setup.</RimAgent.Settings.UseLocalSearchTip>

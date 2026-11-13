@@ -180,11 +180,90 @@ public class BuildToolsTests
         Assert.That(_world.Blueprints.Any(b => b.X == 12 && b.Z == 11), Is.False);
     }
 
+    /// <summary>一個 3x3 小房型：四角是牆、北牆中間是門、中央鋪地板。</summary>
+    private void AddTinyLayout()
+    {
+        _world.LayoutList.Add(new LayoutInfo { DefName = "RimAgent_Tiny", Label = "tiny room", Description = "test room", Width = 3, Height = 3 });
+        _world.LayoutPieces["RimAgent_Tiny"] =
+        [
+            new LayoutPiece { DefName = "Wall", X = 0, Z = 0 },
+            new LayoutPiece { DefName = "Wall", X = 2, Z = 0 },
+            new LayoutPiece { DefName = "Door", X = 1, Z = 2, Rotation = 0 },
+            new LayoutPiece { DefName = "Bed", StuffDefName = "WoodLog", X = 1, Z = 1 },
+            new LayoutPiece { DefName = "WoodPlankFloor", X = 1, Z = 1 }
+        ];
+    }
+
+    [Test]
+    public void LayoutWithEmptyNameListsLayouts()
+    {
+        AddTinyLayout();
+        string text = _tools.PlaceBlueprint("", "layout", 10, 10, 0, 0, 0, "");
+        Assert.That(text, Does.Contain("tiny room (RimAgent_Tiny) 3x3: test room"));
+        Assert.That(_world.Blueprints, Is.Empty);
+    }
+
+    [Test]
+    public void LayoutPlacesEveryPieceAroundTheCenter()
+    {
+        AddTinyLayout();
+        string text = _tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "");
+        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("(9,9)-(11,11)"));
+        Assert.That(_world.Blueprints, Does.Contain(("Door", 10, 11, 0, "")));
+        Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "WoodLog")));
+    }
+
+    [Test]
+    public void LayoutStuffOverridesStuffableAndFallsBackWhenRefused()
+    {
+        AddTinyLayout();
+        _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", Label = "wall", StuffCount = 5 };
+        _world.BuildingInfos["Bed"] = new BuildingInfo { DefName = "Bed", Label = "bed", StuffCount = 45 };
+        _world.BlockedStuff[("Bed", "BlocksGranite")] = "bed cannot be made of granite blocks";
+
+        string text = _tools.PlaceBlueprint("RimAgent_Tiny", "layout", 10, 10, 0, 0, 0, "granite blocks");
+
+        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("Kept their own material (refused BlocksGranite): bed."));
+        Assert.That(_world.Blueprints, Does.Contain(("Wall", 9, 9, 0, "BlocksGranite")));
+        Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "WoodLog")));
+        Assert.That(_world.Blueprints, Does.Contain(("WoodPlankFloor", 10, 10, 0, "")));
+    }
+
+    [Test]
+    public void LayoutGroupsFailuresByThingAndReason()
+    {
+        AddTinyLayout();
+        _world.BlockedCells[(9, 9)] = "space already occupied";
+        _world.BlockedCells[(11, 9)] = "space already occupied";
+
+        string text = _tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "");
+
+        Assert.That(text, Does.StartWith("Placed 3 of 5").And.Contain("Wall: space already occupied (x2)"));
+    }
+
+    [Test]
+    public void LayoutRefusesWhenItLeavesTheMap()
+    {
+        AddTinyLayout();
+        string text = _tools.PlaceBlueprint("tiny room", "layout", 0, 0, 0, 0, 0, "");
+        Assert.That(text, Does.StartWith("Error:").And.Contain("leaves the map"));
+        Assert.That(_world.Blueprints, Is.Empty);
+    }
+
+    [Test]
+    public void LayoutIsRefusedWhenTurnedOff()
+    {
+        AddTinyLayout();
+        var off = new BuildTools(_world, layoutsEnabled: () => false);
+        Assert.That(off.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, ""), Does.StartWith("Error:").And.Contain("turned off"));
+        Assert.That(_world.Blueprints, Is.Empty);
+    }
+
     [Test]
     public void BlueprintErrorsForUnknownBuildingShapeRotationBentLineAndSize()
     {
         Assert.That(_tools.PlaceBlueprint("teleporter", "single", 3, 3, 3, 3, 0, ""), Does.StartWith("Error:").And.Contain("buildable"));
-        Assert.That(_tools.PlaceBlueprint("wall", "circle", 3, 3, 5, 5, 0, ""), Does.StartWith("Error:").And.Contain("single, line, fill or outline"));
+        Assert.That(_tools.PlaceBlueprint("wall", "circle", 3, 3, 5, 5, 0, ""), Does.StartWith("Error:").And.Contain("single, line, fill, outline or layout"));
         Assert.That(_tools.PlaceBlueprint("wall", "single", 3, 3, 3, 3, 7, ""), Does.StartWith("Error:").And.Contain("rotation"));
         Assert.That(_tools.PlaceBlueprint("wall", "line", 3, 3, 5, 5, 0, ""), Does.StartWith("Error:").And.Contain("straight"));
         Assert.That(_tools.PlaceBlueprint("wall", "fill", 0, 0, 20, 19, 0, ""), Does.StartWith("Error:").And.Contain("420 cells"));

@@ -51,6 +51,8 @@ internal sealed class FakeGameWorld : IGameWorld
 
     /// <summary>藍圖放不下的格子與原因。</summary>
     public Dictionary<(int X, int Z), string> BlockedCells { get; } = [];
+    /// <summary>某建築不能用某材料（defName, stuffDefName）→ 失敗原因。</summary>
+    public Dictionary<(string Def, string Stuff), string> BlockedStuff { get; } = [];
     public HashSet<(int X, int Z)> UnwalkableCells { get; } = [];
     public List<(string Def, int X, int Z, int Rotation, string Stuff)> Blueprints { get; } = [];
 
@@ -637,8 +639,28 @@ internal sealed class FakeGameWorld : IGameWorld
     {
         Calls.Add($"TryPlaceBlueprint({buildableDefName},{x},{z},{rotation},{stuffDefName})");
         if (BlockedCells.TryGetValue((x, z), out string reason)) return CommandResult.Fail(reason);
+        if (BlockedStuff.TryGetValue((buildableDefName, stuffDefName ?? string.Empty), out string stuffReason)) return CommandResult.Fail(stuffReason);
         Blueprints.Add((buildableDefName, x, z, rotation, stuffDefName));
         return CommandResult.Ok();
+    }
+
+    public List<LayoutInfo> LayoutList { get; } = new List<LayoutInfo>();
+    public IReadOnlyList<LayoutInfo> Layouts => LayoutList;
+
+    /// <summary>房型內容（以 defName 為鍵），座標相對房型左下角、朝北；GetLayoutPlan 只做平移，不模擬旋轉。</summary>
+    public Dictionary<string, List<LayoutPiece>> LayoutPieces { get; } = new Dictionary<string, List<LayoutPiece>>(StringComparer.Ordinal);
+
+    public LayoutPlan GetLayoutPlan(string layoutDefName, int x, int z, int rotation)
+    {
+        Calls.Add($"GetLayoutPlan({layoutDefName},{x},{z},{rotation})");
+        LayoutInfo info = LayoutList.FirstOrDefault(l => l.DefName == layoutDefName);
+        if (info == null || !LayoutPieces.TryGetValue(layoutDefName, out List<LayoutPiece> local)) return null;
+        int minX = x - (info.Width - 1) / 2, minZ = z - (info.Height - 1) / 2;
+        return new LayoutPlan
+        {
+            Rect = new CellRectSpec(minX, minZ, minX + info.Width - 1, minZ + info.Height - 1),
+            Pieces = local.Select(p => new LayoutPiece { DefName = p.DefName, StuffDefName = p.StuffDefName, X = minX + p.X, Z = minZ + p.Z, Rotation = p.Rotation }).ToList()
+        };
     }
 
     public List<string> RemovableBlueprints { get; } = new List<string>();

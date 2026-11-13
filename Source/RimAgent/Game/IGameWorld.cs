@@ -123,6 +123,10 @@ public interface IGameWorld
     DefLookupInfo LookupDef(string kind, string defName);
     /// <summary>內含可放置檢查；失敗訊息帶遊戲給的原因（空間被占用時附上占用者與其範圍）。</summary>
     CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName);
+    /// <summary>可整組放置的房型。</summary>
+    IReadOnlyList<LayoutInfo> Layouts { get; }
+    /// <summary>房型以 (x,z) 為中心、朝向 rotation 時的範圍與每一件；房型不存在回傳 null。</summary>
+    LayoutPlan GetLayoutPlan(string layoutDefName, int x, int z, int rotation);
     /// <summary>取消範圍內玩家的藍圖與框架（同原版取消指令，框架退回材料）；回傳被取消者的名稱與範圍。</summary>
     IReadOnlyList<string> RemoveBlueprints(CellRectSpec rect);
     /// <summary>目前地圖上的飛船零件，含藍圖與框架。</summary>

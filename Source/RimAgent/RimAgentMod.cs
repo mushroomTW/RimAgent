@@ -161,6 +161,11 @@ public class RimAgentMod : Mod
         }
 
         listing.Gap();
+        listing.Label("RimAgent.Settings.LayoutsHeader".Translate());
+        listing.GapLine();
+        listing.CheckboxLabeled("RimAgent.Settings.Layouts".Translate(), ref Settings.layouts, "RimAgent.Settings.LayoutsTip".Translate());
+
+        listing.Gap();
         listing.Label("RimAgent.Settings.WebSearchHeader".Translate());
         listing.GapLine();
         listing.CheckboxLabeled("RimAgent.Settings.UseLocalSearch".Translate(), ref Settings.useLocalSearch,
@@ -663,24 +668,11 @@ public class RimAgentMod : Mod
 
         if (Widgets.ButtonText(modelDropdownRect, shownModel.Truncate(modelDropdownRect.width - 12f)))
         {
+            // RimLLM 已不提供預設模型（模型由玩家從伺服器清單選），這裡只留「預設」一項。
             var options = new List<FloatMenuOption>
             {
                 new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionModel = string.Empty)
             };
-            string targetProv = string.IsNullOrEmpty(Settings.decisionProvider)
-                ? availability?.ProviderId
-                : Settings.decisionProvider;
-            try
-            {
-                AddDecisionModelOptions(options, targetProv);
-            }
-            catch (MissingMethodException)
-            {
-                // 舊版 RimLLM 沒有供應商目錄；只留預設模型一項。
-            }
-            catch (TypeLoadException)
-            {
-            }
             Find.WindowStack.Add(new FloatMenu(options));
         }
         if (Mouse.IsOver(modelDropdownRect) || Mouse.IsOver(modelLabelRect))
@@ -742,18 +734,6 @@ public class RimAgentMod : Mod
             string id = provider.Id;
             if (string.IsNullOrWhiteSpace(id)) continue;
             options.Add(new FloatMenuOption(id, () => Settings.decisionProvider = id));
-        }
-    }
-
-    /// <summary>同上：只把目前供應商提供的預設模型加進選單，目錄不可用時保持預設項。</summary>
-    private static void AddDecisionModelOptions(List<FloatMenuOption> options, string providerId)
-    {
-        if (string.IsNullOrWhiteSpace(providerId)) return;
-        if (!RimLLMDecisionProviderCatalog.TryGet(providerId, out RimLLMDecisionProvider provider)) return;
-        foreach (string model in provider.PresetModels)
-        {
-            string captured = model;
-            options.Add(new FloatMenuOption(captured, () => Settings.decisionModel = captured));
         }
     }
 

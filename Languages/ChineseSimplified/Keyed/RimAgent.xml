@@ -88,6 +88,9 @@
   <RimAgent.Settings.MCPTip>让 agent 调用 AgentPack/MCP/servers.json 里设定的本地 MCP 服务器工具。服务器以你的用户权限执行，只开信任的。</RimAgent.Settings.MCPTip>
   <RimAgent.Settings.Web>上网查资料</RimAgent.Settings.Web>
   <RimAgent.Settings.WebTip>默认通过 Parallel Search MCP 搜索；也可在下方改用本地 SearXNG。两者都无需 API 密钥。</RimAgent.Settings.WebTip>
+  <RimAgent.Settings.LayoutsHeader>建造</RimAgent.Settings.LayoutsHeader>
+  <RimAgent.Settings.Layouts>模块化房型</RimAgent.Settings.Layouts>
+  <RimAgent.Settings.LayoutsTip>让 agent 一次放好整间预先设计的 13×13 房间（墙、门、家具与地板蓝图）。关闭后只能一件一件放。</RimAgent.Settings.LayoutsTip>
   <RimAgent.Settings.WebSearchHeader>网络搜索</RimAgent.Settings.WebSearchHeader>
   <RimAgent.Settings.UseLocalSearch>改用自己电脑上的 SearXNG（大部分人不用开）</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>需先启动已开启 JSON 输出的 SearXNG 服务。保持关闭即可免本地设置，使用 Parallel 匿名免费方案。</RimAgent.Settings.UseLocalSearchTip>

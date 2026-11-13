@@ -79,7 +79,7 @@ public sealed class AgentToolRegistry
     }
 
 #pragma warning disable S107 // Tool registry aggregates all domain tool implementations
-    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, IRiskChecker classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null)
+    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, IRiskChecker classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null, Func<bool> layoutsEnabled = null)
 #pragma warning restore S107
     {
         if (world == null) throw new ArgumentNullException(nameof(world));
@@ -96,7 +96,7 @@ public sealed class AgentToolRegistry
         Register(new ChoiceTools(world, gate), transcript);
         Register(new QuestTools(world, gate), transcript);
         Register(new WorkTools(world, undo ?? new WorkUndoStack(), gate), transcript);
-        Register(new BuildTools(world, gate), transcript);
+        Register(new BuildTools(world, gate, layoutsEnabled), transcript);
         Register(new ShipTools(world), transcript);
         Register(new GizmoTools(world, gate), transcript);
         Register(new FloatMenuTools(world, gate), transcript);

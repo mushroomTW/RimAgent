@@ -15,11 +15,14 @@ public sealed class BuildTools
 
     private readonly IGameWorld _world;
     private readonly ConfirmationGate _gate;
+    private readonly Func<bool> _layoutsEnabled;
 
-    public BuildTools(IGameWorld world, ConfirmationGate gate = null)
+    /// <param name="layoutsEnabled">設定頁的「模組化房型」開關；null 視為開啟。</param>
+    public BuildTools(IGameWorld world, ConfirmationGate gate = null, Func<bool> layoutsEnabled = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
+        _layoutsEnabled = layoutsEnabled ?? (() => true);
     }
 
     /// <summary>模型看到的標記種類 → 要找的物件種類、標記 defName、標記是掛在格子還是物件上。</summary>
@@ -162,7 +165,7 @@ public sealed class BuildTools
     }
 
     [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
+    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = material for walls, doors and furniture; an empty building lists the layouts). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
 #pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
     public string PlaceBlueprint(
         [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
@@ -175,6 +178,8 @@ public sealed class BuildTools
         [Description("Material, e.g. \"wood\", \"granite blocks\"; empty = default.")] string stuff)
 #pragma warning restore S107
     {
+        if (string.Equals(shape?.Trim(), "layout", StringComparison.OrdinalIgnoreCase)) return PlaceLayout(building, x, z, rotation, stuff);
+
         Result<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
         if (!def.Success) return def.Error;
 
@@ -217,6 +222,96 @@ public sealed class BuildTools
         }
         string summary = $"Placed {placed} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
         return failures.Count == 0 ? summary : summary + $" {failures.Count} failed: " + string.Join("; ", failures.Take(5));
+    }
+
+    /// <summary>失敗原因最多列幾種；同一種東西同一個原因合併計數。</summary>
+    private const int MaxLayoutFailuresListed = 6;
+
+    /// <summary>
+    /// 整組放一個房型：先建築後地板，逐件走一般藍圖放置（同樣的放置檢查與失敗原因）。
+    /// 指定材料時套用到能用該材料的每一件；不能用的退回房型自己的材料。
+    /// </summary>
+    private string PlaceLayout(string layout, int x, int z, int rotation, string stuff)
+    {
+        if (!_layoutsEnabled()) return ToolText.Error("room layouts are turned off in the RimAgent settings; build with the other shapes instead.");
+        IReadOnlyList<LayoutInfo> layouts = _world.Layouts;
+        if (layouts.Count == 0) return ToolText.Error("no room layouts are installed.");
+
+        if (string.IsNullOrWhiteSpace(layout))
+        {
+            return "Layouts (size, then what it is): " + string.Join("; ",
+                layouts.Select(l => $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}" + (l.Description.Length > 0 ? ": " + l.Description : string.Empty))) + ".";
+        }
+        Result<DefInfo> chosen = DefResolver.Resolve(layout, [.. layouts.Select(l => new DefInfo(l.DefName, l.Label))], "layout");
+        // 名稱打錯只附名稱與尺寸，完整說明用空名稱查。
+        if (!chosen.Success) return chosen.Error + " Layouts: " + string.Join("; ", layouts.Select(l => $"{l.Label} {l.Width}x{l.Height}")) + ".";
+
+        if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
+        Result<string> stuffResult = ResolveStuffDefName(stuff);
+        if (!stuffResult.Success) return stuffResult.Error;
+
+        LayoutPlan plan = _world.GetLayoutPlan(chosen.Value.DefName, x, z, rotation);
+        if (plan == null) return ToolText.Error($"no data for layout {chosen.Value.DefName}.");
+        MapBounds bounds = _world.GetMapBounds();
+        if (TargetResolver.CheckCell(plan.Rect.MinX, plan.Rect.MinZ, bounds) != null || TargetResolver.CheckCell(plan.Rect.MaxX, plan.Rect.MaxZ, bounds) != null)
+        {
+            return ToolText.Error($"{chosen.Value.Label} centered at {ToolText.Cell(x, z)} would cover {plan.Rect}, which leaves the map.");
+        }
+
+        string what = chosen.Value.Label + (stuffResult.Value.Length > 0 ? $" ({stuffResult.Value})" : string.Empty);
+        string blocked = ToolText.Blocked(_gate, $"would place the {what} layout: {plan.Pieces.Count} blueprints covering {plan.Rect}.");
+        if (blocked != null) return blocked;
+
+        int placed = 0;
+        var failures = new Dictionary<string, int>(StringComparer.Ordinal);
+        var fellBack = new Dictionary<string, int>(StringComparer.Ordinal);
+        var infos = new Dictionary<string, BuildingInfo>(StringComparer.Ordinal);
+        BuildingInfo Info(string defName) => infos.TryGetValue(defName, out BuildingInfo i) ? i : infos[defName] = _world.GetBuildingInfo(defName);
+        foreach (LayoutPiece piece in plan.Pieces)
+        {
+            CommandResult r = PlaceLayoutPiece(piece, stuffResult.Value, Info(piece.DefName), out bool usedOwnStuff);
+            string label = Info(piece.DefName)?.Label ?? piece.DefName;
+            if (r.Success)
+            {
+                placed++;
+                if (usedOwnStuff) fellBack[label] = fellBack.TryGetValue(label, out int k) ? k + 1 : 1;
+                continue;
+            }
+            string key = $"{label}: {r.Message}";
+            failures[key] = failures.TryGetValue(key, out int n) ? n + 1 : 1;
+        }
+
+        if (placed == 0)
+        {
+            return ToolText.Error($"could not place any part of the {what} layout in {plan.Rect}. " + FormatLayoutFailures(failures));
+        }
+        string summary = $"Placed {placed} of {plan.Pieces.Count} blueprints of the {what} layout, covering {plan.Rect}.";
+        if (fellBack.Count > 0) summary += $" Kept their own material (refused {stuffResult.Value}): " + FormatLayoutFailures(fellBack);
+        return failures.Count == 0 ? summary : summary + " Not placed: " + FormatLayoutFailures(failures);
+    }
+
+    /// <param name="usedOwnStuff">指定的材料被拒、改用房型原本的材料放成功時為 true。</param>
+    private CommandResult PlaceLayoutPiece(LayoutPiece piece, string stuffOverride, BuildingInfo info, out bool usedOwnStuff)
+    {
+        usedOwnStuff = false;
+        if (stuffOverride.Length == 0 || stuffOverride == piece.StuffDefName || info == null || info.StuffCount == 0)
+        {
+            return _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName);
+        }
+        // 指定的材料這件不能用（例如某些家具不收石磚）時，退回房型原本的材料。
+        CommandResult r = _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, stuffOverride);
+        if (r.Success) return r;
+        CommandResult own = _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName);
+        usedOwnStuff = own.Success;
+        return own.Success ? own : r;
+    }
+
+    private static string FormatLayoutFailures(Dictionary<string, int> failures)
+    {
+        IEnumerable<string> listed = failures.OrderByDescending(f => f.Value).Take(MaxLayoutFailuresListed)
+            .Select(f => f.Value > 1 ? $"{f.Key} (x{f.Value})" : f.Key);
+        string more = failures.Count > MaxLayoutFailuresListed ? $"; +{failures.Count - MaxLayoutFailuresListed} more kinds" : string.Empty;
+        return string.Join("; ", listed) + more + ".";
     }
 
     [AgentTool("remove_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
@@ -439,7 +534,7 @@ public sealed class BuildTools
         }
         if (kind != "line" && kind != "fill" && kind != "outline")
         {
-            return Result<List<(int X, int Z)>>.Fail(ToolText.Error($"unknown shape \"{shape}\". Use single, line, fill or outline."));
+            return Result<List<(int X, int Z)>>.Fail(ToolText.Error($"unknown shape \"{shape}\". Use single, line, fill, outline or layout."));
         }
         if (kind == "line" && x != x2 && z != z2)
         {

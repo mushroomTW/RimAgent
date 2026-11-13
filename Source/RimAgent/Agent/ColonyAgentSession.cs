@@ -237,7 +237,8 @@ public sealed class ColonyAgentSession
                 () => RimAgentMod.Settings?.decisionModel));
         _classifier = classifier;
 
-        _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity);
+        _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity,
+            layoutsEnabled: () => RimAgentMod.Settings?.layouts ?? true);
         // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
         _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity), _registry, Transcript, subagentsProvider, _permissions,
             routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);

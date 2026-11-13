@@ -103,6 +103,8 @@ public class RimAgentSettings : ModSettings
     public bool confirmAutonomousMajor = true;
     /// <summary>日常自動調整遊戲速度：安全時加速，出事降回正常；預設關閉。</summary>
     public bool autoTimeSpeed = false;
+    /// <summary>讓 agent 能整組放置預先設計好的 13x13 模組化房型；預設開啟。</summary>
+    public bool layouts = true;
 
     // 上下文壓縮：依模型視窗的百分比自動折疊較舊工具輸出（不多花模型呼叫）；
     // 手動 /compact 另走一次 LLM 摘要，不受此開關影響。
@@ -355,6 +357,7 @@ public class RimAgentSettings : ModSettings
         // 同上：舊版預設為關，Scribe 預設值維持 false，老玩家升級後不變。
         Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", false);
         Scribe_Values.Look(ref autoTimeSpeed, "autoTimeSpeed", false);
+        Scribe_Values.Look(ref layouts, "layouts", true);
         Scribe_Values.Look(ref autoCompact, "autoCompact", true);
         Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
         Scribe_Values.Look(ref recordRuns, "recordRuns", false);

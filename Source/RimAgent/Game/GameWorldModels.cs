@@ -1057,6 +1057,34 @@ public sealed class DefInfo
     public string Label { get; set; } = string.Empty;
 }
 
+/// <summary>預先設計好的房型（本模組提供的 PrefabDef）。</summary>
+public sealed class LayoutInfo
+{
+    public string DefName { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public int Width { get; set; }
+    public int Height { get; set; }
+}
+
+/// <summary>房型展開後的一件建築或地板；座標與朝向已套用房型的位置與旋轉。</summary>
+public sealed class LayoutPiece
+{
+    public string DefName { get; set; } = string.Empty;
+    /// <summary>房型指定的材料；空字串表示用預設材料。</summary>
+    public string StuffDefName { get; set; } = string.Empty;
+    public int X { get; set; }
+    public int Z { get; set; }
+    public int Rotation { get; set; }
+}
+
+/// <summary>房型放在某處時涵蓋的範圍與要放的每一件（建築在前、地板在後）。</summary>
+public sealed class LayoutPlan
+{
+    public CellRectSpec Rect { get; set; }
+    public IReadOnlyList<LayoutPiece> Pieces { get; set; } = Array.Empty<LayoutPiece>();
+}
+
 /// <summary>lookup_def 可查的 Def 種類。</summary>
 public static class DefLookupKind
 {

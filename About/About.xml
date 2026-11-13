@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.11.12.3</modVersion>
+  <modVersion>2026.11.13.1</modVersion>
   <supportedVersions>
     <li>1.7</li>
   </supportedVersions>
@@ -22,6 +22,9 @@ Key Capabilities:
 • Subagents & Model Roles: Delegate tasks to isolated subagents (parallel read-only execution) and assign dedicated models and reasoning levels to subagents, classifiers, and /compact summaries.
 • Dual-Scope Memory: Global memory (prefixed with global_) shared across all saves, alongside save-specific colony memory notes.
 • MCP Extensibility: Connect trusted local Model Context Protocol servers to provide custom external tools.
+
+Room Layout Credits:
+• The 13x13 modular room layouts are based on designs by 阿松君 (YouTube), 编号tc97 (Bilibili) and trigger's 13x13 Cell Prefabs (Steam Workshop 3482235159).
 
 Safety Notices:
 • Combat orders experience several seconds of latency due to LLM round-trip time; designed for strategic positioning and retreats rather than micro-tactics.
