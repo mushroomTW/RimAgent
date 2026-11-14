@@ -127,6 +127,7 @@ public class ColonyAgentSessionTests
         List<string> names = [.. options.Tools.OfType<AIFunction>().Select(t => t.Name)];
         Assert.That(names, Does.Contain("get_colony_overview").And.Contain("set_work_priorities"));
         Assert.That(names, Does.Not.Contain("designate_area").And.Not.Contain("draft"));
+        Assert.That(names, Does.Contain(ScriptTools.ToolName), "主 Agent 有可用工具時一併提供 run_script");
         Assert.That(options.ToolMode, Is.EqualTo(ChatToolMode.Auto));
     }
 

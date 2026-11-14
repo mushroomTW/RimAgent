@@ -276,12 +276,12 @@ public sealed class ObserveTools
     [Description("Finds map objects by kind, optional name and optional rectangle. Returns id, defName, label, cell and existing marks; designate_area, place_blueprint and order_attack take these ids and cells. When there are more matches than the limit, results are ordered allowed (not forbidden) before forbidden, then nearest to the colonists first, and the reply says how many matched in total.")]
     public string FindThings(
         [Description("What to look for: any, mineable, plant, building, item or pawn.")] string kind,
-        [Description("defName or part of the label to match, e.g. \"steel\" or \"tree\". Empty string matches everything.")] string name,
-        [Description("Rectangle corner x; pass -1 for all four corners to search the whole map.")] int x1,
-        [Description("Rectangle corner z.")] int z1,
-        [Description("Opposite corner x.")] int x2,
-        [Description("Opposite corner z.")] int z2,
-        [Description("Maximum results, 1-200; 0 means 20.")] int limit)
+        [Description("defName or part of the label to match, e.g. \"steel\" or \"tree\". Empty string matches everything.")] string name = "",
+        [Description("Rectangle corner x; pass -1 for all four corners to search the whole map.")] int x1 = -1,
+        [Description("Rectangle corner z.")] int z1 = -1,
+        [Description("Opposite corner x.")] int x2 = -1,
+        [Description("Opposite corner z.")] int z2 = -1,
+        [Description("Maximum results, 1-200; 0 means 20.")] int limit = 0)
     {
         if (!TryParseKind(kind, out ThingKind parsedKind))
         {
@@ -364,7 +364,7 @@ public sealed class ObserveTools
     }
 
     [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
+    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
     public string InspectArea(
         [Description("Rectangle corner x.")] int x1,
         [Description("Rectangle corner z.")] int z1,
@@ -374,14 +374,12 @@ public sealed class ObserveTools
         if (x1 == x2 && z1 == z2) return DescribeCell(x1, z1);
         Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
         if (!rect.Success) return rect.Error;
-        if (rect.Value.CellCount > MaxInspectedCells)
-        {
-            return ToolText.Error($"rectangle {rect.Value} has {rect.Value.CellCount} cells; the limit is {MaxInspectedCells} cells: {MapGridTools.RectLimitHint}. Inspect a smaller area or use find_things.");
-        }
+        CellRectSpec area = MapGridTools.CropOversized(rect.Value, MaxInspectedCells, out string cropNote);
 
-        IReadOnlyList<CellInfo> cells = _world.GetCells(rect.Value);
+        IReadOnlyList<CellInfo> cells = _world.GetCells(area);
         var sb = new StringBuilder();
-        sb.Append("Area ").Append(rect.Value).Append(": ").Append(cells.Count).Append(" cells");
+        if (cropNote != null) sb.Append(cropNote).AppendLine();
+        sb.Append("Area ").Append(area).Append(": ").Append(cells.Count).Append(" cells");
         sb.Append(" | terrain: ").Append(string.Join(", ", cells
             .GroupBy(c => c.Terrain)
             .OrderByDescending(g => g.Count())
@@ -429,7 +427,7 @@ public sealed class ObserveTools
     }
 
     [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Safe)]
-    [Description("Saves a screenshot of the current game view to disk for the player and returns the file path. The image is for the player; you cannot view it.")]
+    [Description("Saves a screenshot of the current game view (what the player's screen shows, including open windows) to disk and returns the file path. When your model accepts images, the image is shown to you right after this result; otherwise only the player can see it.")]
     public string TakeScreenshot(
         [Description("File name without directory or .png; empty uses a timestamped name.")] string name = null)
     {

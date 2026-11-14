@@ -22,6 +22,13 @@ public sealed class RunLogRecord
     public string Source { get; set; } = string.Empty;
     public string Instruction { get; set; } = string.Empty;
     public string Outcome { get; set; } = string.Empty;
+    /// <summary>寫入時的 RimAgent 版本（About.xml modVersion），比較改版前後的成功率用。</summary>
+    public string ModVersion { get; set; } = string.Empty;
+    /// <summary>本句全部工具呼叫的計數，不受 <see cref="TranscriptSteps"/> 只留最後 40 步的影響。</summary>
+    public int ToolCalls { get; set; }
+    /// <summary>工具本身失敗的次數（不含停止／取消）。</summary>
+    public int ToolFailures { get; set; }
+    public int ToolCancellations { get; set; }
     /// <summary>自主任務的起跑脈絡；玩家指令與目標為 null。</summary>
     public AutonomousRunInfo Autonomous { get; set; }
     public List<RunLogModelStep> ModelSteps { get; set; } = [];
@@ -40,6 +47,7 @@ public sealed class RunLogRecord
         }
         ModelSteps.Add(new RunLogModelStep
         {
+            Model = Limit(response.ModelId),
             Text = Limit(response.Text),
             ToolNames = response.Messages == null ? string.Empty : Limit(string.Join(", ",
                 response.Messages.Where(m => m?.Contents != null)
@@ -53,6 +61,12 @@ public sealed class RunLogRecord
     {
         if (entries == null) return;
         List<TranscriptEntry> own = [.. entries.Where(e => e.InstructionId == instructionId)];
+        foreach (TranscriptEntry tool in own.Where(e => e.Kind == TranscriptKind.Tool))
+        {
+            ToolCalls++;
+            if (tool.Cancelled) ToolCancellations++;
+            else if (tool.Failed) ToolFailures++;
+        }
         int skip = Math.Max(0, own.Count - MaxEntries);
         OmittedTranscriptSteps += skip;
         foreach (TranscriptEntry entry in own.Skip(skip))
@@ -66,7 +80,9 @@ public sealed class RunLogRecord
                 Result = Limit(entry.Result),
                 Risk = Limit(entry.RiskCheck),
                 RiskSource = Limit(entry.RiskCheckSource),
-                Failed = entry.Failed
+                Failed = entry.Failed,
+                Cancelled = entry.Cancelled,
+                DurationMs = entry.DurationMs
             });
         }
     }
@@ -93,6 +109,8 @@ public sealed class AutonomousRunInfo
 
 public sealed class RunLogModelStep
 {
+    /// <summary>實際回應的模型（備援鏈可能每步不同）；供 benchmark 依模型分組。</summary>
+    public string Model { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
     public string ToolNames { get; set; } = string.Empty;
     public long? InputTokens { get; set; }
@@ -109,6 +127,8 @@ public sealed class RunLogTranscriptStep
     public string Risk { get; set; } = string.Empty;
     public string RiskSource { get; set; } = string.Empty;
     public bool Failed { get; set; }
+    public bool Cancelled { get; set; }
+    public long DurationMs { get; set; }
 }
 
 /// <summary>
@@ -136,9 +156,13 @@ public sealed class RunLogWriter
 
     public string FilePath { get; }
 
+    /// <summary>寫入時補進紀錄的模組版本；由遊戲端從 About.xml 讀取。</summary>
+    public string ModVersion { get; set; } = string.Empty;
+
     public void Append(RunLogRecord record)
     {
         if (record == null) return;
+        if (string.IsNullOrEmpty(record.ModVersion)) record.ModVersion = ModVersion ?? string.Empty;
         string json = JsonSerializer.Serialize(record);
         lock (_gate)
         {

@@ -123,6 +123,15 @@ public class ZoneToolsTests
         Assert.That(_world.ZoneDisallowed[1], Does.Contain("Steel"));
     }
 
+    [TestCase("[1]")]
+    [TestCase("#1")]
+    [TestCase(" [ 1 ] ")]
+    public void ZoneIdCopiedWithListDecorationResolves(string zone)
+    {
+        // 模型照抄 list_zones 的「[1] Storage」格式，運行紀錄中 set_zone_filter 因此失敗多次。
+        Assert.That(_tools.SetZoneFilter(zone, "corn", string.Empty), Does.StartWith("Zone [1] Storage now allows corn"));
+    }
+
     [Test]
     public void FilterOnGrowingZoneIsRefused()
     {

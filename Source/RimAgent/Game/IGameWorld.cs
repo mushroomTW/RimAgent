@@ -271,6 +271,11 @@ public interface IGameWorld
     CommandResult SetTimeSpeed(string speedDefName);
     /// <summary>擷取當前遊戲畫面並存檔。filename 為可選檔名（不含路徑與副檔名）；空值則自動以時間戳記命名。</summary>
     ScreenshotInfo TakeScreenshot(string filename = null);
+    /// <summary>
+    /// 讀取遊戲截圖資料夾中的 PNG 原始檔，可在背景執行緒呼叫（解碼與縮圖由呼叫端排回主線程）。
+    /// 檔案不在截圖資料夾或尚未寫完時回傳 null（截圖在該幀渲染完才寫出，呼叫端可稍後重試）。
+    /// </summary>
+    byte[] ReadScreenshotFile(string filePath);
 
     /// <summary>存讀檔工具需要的這一局狀態。</summary>
     SaveContext GetSaveContext();

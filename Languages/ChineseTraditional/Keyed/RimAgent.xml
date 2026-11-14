@@ -31,6 +31,10 @@
   <RimAgent.Close>關閉</RimAgent.Close>
   <RimAgent.Placeholder>告訴 Agent 要做什麼，輸入 / 使用指令，輸入 $ 指定技能</RimAgent.Placeholder>
   <RimAgent.PlaceholderBusy>執行中…在此輸入並按 Enter，可補充或改變目前的任務</RimAgent.PlaceholderBusy>
+  <RimAgent.ImagesAttached>[附圖 {0} 張]</RimAgent.ImagesAttached>
+  <RimAgent.PastedImageTip>貼上的圖片，會隨下一句指令送出。點擊移除。</RimAgent.PastedImageTip>
+  <RimAgent.ImageLimit>每句指令最多附 {0} 張圖片。</RimAgent.ImageLimit>
+  <RimAgent.ImagesUnsupported>目前的模型不支援圖片（或無法判斷且設定未開啟圖片輸入）。請點擊縮圖移除貼上的圖片，或換成支援圖片的模型後再送出。</RimAgent.ImagesUnsupported>
   <RimAgent.Send>送出</RimAgent.Send>
   <RimAgent.Stop>停止</RimAgent.Stop>
   <RimAgent.Confirm>確認執行</RimAgent.Confirm>
@@ -91,6 +95,9 @@
   <RimAgent.Settings.LayoutsHeader>建造</RimAgent.Settings.LayoutsHeader>
   <RimAgent.Settings.Layouts>模組化房型</RimAgent.Settings.Layouts>
   <RimAgent.Settings.LayoutsTip>讓 agent 一次放好整間預先設計的 13×13 房間（牆、門、家具與地板藍圖）。關閉後只能一件一件放。</RimAgent.Settings.LayoutsTip>
+  <RimAgent.Settings.ImageHeader>圖片</RimAgent.Settings.ImageHeader>
+  <RimAgent.Settings.ImageInput>模型支援圖片輸入（無法判斷時）</RimAgent.Settings.ImageInput>
+  <RimAgent.Settings.ImageInputTip>讓 agent 看得到 take_screenshot 的截圖，並可在輸入欄用 Ctrl+V 貼上圖片。在 RimLLM Framework 重新整理過模型清單後，已知是否支援圖片的模型會自動判斷；無法判斷時才依此設定。只在模型支援圖片輸入時開啟；不支援的模型會直接回傳錯誤。</RimAgent.Settings.ImageInputTip>
   <RimAgent.Settings.WebSearchHeader>網路搜尋</RimAgent.Settings.WebSearchHeader>
   <RimAgent.Settings.UseLocalSearch>改用自己電腦上的 SearXNG（大部分人不用開）</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>需先啟動已開啟 JSON 輸出的 SearXNG 服務。保持關閉即可免本機設定，使用 Parallel 匿名免費方案。</RimAgent.Settings.UseLocalSearchTip>

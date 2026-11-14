@@ -111,6 +111,19 @@ public sealed class WorkTools
         return null;
     }
 
+    /// <summary>
+    /// 技能名與工作類型名不同的對照：模型常把技能（Intellectual、Medicine）當成工作類型。
+    /// 只在原名對不到任何工作類型時才套用。
+    /// </summary>
+    private static readonly Dictionary<string, string> SkillToWorkType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Intellectual"] = "Research",
+        ["Medicine"] = "Doctor",
+        ["Medical"] = "Doctor",
+        ["Animals"] = "Handling",
+        ["Artistic"] = "Art"
+    };
+
     private bool TryParseAssignment(string raw, out WorkPriorityChange change, out string error)
     {
         change = null;
@@ -141,7 +154,12 @@ public sealed class WorkTools
             error = $"{pawn.Value.Name}'s current work priorities could not be read because another mod threw an error; not changing them.";
             return false;
         }
-        Result<DefInfo> work = DefResolver.Resolve(part.Substring(colon + 1, equals - colon - 1).Trim(), _world.WorkTypes, "work type");
+        string workName = part.Substring(colon + 1, equals - colon - 1).Trim();
+        Result<DefInfo> work = DefResolver.Resolve(workName, _world.WorkTypes, "work type");
+        if (DefResolver.IsNoMatch(work) && SkillToWorkType.TryGetValue(workName, out string workAlias))
+        {
+            work = DefResolver.Resolve(workAlias, _world.WorkTypes, "work type");
+        }
         if (!work.Success)
         {
             error = work.Error;

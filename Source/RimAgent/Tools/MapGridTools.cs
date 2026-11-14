@@ -30,6 +30,26 @@ public sealed class MapGridTools
     /// <summary>三個圖層共用的矩形上限錯誤：角落含頭尾，51 格寬就超過了，要明講並給可直接照抄的例子。</summary>
     internal const string RectLimitHint = "at most 50 cells per side; corners are inclusive, so (0,0)-(49,49) is the largest square";
 
+    /// <summary>超額矩形裁切後每邊的格數；50x50 正好等於格數上限。</summary>
+    internal const int MaxSide = 50;
+
+    /// <summary>
+    /// 純看的工具遇到超額矩形時，從西南角裁成每邊最多 <see cref="MaxSide"/> 格並附註，
+    /// 不直接報錯：模型最常犯的是角落含頭尾的差一格（51x51），整次失敗只會浪費一輪。
+    /// </summary>
+    internal static CellRectSpec CropOversized(CellRectSpec rect, int maxCells, out string note)
+    {
+        note = null;
+        if (rect.CellCount <= maxCells) return rect;
+        var cropped = new CellRectSpec(
+            rect.MinX,
+            rect.MinZ,
+            Math.Min(rect.MaxX, rect.MinX + MaxSide - 1),
+            Math.Min(rect.MaxZ, rect.MinZ + MaxSide - 1));
+        note = $"Note: {rect} has {rect.CellCount} cells, over the {maxCells}-cell limit ({RectLimitHint}); showing {cropped} only. Request the rest separately.";
+        return cropped;
+    }
+
     private sealed class Glyph
     {
         public Glyph(char symbol, string meaning)
@@ -94,7 +114,7 @@ public sealed class MapGridTools
     }
 
     [AgentTool("view_map_grid", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Draws a rectangle of the current map as a character grid, one character per cell, so you can see rooms, walls, doors, kill boxes, hull shapes, water and zones. Rows run north (top, highest z) to south and columns west to east; x labels sit above the columns and a z label starts each row, so you can read exact cells for place_blueprint, add_zone or order_move. A legend lists only the characters that appear. Default layer \"map\" draws, by priority: unexplored fog, pawns (hostile, colonist, other), buildings (wall, door, turret, walk-through cover such as sandbags, other, then frame and blueprint of unfinished ones), items, natural rock, water, trees and other plants, stockpile and growing zones, constructed floor, bare ground. Not drawn: grass and other ground cover, filth, power conduits, floor blueprints. Layer \"roof\" instead shows roofs (thick rock, thin rock, constructed, none) with walls and doors for orientation, to find unroofed gaps in a room. Layer \"build\" shows where structures can go: # taken by a building, blueprint, frame or natural rock (floors, conduits, plants and items do not count; a multi-cell building marks every cell it covers), H heavy-capable ground, m medium only, l light only, ~ no support (deep water); fog stays ?. Ship parts and most large buildings (reactor, engines, etc.) need H on every cell they cover. Up to 50 cells per side (2500 cells); corners are inclusive, so (0,0)-(49,49) is the largest square. A rectangle partly outside the map is clamped. For counts, ids and room details use inspect_area and find_things.")]
+    [Description("Draws a rectangle of the current map as a character grid, one character per cell, so you can see rooms, walls, doors, kill boxes, hull shapes, water and zones. Rows run north (top, highest z) to south and columns west to east; x labels sit above the columns and a z label starts each row, so you can read exact cells for place_blueprint, add_zone or order_move. A legend lists only the characters that appear. Default layer \"map\" draws, by priority: unexplored fog, pawns (hostile, colonist, other), buildings (wall, door, turret, walk-through cover such as sandbags, other, then frame and blueprint of unfinished ones), items, natural rock, water, trees and other plants, stockpile and growing zones, constructed floor, bare ground. Not drawn: grass and other ground cover, filth, power conduits, floor blueprints. Layer \"roof\" instead shows roofs (thick rock, thin rock, constructed, none) with walls and doors for orientation, to find unroofed gaps in a room. Layer \"build\" shows where structures can go: # taken by a building, blueprint, frame or natural rock (floors, conduits, plants and items do not count; a multi-cell building marks every cell it covers), H heavy-capable ground, m medium only, l light only, ~ no support (deep water); fog stays ?. Ship parts and most large buildings (reactor, engines, etc.) need H on every cell they cover. Up to 50 cells per side (2500 cells); corners are inclusive, so (0,0)-(49,49) is the largest square. A rectangle partly outside the map is clamped, and one over the limit is cropped to its south-west 50x50 part. For counts, ids and room details use inspect_area and find_things.")]
     public string ViewMapGrid(
         [Description("Rectangle corner x.")] int x1,
         [Description("Rectangle corner z.")] int z1,
@@ -112,17 +132,14 @@ public sealed class MapGridTools
         CellRectSpec requested = CellRectSpec.FromCorners(x1, z1, x2, z2);
         Result<CellRectSpec> clamped = TargetResolver.ClampRect(x1, z1, x2, z2, _world.GetMapBounds());
         if (!clamped.Success) return clamped.Error;
-        CellRectSpec rect = clamped.Value;
-        if (rect.CellCount > MaxCells)
-        {
-            return ToolText.Error($"rectangle {rect} has {rect.CellCount} cells; the limit is {MaxCells} cells: {RectLimitHint}. Split it into smaller rectangles.");
-        }
+        CellRectSpec rect = CropOversized(clamped.Value, MaxCells, out string cropNote);
 
         IReadOnlyList<MapGridCell> cells = _world.GetMapGrid(rect);
         int width = rect.MaxX - rect.MinX + 1;
         int height = rect.MaxZ - rect.MinZ + 1;
 
         var sb = new StringBuilder();
+        if (cropNote != null) sb.Append(cropNote).AppendLine();
         sb.Append(kind == RoofLayer ? "Roof grid " : kind == BuildLayer ? "Build grid " : "Map grid ").Append(rect).Append(": ").Append(width).Append('x').Append(height)
           .Append(" cells. Rows run north (top, highest z) to south, columns west to east.").AppendLine();
         if (!SameRect(requested, rect))

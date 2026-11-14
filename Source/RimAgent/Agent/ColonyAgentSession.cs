@@ -39,6 +39,10 @@ public sealed class ColonyAgentSession
     private readonly RunOptionsCapture _runOptions;
     private readonly FunctionInvokingChatClient _invoking;
     private readonly AIFunction _toolPackLoader;
+    /// <summary>run_script：一步依序執行多個工具呼叫；只給主 Agent。</summary>
+    private readonly AIFunction _scriptRunner;
+    /// <summary>把玩家貼圖與截圖附到送出的請求上。</summary>
+    private readonly ImageAttachingChatClient _images;
     /// <summary>本段對話展開過的工具包；清除對話、讀檔或手動壓縮時重置。工具（主線程）與組請求（背景）都會碰，所以上鎖。</summary>
     private readonly HashSet<string> _loadedPacks = new(StringComparer.Ordinal);
 #pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
@@ -50,6 +54,7 @@ public sealed class ColonyAgentSession
     private readonly IChatClient _inner;
     private readonly TokenTrackingChatClient _tokenUsage;
     private readonly Func<string, int?> _contextWindowLookup;
+    private readonly Func<string, bool?> _visionLookup;
     private readonly DecisionReasoningRouter _router;
     private readonly DecisionToolPackSelector _packSelector;
     private readonly IRiskChecker _classifier;
@@ -191,7 +196,7 @@ public sealed class ColonyAgentSession
     /// <param name="decisionService">測試用決策模型服務；null 則透過 DecisionServiceFactory 建立。</param>
     /// <param name="router">測試用決策模型分流器；null 則透過 DecisionServiceFactory 建立。</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionReasoningRouter router = null)
+    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionReasoningRouter router = null, Func<string, bool?> visionLookup = null)
     {
         if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
         if (world == null) throw new ArgumentNullException(nameof(world));
@@ -238,8 +243,14 @@ public sealed class ColonyAgentSession
             routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);
         _tokenUsage = new TokenTrackingChatClient(innerClient);
         _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
+        _visionLookup = visionLookup ?? RimLLMProvider.SupportsVision;
         _tokenUsage.ResponseObserved = RecordModelResponse;
-        _runOptions = new RunOptionsCapture(new ThinkingActivityClient(_tokenUsage, Activity));
+        // 附圖在 FICC 之內：每次模型呼叫前都看得到這一輪最新的工具結果。讀圖要排到主線程。
+        _images = new ImageAttachingChatClient(
+            new ThinkingActivityClient(_tokenUsage, Activity),
+            () => ImageInputEnabled,
+            path => LoadScreenshotForModelAsync(world, path));
+        _runOptions = new RunOptionsCapture(_images);
         _inner = _runOptions.AsMainThreadFunctionInvokingClient(maxSteps);
         _invoking = _inner as FunctionInvokingChatClient;
         // 經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話。不碰遊戲世界，不扣自主模式的工具額度。
@@ -248,6 +259,9 @@ public sealed class ColonyAgentSession
                 new ToolPackTools(LoadToolPack), ToolPackTools.ToolName, null, null),
             Transcript, world, ToolCategory.Observe, ToolRisk.Query, ConfirmGate, null, _registry.Outputs, _interjections,
             consumesBudget: false, activity: Activity);
+        // 每步呼叫登錄表裡的原工具（含未公告的工具包），照常受權限、模式、閘門與紀錄管控。
+        _scriptRunner = AIFunctionFactory.Create(typeof(ScriptTools).GetMethod(nameof(ScriptTools.RunScript)),
+            new ScriptTools(() => _registry.Select(_permissions()), _registry.Outputs, _interjections), ScriptTools.ToolName, null, null);
         _summarizer = new ModelSlotChatClient(innerClient, routing?.CompactModel, routing?.CompactReasoning);
         _maxSteps = NormalizeSteps(maxSteps);
         // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
@@ -446,6 +460,7 @@ public sealed class ColonyAgentSession
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, LoadedPacks());
         List<AITool> tools = [.. selected.Advertised];
+        if (tools.Count > 0) tools.Add(_scriptRunner);
         if (selected.Packs.Count > 0) tools.Add(_toolPackLoader);
         IReadOnlyList<AgentSubagent> subagents = permissions.Allows(ToolCategory.Agents)
             ? _subagents.Available(permissions)
@@ -555,16 +570,7 @@ public sealed class ColonyAgentSession
     {
         try
         {
-            RimAgentSettings settings = RimAgentMod.Settings;
-            string preferred = PreferredModel;
-            string model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
-            List<string> candidates;
-            try { candidates = RimLLMProvider.GetFallbackChain(); }
-            catch (InvalidOperationException) { candidates = []; }
-            // 只看當前模型：有指定就用它，跟隨框架時是備援鏈第一個。
-            string current = !string.IsNullOrWhiteSpace(model) && !RimAgentSettings.IsModelSentinel(model)
-                ? model.Trim()
-                : candidates.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
+            string current = ResolveCurrentModel();
             return current == null ? null : MinimumKnownContextWindow([current], _contextWindowLookup);
         }
         catch (InvalidOperationException)
@@ -572,6 +578,49 @@ public sealed class ColonyAgentSession
             // 框架尚未初始化時，視窗上限暫不可用。
             return null;
         }
+    }
+
+    /// <summary>
+    /// 是否讓模型看圖（截圖結果與玩家貼上的圖片）。框架知道目前模型支不支援圖片輸入就照它，
+    /// 不明時（未重新整理模型清單、資料來源沒有該模型）退回玩家的「圖片輸入」設定。
+    /// </summary>
+    public bool ImageInputEnabled
+    {
+        get
+        {
+            bool? known = null;
+            try
+            {
+                string current = ResolveCurrentModel();
+                if (current != null) known = _visionLookup(current);
+            }
+            catch (InvalidOperationException)
+            {
+                // 框架尚未初始化時，退回玩家設定。
+            }
+            return known ?? RimAgentMod.Settings?.imageInput == true;
+        }
+    }
+
+    /// <summary>讀檔在背景執行緒；解碼、縮圖與 JPEG 編碼要用 Unity API，排回主線程。檔案還沒寫完時回傳 null。</summary>
+    private static async Task<byte[]> LoadScreenshotForModelAsync(IGameWorld world, string path)
+    {
+        byte[] png = await Task.Run(() => world.ReadScreenshotFile(path)).ConfigureAwait(false);
+        if (png == null) return null;
+        return await RimLLM_Framework.Core.RimLLMDispatcher.EnqueueOnMainThreadAsync(() => ModelImageEncoder.FromEncoded(png)).ConfigureAwait(false);
+    }
+
+    /// <summary>目前主模型（"供應商:模型"）：有指定就用它，跟隨框架時是備援鏈第一個；都沒有時為 null。</summary>
+    private string ResolveCurrentModel()
+    {
+        RimAgentSettings settings = RimAgentMod.Settings;
+        string preferred = PreferredModel;
+        string model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
+        if (!string.IsNullOrWhiteSpace(model) && !RimAgentSettings.IsModelSentinel(model)) return model.Trim();
+        List<string> candidates;
+        try { candidates = RimLLMProvider.GetFallbackChain(); }
+        catch (InvalidOperationException) { candidates = []; }
+        return candidates.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
     }
     internal static int? MinimumKnownContextWindow(IEnumerable<string> candidates, Func<string, int?> lookup)
     {
@@ -629,6 +678,7 @@ public sealed class ColonyAgentSession
     /// <param name="reasoningOverride">覆寫本次呼叫的思考強度；null 則沿用預設。</param>
     /// <param name="onAccepted">玩家訊息寫入對話後的通知；忙碌而拒收時不呼叫。</param>
     /// <param name="autonomousInfo">自主任務的起跑脈絡，只寫進執行紀錄；帶了就視為自主任務。</param>
+    /// <param name="images">玩家貼上的圖片（JPEG）；只在這句指令期間附給模型，不寫進對話歷史。</param>
     /// <returns>模型最後回覆的文字內容；發生錯誤或文字為空白時回傳 null。</returns>
     public async Task<string> SendAsync(
         string userText,
@@ -639,7 +689,8 @@ public sealed class ColonyAgentSession
         string displayText = null,
         ReasoningLevel? reasoningOverride = null,
         Action onAccepted = null,
-        AutonomousRunInfo autonomousInfo = null)
+        AutonomousRunInfo autonomousInfo = null,
+        IReadOnlyList<byte[]> images = null)
     {
         if (string.IsNullOrWhiteSpace(userText)) return null;
         // 紀錄關閉時呼叫端不建脈絡，所以只能單向推導：有脈絡必是自主任務，反之不一定。
@@ -652,8 +703,18 @@ public sealed class ColonyAgentSession
         _interjections.Open();
         try
         {
-            string reply = await RunInstructionAsync(userText.Trim(), cancellationToken, autonomous, maxToolSteps, goalRun,
-                displayText, reasoningOverride, onAccepted, echo: true, autonomousInfo: autonomousInfo).ConfigureAwait(false);
+            string reply;
+            _images.SetPlayerImages(images);
+            try
+            {
+                reply = await RunInstructionAsync(userText.Trim(), cancellationToken, autonomous, maxToolSteps, goalRun,
+                    displayText, reasoningOverride, onAccepted, echo: true, autonomousInfo: autonomousInfo).ConfigureAwait(false);
+            }
+            finally
+            {
+                // 圖片只屬於這句指令：之後的插話指令不再附。
+                _images.SetPlayerImages(null);
+            }
             await RunLateInterjectionsAsync(cancellationToken).ConfigureAwait(false);
             return reply;
         }
@@ -1450,6 +1511,7 @@ public sealed class ColonyAgentSession
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, LoadedPacks());
         IList<AITool> tools = selected.Advertised;
+        if (tools.Count > 0) tools.Add(_scriptRunner);
         IReadOnlyList<ToolPacks.Pack> packs = selected.Packs;
         if (packs.Count > 0) tools.Add(_toolPackLoader);
         // 包內工具照常可執行、只是不公告；同樣受權限與模式過濾，每輪依當下設定重設。

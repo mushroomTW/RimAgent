@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  圖片輸入、run_script 與工具成功率修正的遊戲內檢查啟動標記（VisionScriptCheck.cs）。
+  run_test_cycle 的 seed_config 只需帶入本檔；不需要模型與金鑰。
+  結果是 "[RimAgent.InGameTests] VisionScriptCheck PASS/FAIL" 警告。
+-->
+<VisionScriptCheck />

@@ -336,6 +336,21 @@ public class ObserveToolsTests
     }
 
     [Test]
+    public async System.Threading.Tasks.Task FindThingsOnlyRequiresKind()
+    {
+        // 運行紀錄中模型省略 name 時，參數綁定直接拋 ArgumentException；選填參數要有預設值。
+        Microsoft.Extensions.AI.AIFunction tool = Microsoft.Extensions.AI.AIFunctionFactory.Create(
+            typeof(ObserveTools).GetMethod(nameof(ObserveTools.FindThings)), _tools);
+
+        string required = tool.JsonSchema.GetProperty("required").ToString();
+        object result = await tool.InvokeAsync(new Microsoft.Extensions.AI.AIFunctionArguments(
+            new System.Collections.Generic.Dictionary<string, object> { ["kind"] = "item" }));
+
+        Assert.That(required, Is.EqualTo("[\"kind\"]"));
+        Assert.That(result?.ToString(), Does.Not.StartWith("Error:"));
+    }
+
+    [Test]
     public void InspectAreaSummarisesTerrainObstaclesZonesAndRooms()
     {
         _world.UnwalkableCells.Add((7, 7));
@@ -357,10 +372,13 @@ public class ObserveToolsTests
     }
 
     [Test]
-    public void InspectAreaRejectsOversizedAndOutOfMapRectangles()
+    public void InspectAreaCropsOversizedAndRejectsOutOfMapRectangles()
     {
-        Assert.That(_tools.InspectArea(0, 0, 50, 50), Does.StartWith("Error:").And.Contain("2601 cells")
-            .And.Contain("corners are inclusive").And.Contain("(0,0)-(49,49)"));
+        // 角落含頭尾的 51x51 是模型最常犯的差一格；裁切後照常回報，不浪費一輪。
+        string cropped = _tools.InspectArea(0, 0, 50, 50);
+        Assert.That(cropped, Does.StartWith("Note:").And.Contain("2601 cells")
+            .And.Contain("corners are inclusive").And.Contain("showing (0,0)-(49,49)"));
+        Assert.That(cropped, Does.Contain("Area (0,0)-(49,49): 2500 cells"));
         Assert.That(_tools.InspectArea(0, 0, 49, 49), Does.StartWith("Area (0,0)-(49,49): 2500 cells"));
         Assert.That(_tools.InspectArea(0, 0, 100, 5), Does.StartWith("Error:"));
     }

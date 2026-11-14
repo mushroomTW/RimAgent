@@ -51,6 +51,10 @@ public sealed class TranscriptEntry
     public string Arguments { get; set; } = string.Empty;
     public string Result { get; set; } = string.Empty;
     public bool Failed { get; set; }
+    /// <summary>因停止或取消而中斷（也算 <see cref="Failed"/>），統計成功率時應與工具本身的失敗分開。</summary>
+    public bool Cancelled { get; set; }
+    /// <summary>工具執行的實際耗時（毫秒），含分類器檢查；未實際執行（前置檢查擋下）為 0。</summary>
+    public long DurationMs { get; set; }
     /// <summary>本次呼叫是否實際扣除自主模式的每日工具額度。</summary>
     public bool BudgetConsumed { get; set; }
     /// <summary>自動模式的分類結果：low／high／unavailable；沒經分類器為空。</summary>

@@ -103,6 +103,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         }
 
         _gate?.BeginInvocation(Name, _risk);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             object result;
@@ -137,10 +138,12 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             // 例外那次期間的遊戲錯誤也算這次的，不能留給下一個工具呼叫背鍋。
             entry.Result = AppendGameErrors(ex.GetType().Name + ": " + ex.Message);
             entry.Failed = true;
+            entry.Cancelled = ex is OperationCanceledException;
             throw;
         }
         finally
         {
+            entry.DurationMs = stopwatch.ElapsedMilliseconds;
             _gate?.EndInvocation();
             _transcript.Add(entry);
         }

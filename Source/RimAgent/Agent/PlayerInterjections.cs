@@ -11,6 +11,19 @@ public sealed class PlayerInterjections
     private readonly object _lock = new();
     private readonly List<string> _pending = [];
     private bool _open;
+    private int _delivered;
+
+    /// <summary>已被取走（送進工具結果或接續的指令）的插話批數；run_script 比對前後值，得知某一步帶出了玩家的話。</summary>
+    public int Delivered
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _delivered;
+            }
+        }
+    }
 
     public void Open()
     {
@@ -67,6 +80,7 @@ public sealed class PlayerInterjections
         if (_pending.Count == 0) return null;
         string text = string.Join("\n\n", _pending);
         _pending.Clear();
+        _delivered++;
         return text;
     }
 }

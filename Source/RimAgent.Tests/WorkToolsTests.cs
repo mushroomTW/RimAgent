@@ -30,6 +30,23 @@ public class WorkToolsTests
     }
 
     [Test]
+    public void SkillNamesFallBackToMatchingWorkTypes()
+    {
+        // 運行紀錄中模型寫過 Tony:Intellectual=1; Tony:Medicine=2，技能名不是工作類型。
+        string text = _tools.SetWorkPriorities("Ali:Medicine=1; Bob:Intellectual=2");
+
+        Assert.That(text, Does.StartWith("Set "));
+        Assert.That(_world.Calls, Does.Contain("SetWorkPriority(101,Doctor,1)"));
+        Assert.That(_world.Calls, Does.Contain("SetWorkPriority(102,Research,2)"));
+    }
+
+    [Test]
+    public void UnknownWorkTypeWithoutSkillAliasStillFails()
+    {
+        Assert.That(_tools.SetWorkPriorities("Ali:Shooting=1"), Does.StartWith("Error:").And.Contain("work type"));
+    }
+
+    [Test]
     public void UnreadablePrioritiesAreNotChangedSoUndoStaysCorrect()
     {
         // 其他模組讓優先級讀不到時記不了原值；照改的話 /undo 會寫回預設的 3。

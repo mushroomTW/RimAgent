@@ -38,7 +38,7 @@ public sealed class ZoneTools
     }
 
     [AgentTool("add_zone", ToolCategory.Zone, ToolRisk.Safe)]
-    [Description("Creates a stockpile or growing zone over a rectangle. Every cell must be inside the map and free of other zones, or nothing is created.")]
+    [Description("Creates a stockpile or growing zone over a rectangle. Like dragging in the game, cells that cannot hold the zone (other zones, rock, buildings, fog, infertile ground for growing) are skipped and reported; separated groups of valid cells become separate zones.")]
     public string AddZone(
         [Description("Zone kind: \"stockpile\" or \"growing\".")] string kind,
         [Description("Rectangle corner x.")] int x1,

@@ -204,12 +204,12 @@ public class MapGridToolsTests
     }
 
     [Test]
-    public void RefusesRectanglesOverTheCellBudget()
+    public void CropsRectanglesOverTheCellBudget()
     {
         string tooBig = _tools.ViewMapGrid(0, 0, 50, 49);
-        Assert.That(tooBig, Does.StartWith("Error:").And.Contain("2550 cells").And.Contain("2500").And.Contain("Split"));
-        Assert.That(tooBig, Does.Contain("at most 50 cells per side").And.Contain("corners are inclusive").And.Contain("(0,0)-(49,49)"));
-        Assert.That(_world.GridRequests, Is.Empty, "超過上限不該去讀世界");
+        Assert.That(tooBig, Does.StartWith("Note:").And.Contain("2550 cells").And.Contain("2500"));
+        Assert.That(tooBig, Does.Contain("at most 50 cells per side").And.Contain("corners are inclusive").And.Contain("showing (0,0)-(49,49)"));
+        Assert.That(tooBig, Does.Contain("Map grid (0,0)-(49,49): 50x50 cells"));
 
         string full = _tools.ViewMapGrid(0, 0, 49, 49);
         Assert.That(full, Does.StartWith("Map grid (0,0)-(49,49): 50x50 cells"));
@@ -218,13 +218,15 @@ public class MapGridToolsTests
     }
 
     [Test]
-    public void InclusiveCornersMakeFiftyOneBySquareTooBig()
+    public void InclusiveCornersFiftyOneBySquareIsCroppedWithNote()
     {
-        // 模型實際犯過三次的錯：(0,0)-(50,50) 看似 50x50，其實角落含頭尾是 51x51 = 2601 格。
+        // 模型實際犯過多次的錯：(0,0)-(50,50) 看似 50x50，其實角落含頭尾是 51x51 = 2601 格。
+        // 報錯會白白浪費一輪，改為裁成 50x50 並說明。
         string text = _tools.ViewMapGrid(0, 0, 50, 50);
 
-        Assert.That(text, Does.StartWith("Error:").And.Contain("2601 cells").And.Contain("corners are inclusive").And.Contain("(0,0)-(49,49)"));
-        Assert.That(_tools.ViewMapGrid(0, 0, 50, 50, "build"), Does.Contain("corners are inclusive"));
+        Assert.That(text, Does.StartWith("Note:").And.Contain("2601 cells").And.Contain("corners are inclusive").And.Contain("showing (0,0)-(49,49)"));
+        Assert.That(text, Does.Contain("Map grid (0,0)-(49,49): 50x50 cells"));
+        Assert.That(_tools.ViewMapGrid(0, 0, 50, 50, "build"), Does.Contain("Build grid (0,0)-(49,49)"));
     }
 
     [Test]
@@ -249,8 +251,8 @@ public class MapGridToolsTests
     [Test]
     public void ClampingAppliesBeforeTheSizeCap()
     {
-        // 要求的矩形遠大於上限，但裁到地圖內（100x100 → 要求 -100..149 裁成 0..99 仍是 10000 格）仍然超過。
-        Assert.That(_tools.ViewMapGrid(-100, -100, 149, 149), Does.StartWith("Error:").And.Contain("10000 cells"));
+        // 要求的矩形遠大於上限：先裁到地圖內（-100..149 → 0..99，10000 格），再裁成 50x50。
+        Assert.That(_tools.ViewMapGrid(-100, -100, 149, 149), Does.StartWith("Note:").And.Contain("10000 cells").And.Contain("showing (0,0)-(49,49)"));
         // 反過來：要求的矩形帶了很大的越界範圍，裁完在上限內就畫。
         Assert.That(_tools.ViewMapGrid(-1000, 0, 9, 4), Does.StartWith("Map grid (0,0)-(9,4): 10x5 cells"));
     }

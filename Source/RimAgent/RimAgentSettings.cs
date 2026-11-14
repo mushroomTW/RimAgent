@@ -105,6 +105,11 @@ public class RimAgentSettings : ModSettings
     public bool autoTimeSpeed = false;
     /// <summary>讓 agent 能整組放置預先設計好的 13x13 模組化房型；預設開啟。</summary>
     public bool layouts = true;
+    /// <summary>
+    /// 框架查不出目前模型是否支援圖片輸入時（<c>RimLLMProvider.SupportsVision</c> 回傳 null）才採用的手動設定：
+    /// 開啟時截圖會附給模型看、玩家可在輸入欄貼圖。預設關閉，不支援圖片的模型收到圖片會直接報錯。
+    /// </summary>
+    public bool imageInput = false;
 
     // 上下文壓縮：依模型視窗的百分比自動折疊較舊工具輸出（不多花模型呼叫）；
     // 手動 /compact 另走一次 LLM 摘要，不受此開關影響。
@@ -358,6 +363,7 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", false);
         Scribe_Values.Look(ref autoTimeSpeed, "autoTimeSpeed", false);
         Scribe_Values.Look(ref layouts, "layouts", true);
+        Scribe_Values.Look(ref imageInput, "imageInput", false);
         Scribe_Values.Look(ref autoCompact, "autoCompact", true);
         Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
         Scribe_Values.Look(ref recordRuns, "recordRuns", false);

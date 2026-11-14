@@ -31,6 +31,10 @@
   <RimAgent.Close>Close</RimAgent.Close>
   <RimAgent.Placeholder>Tell the agent what to do. Type / for commands, $ to pick a skill</RimAgent.Placeholder>
   <RimAgent.PlaceholderBusy>Working… type here and press Enter to add to the current task</RimAgent.PlaceholderBusy>
+  <RimAgent.ImagesAttached>[{0} image(s) attached]</RimAgent.ImagesAttached>
+  <RimAgent.PastedImageTip>Pasted image, sent with your next instruction. Click to remove.</RimAgent.PastedImageTip>
+  <RimAgent.ImageLimit>You can attach at most {0} images per instruction.</RimAgent.ImageLimit>
+  <RimAgent.ImagesUnsupported>The current model does not accept images (or it is unknown and image input is off in the settings). Remove the pasted images (click them) or switch to a model that does, then send again.</RimAgent.ImagesUnsupported>
   <RimAgent.Send>Send</RimAgent.Send>
   <RimAgent.Stop>Stop</RimAgent.Stop>
   <RimAgent.Confirm>Confirm</RimAgent.Confirm>
@@ -91,6 +95,9 @@
   <RimAgent.Settings.LayoutsHeader>Building</RimAgent.Settings.LayoutsHeader>
   <RimAgent.Settings.Layouts>Modular room layouts</RimAgent.Settings.Layouts>
   <RimAgent.Settings.LayoutsTip>Lets the agent place a whole predesigned 13x13 room (walls, door, furniture and floor blueprints) in one step. Turn off to make it build everything piece by piece.</RimAgent.Settings.LayoutsTip>
+  <RimAgent.Settings.ImageHeader>Images</RimAgent.Settings.ImageHeader>
+  <RimAgent.Settings.ImageInput>Model accepts images (when unknown)</RimAgent.Settings.ImageInput>
+  <RimAgent.Settings.ImageInputTip>Shows take_screenshot images to the agent and lets you paste an image into the input box with Ctrl+V. Once you refresh the model list in RimLLM Framework, models with known image support are detected automatically; this setting is used only when that is unknown. Turn it on only if your model supports image input; a model without it will return an error.</RimAgent.Settings.ImageInputTip>
   <RimAgent.Settings.WebSearchHeader>Web search</RimAgent.Settings.WebSearchHeader>
   <RimAgent.Settings.UseLocalSearch>Use SearXNG on my own computer (most people leave this off)</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>Requires a running SearXNG server with JSON output enabled. Leave off to use Parallel's anonymous free tier without local setup.</RimAgent.Settings.UseLocalSearchTip>

@@ -166,6 +166,11 @@ public class RimAgentMod : Mod
         listing.CheckboxLabeled("RimAgent.Settings.Layouts".Translate(), ref Settings.layouts, "RimAgent.Settings.LayoutsTip".Translate());
 
         listing.Gap();
+        listing.Label("RimAgent.Settings.ImageHeader".Translate());
+        listing.GapLine();
+        listing.CheckboxLabeled("RimAgent.Settings.ImageInput".Translate(), ref Settings.imageInput, "RimAgent.Settings.ImageInputTip".Translate());
+
+        listing.Gap();
         listing.Label("RimAgent.Settings.WebSearchHeader".Translate());
         listing.GapLine();
         listing.CheckboxLabeled("RimAgent.Settings.UseLocalSearch".Translate(), ref Settings.useLocalSearch,

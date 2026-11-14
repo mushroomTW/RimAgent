@@ -1510,7 +1510,10 @@ public class RimAgentGameComponent : GameComponent
             if (!settings.recordRuns) return;
             if (_runLogWriter == null)
             {
-                _runLogWriter = new RunLogWriter(Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent"));
+                _runLogWriter = new RunLogWriter(Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent"))
+                {
+                    ModVersion = LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.ModVersion ?? string.Empty
+                };
             }
             _runLogWriter.Append(record);
         };

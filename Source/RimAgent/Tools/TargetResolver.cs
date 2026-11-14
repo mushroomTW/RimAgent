@@ -90,7 +90,7 @@ public static class TargetResolver
             return Result<T>.Fail(emptyErrorMessage ?? $"Error: {kindLabel} is empty. Give a name or id.");
         }
 
-        if (int.TryParse(needle, out int id))
+        if (int.TryParse(StripIdDecoration(needle), out int id))
         {
             T byId = candidates.FirstOrDefault(c => getId(c) == id);
             return byId != null
@@ -111,6 +111,19 @@ public static class TargetResolver
         if (contains.Count > 1) return FormatAmbiguous(needle, contains, describe, kindLabel);
 
         return Result<T>.Fail($"Error: no {kindLabel} matches \"{needle}\". {FormatListAll(candidates, describe, kindLabel)}");
+    }
+
+    /// <summary>
+    /// 去掉清單輸出慣用的 id 外框：「[3]」與「#3」。模型常照抄 list_zones 等工具的格式。
+    /// </summary>
+    private static string StripIdDecoration(string needle)
+    {
+        if (needle.Length > 2 && needle[0] == '[' && needle[needle.Length - 1] == ']')
+        {
+            return needle.Substring(1, needle.Length - 2).Trim();
+        }
+        if (needle.Length > 1 && needle[0] == '#') return needle.Substring(1).Trim();
+        return needle;
     }
 
     private static Result<T> FormatAmbiguous<T>(string needle, List<T> matches, Func<T, string> describe, string kindLabel)

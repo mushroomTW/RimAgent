@@ -26,6 +26,9 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     /// <summary>綁定的遊戲；不為 null 時，換成別的遊戲（讀檔）後一律不可執行工具。</summary>
     private readonly Verse.Game _boundGame;
 
+    /// <summary>遊戲截圖資料夾；截圖時（主線程）記下，供背景執行緒讀截圖檔使用。還沒截過圖時為 null。</summary>
+    private volatile string _screenshotFolder;
+
     public RimWorldGameWorld(Verse.Game boundGame = null)
     {
         _boundGame = boundGame;
@@ -2224,13 +2227,22 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             ? (Designator_ZoneAdd)new Designator_ZoneAddStockpile_Resources()
             : new Designator_ZoneAdd_Growing();
 
-        CommandResult cellResult = ValidateZoneCells(map, rect, designator, growing, kind, out List<IntVec3> cells);
-        if (cellResult != null) return cellResult;
+        List<IntVec3> cells = CollectZoneCells(map, rect, designator, growing, out Dictionary<string, int> skipped);
+        string skippedText = skipped.Count == 0
+            ? string.Empty
+            : " Skipped " + string.Join("; ", skipped.Select(p => $"{p.Value} cell{(p.Value == 1 ? "" : "s")} ({p.Key})").ToArray()) + ".";
+        if (cells.Count == 0) return CommandResult.Fail($"no cell in {rect} can hold a {kind.ToLowerInvariant()} zone.{skippedText}");
 
-        Zone zone = CreateZoneInstance(map, stockpile, plant);
-        map.zoneManager.RegisterZone(zone);
-        foreach (IntVec3 cell in cells) zone.AddCell(cell);
-        return CommandResult.Ok($"Added {zone.label} [{zone.ID}] covering {cells.Count} cells.");
+        // 與原版拖曳相同：不相連的格子各自成區，避免單一區域被切成不連通的幾塊。
+        var added = new List<string>();
+        foreach (List<IntVec3> group in SplitContiguous(cells))
+        {
+            Zone zone = CreateZoneInstance(map, stockpile, plant);
+            map.zoneManager.RegisterZone(zone);
+            foreach (IntVec3 cell in group) zone.AddCell(cell);
+            added.Add($"{zone.label} [{zone.ID}] covering {group.Count} cells");
+        }
+        return CommandResult.Ok("Added " + string.Join(", ", added.ToArray()) + "." + skippedText);
     }
 
     private static CommandResult TryResolveGrowingPlant(bool growing, string plantDefName, out ThingDef plant)
@@ -2245,27 +2257,59 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         return null;
     }
 
-    private static CommandResult ValidateZoneCells(Map map, CellRectSpec rect, Designator_ZoneAdd designator, bool growing, string kind, out List<IntVec3> cells)
+    /// <summary>
+    /// 收集矩形內可畫區域的格子；不合格的格子跳過並依原因計數，與原版拖曳只套用合格格子的行為一致。
+    /// </summary>
+    private static List<IntVec3> CollectZoneCells(Map map, CellRectSpec rect, Designator_ZoneAdd designator, bool growing, out Dictionary<string, int> skipped)
     {
-        cells = [];
+        var cells = new List<IntVec3>();
+        var reasons = new Dictionary<string, int>();
         for (int x = rect.MinX; x <= rect.MaxX; x++)
         {
             for (int z = rect.MinZ; z <= rect.MaxZ; z++)
             {
                 var cell = new IntVec3(x, 0, z);
-                if (!cell.InBounds(map)) return CommandResult.Fail($"cell ({x},{z}) is outside the map");
-                Zone existing = map.zoneManager.ZoneAt(cell);
-                if (existing != null) return CommandResult.Fail($"cell ({x},{z}) already belongs to zone \"{existing.label}\"");
-                AcceptanceReport report = designator.CanDesignateCell(cell);
-                if (!report.Accepted)
+                string why = null;
+                if (!cell.InBounds(map)) why = "outside the map";
+                else if (map.zoneManager.ZoneAt(cell) is Zone existing) why = $"already in zone \"{existing.label}\"";
+                else
                 {
-                    string why = GetZoneRejectionReason(report, growing);
-                    return CommandResult.Fail($"cell ({x},{z}) cannot hold a {kind.ToLowerInvariant()} zone: {why}");
+                    AcceptanceReport report = designator.CanDesignateCell(cell);
+                    if (!report.Accepted) why = GetZoneRejectionReason(report, growing);
                 }
-                cells.Add(cell);
+                if (why == null)
+                {
+                    cells.Add(cell);
+                    continue;
+                }
+                reasons.TryGetValue(why, out int count);
+                reasons[why] = count + 1;
             }
         }
-        return null;
+        skipped = reasons;
+        return cells;
+    }
+
+    /// <summary>以四方向相鄰把格子分成連通的群組。</summary>
+    private static List<List<IntVec3>> SplitContiguous(List<IntVec3> cells)
+    {
+        var remaining = new HashSet<IntVec3>(cells);
+        var groups = new List<List<IntVec3>>();
+        foreach (IntVec3 start in cells)
+        {
+            if (!remaining.Remove(start)) continue;
+            var group = new List<IntVec3> { start };
+            for (int i = 0; i < group.Count; i++)
+            {
+                foreach (IntVec3 dir in GenAdj.CardinalDirections)
+                {
+                    IntVec3 next = group[i] + dir;
+                    if (remaining.Remove(next)) group.Add(next);
+                }
+            }
+            groups.Add(group);
+        }
+        return groups;
     }
 
     private static string GetZoneRejectionReason(AcceptanceReport report, bool growing)
@@ -2372,9 +2416,10 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     public IReadOnlyList<DefInfo> GetTableRecipes(int tableId)
     {
         if (FindBillGiver(tableId) is not Thing table) return Array.Empty<DefInfo>();
+        // 屠宰、火化、熔煉等配方沒有單一產物，改用配方名稱，否則這類工作單無法新增。
         return table.def.AllRecipes
-            .Where(r => r.ProducedThingDef != null && (r.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass)))
-            .Select(r => new DefInfo(r.defName, r.ProducedThingDef.label))
+            .Where(r => r.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass))
+            .Select(r => new DefInfo(r.defName, r.ProducedThingDef?.label ?? r.label))
             .ToList();
     }
 
@@ -4157,6 +4202,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         {
             string baseName = Tools.ObserveTools.ResolveScreenshotName(filename);
             string folder = GenFilePaths.ScreenshotFolderPath;
+            _screenshotFolder = folder;
             string safeName = baseName;
             string fullPath = System.IO.Path.Combine(folder, safeName + ".png");
 
@@ -4186,6 +4232,32 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
                 Error = ex.Message
             };
         }
+    }
+
+    public byte[] ReadScreenshotFile(string filePath)
+    {
+        // 只讀遊戲自己的截圖資料夾，避免工具結果被拿來讀任意檔案。資料夾在截圖時於主線程記下，這裡可在背景執行緒呼叫；還沒截過圖就沒有可讀的檔。
+        string fullPath = UI.TranscriptScreenshot.ResolveInFolder(filePath, _screenshotFolder);
+        if (fullPath == null) return null;
+        try
+        {
+            if (!System.IO.File.Exists(fullPath)) return null;
+            byte[] png = System.IO.File.ReadAllBytes(fullPath);
+            // 截圖在該幀渲染完才寫出；沒有 IEND 區塊代表還沒寫完，不必拿去解碼。
+            return IsCompletePng(png) ? png : null;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
+        {
+            // 截圖可能仍在寫入；呼叫端會重試。
+            return null;
+        }
+    }
+
+    /// <summary>PNG 以 IEND 區塊（長度 0、類型 "IEND"、4 位元組 CRC）結尾。</summary>
+    private static bool IsCompletePng(byte[] png)
+    {
+        int n = png.Length;
+        return n >= 12 && png[n - 8] == 'I' && png[n - 7] == 'E' && png[n - 6] == 'N' && png[n - 5] == 'D';
     }
 
     public SaveContext GetSaveContext()

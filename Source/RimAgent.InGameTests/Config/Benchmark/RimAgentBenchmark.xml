@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  真模型 benchmark 的啟動標記（Benchmark.cs）。根節點可加 model="供應商:模型" 覆寫要測的模型，
+  不加則照 seed 進來的玩家設定。
+  run_test_cycle 的 seed_config 要同時帶入：
+    1. 本檔
+    2. 玩家 Config 裡的 Mod_RimAgent_RimAgentMod.xml（模式與自主照顧由 benchmark 在記憶體裡改）
+    3. 玩家 Config 裡的 Mod_RimLLM Framework_RimLLMFrameworkMod.xml 與 RimLLM_EncryptionKey.dat（供應商設定與金鑰）
+    以上 2、3 都直接指向玩家的 Config 路徑帶入，不要複製進版本庫。
+  結果附加到 SaveData/RimAgent/Benchmark.jsonl（每題一行，最後一行 note=summary），
+  執行紀錄 RimAgent-runs.jsonl 可再用 Source/Scripts/run_log_stats.py 統計 token 與各工具成功率。
+-->
+<RimAgentBenchmark />

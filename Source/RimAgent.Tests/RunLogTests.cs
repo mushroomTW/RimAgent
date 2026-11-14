@@ -114,6 +114,50 @@ public class RunLogTests
     }
 
     [Test]
+    public void ToolCountsCoverEveryCallAndSeparateCancellations()
+    {
+        // 計數要涵蓋被截掉的早期步驟；玩家停止造成的取消不算工具本身失敗（運行紀錄中 wait_for_time 的失敗全是這種）。
+        var record = new RunLogRecord();
+        var entries = new List<TranscriptEntry>();
+        for (int i = 0; i < 45; i++)
+        {
+            entries.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "t", InstructionId = 3, Failed = i < 5, DurationMs = 12 });
+        }
+        entries.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "wait_for_time", InstructionId = 3, Failed = true, Cancelled = true });
+        entries.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "other", InstructionId = 4, Failed = true });
+
+        record.CaptureTranscript(entries, 3);
+
+        Assert.That(record.ToolCalls, Is.EqualTo(46));
+        Assert.That(record.ToolFailures, Is.EqualTo(5));
+        Assert.That(record.ToolCancellations, Is.EqualTo(1));
+        Assert.That(record.TranscriptSteps.Last().Cancelled, Is.True);
+        Assert.That(record.TranscriptSteps.First().DurationMs, Is.EqualTo(12));
+    }
+
+    [Test]
+    public void ModelIdAndModVersionAreRecorded()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "RimAgentRunLogTests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var record = new RunLogRecord();
+            record.AddModelResponse(new Microsoft.Extensions.AI.ChatResponse(
+                new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.Assistant, "hi")) { ModelId = "test-model" });
+            var writer = new RunLogWriter(folder) { ModVersion = "2026.11.14.1" };
+
+            writer.Append(record);
+
+            string line = File.ReadAllLines(writer.FilePath).Single();
+            Assert.That(line, Does.Contain("\"Model\":\"test-model\"").And.Contain("\"ModVersion\":\"2026.11.14.1\""));
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+        }
+    }
+
+    [Test]
     public async Task LoggingOffProducesNoRunRecord()
     {
         var client = new ScriptedChatClient().Reply("ok");

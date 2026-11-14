@@ -162,6 +162,18 @@ public partial class Window_Agent : Window
     private float _bubbleWidth;
 
     private string _input = string.Empty;
+
+    /// <summary>一句指令最多附幾張貼上的圖片。</summary>
+    private const int MaxPastedImages = 4;
+
+    /// <summary>以 Ctrl+V 貼上、等著隨下一句指令送出的圖片。</summary>
+    private sealed class PastedImage
+    {
+        public byte[] Jpeg;
+        public Texture2D Thumbnail;
+    }
+
+    private readonly List<PastedImage> _pastedImages = new();
     private Vector2 _scroll;
     /// <summary>上一次繪製時的最大捲動量；捲動位置在它附近就算停在底部。</summary>
     private float _lastMaxScroll;
@@ -339,6 +351,7 @@ public partial class Window_Agent : Window
         _pendingScreenshot = null;
         _readingScreenshot = null;
         _screenshotRead = null;
+        TakePastedImages();
         if (RimAgentMod.Settings != null)
         {
             // 收合時 windowRect 是圖標大小，設定裡留的展開尺寸才是要記住的。
@@ -1949,6 +1962,7 @@ public partial class Window_Agent : Window
                             Event.current.type == EventType.KeyDown &&
                             (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
 
+        HandlePasteImage(session);
         DrawInputField(inputRect, session.IsBusy);
         if (DrawSendOrStop(session, buttonRect, canSend, enterPressed) && enterPressed)
         {
@@ -2007,12 +2021,66 @@ public partial class Window_Agent : Window
         return _bareTextFieldStyle;
     }
 
+    /// <summary>
+    /// Ctrl+V：目前模型可看圖（見 <see cref="ColonyAgentSession.ImageInputEnabled"/>）且剪貼簿只有圖片時，把圖片附到下一句指令。
+    /// 剪貼簿有文字時不攔截，輸入框照常貼上文字。
+    /// </summary>
+    private void HandlePasteImage(ColonyAgentSession session)
+    {
+        Event e = Event.current;
+        if (e.type != EventType.KeyDown || e.keyCode != KeyCode.V || !(e.control || e.command)) return;
+        if (session?.ImageInputEnabled != true) return;
+        byte[] jpeg = ClipboardImage.TryRead();
+        if (jpeg == null) return;
+        e.Use();
+        if (_pastedImages.Count >= MaxPastedImages)
+        {
+            Notice(session, "RimAgent.ImageLimit".Translate(MaxPastedImages));
+            return;
+        }
+        var thumbnail = new Texture2D(2, 2);
+        thumbnail.LoadImage(jpeg);
+        _pastedImages.Add(new PastedImage { Jpeg = jpeg, Thumbnail = thumbnail });
+    }
+
+    private void DrawPastedImages(Rect rect, float thumbSize)
+    {
+        for (int i = 0; i < _pastedImages.Count; i++)
+        {
+            var thumbRect = new Rect(rect.x + i * (thumbSize + 3f), rect.y, thumbSize, thumbSize);
+            GUI.DrawTexture(thumbRect, _pastedImages[i].Thumbnail, ScaleMode.ScaleToFit);
+            TooltipHandler.TipRegion(thumbRect, "RimAgent.PastedImageTip".Translate());
+            if (!Widgets.ButtonInvisible(thumbRect)) continue;
+            UnityEngine.Object.Destroy(_pastedImages[i].Thumbnail);
+            _pastedImages.RemoveAt(i);
+            break;
+        }
+    }
+
+    /// <summary>取出貼上的圖片並清空縮圖；沒有圖片時回傳 null。</summary>
+    private List<byte[]> TakePastedImages()
+    {
+        if (_pastedImages.Count == 0) return null;
+        List<byte[]> images = _pastedImages.Select(p => p.Jpeg).ToList();
+        foreach (PastedImage image in _pastedImages) UnityEngine.Object.Destroy(image.Thumbnail);
+        _pastedImages.Clear();
+        return images;
+    }
+
     private void DrawInputField(Rect inputRect, bool busy)
     {
         DrawRoundedBox(inputRect, ControlBgColor, ControlBorderColor);
 
         GUI.SetNextControlName(InputControlName);
         var innerInputRect = inputRect.ContractedBy(4f, 2f);
+        if (_pastedImages.Count > 0)
+        {
+            // 貼上的圖片縮圖排在輸入框右側，文字區讓出空間。
+            float thumbSize = inputRect.height - 6f;
+            float thumbsWidth = _pastedImages.Count * (thumbSize + 3f);
+            innerInputRect.width -= thumbsWidth;
+            DrawPastedImages(new Rect(innerInputRect.xMax + 2f, inputRect.y + 3f, thumbsWidth, thumbSize), thumbSize);
+        }
         string before = _input;
         _input = GUI.TextField(innerInputRect, _input ?? string.Empty, GetBareTextFieldStyle());
         // 玩家自己改了內容就不算在瀏覽歷史：↓ 不會拿舊草稿蓋掉新字，打 / 也讓方向鍵回到斜線選單。
@@ -2526,6 +2594,12 @@ public partial class Window_Agent : Window
         {
             ProbeCapabilities();
             if (_capabilityWarning != null) return;
+            // 貼圖後換成不支援圖片的模型：圖片送出時會被丟掉，先擋下並保留輸入與圖片，讓玩家移除圖片或換回模型。
+            if (_pastedImages.Count > 0 && !session.ImageInputEnabled)
+            {
+                Notice(session, "RimAgent.ImagesUnsupported".Translate());
+                return;
+            }
         }
         _input = string.Empty;
         RememberInput(text);
@@ -2541,7 +2615,9 @@ public partial class Window_Agent : Window
         }
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
-        Observe(session, session.SendAsync(text, _cts.Token));
+        List<byte[]> images = TakePastedImages();
+        string display = images == null ? null : text + " " + "RimAgent.ImagesAttached".Translate(images.Count);
+        Observe(session, session.SendAsync(text, _cts.Token, displayText: display, images: images));
     }
 
     private void ProbeCapabilities()
