@@ -2572,7 +2572,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         return CommandResult.Ok();
     }
 
-    public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName)
+    public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName, bool checkOnly = false)
     {
         Map map = Map;
         BuildableDef def = (BuildableDef)DefDatabase<ThingDef>.GetNamedSilentFail(buildableDefName)
@@ -2601,6 +2601,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             return CommandResult.Fail(reason);
         }
 
+        if (checkOnly) return CommandResult.Ok();
         GenConstruct.PlaceBlueprintForBuild(def, cell, map, rot, Faction.OfPlayer, stuff);
         return CommandResult.Ok();
     }

@@ -644,11 +644,13 @@ internal sealed class FakeGameWorld : IGameWorld
         return LookupInfos.TryGetValue(kind ?? string.Empty, out List<DefLookupInfo> list) ? list.FirstOrDefault(i => i.DefName == defName) : null;
     }
 
-    public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName)
+    public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName, bool checkOnly = false)
     {
-        Calls.Add($"TryPlaceBlueprint({buildableDefName},{x},{z},{rotation},{stuffDefName})");
+        // 只檢查的呼叫不記進 Calls，既有測試對實際放置順序的斷言不受影響。
+        if (!checkOnly) Calls.Add($"TryPlaceBlueprint({buildableDefName},{x},{z},{rotation},{stuffDefName})");
         if (BlockedCells.TryGetValue((x, z), out string reason)) return CommandResult.Fail(reason);
         if (BlockedStuff.TryGetValue((buildableDefName, stuffDefName ?? string.Empty), out string stuffReason)) return CommandResult.Fail(stuffReason);
+        if (checkOnly) return CommandResult.Ok();
         Blueprints.Add((buildableDefName, x, z, rotation, stuffDefName));
         return CommandResult.Ok();
     }

@@ -139,12 +139,20 @@ public class BuildToolsTests
     }
 
     [Test]
-    public void BlueprintLinePlacesEachCellAndReportsBlockedOnes()
+    public void BlueprintLinePlacesNothingWhenAnyCellIsBlocked()
     {
         _world.BlockedCells[(12, 20)] = "space already occupied";
         string text = _tools.PlaceBlueprint("wall", "line", 10, 20, 14, 20, 0, "wood");
-        Assert.That(text, Does.StartWith("Placed 4 wall (WoodLog) blueprint(s) from (10,20) to (14,20) (line).").And.Contain("(12,20): space already occupied"));
-        Assert.That(_world.Blueprints.Select(b => b.X), Is.EqualTo([10, 11, 13, 14]));
+        Assert.That(text, Does.StartWith("Error: placed nothing: 1 of 5 wall (WoodLog) blueprint(s)").And.Contain("(12,20): space already occupied"));
+        Assert.That(_world.Blueprints, Is.Empty, "放不完整就一個都不放，不留半道牆");
+    }
+
+    [Test]
+    public void BlueprintLinePlacesEveryCellWhenAllFit()
+    {
+        string text = _tools.PlaceBlueprint("wall", "line", 10, 20, 14, 20, 0, "wood");
+        Assert.That(text, Does.StartWith("Placed 5 wall (WoodLog) blueprint(s) from (10,20) to (14,20) (line)."));
+        Assert.That(_world.Blueprints.Select(b => b.X), Is.EqualTo([10, 11, 12, 13, 14]));
         Assert.That(_world.Blueprints.All(b => b.Def == "Wall" && b.Stuff == "WoodLog"), Is.True);
     }
 
@@ -209,7 +217,7 @@ public class BuildToolsTests
     {
         AddTinyLayout();
         string text = _tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "");
-        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("(9,9)-(11,11)"));
+        Assert.That(text, Does.StartWith("Placed all 5").And.Contain("(9,9)-(11,11)"));
         Assert.That(_world.Blueprints, Does.Contain(("Door", 10, 11, 0, "")));
         Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "WoodLog")));
     }
@@ -224,7 +232,7 @@ public class BuildToolsTests
 
         string text = _tools.PlaceBlueprint("RimAgent_Tiny", "layout", 10, 10, 0, 0, 0, "granite blocks");
 
-        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("Kept the layout's own material or floor (the requested one was refused): bed."));
+        Assert.That(text, Does.StartWith("Placed all 5").And.Contain("Kept the layout's own material or floor (the requested one was refused): bed."));
         Assert.That(_world.Blueprints, Does.Contain(("Wall", 9, 9, 0, "BlocksGranite")));
         Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "WoodLog")));
         Assert.That(_world.Blueprints, Does.Contain(("WoodPlankFloor", 10, 10, 0, "")));
@@ -239,7 +247,7 @@ public class BuildToolsTests
 
         string text = _tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "walls=granite blocks; floor=steel tile; furniture=steel");
 
-        Assert.That(text, Does.StartWith("Placed 5 of 5").And.Contain("walls BlocksGranite, floor MetalTile, furniture Steel"));
+        Assert.That(text, Does.StartWith("Placed all 5").And.Contain("walls BlocksGranite, floor MetalTile, furniture Steel"));
         Assert.That(_world.Blueprints, Does.Contain(("Wall", 9, 9, 0, "BlocksGranite")));
         Assert.That(_world.Blueprints, Does.Contain(("Door", 10, 11, 0, "BlocksGranite")));
         Assert.That(_world.Blueprints, Does.Contain(("Bed", 10, 10, 0, "Steel")));
@@ -292,7 +300,8 @@ public class BuildToolsTests
 
         string text = _tools.PlaceBlueprint("tiny room", "layout", 10, 10, 0, 0, 0, "");
 
-        Assert.That(text, Does.StartWith("Placed 3 of 5").And.Contain("Wall: space already occupied (x2)"));
+        Assert.That(text, Does.StartWith("Error: placed nothing: 2 of 5 parts").And.Contain("Wall: space already occupied (x2)"));
+        Assert.That(_world.Blueprints, Is.Empty, "房型缺任何一件就整間都不放");
     }
 
     [Test]
@@ -320,6 +329,7 @@ public class BuildToolsTests
             .All.OfType<AIFunction>().Single(f => f.Name == "place_blueprint").Description;
 
         Assert.That(Description(true), Does.Contain("layout"));
+        Assert.That(Description(true), Does.Contain("use a layout by default"), "開啟房型時蓋房間預設用房型");
         Assert.That(Description(false), Does.Not.Contain("layout").And.Contain("outline"));
     }
 
@@ -337,7 +347,8 @@ public class BuildToolsTests
     [Test]
     public void BlueprintOutsideMapCellsAreReported()
     {
-        Assert.That(_tools.PlaceBlueprint("wall", "line", 99, 99, 101, 99, 0, ""), Does.StartWith("Placed 1").And.Contain("outside the map"));
+        Assert.That(_tools.PlaceBlueprint("wall", "line", 99, 99, 101, 99, 0, ""), Does.StartWith("Error: placed nothing").And.Contain("outside the map"));
+        Assert.That(_world.Blueprints, Is.Empty);
         Assert.That(_tools.PlaceBlueprint("wall", "single", 200, 200, 200, 200, 0, ""), Does.StartWith("Error:").And.Contain("outside"));
     }
 
@@ -417,14 +428,15 @@ public class BuildToolsTests
     }
 
     [Test]
-    public void SeveralLargeBlueprintsListEachCenterAndRectangle()
+    public void LargeBlueprintsThatOverlapEachOtherPlaceNothing()
     {
         AddShipParts();
 
         string text = _tools.PlaceBlueprint("Ship_SensorCluster", "line", 10, 10, 20, 10, 0, "");
 
-        Assert.That(text, Does.Contain("Placed 11 ship sensor cluster blueprint(s)").And.Contain("Each is 2x2, rotation 0: (10,10) covers (10,10)-(11,11); (11,10) covers (11,10)-(12,11);"));
-        Assert.That(text, Does.Contain("+6 more."));
+        Assert.That(text, Does.StartWith("Error: placed nothing")
+            .And.Contain("(11,10) (would cover (11,10)-(12,11)): overlaps another blueprint of this call"));
+        Assert.That(_world.Blueprints, Is.Empty);
     }
 
     [Test]
@@ -435,7 +447,7 @@ public class BuildToolsTests
 
         string text = _tools.PlaceBlueprint("Ship_SensorCluster", "single", 41, 44, 41, 44, 0, "");
 
-        Assert.That(text, Does.StartWith("Error: could not place any ship sensor cluster blueprint."));
+        Assert.That(text, Does.StartWith("Error: placed nothing: 1 of 1 ship sensor cluster blueprint(s)"));
         Assert.That(text, Does.Contain("(41,44) (would cover (41,44)-(42,45)): Space already occupied (blocked by: ship reactor (blueprint) #77 (39,42)-(44,48))"));
     }
 

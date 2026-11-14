@@ -29,7 +29,7 @@ public sealed class BuildTools
     /// 房型開關關掉時 <c>place_blueprint</c> 改用的說明：拿掉 layout，免得模型每蓋一間房都先試一次被拒。
     /// 內容與 <see cref="PlaceBlueprint"/> 的 <see cref="DescriptionAttribute"/> 相同，只少了 layout 那段。
     /// </summary>
-    private const string PlaceBlueprintWithoutLayoutsDescription = "Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.";
+    private const string PlaceBlueprintWithoutLayoutsDescription = "Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. All or nothing: if any cell is refused, nothing is placed and the reasons are listed; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.";
 
     /// <summary>註冊工具時取代 <see cref="DescriptionAttribute"/> 的說明；不需取代時回 null。</summary>
     /// <param name="toolName">工具名稱。</param>
@@ -179,7 +179,7 @@ public sealed class BuildTools
     }
 
     [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = one material for walls, doors and furniture, or set each part: \"walls=granite blocks; floor=fine granite tile; furniture=steel\" (any material or floor in the game, modded ones too; omitted parts keep the layout's own); an empty building lists the layouts). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. Refused cells give the reason; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
+    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = one material for walls, doors and furniture, or set each part: \"walls=granite blocks; floor=fine granite tile; furniture=steel\" (any material or floor in the game, modded ones too; omitted parts keep the layout's own); an empty building lists the layouts). To build a room (bedroom, kitchen, workshop, storage, etc.), use a layout by default: list them and pick the closest fit; draw walls with outline only when the player asks for a specific size or shape, or no layout fits. Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. All or nothing: if any cell (or any part of a layout) is refused, nothing is placed and the reasons are listed; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
 #pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
     public string PlaceBlueprint(
         [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
@@ -215,27 +215,65 @@ public sealed class BuildTools
         MapBounds bounds = _world.GetMapBounds();
         BuildingInfo info = _world.GetBuildingInfo(def.Value.DefName);
         bool large = info != null && (info.Width > 1 || info.Height > 1);
+        // 先檢查每一格都放得下（含同一次呼叫裡大型建築彼此重疊），任何一格不行就一個都不放，
+        // 避免只蓋出半道牆或缺角的房間卻回報成功。
         var failures = new List<string>();
-        var placedCells = new List<(int X, int Z)>();
+        var claimed = new HashSet<(int X, int Z)>();
         foreach ((int cx, int cz) in cells.Value)
         {
+            string cell = ToolText.Cell(cx, cz) + (large ? " (would cover " + OccupiedRect(cx, cz, rotation, info) + ")" : string.Empty);
             if (TargetResolver.CheckCell(cx, cz, bounds) != null)
             {
                 failures.Add($"{ToolText.Cell(cx, cz)}: outside the map");
                 continue;
             }
-            CommandResult r = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName);
-            if (r.Success) placedCells.Add((cx, cz));
-            else failures.Add($"{ToolText.Cell(cx, cz)}{(large ? " (would cover " + OccupiedRect(cx, cz, rotation, info) + ")" : string.Empty)}: {r.Message}");
+            if (large && !Claim(claimed, OccupiedRect(cx, cz, rotation, info)))
+            {
+                failures.Add($"{cell}: overlaps another blueprint of this call");
+                continue;
+            }
+            CommandResult check = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName, checkOnly: true);
+            if (!check.Success) failures.Add($"{cell}: {check.Message}");
+        }
+        if (failures.Count > 0)
+        {
+            return ToolText.Error($"placed nothing: {failures.Count} of {cells.Value.Count} {what} blueprint(s) cannot go there. "
+                + string.Join("; ", failures.Take(5)) + (failures.Count > 5 ? $"; and {failures.Count - 5} more" : string.Empty)
+                + ". Clear the blockers or choose other cells, then place them all again.");
         }
 
-        int placed = placedCells.Count;
-        if (placed == 0)
+        var placedCells = new List<(int X, int Z)>();
+        var lateFailures = new List<string>();
+        foreach ((int cx, int cz) in cells.Value)
         {
-            return ToolText.Error($"could not place any {what} blueprint. " + string.Join("; ", failures.Take(5)));
+            CommandResult r = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName);
+            if (r.Success) placedCells.Add((cx, cz));
+            else lateFailures.Add($"{ToolText.Cell(cx, cz)}: {r.Message}");
         }
-        string summary = $"Placed {placed} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
-        return failures.Count == 0 ? summary : summary + $" {failures.Count} failed: " + string.Join("; ", failures.Take(5));
+        if (lateFailures.Count > 0)
+        {
+            // 檢查通過後才被拒（同批放置互相影響）：已放的留著，但整次仍算失敗。
+            return ToolText.Error($"only {placedCells.Count} of {cells.Value.Count} {what} blueprint(s) were placed {where}; "
+                + "these were refused after the check: " + string.Join("; ", lateFailures.Take(5)) + ".");
+        }
+        return $"Placed {placedCells.Count} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
+    }
+
+    /// <summary>把範圍內的格子記為已占用；有任何一格已被占用時回傳 false。</summary>
+    private static bool Claim(HashSet<(int X, int Z)> claimed, CellRectSpec rect)
+    {
+        for (int x = rect.MinX; x <= rect.MaxX; x++)
+        {
+            for (int z = rect.MinZ; z <= rect.MaxZ; z++)
+            {
+                if (claimed.Contains((x, z))) return false;
+            }
+        }
+        for (int x = rect.MinX; x <= rect.MaxX; x++)
+        {
+            for (int z = rect.MinZ; z <= rect.MaxZ; z++) claimed.Add((x, z));
+        }
+        return true;
     }
 
     /// <summary>失敗原因最多列幾種；同一種東西同一個原因合併計數。</summary>
@@ -277,15 +315,34 @@ public sealed class BuildTools
         string blocked = ToolText.Blocked(_gate, $"would place the {what} layout: {plan.Pieces.Count} blueprints covering {plan.Rect}.");
         if (blocked != null) return blocked;
 
-        int placed = 0;
-        var failures = new Dictionary<string, int>(StringComparer.Ordinal);
-        var fellBack = new Dictionary<string, int>(StringComparer.Ordinal);
         var infos = new Dictionary<string, BuildingInfo>(StringComparer.Ordinal);
         BuildingInfo Info(string defName) => infos.TryGetValue(defName, out BuildingInfo i) ? i : infos[defName] = _world.GetBuildingInfo(defName);
+        string Label(LayoutPiece piece) => Info(piece.DefName)?.Label ?? piece.DefName;
+
+        // 先確認每一件都放得下（牆擋住、地板需要承重地基等），任何一件不行就整間都不放，不留缺角的房間。
+        var failures = new Dictionary<string, int>(StringComparer.Ordinal);
+        int refused = 0;
         foreach (LayoutPiece piece in plan.Pieces)
         {
-            CommandResult r = PlaceLayoutPiece(piece, materials.Value.For(piece.Part), Info(piece.DefName), out bool usedOwnStuff);
-            string label = Info(piece.DefName)?.Label ?? piece.DefName;
+            CommandResult check = PlaceLayoutPiece(piece, materials.Value.For(piece.Part), Info(piece.DefName), true, out _);
+            if (check.Success) continue;
+            refused++;
+            string key = $"{Label(piece)}: {check.Message}";
+            failures[key] = failures.TryGetValue(key, out int n) ? n + 1 : 1;
+        }
+        if (refused > 0)
+        {
+            return ToolText.Error($"placed nothing: {refused} of {plan.Pieces.Count} parts of the {what} layout cannot go in {plan.Rect}. "
+                + FormatLayoutFailures(failures) + " Clear the blockers or choose another spot, then place the layout again.");
+        }
+
+        int placed = 0;
+        var lateFailures = new Dictionary<string, int>(StringComparer.Ordinal);
+        var fellBack = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (LayoutPiece piece in plan.Pieces)
+        {
+            CommandResult r = PlaceLayoutPiece(piece, materials.Value.For(piece.Part), Info(piece.DefName), false, out bool usedOwnStuff);
+            string label = Label(piece);
             if (r.Success)
             {
                 placed++;
@@ -293,38 +350,40 @@ public sealed class BuildTools
                 continue;
             }
             string key = $"{label}: {r.Message}";
-            failures[key] = failures.TryGetValue(key, out int n) ? n + 1 : 1;
+            lateFailures[key] = lateFailures.TryGetValue(key, out int n) ? n + 1 : 1;
         }
-
-        if (placed == 0)
+        if (lateFailures.Count > 0)
         {
-            return ToolText.Error($"could not place any part of the {what} layout in {plan.Rect}. " + FormatLayoutFailures(failures));
+            // 檢查通過後才被拒（同一房型的件彼此影響）：已放的留著，但整次仍算失敗。
+            return ToolText.Error($"only {placed} of {plan.Pieces.Count} blueprints of the {what} layout were placed in {plan.Rect}; "
+                + "these were refused after the check: " + FormatLayoutFailures(lateFailures));
         }
-        string summary = $"Placed {placed} of {plan.Pieces.Count} blueprints of the {what} layout, covering {plan.Rect}.";
+        string summary = $"Placed all {placed} blueprints of the {what} layout, covering {plan.Rect}.";
         if (fellBack.Count > 0) summary += " Kept the layout's own material or floor (the requested one was refused): " + FormatLayoutFailures(fellBack);
-        return failures.Count == 0 ? summary : summary + " Not placed: " + FormatLayoutFailures(failures);
+        return summary;
     }
 
     /// <summary>放一件房型內容；有指定替換時先試替換，被拒再退回房型原本的設計。</summary>
     /// <param name="piece">要放的一件。</param>
     /// <param name="replacement">這一類指定的材料 defName（地板則是地板 defName）；空字串表示不替換。</param>
     /// <param name="info">這件的建造資訊；查不到時為 null。</param>
+    /// <param name="checkOnly">true 時只檢查放不放得下，不放置。</param>
     /// <param name="usedOwnStuff">指定的替換被拒、改用房型原本的設計放成功時為 true。</param>
     /// <returns>放置結果；替換與原設計都失敗時回替換的失敗原因。</returns>
-    private CommandResult PlaceLayoutPiece(LayoutPiece piece, string replacement, BuildingInfo info, out bool usedOwnStuff)
+    private CommandResult PlaceLayoutPiece(LayoutPiece piece, string replacement, BuildingInfo info, bool checkOnly, out bool usedOwnStuff)
     {
         usedOwnStuff = false;
         bool floor = piece.Part == LayoutPart.Floor;
         bool skip = replacement.Length == 0
             || (floor ? replacement == piece.DefName : replacement == piece.StuffDefName || info == null || info.StuffCount == 0);
-        if (skip) return _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName);
+        if (skip) return _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName, checkOnly);
 
         // 指定的材料或地板這件不能用（例如某些家具不收石磚、重地板要承重地基）時，退回房型原本的設計。
         CommandResult r = floor
-            ? _world.TryPlaceBlueprint(replacement, piece.X, piece.Z, piece.Rotation, string.Empty)
-            : _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, replacement);
+            ? _world.TryPlaceBlueprint(replacement, piece.X, piece.Z, piece.Rotation, string.Empty, checkOnly)
+            : _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, replacement, checkOnly);
         if (r.Success) return r;
-        CommandResult own = _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName);
+        CommandResult own = _world.TryPlaceBlueprint(piece.DefName, piece.X, piece.Z, piece.Rotation, piece.StuffDefName, checkOnly);
         usedOwnStuff = own.Success;
         return own.Success ? own : r;
     }

@@ -122,7 +122,8 @@ public interface IGameWorld
     /// <summary>一個 Def 的資訊卡與事實；不存在回傳 null。</summary>
     DefLookupInfo LookupDef(string kind, string defName);
     /// <summary>內含可放置檢查；失敗訊息帶遊戲給的原因（空間被占用時附上占用者與其範圍）。</summary>
-    CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName);
+    /// <param name="checkOnly">true 時只做同樣的檢查、不放置，供整批放置前先確認每一件都放得下。</param>
+    CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName, bool checkOnly = false);
     /// <summary>可整組放置的房型。</summary>
     IReadOnlyList<LayoutInfo> Layouts { get; }
     /// <summary>房型以 (x,z) 為中心、朝向 rotation 時的範圍與每一件；房型不存在回傳 null。</summary>
