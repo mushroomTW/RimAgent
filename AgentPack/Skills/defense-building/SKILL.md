@@ -8,7 +8,7 @@ description: Building defenses before raids come: choke points, kill boxes, sand
 Raids grow with colony wealth. Build defenses one step ahead of wealth, not after a raid breaks in.
 
 ## 1. Read the ground
-- view_map_grid around the base (50x50 at a time) to see walls (#), doors (+), cover (c), turrets (t), rock (^) and open approaches. The roof layer shows mountain roof (M): no drop pods land under it.
+- get_map_overview for rock masses, water and the home area, then take_screenshot with a rectangle around the base (about 50x50) to see walls, doors, cover, turrets, rock and open approaches. Thick mountain roof (get_map_overview, or inspect_area's overhead mountain count) stops drop pods.
 - Note where raiders enter: open map edges, the gaps between rock and walls.
 Done when you can name each approach and the one you want raiders to use.
 

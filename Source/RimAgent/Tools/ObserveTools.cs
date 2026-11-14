@@ -332,6 +332,30 @@ public sealed class ObserveTools
 
     /// <summary>inspect_area 一次最多看的格數（50x50）；再大就是在掃全圖，該改用 find_things。</summary>
     internal const int MaxInspectedCells = 2500;
+
+    /// <summary>矩形上限的錯誤說明：角落含頭尾，51 格寬就超過了，要明講並給可直接照抄的例子。</summary>
+    internal const string RectLimitHint = "at most 50 cells per side; corners are inclusive, so (0,0)-(49,49) is the largest square";
+
+    /// <summary>超額矩形裁切後每邊的格數；50x50 正好等於格數上限。</summary>
+    private const int MaxSide = 50;
+
+    /// <summary>
+    /// 純看的工具遇到超額矩形時，從西南角裁成每邊最多 <see cref="MaxSide"/> 格並附註，
+    /// 不直接報錯：模型最常犯的是角落含頭尾的差一格（51x51），整次失敗只會浪費一輪。
+    /// </summary>
+    internal static CellRectSpec CropOversized(CellRectSpec rect, int maxCells, out string note)
+    {
+        note = null;
+        if (rect.CellCount <= maxCells) return rect;
+        var cropped = new CellRectSpec(
+            rect.MinX,
+            rect.MinZ,
+            Math.Min(rect.MaxX, rect.MinX + MaxSide - 1),
+            Math.Min(rect.MaxZ, rect.MinZ + MaxSide - 1));
+        note = $"Note: {rect} has {rect.CellCount} cells, over the {maxCells}-cell limit ({RectLimitHint}); showing {cropped} only. Request the rest separately.";
+        return cropped;
+    }
+
     private const int MaxObstaclesListed = 10;
     private const float FertileThreshold = 0.7f;
 
@@ -346,7 +370,8 @@ public sealed class ObserveTools
         sb.Append("Cell ").Append(ToolText.Cell(c.X, c.Z)).Append(": ").Append(c.Terrain).Append(" (").Append(c.TerrainDefName).Append(')')
           .Append(", fertility ").Append(ToolText.Pct(c.Fertility))
           .Append(", roof: ").Append(string.IsNullOrEmpty(c.Roof) ? "none" : c.Roof)
-          .Append(c.Walkable ? ", walkable" : ", NOT walkable");
+          .Append(c.Walkable ? ", walkable" : ", NOT walkable")
+          .Append(", ground holds ").Append(SupportText(c.Support));
         if (c.Fogged) sb.Append(", unexplored (fogged)");
         sb.AppendLine();
         sb.Append("Zone: ").Append(c.Zone == null ? "none" : $"[{c.Zone.Id}] {c.Zone.Label} ({c.Zone.Kind}, {c.Zone.CellCount} cells)").AppendLine();
@@ -364,7 +389,7 @@ public sealed class ObserveTools
     }
 
     [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
+    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, how heavy a building the ground holds, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, how many cells hold heavy, medium or only light buildings (ship parts and most large buildings need heavy under every cell), obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
     public string InspectArea(
         [Description("Rectangle corner x.")] int x1,
         [Description("Rectangle corner z.")] int z1,
@@ -374,7 +399,7 @@ public sealed class ObserveTools
         if (x1 == x2 && z1 == z2) return DescribeCell(x1, z1);
         Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
         if (!rect.Success) return rect.Error;
-        CellRectSpec area = MapGridTools.CropOversized(rect.Value, MaxInspectedCells, out string cropNote);
+        CellRectSpec area = CropOversized(rect.Value, MaxInspectedCells, out string cropNote);
 
         IReadOnlyList<CellInfo> cells = _world.GetCells(area);
         var sb = new StringBuilder();
@@ -390,6 +415,10 @@ public sealed class ObserveTools
         int mountain = cells.Count(c => c.Roof == "overhead mountain");
         if (mountain > 0) sb.Append(" (overhead mountain ").Append(mountain).Append(')');
         sb.Append(" | not walkable: ").Append(cells.Count(c => !c.Walkable));
+        sb.Append(" | ground holds heavy: ").Append(cells.Count(c => c.Support == GroundSupport.Heavy))
+          .Append(", medium at most: ").Append(cells.Count(c => c.Support == GroundSupport.Medium))
+          .Append(", light at most: ").Append(cells.Count(c => c.Support == GroundSupport.Light))
+          .Append(", nothing: ").Append(cells.Count(c => c.Support == GroundSupport.None && !c.Fogged));
         int fogged = cells.Count(c => c.Fogged);
         if (fogged > 0) sb.Append(" | unexplored: ").Append(fogged);
         sb.AppendLine();
@@ -426,21 +455,53 @@ public sealed class ObserveTools
         return sb.ToString().Trim();
     }
 
-    [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Safe)]
-    [Description("Saves a screenshot of the current game view (what the player's screen shows, including open windows) to disk and returns the file path. When your model accepts images, the image is shown to you right after this result; otherwise only the player can see it.")]
-    public string TakeScreenshot(
-        [Description("File name without directory or .png; empty uses a timestamped name.")] string name = null)
+    private static string SupportText(GroundSupport support) => support switch
     {
+        GroundSupport.Heavy => "heavy buildings",
+        GroundSupport.Medium => "medium buildings at most",
+        GroundSupport.Light => "light buildings only",
+        _ => "no buildings"
+    };
+
+    [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Safe)]
+    [Description("Saves a screenshot to disk and returns the file path. When your model accepts images, the image is shown to you right after this result; otherwise only the player can see it. With no rectangle it captures the player's screen as it is, including open windows. With a rectangle it renders that part of the current map from straight above without moving the player's camera, north up, with yellow coordinate lines and x (bottom) / z (left) labels so you can read exact cells; unexplored fog shows as black. The whole map fits in one image (about 4 pixels per cell on a 250x250 map), good for layout and terrain; zoom into about 50x50 cells to see individual walls, doors and furniture. Corners outside the map are clamped, so 0,0,999,999 means the whole map.")]
+    public string TakeScreenshot(
+        [Description("File name without directory or .png; empty uses a timestamped name.")] string name = null,
+        [Description("Rectangle corner x; leave all four corners at -1 to capture the player's screen instead.")] int x1 = -1,
+        [Description("Rectangle corner z.")] int z1 = -1,
+        [Description("Opposite corner x.")] int x2 = -1,
+        [Description("Opposite corner z.")] int z2 = -1)
+    {
+        int given = (x1 != -1 ? 1 : 0) + (z1 != -1 ? 1 : 0) + (x2 != -1 ? 1 : 0) + (z2 != -1 ? 1 : 0);
+        if (given is > 0 and < 4)
+        {
+            return ToolText.Error("give all four corners x1, z1, x2, z2 for a map area, or leave all four at -1 for the player's screen.");
+        }
+        bool area = given == 4;
+        CellRectSpec rect = default;
+        if (area)
+        {
+            Result<CellRectSpec> clamped = TargetResolver.ClampRect(x1, z1, x2, z2, _world.GetMapBounds());
+            if (!clamped.Success) return clamped.Error;
+            rect = clamped.Value;
+        }
+
         string safeName = ResolveScreenshotName(name);
         string blocked = ToolText.Blocked(_gate, $"would take screenshot to disk as \"{safeName}.png\".");
         if (blocked != null) return blocked;
 
-        ScreenshotInfo info = _world.TakeScreenshot(safeName);
+        ScreenshotInfo info = area ? _world.RenderMapArea(rect, safeName) : _world.TakeScreenshot(safeName);
         if (!info.Success)
         {
             return ToolText.Error(string.IsNullOrEmpty(info.Error) ? "failed to take screenshot." : info.Error);
         }
-        return $"Screenshot saved: {info.FilePath} ({info.Width}x{info.Height})";
+        string saved = $"Screenshot saved: {info.FilePath} ({info.Width}x{info.Height})";
+        MapShotLayout layout = info.Layout;
+        if (layout == null) return saved;
+
+        return saved + Environment.NewLine
+            + $"Map view of {layout.Rect}, north up, {layout.PixelsPerCell} px per cell. Yellow lines run along the west edge of cells whose x is a multiple of {layout.GridStep} "
+            + $"and the south edge of cells whose z is a multiple of {layout.GridStep}; the number beside each line is that x (bottom margin) or z (left margin).";
     }
 
     internal static string ResolveScreenshotName(string input)

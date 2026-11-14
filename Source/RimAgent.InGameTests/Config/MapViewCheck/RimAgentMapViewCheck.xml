@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  地圖俯視截圖與全圖勘查遊戲內檢查的啟動標記（MapViewCheck.cs 的 MapViewCheckComponent）。
+  run_test_cycle 的 seed_config 只需帶入本檔；不需要模型與金鑰。
+  結果是 "[RimAgent.InGameTests] MapViewCheck PASS/FAIL" 警告，截圖路徑也寫在 log。
+-->
+<MapViewCheck />

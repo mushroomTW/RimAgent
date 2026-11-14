@@ -8,9 +8,10 @@ namespace RimAgent.UI;
 /// <summary>僅接受截圖工具成功回傳、且位於遊戲截圖資料夾的 PNG 路徑。</summary>
 internal static class TranscriptScreenshot
 {
+    /// <summary>截圖結果的第一行；地圖範圍截圖在後面另有格線說明。</summary>
     private static readonly Regex SavedResult = new(
-        @"^Screenshot saved: (.+) \([0-9]+x[0-9]+\)$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        @"\AScreenshot saved: (.+) \([0-9]+x[0-9]+\)\r?$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.Multiline,
         TimeSpan.FromSeconds(1));
 
     /// <summary>run_script 結果中截圖那一步的行，格式為「N. take_screenshot(參數): Screenshot saved: 路徑 (寬x高)」。</summary>

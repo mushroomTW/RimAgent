@@ -595,6 +595,8 @@ public sealed class ZoneInfo
     /// <summary>Stockpile / Growing 等。</summary>
     public string Kind { get; set; } = string.Empty;
     public int CellCount { get; set; }
+    /// <summary>涵蓋區域所有格子的最小矩形。</summary>
+    public CellRectSpec Extents { get; set; }
 }
 
 /// <summary>地圖上的一隻動物（殖民地或野生）。</summary>
@@ -864,6 +866,17 @@ public sealed class RoomInfo
     public CellRectSpec Extents { get; set; }
 }
 
+/// <summary>地面能承載的建築重量等級（原版 TerrainAffordance 的 Light／Medium／Heavy 取最強者）。</summary>
+public enum GroundSupport
+{
+    /// <summary>連輕型建築都不行（深水等）。</summary>
+    None,
+    Light,
+    Medium,
+    /// <summary>船體零件、反應爐等大型建築需要每格都是 Heavy。</summary>
+    Heavy
+}
+
 /// <summary>一格地面的狀態：地形、屋頂、可否行走、所屬區域與房間、格上的物件。</summary>
 public sealed class CellInfo
 {
@@ -876,6 +889,8 @@ public sealed class CellInfo
     /// <summary>屋頂：空字串無屋頂；constructed／natural（薄岩頂）／overhead mountain（厚岩頂，不可拆）。</summary>
     public string Roof { get; set; } = string.Empty;
     public bool Walkable { get; set; }
+    /// <summary>地面（地基優先，否則地形）能承載的最重建築等級；迷霧格為 <see cref="GroundSupport.None"/>。</summary>
+    public GroundSupport Support { get; set; }
     public bool Fogged { get; set; }
     /// <summary>null 代表不在任何區域內。</summary>
     public ZoneInfo Zone { get; set; }
@@ -884,88 +899,52 @@ public sealed class CellInfo
     public IReadOnlyList<ThingInfo> Things { get; set; } = Array.Empty<ThingInfo>();
 }
 
-/// <summary>字元網格上一格的 pawn：同格有多個時由世界層挑出現在的優先序（敵對 > 殖民者 > 其他）。</summary>
-public enum GridPawn
-{
-    None,
-    Other,
-    Colonist,
-    Hostile
-}
-
-/// <summary>字元網格上一格的建築類：列舉值越大越優先（同格有多筆時取最大）。不含天然岩石，岩石另有欄位。</summary>
-public enum GridBuilding
-{
-    None,
-    Blueprint,
-    Frame,
-    Other,
-    /// <summary>可穿過、遮蔽率至少一半的掩體（沙包、路障）。</summary>
-    Cover,
-    Turret,
-    Door,
-    Wall
-}
-
-public enum GridTerrain
-{
-    Ground,
-    Floor,
-    ShallowWater,
-    DeepWater
-}
-
-/// <summary>地形能承載的建築重量等級（取 Heavy／Medium／Light 中最強的一個）；None 代表三種都不行（深水等）。</summary>
-public enum GridAffordance
-{
-    None,
-    Light,
-    Medium,
-    Heavy
-}
-
-public enum GridPlant
-{
-    None,
-    Other,
-    Tree
-}
-
-public enum GridZone
-{
-    None,
-    Stockpile,
-    Growing
-}
-
-public enum GridRoof
-{
-    None,
-    Constructed,
-    Natural,
-    Mountain
-}
-
 /// <summary>
-/// 字元網格的一格：世界層只分類每個圖層的狀態，圖層之間的優先序與字元由工具層決定。
-/// 迷霧中的格子只有 Fogged 有意義，其他欄位一律是預設值（不透露玩家看不到的東西）。
+/// 全圖勘查時每格的地貌分類。只看遊戲屬性（是否天然岩石、是否水、肥沃度、是否人造），
+/// 不看 defName，模組加的地形與建築會自動落進對的類別。
 /// </summary>
-public sealed class MapGridCell
+public enum SurveyCell : byte
 {
-    public bool Fogged { get; set; }
-    public GridPawn Pawn { get; set; }
-    public GridBuilding Building { get; set; }
-    public bool HasItem { get; set; }
-    /// <summary>天然岩石或礦脈（可開採的牆）。</summary>
-    public bool Rock { get; set; }
-    public GridTerrain Terrain { get; set; }
-    public GridPlant Plant { get; set; }
-    public GridZone Zone { get; set; }
-    public GridRoof Roof { get; set; }
-    /// <summary>build 圖層：格子已被佔走——格上有建築、藍圖、框架（地板與電線類除外）或天然岩石，蓋別的建築前得先移除或換地方。</summary>
-    public bool Blocked { get; set; }
-    /// <summary>build 圖層：地形（含地基）承載的最強建築重量等級。</summary>
-    public GridAffordance BuildSupport { get; set; }
+    /// <summary>迷霧中，內容不透露。</summary>
+    Unknown,
+    /// <summary>天然岩壁（含礦脈；礦脈另記在 <see cref="MapSurvey.Resource"/>）。</summary>
+    Rock,
+    /// <summary>其他建築（牆、家具、機器等），代表已有人造結構。</summary>
+    Structure,
+    DeepWater,
+    ShallowWater,
+    /// <summary>人造地板或地基。</summary>
+    BuiltFloor,
+    /// <summary>天然地面，肥沃度 120% 以上（肥沃土壤）。</summary>
+    RichSoil,
+    /// <summary>天然地面，肥沃度 70%-120%（一般土壤、礫石）。</summary>
+    Soil,
+    /// <summary>天然地面，肥沃度 70% 以下（沙地、冰、岩地等）。</summary>
+    Barren
+}
+
+/// <summary>全圖勘查結果（get_map_overview 的資料來源）。格子陣列的索引為 z * Width + x。</summary>
+public sealed class MapSurvey
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public string Biome { get; set; } = string.Empty;
+    public SurveyCell[] Cells { get; set; } = Array.Empty<SurveyCell>();
+    /// <summary>每格的礦脈：0 為無，n 代表 <see cref="ResourceLabels"/>[n - 1]。</summary>
+    public short[] Resource { get; set; } = Array.Empty<short>();
+    public IReadOnlyList<string> ResourceLabels { get; set; } = Array.Empty<string>();
+    /// <summary>每格是否在厚岩頂（山體）下；迷霧格一律 false。</summary>
+    public bool[] ThickRoof { get; set; } = Array.Empty<bool>();
+    /// <summary>室內房間（不含室外與碰到地圖邊緣的）。</summary>
+    public IReadOnlyList<RoomInfo> Rooms { get; set; } = Array.Empty<RoomInfo>();
+    public IReadOnlyList<ZoneInfo> Zones { get; set; } = Array.Empty<ZoneInfo>();
+    /// <summary>家園區的範圍；沒有家園區時為 null。</summary>
+    public CellRectSpec? HomeArea { get; set; }
+    public int HomeAreaCells { get; set; }
+    /// <summary>已出生在地圖上的自由殖民者位置。</summary>
+    public IReadOnlyList<(int X, int Z)> Colonists { get; set; } = Array.Empty<(int X, int Z)>();
+    /// <summary>不在迷霧中、未倒地的敵對 pawn 位置。</summary>
+    public IReadOnlyList<(int X, int Z)> Hostiles { get; set; } = Array.Empty<(int X, int Z)>();
 }
 
 /// <summary>建築造價的一項材料。</summary>
@@ -1158,6 +1137,8 @@ public sealed class ScreenshotInfo
     public int Width { get; set; }
     public int Height { get; set; }
     public string Error { get; set; } = string.Empty;
+    /// <summary>地圖範圍截圖的版面（每格像素、格線間距）；截玩家畫面時為 null。</summary>
+    public MapShotLayout Layout { get; set; }
 }
 
 /// <summary>存讀檔工具需要的這一局狀態。</summary>

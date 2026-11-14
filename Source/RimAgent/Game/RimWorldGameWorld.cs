@@ -1690,103 +1690,6 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         return result;
     }
 
-    /// <summary>沙包與路障是 0.55；家具多在 0.4 上下，不算進網格的掩體。</summary>
-    private const float CoverFillPercent = 0.5f;
-
-    public IReadOnlyList<MapGridCell> GetMapGrid(CellRectSpec rect)
-    {
-        Map map = Map;
-        var result = new List<MapGridCell>(rect.CellCount);
-        for (int z = rect.MinZ; z <= rect.MaxZ; z++)
-        {
-            for (int x = rect.MinX; x <= rect.MaxX; x++)
-            {
-                result.Add(ToGridCell(new IntVec3(x, 0, z), map));
-            }
-        }
-        return result;
-    }
-
-    private static MapGridCell ToGridCell(IntVec3 c, Map map)
-    {
-        // 迷霧裡的東西玩家看不到，其他圖層一律不填（與 ToCell 同一原則）。
-        if (c.Fogged(map)) return new MapGridCell { Fogged = true };
-
-        TerrainDef terrain = c.GetTerrain(map);
-        Zone zone = c.GetZone(map);
-        RoofDef roof = c.GetRoof(map);
-        var cell = new MapGridCell
-        {
-            Terrain = terrain.IsWater
-                ? (terrain.passability == Traversability.Impassable ? GridTerrain.DeepWater : GridTerrain.ShallowWater)
-                : (terrain.IsFloor || terrain.bridge || terrain.IsSubstructure ? GridTerrain.Floor : GridTerrain.Ground),
-            Zone = zone is Zone_Stockpile ? GridZone.Stockpile : zone is Zone_Growing ? GridZone.Growing : GridZone.None,
-            Roof = roof == null ? GridRoof.None : !roof.isNatural ? GridRoof.Constructed : roof.isThickRoof ? GridRoof.Mountain : GridRoof.Natural,
-            BuildSupport = BuildSupportAt(c, map)
-        };
-
-        List<Thing> things = c.GetThingList(map);
-        for (int i = 0; i < things.Count; i++)
-        {
-            Thing t = things[i];
-            if (t is Pawn pawn)
-            {
-                GridPawn kind = pawn.HostileTo(Faction.OfPlayer) ? GridPawn.Hostile : pawn.IsColonist ? GridPawn.Colonist : GridPawn.Other;
-                if (kind > cell.Pawn) cell.Pawn = kind;
-            }
-            else if (t is Plant plant)
-            {
-                // 玩家點不到的植物（草、苔、蒲公英）是地表覆蓋，畫出來只會淹掉真正要看的東西。
-                if (!plant.def.selectable) continue;
-                GridPlant kind = plant.def.plant != null && plant.def.plant.IsTree ? GridPlant.Tree : GridPlant.Other;
-                if (kind > cell.Plant) cell.Plant = kind;
-            }
-            else if (t is Blueprint || t is Frame)
-            {
-                // 地板的藍圖與框架蓋滿整間房，只會遮住家具與物品；地板在地形圖層看得到成品，這裡不畫。
-                if (t.def.entityDefToBuild is TerrainDef) continue;
-                GridBuilding kind = t is Frame ? GridBuilding.Frame : GridBuilding.Blueprint;
-                if (kind > cell.Building) cell.Building = kind;
-                // 多格藍圖在它覆蓋的每一格都有登記（ThingGrid.Register），逐格判斷就夠。
-                if (t.def.entityDefToBuild.IsEdifice()) cell.Blocked = true;
-            }
-            else if (t.def.mineable)
-            {
-                cell.Rock = true;
-                cell.Blocked = true;
-            }
-            else if (t is Building)
-            {
-                // 電線與管線貼著整片地面，畫出來沒有佈局資訊。
-                if (t.def.altitudeLayer == AltitudeLayer.Conduits) continue;
-                // 與 GenConstruct.CanPlaceBlueprintOver 同一判準：蓋建築（edifice）時，底下的 edifice 一律擋住；
-                // 非 edifice（電線、牆上的附掛物）允許疊放，不算占用。
-                if (t.def.IsEdifice()) cell.Blocked = true;
-                GridBuilding kind = t.def.IsWall ? GridBuilding.Wall
-                    : t.def.IsDoor ? GridBuilding.Door
-                    : t is Building_Turret ? GridBuilding.Turret
-                    : t.def.passability == Traversability.PassThroughOnly && t.def.fillPercent >= CoverFillPercent ? GridBuilding.Cover
-                    : GridBuilding.Other;
-                if (kind > cell.Building) cell.Building = kind;
-            }
-            else if (t.def.category == ThingCategory.Item)
-            {
-                cell.HasItem = true;
-            }
-        }
-        return cell;
-    }
-
-    /// <summary>與 GenConstruct.CanBuildOnTerrain 同一來源（IntVec3.GetAffordances：地基優先，否則地形）取最強的重量等級。</summary>
-    private static GridAffordance BuildSupportAt(IntVec3 c, Map map)
-    {
-        List<TerrainAffordanceDef> affordances = c.GetAffordances(map);
-        if (affordances.Contains(TerrainAffordanceDefOf.Heavy)) return GridAffordance.Heavy;
-        if (affordances.Contains(TerrainAffordanceDefOf.Medium)) return GridAffordance.Medium;
-        if (affordances.Contains(TerrainAffordanceDefOf.Light)) return GridAffordance.Light;
-        return GridAffordance.None;
-    }
-
     private static CellInfo ToCell(IntVec3 c, Map map, Dictionary<int, RoomInfo> rooms)
     {
         TerrainDef terrain = c.GetTerrain(map);
@@ -1801,6 +1704,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             Fertility = map.fertilityGrid.FertilityAt(c),
             Roof = RoofLabel(c.GetRoof(map)),
             Walkable = c.Walkable(map),
+            Support = fogged ? GroundSupport.None : SupportAt(c, map),
             Fogged = fogged,
             Zone = zone != null ? ToZone(zone) : null,
             Room = ToRoom(c.GetRoom(map), rooms),
@@ -1810,6 +1714,16 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
                 ? (IReadOnlyList<ThingInfo>)[]
                 : c.GetThingList(map).Where(t => KindOf(t) != null || t is Blueprint).Select(t => ToThing(t, map)).ToList()
         };
+    }
+
+    /// <summary>與 GenConstruct.CanBuildOnTerrain 同一來源（IntVec3.GetAffordances：地基優先，否則地形）取最強的重量等級。</summary>
+    private static GroundSupport SupportAt(IntVec3 c, Map map)
+    {
+        List<TerrainAffordanceDef> affordances = c.GetAffordances(map);
+        if (affordances.Contains(TerrainAffordanceDefOf.Heavy)) return GroundSupport.Heavy;
+        if (affordances.Contains(TerrainAffordanceDefOf.Medium)) return GroundSupport.Medium;
+        if (affordances.Contains(TerrainAffordanceDefOf.Light)) return GroundSupport.Light;
+        return GroundSupport.None;
     }
 
     private static string RoofLabel(RoofDef roof)
@@ -2177,7 +2091,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     public IReadOnlyList<ZoneInfo> GetZones()
     {
-        return Map.zoneManager.AllZones.Select(ToZone).ToList();
+        return Map.zoneManager.AllZones.Select(ToZoneWithExtents).ToList();
     }
 
     private static ZoneInfo ToZone(Zone zone)
@@ -2189,6 +2103,14 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             Kind = ResolveZoneKind(zone),
             CellCount = zone.CellCount
         };
+    }
+
+    /// <summary>連同範圍：要掃過整個區域的格子，只給列區域的地方用（逐格查詢用 <see cref="ToZone"/>）。</summary>
+    private static ZoneInfo ToZoneWithExtents(Zone zone)
+    {
+        ZoneInfo info = ToZone(zone);
+        info.Extents = Extents(zone.Cells);
+        return info;
     }
 
     private static string ResolveZoneKind(Zone zone)
@@ -4201,20 +4123,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     {
         try
         {
-            string baseName = Tools.ObserveTools.ResolveScreenshotName(filename);
-            string folder = GenFilePaths.ScreenshotFolderPath;
-            _screenshotFolder = folder;
-            string safeName = baseName;
-            string fullPath = System.IO.Path.Combine(folder, safeName + ".png");
-
-            int counter = 1;
-            while (System.IO.File.Exists(fullPath))
-            {
-                safeName = $"{baseName}_{counter++}";
-                fullPath = System.IO.Path.Combine(folder, safeName + ".png");
-            }
-
-            ScreenshotTaker.TakeNonSteamShot(safeName);
+            string fullPath = ReserveScreenshotPath(filename);
+            ScreenshotTaker.TakeNonSteamShot(System.IO.Path.GetFileNameWithoutExtension(fullPath));
 
             return new ScreenshotInfo
             {

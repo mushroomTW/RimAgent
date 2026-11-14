@@ -53,12 +53,6 @@ public interface IGameWorld
     /// <summary>矩形內每一格的地面狀態（含邊界）；呼叫者已確認矩形在地圖內並限制大小。</summary>
     IReadOnlyList<CellInfo> GetCells(CellRectSpec rect);
     /// <summary>
-    /// 矩形內每一格的圖層分類（供字元網格用，比 GetCells 輕）；順序同 GetCells：先 z 由小到大，同列 x 由小到大。
-    /// 呼叫者已確認矩形在地圖內並限制大小。
-    /// </summary>
-    IReadOnlyList<MapGridCell> GetMapGrid(CellRectSpec rect);
-
-    /// <summary>
     /// 遊戲目前不能執行工具的原因（沒有進行中的遊戲、讀檔或生成地圖中、沒有當前地圖）；可以執行時回傳 null。
     /// </summary>
     string GetNotReadyReason();
@@ -272,6 +266,13 @@ public interface IGameWorld
     CommandResult SetTimeSpeed(string speedDefName);
     /// <summary>擷取當前遊戲畫面並存檔。filename 為可選檔名（不含路徑與副檔名）；空值則自動以時間戳記命名。</summary>
     ScreenshotInfo TakeScreenshot(string filename = null);
+    /// <summary>
+    /// 不動玩家鏡頭，把目前地圖的一塊範圍以俯視角離屏渲染，加上座標格線後存成 PNG（版面見 <see cref="MapShotLayout"/>）。
+    /// 範圍需已裁進地圖內。檔案在之後一兩幀渲染完才寫出，回傳的路徑可交給 <see cref="ReadScreenshotFile"/> 重試讀取。
+    /// </summary>
+    ScreenshotInfo RenderMapArea(CellRectSpec rect, string filename = null);
+    /// <summary>目前地圖的全圖勘查：每格地貌分類與礦脈，加上室內房間、區域、基地範圍與人員位置。迷霧格不透露內容。</summary>
+    MapSurvey GetMapSurvey();
     /// <summary>
     /// 讀取遊戲截圖資料夾中的 PNG 原始檔，可在背景執行緒呼叫（解碼與縮圖由呼叫端排回主線程）。
     /// 檔案不在截圖資料夾或尚未寫完時回傳 null（截圖在該幀渲染完才寫出，呼叫端可稍後重試）。

@@ -8,7 +8,7 @@ description: Hostiles on the map (raid, siege, sappers, manhunter pack, mechanoi
 Orders land seconds late: win by positioning and let the colonists' own AI do the shooting. Pause with set_time_speed before a batch of orders when the enemy is already close.
 
 ## 1. Size up
-From list_threats, list_colonists and view_map_grid on the approach (hostiles !, cover c, turrets t):
+From list_threats, list_colonists and take_screenshot with a rectangle on the approach (hostiles, cover, turrets):
 - Fighters: colonists with a weapon who can do violence and are not downed.
 - Threat type: ranged, melee, manhunting animals, mechanoids, or a siege or sapper camp that is not charging yet.
 - Approach: where they come from relative to the colony's walls and doors.

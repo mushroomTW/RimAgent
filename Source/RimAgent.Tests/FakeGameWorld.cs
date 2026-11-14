@@ -54,6 +54,8 @@ internal sealed class FakeGameWorld : IGameWorld
     /// <summary>某建築不能用某材料（defName, stuffDefName）→ 失敗原因。</summary>
     public Dictionary<(string Def, string Stuff), string> BlockedStuff { get; } = [];
     public HashSet<(int X, int Z)> UnwalkableCells { get; } = [];
+    /// <summary>只撐得住輕型建築的格子（例如沼澤）；其餘格子都能放重型建築。</summary>
+    public HashSet<(int X, int Z)> LightOnlyCells { get; } = [];
     public List<(string Def, int X, int Z, int Rotation, string Stuff)> Blueprints { get; } = [];
 
     public IReadOnlyList<DefInfo> WorkTypes { get; set; } = new[]
@@ -218,6 +220,37 @@ internal sealed class FakeGameWorld : IGameWorld
             Width = ScreenshotResult?.Width ?? 1920,
             Height = ScreenshotResult?.Height ?? 1080,
             Error = ScreenshotResult?.Error ?? string.Empty
+        };
+    }
+
+    public ScreenshotInfo RenderMapArea(CellRectSpec rect, string filename = null)
+    {
+        Calls.Add($"RenderMapArea({rect}, {filename ?? "null"})");
+        if (ScreenshotResult != null && !ScreenshotResult.Success) return ScreenshotResult;
+        MapShotLayout layout = MapShotLayout.For(rect);
+        return new ScreenshotInfo
+        {
+            Success = true,
+            FilePath = $"C:/RimWorld/Screenshots/{(string.IsNullOrWhiteSpace(filename) ? "screenshot" : filename)}.png",
+            Width = layout.ImageWidth,
+            Height = layout.ImageHeight,
+            Layout = layout
+        };
+    }
+
+    /// <summary>GetMapSurvey 回傳的勘查資料；沒設定時為 10x10 全是一般土壤的空地圖。</summary>
+    public MapSurvey MapSurvey { get; set; }
+
+    public MapSurvey GetMapSurvey()
+    {
+        Calls.Add("GetMapSurvey()");
+        return MapSurvey ?? new MapSurvey
+        {
+            Width = 10,
+            Height = 10,
+            Cells = Enumerable.Repeat(SurveyCell.Soil, 100).ToArray(),
+            Resource = new short[100],
+            ThickRoof = new bool[100]
         };
     }
 
@@ -451,6 +484,7 @@ internal sealed class FakeGameWorld : IGameWorld
         {
             X = x, Z = z, TerrainDefName = "Soil", Terrain = "soil", Fertility = 1f,
             Walkable = !UnwalkableCells.Contains((x, z)), Room = Outdoors,
+            Support = LightOnlyCells.Contains((x, z)) ? GroundSupport.Light : GroundSupport.Heavy,
             Things = Things.Where(t => t.X == x && t.Z == z).ToList()
         };
     }
@@ -461,26 +495,6 @@ internal sealed class FakeGameWorld : IGameWorld
         for (int z = rect.MinZ; z <= rect.MaxZ; z++)
         {
             for (int x = rect.MinX; x <= rect.MaxX; x++) result.Add(GetCell(x, z));
-        }
-        return result;
-    }
-
-    /// <summary>字元網格的格子；沒登記的格子為室外裸地（預設的 MapGridCell）。</summary>
-    public Dictionary<(int X, int Z), MapGridCell> GridCells { get; } = [];
-
-    /// <summary>每次 GetMapGrid 收到的矩形（驗證工具層有裁切、有擋超大矩形）。</summary>
-    public List<CellRectSpec> GridRequests { get; } = [];
-
-    public IReadOnlyList<MapGridCell> GetMapGrid(CellRectSpec rect)
-    {
-        GridRequests.Add(rect);
-        var result = new List<MapGridCell>();
-        for (int z = rect.MinZ; z <= rect.MaxZ; z++)
-        {
-            for (int x = rect.MinX; x <= rect.MaxX; x++)
-            {
-                result.Add(GridCells.TryGetValue((x, z), out MapGridCell cell) ? cell : new MapGridCell());
-            }
         }
         return result;
     }

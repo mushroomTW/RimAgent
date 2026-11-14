@@ -14,7 +14,7 @@ description: Mechhive ending (Odyssey DLC): build and fly a gravship, follow the
 ## 2. Fly (each step waits in list_pending_choices)
 1. use_gizmo on the pilot console starts the launch ritual: choose_option begins it. A pilot and copilot are chosen by default.
 2. After the ritual a confirmation box may appear, then a tile picker. Give the tile as input; orbital tiles read Orbit:123. The reply gives the game's reason when out of range or low on fuel.
-3. Landing: the choice dialog-landing shows the marker and map size. Option 2 moves the marker to x,z given as input; view_map_grid helps pick open ground. Option 1 lands. The game stays paused until you confirm.
+3. Landing: the choice dialog-landing shows the marker and map size. Option 2 moves the marker to x,z given as input; take_screenshot with a rectangle around the marker helps pick open ground. Option 1 lands. The game stays paused until you confirm.
 
 ## 3. Quests to the mechhive
 Gravcore quests lead on one at a time; the mechhive comes after several. It is on the Orbit layer, a few tiles from your colony. list_world_objects shows its tile as Orbit:N. It may require a SignalJammer on the ship (AdvancedGravtech): the tile picker's refusal says so. Until it falls, mechhive raids keep arriving.

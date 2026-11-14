@@ -167,7 +167,7 @@ All 16 tool categories except Save are enabled by default and can be toggled ind
 
 | Category | Capabilities & Examples |
 | --- | --- |
-| **Observe** | Comprehensive colony overview, resources, threat assessment, research progress, maps, object lookups, a game encyclopedia for any item, building, floor, research or health condition (modded content included), allowed areas, ASCII character-grid map representations, real-time screenshots, skill index/body retrieval, pending choices, and quest management (list, accept, dismiss) |
+| **Observe** | Comprehensive colony overview, resources, threat assessment, research progress, maps, object lookups, a game encyclopedia for any item, building, floor, research or health condition (modded content included), allowed areas, a whole-map summary (terrain, rooms, zones, ore, water), off-screen top-down map renders with a coordinate grid, real-time screenshots, skill index/body retrieval, pending choices, and quest management (list, accept, dismiss) |
 | **Work** | Individual and batch work priority adjustments, 24-hour daily schedules (fully reversible with `/undo`) |
 | **Build** | Designations (mine, cut, harvest, hunt, deconstruct, haul), blueprint placement (single cell, line, rectangle fill, outline; up to 400 cells), item forbidden toggles, gizmo command triggers (including targeted commands), and right-click context menu actions |
 | **Combat** | Colonist drafting, tactical movement, attack targeting, casualty rescue, enemy capture, emergency medical tending, equipment stripping, weapon/gear equipping, and entering cryptosleep caskets |
