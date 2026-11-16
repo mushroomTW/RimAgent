@@ -36,18 +36,7 @@ internal static class LayoutCheck
                 ("freezer", 2, 11), ("entry", 6, 10), ("prison", 10, 11), ("hall", 6, 5),
                 ("bedroom1", 1, 2), ("bedroom2", 4, 2), ("bedroom3", 7, 2), ("bedroom4", 11, 2)
             },
-            Extra = (map, L, failures) =>
-            {
-                if (L(9, 5).GetRoom(map) != L(6, 5).GetRoom(map)) failures.Add("research nook is not part of the hall");
-                Building dispenser = L(3, 8).GetFirstThing<Building_NutrientPasteDispenser>(map);
-                if (dispenser == null) failures.Add("no nutrient paste dispenser at local (3,8)");
-                else if (dispenser.InteractionCell != L(6, 8)) failures.Add($"dispenser serves {dispenser.InteractionCell - L(0, 0)}, expected local (6,8)");
-                else if (HopperCount(map, dispenser) != 3) failures.Add($"dispenser sees {HopperCount(map, dispenser)} hoppers, expected 3");
-                Building cooler = L(0, 10).GetFirstThing<Building_Cooler>(map);
-                if (cooler == null) failures.Add("no cooler at local (0,10)");
-                else if ((cooler.Position + IntVec3.North.RotatedBy(cooler.Rotation)).GetRoom(map) != L(2, 11).GetRoom(map))
-                    failures.Add("cooler does not blow cold air into the freezer");
-            }
+            Extra = CheckStarterCabin13Extra,
         },
         new Spec
         {
@@ -73,27 +62,7 @@ internal static class LayoutCheck
         {
             Layout = "RimAgent_Freezer13",
             Rooms = new[] { ("freezer", 6, 9), ("butcher", 10, 2) },
-            Extra = (map, L, failures) =>
-            {
-                // 四台冷氣都把冷風吹進冷庫
-                Room freezer = L(6, 9).GetRoom(map);
-                foreach ((int x, int z) in new[] { (1, 12), (0, 10), (0, 2), (1, 0) })
-                {
-                    Building cooler = L(x, z).GetFirstThing<Building_Cooler>(map);
-                    if (cooler == null) failures.Add($"no cooler at local ({x},{z})");
-                    else if ((cooler.Position + IntVec3.North.RotatedBy(cooler.Rotation)).GetRoom(map) != freezer)
-                        failures.Add($"cooler at local ({x},{z}) does not blow cold air into the freezer");
-                }
-                foreach ((int x, int z) in new[] { (1, 8), (1, 4) })
-                {
-                    Building stove = L(x, z).GetEdifice(map);
-                    if (stove?.def.defName != "ElectricStove") failures.Add($"no electric stove at local ({x},{z})");
-                    else if (stove.InteractionCell != L(x + 1, z)) failures.Add($"stove at local ({x},{z}) is used from {stove.InteractionCell - L(0, 0)}");
-                }
-                Building butcher = L(10, 4).GetEdifice(map);
-                if (butcher?.def.defName != "TableButcher") failures.Add("no butcher table at local (10,4)");
-                else if (butcher.InteractionCell.GetRoom(map) != L(10, 2).GetRoom(map)) failures.Add("butcher table is not used from inside the butcher room");
-            }
+            Extra = CheckFreezer13Extra,
         },
     };
 
@@ -126,20 +95,7 @@ internal static class LayoutCheck
 
             int ox = plan.Rect.MinX, oz = plan.Rect.MinZ;
             IntVec3 L(int x, int z) => new IntVec3(ox + x, 0, oz + z);
-            var seen = new Dictionary<Room, string>();
-            foreach ((string name, int x, int z) in spec.Rooms)
-            {
-                Room room = L(x, z).GetRoom(map);
-                if (room == null) { Fail($"{name}: no room"); continue; }
-                if (room.TouchesMapEdge) Fail($"{name}: open to the map edge");
-                if (!room.ProperRoom) Fail($"{name}: not a proper room");
-                if (seen.TryGetValue(room, out string other)) Fail($"{name} shares a room with {other}");
-                else seen[room] = name;
-                Log.Message(TestHelpers.LogPrefix + $"LayoutCheck {spec.Layout} {name}: {room.CellCount} cells, role {room.Role?.defName ?? "none"}");
-            }
-            var extra = new List<string>();
-            spec.Extra(map, L, extra);
-            extra.ForEach(Fail);
+            CheckSpecRooms(map, spec, L, failures);
         }
 
         // 其他房型（轉換自 13x13 Cell Prefabs）：同一塊空地輪流放四個方向，每次都要整組放得下。
@@ -150,17 +106,38 @@ internal static class LayoutCheck
             skipReason = $"no clear {Size + 2}x{Size + 2} area for the imported layouts";
             return failures;
         }
-        int imported = 0;
-        foreach (LayoutInfo info in world.Layouts.Where(l => !checkedNames.Contains(l.DefName)))
-        {
-            PlaceAllRotations(world, tools, info.DefName, shared.Value.CenterCell, m => failures.Add(info.DefName + " " + m));
-            imported++;
-        }
+        int imported = CheckImportedLayouts(world, tools, shared.Value.CenterCell, checkedNames, failures);
         Log.Message(TestHelpers.LogPrefix + $"LayoutCheck imported layouts checked: {imported}");
 
         CheckPartMaterials(world, tools, map, Specs[0].Layout, m => failures.Add("materials " + m));
 
         // 挑幾個蓋起來截圖，和原模組的預覽圖比對。
+        CheckShowcaseLayouts(world, map, builtCenters);
+        return failures;
+    }
+
+    /// <summary>檢查單個房型內各房間是否正確，並執行額外的自訂檢查。</summary>
+    private static void CheckSpecRooms(Map map, Spec spec, Func<int, int, IntVec3> L, List<string> failures)
+    {
+        var seen = new Dictionary<Room, string>();
+        foreach ((string name, int x, int z) in spec.Rooms)
+        {
+            Room room = L(x, z).GetRoom(map);
+            if (room == null) { failures.Add($"{spec.Layout} {name}: no room"); continue; }
+            if (room.TouchesMapEdge) failures.Add($"{spec.Layout} {name}: open to the map edge");
+            if (!room.ProperRoom) failures.Add($"{spec.Layout} {name}: not a proper room");
+            if (seen.TryGetValue(room, out string other)) failures.Add($"{spec.Layout} {name} shares a room with {other}");
+            else seen[room] = name;
+            Log.Message(TestHelpers.LogPrefix + $"LayoutCheck {spec.Layout} {name}: {room.CellCount} cells, role {room.Role?.defName ?? "none"}");
+        }
+        var extra = new List<string>();
+        spec.Extra(map, L, extra);
+        extra.ForEach(m => failures.Add($"{spec.Layout} {m}"));
+    }
+
+    /// <summary>蓋 Showcase 列表中的房型並截圖比對。</summary>
+    private static void CheckShowcaseLayouts(RimWorldGameWorld world, Map map, List<(string Layout, IntVec3 Center)> builtCenters)
+    {
         foreach (string layout in Showcase.Where(l => DefDatabase<PrefabDef>.GetNamedSilentFail(l) != null))
         {
             CellRect? area = FindClearArea(map);
@@ -168,7 +145,6 @@ internal static class LayoutCheck
             Build(world, map, layout, area.Value.CenterCell);
             builtCenters.Add((layout, area.Value.CenterCell));
         }
-        return failures;
     }
 
     /// <summary>截圖比對用的轉換房型。</summary>
@@ -211,26 +187,32 @@ internal static class LayoutCheck
         int walls = 0, floors = 0, steel = 0;
         foreach (Blueprint bp in map.listerThings.ThingsInGroup(ThingRequestGroup.Blueprint).OfType<Blueprint>().Where(b => rect.Contains(b.Position)))
         {
-            BuildableDef built = bp.def.entityDefToBuild;
-            ThingDef stuff = bp.EntityToBuildStuff();
-            if (built is TerrainDef terrain)
-            {
-                floors++;
-                if (terrain.defName != "FlagstoneGranite") fail($"floor {terrain.defName} at {bp.Position}");
-            }
-            else if (built is ThingDef thing && (thing.IsWall || thing.IsDoor))
-            {
-                walls++;
-                if (stuff?.defName != "BlocksGranite") fail($"{thing.defName} made of {stuff?.defName ?? "nothing"} at {bp.Position}");
-            }
-            else if (stuff?.defName == "Steel")
-            {
-                steel++;
-            }
+            CheckBlueprintMaterial(bp, rect, ref walls, ref floors, ref steel, fail);
         }
         Log.Message(TestHelpers.LogPrefix + $"LayoutCheck materials: walls {walls}, floors {floors}, steel furniture {steel}");
         if (walls == 0 || floors == 0 || steel == 0) fail($"expected walls, floors and steel furniture, got {walls}/{floors}/{steel}");
         world.RemoveBlueprints(new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ));
+    }
+
+    private static void CheckBlueprintMaterial(Blueprint bp, CellRect rect, ref int walls, ref int floors, ref int steel, Action<string> fail)
+    {
+        if (!rect.Contains(bp.Position)) return;
+        BuildableDef built = bp.def.entityDefToBuild;
+        ThingDef stuff = bp.EntityToBuildStuff();
+        if (built is TerrainDef terrain)
+        {
+            floors++;
+            if (terrain.defName != "FlagstoneGranite") fail($"floor {terrain.defName} at {bp.Position}");
+        }
+        else if (built is ThingDef thing && (thing.IsWall || thing.IsDoor))
+        {
+            walls++;
+            if (stuff?.defName != "BlocksGranite") fail($"{thing.defName} made of {stuff?.defName ?? "nothing"} at {bp.Position}");
+        }
+        else if (stuff?.defName == "Steel")
+        {
+            steel++;
+        }
     }
 
     /// <summary>地板藍圖沒放上去的格子，列出那格上有什麼，方便查衝突。</summary>
@@ -286,12 +268,7 @@ internal static class LayoutCheck
             for (int cx = 10; cx + s < map.Size.x - 10; cx += 3)
             {
                 var candidate = new CellRect(cx, cz, s, s);
-                if (candidate.Cells.All(c => !c.Fogged(map) && c.Standable(map) && c.GetEdifice(map) == null
-                    && c.GetThingList(map).All(t => t is Plant || t is Pawn) && !c.GetThingList(map).Any(t => t is Blueprint)
-                    && map.terrainGrid.TerrainAt(c).affordances.Contains(TerrainAffordanceDefOf.Heavy)))
-                {
-                    return candidate;
-                }
+                if (IsClearArea(map, candidate)) return candidate;
             }
         }
         // 隨機測試地圖空地不夠時，退而求其次：地基撐得住重建築、沒霧、沒人，就把上面的植物、石塊和岩壁清掉。
@@ -300,16 +277,82 @@ internal static class LayoutCheck
             for (int cx = 10; cx + s < map.Size.x - 10; cx += 3)
             {
                 var candidate = new CellRect(cx, cz, s, s);
-                if (!candidate.Cells.All(c => !c.Fogged(map) && !c.GetThingList(map).Any(t => t is Pawn || t is Blueprint || t.Faction == Faction.OfPlayer || !t.def.destroyable)
-                    && map.terrainGrid.TerrainAt(c).affordances.Contains(TerrainAffordanceDefOf.Heavy))) continue;
-                foreach (IntVec3 c in candidate.Cells)
-                {
-                    foreach (Thing t in c.GetThingList(map).ToList()) t.Destroy();
-                }
+                if (!IsReclaimableArea(map, candidate)) continue;
+                ClearAreaContents(map, candidate);
                 return candidate;
             }
         }
         return null;
+    }
+
+    /// <summary>檢查一塊區域是否為乾淨空地：無霧、可站立、無建築、只有植物或殖民者、無藍圖、地基為 Heavy。</summary>
+    private static bool IsClearArea(Map map, CellRect candidate)
+    {
+        return candidate.Cells.All(c => !c.Fogged(map) && c.Standable(map) && c.GetEdifice(map) == null
+            && c.GetThingList(map).All(t => t is Plant || t is Pawn) && !c.GetThingList(map).Any(t => t is Blueprint)
+            && map.terrainGrid.TerrainAt(c).affordances.Contains(TerrainAffordanceDefOf.Heavy));
+    }
+
+    /// <summary>檢查一塊區域是否可回收：無霧、無殖民者／藍圖／玩家派系物件／不可摧毀物、地基為 Heavy。</summary>
+    private static bool IsReclaimableArea(Map map, CellRect candidate)
+    {
+        return candidate.Cells.All(c => !c.Fogged(map) && !c.GetThingList(map).Any(t => t is Pawn || t is Blueprint || t.Faction == Faction.OfPlayer || !t.def.destroyable)
+            && map.terrainGrid.TerrainAt(c).affordances.Contains(TerrainAffordanceDefOf.Heavy));
+    }
+
+    /// <summary>摧毀一塊區域內的所有物件（植物、石塊、岩壁等），讓區域可重建。</summary>
+    private static void ClearAreaContents(Map map, CellRect candidate)
+    {
+        foreach (IntVec3 c in candidate.Cells)
+        {
+            foreach (Thing t in c.GetThingList(map).ToList()) t.Destroy();
+        }
+    }
+
+    private static void CheckStarterCabin13Extra(Map map, Func<int, int, IntVec3> L, List<string> failures)
+    {
+        if (L(9, 5).GetRoom(map) != L(6, 5).GetRoom(map)) failures.Add("research nook is not part of the hall");
+        Building_NutrientPasteDispenser dispenser = L(3, 8).GetFirstThing<Building_NutrientPasteDispenser>(map);
+        if (dispenser == null) failures.Add("no nutrient paste dispenser at local (3,8)");
+        else if (dispenser.InteractionCell != L(6, 8)) failures.Add($"dispenser serves {dispenser.InteractionCell - L(0, 0)}, expected local (6,8)");
+        else if (HopperCount(map, dispenser) != 3) failures.Add($"dispenser sees {HopperCount(map, dispenser)} hoppers, expected 3");
+        Building cooler = L(0, 10).GetFirstThing<Building_Cooler>(map);
+        if (cooler == null) failures.Add("no cooler at local (0,10)");
+        else if ((cooler.Position + IntVec3.North.RotatedBy(cooler.Rotation)).GetRoom(map) != L(2, 11).GetRoom(map))
+            failures.Add("cooler does not blow cold air into the freezer");
+    }
+
+    private static void CheckFreezer13Extra(Map map, Func<int, int, IntVec3> L, List<string> failures)
+    {
+        // 四台冷氣都把冷風吹進冷庫
+        Room freezer = L(6, 9).GetRoom(map);
+        foreach ((int x, int z) in new[] { (1, 12), (0, 10), (0, 2), (1, 0) })
+        {
+            Building cooler = L(x, z).GetFirstThing<Building_Cooler>(map);
+            if (cooler == null) failures.Add($"no cooler at local ({x},{z})");
+            else if ((cooler.Position + IntVec3.North.RotatedBy(cooler.Rotation)).GetRoom(map) != freezer)
+                failures.Add($"cooler at local ({x},{z}) does not blow cold air into the freezer");
+        }
+        foreach ((int x, int z) in new[] { (1, 8), (1, 4) })
+        {
+            Building stove = L(x, z).GetEdifice(map);
+            if (stove?.def.defName != "ElectricStove") failures.Add($"no electric stove at local ({x},{z})");
+            else if (stove.InteractionCell != L(x + 1, z)) failures.Add($"stove at local ({x},{z}) is used from {stove.InteractionCell - L(0, 0)}");
+        }
+        Building butcher = L(10, 4).GetEdifice(map);
+        if (butcher?.def.defName != "TableButcher") failures.Add("no butcher table at local (10,4)");
+        else if (butcher.InteractionCell.GetRoom(map) != L(10, 2).GetRoom(map)) failures.Add("butcher table is not used from inside the butcher room");
+    }
+
+    private static int CheckImportedLayouts(RimWorldGameWorld world, BuildTools tools, IntVec3 center, HashSet<string> checkedNames, List<string> failures)
+    {
+        int imported = 0;
+        foreach (string defName in world.Layouts.Where(l => !checkedNames.Contains(l.DefName)).Select(info => info.DefName))
+        {
+            PlaceAllRotations(world, tools, defName, center, m => failures.Add(defName + " " + m));
+            imported++;
+        }
+        return imported;
     }
 }
 
@@ -320,7 +363,7 @@ internal static class LayoutCheck
 public sealed class LayoutCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentLayoutCheck.xml";
-    private static bool _done;
+    private bool _done;
     private readonly List<(string Layout, IntVec3 Center)> _shots = new List<(string, IntVec3)>();
     private int _shotFrame = -1;
     private int _nextAimFrame = -1;

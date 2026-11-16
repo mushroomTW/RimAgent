@@ -21,7 +21,7 @@ public sealed class MapViewCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentMapViewCheck.xml";
     private const string Prefix = TestHelpers.LogPrefix + "MapViewCheck ";
-    private static bool _started;
+    private bool _started;
 
     public MapViewCheckComponent(Verse.Game game)
     {
@@ -32,10 +32,10 @@ public sealed class MapViewCheckComponent : GameComponent
         if (_started || Current.ProgramState != ProgramState.Playing || Find.CurrentMap == null) return;
         _started = true;
         if (!File.Exists(Path.Combine(GenFilePaths.ConfigFolderPath, MarkerFileName))) return;
-        RunAsync();
+        _ = RunAsync();
     }
 
-    private static async void RunAsync()
+    private static async Task RunAsync()
     {
         var failures = new List<string>();
         try
@@ -114,45 +114,52 @@ public sealed class MapViewCheckComponent : GameComponent
         var samples = new Dictionary<string, int>();
         foreach (IntVec3 c in map.AllCells)
         {
-            int i = map.cellIndices.CellToIndex(c);
-            SurveyCell shown = survey.Cells[i];
-            string kind;
-            bool ok;
-            Building edifice = c.GetEdifice(map);
-            if (c.Fogged(map))
-            {
-                kind = "fog";
-                ok = shown == SurveyCell.Unknown && survey.Resource[i] == 0 && !survey.ThickRoof[i];
-            }
-            else if (edifice != null && edifice.def.building.isNaturalRock)
-            {
-                kind = edifice.def.building.isResourceRock ? "ore" : "rock";
-                ok = shown == SurveyCell.Rock
-                    && (edifice.def.building.isResourceRock
-                        ? survey.Resource[i] > 0 && survey.ResourceLabels[survey.Resource[i] - 1] == edifice.def.label
-                        : survey.Resource[i] == 0);
-            }
-            else if (edifice != null)
-            {
-                kind = "structure";
-                ok = shown == SurveyCell.Structure;
-            }
-            else if (c.GetTerrain(map).IsWater)
-            {
-                kind = "water";
-                ok = shown == SurveyCell.ShallowWater || shown == SurveyCell.DeepWater;
-            }
-            else
-            {
-                kind = "ground";
-                ok = shown != SurveyCell.Unknown && shown != SurveyCell.Rock && shown != SurveyCell.Structure;
-            }
-            samples[kind] = samples.TryGetValue(kind, out int n) ? n + 1 : 1;
-            if (!ok && failures.Count < 20) failures.Add($"survey: {kind} at {c} shown as {shown}");
-            bool roof = !c.Fogged(map) && map.roofGrid.RoofAt(c)?.isThickRoof == true;
-            if (survey.ThickRoof[i] != roof && failures.Count < 20) failures.Add($"survey: thick roof at {c} is {survey.ThickRoof[i]}");
+            CheckSurveyCell(map, survey, map.cellIndices.CellToIndex(c), c, samples, failures);
         }
         if (survey.Colonists.Count != map.mapPawns.FreeColonistsSpawned.Count) failures.Add($"survey: {survey.Colonists.Count} colonists");
         Log.Message(Prefix + "survey samples " + string.Join(", ", samples.Select(kv => kv.Key + " x" + kv.Value)));
+    }
+
+    private static void CheckSurveyCell(Map map, MapSurvey survey, int i, IntVec3 c, Dictionary<string, int> samples, List<string> failures)
+    {
+        SurveyCell shown = survey.Cells[i];
+        string kind = ClassifyCell(map, c);
+        bool ok = VerifySurveyCell(map, survey, i, c, kind, shown);
+        samples[kind] = samples.TryGetValue(kind, out int n) ? n + 1 : 1;
+        if (!ok && failures.Count < 20) failures.Add($"survey: {kind} at {c} shown as {shown}");
+        bool roof = !c.Fogged(map) && map.roofGrid.RoofAt(c)?.isThickRoof == true;
+        if (survey.ThickRoof[i] != roof && failures.Count < 20) failures.Add($"survey: thick roof at {c} is {survey.ThickRoof[i]}");
+    }
+
+    private static string ClassifyCell(Map map, IntVec3 c)
+    {
+        if (c.Fogged(map)) return "fog";
+        Building edifice = c.GetEdifice(map);
+        if (edifice != null && edifice.def.building.isNaturalRock)
+            return edifice.def.building.isResourceRock ? "ore" : "rock";
+        if (edifice != null) return "structure";
+        if (c.GetTerrain(map).IsWater) return "water";
+        return "ground";
+    }
+
+    private static bool VerifySurveyCell(Map map, MapSurvey survey, int i, IntVec3 c, string kind, SurveyCell shown)
+    {
+        switch (kind)
+        {
+            case "fog":
+                return shown == SurveyCell.Unknown && survey.Resource[i] == 0 && !survey.ThickRoof[i];
+            case "ore":
+            case "rock":
+                Building edifice = c.GetEdifice(map);
+                if (kind == "ore")
+                    return shown == SurveyCell.Rock && survey.Resource[i] > 0 && survey.ResourceLabels[survey.Resource[i] - 1] == edifice.def.label;
+                return shown == SurveyCell.Rock && survey.Resource[i] == 0;
+            case "structure":
+                return shown == SurveyCell.Structure;
+            case "water":
+                return shown == SurveyCell.ShallowWater || shown == SurveyCell.DeepWater;
+            default:
+                return shown != SurveyCell.Unknown && shown != SurveyCell.Rock && shown != SurveyCell.Structure;
+        }
     }
 }

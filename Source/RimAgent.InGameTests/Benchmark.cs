@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using RimAgent.Agent;
 using RimWorld;
 using Verse;
@@ -24,7 +25,7 @@ public sealed class BenchmarkComponent : GameComponent
     private const string LogPrefix = TestHelpers.LogPrefix + "Benchmark ";
     private const int MaxReplyChars = 300;
 
-    private static bool _started;
+    private bool _started;
     private float _readyAt = -1f;
 
     private const string Basic = "basic";
@@ -37,6 +38,11 @@ public sealed class BenchmarkComponent : GameComponent
     /// <summary>醫療技能並列最高的其餘殖民者；指令說「最高的那一位」，同分時任一位都算對。</summary>
     private static readonly List<Pawn> _doctors = [];
     private static readonly List<Pawn> _enemies = [];
+
+    private const string CellsKey = "cells";
+    private const string BenchesKey = "benches";
+    private const string WallsKey = "walls";
+    private const string DoorsKey = "doors";
 
     /// <summary>一題：指令、量測（指令前後各量一次）與判分。</summary>
     private sealed class BenchTask
@@ -53,66 +59,86 @@ public sealed class BenchmarkComponent : GameComponent
         public Func<Dictionary<string, int>, Dictionary<string, int>, string, string> Check;
     }
 
-    private static readonly BenchTask[] Tasks =
-    [
+    private static BenchTask[] Tasks => CreateTasks();
+
+    private static BenchTask[] CreateTasks() => [
+        StockpileTask(), RiceFieldTask(), ResearchBenchTask(), WoodRoomTask(),
+        ResearchPriorityTask(), CutTreesTask(), FoodReportTask(), TwoRoomHouseTask(),
+        FreezerTask(), CornStorageTask(), KitchenBillsTask(), InjuredCareTask(),
+        DailyScheduleTask(), DefendTask()
+    ];
+
+    private static BenchTask StockpileTask() =>
         new BenchTask
         {
             Id = "stockpile",
             Instruction = "在殖民者附近建立一個大約 6x6 的儲存區。",
-            Measure = map => new() { ["cells"] = ZoneCells<Zone_Stockpile>(map, _ => true) },
-            Check = (before, after, _) => Delta(before, after, "cells") >= 20 ? null : $"stockpile cells +{Delta(before, after, "cells")}, need +20"
-        },
+            Measure = map => new() { [CellsKey] = ZoneCells<Zone_Stockpile>(map, _ => true) },
+            Check = (before, after, _) => Delta(before, after, CellsKey) >= 20 ? null : $"stockpile cells +{Delta(before, after, CellsKey)}, need +20"
+        };
+
+    private static BenchTask RiceFieldTask() =>
         new BenchTask
         {
             Id = "rice_field",
             Instruction = "在殖民者附近開一塊至少 30 格的水稻田。",
-            Measure = map => new() { ["cells"] = ZoneCells<Zone_Growing>(map, z => z.GetPlantDefToGrow()?.defName == "Plant_Rice") },
-            Check = (before, after, _) => Delta(before, after, "cells") >= 25 ? null : $"rice zone cells +{Delta(before, after, "cells")}, need +25"
-        },
+            Measure = map => new() { [CellsKey] = ZoneCells<Zone_Growing>(map, z => z.GetPlantDefToGrow()?.defName == "Plant_Rice") },
+            Check = (before, after, _) => Delta(before, after, CellsKey) >= 25 ? null : $"rice zone cells +{Delta(before, after, CellsKey)}, need +25"
+        };
+
+    private static BenchTask ResearchBenchTask() =>
         new BenchTask
         {
             Id = "research_bench",
             Instruction = "在殖民者附近放一張簡易研究台的藍圖。",
-            Measure = map => new() { ["benches"] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench")) },
-            Check = (before, after, _) => Delta(before, after, "benches") >= 1 ? null : "no new research bench blueprint"
-        },
+            Measure = map => new() { [BenchesKey] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench")) },
+            Check = (before, after, _) => Delta(before, after, BenchesKey) >= 1 ? null : "no new research bench blueprint"
+        };
+
+    private static BenchTask WoodRoomTask() =>
         new BenchTask
         {
             Id = "wood_room",
             Instruction = "在殖民者附近的空地上，用木頭規劃一間內部 5x5 的小房間藍圖（四面牆加一扇門）。",
             Measure = map => new()
             {
-                ["walls"] = CountBuildTargets(map, d => d == ThingDefOf.Wall),
-                ["doors"] = CountBuildTargets(map, d => d.IsDoor)
+                [WallsKey] = CountBuildTargets(map, d => d == ThingDefOf.Wall),
+                [DoorsKey] = CountBuildTargets(map, d => d.IsDoor)
             },
             Check = (before, after, _) =>
-                Delta(before, after, "walls") >= 16 && Delta(before, after, "doors") >= 1
+                Delta(before, after, WallsKey) >= 16 && Delta(before, after, DoorsKey) >= 1
                     ? null
-                    : $"walls +{Delta(before, after, "walls")} (need +16), doors +{Delta(before, after, "doors")} (need +1)"
-        },
+                    : $"walls +{Delta(before, after, WallsKey)} (need +16), doors +{Delta(before, after, DoorsKey)} (need +1)"
+        };
+
+    private static BenchTask ResearchPriorityTask() =>
         new BenchTask
         {
             Id = "research_priority",
             Instruction = "讓每一位能做研究的殖民者，把研究工作的優先級設為 1。",
             Measure = map => new() { ["missing"] = ColonistsWithoutResearchPriorityOne(map) },
             Check = (_, after, _) => after["missing"] == 0 ? null : $"{after["missing"]} capable colonist(s) not at research priority 1"
-        },
+        };
+
+    private static BenchTask CutTreesTask() =>
         new BenchTask
         {
             Id = "cut_trees",
             Instruction = "標記砍伐殖民者附近的 5 棵樹。",
             Measure = map => new() { ["marked"] = map.designationManager.SpawnedDesignationsOfDef(DesignationDefOf.CutPlant).Count() },
             Check = (before, after, _) => Delta(before, after, "marked") >= 5 ? null : $"cut designations +{Delta(before, after, "marked")}, need +5"
-        },
+        };
+
+    private static BenchTask FoodReportTask() =>
         new BenchTask
         {
             Id = "food_report",
             Instruction = "告訴我殖民地目前的食物存量大概能撐幾天。只要回答，不要下任何指令。",
             Measure = _ => new(),
-            Check = (_, _, reply) => reply != null && Regex.IsMatch(reply, "[0-9０-９]") ? null : "reply has no number"
-        },
+            Check = (_, _, reply) => reply != null && Regex.IsMatch(reply, "[0-9０-９]", RegexOptions.None, TimeSpan.FromSeconds(1)) ? null : "reply has no number"
+        };
 
-        // ---- 高難度：多步驟、空間規劃、跨工具推理 ----
+    private static BenchTask TwoRoomHouseTask() =>
         new BenchTask
         {
             Id = "two_room_house",
@@ -123,16 +149,18 @@ public sealed class BenchmarkComponent : GameComponent
             Measure = map => new()
             {
                 ["woodWalls"] = CountBuildTargets(map, d => d == ThingDefOf.Wall, ThingDefOf.WoodLog),
-                ["doors"] = CountBuildTargets(map, d => d.IsDoor),
+                [DoorsKey] = CountBuildTargets(map, d => d.IsDoor),
                 ["beds"] = CountBuildTargets(map, IsRealBed),
                 ["benches"] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench")),
                 ["spread"] = WallBounds(map) is CellRect r ? Math.Max(r.Width, r.Height) : 0
             },
             Check = (before, after, _) => Fails(
-                Need(after, before, "woodWalls", 20), Need(after, before, "doors", 2),
+                Need(after, before, "woodWalls", 20), Need(after, before, DoorsKey, 2),
                 Need(after, before, "beds", 2), Need(after, before, "benches", 1),
                 after["spread"] <= 20 ? null : $"walls spread over {after["spread"]} cells (max 20, not one building)")
-        },
+        };
+
+    private static BenchTask FreezerTask() =>
         new BenchTask
         {
             Id = "freezer",
@@ -143,14 +171,16 @@ public sealed class BenchmarkComponent : GameComponent
             Measure = map => new()
             {
                 ["walls"] = CountBuildTargets(map, d => d == ThingDefOf.Wall),
-                ["doors"] = CountBuildTargets(map, d => d.IsDoor),
+                [DoorsKey] = CountBuildTargets(map, d => d.IsDoor),
                 ["coolersOnWall"] = WallBounds(map) is CellRect r ? CoolersOnWallLine(map, r) : 0,
                 ["stockpileInside"] = WallBounds(map) is CellRect room ? StockpileCellsInside(map, room.ContractedBy(1)) : 0
             },
             Check = (before, after, _) => Fails(
-                Need(after, before, "walls", 10), Need(after, before, "doors", 1),
+                Need(after, before, "walls", 10), Need(after, before, DoorsKey, 1),
                 Need(after, before, "coolersOnWall", 1), Need(after, before, "stockpileInside", 4))
-        },
+        };
+
+    private static BenchTask CornStorageTask() =>
         new BenchTask
         {
             Id = "corn_storage",
@@ -163,7 +193,9 @@ public sealed class BenchmarkComponent : GameComponent
                 ["cornStores"] = map.zoneManager.AllZones.OfType<Zone_Stockpile>().Count(IsCornOnlyStore)
             },
             Check = (before, after, _) => Fails(Need(after, before, "cornCells", 25), Need(after, before, "cornStores", 1))
-        },
+        };
+
+    private static BenchTask KitchenBillsTask() =>
         new BenchTask
         {
             Id = "kitchen_bills",
@@ -178,7 +210,9 @@ public sealed class BenchmarkComponent : GameComponent
             Check = (_, after, _) => Fails(
                 after["mealBill"] == 1 ? null : "no simple meal x10 bill on the stove",
                 after["butcherBill"] == 1 ? null : "no butcher corpse bill on the butcher table")
-        },
+        };
+
+    private static BenchTask InjuredCareTask() =>
         new BenchTask
         {
             Id = "injured_care",
@@ -196,7 +230,9 @@ public sealed class BenchmarkComponent : GameComponent
                 after["doctorOne"] == 1
                     ? null
                     : $"none of the best other doctors ({string.Join(", ", _doctors.Select(p => p.LabelShort))}) has doctor priority 1")
-        },
+        };
+
+    private static BenchTask DailyScheduleTask() =>
         new BenchTask
         {
             Id = "daily_schedule",
@@ -205,7 +241,9 @@ public sealed class BenchmarkComponent : GameComponent
             Setup = ResetSchedules,
             Measure = map => new() { ["wrongHours"] = WrongScheduleHours(map) },
             Check = (_, after, _) => after["wrongHours"] == 0 ? null : $"{after["wrongHours"]} colonist-hours differ from the requested schedule"
-        },
+        };
+
+    private static BenchTask DefendTask() =>
         new BenchTask
         {
             Id = "defend",
@@ -221,8 +259,7 @@ public sealed class BenchmarkComponent : GameComponent
             Check = (_, after, _) => Fails(
                 after["notDrafted"] == 0 ? null : $"{after["notDrafted"]} fighter(s) not drafted",
                 after["notAttacking"] == 0 ? null : $"{after["notAttacking"]} fighter(s) not ordered to attack an enemy")
-        }
-    ];
+        };
 
     public BenchmarkComponent(Verse.Game game)
     {
@@ -239,10 +276,10 @@ public sealed class BenchmarkComponent : GameComponent
         if (_readyAt < 0f) _readyAt = UnityEngine.Time.realtimeSinceStartup + 5f;
         if (UnityEngine.Time.realtimeSinceStartup < _readyAt) return;
         _started = true;
-        RunAsync();
+        _ = RunAsync();
     }
 
-    private static async void RunAsync()
+    private static async Task RunAsync()
     {
         try
         {
@@ -254,7 +291,7 @@ public sealed class BenchmarkComponent : GameComponent
                 return;
             }
             // 只改隔離環境記憶體裡的設定：完整權限讓行動直接執行，關掉自主照顧免得插隊。
-            string modelOverride = Regex.Match(File.ReadAllText(MarkerPath), "model=\"([^\"]+)\"").Groups[1].Value;
+            string modelOverride = Regex.Match(await File.ReadAllTextAsync(MarkerPath), "model=\"([^\"]+)\"", RegexOptions.None, TimeSpan.FromSeconds(1)).Groups[1].Value;
             if (modelOverride.Length > 0) settings.agentModel = modelOverride;
             settings.mode = AgentMode.Autonomous;
             settings.autonomousCare = false;
@@ -275,58 +312,13 @@ public sealed class BenchmarkComponent : GameComponent
             int totalFailures = 0;
             foreach (BenchTask task in Tasks)
             {
-                session.Clear();
-                Map map = Find.CurrentMap;
-                string failure = null;
-                string reply = null;
-                float seconds = 0f;
-                List<TranscriptEntry> tools = [];
-                try
-                {
-                    string setupError = task.Setup?.Invoke(map);
-                    if (setupError != null)
-                    {
-                        failure = "setup: " + setupError;
-                    }
-                    else
-                    {
-                        Dictionary<string, int> before = task.Measure(map);
-                        int transcriptStart = session.Transcript.Snapshot().Count;
-                        float startedAt = UnityEngine.Time.realtimeSinceStartup;
-                        try
-                        {
-                            reply = await session.SendAsync(task.Instruction);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Warning(LogPrefix + task.Id + " exception: " + ex.GetType().Name + ": " + ex.Message);
-                        }
-                        seconds = UnityEngine.Time.realtimeSinceStartup - startedAt;
-                        failure = task.Check(before, task.Measure(Find.CurrentMap), reply);
-                        tools = [.. session.Transcript.Snapshot().Skip(transcriptStart).Where(e => e.Kind == TranscriptKind.Tool)];
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // 佈置、量測或判分出錯只算這一題失敗，其餘題目與總結照常產出。
-                    failure = "exception: " + ex.GetType().Name + ": " + ex.Message;
-                    Log.Warning(LogPrefix + task.Id + " " + failure);
-                }
-                finally
-                {
-                    task.Cleanup?.Invoke(map);
-                }
-
+                (string failure, List<TranscriptEntry> tools, float seconds, string reply) = await RunTaskAsync(session, task);
                 int failures = tools.Count(t => t.Failed && !t.Cancelled);
                 totalTools += tools.Count;
                 totalFailures += failures;
-                if (failure == null) passedByTier[task.Tier]++;
 
                 Append(resultPath, new Dictionary<string, object>
                 {
-                    ["run"] = runId,
-                    ["modVersion"] = modVersion,
-                    ["model"] = model,
                     ["task"] = task.Id,
                     ["tier"] = task.Tier,
                     ["ok"] = failure == null,
@@ -338,6 +330,7 @@ public sealed class BenchmarkComponent : GameComponent
                     ["reply"] = Short(reply)
                 });
                 Log.Message(LogPrefix + $"{task.Tier}/{task.Id}: {(failure == null ? "PASS" : "FAIL " + failure)} tools={tools.Count} failed={failures} {seconds:0}s");
+                if (failure == null) passedByTier[task.Tier]++;
             }
 
             var summary = new Dictionary<string, object>
@@ -362,6 +355,52 @@ public sealed class BenchmarkComponent : GameComponent
         {
             Log.Warning(LogPrefix + "FAIL exception: " + ex);
         }
+    }
+
+    private static async Task<(string failure, List<TranscriptEntry> tools, float seconds, string reply)> RunTaskAsync(ColonyAgentSession session, BenchTask task)
+    {
+        session.Clear();
+        Map map = Find.CurrentMap;
+        string failure = null;
+        string reply = null;
+        float seconds = 0f;
+        List<TranscriptEntry> tools = [];
+        try
+        {
+            string setupError = task.Setup?.Invoke(map);
+            if (setupError != null)
+            {
+                failure = "setup: " + setupError;
+            }
+            else
+            {
+                Dictionary<string, int> before = task.Measure(map);
+                int transcriptStart = session.Transcript.Snapshot().Count;
+                float startedAt = UnityEngine.Time.realtimeSinceStartup;
+                try
+                {
+                    reply = await session.SendAsync(task.Instruction);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(LogPrefix + task.Id + " exception: " + ex.GetType().Name + ": " + ex.Message);
+                }
+                seconds = UnityEngine.Time.realtimeSinceStartup - startedAt;
+                failure = task.Check(before, task.Measure(Find.CurrentMap), reply);
+                tools = [.. session.Transcript.Snapshot().Skip(transcriptStart).Where(e => e.Kind == TranscriptKind.Tool)];
+            }
+        }
+        catch (Exception ex)
+        {
+            // 佈置、量測或判分出錯只算這一題失敗，其餘題目與總結照常產出。
+            failure = "exception: " + ex.GetType().Name + ": " + ex.Message;
+            Log.Warning(LogPrefix + task.Id + " " + failure);
+        }
+        finally
+        {
+            task.Cleanup?.Invoke(map);
+        }
+        return (failure, tools, seconds, reply);
     }
 
     private static int Delta(Dictionary<string, int> before, Dictionary<string, int> after, string key)
@@ -448,9 +487,10 @@ public sealed class BenchmarkComponent : GameComponent
         {
             for (int hour = 0; hour < 24; hour++)
             {
-                TimeAssignmentDef expected = hour < 6 ? TimeAssignmentDefOf.Sleep
-                    : hour < 22 ? TimeAssignmentDefOf.Work
-                    : TimeAssignmentDefOf.Joy;
+                TimeAssignmentDef expected;
+                if (hour < 6) expected = TimeAssignmentDefOf.Sleep;
+                else if (hour < 22) expected = TimeAssignmentDefOf.Work;
+                else expected = TimeAssignmentDefOf.Joy;
                 if (pawn.timetable.GetAssignment(hour) != expected) wrong++;
             }
         }
@@ -617,6 +657,6 @@ public sealed class BenchmarkComponent : GameComponent
     private static string Short(string text)
     {
         string flat = (text ?? string.Empty).Replace("\r", string.Empty).Replace("\n", " / ");
-        return flat.Length > MaxReplyChars ? flat.Substring(0, MaxReplyChars) + "…" : flat;
+        return flat.Length > MaxReplyChars ? flat[..MaxReplyChars] + "…" : flat;
     }
 }

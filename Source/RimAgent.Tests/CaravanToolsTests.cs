@@ -14,6 +14,7 @@ public class CaravanToolsTests
 {
     private FakeGameWorld _world;
     private CaravanTools _tools;
+    private static readonly string[] _silverPemmicanCargo = ["silver x500", "pemmican x80"];
 
     [SetUp]
     public void SetUp()
@@ -211,7 +212,7 @@ public class CaravanToolsTests
         Assert.That(text, Does.Contain("12 tiles").And.Contain("20 days"));
         Assert.That(text, Does.Contain("cancel_forming_caravan"));
         Assert.That(_world.Calls.Single(), Is.EqualTo("FormCaravan(101+102+701|Silver:500+Pemmican:80|4600)"));
-        Assert.That(_world.Forming.Single().Cargo, Is.EquivalentTo(new[] { "silver x500", "pemmican x80" }));
+        Assert.That(_world.Forming.Single().Cargo, Is.EquivalentTo(_silverPemmicanCargo));
     }
 
     [Test]

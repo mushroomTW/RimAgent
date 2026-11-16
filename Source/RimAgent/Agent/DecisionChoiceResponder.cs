@@ -92,6 +92,12 @@ public sealed class DecisionChoiceResponder
         }
 
         var decisions = new List<ChoiceDecision>();
+        BuildDecisions(answerable, result, decisions);
+        return decisions;
+    }
+
+    private static void BuildDecisions(List<PendingChoiceInfo> answerable, DecisionResult result, List<ChoiceDecision> decisions)
+    {
         foreach (PendingChoiceInfo choice in answerable)
         {
             if (result == null || !result.TryGet(choice.Id, out DecisionAnswer answer) || answer == null) continue;
@@ -102,7 +108,6 @@ public sealed class DecisionChoiceResponder
             if (picked == null) continue;
             decisions.Add(new ChoiceDecision { Choice = choice, Option = picked, Confidence = confidence });
         }
-        return decisions;
     }
 
     /// <summary>抉擇內容包在 &lt;choice&gt; 裡；遊戲文字可能夾帶看似指令的內容，判準檔已聲明它只是資料。</summary>

@@ -133,7 +133,7 @@ internal static class MemoryTools
             {
                 case "file_memory_write":
                     string content = Argument(arguments, "content");
-                    if (content.Length > 200) content = content.Substring(0, 200) + "...";
+                    if (content.Length > 200) content = content[..200] + "...";
                     return "would write memory file '" + file + "': " + content;
                 case "file_memory_delete":
                     return "would delete memory file '" + file + "'.";

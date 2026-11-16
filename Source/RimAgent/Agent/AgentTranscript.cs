@@ -185,7 +185,7 @@ public sealed class AgentTranscript
 
     public void Add(TranscriptEntry entry)
     {
-        if (entry == null) throw new ArgumentNullException(nameof(entry));
+        ArgumentNullException.ThrowIfNull(entry);
         lock (_gate)
         {
             _entries.Add(entry);
@@ -204,7 +204,7 @@ public sealed class AgentTranscript
     /// </summary>
     public void UpdateToolResult(TranscriptEntry entry, string result, bool failed)
     {
-        if (entry == null) throw new ArgumentNullException(nameof(entry));
+        ArgumentNullException.ThrowIfNull(entry);
         lock (_gate)
         {
             entry.Result = result ?? string.Empty;
@@ -214,14 +214,6 @@ public sealed class AgentTranscript
                 _version++;
                 _epoch++;
             }
-        }
-    }
-
-    public IReadOnlyList<TranscriptEntry> Snapshot()
-    {
-        lock (_gate)
-        {
-            return _entries.ToArray();
         }
     }
 
@@ -242,6 +234,15 @@ public sealed class AgentTranscript
         {
             version = _version;
             epoch = _epoch;
+            return _entries.ToArray();
+        }
+    }
+
+    /// <summary>一次快照，只取清單（不記錄 Version／Epoch）。</summary>
+    public IReadOnlyList<TranscriptEntry> Snapshot()
+    {
+        lock (_gate)
+        {
             return _entries.ToArray();
         }
     }

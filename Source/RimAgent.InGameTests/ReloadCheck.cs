@@ -35,7 +35,7 @@ public sealed class ReloadCheckComponent : GameComponent
     private static RimWorldGameWorld _oldWorld;
     private static readonly List<string> Failures = [];
 
-    private static bool _stepping;
+    private bool _stepping;
     private float _nextStepAt;
 
     public ReloadCheckComponent(Verse.Game game)
@@ -55,7 +55,7 @@ public sealed class ReloadCheckComponent : GameComponent
     }
 
     // 工具是 async，讀存檔清單會切到背景執行緒再回主線程：在主線程同步等它會卡死，一律 await。
-    private static async Task StepGuardedAsync()
+    private async Task StepGuardedAsync()
     {
         try
         {
@@ -78,88 +78,104 @@ public sealed class ReloadCheckComponent : GameComponent
         switch (_phase)
         {
             case Phase.Start:
-            {
-                RimAgentSettings settings = RimAgentMod.Settings;
-                settings.SetAllow(ToolCategory.Save, true);
-                settings.autonomousCare = true;
-                ClearDanger();
-                var world = new RimWorldGameWorld(Current.Game);
-                SaveContext context = world.GetSaveContext();
-                Check(context.ColonyId.Length == 8, "colony id: " + context.ColonyId);
-                _checkpoint = SaveTools.CheckpointName(context.ColonyId, context.Tick);
-                string saved = await new SaveTools(world).SaveGame();
-                Check(saved.StartsWith("Saved checkpoint", StringComparison.Ordinal), "save_game: " + saved);
-                // 同原版：autosave 排成長事件。
-                LongEventHandler.QueueLongEvent(() => Find.Autosaver.DoAutosave(), "Autosaving", false, null);
-                _phase = Phase.Saved;
+                if (!await HandleStartPhase()) return;
                 break;
-            }
             case Phase.Saved:
-            {
-                var world = new RimWorldGameWorld(Current.Game);
-                IReadOnlyList<SaveSlotInfo> files = await world.GetSaveFilesAsync();
-                string id = world.GetSaveContext().ColonyId;
-                SaveSlotInfo checkpoint = files.FirstOrDefault(f => f.Name == _checkpoint);
-                SaveSlotInfo autosave = files.FirstOrDefault(f => !f.Checkpoint && f.ColonyId == id);
-                if (checkpoint == null || autosave == null) return; // 長事件還沒寫完
-                Check(checkpoint.ColonyId == id, "checkpoint colony id");
-                Check(autosave.Tick > 0, "autosave tick read: " + autosave.Tick);
-                string list = await new SaveTools(world).ListSaves();
-                Check(list.Contains(_checkpoint) && list.Contains(autosave.Name), "list_saves: " + list);
-                _phase = Phase.Listed;
+                if (!await HandleSavedPhase()) return;
                 break;
-            }
             case Phase.Listed:
-            {
-                // 殖民者要先被點名（每 500 tick 一次）才認得出死亡。
-                if (Find.TickManager.TicksGame < 1000)
-                {
-                    if (Find.TickManager.Paused) Find.TickManager.CurTimeSpeed = TimeSpeed.Superfast;
-                    return;
-                }
-                Pawn victim = Find.CurrentMap.mapPawns.FreeColonistsSpawned.First();
-                _victimId = victim.thingIDNumber;
-                _victimName = victim.LabelShort;
-                victim.Kill(null);
-                _phase = Phase.Killed;
+                if (!await HandleListedPhase()) return;
                 break;
-            }
             case Phase.Killed:
-            {
-                // 死亡在下一次訊號檢查（500 tick）才點到；自主任務沒有供應商會失敗，但指令留在紀錄裡。
-                bool started = agent.Session.Transcript.Snapshot()
-                    .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("Died: " + _victimName));
-                if (!started && Find.TickManager.Paused) Find.TickManager.CurTimeSpeed = TimeSpeed.Superfast;
-                if (!started) return;
-                agent.StopAutonomousRun();
-                _oldWorld = new RimWorldGameWorld(Current.Game);
-                string loaded = await new SaveTools(_oldWorld).LoadSave(_checkpoint, "test lesson: keep colonists inside");
-                Check(loaded.StartsWith("Reloading", StringComparison.Ordinal), "load_save: " + loaded);
-                _phase = Phase.Reloading;
+                if (!await HandleKilledPhase(agent)) return;
                 break;
-            }
             case Phase.Reloading:
-            {
-                Pawn victim = Find.CurrentMap.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.thingIDNumber == _victimId);
-                Check(victim != null && !victim.Dead, "victim alive after reload");
-                bool notice = agent.Session.Transcript.Snapshot()
-                    .Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Reloaded " + _checkpoint) && e.Text.Contains("test lesson"));
-                bool reloadRun = agent.Session.Transcript.Snapshot()
-                    .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("test lesson"));
-                if (!notice || !reloadRun)
-                {
-                    // 讀檔後的通知與任務在 Update 起跑，給它幾輪。
-                    if (Time.realtimeSinceStartup < 600f) return;
-                }
-                Check(notice, "reload notice in transcript");
-                Check(reloadRun, "reloaded task carries the lesson");
-                Check(_oldWorld.GetNotReadyReason()?.Contains("reloaded") == true, "old session blocked: " + _oldWorld.GetNotReadyReason());
-                string list = await new SaveTools(new RimWorldGameWorld(Current.Game)).ListSaves();
-                Check(list.Contains("reloads used 1/3"), "attempt counted: " + list);
-                Finish();
+                if (!await HandleReloadingPhase(agent)) return;
                 break;
-            }
         }
+    }
+
+    private static async Task<bool> HandleStartPhase()
+    {
+        RimAgentSettings settings = RimAgentMod.Settings;
+        settings.SetAllow(ToolCategory.Save, true);
+        settings.autonomousCare = true;
+        ClearDanger();
+        var world = new RimWorldGameWorld(Current.Game);
+        SaveContext context = world.GetSaveContext();
+        Check(context.ColonyId.Length == 8, "colony id: " + context.ColonyId);
+        _checkpoint = SaveTools.CheckpointName(context.ColonyId, context.Tick);
+        string saved = await new SaveTools(world).SaveGame();
+        Check(saved.StartsWith("Saved checkpoint", StringComparison.Ordinal), "save_game: " + saved);
+        // 同原版：autosave 排成長事件。
+        LongEventHandler.QueueLongEvent(() => Find.Autosaver.DoAutosave(), "Autosaving", false, null);
+        _phase = Phase.Saved;
+        return true;
+    }
+
+    private static async Task<bool> HandleSavedPhase()
+    {
+        var world = new RimWorldGameWorld(Current.Game);
+        IReadOnlyList<SaveSlotInfo> files = await world.GetSaveFilesAsync();
+        string id = world.GetSaveContext().ColonyId;
+        SaveSlotInfo checkpoint = files.FirstOrDefault(f => f.Name == _checkpoint);
+        SaveSlotInfo autosave = files.FirstOrDefault(f => !f.Checkpoint && f.ColonyId == id);
+        if (checkpoint == null || autosave == null) return false; // 長事件還沒寫完
+        Check(checkpoint.ColonyId == id, "checkpoint colony id");
+        Check(autosave.Tick > 0, "autosave tick read: " + autosave.Tick);
+        string list = await new SaveTools(world).ListSaves();
+        Check(list.Contains(_checkpoint) && list.Contains(autosave.Name), "list_saves: " + list);
+        _phase = Phase.Listed;
+        return true;
+    }
+
+    private static async Task<bool> HandleListedPhase()
+    {
+        // 殖民者要先被點名（每 500 tick 一次）才認得出死亡。
+        if (Find.TickManager.TicksGame < 1000)
+        {
+            if (Find.TickManager.Paused) Find.TickManager.CurTimeSpeed = TimeSpeed.Superfast;
+            return false;
+        }
+        Pawn victim = Find.CurrentMap.mapPawns.FreeColonistsSpawned[0];
+        _victimId = victim.thingIDNumber;
+        _victimName = victim.LabelShort;
+        victim.Kill(null);
+        _phase = Phase.Killed;
+        return true;
+    }
+
+    private static async Task<bool> HandleKilledPhase(RimAgentGameComponent agent)
+    {
+        // 死亡在下一次訊號檢查（500 tick）才點到；自主任務沒有供應商會失敗，但指令留在紀錄裡。
+        bool started = agent.Session.Transcript.Snapshot()
+            .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("Died: " + _victimName));
+        if (!started && Find.TickManager.Paused) Find.TickManager.CurTimeSpeed = TimeSpeed.Superfast;
+        if (!started) return false;
+        agent.StopAutonomousRun();
+        _oldWorld = new RimWorldGameWorld(Current.Game);
+        string loaded = await new SaveTools(_oldWorld).LoadSave(_checkpoint, "test lesson: keep colonists inside");
+        Check(loaded.StartsWith("Reloading", StringComparison.Ordinal), "load_save: " + loaded);
+        _phase = Phase.Reloading;
+        return true;
+    }
+
+    private static async Task<bool> HandleReloadingPhase(RimAgentGameComponent agent)
+    {
+        Pawn victim = Find.CurrentMap.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.thingIDNumber == _victimId);
+        Check(victim != null && !victim.Dead, "victim alive after reload");
+        bool notice = agent.Session.Transcript.Snapshot()
+            .Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Reloaded " + _checkpoint) && e.Text.Contains("test lesson"));
+        bool reloadRun = agent.Session.Transcript.Snapshot()
+            .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("test lesson"));
+        if ((!notice || !reloadRun) && Time.realtimeSinceStartup < 600f) return false;
+        Check(notice, "reload notice in transcript");
+        Check(reloadRun, "reloaded task carries the lesson");
+        Check(_oldWorld.GetNotReadyReason()?.Contains("reloaded") == true, "old session blocked: " + _oldWorld.GetNotReadyReason());
+        string list = await new SaveTools(new RimWorldGameWorld(Current.Game)).ListSaves();
+        Check(list.Contains("reloads used 1/3"), "attempt counted: " + list);
+        Finish();
+        return true;
     }
 
     private static void ClearDanger()

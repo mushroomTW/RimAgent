@@ -51,8 +51,8 @@ public sealed class ProductionTools
         sb.Append(tables.Count == 1 ? "1 work table:" : tables.Count + " work tables:").AppendLine();
         foreach (WorkTableInfo t in tables)
         {
-            sb.Append("[").Append(t.Id).Append("] ").Append(t.Label);
-            sb.Append(" at (").Append(t.X).Append(",").Append(t.Z).Append(')');
+            sb.Append('[').Append(t.Id).Append("] ").Append(t.Label);
+            sb.Append(" at (").Append(t.X).Append(',').Append(t.Z).Append(')');
             List<BillInfo> bills = [.. _world.GetBills(t.Id)];
             if (bills.Count == 0)
             {

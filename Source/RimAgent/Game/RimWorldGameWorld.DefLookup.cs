@@ -118,6 +118,7 @@ internal sealed partial class RimWorldGameWorld
         }
         catch (Exception)
         {
+            // 原版的 StatDrawEntry 可能在某些 def 上拋出（例如缺少圖表資源）；忽略該個別 stat，繼續下一個。
         }
     }
 
@@ -125,15 +126,36 @@ internal sealed partial class RimWorldGameWorld
     {
         List<ThingDef> things = DefDatabase<ThingDef>.AllDefsListForReading;
 
+        foreach (string fact in RecipeFacts(def)) yield return fact;
+        foreach (string fact in PlantFacts(things, def)) yield return fact;
+        foreach (string fact in MineableFacts(things, def)) yield return fact;
+        foreach (string fact in AnimalProductFacts(things, def)) yield return fact;
+        foreach (string fact in TraderFacts(def)) yield return fact;
+        foreach (string fact in IngredientFacts(def)) yield return fact;
+        foreach (string fact in BuildFacts(things, def)) yield return fact;
+    }
+
+    private static IEnumerable<string> RecipeFacts(ThingDef def)
+    {
         List<RecipeDef> making = [.. DefDatabase<RecipeDef>.AllDefsListForReading.Where(r => r.products != null && r.products.Any(p => p.thingDef == def))];
         foreach (RecipeDef recipe in making.Take(MaxListedSources)) yield return RecipeFact(recipe, def);
         if (making.Count > MaxListedSources) yield return $"{making.Count - MaxListedSources} more recipes also make it.";
+    }
 
+    private static IEnumerable<string> PlantFacts(List<ThingDef> things, ThingDef def)
+    {
         string plants = NameList(things.Where(d => d.plant?.harvestedThingDef == def), d => $"{Name(d)} (yield {d.plant.harvestYield:0.#})");
         if (plants != null) yield return "Harvested from: " + plants + ".";
+    }
+
+    private static IEnumerable<string> MineableFacts(List<ThingDef> things, ThingDef def)
+    {
         string rocks = NameList(things.Where(d => d.building?.mineableThing == def), d => $"{Name(d)} (yield {d.building.mineableYield})");
         if (rocks != null) yield return "Mined from: " + rocks + ".";
+    }
 
+    private static IEnumerable<string> AnimalProductFacts(List<ThingDef> things, ThingDef def)
+    {
         // 屍體 ThingDef 也帶 race，會讓每種動物出現兩次。
         List<ThingDef> races = [.. things.Where(d => d.race != null && !d.IsCorpse)];
         var animal = new List<string>();
@@ -142,12 +164,22 @@ internal sealed partial class RimWorldGameWorld
         AddNames(animal, "shearing", races.Where(d => d.GetCompProperties<CompProperties_Shearable>()?.woolDef == def));
         AddNames(animal, "eggs from", races.Where(d => d.GetCompProperties<CompProperties_EggLayer>()?.eggUnfertilizedDef == def));
         if (animal.Count > 0) yield return "From animals: " + string.Join("; ", animal) + ".";
+    }
 
+    private static IEnumerable<string> TraderFacts(ThingDef def)
+    {
         if (def.category == ThingCategory.Item && def.tradeability.TraderCanSell()) yield return "Traders can sell it.";
+    }
 
+    private static IEnumerable<string> IngredientFacts(ThingDef def)
+    {
         string ingredientIn = NameList(DefDatabase<RecipeDef>.AllDefsListForReading.Where(r =>
             r.ingredients != null && r.ingredients.Any(i => i.IsFixedIngredient && i.FixedIngredient == def)), r => r.label ?? r.defName);
         if (ingredientIn != null) yield return "Ingredient of recipes: " + ingredientIn + ".";
+    }
+
+    private static IEnumerable<string> BuildFacts(List<ThingDef> things, ThingDef def)
+    {
         string builds = NameList(things.Where(d => d.BuildableByPlayer && CostsInclude(d, def))
             .Cast<BuildableDef>()
             .Concat(DefDatabase<TerrainDef>.AllDefsListForReading.Where(d => d.BuildableByPlayer && CostsInclude(d, def))), Name);
@@ -168,19 +200,14 @@ internal sealed partial class RimWorldGameWorld
 
     private static IEnumerable<string> ResearchFacts(ResearchProjectDef def)
     {
-        bool playing = Current.ProgramState == ProgramState.Playing;
-        if (playing)
-        {
-            if (def.IsFinished) yield return "Status: finished.";
-            else if (def.ProgressReal > 0f) yield return $"Status: in progress, {def.ProgressApparentString} / {def.CostApparent:0}.";
-            else yield return "Status: not started" + (def.CanStartNow ? ", can start now." : ".");
-        }
+        string status = ResearchStatus(def);
+        if (status != null) yield return status;
         yield return $"Cost: {def.CostApparent:0}" + (def.knowledgeCategory != null ? $" ({def.knowledgeCategory.label} knowledge)" : string.Empty) + $"; tech level {def.techLevel.ToString().ToLowerInvariant()}.";
         List<ResearchProjectDef> prerequisites = [.. (def.prerequisites ?? []).Concat(def.hiddenPrerequisites ?? []).Distinct()];
         yield return prerequisites.Count == 0 ? "Prerequisites: none." : "Prerequisites: " + string.Join(", ", prerequisites.Select(ResearchWithStatus)) + ".";
         if (def.requiredResearchBuilding != null) yield return "Needs research bench: " + Name(def.requiredResearchBuilding) + ".";
         if (!def.requiredResearchFacilities.NullOrEmpty()) yield return "Needs bench facilities: " + string.Join(", ", def.requiredResearchFacilities.Select(Name)) + ".";
-        if (def.TechprintCount > 0) yield return $"Needs {def.TechprintCount} techprint(s)" + (playing ? $", {def.TechprintsApplied} applied." : ".");
+        if (def.TechprintCount > 0) yield return $"Needs {def.TechprintCount} techprint(s)" + (Current.ProgramState == ProgramState.Playing ? $", {def.TechprintsApplied} applied." : ".");
         string unlocks = NameList(def.UnlockedDefs ?? [], d => d.label ?? d.defName);
         if (unlocks != null) yield return "Unlocks: " + unlocks + ".";
     }
@@ -200,8 +227,27 @@ internal sealed partial class RimWorldGameWorld
 
     private static bool CostsInclude(BuildableDef def, ThingDef material) => def.CostList != null && def.CostList.Any(c => c.thingDef == material);
 
-    private static string ResearchWithStatus(ResearchProjectDef r) =>
-        Name(r) + (Current.ProgramState == ProgramState.Playing ? (r.IsFinished ? " (done)" : " (NOT done)") : string.Empty);
+    private static string ResearchStatus(ResearchProjectDef def)
+    {
+        if (Current.ProgramState != ProgramState.Playing) return null;
+        if (def.IsFinished) return "Status: finished.";
+        if (def.ProgressReal > 0f) return $"Status: in progress, {def.ProgressApparentString} / {def.CostApparent:0}.";
+        return "Status: not started" + (def.CanStartNow ? ", can start now." : ".");
+    }
+
+    private static string ResearchWithStatus(ResearchProjectDef r)
+    {
+        string status;
+        if (Current.ProgramState == ProgramState.Playing)
+        {
+            status = r.IsFinished ? " (done)" : " (NOT done)";
+        }
+        else
+        {
+            status = string.Empty;
+        }
+        return Name(r) + status;
+    }
 
     private static string Name(Def d) => d.label ?? d.defName;
 

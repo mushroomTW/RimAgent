@@ -31,7 +31,7 @@ public sealed class JevDecisionService : IDecisionService
 
     public async Task<DecisionResult> EvaluateAsync(string state, DecisionPlan plan, CancellationToken cancellationToken = default)
     {
-        if (plan == null) throw new ArgumentNullException(nameof(plan));
+        ArgumentNullException.ThrowIfNull(plan);
         if (plan.IsEmpty) return new DecisionResult();
         if (_client == null) throw new DecisionUnavailableException("decision service is not available");
         if (string.IsNullOrWhiteSpace(state)) throw new ArgumentException("decision state is empty", nameof(state));
@@ -44,55 +44,31 @@ public sealed class JevDecisionService : IDecisionService
         foreach (DecisionQuestion question in plan.Questions)
         {
             if (question == null || string.IsNullOrWhiteSpace(question.Id)) continue;
-            JevContent instructions = JevContent.FromText(question.Instructions ?? string.Empty);
-            switch (question.Type)
-            {
-                case DecisionQuestionType.Noul:
-                {
-                    JevNoulCriteria criteria = BuildNoulCriteria(question);
-                    nouls[question.Id] = builder.AddNoul(question.Id, instructions, criteria);
-                    break;
-                }
-                case DecisionQuestionType.Choice:
-                {
-                    var options = new List<JevChoiceOption<string>>();
-                    if (question.Options != null)
-                    {
-                        foreach (KeyValuePair<string, string> option in question.Options)
-                        {
-                            options.Add(new JevChoiceOption<string>(option.Key, option.Key,
-                                JevContent.FromText(option.Value ?? string.Empty)));
-                        }
-                    }
-                    if (options.Count == 0) break;
-                    choices[question.Id] = builder.AddChoice(question.Id, instructions, options.ToArray());
-                    break;
-                }
-                case DecisionQuestionType.Score:
-                {
-                    if (question.Levels == null || question.Levels.Count == 0) break;
-                    scores[question.Id] = builder.AddScore(question.Id, instructions, ToContentArray(question.Levels));
-                    break;
-                }
-            }
+            ProcessQuestion(question, builder, nouls, choices, scores);
         }
 
         JevDecisionPlan jevPlan = builder.Build();
-        JevResult result;
+        JevResult result = await CallDecisionServiceAsync(state, jevPlan, cancellationToken);
+
+        var answers = new Dictionary<string, DecisionAnswer>(StringComparer.Ordinal);
+        ProcessNoulAnswers(result, nouls, answers);
+        ProcessChoiceAnswers(result, choices, answers);
+        ProcessScoreAnswers(result, scores, answers);
+        return new DecisionResult(answers);
+    }
+
+    private async Task<JevResult> CallDecisionServiceAsync(string state, JevDecisionPlan jevPlan, CancellationToken cancellationToken)
+    {
         try
         {
             string provider = _providerId?.Invoke();
             string model = _model?.Invoke();
             // 未指定供應商時走 EvaluateAsync，才能使用 RimLLM Framework 的決策備援鏈；
             // 呼叫端明確指定供應商時才走 EvaluateWithProviderAsync（依框架契約不換家）。
-            result = await (string.IsNullOrWhiteSpace(provider)
+            return await (string.IsNullOrWhiteSpace(provider)
                 ? _client.EvaluateAsync(state, jevPlan, model, cancellationToken)
                 : _client.EvaluateWithProviderAsync(state, jevPlan, provider, model, cancellationToken))
                 .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
         }
         catch (RimLLMException ex)
         {
@@ -104,13 +80,19 @@ public sealed class JevDecisionService : IDecisionService
                 IsConfigurationError = configurationError
             };
         }
+    }
 
-        var answers = new Dictionary<string, DecisionAnswer>(StringComparer.Ordinal);
+    private static void ProcessNoulAnswers(JevResult result, Dictionary<string, JevNoulHandle> nouls, Dictionary<string, DecisionAnswer> answers)
+    {
         foreach (KeyValuePair<string, JevNoulHandle> entry in nouls)
         {
             NoulAnswer answer = result.Get(entry.Value);
             answers[entry.Key] = new DecisionAnswer { Probability = answer.Probability };
         }
+    }
+
+    private static void ProcessChoiceAnswers(JevResult result, Dictionary<string, JevChoiceHandle<string>> choices, Dictionary<string, DecisionAnswer> answers)
+    {
         foreach (KeyValuePair<string, JevChoiceHandle<string>> entry in choices)
         {
             ChoiceAnswer<string> answer = result.Get(entry.Value);
@@ -127,6 +109,10 @@ public sealed class JevDecisionService : IDecisionService
                 Probabilities = probabilities
             };
         }
+    }
+
+    private static void ProcessScoreAnswers(JevResult result, Dictionary<string, JevScoreHandle> scores, Dictionary<string, DecisionAnswer> answers)
+    {
         foreach (KeyValuePair<string, JevScoreHandle> entry in scores)
         {
             ScoreAnswer answer = result.Get(entry.Value);
@@ -142,7 +128,47 @@ public sealed class JevDecisionService : IDecisionService
                 Probabilities = probabilities
             };
         }
-        return new DecisionResult(answers);
+    }
+
+    private static void ProcessQuestion(DecisionQuestion question, JevDecisionPlanBuilder builder,
+        Dictionary<string, JevNoulHandle> nouls, Dictionary<string, JevChoiceHandle<string>> choices,
+        Dictionary<string, JevScoreHandle> scores)
+    {
+        JevContent instructions = JevContent.FromText(question.Instructions ?? string.Empty);
+        switch (question.Type)
+        {
+            case DecisionQuestionType.Noul:
+            {
+                JevNoulCriteria criteria = BuildNoulCriteria(question);
+                nouls[question.Id] = builder.AddNoul(question.Id, instructions, criteria);
+                break;
+            }
+            case DecisionQuestionType.Choice:
+            {
+                var options = new List<JevChoiceOption<string>>();
+                if (question.Options != null)
+                {
+                    foreach (KeyValuePair<string, string> option in question.Options)
+                    {
+                        options.Add(new JevChoiceOption<string>(option.Key, option.Key,
+                            JevContent.FromText(option.Value ?? string.Empty)));
+                    }
+                }
+                if (options.Count > 0)
+                {
+                    choices[question.Id] = builder.AddChoice(question.Id, instructions, options.ToArray());
+                }
+                break;
+            }
+            case DecisionQuestionType.Score:
+            {
+                if (question.Levels != null && question.Levels.Count > 0)
+                {
+                    scores[question.Id] = builder.AddScore(question.Id, instructions, ToContentArray(question.Levels));
+                }
+                break;
+            }
+        }
     }
 
     /// <summary>評分題的等級名稱在圖例裡；取不到就用序號代替。</summary>

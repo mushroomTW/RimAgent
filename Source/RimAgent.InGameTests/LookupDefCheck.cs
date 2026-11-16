@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using RimAgent.Game;
 using Verse;
 
@@ -13,16 +14,19 @@ namespace RimAgent.InGameTests;
 /// </summary>
 internal static class LookupDefCheck
 {
+    private const string ThingKind = "thing";
+    private const string EmptyKind = "";
+
     private static readonly (string Name, string Kind, string[] Wants)[] Cases =
     [
-        ("ComponentIndustrial", "thing", ["(ComponentIndustrial), thing", "Stats:", "Made by", "Ingredient of recipes:", "Used to build:"]),
-        ("Steel", "thing", ["Mined from:"]),
-        ("RawRice", "thing", ["Harvested from:"]),
-        ("Milk", "thing", ["From animals: milking"]),
+        ("ComponentIndustrial", ThingKind, ["(ComponentIndustrial), thing", "Stats:", "Made by", "Ingredient of recipes:", "Used to build:"]),
+        ("Steel", ThingKind, ["Mined from:"]),
+        ("RawRice", ThingKind, ["Harvested from:"]),
+        ("Milk", ThingKind, ["From animals: milking"]),
         ("MicroelectronicsBasics", "research", ["(MicroelectronicsBasics), research", "Status:", "Prerequisites:", "Unlocks:"]),
         ("Plague", "hediff", ["(Plague), hediff", "Lethal at severity 1", "builds immunity", "Can be tended"]),
         ("WoodPlankFloor", "terrain", ["(WoodPlankFloor), terrain", "Building:", "Size: 1x1"]),
-        ("Gun_AssaultRifle", "", ["(Gun_AssaultRifle), thing", "Stats:"])
+        ("Gun_AssaultRifle", EmptyKind, ["(Gun_AssaultRifle), thing", "Stats:"])
     ];
 
     public static List<string> Run(RimWorldGameWorld world, bool logReplies)
@@ -39,12 +43,12 @@ internal static class LookupDefCheck
                 failures.Add($"{name}: {text}");
                 continue;
             }
-            foreach (string want in wants)
+            foreach (string want in wants.Where(want => !text.Contains(want)))
             {
-                if (!text.Contains(want)) failures.Add($"{name} lacks '{want}'");
+                failures.Add($"{name} lacks '{want}'");
             }
         }
-        if (!tools.LookupDef("Gun_AssaultRifle", "", "all").Contains("Stats:")) failures.Add("detail=all has no stats");
+        if (!tools.LookupDef("Gun_AssaultRifle", EmptyKind, "all").Contains("Stats:")) failures.Add("detail=all has no stats");
         foreach (string error in world.TakeNewGameErrors()) failures.Add("game error: " + error);
         return failures;
     }
@@ -54,7 +58,7 @@ internal static class LookupDefCheck
 public sealed class LookupDefCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentLookupDefCheck.xml";
-    private static bool _done;
+    private bool _done;
 
     public LookupDefCheckComponent(Verse.Game game)
     {

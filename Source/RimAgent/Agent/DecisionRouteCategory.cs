@@ -7,10 +7,14 @@ namespace RimAgent.Agent;
 /// <summary>一個分流類別：說明是決策模型看的判準，思考強度是這一類要用的。</summary>
 public sealed class DecisionRouteCategory : IExposable
 {
-    public string id = string.Empty;          // 穩定識別碼
-    public string name = string.Empty;        // 顯示名稱
-    public string description = string.Empty; // 判準：這一類包含什麼、不包含什麼
-    public ReasoningLevel reasoning = ReasoningLevel.Auto;
+    private string _id = string.Empty;          // 穩定識別碼
+    private string _name = string.Empty;        // 顯示名稱
+    private string _description = string.Empty; // 判準：這一類包含什麼、不包含什麼
+
+    public string Id { get => _id; set => _id = value ?? string.Empty; }
+    public string Name { get => _name; set => _name = value ?? string.Empty; }
+    public string Description { get => _description; set => _description = value ?? string.Empty; }
+    public ReasoningLevel Reasoning { get; set; } = ReasoningLevel.Auto;
 
     public DecisionRouteCategory() { }
 
@@ -20,18 +24,20 @@ public sealed class DecisionRouteCategory : IExposable
         string description,
         ReasoningLevel reasoning = ReasoningLevel.Auto)
     {
-        this.id = id ?? string.Empty;
-        this.name = name ?? string.Empty;
-        this.description = description ?? string.Empty;
-        this.reasoning = reasoning;
+        Id = id ?? string.Empty;
+        Name = name ?? string.Empty;
+        Description = description ?? string.Empty;
+        Reasoning = reasoning;
     }
 
     public void ExposeData()
     {
-        Scribe_Values.Look(ref id, "id", string.Empty);
-        Scribe_Values.Look(ref name, "name", string.Empty);
-        Scribe_Values.Look(ref description, "description", string.Empty);
+        Scribe_Values.Look(ref _id, "id", string.Empty);
+        Scribe_Values.Look(ref _name, "name", string.Empty);
+        Scribe_Values.Look(ref _description, "description", string.Empty);
+        var reasoning = Reasoning;
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
+        Reasoning = reasoning;
     }
 
     /// <summary>建立內建的四個決策分流類別。</summary>

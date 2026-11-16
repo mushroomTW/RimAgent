@@ -31,7 +31,7 @@ public sealed class PrisonerTools
         sb.Append(prisoners.Count == 1 ? "1 prisoner:" : prisoners.Count + " prisoners:").AppendLine();
         foreach (PrisonerInfo p in prisoners)
         {
-            sb.Append("[").Append(p.Id).Append("] ").Append(DisplayName(p));
+            sb.Append('[').Append(p.Id).Append("] ").Append(DisplayName(p));
             sb.Append(" - resistance ").Append(FormatResistance(p.Resistance));
             sb.Append(p.Recruitable ? ", recruitable" : ", not recruitable");
             sb.Append(", mode: ").Append(string.IsNullOrEmpty(p.InteractionModeLabel) ? p.InteractionMode : p.InteractionModeLabel);

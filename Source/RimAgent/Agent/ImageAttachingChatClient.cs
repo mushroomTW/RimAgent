@@ -135,19 +135,29 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         for (int i = list.Count - 1; i >= start && screenshotCalls.Count > 0; i--)
         {
             if (list[i].Role != ChatRole.Tool) continue;
-            foreach (FunctionResultContent result in list[i].Contents.OfType<FunctionResultContent>().Reverse())
+            if (TryParseScreenshotResult(list[i], screenshotCalls, out string foundPath))
             {
-                if (result.CallId == null || !screenshotCalls.TryGetValue(result.CallId, out string tool)) continue;
-                string text = result.Result?.ToString();
-                path = tool == ScreenshotToolName
-                    ? TranscriptScreenshot.TryParseSavedPath(text)
-                    : TranscriptScreenshot.TryParseScriptSavedPath(text);
-                if (path == null) continue;
+                path = foundPath;
                 toolIndex = i;
                 return true;
             }
         }
         toolIndex = -1;
+        path = null;
+        return false;
+    }
+
+    private static bool TryParseScreenshotResult(ChatMessage toolMsg, Dictionary<string, string> screenshotCalls, out string path)
+    {
+        foreach (FunctionResultContent result in toolMsg.Contents.OfType<FunctionResultContent>().Reverse())
+        {
+            if (result.CallId == null || !screenshotCalls.TryGetValue(result.CallId, out string tool)) continue;
+            string text = result.Result?.ToString();
+            path = tool == ScreenshotToolName
+                ? TranscriptScreenshot.TryParseSavedPath(text)
+                : TranscriptScreenshot.TryParseScriptSavedPath(text);
+            if (path != null) return true;
+        }
         path = null;
         return false;
     }

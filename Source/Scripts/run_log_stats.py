@@ -86,21 +86,7 @@ def print_group(title, runs, key):
         print(f"{name[:31]:32}{len(items):5}{calls:7}{pct(fails, calls):>8}{pct(finished, len(items)):>10}{tokens:12}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("log", nargs="?", default=DEFAULT_LOG)
-    parser.add_argument("--since", help="只算 StartedUtc 不早於此日期（ISO 格式）的紀錄")
-    parser.add_argument("--model", help="只算用過此模型（子字串）的紀錄")
-    parser.add_argument("--version", help="只算 ModVersion 含此字串的紀錄")
-    parser.add_argument("--top", type=int, default=15, help="各表最多列幾行")
-    args = parser.parse_args()
-
-    if not os.path.exists(args.log):
-        sys.exit(f"找不到紀錄檔：{args.log}")
-    runs = load(args.log, args)
-    if not runs:
-        sys.exit("沒有符合條件的紀錄。")
-
+def print_overview(runs):
     print(f"{len(runs)} runs, {runs[0]['StartedUtc'][:16]} ~ {runs[-1]['StartedUtc'][:16]}")
     outcomes = collections.Counter(r.get("Outcome", "") for r in runs)
     print("outcomes:", ", ".join(f"{k} {v}" for k, v in outcomes.most_common()))
@@ -111,6 +97,8 @@ def main():
         calls, fails, cancels = calls + c, fails + f, cancels + x
     print(f"tool calls {calls}, failed {fails} ({pct(fails, calls).strip()}), cancelled {cancels}")
 
+
+def collect_tool_metrics(runs):
     total = collections.Counter()
     failed = collections.Counter()
     durations = collections.defaultdict(list)
@@ -126,20 +114,43 @@ def main():
             if step.get("Failed"):
                 failed[name] += 1
                 reasons[name][normalize_error(step.get("Result"))] += 1
+    return total, failed, durations, reasons
+
+
+def print_tools_breakdown(runs, top):
+    total, failed, durations, reasons = collect_tool_metrics(runs)
 
     print("\n== tools (kept steps only, cancellations excluded)")
     print(f"{'tool':28}{'calls':>6}{'fail':>6}{'fail%':>8}{'avg ms':>8}")
-    for name, n in total.most_common(args.top):
+    for name, n in total.most_common(top):
         ms = durations[name]
         avg = f"{sum(ms) // len(ms):8}" if ms else "       -"
         print(f"{name:28}{n:6}{failed[name]:6}{pct(failed[name], n):>8}{avg}")
 
     print("\n== top failure reasons")
-    for name, n in failed.most_common(args.top):
+    for name, n in failed.most_common(top):
         print(f"{name} ({n}/{total[name]})")
         for reason, count in reasons[name].most_common(3):
             print(f"    {count:3}  {reason}")
 
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("log", nargs="?", default=DEFAULT_LOG)
+    parser.add_argument("--since", help="只算 StartedUtc 不早於此日期（ISO 格式）的紀錄")
+    parser.add_argument("--model", help="只算用過此模型（子字串）的紀錄")
+    parser.add_argument("--version", help="只算 ModVersion 含此字串的紀錄")
+    parser.add_argument("--top", type=int, default=15, help="各表最多列幾行")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.log):
+        sys.exit(f"找不到紀錄檔：{args.log}")
+    runs = load(args.log, args)
+    if not runs:
+        sys.exit("沒有符合條件的紀錄。")
+
+    print_overview(runs)
+    print_tools_breakdown(runs, args.top)
     print_group("by model", runs, run_models)
     print_group("by mod version", runs, lambda r: r.get("ModVersion") or "(unknown)")
 

@@ -56,7 +56,7 @@ public sealed class MapOverviewTools
         int width = survey.Width;
         int height = survey.Height;
         int total = width * height;
-        var counts = new int[Enum.GetValues(typeof(SurveyCell)).Length];
+        var counts = new int[Enum.GetValues<SurveyCell>().Length];
         int thickRoof = 0;
         for (int i = 0; i < total; i++)
         {
@@ -215,29 +215,47 @@ public sealed class MapOverviewTools
         {
             int key = keys[start];
             if (key == 0 || visited[start]) continue;
-            var cluster = new Cluster { Key = key };
-            visited[start] = true;
-            stack.Push(start);
-            while (stack.Count > 0)
-            {
-                int i = stack.Pop();
-                int x = i % width, z = i / width;
-                cluster.Cells++;
-                cluster.SumX += x;
-                cluster.SumZ += z;
-                if (x < cluster.MinX) cluster.MinX = x;
-                if (x > cluster.MaxX) cluster.MaxX = x;
-                if (z < cluster.MinZ) cluster.MinZ = z;
-                if (z > cluster.MaxZ) cluster.MaxZ = z;
-                if (x > 0) TryPush(i - 1, key, keys, visited, stack);
-                if (x < width - 1) TryPush(i + 1, key, keys, visited, stack);
-                if (z > 0) TryPush(i - width, key, keys, visited, stack);
-                if (i + width < total) TryPush(i + width, key, keys, visited, stack);
-            }
-            clusters.Add(cluster);
+            FloodFillFrom(start, key, keys, visited, width, total, stack, clusters);
         }
         return clusters;
     }
+
+#pragma warning disable S107 // 私有遞迴輔助方法，參數皆為洪水填充相關，無需重構
+    private static void FloodFillFrom(int start, int key, int[] keys, bool[] visited, int width, int total, Stack<int> stack, List<Cluster> clusters)
+    {
+        var cluster = new Cluster { Key = key };
+        visited[start] = true;
+        stack.Push(start);
+        while (stack.Count > 0)
+        {
+            int i = stack.Pop();
+            UpdateClusterBounds(i, width, cluster);
+            TryPushNeighbors(i, key, keys, visited, width, total, stack);
+        }
+        clusters.Add(cluster);
+    }
+
+    private static void UpdateClusterBounds(int i, int width, Cluster cluster)
+    {
+        int x = i % width, z = i / width;
+        cluster.Cells++;
+        cluster.SumX += x;
+        cluster.SumZ += z;
+        if (x < cluster.MinX) cluster.MinX = x;
+        if (x > cluster.MaxX) cluster.MaxX = x;
+        if (z < cluster.MinZ) cluster.MinZ = z;
+        if (z > cluster.MaxZ) cluster.MaxZ = z;
+    }
+
+    private static void TryPushNeighbors(int i, int key, int[] keys, bool[] visited, int width, int total, Stack<int> stack)
+    {
+        int x = i % width, z = i / width;
+        if (x > 0) TryPush(i - 1, key, keys, visited, stack);
+        if (x < width - 1) TryPush(i + 1, key, keys, visited, stack);
+        if (z > 0) TryPush(i - width, key, keys, visited, stack);
+        if (i + width < total) TryPush(i + width, key, keys, visited, stack);
+    }
+#pragma warning restore S107
 
     private static void TryPush(int n, int key, int[] keys, bool[] visited, Stack<int> stack)
     {
@@ -253,8 +271,8 @@ public sealed class MapOverviewTools
     {
         int col = Math.Min(2, Math.Max(0, x * 3 / Math.Max(1, survey.Width)));
         int row = Math.Min(2, Math.Max(0, z * 3 / Math.Max(1, survey.Height)));
-        string ns = row == 2 ? "north" : row == 0 ? "south" : string.Empty;
-        string ew = col == 2 ? "east" : col == 0 ? "west" : string.Empty;
+        string ns = row switch { 2 => "north", 0 => "south", _ => string.Empty };
+        string ew = col switch { 2 => "east", 0 => "west", _ => string.Empty };
         if (ns.Length == 0 && ew.Length == 0) return "centre";
         if (ns.Length == 0) return ew;
         return ew.Length == 0 ? ns : ns + "-" + ew;

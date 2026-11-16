@@ -106,7 +106,7 @@ public static class TargetResolver
         if (prefix.Count == 1) return Result<T>.Ok(prefix[0]);
         if (prefix.Count > 1) return FormatAmbiguous(needle, prefix, describe, kindLabel);
 
-        List<T> contains = [.. candidates.Where(c => getNames(c).Any(n => n != null && n.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0))];
+        List<T> contains = [.. candidates.Where(c => getNames(c).Any(n => n != null && n.Contains(needle, StringComparison.OrdinalIgnoreCase)))];
         if (contains.Count == 1) return Result<T>.Ok(contains[0]);
         if (contains.Count > 1) return FormatAmbiguous(needle, contains, describe, kindLabel);
 

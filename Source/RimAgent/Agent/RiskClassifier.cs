@@ -60,7 +60,7 @@ public sealed class RiskClassifier : IRiskChecker
 
     public async Task<RiskVerdict> ClassifyAsync(RiskQuestion question, CancellationToken cancellationToken)
     {
-        if (question == null) throw new ArgumentNullException(nameof(question));
+        ArgumentNullException.ThrowIfNull(question);
         string prompt = _systemPrompt?.Invoke();
         if (string.IsNullOrWhiteSpace(prompt))
         {

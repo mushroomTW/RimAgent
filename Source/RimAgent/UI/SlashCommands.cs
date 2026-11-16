@@ -110,31 +110,64 @@ public static class SlashCommands
         index = 0;
         text = (args ?? string.Empty).Trim();
         if (text.Length == 0) return GoalAction.List;
-        if (string.Equals(text, "pause", StringComparison.OrdinalIgnoreCase)) return GoalAction.Pause;
-        if (string.Equals(text, "resume", StringComparison.OrdinalIgnoreCase)) return GoalAction.Resume;
-        if (string.Equals(text, "clear", StringComparison.OrdinalIgnoreCase)) return GoalAction.Clear;
-        if (string.Equals(text, "show", StringComparison.OrdinalIgnoreCase)) return GoalAction.Show;
-        if (text.StartsWith("show ", StringComparison.OrdinalIgnoreCase))
+
+        if (TryParseSimpleCommand(text, out GoalAction simpleResult)) return simpleResult;
+        if (TryParseShowCommand(text, out index)) return GoalAction.Show;
+        if (TryParseEditCommand(text, out index, out string rest))
         {
-            int.TryParse(text.Substring(5).Trim(), out index);
-            return GoalAction.Show;
-        }
-        if (string.Equals(text, "edit", StringComparison.OrdinalIgnoreCase)) return GoalAction.Edit;
-        if (text.StartsWith("edit ", StringComparison.OrdinalIgnoreCase))
-        {
-            string rest = text.Substring(5).Trim();
-            int separator = rest.IndexOf(' ');
-            int.TryParse(separator < 0 ? rest : rest.Substring(0, separator), out index);
-            text = separator < 0 ? string.Empty : rest.Substring(separator + 1).Trim();
+            text = rest;
             return GoalAction.Edit;
         }
-        // 「remove」沒帶序號也算刪除（index 留 0，UI 回報沒有這個序號），不能誤加成目標。
-        if (string.Equals(text, "remove", StringComparison.OrdinalIgnoreCase)) return GoalAction.Remove;
+        if (TryParseRemoveCommand(text, out index)) return GoalAction.Remove;
+        return GoalAction.Add;
+    }
+
+    private static bool TryParseSimpleCommand(string text, out GoalAction result)
+    {
+        result = text.ToLowerInvariant() switch
+        {
+            "pause" => GoalAction.Pause,
+            "resume" => GoalAction.Resume,
+            "clear" => GoalAction.Clear,
+            "show" => GoalAction.Show,
+            "edit" => GoalAction.Edit,
+            "remove" => GoalAction.Remove,
+            _ => GoalAction.List
+        };
+        return result != GoalAction.List;
+    }
+
+    private static bool TryParseShowCommand(string text, out int index)
+    {
+        index = 0;
+        if (text.StartsWith("show ", StringComparison.OrdinalIgnoreCase))
+            return int.TryParse(text.Substring(5).Trim(), out index);
+        return false;
+    }
+
+    private static bool TryParseEditCommand(string text, out int index, out string rest)
+    {
+        index = 0;
+        rest = string.Empty;
+        if (!text.StartsWith("edit ", StringComparison.OrdinalIgnoreCase)) return false;
+        string trimmed = text.Substring(5).Trim();
+        int separator = trimmed.IndexOf(' ');
+        if (!int.TryParse(separator < 0 ? trimmed : trimmed.Substring(0, separator), out index)) return false;
+        rest = separator < 0 ? string.Empty : trimmed.Substring(separator + 1).Trim();
+        return true;
+    }
+
+    private static bool TryParseRemoveCommand(string text, out int index)
+    {
+        index = 0;
         if (text.StartsWith("remove ", StringComparison.OrdinalIgnoreCase))
         {
-            int.TryParse(text.Substring(7).Trim(), out index);
-            return GoalAction.Remove;
+            if (!int.TryParse(text.Substring(7).Trim(), out index))
+            {
+                index = 0;
+            }
+            return true;
         }
-        return GoalAction.Add;
+        return false;
     }
 }

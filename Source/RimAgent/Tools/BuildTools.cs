@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Text;
 using RimAgent.Agent;
 using RimAgent.Game;
 
@@ -206,58 +207,90 @@ public sealed class BuildTools
         if (!cells.Success) return cells.Error;
 
         string what = def.Value.Label + (stuffDefName.Length > 0 ? $" ({stuffDefName})" : string.Empty);
-        string where = cells.Value.Count == 1
-            ? $"at {ToolText.Cell(x, z)}"
-            : $"from {ToolText.Cell(x, z)} to {ToolText.Cell(x2, z2)} ({shape.Trim().ToLowerInvariant()})";
+        string where = WhereText(cells.Value, x, z, x2, z2, shape);
         string blocked = ToolText.Blocked(_gate, $"would place {cells.Value.Count} {what} blueprint(s) {where}.");
         if (blocked != null) return blocked;
 
+        return PlaceAndReport(def, cells.Value, rotation, stuffDefName, what, where);
+    }
+
+    private static string WhereText(List<(int X, int Z)> cells, int x, int z, int x2, int z2, string shape)
+    {
+        return cells.Count == 1
+            ? $"at {ToolText.Cell(x, z)}"
+            : $"from {ToolText.Cell(x, z)} to {ToolText.Cell(x2, z2)} ({shape.Trim().ToLowerInvariant()})";
+    }
+
+    private string PlaceAndReport(Result<DefInfo> def, List<(int X, int Z)> cells, int rotation, string stuffDefName, string what, string where)
+    {
         MapBounds bounds = _world.GetMapBounds();
         BuildingInfo info = _world.GetBuildingInfo(def.Value.DefName);
         bool large = info != null && (info.Width > 1 || info.Height > 1);
         // 先檢查每一格都放得下（含同一次呼叫裡大型建築彼此重疊），任何一格不行就一個都不放，
         // 避免只蓋出半道牆或缺角的房間卻回報成功。
-        var failures = new List<string>();
-        var claimed = new HashSet<(int X, int Z)>();
-        foreach ((int cx, int cz) in cells.Value)
-        {
-            string cell = ToolText.Cell(cx, cz) + (large ? " (would cover " + OccupiedRect(cx, cz, rotation, info) + ")" : string.Empty);
-            if (TargetResolver.CheckCell(cx, cz, bounds) != null)
-            {
-                failures.Add($"{ToolText.Cell(cx, cz)}: outside the map");
-                continue;
-            }
-            if (large && !Claim(claimed, OccupiedRect(cx, cz, rotation, info)))
-            {
-                failures.Add($"{cell}: overlaps another blueprint of this call");
-                continue;
-            }
-            CommandResult check = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName, checkOnly: true);
-            if (!check.Success) failures.Add($"{cell}: {check.Message}");
-        }
-        if (failures.Count > 0)
-        {
-            return ToolText.Error($"placed nothing: {failures.Count} of {cells.Value.Count} {what} blueprint(s) cannot go there. "
-                + string.Join("; ", failures.Take(5)) + (failures.Count > 5 ? $"; and {failures.Count - 5} more" : string.Empty)
-                + ". Clear the blockers or choose other cells, then place them all again.");
-        }
+        var validation = ValidateAllCells(cells, rotation, info, bounds, large, def, stuffDefName);
+        if (validation.failures.Count > 0) return BuildPlaceValidationError(what, cells, validation);
 
         var placedCells = new List<(int X, int Z)>();
         var lateFailures = new List<string>();
-        foreach ((int cx, int cz) in cells.Value)
+        PlaceAllCells(cells, def.Value.DefName, rotation, stuffDefName, placedCells, lateFailures);
+        if (lateFailures.Count > 0) return BuildPlaceLateFailureError(what, cells, placedCells, lateFailures, where);
+
+        return $"Placed {placedCells.Count} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
+    }
+
+    private static string BuildPlaceValidationError(string what, List<(int X, int Z)> cells, (bool success, List<string> failures) validation)
+    {
+        return ToolText.Error($"placed nothing: {validation.failures.Count} of {cells.Count} {what} blueprint(s) cannot go there. "
+            + string.Join("; ", validation.failures.Take(5)) + (validation.failures.Count > 5 ? $"; and {validation.failures.Count - 5} more" : string.Empty)
+            + ". Clear the blockers or choose other cells, then place them all again.");
+    }
+
+    private static string BuildPlaceLateFailureError(string what, List<(int X, int Z)> cells, List<(int X, int Z)> placedCells, List<string> lateFailures, string where)
+    {
+        return ToolText.Error($"only {placedCells.Count} of {cells.Count} {what} blueprint(s) were placed {where}; "
+            + "these were refused after the check: " + string.Join("; ", lateFailures.Take(5)) + ".");
+    }
+
+    private (bool success, List<string> failures) ValidateAllCells(List<(int X, int Z)> cells, int rotation, BuildingInfo info, MapBounds bounds, bool large, Result<DefInfo> def, string stuffDefName)
+    {
+        var failures = new List<string>();
+        var claimed = new HashSet<(int X, int Z)>();
+        foreach ((int cx, int cz) in cells)
         {
-            CommandResult r = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName);
+            ValidatePlaceCell(cx, cz, rotation, info, bounds, claimed, failures, large, def, stuffDefName);
+        }
+        return (failures.Count == 0, failures);
+    }
+
+    private void PlaceAllCells(List<(int X, int Z)> cells, string defName, int rotation, string stuffDefName, List<(int X, int Z)> placedCells, List<string> lateFailures)
+    {
+        foreach ((int cx, int cz) in cells)
+        {
+            CommandResult r = _world.TryPlaceBlueprint(defName, cx, cz, rotation, stuffDefName);
             if (r.Success) placedCells.Add((cx, cz));
             else lateFailures.Add($"{ToolText.Cell(cx, cz)}: {r.Message}");
         }
-        if (lateFailures.Count > 0)
-        {
-            // 檢查通過後才被拒（同批放置互相影響）：已放的留著，但整次仍算失敗。
-            return ToolText.Error($"only {placedCells.Count} of {cells.Value.Count} {what} blueprint(s) were placed {where}; "
-                + "these were refused after the check: " + string.Join("; ", lateFailures.Take(5)) + ".");
-        }
-        return $"Placed {placedCells.Count} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
     }
+
+#pragma warning disable S107 // 私有驗證輔助方法，參數皆為放置檢查相關，無需重構
+    private void ValidatePlaceCell(int cx, int cz, int rotation, BuildingInfo info, MapBounds bounds, HashSet<(int X, int Z)> claimed, List<string> failures, bool large, Result<DefInfo> def, string stuffDefName)
+    {
+        string cell = ToolText.Cell(cx, cz) + (large ? " (would cover " + OccupiedRect(cx, cz, rotation, info) + ")" : string.Empty);
+        if (TargetResolver.CheckCell(cx, cz, bounds) != null)
+        {
+            failures.Add($"{ToolText.Cell(cx, cz)}: outside the map");
+            return;
+        }
+        if (large && !Claim(claimed, OccupiedRect(cx, cz, rotation, info)))
+        {
+            failures.Add($"{cell}: overlaps another blueprint of this call");
+            return;
+        }
+        CommandResult check = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName, checkOnly: true);
+        if (!check.Success) failures.Add($"{cell}: {check.Message}");
+    }
+#pragma warning restore S107
 
     /// <summary>把範圍內的格子記為已占用；有任何一格已被占用時回傳 false。</summary>
     private static bool Claim(HashSet<(int X, int Z)> claimed, CellRectSpec rect)
@@ -289,13 +322,8 @@ public sealed class BuildTools
         IReadOnlyList<LayoutInfo> layouts = _world.Layouts;
         if (layouts.Count == 0) return ToolText.Error("no room layouts are installed.");
 
-        if (string.IsNullOrWhiteSpace(layout))
-        {
-            return "Layouts (size, then what it is): " + string.Join("; ",
-                layouts.Select(l => $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}" + (l.Description.Length > 0 ? ": " + l.Description : string.Empty))) + ".";
-        }
-        Result<DefInfo> chosen = DefResolver.Resolve(layout, [.. layouts.Select(l => new DefInfo(l.DefName, l.Label))], "layout");
-        // 名稱打錯只附名稱與尺寸，完整說明用空名稱查。
+        if (string.IsNullOrWhiteSpace(layout)) return ListLayouts(layouts);
+        Result<DefInfo> chosen = ResolveLayout(layout, layouts);
         if (!chosen.Success) return chosen.Error + " Layouts: " + string.Join("; ", layouts.Select(l => $"{l.Label} {l.Width}x{l.Height}")) + ".";
 
         if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
@@ -305,43 +333,79 @@ public sealed class BuildTools
         LayoutPlan plan = _world.GetLayoutPlan(chosen.Value.DefName, x, z, rotation);
         if (plan == null) return ToolText.Error($"no data for layout {chosen.Value.DefName}.");
         MapBounds bounds = _world.GetMapBounds();
-        if (TargetResolver.CheckCell(plan.Rect.MinX, plan.Rect.MinZ, bounds) != null || TargetResolver.CheckCell(plan.Rect.MaxX, plan.Rect.MaxZ, bounds) != null)
-        {
-            return ToolText.Error($"{chosen.Value.Label} centered at {ToolText.Cell(x, z)} would cover {plan.Rect}, which leaves the map.");
-        }
+        if (LayoutOutOfMap(plan, bounds)) return ToolText.Error($"{chosen.Value.Label} centered at {ToolText.Cell(x, z)} would cover {plan.Rect}, which leaves the map.");
 
         string chosenMaterials = materials.Value.Describe();
         string what = chosen.Value.Label + (chosenMaterials.Length > 0 ? $" ({chosenMaterials})" : string.Empty);
         string blocked = ToolText.Blocked(_gate, $"would place the {what} layout: {plan.Pieces.Count} blueprints covering {plan.Rect}.");
         if (blocked != null) return blocked;
 
+        return ApplyLayout(plan, materials.Value, what);
+    }
+
+    /// <summary>房型的矩形是否超出地圖邊界。</summary>
+    private static bool LayoutOutOfMap(LayoutPlan plan, MapBounds bounds)
+    {
+        return TargetResolver.CheckCell(plan.Rect.MinX, plan.Rect.MinZ, bounds) != null
+            || TargetResolver.CheckCell(plan.Rect.MaxX, plan.Rect.MaxZ, bounds) != null;
+    }
+
+    /// <summary>驗證並放置房型的每件建築，失敗時回傳說明，成功則回放置摘要。</summary>
+    private string ApplyLayout(LayoutPlan plan, LayoutMaterials materials, string what)
+    {
         var infos = new Dictionary<string, BuildingInfo>(StringComparer.Ordinal);
-        BuildingInfo Info(string defName) => infos.TryGetValue(defName, out BuildingInfo i) ? i : infos[defName] = _world.GetBuildingInfo(defName);
+        BuildingInfo Info(string defName)
+        {
+            if (infos.TryGetValue(defName, out BuildingInfo i)) return i;
+            i = _world.GetBuildingInfo(defName);
+            infos[defName] = i;
+            return i;
+        }
         string Label(LayoutPiece piece) => Info(piece.DefName)?.Label ?? piece.DefName;
 
         // 先確認每一件都放得下（牆擋住、地板需要承重地基等），任何一件不行就整間都不放，不留缺角的房間。
         var failures = new Dictionary<string, int>(StringComparer.Ordinal);
+        int refused = CheckLayoutPieces(plan, materials, Info, Label, failures);
+        if (refused > 0)
+            return ToolText.Error($"placed nothing: {refused} of {plan.Pieces.Count} parts of the {what} layout cannot go in {plan.Rect}. "
+                + FormatLayoutFailures(failures) + " Clear the blockers or choose another spot, then place the layout again.");
+
+        int placed = 0;
+        var lateFailures = new Dictionary<string, int>(StringComparer.Ordinal);
+        var fellBack = new Dictionary<string, int>(StringComparer.Ordinal);
+        PlaceLayoutPieces(plan, materials, Info, Label, ref placed, lateFailures, fellBack);
+        if (lateFailures.Count > 0)
+            return ToolText.Error($"only {placed} of {plan.Pieces.Count} blueprints of the {what} layout were placed in {plan.Rect}; "
+                + "these were refused after the check: " + FormatLayoutFailures(lateFailures));
+        string summary = $"Placed all {placed} blueprints of the {what} layout, covering {plan.Rect}.";
+        if (fellBack.Count > 0) summary += " Kept the layout's own material or floor (the requested one was refused): " + FormatLayoutFailures(fellBack);
+        return summary;
+    }
+
+    private static Result<DefInfo> ResolveLayout(string layout, IReadOnlyList<LayoutInfo> layouts)
+    {
+        return DefResolver.Resolve(layout, [.. layouts.Select(l => new DefInfo(l.DefName, l.Label))], "layout");
+    }
+
+    private int CheckLayoutPieces(LayoutPlan plan, LayoutMaterials materials, Func<string, BuildingInfo> Info, Func<LayoutPiece, string> Label, Dictionary<string, int> failures)
+    {
         int refused = 0;
         foreach (LayoutPiece piece in plan.Pieces)
         {
-            CommandResult check = PlaceLayoutPiece(piece, materials.Value.For(piece.Part), Info(piece.DefName), true, out _);
+            CommandResult check = PlaceLayoutPiece(piece, materials.For(piece.Part), Info(piece.DefName), true, out _);
             if (check.Success) continue;
             refused++;
             string key = $"{Label(piece)}: {check.Message}";
             failures[key] = failures.TryGetValue(key, out int n) ? n + 1 : 1;
         }
-        if (refused > 0)
-        {
-            return ToolText.Error($"placed nothing: {refused} of {plan.Pieces.Count} parts of the {what} layout cannot go in {plan.Rect}. "
-                + FormatLayoutFailures(failures) + " Clear the blockers or choose another spot, then place the layout again.");
-        }
+        return refused;
+    }
 
-        int placed = 0;
-        var lateFailures = new Dictionary<string, int>(StringComparer.Ordinal);
-        var fellBack = new Dictionary<string, int>(StringComparer.Ordinal);
+    private void PlaceLayoutPieces(LayoutPlan plan, LayoutMaterials materials, Func<string, BuildingInfo> Info, Func<LayoutPiece, string> Label, ref int placed, Dictionary<string, int> lateFailures, Dictionary<string, int> fellBack)
+    {
         foreach (LayoutPiece piece in plan.Pieces)
         {
-            CommandResult r = PlaceLayoutPiece(piece, materials.Value.For(piece.Part), Info(piece.DefName), false, out bool usedOwnStuff);
+            CommandResult r = PlaceLayoutPiece(piece, materials.For(piece.Part), Info(piece.DefName), false, out bool usedOwnStuff);
             string label = Label(piece);
             if (r.Success)
             {
@@ -352,15 +416,12 @@ public sealed class BuildTools
             string key = $"{label}: {r.Message}";
             lateFailures[key] = lateFailures.TryGetValue(key, out int n) ? n + 1 : 1;
         }
-        if (lateFailures.Count > 0)
-        {
-            // 檢查通過後才被拒（同一房型的件彼此影響）：已放的留著，但整次仍算失敗。
-            return ToolText.Error($"only {placed} of {plan.Pieces.Count} blueprints of the {what} layout were placed in {plan.Rect}; "
-                + "these were refused after the check: " + FormatLayoutFailures(lateFailures));
-        }
-        string summary = $"Placed all {placed} blueprints of the {what} layout, covering {plan.Rect}.";
-        if (fellBack.Count > 0) summary += " Kept the layout's own material or floor (the requested one was refused): " + FormatLayoutFailures(fellBack);
-        return summary;
+    }
+
+    private static string ListLayouts(IReadOnlyList<LayoutInfo> layouts)
+    {
+        return "Layouts (size, then what it is): " + string.Join("; ",
+            layouts.Select(l => $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}" + (l.Description.Length > 0 ? ": " + l.Description : string.Empty))) + ".";
     }
 
     /// <summary>放一件房型內容；有指定替換時先試替換，被拒再退回房型原本的設計。</summary>
@@ -434,35 +495,46 @@ public sealed class BuildTools
 
         foreach (string entry in text.Split([';', ','], StringSplitOptions.RemoveEmptyEntries))
         {
-            int sep = entry.IndexOfAny(['=', ':']);
-            string key = sep < 0 ? string.Empty : entry.Substring(0, sep).Trim().ToLowerInvariant();
-            string value = sep < 0 ? string.Empty : entry.Substring(sep + 1).Trim();
-            switch (key)
-            {
-                case "wall":
-                case "walls":
-                case "furniture":
-                    Result<string> material = ResolveStuffDefName(value);
-                    if (!material.Success) return Result<LayoutMaterials>.Fail(material.Error);
-                    if (key == "furniture") result.Furniture = material.Value;
-                    else result.Walls = material.Value;
-                    break;
-                case "floor":
-                case "floors":
-                    if (value.Length == 0) break;
-                    Result<DefInfo> floor = DefResolver.Resolve(value, _world.Buildables, "floor");
-                    if (!floor.Success) return Result<LayoutMaterials>.Fail(floor.Error);
-                    if (_world.GetBuildingInfo(floor.Value.DefName)?.IsTerrain != true)
-                    {
-                        return Result<LayoutMaterials>.Fail(ToolText.Error($"{floor.Value.Label} is not a floor."));
-                    }
-                    result.Floor = floor.Value.DefName;
-                    break;
-                default:
-                    return Result<LayoutMaterials>.Fail(ToolText.Error($"unknown part \"{entry.Trim()}\" in stuff; use walls=...; floor=...; furniture=..."));
-            }
+            string error = ApplyLayoutMaterialEntry(result, entry);
+            if (error != null) return Result<LayoutMaterials>.Fail(error);
         }
         return Result<LayoutMaterials>.Ok(result);
+    }
+
+    private string ApplyLayoutMaterialEntry(LayoutMaterials result, string entry)
+    {
+        int sep = entry.IndexOfAny(['=', ':']);
+        string key = sep < 0 ? string.Empty : entry.Substring(0, sep).Trim().ToLowerInvariant();
+        string value = sep < 0 ? string.Empty : entry.Substring(sep + 1).Trim();
+        switch (key)
+        {
+            case "wall":
+            case "walls":
+            case "furniture":
+                Result<string> material = ResolveStuffDefName(value);
+                if (!material.Success) return material.Error;
+                if (key == "furniture") result.Furniture = material.Value;
+                else result.Walls = material.Value;
+                return null;
+            case "floor":
+            case "floors":
+                return ApplyFloorEntry(result, value);
+            default:
+                return ToolText.Error($"unknown part \"{entry.Trim()}\" in stuff; use walls=...; floor=...; furniture=...");
+        }
+    }
+
+    private string ApplyFloorEntry(LayoutMaterials result, string value)
+    {
+        if (value.Length == 0) return null;
+        Result<DefInfo> floor = DefResolver.Resolve(value, _world.Buildables, "floor");
+        if (!floor.Success) return floor.Error;
+        if (_world.GetBuildingInfo(floor.Value.DefName)?.IsTerrain != true)
+        {
+            return ToolText.Error($"{floor.Value.Label} is not a floor.");
+        }
+        result.Floor = floor.Value.DefName;
+        return null;
     }
 
     private static string FormatLayoutFailures(Dictionary<string, int> failures)
@@ -558,15 +630,7 @@ public sealed class BuildTools
 
         // 各種類的目錄合併後一起比對，名稱層級（精確 → 前綴 → 包含）才是全域的；再以參考對回種類。
         var kindOf = new Dictionary<DefInfo, string>();
-        var candidates = new List<DefInfo>();
-        foreach (string k in wanted.Length > 0 ? new[] { wanted } : DefLookupKind.All)
-        {
-            foreach (DefInfo d in _world.GetLookupCatalog(k))
-            {
-                kindOf[d] = k;
-                candidates.Add(d);
-            }
-        }
+        List<DefInfo> candidates = CollectLookupCandidates(wanted, kindOf);
         Result<DefInfo> def = DefResolver.Resolve(name, candidates, wanted.Length > 0 ? wanted : "def");
         if (!def.Success) return def.Error;
         string resolvedKind = kindOf[def.Value];
@@ -577,20 +641,49 @@ public sealed class BuildTools
         sb.Append(info.Label).Append(" (").Append(info.DefName).Append("), ").AppendLine(resolvedKind);
         if (info.Description.Length > 0)
         {
-            sb.AppendLine(info.Description.Length > MaxDescriptionChars ? info.Description.Substring(0, MaxDescriptionChars) + "…" : info.Description);
+            sb.AppendLine(info.Description.Length > MaxDescriptionChars ? info.Description[..MaxDescriptionChars] + "…" : info.Description);
         }
         AppendStats(sb, info.Stats, (detail ?? string.Empty).Trim());
-        if (info.Facts.Count > 0)
-        {
-            sb.AppendLine("Facts:");
-            foreach (string fact in info.Facts) sb.Append("- ").AppendLine(fact);
-        }
-        if (resolvedKind is DefLookupKind.Thing or DefLookupKind.Terrain && _world.Buildables.Any(b => b.DefName == info.DefName))
+        AppendLookupFacts(sb, info);
+        if (IsPlaceableBuildable(resolvedKind, info))
         {
             BuildingInfo building = _world.GetBuildingInfo(info.DefName);
             if (building != null) sb.AppendLine("Building:").AppendLine(FormatBuildingInfo(building));
         }
         return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    /// <summary>依 wanted 種類蒐集候選物件，並把每個物件對應的種類記入 kindOf。</summary>
+    private List<DefInfo> CollectLookupCandidates(string wanted, Dictionary<DefInfo, string> kindOf)
+    {
+        var candidates = new List<DefInfo>();
+        foreach (string k in wanted.Length > 0 ? new[] { wanted } : DefLookupKind.All)
+        {
+            foreach (DefInfo d in _world.GetLookupCatalog(k))
+            {
+                kindOf[d] = k;
+                candidates.Add(d);
+            }
+        }
+        return candidates;
+    }
+
+    /// <summary>把查詢結果的「事實」清單附加到摘要。</summary>
+    private static void AppendLookupFacts(System.Text.StringBuilder sb, DefLookupInfo info)
+    {
+        if (info.Facts.Count > 0)
+        {
+            sb.AppendLine("Facts:");
+            foreach (string fact in info.Facts) sb.Append("- ").AppendLine(fact);
+        }
+    }
+
+    /// <summary>該 def 是否可放置為建築（物件，或屬於建築的地形）。</summary>
+    private bool IsPlaceableBuildable(string resolvedKind, DefLookupInfo info)
+    {
+        return string.Equals(resolvedKind, DefLookupKind.Thing, StringComparison.OrdinalIgnoreCase)
+            || (string.Equals(resolvedKind, DefLookupKind.Terrain, StringComparison.OrdinalIgnoreCase)
+                && _world.Buildables.Any(b => b.DefName == info.DefName));
     }
 
     /// <summary>
@@ -602,6 +695,22 @@ public sealed class BuildTools
         if (stats.Count == 0) return;
         // 以顯示名稱分組：原版的 Basics、BasicsImportant、BasicsNonPawn 等類別同名，分開列會重複出現好幾行。
         List<IGrouping<string, DefStatEntry>> groups = [.. stats.GroupBy(s => s.CategoryLabel)];
+        var shown = SelectShownGroups(groups, detail, sb);
+
+        if (shown.Count > 0)
+        {
+            sb.AppendLine("Stats:");
+            foreach (IGrouping<string, DefStatEntry> g in shown)
+            {
+                sb.AppendLine(FormatStatGroup(g));
+            }
+        }
+        AppendHiddenGroups(sb, groups, shown);
+    }
+
+    /// <summary>依 detail 參數挑選要顯示的統計群組；detail 為空白時依預算依序放入。</summary>
+    private static List<IGrouping<string, DefStatEntry>> SelectShownGroups(List<IGrouping<string, DefStatEntry>> groups, string detail, System.Text.StringBuilder sb)
+    {
         bool all = string.Equals(detail, "all", StringComparison.OrdinalIgnoreCase);
         var shown = new List<IGrouping<string, DefStatEntry>>();
         if (all) shown.AddRange(groups);
@@ -622,16 +731,11 @@ public sealed class BuildTools
                 used += n;
             }
         }
+        return shown;
+    }
 
-        if (shown.Count > 0)
-        {
-            sb.AppendLine("Stats:");
-            foreach (IGrouping<string, DefStatEntry> g in shown)
-            {
-                sb.Append('[').Append(g.Key).Append("] ")
-                  .AppendLine(string.Join("; ", g.Select(s => s.Value.Length > 0 ? $"{s.Label}: {s.Value}" : s.Label)));
-            }
-        }
+    private static void AppendHiddenGroups(System.Text.StringBuilder sb, List<IGrouping<string, DefStatEntry>> groups, List<IGrouping<string, DefStatEntry>> shown)
+    {
         List<IGrouping<string, DefStatEntry>> hidden = [.. groups.Where(g => !shown.Contains(g))];
         if (hidden.Count > 0)
         {
@@ -640,26 +744,59 @@ public sealed class BuildTools
         }
     }
 
+    private static string FormatStatGroup(IGrouping<string, DefStatEntry> g)
+    {
+        return $"[{g.Key}] " + string.Join("; ", g.Select(s => s.Value.Length > 0 ? $"{s.Label}: {s.Value}" : s.Label));
+    }
+
     private static string FormatBuildingInfo(BuildingInfo b)
     {
         var sb = new System.Text.StringBuilder();
+        AppendSizeAndRotation(sb, b);
+        AppendCost(sb, b);
+        AppendGround(sb, b);
+        AppendResearch(sb, b);
+        AppendBuilderSkill(sb, b);
+        AppendPlacement(sb, b);
+        AppendShipPart(sb, b);
+        AppendPower(sb, b);
+        AppendInteractionCell(sb, b);
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
+    private static void AppendSizeAndRotation(StringBuilder sb, BuildingInfo b)
+    {
         sb.Append("Size: ").Append(b.Width).Append('x').Append(b.Height).Append(" (x by z, facing north). ");
         sb.AppendLine(b.Width == b.Height
             ? "Rotation does not change the footprint."
             : $"Rotation 1 or 3 (east/west) makes it {b.Height}x{b.Width}.");
         if (b.Width > 1 || b.Height > 1) sb.AppendLine("place_blueprint x,z is the center cell; its reply lists the covered rectangle.");
+    }
 
+    private static void AppendCost(StringBuilder sb, BuildingInfo b)
+    {
         var cost = new List<string>(b.Costs.Select(c => $"{c.Label} x{c.Count}"));
         if (b.StuffCount > 0) cost.Add($"{b.StuffCount} of a material ({string.Join(", ", b.StuffCategories)})");
         sb.Append("Cost: ").AppendLine(cost.Count == 0 ? "none" : string.Join(", ", cost));
+    }
 
+    private static void AppendGround(StringBuilder sb, BuildingInfo b)
+    {
         if (b.TerrainAffordance.Length > 0)
         {
             sb.Append("Ground: needs ").Append(b.TerrainAffordance).Append(" support under every covered cell")
               .AppendLine(b.AffordanceFromStuff ? " (may depend on the material)." : ".");
         }
+    }
+
+    private static void AppendResearch(StringBuilder sb, BuildingInfo b)
+    {
         if (b.Research.Count == 0) sb.AppendLine("Research: none.");
         else sb.Append("Research: ").AppendLine(string.Join(", ", b.Research.Select(r => r.Label + (r.Done ? " (done)" : " (NOT done)"))));
+    }
+
+    private static void AppendBuilderSkill(StringBuilder sb, BuildingInfo b)
+    {
         if (b.ConstructionSkill > 0 || b.ArtisticSkill > 0)
         {
             var skills = new List<string>();
@@ -667,20 +804,35 @@ public sealed class BuildTools
             if (b.ArtisticSkill > 0) skills.Add($"artistic {b.ArtisticSkill}");
             sb.Append("Builder skill: ").Append(string.Join(", ", skills)).AppendLine(".");
         }
+    }
+
+    private static void AppendPlacement(StringBuilder sb, BuildingInfo b)
+    {
         if (b.PlaceWorkers.Count > 0)
         {
             sb.Append("Placement: ").AppendLine(string.Join("; ", b.PlaceWorkers.Select(w =>
                 PlaceWorkerRules.TryGetValue(w, out string rule) ? w + " -> " + rule : w)));
         }
+    }
+
+    private static void AppendShipPart(StringBuilder sb, BuildingInfo b)
+    {
         if (b.ShipPart) sb.AppendLine("Ship part: counts toward the starship (must touch the others edge to edge; check_ship_layout verifies).");
+    }
+
+    private static void AppendPower(StringBuilder sb, BuildingInfo b)
+    {
         if (b.PowerWatts > 0) sb.Append("Power: uses ").Append(ToolText.Num(b.PowerWatts)).AppendLine(" W.");
         else if (b.PowerWatts < 0) sb.Append("Power: produces ").Append(ToolText.Num(-b.PowerWatts)).AppendLine(" W.");
+    }
+
+    private static void AppendInteractionCell(StringBuilder sb, BuildingInfo b)
+    {
         if (b.InteractionOffsets.Count > 0)
         {
             sb.Append("Interaction cell: offset ").Append(string.Join(", ", b.InteractionOffsets.Select(o => ToolText.Cell(o.X, o.Z))))
               .AppendLine(" from the center when facing north (turns with rotation); keep it free.");
         }
-        return sb.ToString().TrimEnd('\r', '\n');
     }
 
     /// <summary>形狀展開成格子；line 照模型給的起點走向終點，fill／outline 由下往上逐列。</summary>
@@ -816,7 +968,7 @@ public sealed class BuildTools
 
     private static bool Matches(ThingInfo t, string needle)
     {
-        return t.DefName.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0 ||
-               t.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+        return t.DefName.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+               t.Label.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 }

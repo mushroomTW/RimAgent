@@ -23,7 +23,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentVisionScriptCheck.xml";
     private const string Prefix = TestHelpers.LogPrefix + "VisionScriptCheck ";
-    private static bool _started;
+    private bool _started;
 
     public VisionScriptCheckComponent(Verse.Game game)
     {
@@ -34,10 +34,10 @@ public sealed class VisionScriptCheckComponent : GameComponent
         if (_started || Current.ProgramState != ProgramState.Playing || Find.CurrentMap == null) return;
         _started = true;
         if (!File.Exists(Path.Combine(GenFilePaths.ConfigFolderPath, MarkerFileName))) return;
-        RunAsync();
+        _ = RunAsync();
     }
 
-    private static async void RunAsync()
+    private static async Task RunAsync()
     {
         var failures = new List<string>();
         try
@@ -170,7 +170,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
             }
         }
         byte[] fromDib = ClipboardImage.FromDib(dib);
-        if (fromDib == null)
+        if (fromDib.Length == 0)
         {
             failures.Add("dib: decode failed");
         }
@@ -201,7 +201,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
         string text = await script.RunScript(
             "[{\"tool\":\"get_colony_overview\"},{\"tool\":\"find_things\",\"args\":{\"kind\":\"item\"}," +
             "\"for_each\":[{\"limit\":3},{\"limit\":5}]}]");
-        Log.Message(Prefix + "run_script tail: " + text.Substring(Math.Max(0, text.Length - 120)));
+        Log.Message(Prefix + "run_script tail: " + text[Math.Max(0, text.Length - 120)..]);
         if (!text.EndsWith("Ran 3 of 3 calls: 3 ok, 0 failed.", StringComparison.Ordinal)) failures.Add("run_script: " + text);
     }
 
@@ -210,7 +210,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
         string text = new ObserveTools(world).InspectArea(0, 0, 50, 50);
         if (!text.StartsWith("Note:", StringComparison.Ordinal) || !text.Contains("Area (0,0)-(49,49)"))
         {
-            failures.Add("inspect_area crop: " + text.Substring(0, Math.Min(200, text.Length)));
+            failures.Add("inspect_area crop: " + text[..Math.Min(200, text.Length)]);
         }
     }
 

@@ -15,6 +15,7 @@ internal static class ClipboardImage
     private const uint CfUnicodeText = 13;
     private const uint CfDib = 8;
 
+#pragma warning disable SYSLIB1054 // 避免在 Mod 組件中開啟 AllowUnsafeBlocks，維持 DllImport 與 safe 指標封送
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool OpenClipboard(IntPtr owner);
 
@@ -38,6 +39,7 @@ internal static class ClipboardImage
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern UIntPtr GlobalSize(IntPtr memory);
+#pragma warning restore SYSLIB1054
 
     private static bool IsWindows =>
         Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
@@ -45,17 +47,17 @@ internal static class ClipboardImage
     /// <summary>
     /// 剪貼簿有圖片且沒有文字時讀出並轉成 JPEG；有文字時交給輸入框照常貼上。
     /// </summary>
-    /// <returns>JPEG 位元組；沒有可用的圖片或非 Windows 時回傳 null。</returns>
+    /// <returns>JPEG 位元組；沒有可用的圖片或非 Windows 時回傳空陣列。</returns>
     public static byte[] TryRead()
     {
-        if (!IsWindows) return null;
+        if (!IsWindows) return [];
         try
         {
-            if (IsClipboardFormatAvailable(CfUnicodeText)) return null;
+            if (IsClipboardFormatAvailable(CfUnicodeText)) return [];
             uint png = RegisterClipboardFormat("PNG");
             bool hasPng = png != 0 && IsClipboardFormatAvailable(png);
-            if (!hasPng && !IsClipboardFormatAvailable(CfDib)) return null;
-            if (!OpenClipboard(IntPtr.Zero)) return null;
+            if (!hasPng && !IsClipboardFormatAvailable(CfDib)) return [];
+            if (!OpenClipboard(IntPtr.Zero)) return [];
             byte[] data;
             try
             {
@@ -65,25 +67,25 @@ internal static class ClipboardImage
             {
                 CloseClipboard();
             }
-            if (data == null) return null;
+            if (data == null) return [];
             return hasPng ? ModelImageEncoder.FromEncoded(data) : FromDib(data);
         }
-        catch (Exception ex) when (ex is DllNotFoundException || ex is EntryPointNotFoundException)
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            return null;
+            return [];
         }
     }
 
     private static byte[] ReadFormat(uint format)
     {
         IntPtr handle = GetClipboardData(format);
-        if (handle == IntPtr.Zero) return null;
+        if (handle == IntPtr.Zero) return [];
         IntPtr pointer = GlobalLock(handle);
-        if (pointer == IntPtr.Zero) return null;
+        if (pointer == IntPtr.Zero) return [];
         try
         {
             ulong size = GlobalSize(handle).ToUInt64();
-            if (size == 0 || size > int.MaxValue) return null;
+            if (size == 0 || size > int.MaxValue) return [];
             var data = new byte[(int)size];
             Marshal.Copy(pointer, data, 0, data.Length);
             return data;
@@ -96,7 +98,7 @@ internal static class ClipboardImage
 
     internal static byte[] FromDib(byte[] dib)
     {
-        if (!DibDecoder.TryDecode(dib, out int width, out int height, out byte[] rgba)) return null;
+        if (!DibDecoder.TryDecode(dib, out int width, out int height, out byte[] rgba)) return [];
         var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
         try
         {

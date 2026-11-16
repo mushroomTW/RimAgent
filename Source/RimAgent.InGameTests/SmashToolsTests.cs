@@ -15,8 +15,9 @@ namespace RimAgent.InGameTests;
 [TestFixture(TestType.MainMenu)]
 internal sealed class SmashToolsTests
 {
+    private SmashToolsTests() { }
     [Test]
-    public void SetupBelongsToRimAgentAndPatchesOnce()
+    public static void SetupBelongsToRimAgentAndPatchesOnce()
     {
         var setup = LoadedModManager.GetMod<ProjectSetup>();
         Expect.IsNotNull(setup);
@@ -40,7 +41,7 @@ internal sealed class SmashToolsTests
     }
 
     [Test]
-    public IEnumerator BackgroundDispatchReturnsToGameThread()
+    public static IEnumerator BackgroundDispatchReturnsToGameThread()
     {
         // 必須先在遊戲執行緒建立 UnityThread，才能從背景工作派送。
         Expect.IsTrue(UnityThread.IsInMainThread);

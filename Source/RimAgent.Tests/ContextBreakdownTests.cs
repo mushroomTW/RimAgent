@@ -10,6 +10,12 @@ namespace RimAgent.Tests;
 [TestFixture]
 public class ContextBreakdownTests
 {
+    private static readonly string[] _contextParts =
+    [
+        "SystemPrompt", "Tools", "ToolPacks", "Subagents", "Memory",
+        "UserMessages", "AssistantMessages", "ToolCalls", "ToolResults"
+    ];
+
     [Test]
     public void EstimateCountsCjkPerCharAndLatinPerFourChars()
     {
@@ -31,11 +37,7 @@ public class ContextBreakdownTests
 
         var parts = session.GetContextBreakdown().ToDictionary(p => p.Key);
 
-        Assert.That(parts.Keys, Is.EquivalentTo(new[]
-        {
-            "SystemPrompt", "Tools", "ToolPacks", "Subagents", "Memory",
-            "UserMessages", "AssistantMessages", "ToolCalls", "ToolResults"
-        }));
+        Assert.That(parts.Keys, Is.EquivalentTo(_contextParts));
         Assert.That(parts["Tools"].Tokens, Is.GreaterThan(0));
         Assert.That(parts["Tools"].Count, Is.GreaterThan(0));
         Assert.That(parts["UserMessages"].Tokens, Is.GreaterThan(0));

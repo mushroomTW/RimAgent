@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using RimAgent.Agent;
 using RimAgent.Game;
@@ -11,6 +12,15 @@ public class QuestToolsTests
     private FakeGameWorld _world;
     private QuestTools _tools;
 
+    private static readonly string[] _silverX300 = ["Silver x300"];
+    private static readonly string[] _goodwillOutlanders = ["Goodwill +10 with Outlanders"];
+    private static readonly string[] _requiresCount = ["Requires a colonist with the title Count"];
+    private static readonly string[] _endsIn3Days = ["Ends in 3 days"];
+    private static readonly QuestRewardInfo _rewardFavorPlus4 = new() { Number = 1, Rewards = new[] { "Favor +4" }, RequiresAccepter = true };
+    private static readonly QuestRewardInfo[] _rewardOptionsFavorPlus4 = [_rewardFavorPlus4];
+    private static readonly QuestAccepterInfo _accepterAli = new() { Id = 101, Name = "Ali", FullName = "Alice Smith" };
+    private static readonly QuestAccepterInfo _accepterBob = new() { Id = 102, Name = "Bob", FullName = "Bob Jones", Warning = "Bob is conceited." };
+
     [SetUp]
     public void SetUp()
     {
@@ -23,8 +33,8 @@ public class QuestToolsTests
             ExpiresInTicks = 150000,
             RewardOptions = new[]
             {
-                new QuestRewardInfo { Number = 1, Rewards = new[] { "Silver x300" } },
-                new QuestRewardInfo { Number = 2, Rewards = new[] { "Goodwill +10 with Outlanders" } }
+                new QuestRewardInfo { Number = 1, Rewards = _silverX300 },
+                new QuestRewardInfo { Number = 2, Rewards = _goodwillOutlanders }
             }
         });
         _world.Quests.Add(new QuestInfo
@@ -33,26 +43,22 @@ public class QuestToolsTests
             Name = "Ascent",
             Description = "Reach the title of Baron.",
             CanAccept = false,
-            UnmetRequirements = new[] { "Requires a colonist with the title Count" }
+            UnmetRequirements = _requiresCount
         });
         _world.Quests.Add(new QuestInfo
         {
             Id = 11,
             Name = "Favor for the empire",
             RequiresAccepter = true,
-            RewardOptions = new[] { new QuestRewardInfo { Number = 1, Rewards = new[] { "Favor +4" }, RequiresAccepter = true } },
-            Accepters = new[]
-            {
-                new QuestAccepterInfo { Id = 101, Name = "Ali", FullName = "Alice Smith" },
-                new QuestAccepterInfo { Id = 102, Name = "Bob", FullName = "Bob Jones", Warning = "Bob is conceited." }
-            }
+            RewardOptions = _rewardOptionsFavorPlus4,
+            Accepters = [_accepterAli, _accepterBob],
         });
         _world.Quests.Add(new QuestInfo
         {
             Id = 12,
             Name = "Single accepter",
             RequiresAccepter = true,
-            Accepters = new[] { new QuestAccepterInfo { Id = 101, Name = "Ali", FullName = "Alice Smith" } }
+            Accepters = [_accepterAli],
         });
         _world.Quests.Add(new QuestInfo
         {
@@ -60,7 +66,7 @@ public class QuestToolsTests
             Name = "Defend the ship",
             State = QuestInfo.ActiveState,
             AccepterName = "Ali",
-            Deadlines = new[] { "Ends in 3 days" }
+            Deadlines = _endsIn3Days,
         });
         _world.Quests.Add(new QuestInfo { Id = 30, Name = "Old offer", Dismissed = true });
         _tools = new QuestTools(_world);
@@ -150,7 +156,7 @@ public class QuestToolsTests
     [Test]
     public void AcceptRefusesWithoutAGameReasonStillExplains()
     {
-        _world.Quests[1].UnmetRequirements = new string[0];
+        _world.Quests[1].UnmetRequirements = Array.Empty<string>();
 
         Assert.That(_tools.AcceptQuest(9), Does.StartWith("Error:").And.Contain("does not allow accepting"));
     }
@@ -215,7 +221,7 @@ public class QuestToolsTests
     [Test]
     public void AcceptWithNoEligibleColonistIsRefused()
     {
-        _world.Quests[3].Accepters = new QuestAccepterInfo[0];
+        _world.Quests[3].Accepters = Array.Empty<QuestAccepterInfo>();
 
         Assert.That(_tools.AcceptQuest(12), Does.StartWith("Error:").And.Contain("no colonist can accept"));
         Assert.That(_world.Calls, Is.Empty);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using Verse;
@@ -185,7 +186,7 @@ public class RimAgentSettings : ModSettings
     public PermissionPreset? MatchPreset()
     {
         EnsureAllows();
-        foreach (PermissionPreset preset in (PermissionPreset[])Enum.GetValues(typeof(PermissionPreset)))
+        foreach (PermissionPreset preset in Enum.GetValues<PermissionPreset>())
         {
             bool match = true;
             for (int i = 0; i < allowByCategory.Length && match; i++)
@@ -266,10 +267,7 @@ public class RimAgentSettings : ModSettings
     {
         string current = agentModel?.Trim();
         if (string.IsNullOrEmpty(current) || configuredModels == null || configuredModels.Count == 0) return false;
-        foreach (string model in configuredModels)
-        {
-            if (string.Equals(model?.Trim(), current, StringComparison.OrdinalIgnoreCase)) return false;
-        }
+        if (configuredModels.Any(model => string.Equals(model?.Trim(), current, StringComparison.OrdinalIgnoreCase))) return false;
         agentModel = string.Empty;
         return true;
     }
@@ -326,7 +324,7 @@ public class RimAgentSettings : ModSettings
         string modeName = mode.ToString();
         Scribe_Values.Look(ref modeName, "mode", nameof(AgentMode.Confirm));
         if (Scribe.mode == LoadSaveMode.LoadingVars)
-            mode = Enum.TryParse(modeName, out AgentMode parsed) && Enum.IsDefined(typeof(AgentMode), parsed)
+            mode = Enum.TryParse(modeName, out AgentMode parsed) && Enum.IsDefined<AgentMode>(parsed)
                 ? parsed
                 : AgentMode.Confirm;
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);

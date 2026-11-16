@@ -32,6 +32,7 @@ public sealed class DecisionGoalAuditor
     public const int ReplyHeadChars = 2000;
     /// <summary>回覆結尾保留的字數：完成報告通常在最後。</summary>
     public const int ReplyTailChars = 8000;
+    private static readonly string[] _newlineSplit = ["\r\n", "\r", "\n"];
 
     private readonly IDecisionService _decisionService;
     private readonly Func<IDecisionService> _serviceFactory;
@@ -53,9 +54,11 @@ public sealed class DecisionGoalAuditor
     public async Task<GoalAuditResult> AuditAsync(
         string objective,
         string reply,
-        CancellationToken cancellationToken = default,
-        string toolEvidence = null)
+        string toolEvidence = null,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(objective);
+        ArgumentNullException.ThrowIfNull(reply);
         if (string.IsNullOrWhiteSpace(objective)) return null;
 
         IDecisionService service = _decisionService ?? ResolveService();
@@ -189,7 +192,7 @@ public sealed class DecisionGoalAuditor
         string needsUserWhenTrue = "The agent asked the player a question, requested a decision, or paused for player intervention.";
         string needsUserWhenFalse = "The agent is not waiting for player guidance or input to proceed.";
 
-        string[] lines = markdown.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        string[] lines = markdown.Split(_newlineSplit, StringSplitOptions.None);
         string currentSection = null;
         var sectionLines = new List<string>();
 

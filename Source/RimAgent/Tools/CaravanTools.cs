@@ -150,28 +150,35 @@ public sealed class CaravanTools
                 continue;
             }
 
-            string species = m.Groups[1].Value.Trim();
-            int count = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
-            if (species.Length == 0 || count < 1 || count > 1000)
-                return Result<List<AnimalInfo>>.Fail(ToolText.Error($"cannot understand \"{part}\" in animals. Use \"species x count\", e.g. \"muffalo x3\"."));
-            List<AnimalInfo> pool = [.. colony.Where(a => !chosen.Contains(a))];
-            List<AnimalInfo> matches = [.. pool.Where(a => Same(a.Species, species) || Same(a.SpeciesDefName, species))];
-            if (matches.Count == 0)
-                matches = [.. pool.Where(a => Has(a.Species, species) || Has(a.SpeciesDefName, species))];
-            if (matches.Count < count)
-            {
-                return Result<List<AnimalInfo>>.Fail(ToolText.Error(
-                    $"only {matches.Count} colony animal(s) match \"{species}\" (asked for {count}). Colony animals: " +
-                    (colony.Count == 0 ? "none" : string.Join(", ", colony.Select(a => $"[{a.Id}] {a.Name}").ToArray())) + "."));
-            }
-            chosen.AddRange(matches.OrderBy(a => a.Downed).ThenBy(a => a.Id).Take(count));
+            Result<List<AnimalInfo>> batch = ResolveSpeciesBatch(part, m, colony, chosen);
+            if (!batch.Success) return batch;
+            chosen.AddRange(batch.Value);
         }
         return Result<List<AnimalInfo>>.Ok(chosen);
     }
 
+    private static Result<List<AnimalInfo>> ResolveSpeciesBatch(string part, Match m, List<AnimalInfo> colony, List<AnimalInfo> chosen)
+    {
+        string species = m.Groups[1].Value.Trim();
+        int count = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+        if (species.Length == 0 || count < 1 || count > 1000)
+            return Result<List<AnimalInfo>>.Fail(ToolText.Error($"cannot understand \"{part}\" in animals. Use \"species x count\", e.g. \"muffalo x3\"."));
+        List<AnimalInfo> pool = [.. colony.Where(a => !chosen.Contains(a))];
+        List<AnimalInfo> matches = [.. pool.Where(a => Same(a.Species, species) || Same(a.SpeciesDefName, species))];
+        if (matches.Count == 0)
+            matches = [.. pool.Where(a => Has(a.Species, species) || Has(a.SpeciesDefName, species))];
+        if (matches.Count < count)
+        {
+            return Result<List<AnimalInfo>>.Fail(ToolText.Error(
+                $"only {matches.Count} colony animal(s) match \"{species}\" (asked for {count}). Colony animals: " +
+                (colony.Count == 0 ? "none" : string.Join(", ", colony.Select(a => $"[{a.Id}] {a.Name}").ToArray())) + "."));
+        }
+        return Result<List<AnimalInfo>>.Ok([.. matches.OrderBy(a => a.Downed).ThenBy(a => a.Id).Take(count)]);
+    }
+
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
-    private static bool Has(string text, string needle) => !string.IsNullOrEmpty(text) && text.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+    private static bool Has(string text, string needle) => !string.IsNullOrEmpty(text) && text.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
     private static Result<List<PrisonerInfo>> ResolvePrisoners(string input, IReadOnlyList<PrisonerInfo> all)
     {
@@ -233,7 +240,7 @@ public sealed class CaravanTools
         if (int.TryParse(needle, NumberStyles.Integer, CultureInfo.InvariantCulture, out int id))
             hits = [.. forming.Where(f => f.Id == id), .. forming.Where(f => f.Id != id && f.Members.Any(m => m.Id == id))];
         else
-            hits = [.. forming.Where(f => f.Members.Any(m => m.Name.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0))];
+            hits = [.. forming.Where(f => f.Members.Any(m => m.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)))];
         if (hits.Count == 1) return Result<FormingCaravanInfo>.Ok(hits[0]);
         return Result<FormingCaravanInfo>.Fail(ToolText.Error(hits.Count == 0
             ? $"no forming caravan matches \"{needle}\". " + FormingList(forming)

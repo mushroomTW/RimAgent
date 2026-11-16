@@ -153,7 +153,7 @@ public static class GoalProgress
             string result = (entry.Result ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
             if (result.Length > AuditEvidenceResultChars)
             {
-                result = result.Substring(0, AuditEvidenceResultChars) + "…";
+                result = result[..AuditEvidenceResultChars] + "…";
             }
             sb.Append("- ").Append(entry.Failed ? "FAILED " : string.Empty)
                 .Append(entry.ToolName).Append(" (").Append(entry.ToolRisk).Append("): ")

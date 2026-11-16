@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -13,8 +14,10 @@ namespace RimAgent.Tests;
 
 /// <summary>自動模式：命令先預覽、問分類器，僅核可的低風險命令執行；其餘拒絕且不要求玩家確認。</summary>
 [TestFixture]
-public class AutoModeTests
+public partial class AutoModeTests
 {
+    [GeneratedRegex("(?<!\\\\)<player_instruction>")]
+    private static partial Regex PlayerInstructionRegex();
     private FakeGameWorld _world;
     private ScriptedChatClient _agentClient;
     private ScriptedChatClient _classifierClient;
@@ -270,7 +273,7 @@ public class AutoModeTests
 
         Assert.That(question, Does.Contain("<player_instruction>\ncheck on Bob\n</player_instruction>"));
         Assert.That(question, Does.Contain("\\</tool_arguments>").And.Contain("\\<player_instruction>"));
-        Assert.That(System.Text.RegularExpressions.Regex.Matches(question, "(?<!\\\\)<player_instruction>").Count,
+        Assert.That(PlayerInstructionRegex().Count(question),
             Is.EqualTo(1), "只能有一段真正的玩家指令");
     }
 

@@ -51,7 +51,9 @@ public sealed class ChoiceTools
         if (picked.Disabled) return ToolText.Error($"option {option} of \"{choice.Title}\" is disabled" + DisabledSuffix(picked));
 
         // 輸入常是清單序號，附上清單，確認的人才看得出選了什麼。
-        string given = string.IsNullOrEmpty(input) ? string.Empty : $" Input: {input}." + (string.IsNullOrEmpty(choice.Text) ? string.Empty : "\n" + choice.Text);
+        string inputPart = string.IsNullOrEmpty(input) ? string.Empty : $" Input: {input}.";
+        string textPart = string.IsNullOrEmpty(choice.Text) ? string.Empty : "\n" + choice.Text;
+        string given = inputPart + textPart;
         string blocked = ToolText.Blocked(_gate, $"would answer \"{choice.Title}\" with option {option}: {picked.Text}.{given}");
         if (blocked != null) return blocked;
 

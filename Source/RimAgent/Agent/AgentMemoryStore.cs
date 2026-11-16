@@ -61,7 +61,7 @@ public class AgentMemoryStore : AgentFileStore
         if (dropped.Count == 0 || !_files.TryGetValue(IndexFileName, out string index)) return;
 
         _files[IndexFileName] = string.Join("\n", index.Split('\n')
-            .Where(line => !dropped.Any(name => line.IndexOf("**" + name + "**", StringComparison.OrdinalIgnoreCase) >= 0)));
+            .Where(line => !dropped.Any(name => line.Contains("**" + name + "**", StringComparison.OrdinalIgnoreCase))));
     }
 
     /// <summary>讀檔時因超出限制而捨棄的記憶檔數（合成兩個範圍時為兩者相加）。</summary>
@@ -97,7 +97,7 @@ public class AgentMemoryStore : AgentFileStore
     private static string DescriptionFileName(string name)
     {
         int dot = name.LastIndexOf('.');
-        return dot > 0 ? name.Substring(0, dot) + DescriptionSuffix : name + DescriptionSuffix;
+        return dot > 0 ? name[..dot] + DescriptionSuffix : name + DescriptionSuffix;
     }
 
     private string DescriptionOf(string name)
@@ -138,7 +138,7 @@ public class AgentMemoryStore : AgentFileStore
     private static string OneLine(string text)
     {
         string line = string.Join(" ", (text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
-        return line.Length > MaxDescriptionChars ? line.Substring(0, MaxDescriptionChars) + "..." : line;
+        return line.Length > MaxDescriptionChars ? line[..MaxDescriptionChars] + "..." : line;
     }
 
     public override Task<string> ReadAsync(string path, CancellationToken cancellationToken = default)
@@ -157,7 +157,7 @@ public class AgentMemoryStore : AgentFileStore
         lock (_gate)
         {
             entries = NormalizeName(directory).Length > 0
-                ? new FileStoreEntry[0]
+                ? Array.Empty<FileStoreEntry>()
                 : [.. _files.Keys.Select(name => new FileStoreEntry(name, "file"))];
         }
         return Task.FromResult(entries);

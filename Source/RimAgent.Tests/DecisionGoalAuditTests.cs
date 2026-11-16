@@ -203,7 +203,7 @@ false: The agent is not waiting for player guidance or input.
 
         Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
-            await auditor.AuditAsync("Build 3 beds", "Done.\n[[GOAL:COMPLETE]]", cts.Token);
+            await auditor.AuditAsync("Build 3 beds", "Done.\n[[GOAL:COMPLETE]]", cancellationToken: cts.Token);
         });
     }
 

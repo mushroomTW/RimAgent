@@ -17,7 +17,7 @@ public static class ModelSlots
     /// <summary>空白模型不動 <see cref="ChatOptions.ModelId"/>（交給框架備援鏈），其餘覆寫。</summary>
     public static void Apply(ChatOptions options, string model, ReasoningLevel reasoning)
     {
-        if (options == null) throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
         string trimmed = model?.Trim();
         // 哨兵值不是模型名稱：呼叫端若漏了 ResolveModelSlot，也不能把 =agent／=auto 送進框架。
         if (!string.IsNullOrWhiteSpace(trimmed) && !RimAgentSettings.IsModelSentinel(trimmed))

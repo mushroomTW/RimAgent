@@ -16,6 +16,10 @@ public class ScriptToolsTests
 {
     private FakeGameWorld _world;
     private AgentTranscript _transcript;
+    private static readonly string[] _addZoneCalls =
+    [
+        "AddZone(Stockpile,(1,1)-(2,2))", "AddZone(Stockpile,(5,5)-(6,6))"
+    ];
 
     [SetUp]
     public void SetUp()
@@ -41,7 +45,7 @@ public class ScriptToolsTests
 
         Assert.That(text, Does.Contain("1. list_zones()").And.Contain("2. add_zone(").And.Contain("3. add_zone("));
         Assert.That(text, Does.EndWith("Ran 3 of 3 calls: 3 ok, 0 failed."));
-        Assert.That(_world.Calls, Is.EqualTo(new[] { "AddZone(Stockpile,(1,1)-(2,2))", "AddZone(Stockpile,(5,5)-(6,6))" }));
+        Assert.That(_world.Calls, Is.EqualTo(_addZoneCalls));
         Assert.That(_transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool), Is.EqualTo(3), "每一步照常進行動紀錄");
     }
 

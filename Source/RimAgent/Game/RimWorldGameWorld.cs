@@ -174,7 +174,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     /// 除了應急訊號，也收「基地狀況」（受寒、沒床、露宿、停電、心情、停研），
     /// 讓排程器自己看出需要保養，不必為了問一句「沒事嗎」而燒一次模型呼叫。
     /// </summary>
-    internal Agent.AutonomousSignals GetAutonomousSignals()
+    internal static Agent.AutonomousSignals GetAutonomousSignals()
     {
         List<Map> maps = Find.Maps;
         int hostileCount = 0;
@@ -244,7 +244,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     {
         PowerNetManager manager = map.powerNetManager;
         if (manager == null) return false;
-        IReadOnlyList<PowerNet> nets = manager.AllNetsListForReading;
+        // CA1859：使用 List<T> 而非 IReadOnlyList<T>，AllNetsListForReading 需轉為 List。
+        List<PowerNet> nets = manager.AllNetsListForReading.ToList();
         for (int i = 0; i < nets.Count; i++)
         {
             List<CompPowerTrader> comps = nets[i].powerComps;
@@ -490,7 +491,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
                 Id = DialogChoicePrefix + dialog.ID,
                 Title = NodeTreeTitleField?.GetValue(dialog) as string ?? string.Empty,
                 Text = LimitChoiceText(node.text.Resolve()),
-                Options = ToChoiceOptions(node.options)
+                Options = ToChoiceOptions(node.options.ToList()).ToList()
             });
         }
         foreach (Dialog_MessageBox box in Find.WindowStack.Windows.OfType<Dialog_MessageBox>())
@@ -514,7 +515,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
                 Title = letter.Label.Resolve(),
                 Text = LimitChoiceText(letter.Text.Resolve()),
                 ExpiresInTicks = letter.TimeoutActive ? letter.disappearAtTick - now : (int?)null,
-                Options = ToChoiceOptions([.. letter.Choices])
+                Options = ToChoiceOptions(letter.Choices.ToList()).ToList()
             });
         }
         return result;
@@ -557,7 +558,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     {
         number = 0;
         return id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-               && int.TryParse(id.Substring(prefix.Length), out number);
+               && int.TryParse(id[prefix.Length..], out number);
     }
 
     private static DiaNode CurrentNode(Dialog_NodeTree dialog)
@@ -568,10 +569,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     private static string LimitChoiceText(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
-        return text.Length <= ChoiceTextLimit ? text : text.Substring(0, ChoiceTextLimit) + "…";
+        return text.Length <= ChoiceTextLimit ? text : text[..ChoiceTextLimit] + "…";
     }
 
-    private static IReadOnlyList<ChoiceOptionInfo> ToChoiceOptions(IList<DiaOption> options)
+    // CA1859：參數用 List<T>、傳回 IEnumerable<T>，避免 IList<T> / IReadOnlyList<T>。
+    private static List<ChoiceOptionInfo> ToChoiceOptions(List<DiaOption> options)
     {
         var result = new List<ChoiceOptionInfo>();
         for (int i = 0; i < options.Count; i++)
@@ -645,6 +647,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     }
 
     private const string QuestNotFound = "no available or active quest with that id. Call list_quests for the current ids.";
+    private const string CaravanNotFound = "caravan not found";
     private static readonly Regex MarkupTags = new("<[^>]+>", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     /// <summary>任務分頁會列出的任務：可接受與進行中，不含已結束、已過期與隱藏的。</summary>
@@ -764,13 +767,9 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     private static bool ChoiceRequiresAccepter(Quest quest, QuestPart_Choice choice, QuestPart_Choice.Choice picked)
     {
         var remaining = new List<QuestPart>(quest.PartsListForReading);
-        foreach (QuestPart_Choice.Choice other in choice.choices)
+        foreach (QuestPart part in choice.choices.Where(c => c != picked).SelectMany(c => c.questParts))
         {
-            if (other == picked) continue;
-            foreach (QuestPart part in other.questParts)
-            {
-                if (!picked.questParts.Contains(part)) remaining.Remove(part);
-            }
+            remaining.Remove(part);
         }
         return remaining.Any(p => p.RequiresAccepter);
     }
@@ -825,24 +824,18 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
                 + (reasons.Count > 0 ? string.Join("; ", reasons) : "MessageCannotAcceptQuest".Translate().Resolve()));
         }
 
-        // 有獎勵選項的任務沒有一般的接受鈕，只能用「以此獎勵接受」；只有一組時不必指定。
         QuestPart_Choice choice = quest.PartsListForReading.OfType<QuestPart_Choice>().FirstOrDefault();
         QuestPart_Choice.Choice picked = null;
         bool requiresAccepter = quest.RequiresAccepter;
         if (choice != null)
         {
-            if (rewardNumber >= 1 && rewardNumber <= choice.choices.Count) picked = choice.choices[rewardNumber - 1];
-            else if (rewardNumber == 0 && choice.choices.Count == 1) picked = choice.choices[0];
+            picked = SelectRewardChoice(choice, rewardNumber);
             if (picked == null) return CommandResult.Fail($"pick a reward choice from 1 to {choice.choices.Count}");
             requiresAccepter = ChoiceRequiresAccepter(quest, choice, picked);
         }
 
-        Pawn accepter = null;
-        if (requiresAccepter)
-        {
-            accepter = QuestAccepterCandidates(quest).FirstOrDefault(p => p.thingIDNumber == accepterPawnId);
-            if (accepter == null) return CommandResult.Fail("the accepter is not a colonist who can accept this quest");
-        }
+        Pawn accepter = SelectAccepter(quest, requiresAccepter, accepterPawnId);
+        if (requiresAccepter && accepter == null) return CommandResult.Fail("the accepter is not a colonist who can accept this quest");
 
         if (picked != null) choice.Choose(picked);
         quest.Accept(accepter);
@@ -851,6 +844,20 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             Messages.Message("MessageQuestAccepted".Translate(accepter, quest.name), accepter, MessageTypeDefOf.TaskCompletion, historical: false);
         }
         return CommandResult.Ok(quest.name);
+    }
+
+    private static QuestPart_Choice.Choice SelectRewardChoice(QuestPart_Choice choice, int rewardNumber)
+    {
+        if (choice == null) return null;
+        if (rewardNumber >= 1 && rewardNumber <= choice.choices.Count) return choice.choices[rewardNumber - 1];
+        if (rewardNumber == 0 && choice.choices.Count == 1) return choice.choices[0];
+        return null;
+    }
+
+    private static Pawn SelectAccepter(Quest quest, bool requiresAccepter, int accepterPawnId)
+    {
+        if (!requiresAccepter) return null;
+        return QuestAccepterCandidates(quest).FirstOrDefault(p => p.thingIDNumber == accepterPawnId);
     }
 
     /// <summary>照任務分頁的拒絕鈕：切換 dismissed，子任務一起跟著。已結束的任務該鈕是刪除，這裡不做。</summary>
@@ -922,14 +929,15 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             if (def == null || def.targetWorldCell) return GizmoInfo.UnsupportedKind;
             // 不需要目標的能力按下去就生效，和一般 action 一樣。
             if (!def.targetRequired) return GizmoInfo.ActionKind;
-            return TargetKindOf(abilityCommand.Ability.verb as ITargetingSource, out targetHint);
+            return TargetKindOf(abilityCommand.Ability.verb, out targetHint);
         }
         if (command is Command_VerbTarget verbCommand) return TargetKindOf(verbCommand.verb, out targetHint);
         if (command is Command_Target targetCommand) return TargetKindOf(targetCommand.targetingParams, out targetHint);
         return GizmoInfo.UnsupportedKind;
     }
 
-    private static string TargetKindOf(ITargetingSource source, out string targetHint)
+    // CA1859：參數用 Verb 而非 ITargetingSource 介面。
+    private static string TargetKindOf(Verb source, out string targetHint)
     {
         targetHint = string.Empty;
         // 不可選目標的 verb（對自己施放）按下去就直接執行。
@@ -1002,7 +1010,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             return [.. Live().Where(m => !string.IsNullOrEmpty(m.text) && (!_before.TryGetValue(m, out int frame) || frame != m.startingFrame))
                 .Select(m => m.text.StripTags().Flatten().Trim())
                 .Where(t => t.Length > 0)
-                .Select(t => t.Length <= MaxGameMessageChars ? t : t.Substring(0, MaxGameMessageChars) + "…")
+                .Select(t => t.Length <= MaxGameMessageChars ? t : t[..MaxGameMessageChars] + "…")
                 .Distinct().Take(MaxGameMessages)];
         }
     }
@@ -1120,38 +1128,38 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (parameters == null) return CommandResult.Fail($"\"{label}\" started a kind of targeting that cannot be driven without the mouse");
         string described = DescribeTarget(target);
 
-        // 1) 能不能指這種東西：原版以 TargetingParameters.CanTarget 篩（GenUI.TargetsAt）。
         string untargetable = UntargetableReason(parameters, source, target);
         if (untargetable != null) return CommandResult.Fail($"{described} cannot be targeted by \"{label}\": {untargetable}");
 
-        if (source == null)
-        {
-            if (TargeterActionField?.GetValue(targeter) is not Action<LocalTargetInfo> action) return CommandResult.Fail($"\"{label}\" started a kind of targeting that cannot be driven without the mouse");
-            if (TargeterValidatorField?.GetValue(targeter) is Func<LocalTargetInfo, bool> validator && !validator(target)) return CommandResult.Fail($"{described} was rejected by the game's target check for \"{label}\"");
-            action(target);
-            return CommandResult.Ok(WithGameMessages("targeted " + described, watch));
-        }
+        if (source == null) return HandleNoSource(targeter, label, described, target, watch);
+        if (source.DestinationSelector != null) return CommandResult.Fail($"\"{label}\" needs a second target (a destination) after {described}, which is not supported yet");
+        if (target.HasThing && target.Thing == source.Caster && !parameters.canTargetSelf) return CommandResult.Fail($"\"{label}\" cannot target its own source");
+        if (!source.ValidateTarget(target, showMessages: false)) return HandleTargetRejected(targeter, label, described, target);
+        if (target.Thing is not Pawn && !source.IsMeleeAttack && !source.CanHitTarget(target)) return CommandResult.Fail($"{described} cannot be hit by \"{label}\"" + RangeNote(source, target));
 
-        // 兩段式選目標（先選目標再選落點）要第二個目標，這裡只給一個。
-        if (source.DestinationSelector != null)
-            return CommandResult.Fail($"\"{label}\" needs a second target (a destination) after {described}, which is not supported yet");
-        if (target.HasThing && target.Thing == source.Caster && !parameters.canTargetSelf)
-            return CommandResult.Fail($"\"{label}\" cannot target its own source");
+        return ExecuteTargetOrder(targeter, target, label, described, watch);
+    }
 
-        // 2) 目標來源自己的驗證（例如殖民者忙碌、倒地、走不到）；原因只存在於它顯示的訊息裡。
-        if (!source.ValidateTarget(target, showMessages: false))
-        {
-            var reasonWatch = new MessageWatch();
-            source.ValidateTarget(target, showMessages: true);
-            string reason = reasonWatch.NewTexts().FirstOrDefault();
-            return CommandResult.Fail($"the game rejected {described} for \"{label}\"" + (reason == null ? " (it gave no reason)" : ": " + reason));
-        }
+    private static CommandResult HandleNoSource(Targeter targeter, string label, string described, LocalTargetInfo target, MessageWatch watch)
+    {
+        if (TargeterActionField?.GetValue(targeter) is not Action<LocalTargetInfo> action) return CommandResult.Fail($"\"{label}\" started a kind of targeting that cannot be driven without the mouse");
+        if (TargeterValidatorField?.GetValue(targeter) is Func<LocalTargetInfo, bool> validator && !validator(target)) return CommandResult.Fail($"{described} was rejected by the game's target check for \"{label}\"");
+        action(target);
+        return CommandResult.Ok(WithGameMessages("targeted " + described, watch));
+    }
 
-        // 3) 打得到嗎：原版 CurrentTargetUnderMouse(mustBeHittableNowIfNotMelee: true) 對非 pawn 目標要求可命中，否則視為無效。
-        if (target.Thing is not Pawn && !source.IsMeleeAttack && !source.CanHitTarget(target))
-            return CommandResult.Fail($"{described} cannot be hit by \"{label}\"" + RangeNote(source, target));
+    private static CommandResult HandleTargetRejected(Targeter targeter, string label, string described, LocalTargetInfo target)
+    {
+        ITargetingSource source = targeter.targetingSource;
+        var reasonWatch = new MessageWatch();
+        source.ValidateTarget(target, showMessages: true);
+        string reason = reasonWatch.NewTexts().FirstOrDefault();
+        return CommandResult.Fail($"the game rejected {described} for \"{label}\"" + (reason == null ? " (it gave no reason)" : ": " + reason));
+    }
 
-        // 4) 下令：照原版 Targeter.OrderVerbForceTarget。
+    private static CommandResult ExecuteTargetOrder(Targeter targeter, LocalTargetInfo target, string label, string described, MessageWatch watch)
+    {
+        ITargetingSource source = targeter.targetingSource;
         if (source.CasterIsPawn)
         {
             source.OrderForceTarget(target);
@@ -1205,6 +1213,12 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (Find.WorldTargeter.IsTargeting) Find.WorldTargeter.StopTargeting();
         _agentWorldTarget = false;
         _agentMapTarget = false;
+    }
+
+    private static void SetTargetingState(bool mapTarget, bool worldTarget)
+    {
+        _agentMapTarget = mapTarget;
+        _agentWorldTarget = worldTarget;
     }
 
     private static CommandResult ValidateGizmoCommand(Thing thing, int gizmoNumber, string label, List<Command> commands, out Command command)
@@ -1268,7 +1282,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (!TryResolveTarget(target, out LocalTargetInfo resolved, out string error)) return CommandResult.Fail(error);
         List<FloatMenuOption> options = BuildFloatMenu(pawn, resolved, out error);
-        if (options == null) return CommandResult.Fail(error);
+        if (options == null || options.Count == 0) return CommandResult.Fail(error);
 
         FloatMenuOption option = optionNumber >= 1 && optionNumber <= options.Count ? options[optionNumber - 1] : null;
         if (option == null || !string.Equals(option.Label.StripTags(), label, StringComparison.OrdinalIgnoreCase))
@@ -1289,8 +1303,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         }
 
         // 選項若接著要再選目標就留著，由 choose_option 回應；回答不了的視窗才收掉並回報。
-        _agentMapTarget = Find.Targeter.IsTargeting;
-        _agentWorldTarget = Find.WorldTargeter.IsTargeting;
+        SetTargetingState(Find.Targeter.IsTargeting, Find.WorldTargeter.IsTargeting);
         KeepCasterSelected();
         CommandResult windowFailure = CloseUnsupportedWindows(before, label);
         if (windowFailure != null)
@@ -1313,26 +1326,30 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (!allowed.Accepted)
         {
             error = allowed.Reason.NullOrEmpty() ? $"{pawn.LabelShort} cannot be given orders right now" : allowed.Reason.StripTags();
-            return null;
+            return [];
         }
         if (!pawn.CanTakeOrder)
         {
             error = $"{pawn.LabelShort} cannot take orders";
-            return null;
+            return [];
         }
         // 點擊位置：pawn 用繪製位置（原版先以 DrawPos 距離找 pawn），其他物件用所在格的中心。
-        UnityEngine.Vector3 clickPosition = target.HasThing
-            ? (target.Thing is Pawn targetPawn ? targetPawn.DrawPos : target.Thing.Position.ToVector3Shifted())
-            : target.Cell.ToVector3Shifted();
+        UnityEngine.Vector3 clickPosition;
+        if (target.HasThing)
+        {
+            clickPosition = target.Thing is Pawn targetPawn ? targetPawn.DrawPos : target.Thing.Position.ToVector3Shifted();
+        }
+        else
+        {
+            clickPosition = target.Cell.ToVector3Shifted();
+        }
         try
         {
             // GetOptions 會改動傳入的清單，所以給一份新的。
             List<FloatMenuOption> options = FloatMenuMakerMap.GetOptions([pawn], clickPosition, out FloatMenuContext _) ?? [];
             // 原版只在多選時問這一份，有些東西（古樞紐核心）的選項只放在這裡，只選一人就看不到。
-            foreach (FloatMenuOption extra in clickPosition.ToIntVec3().GetThingList(pawn.Map).ToList().SelectMany(t => t.GetMultiSelectFloatMenuOptions([pawn])))
-            {
-                if (options.All(o => o.Label != extra.Label)) options.Add(extra);
-            }
+            var extras = clickPosition.ToIntVec3().GetThingList(pawn.Map).SelectMany(t => t.GetMultiSelectFloatMenuOptions([pawn]));
+            extras.Where(e => options.All(o => o.Label != e.Label)).ToList().ForEach(e => options.Add(e));
             return [.. (options ?? [])
                 .OrderByDescending(o => o.Priority).ThenByDescending(o => o.orderInPriority)];
         }
@@ -1340,7 +1357,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         {
             Log.Warning("RimAgent: building the right-click menu failed: " + ex);
             error = "the game could not build the right-click menu: " + ex.Message;
-            return null;
+            return [];
         }
     }
 
@@ -1365,7 +1382,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     public PowerInfo GetPower()
     {
-        IReadOnlyList<PowerNet> nets = Map.powerNetManager.AllNetsListForReading;
+        // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
+        List<PowerNet> nets = Map.powerNetManager.AllNetsListForReading.ToList();
         return new PowerInfo
         {
             NetworkCount = nets.Count,
@@ -1575,14 +1593,14 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         object parsed;
         try
         {
-            parsed = Enum.Parse(typeof(TimeSpeed), (speedDefName ?? string.Empty).Trim(), true);
+            parsed = Enum.Parse<TimeSpeed>((speedDefName ?? string.Empty).Trim(), true);
         }
         catch (ArgumentException)
         {
             return CommandResult.Fail($"unknown time speed {speedDefName}");
         }
         var speed = (TimeSpeed)parsed;
-        if (!Enum.IsDefined(typeof(TimeSpeed), speed)) return CommandResult.Fail($"unknown time speed {speedDefName}");
+        if (!Enum.IsDefined<TimeSpeed>(speed)) return CommandResult.Fail($"unknown time speed {speedDefName}");
         if (speed == TimeSpeed.Ultrafast) return CommandResult.Fail("Ultrafast is only for development; use Paused, Normal, Fast or Superfast");
         TimeSpeed previous = Find.TickManager.CurTimeSpeed;
         if (previous == speed) return CommandResult.Ok($"Time speed is already {speed}.");
@@ -1593,15 +1611,13 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     public ThingSearchResult FindThings(ThingQuery query)
     {
         Map map = Map;
-        var matches = new List<Thing>();
         bool hasDefName = !string.IsNullOrEmpty(query.DefName);
         bool hasNeedle = !string.IsNullOrEmpty(query.LabelContains);
         // 便宜的檢查排前面：座標是整數比較，Label 要走 GenLabel 配字串，全圖數萬個 Thing 逐一算會卡一幀。
         // 不再碰到 Limit 就停：listerThings 的順序與玩家無關，先到先得會讓離殖民者很遠的地圖生成物件擠掉近處的。
-        foreach (Thing t in CandidateThings(map, query.Kind))
-        {
-            if (MatchesQuery(t, query, hasDefName, hasNeedle)) matches.Add(t);
-        }
+        var matches = CandidateThings(map, query.Kind)
+            .Where(t => MatchesQuery(t, query, hasDefName, hasNeedle))
+            .ToList();
 
         // 排序鍵：先放行（未禁用）再禁用，同組依距離殖民者平均位置的平方由近到遠；ToThing 較貴，只對留下的幾筆算。
         List<Pawn> colonists = map.mapPawns.FreeColonistsSpawned;
@@ -1649,9 +1665,9 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     private static bool MatchesLabel(Thing t, string needle)
     {
-        return t.def.defName.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
-               || (t.def.label ?? string.Empty).IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0
-               || t.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+        return t.def.defName.Contains(needle, StringComparison.OrdinalIgnoreCase)
+               || (t.def.label ?? string.Empty).Contains(needle, StringComparison.OrdinalIgnoreCase)
+               || t.Label.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<ThingInfo> GetSelection()
@@ -1860,8 +1876,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             .ToList());
 
     public IReadOnlyList<DefInfo> MedicalCareLevels =>
-        _medicalCareLevels ?? (_medicalCareLevels = Enum.GetValues(typeof(MedicalCareCategory))
-            .Cast<MedicalCareCategory>()
+        _medicalCareLevels ?? (_medicalCareLevels = Enum.GetValues<MedicalCareCategory>()
             .Select(c => new DefInfo(c.ToString(), MedicalCareUtility.GetLabel(c)))
             .ToList());
 
@@ -1873,7 +1888,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         object parsed;
         try
         {
-            parsed = Enum.Parse(typeof(MedicalCareCategory), careDefName, true);
+            parsed = Enum.Parse<MedicalCareCategory>(careDefName, true);
         }
         catch (ArgumentException)
         {
@@ -2488,7 +2503,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         Thing thing = FindThing(thingId);
         if (thing == null) return CommandResult.Fail("object not found on the map");
         DesignationDef def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
-        Designation existing = def == null ? null : map.designationManager.DesignationOn(thing, def);
+        Designation existing = null;
+        if (def != null) existing = map.designationManager.DesignationOn(thing, def);
         if (existing == null) return CommandResult.Fail("no such designation on it");
         map.designationManager.RemoveDesignation(existing);
         return CommandResult.Ok();
@@ -2516,16 +2532,23 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         var cell = new IntVec3(x, 0, z);
         var rot = new Rot4(rotation);
         AcceptanceReport report = GenConstruct.CanPlaceBlueprintAt(def, cell, rot, map, false, null, null, stuff);
+        CommandResult reportFail = HandleBlueprintReport(def, report, cell, rot, map, stuff);
+        if (reportFail != null) return reportFail;
+
+        if (checkOnly) return CommandResult.Ok();
+        GenConstruct.PlaceBlueprintForBuild(def, cell, map, rot, Faction.OfPlayer, stuff);
+        return CommandResult.Ok();
+    }
+
+    private static CommandResult HandleBlueprintReport(BuildableDef def, AcceptanceReport report, IntVec3 cell, Rot4 rot, Map map, ThingDef stuff)
+    {
         if (!report.Accepted)
         {
             string reason = string.IsNullOrEmpty(report.Reason) ? "cannot place there" : report.Reason;
             if (reason == "SpaceAlreadyOccupied".Translate().ToString()) reason += DescribeBlockers(def, cell, rot, map, stuff);
             return CommandResult.Fail(reason);
         }
-
-        if (checkOnly) return CommandResult.Ok();
-        GenConstruct.PlaceBlueprintForBuild(def, cell, map, rot, Faction.OfPlayer, stuff);
-        return CommandResult.Ok();
+        return null;
     }
 
     /// <summary>最多列出幾個占用者；更多的只報數量。</summary>
@@ -2545,25 +2568,30 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         foreach (IntVec3 c in GenAdj.OccupiedRect(center, rot, def.Size))
         {
             if (!c.InBounds(map)) continue;
-            List<Thing> things = c.GetThingList(map);
-            for (int i = 0; i < things.Count; i++)
-            {
-                Thing t = things[i];
-                if (GenConstruct.CanPlaceBlueprintOver(def, t.def, stuff, t.Stuff) || !seen.Add(t.thingIDNumber)) continue;
-                if (parts.Count >= MaxBlockersListed)
-                {
-                    extra++;
-                    continue;
-                }
-                CellRect r = t.OccupiedRect();
-                string where = r.Width == 1 && r.Height == 1
-                    ? $"({r.minX},{r.minZ})"
-                    : $"({r.minX},{r.minZ})-({r.maxX},{r.maxZ})";
-                parts.Add($"{t.LabelNoCount} #{t.thingIDNumber} {where}");
-            }
+            ProcessBlockersAtCell(c, map, def, stuff, seen, parts, ref extra);
         }
         if (parts.Count == 0) return string.Empty;
         return " (blocked by: " + string.Join("; ", parts) + (extra > 0 ? $"; +{extra} more" : string.Empty) + ")";
+    }
+
+    private static void ProcessBlockersAtCell(IntVec3 c, Map map, BuildableDef def, ThingDef stuff, HashSet<int> seen, List<string> parts, ref int extra)
+    {
+        List<Thing> things = c.GetThingList(map);
+        for (int i = 0; i < things.Count; i++)
+        {
+            Thing t = things[i];
+            if (GenConstruct.CanPlaceBlueprintOver(def, t.def, stuff, t.Stuff) || !seen.Add(t.thingIDNumber)) continue;
+            if (parts.Count >= MaxBlockersListed)
+            {
+                extra++;
+                continue;
+            }
+            CellRect r = t.OccupiedRect();
+            string where = r.Width == 1 && r.Height == 1
+                ? $"({r.minX},{r.minZ})"
+                : $"({r.minX},{r.minZ})-({r.maxX},{r.maxZ})";
+            parts.Add($"{t.LabelNoCount} #{t.thingIDNumber} {where}");
+        }
     }
 
     public IReadOnlyList<string> RemoveBlueprints(CellRectSpec rect)
@@ -2595,12 +2623,16 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             ThingDef def = t is Blueprint || t is Frame ? t.def.entityDefToBuild as ThingDef : t.def;
             if (def?.building == null || !def.building.shipPart) continue;
             CellRect r = t.OccupiedRect();
+                ShipPartState state;
+                if (t is Blueprint) state = ShipPartState.Blueprint;
+                else if (t is Frame) state = ShipPartState.Frame;
+                else state = ShipPartState.Built;
             var info = new ShipPartInfo
             {
                 Id = t.thingIDNumber,
                 DefName = def.defName,
                 Label = def.label ?? def.defName,
-                State = t is Blueprint ? ShipPartState.Blueprint : t is Frame ? ShipPartState.Frame : ShipPartState.Built,
+                State = state,
                 Rect = new CellRectSpec(r.minX, r.minZ, r.maxX, r.maxZ)
             };
             if (def.hasInteractionCell)
@@ -3026,7 +3058,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     public IReadOnlyList<CaravanCargoInfo> GetCaravanCargo()
     {
         // AllReachableColonyItems 回傳共用的暫存清單，先複製再分組。
-        return CaravanFormingUtility.AllReachableColonyItems(Map, false, false, false).ToList()
+        return CaravanFormingUtility.AllReachableColonyItems(Map, false, false, false)
             .GroupBy(t => t.GetInnerIfMinified().def)
             .Select(g => new CaravanCargoInfo
             {
@@ -3058,7 +3090,9 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         Messages.Message("CaravanFormationProcessStarted".Translate(), draft.Pawns[0], MessageTypeDefOf.PositiveEvent, historical: false);
 
         string members = string.Join(", ", draft.Pawns.Select(p => p.LabelShort).ToArray());
-        string cargo = plan.Cargo.Count == 0 ? "no cargo" : string.Join(", ", plan.Cargo.Select(c => c.Label + " x" + c.Count).ToArray());
+        string cargo;
+        if (plan.Cargo.Count == 0) cargo = "no cargo";
+        else cargo = string.Join(", ", plan.Cargo.Select(c => c.Label + " x" + c.Count).ToArray());
         return CommandResult.Ok($"Started forming a caravan with {members}; they gather {cargo} at ({draft.MeetingPoint.x},{draft.MeetingPoint.z}) " +
                                 $"and then leave the map at ({draft.ExitSpot.x},{draft.ExitSpot.z}) for tile {draft.Destination.tileId}");
     }
@@ -3078,19 +3112,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
         // 成員：只收組隊視窗會列出的人（AllSendablePawns），其餘說明為什麼不行。
         List<Pawn> sendable = Dialog_FormCaravan.AllSendablePawns(map, false);
-        foreach (int id in (request.PawnIds ?? Array.Empty<int>()).Distinct())
-        {
-            Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
-            if (pawn == null) return RejectCaravan(draft, $"no pawn with id {id} is on this map");
-            if (!sendable.Contains(pawn)) return RejectCaravan(draft, $"{pawn.LabelShort} cannot join a caravan: {WhyNotSendable(pawn)}");
-            // 被徵召的人不吃集結的職責（原版「強制出發」也會先解除徵召）。
-            if (pawn.Drafted) return RejectCaravan(draft, $"{pawn.LabelShort} is drafted; undraft them first");
-            draft.Pawns.Add(pawn);
-            var transferable = new TransferableOneWay();
-            transferable.things.Add(pawn);
-            transferable.AdjustTo(1);
-            draft.Transferables.Add(transferable);
-        }
+        if (!ValidateCaravanPawns(request, sendable, map, draft, out var rejectReason)) return rejectReason;
 
         // 貨物：與視窗物品頁同一份清單（AddItemsToTransferables），同種物品依原版規則併成一行。
         var items = new List<TransferableOneWay>();
@@ -3104,32 +3126,69 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             }
             if (!transferable.things.Contains(thing)) transferable.things.Add(thing);
         }
-        var cargoLines = new List<CaravanPlanCargo>();
-        foreach (TradeLine line in request.Cargo ?? Array.Empty<TradeLine>())
-        {
-            int remaining = line.Count;
-            ThingDef def = null;
-            foreach (TransferableOneWay transferable in items)
-            {
-                ThingDef inner = transferable.AnyThing.GetInnerIfMinified().def;
-                if (remaining <= 0 || !string.Equals(inner.defName, line.DefName, StringComparison.OrdinalIgnoreCase)) continue;
-                def = inner;
-                int take = Math.Min(remaining, transferable.GetMaximumToTransfer() - transferable.CountToTransfer);
-                if (take <= 0) continue;
-                transferable.AdjustTo(transferable.CountToTransfer + take);
-                remaining -= take;
-            }
-            if (def == null)
-                return RejectCaravan(draft, $"the colony has no {line.DefName} to carry; the game only lists items in storage or the home area that nobody has reserved");
-            string label = string.IsNullOrEmpty(def.label) ? def.defName : def.label;
-            if (remaining > 0)
-                return RejectCaravan(draft, $"the colony can only supply {line.Count - remaining} {label} for the caravan (asked for {line.Count}); the game only lists items in storage or the home area that nobody has reserved");
-            cargoLines.Add(new CaravanPlanCargo { DefName = def.defName, Label = label, Count = line.Count, MassEach = def.BaseMass });
-        }
+        CaravanDraft cargoReject = ValidateCaravanCargo(request, items, draft, out var cargoLines);
+        if (cargoReject != null) return cargoReject;
         draft.Transferables.AddRange(items.Where(t => t.CountToTransfer > 0));
 
         FillCaravanPlan(draft, request, map, cargoLines);
         return draft;
+    }
+
+    private static CaravanDraft ValidateCaravanCargo(CaravanRequest request, List<TransferableOneWay> items, CaravanDraft draft, out List<CaravanPlanCargo> cargoLines)
+    {
+        cargoLines = new List<CaravanPlanCargo>();
+        foreach (TradeLine line in request.Cargo ?? Array.Empty<TradeLine>())
+        {
+            if (!TryAllocateCargoLine(line, items, out var cargoLine, out var rejectReason)) return RejectCaravan(draft, rejectReason);
+            cargoLines.Add(cargoLine);
+        }
+        return null;
+    }
+
+    /// <summary>嘗試從物品清單撥貨給一條託運項目；會直接調整 transferable 的 CountToTransfer。</summary>
+    /// <param name="cargoLine">撥貨成功時回傳的貨物明細。</param>
+    /// <param name="rejectReason">失敗時回傳的拒絕說明。</param>
+    private static bool TryAllocateCargoLine(TradeLine line, List<TransferableOneWay> items, out CaravanPlanCargo cargoLine, out string rejectReason)
+    {
+        cargoLine = null;
+        rejectReason = null;
+        int remaining = line.Count;
+        ThingDef def = null;
+        foreach (TransferableOneWay transferable in items)
+        {
+            if (remaining <= 0) break;
+            ThingDef inner = transferable.AnyThing.GetInnerIfMinified().def;
+            if (!string.Equals(inner.defName, line.DefName, StringComparison.OrdinalIgnoreCase)) continue;
+            def = inner;
+            int take = Math.Min(remaining, transferable.GetMaximumToTransfer() - transferable.CountToTransfer);
+            if (take <= 0) continue;
+            transferable.AdjustTo(transferable.CountToTransfer + take);
+            remaining -= take;
+        }
+        if (def == null) { rejectReason = $"the colony has no {line.DefName} to carry; the game only lists items in storage or the home area that nobody has reserved"; return false; }
+        string label = string.IsNullOrEmpty(def.label) ? def.defName : def.label;
+        if (remaining > 0) { rejectReason = $"the colony can only supply {line.Count - remaining} {label} for the caravan (asked for {line.Count}); the game only lists items in storage or the home area that nobody has reserved"; return false; }
+        cargoLine = new CaravanPlanCargo { DefName = def.defName, Label = label, Count = line.Count, MassEach = def.BaseMass };
+        return true;
+    }
+
+    private static bool ValidateCaravanPawns(CaravanRequest request, List<Pawn> sendable, Map map, CaravanDraft draft, out CaravanDraft rejectReason)
+    {
+        rejectReason = null;
+        foreach (int id in (request.PawnIds ?? Array.Empty<int>()).Distinct())
+        {
+            Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
+            if (pawn == null) { rejectReason = RejectCaravan(draft, $"no pawn with id {id} is on this map"); return false; }
+            if (!sendable.Contains(pawn)) { rejectReason = RejectCaravan(draft, $"{pawn.LabelShort} cannot join a caravan: {WhyNotSendable(pawn)}"); return false; }
+            // 被徵召的人不吃集結的職責（原版「強制出發」也會先解除徵召）。
+            if (pawn.Drafted) { rejectReason = RejectCaravan(draft, $"{pawn.LabelShort} is drafted; undraft them first"); return false; }
+            draft.Pawns.Add(pawn);
+            var transferable = new TransferableOneWay();
+            transferable.things.Add(pawn);
+            transferable.AdjustTo(1);
+            draft.Transferables.Add(transferable);
+        }
+        return true;
     }
 
     /// <summary>為什麼 AllSendablePawns 不列這個 pawn（依那個方法的條件逐項對照）。</summary>
@@ -3158,21 +3217,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
         if (!origin.LayerDef.canFormCaravans) blockers.Add("caravans cannot be formed on this world layer");
 
-        // 目的地與起始格（視窗選好路線後：startingTile = BestExitTileToGoTo）。
-        PlanetTile destination = PlanetTile.Invalid;
-        if (request.DestinationTile < 0)
-        {
-            blockers.Add("MessageMustChooseRouteFirst".Translate().Resolve());
-        }
-        else
-        {
-            PlanetTile asked = ToPlanetTile(request.DestinationTile, origin);
-            if (!TileInWorld(asked)) blockers.Add($"tile {request.DestinationTile} does not exist on this layer of the world");
-            else if (!Find.WorldReachability.CanReach(origin, asked)) blockers.Add($"tile {asked.tileId} cannot be reached by land from here");
-            else destination = asked;
-            plan.DestinationTile = request.DestinationTile;
-            plan.DestinationLabel = TileInWorld(asked) ? DescribeWorldTile(asked) : string.Empty;
-        }
+        PlanetTile destination = ResolveCaravanDestination(request, origin, plan, blockers);
         plan.DestinationReachable = destination.Valid;
         if (destination.Valid)
         {
@@ -3191,6 +3236,54 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             plan.TilesPerDay = TilesPerDayCalculator.ApproxTilesPerDay(transferables, plan.MassUsage, plan.MassCapacity, origin, draft.StartingTile, false, null);
             plan.TicksPerMove = CaravanTicksPerMoveUtility.GetTicksPerMove(draft.Pawns, plan.MassUsage, plan.MassCapacity, false, null);
         }
+        CalculateCaravanFoodAndRot(transferables, origin, destination, plan);
+
+        var foraged = ForagedFoodPerDayCalculator.ForagedFoodPerDay(transferables, map.Biome, Faction.OfPlayer, new StringBuilder());
+        plan.ForagedFoodLabel = foraged.Item1 != null ? foraged.Item1.label : string.Empty;
+        plan.ForagedPerDay = foraged.Item2;
+        plan.Visibility = CaravanVisibilityCalculator.Visibility(transferables, new StringBuilder());
+
+        // 送出時的拒絕（CheckForErrors）。
+        if (!draft.Pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.Downed))
+            blockers.Add((ModsConfig.IdeologyActive ? "CaravanMustHaveAtLeastOneNonSlaveColonist" : "CaravanMustHaveAtLeastOneColonist").Translate().Resolve());
+        if (plan.MassUsage > plan.MassCapacity) blockers.Add("TooBigCaravanMassUsage".Translate().Resolve());
+        AddUnreachableItemBlockers(draft.Pawns, transferables, blockers);
+
+        // 警告（TrySend 的「確定嗎」清單，只收我們能原樣算的幾項）。
+        AddCaravanWarnings(plan, transferables, origin, draft.Pawns, warnings);
+
+        // 出口與集合點（TryFormAndSendCaravan）。起始格或隊伍不成立時不必找。
+        if (draft.StartingTile.Valid && draft.Pawns.Any(p => !p.Downed))
+            FindCaravanSpots(draft, map, blockers, warnings);
+
+        plan.Blockers = blockers;
+        plan.Warnings = warnings;
+        draft.Plan = plan;
+    }
+
+    /// <summary>解析商隊目的地格，並將結果填入 plan.DestinationTile／DestinationLabel；找不到可行目的地則回傳 PlanetTile.Invalid。</summary>
+    private static PlanetTile ResolveCaravanDestination(CaravanRequest request, PlanetTile origin, CaravanPlanInfo plan, List<string> blockers)
+    {
+        PlanetTile destination = PlanetTile.Invalid;
+        if (request.DestinationTile < 0)
+        {
+            blockers.Add("MessageMustChooseRouteFirst".Translate().Resolve());
+        }
+        else
+        {
+            PlanetTile asked = ToPlanetTile(request.DestinationTile, origin);
+            if (!TileInWorld(asked)) blockers.Add($"tile {request.DestinationTile} does not exist on this layer of the world");
+            else if (!Find.WorldReachability.CanReach(origin, asked)) blockers.Add($"tile {asked.tileId} cannot be reached by land from here");
+            else destination = asked;
+            plan.DestinationTile = request.DestinationTile;
+            plan.DestinationLabel = TileInWorld(asked) ? DescribeWorldTile(asked) : string.Empty;
+        }
+        return destination;
+    }
+
+    /// <summary>算出食物天數、腐敗天數與預估到達時間；無有效目的地時只算不含路徑的基礎值。</summary>
+    private static void CalculateCaravanFoodAndRot(List<TransferableOneWay> transferables, PlanetTile origin, PlanetTile destination, CaravanPlanInfo plan)
+    {
         if (destination.Valid)
         {
             using WorldPath path = origin.Layer.Pather.FindPath(origin, destination, null);
@@ -3203,47 +3296,42 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             plan.FoodDays = DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(transferables, origin, CaravanInventoryMode, Faction.OfPlayer);
             plan.DaysUntilRot = DaysUntilRotCalculator.ApproxDaysUntilRot(transferables, origin, CaravanInventoryMode);
         }
-        var foraged = ForagedFoodPerDayCalculator.ForagedFoodPerDay(transferables, map.Biome, Faction.OfPlayer, new StringBuilder());
-        plan.ForagedFoodLabel = foraged.Item1 != null ? foraged.Item1.label : string.Empty;
-        plan.ForagedPerDay = foraged.Item2;
-        plan.Visibility = CaravanVisibilityCalculator.Visibility(transferables, new StringBuilder());
+    }
 
-        // 送出時的拒絕（CheckForErrors）。
-        if (!draft.Pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.Downed))
-            blockers.Add((ModsConfig.IdeologyActive ? "CaravanMustHaveAtLeastOneNonSlaveColonist" : "CaravanMustHaveAtLeastOneColonist").Translate().Resolve());
-        if (plan.MassUsage > plan.MassCapacity) blockers.Add("TooBigCaravanMassUsage".Translate().Resolve());
+    private static void AddUnreachableItemBlockers(List<Pawn> pawns, List<TransferableOneWay> transferables, List<string> blockers)
+    {
         foreach (TransferableOneWay transferable in transferables)
         {
             if (transferable.ThingDef.category != ThingCategory.Item || transferable.CountToTransfer <= 0) continue;
-            int reachable = 0;
-            foreach (Thing thing in transferable.things)
-            {
-                if (!thing.Spawned || draft.Pawns.Any(p => p.IsColonist && p.CanReach(thing, PathEndMode.Touch, Danger.Deadly))) reachable += thing.stackCount;
-                if (reachable >= transferable.CountToTransfer) break;
-            }
-            if (reachable >= transferable.CountToTransfer) continue;
+            if (IsTransferableReachable(transferable, pawns)) continue;
             blockers.Add(transferable.CountToTransfer == 1
                 ? "CaravanItemIsUnreachableSingle".Translate(transferable.ThingDef.label).Resolve()
                 : "CaravanItemIsUnreachableMulti".Translate(transferable.CountToTransfer, transferable.ThingDef.label).Resolve());
         }
+    }
 
-        // 警告（TrySend 的「確定嗎」清單，只收我們能原樣算的幾項）。
+    private static bool IsTransferableReachable(TransferableOneWay transferable, List<Pawn> pawns)
+    {
+        int reachable = 0;
+        foreach (Thing thing in transferable.things)
+        {
+            if (!thing.Spawned) continue;
+            if (pawns.Any(p => p.IsColonist && p.CanReach(thing, PathEndMode.Touch, Danger.Deadly))) reachable += thing.stackCount;
+            if (reachable >= transferable.CountToTransfer) break;
+        }
+        return reachable >= transferable.CountToTransfer;
+    }
+
+    private static void AddCaravanWarnings(CaravanPlanInfo plan, List<TransferableOneWay> transferables, PlanetTile origin, List<Pawn> pawns, List<string> warnings)
+    {
         if (plan.FoodDays < 5f)
             warnings.Add(plan.FoodDays < 0.1f
                 ? "DaysWorthOfFoodWarningDialog_NoFood".Translate().Resolve()
                 : "DaysWorthOfFoodWarningDialog".Translate(plan.FoodDays.ToString("0.#")).Resolve());
         else if (MostCaravanFoodWillRotSoon(transferables, origin))
             warnings.Add("CaravanFoodWillRotSoonWarningDialog".Translate().Resolve());
-        if (!draft.Pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.skills.GetSkill(SkillDefOf.Social).TotallyDisabled))
+        if (!pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.skills.GetSkill(SkillDefOf.Social).TotallyDisabled))
             warnings.Add("CaravanIncapableOfSocial".Translate().Resolve());
-
-        // 出口與集合點（TryFormAndSendCaravan）。起始格或隊伍不成立時不必找。
-        if (draft.StartingTile.Valid && draft.Pawns.Any(p => !p.Downed))
-            FindCaravanSpots(draft, map, blockers, warnings);
-
-        plan.Blockers = blockers;
-        plan.Warnings = warnings;
-        draft.Plan = plan;
     }
 
     /// <summary>視窗的 MostFoodWillRotSoon：帶的食物營養有七成五以上不到五天就壞。</summary>
@@ -3561,15 +3649,15 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     private static Dictionary<int, List<WorldObjectQuestLink>> QuestLinksByWorldObject()
     {
         var links = new Dictionary<int, List<WorldObjectQuestLink>>();
-        foreach (Quest quest in Find.QuestManager.QuestsListForReading)
+        foreach (Quest quest in Find.QuestManager.QuestsListForReading
+            .Where(q => !q.hidden && !q.hiddenInUI)
+            .Where(q => q.State == QuestState.NotYetAccepted || q.State == QuestState.Ongoing))
         {
-            if (quest.hidden || quest.hiddenInUI) continue;
-            if (quest.State != QuestState.NotYetAccepted && quest.State != QuestState.Ongoing) continue;
             try
             {
-                foreach (WorldObject obj in quest.QuestLookTargets.Where(t => t.HasWorldObject).Select(t => t.WorldObject).Where(o => o != null).Distinct())
+                foreach (int id in quest.QuestLookTargets.Where(t => t.HasWorldObject).Select(t => t.WorldObject).Where(o => o != null).Select(obj => obj.ID).Distinct())
                 {
-                    if (!links.TryGetValue(obj.ID, out List<WorldObjectQuestLink> list)) links[obj.ID] = list = [];
+                    if (!links.TryGetValue(id, out List<WorldObjectQuestLink> list)) links[id] = list = [];
                     list.Add(new WorldObjectQuestLink { QuestId = quest.id, QuestName = PlainText(quest.name), Active = quest.State == QuestState.Ongoing });
                 }
             }
@@ -3614,12 +3702,23 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (canSettle && SettleUtility.PlayerSettlementsCountLimitReached)
         {
             canSettle = false;
-            reason.Append(Prefs.MaxNumberOfPlayerSettlements > 1
-                ? "CommandSettleFailReachedMaximumNumberOfBases".Translate().ToString()
-                : "CommandSettleFailAlreadyHaveBase".Translate().ToString());
+            string settleFailReason;
+            if (Prefs.MaxNumberOfPlayerSettlements > 1)
+            {
+                settleFailReason = "CommandSettleFailReachedMaximumNumberOfBases".Translate().ToString();
+            }
+            else
+            {
+                settleFailReason = "CommandSettleFailAlreadyHaveBase".Translate().ToString();
+            }
+            reason.Append(settleFailReason);
         }
         Dictionary<int, List<WorldObjectQuestLink>> quests = QuestLinksByWorldObject();
         Landmark landmark = data.Landmark;
+        string landmarkText;
+        if (landmark == null) landmarkText = string.Empty;
+        else if (landmark.name.NullOrEmpty()) landmarkText = landmark.def.label;
+        else landmarkText = landmark.name;
         return new WorldTileInfo
         {
             Tile = tile,
@@ -3635,7 +3734,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             WaterCovered = data.WaterCovered,
             Coastal = data.IsCoastal,
             Feature = data.feature?.name ?? string.Empty,
-            Landmark = landmark == null ? string.Empty : (landmark.name.NullOrEmpty() ? landmark.def.label : landmark.name),
+            Landmark = landmarkText,
             Mutators = data.Mutators.Select(m => m.label).ToList(),
             CanSettle = canSettle,
             SettleBlockedReason = canSettle ? string.Empty : PlainText(reason.ToString()),
@@ -3677,12 +3776,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         }
         try
         {
-            foreach (FloatMenuOption option in FloatMenuMakerWorld.ChoicesAtFor(to, caravan))
-            {
-                if (option.Label.Contains("(Dev:")) continue;
-                FloatMenuOption chosen = option;
-                orders.Add(new CaravanOrder { Label = chosen.Label.StripTags(), Disabled = chosen.Disabled, Run = () => chosen.Chosen(colonistOrdering: false, null) });
-            }
+            AddWorldCaravanOrders(orders, to, caravan);
         }
         catch (Exception ex)
         {
@@ -3691,10 +3785,20 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         return orders;
     }
 
+    private static void AddWorldCaravanOrders(List<CaravanOrder> orders, PlanetTile to, Caravan caravan)
+    {
+        foreach (FloatMenuOption option in FloatMenuMakerWorld.ChoicesAtFor(to, caravan))
+        {
+            if (option.Label.Contains("(Dev:")) continue;
+            FloatMenuOption chosen = option;
+            orders.Add(new CaravanOrder { Label = chosen.Label.StripTags(), Disabled = chosen.Disabled, Run = () => chosen.Chosen(colonistOrdering: false, null) });
+        }
+    }
+
     public CaravanOptionsInfo GetCaravanOptions(int caravanId, int tile)
     {
         Caravan caravan = FindPlayerCaravan(caravanId);
-        if (caravan == null) return new CaravanOptionsInfo { Error = "caravan not found" };
+        if (caravan == null) return new CaravanOptionsInfo { Error = CaravanNotFound };
         PlanetTile to = ToPlanetTile(tile, caravan.Tile);
         if (!TileInWorld(to)) return new CaravanOptionsInfo { Error = $"tile {tile} does not exist on this layer of the world", CaravanName = caravan.LabelCap };
         return new CaravanOptionsInfo
@@ -3707,7 +3811,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     public CommandResult SendCaravan(int caravanId, int tile, int optionNumber, string label)
     {
         Caravan caravan = FindPlayerCaravan(caravanId);
-        if (caravan == null) return CommandResult.Fail("caravan not found");
+        if (caravan == null) return CommandResult.Fail(CaravanNotFound);
         PlanetTile to = ToPlanetTile(tile, caravan.Tile);
         if (!TileInWorld(to)) return CommandResult.Fail($"tile {tile} does not exist on this layer of the world");
         List<CaravanOrder> orders = BuildCaravanOrders(caravan, to);
@@ -3720,15 +3824,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         StopAllTargeting();
         var before = new HashSet<Window>(Find.WindowStack.Windows);
         var watch = new MessageWatch();
-        try
-        {
-            order.Run();
-        }
-        catch (Exception ex)
-        {
-            Log.Warning("RimAgent: caravan order \"" + label + "\" threw: " + ex);
-            return CommandResult.Fail($"\"{label}\" failed in the game: {ex.Message}");
-        }
+        CommandResult runFail = RunCaravanOrder(order, label);
+        if (runFail != null) return runFail;
 
         // 命令若接著要選目標或開別的視窗，這裡沒辦法回應，收掉並回報；確認框與對話留著給 ChooseOption。
         bool targeting = Find.Targeter.IsTargeting || Find.WorldTargeter.IsTargeting;
@@ -3736,7 +3833,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         CommandResult windowFailure = CloseUnsupportedWindows(before, label);
         if (targeting) return CommandResult.Fail($"\"{label}\" asks for a further target, which is not supported yet; it was cancelled");
         if (windowFailure != null) return windowFailure;
+        return FinalizeCaravanSend(caravan, to, startedOnTile, before, watch, label);
+    }
 
+    private static CommandResult FinalizeCaravanSend(Caravan caravan, PlanetTile to, bool startedOnTile, HashSet<Window> before, MessageWatch watch, string label)
+    {
         if (caravan.Destroyed || !caravan.Spawned)
             return CommandResult.Ok(WithGameMessages($"\"{label}\" done: the caravan has left the world map (it entered a map or was dissolved)", watch));
         if (caravan.pather.Moving)
@@ -3748,10 +3849,24 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         return CommandResult.Fail(WithGameMessages($"{caravan.LabelCap} did not start moving", watch));
     }
 
+    private static CommandResult RunCaravanOrder(CaravanOrder order, string label)
+    {
+        try
+        {
+            order.Run();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("RimAgent: caravan order \"" + label + "\" threw: " + ex);
+            return CommandResult.Fail($"\"{label}\" failed in the game: {ex.Message}");
+        }
+    }
+
     public CommandResult SetCaravanMovement(int caravanId, string action)
     {
         Caravan caravan = FindPlayerCaravan(caravanId);
-        if (caravan == null) return CommandResult.Fail("caravan not found");
+        if (caravan == null) return CommandResult.Fail(CaravanNotFound);
         Caravan_PathFollower pather = caravan.pather;
         switch (action)
         {
@@ -3777,7 +3892,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     public CommandResult SettleCaravan(int caravanId, string action)
     {
         Caravan caravan = FindPlayerCaravan(caravanId);
-        if (caravan == null) return CommandResult.Fail("caravan not found");
+        if (caravan == null) return CommandResult.Fail(CaravanNotFound);
         bool camp = action == CaravanSettleAction.Camp;
         if (!camp && action != CaravanSettleAction.Settle) return CommandResult.Fail($"unknown action \"{action}\"");
         // 與玩家按商隊按鈕同一條路：可否判斷、確認框與背景生成地圖都在原版的按鈕動作裡。
@@ -4149,18 +4264,18 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     {
         // 只讀遊戲自己的截圖資料夾，避免工具結果被拿來讀任意檔案。資料夾在截圖時於主線程記下，這裡可在背景執行緒呼叫；還沒截過圖就沒有可讀的檔。
         string fullPath = UI.TranscriptScreenshot.ResolveInFolder(filePath, _screenshotFolder);
-        if (fullPath == null) return null;
+        if (fullPath == null) return [];
         try
         {
-            if (!System.IO.File.Exists(fullPath)) return null;
+            if (!System.IO.File.Exists(fullPath)) return [];
             byte[] png = System.IO.File.ReadAllBytes(fullPath);
             // 截圖在該幀渲染完才寫出；沒有 IEND 區塊代表還沒寫完，不必拿去解碼。
-            return IsCompletePng(png) ? png : null;
+            return IsCompletePng(png) ? png : [];
         }
         catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
         {
             // 截圖可能仍在寫入；呼叫端會重試。
-            return null;
+            return [];
         }
     }
 
@@ -4217,8 +4332,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (!name.StartsWith(Tools.SaveTools.CheckpointPrefix, StringComparison.OrdinalIgnoreCase)) return false;
         string rest = name.Substring(Tools.SaveTools.CheckpointPrefix.Length);
         int dash = rest.LastIndexOf('-');
-        if (dash <= 0 || !int.TryParse(rest.Substring(dash + 1), out tick)) return false;
-        colonyId = rest.Substring(0, dash);
+        if (dash <= 0 || !int.TryParse(rest[(dash + 1)..], out tick)) return false;
+        colonyId = rest[..dash];
         return true;
     }
 

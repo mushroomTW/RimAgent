@@ -16,6 +16,7 @@ internal static class ShipLayoutCheck
 {
     private const int Width = 13;
     private const int Height = 7;
+    private const string GameLogged = "game logged: ";
 
     public static List<string> Run(RimWorldGameWorld world, out string skipReason)
     {
@@ -31,7 +32,8 @@ internal static class ShipLayoutCheck
         }
         int ox = found.Value.minX, oz = found.Value.minZ;
         var spawned = new List<Building>();
-        Blueprint casketBlueprint = null;
+        // CA1859：使用具體且可為 null 的 Blueprint_Build？而非泛型基類 Blueprint。
+        Blueprint_Build casketBlueprint = null;
 
         Building Spawn(ThingDef def, int minX, int minZ)
         {
@@ -52,38 +54,73 @@ internal static class ShipLayoutCheck
             // 休眠艙藍圖貼著核心西側，朝北時站位正好落在核心上。
             casketBlueprint = GenConstruct.PlaceBlueprintForBuild(ThingDefOf.Ship_CryptosleepCasket, CenterFor(ThingDefOf.Ship_CryptosleepCasket, ox + 2, oz), map, Rot4.North, Faction.OfPlayer, null);
 
-            string text = new RimAgent.Tools.ShipTools(world).CheckShipLayout();
-            Log.Message(TestHelpers.LogPrefix + "check_ship_layout reply:\n" + text);
-            string group1 = text.Split('\n').FirstOrDefault(l => l.StartsWith("Group 1:", StringComparison.Ordinal)) ?? string.Empty;
-            List<Building> vanilla = [.. ShipUtility.ShipBuildingsAttachedTo(core)];
-            foreach (Building part in spawned)
+            VerifyShipLayoutResult(new ShipLayoutContext
             {
-                bool inGroup1 = group1.Contains("#" + part.thingIDNumber + " ");
-                if (inGroup1 != vanilla.Contains(part)) failures.Add($"{part.def.defName}: tool says group 1={inGroup1}, vanilla attached={vanilla.Contains(part)}");
-            }
-            if (!vanilla.Contains(engineA) || vanilla.Contains(engineB) || vanilla.Contains(sensor)) failures.Add("test layout is not what it should be");
-            if (!group1.Contains("#" + casketBlueprint.thingIDNumber + " ")) failures.Add("casket blueprint not connected through its edge: " + group1);
-            if (!text.Contains("Group 2 is not connected")) failures.Add("gap not reported: " + text);
-
-            IntVec3 entry = ThingUtility.InteractionCellWhenAt(ThingDefOf.Ship_CryptosleepCasket, casketBlueprint.Position, casketBlueprint.Rotation, map);
-            int casketId = casketBlueprint.thingIDNumber;
-            ShipPartInfo casketInfo = world.GetShipParts().FirstOrDefault(p => p.Id == casketId);
-            if (casketInfo?.State != ShipPartState.Blueprint) failures.Add("casket blueprint state: " + casketInfo?.State);
-            if (casketInfo?.InteractionCell != (entry.x, entry.z)) failures.Add($"casket entry: {casketInfo?.InteractionCell} vs {entry}");
-            if (!core.OccupiedRect().Contains(entry)) failures.Add("test layout: casket entry should be on the core, is " + entry);
-            if (!text.Contains("colonists enter from")) failures.Add("blocked entry not reported: " + text);
-
-            IReadOnlyList<string> removed = world.RemoveBlueprints(new CellRectSpec(ox + 2, oz, ox + 2, oz));
-            if (removed.Count != 1 || !casketBlueprint.Destroyed) failures.Add("remove_blueprint: " + string.Join("; ", removed));
-            if (spawned.Any(b => b.Destroyed)) failures.Add("remove_blueprint touched a finished building");
+                Failures = failures,
+                World = world,
+                Map = map,
+                Core = core,
+                EngineA = engineA,
+                EngineB = engineB,
+                Sensor = sensor,
+                CasketBlueprint = casketBlueprint,
+                Spawned = spawned,
+                Ox = ox,
+                Oz = oz
+            });
         }
         finally
         {
             if (casketBlueprint is { Destroyed: false }) casketBlueprint.Destroy();
             foreach (Building part in spawned.Where(b => !b.Destroyed)) part.Destroy();
         }
-        foreach (string error in world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+        foreach (string error in world.TakeNewGameErrors()) failures.Add(GameLogged + error);
         return failures;
+    }
+
+    /// <summary>船舶配置驗證所需的所有狀態，避免 VerifyShipLayoutResult 參數過多。</summary>
+    private sealed class ShipLayoutContext
+    {
+        public List<string> Failures { get; init; }
+        public RimWorldGameWorld World { get; init; }
+        public Map Map { get; init; }
+        public Building Core { get; init; }
+        public Building EngineA { get; init; }
+        public Building EngineB { get; init; }
+        public Building Sensor { get; init; }
+        public Blueprint_Build CasketBlueprint { get; init; }
+        public List<Building> Spawned { get; init; }
+        public int Ox { get; init; }
+        public int Oz { get; init; }
+    }
+
+    /// <summary>驗證船舶配置檢查結果，將不符的項目加入 failures。</summary>
+    private static void VerifyShipLayoutResult(ShipLayoutContext ctx)
+    {
+        string text = new RimAgent.Tools.ShipTools(ctx.World).CheckShipLayout();
+        Log.Message(TestHelpers.LogPrefix + "check_ship_layout reply:\n" + text);
+        string group1 = text.Split('\n').FirstOrDefault(l => l.StartsWith("Group 1:", StringComparison.Ordinal)) ?? string.Empty;
+        List<Building> vanilla = [.. ShipUtility.ShipBuildingsAttachedTo(ctx.Core)];
+        foreach (Building part in ctx.Spawned)
+        {
+            bool inGroup1 = group1.Contains("#" + part.thingIDNumber + " ");
+            if (inGroup1 != vanilla.Contains(part)) ctx.Failures.Add($"{part.def.defName}: tool says group 1={inGroup1}, vanilla attached={vanilla.Contains(part)}");
+        }
+        if (!vanilla.Contains(ctx.EngineA) || vanilla.Contains(ctx.EngineB) || vanilla.Contains(ctx.Sensor)) ctx.Failures.Add("test layout is not what it should be");
+        if (!group1.Contains("#" + ctx.CasketBlueprint.thingIDNumber + " ")) ctx.Failures.Add("casket blueprint not connected through its edge: " + group1);
+        if (!text.Contains("Group 2 is not connected")) ctx.Failures.Add("gap not reported: " + text);
+
+        IntVec3 entry = ThingUtility.InteractionCellWhenAt(ThingDefOf.Ship_CryptosleepCasket, ctx.CasketBlueprint.Position, ctx.CasketBlueprint.Rotation, ctx.Map);
+        int casketId = ctx.CasketBlueprint.thingIDNumber;
+        ShipPartInfo casketInfo = ctx.World.GetShipParts().FirstOrDefault(p => p.Id == casketId);
+        if (casketInfo?.State != ShipPartState.Blueprint) ctx.Failures.Add("casket blueprint state: " + casketInfo?.State);
+        if (casketInfo?.InteractionCell != (entry.x, entry.z)) ctx.Failures.Add($"casket entry: {casketInfo?.InteractionCell} vs {entry}");
+        if (!ctx.Core.OccupiedRect().Contains(entry)) ctx.Failures.Add("test layout: casket entry should be on the core, is " + entry);
+        if (!text.Contains("colonists enter from")) ctx.Failures.Add("blocked entry not reported: " + text);
+
+        IReadOnlyList<string> removed = ctx.World.RemoveBlueprints(new CellRectSpec(ctx.Ox + 2, ctx.Oz, ctx.Ox + 2, ctx.Oz));
+        if (removed.Count != 1 || !ctx.CasketBlueprint.Destroyed) ctx.Failures.Add("remove_blueprint: " + string.Join("; ", removed));
+        if (ctx.Spawned.Any(b => b.Destroyed)) ctx.Failures.Add("remove_blueprint touched a finished building");
     }
 
     /// <summary>離地圖邊緣留一格：原版連通判定會讀零件外圍的格子，不檢查是否在圖內。</summary>
@@ -113,7 +150,7 @@ internal static class ShipLayoutCheck
 public sealed class ShipLayoutCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentShipLayoutCheck.xml";
-    private static bool _done;
+    private bool _done;
 
     public ShipLayoutCheckComponent(Verse.Game game)
     {

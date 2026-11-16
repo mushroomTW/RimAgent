@@ -51,7 +51,7 @@ internal sealed class ToolOutputTools
         string footer = end < text.Length
             ? "\n[continue with offset " + end.ToString(CultureInfo.InvariantCulture) + "]"
             : "\n[end of output]";
-        return header + text.Substring(start, end - start) + footer;
+        return header + text[start..end] + footer;
     }
 
     private static string Find(string id, string text, string find)
@@ -62,8 +62,8 @@ internal sealed class ToolOutputTools
         {
             int lineEnd = text.IndexOf('\n', lineStart);
             if (lineEnd < 0) lineEnd = text.Length;
-            string line = text.Substring(lineStart, lineEnd - lineStart).TrimEnd(['\r']);
-            if (line.IndexOf(find, StringComparison.OrdinalIgnoreCase) >= 0)
+            string line = text.Substring(lineStart, lineEnd - lineStart).TrimEnd('\r');
+            if (line.Contains(find, StringComparison.OrdinalIgnoreCase))
             {
                 matches++;
                 string entry = "@" + lineStart.ToString(CultureInfo.InvariantCulture) + ": " + line + "\n";
@@ -78,6 +78,6 @@ internal sealed class ToolOutputTools
         if (matches == 0) return "No lines in " + id + " contain \"" + find + "\".";
         string header = matches.ToString(CultureInfo.InvariantCulture) + " line(s) in " + id + " contain \"" + find + "\"" +
             (shown < matches ? "; showing the first " + shown.ToString(CultureInfo.InvariantCulture) : string.Empty) + ":\n";
-        return header + sb.ToString().TrimEnd(['\n']);
+        return header + sb.ToString().TrimEnd('\n');
     }
 }

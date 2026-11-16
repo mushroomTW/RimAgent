@@ -262,7 +262,7 @@ public sealed class ObserveTools
         }
         MapInfo exact = maps.FirstOrDefault(m => string.Equals(m.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return Result<MapInfo>.Ok(exact);
-        List<MapInfo> contains = [.. maps.Where(m => m.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)];
+        List<MapInfo> contains = [.. maps.Where(m => m.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];
         if (contains.Count == 1) return Result<MapInfo>.Ok(contains[0]);
         if (contains.Count > 1)
         {
@@ -327,7 +327,7 @@ public sealed class ObserveTools
     /// <summary>模型給的 kind 字串（大小寫不敏感）對到 <see cref="ThingKind"/>。</summary>
     internal static bool TryParseKind(string kind, out ThingKind parsed)
     {
-        return Enum.TryParse((kind ?? string.Empty).Trim(), true, out parsed) && Enum.IsDefined(typeof(ThingKind), parsed);
+        return Enum.TryParse((kind ?? string.Empty).Trim(), true, out parsed) && Enum.IsDefined<ThingKind>(parsed);
     }
 
     /// <summary>inspect_area 一次最多看的格數（50x50）；再大就是在掃全圖，該改用 find_things。</summary>

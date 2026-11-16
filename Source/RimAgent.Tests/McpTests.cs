@@ -278,7 +278,7 @@ public class McpToolsTests
     {
         var settings = new RimAgentSettings();
         Assert.That(settings.MatchPreset(), Is.EqualTo(RimAgentSettings.PermissionPreset.Recommended));
-        foreach (RimAgentSettings.PermissionPreset preset in (RimAgentSettings.PermissionPreset[])System.Enum.GetValues(typeof(RimAgentSettings.PermissionPreset)))
+        foreach (RimAgentSettings.PermissionPreset preset in System.Enum.GetValues<RimAgentSettings.PermissionPreset>())
         {
             settings.ApplyPreset(preset);
             Assert.That(settings.MatchPreset(), Is.EqualTo(preset));

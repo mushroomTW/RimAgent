@@ -671,10 +671,7 @@ public class RimAgentGameComponent : GameComponent
     /// <summary>點名殖民者：上次還活著、這次不在名單且確實死亡的記下來。離開地圖、被綁架等不算。</summary>
     private void TrackColonistDeaths()
     {
-        foreach (KeyValuePair<int, Pawn> tracked in _trackedColonists)
-        {
-            if (tracked.Value.Dead) _pendingDeaths.Add(tracked.Value.LabelShort);
-        }
+        _pendingDeaths.AddRange(_trackedColonists.Values.Where(t => t.Dead).Select(t => t.LabelShort));
         _trackedColonists.Clear();
         foreach (Pawn pawn in RimWorld.PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoSuspended)
         {
@@ -769,8 +766,8 @@ public class RimAgentGameComponent : GameComponent
             int instructionId = session.Transcript.CurrentInstructionId + 1;
             string confirmationReport = session.PeekGoalConfirmationReport(objective);
             string reply = await session.SendAsync(
-                GoalProgress.BuildPrompt(objective, confirmationReport, _goalNeedsVerification, _goalAuditNote), cts.Token,
-                goalRun: true, displayText: objective);
+                GoalProgress.BuildPrompt(objective, confirmationReport, _goalNeedsVerification, _goalAuditNote),
+                goalRun: true, displayText: objective, cancellationToken: cts.Token);
             if (reply != null && confirmationReport != null) session.TakeGoalConfirmationReport(objective);
             if (!GoalRunIsCurrent(objective, generation, cts)) return;
 
@@ -789,19 +786,8 @@ public class RimAgentGameComponent : GameComponent
                 _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence,
                 _goalBlockerKey, _goalIdleTurns, usedTool);
 
-            GoalAuditResult audit = null;
-            // 審計只能否決完成：沒有工具證據的「完成」在 AfterTurn 就不算完成，也不送審計升級。
-            // 有待確認的命令時目標還沒走完，稽核只會看到半截的結果：不稽核。
-            if (reply != null && !session.HasPendingConfirmation && decision.Complete)
-            {
-                DecisionGoalAuditor auditor = GoalAuditor;
-                if (auditor != null)
-                {
-                    string toolEvidence = GoalProgress.BuildAuditEvidence(entries, instructionId);
-                    // 稽核回來後要繼續在主線程處理目標狀態；切到執行緒池會讓後續的存檔／UI 更新離開主線程。
-                    audit = await auditor.AuditAsync(objective, reply, cts.Token, toolEvidence);
-                }
-            }
+            GoalAuditResult audit = await EvaluateGoalAuditAsync(
+                session, entries, instructionId, objective, reply, decision, cts);
 
             // 等待審計期間玩家可能編輯、刪除或暫停目標；即使是同一個字串也不能沿用舊結果。
             if (!GoalRunIsCurrent(objective, generation, cts)) return;
@@ -819,32 +805,59 @@ public class RimAgentGameComponent : GameComponent
         }
         catch (Exception ex)
         {
-            if (generation != _goalGeneration || cts.IsCancellationRequested) return;
-            _goalBlockedTurns = _goalBlockerKey == "model-error" ? _goalBlockedTurns + 1 : 1;
-            _goalBlockerKey = "model-error";
-            _goalIdleTurns = 0;
-            if (_goalBlockedTurns >= GoalProgress.MaxConsecutiveBlocks)
-            {
-                _goalPaused = true;
-                _goalPauseReason = GoalPauseReason.Error;
-                session.Transcript.Add(new TranscriptEntry
-                {
-                    Kind = TranscriptKind.Notice,
-                    Text = "Goal paused after repeated errors. Use /goal resume to continue: " + objective
-                });
-            }
-            WarnOnce("RimAgent goal run failed: " + ex.Message);
+            HandleGoalRunError(ex, objective, generation, cts, session);
         }
         finally
         {
-            if (exclusive) session.EndExclusiveWork();
-            if (ReferenceEquals(_goalCts, cts)) _goalCts = null;
-            cts.Dispose();
-            if (generation == _goalGeneration)
+            FinalizeGoalRun(exclusive, session, cts, generation);
+        }
+    }
+
+    /// <summary>判斷是否要送審計，並等待結果。只有「完成」且無待確認命令時才稽核。</summary>
+    private async Task<GoalAuditResult> EvaluateGoalAuditAsync(
+        ColonyAgentSession session, IReadOnlyList<TranscriptEntry> entries, int instructionId,
+        string objective, string reply, GoalTurnDecision decision, CancellationTokenSource cts)
+    {
+        // 審計只能否決完成：沒有工具證據的「完成」在 AfterTurn 就不算完成，也不送審計升級。
+        // 有待確認的命令時目標還沒走完，稽核只會看到半截的結果：不稽核。
+        if (reply == null || session.HasPendingConfirmation || !decision.Complete) return null;
+        DecisionGoalAuditor auditor = GoalAuditor;
+        if (auditor == null) return null;
+        string toolEvidence = GoalProgress.BuildAuditEvidence(entries, instructionId);
+        // 稽核回來後要繼續在主線程處理目標狀態；切到執行緒池會讓後續的存檔／UI 更新離開主線程。
+        return await auditor.AuditAsync(objective, reply, toolEvidence, cts.Token);
+    }
+
+    /// <summary>處理目標執行失敗：記錄封鎖輪數，超過閾值則暫停目標。</summary>
+    private void HandleGoalRunError(Exception ex, string objective, int generation, CancellationTokenSource cts, ColonyAgentSession session)
+    {
+        if (generation != _goalGeneration || cts.IsCancellationRequested) return;
+        _goalBlockedTurns = _goalBlockerKey == "model-error" ? _goalBlockedTurns + 1 : 1;
+        _goalBlockerKey = "model-error";
+        _goalIdleTurns = 0;
+        if (_goalBlockedTurns >= GoalProgress.MaxConsecutiveBlocks)
+        {
+            _goalPaused = true;
+            _goalPauseReason = GoalPauseReason.Error;
+            session.Transcript.Add(new TranscriptEntry
             {
-                _goalRunning = false;
-                _goalNextRunAt = DateTime.UtcNow.AddSeconds(1);
-            }
+                Kind = TranscriptKind.Notice,
+                Text = "Goal paused after repeated errors. Use /goal resume to continue: " + objective
+            });
+        }
+        WarnOnce("RimAgent goal run failed: " + ex.Message);
+    }
+
+    /// <summary>收尾目標執行：釋放獨占工作、清除 CTS、重設執行中旗標。</summary>
+    private void FinalizeGoalRun(bool exclusive, ColonyAgentSession session, CancellationTokenSource cts, int generation)
+    {
+        if (exclusive) session.EndExclusiveWork();
+        if (ReferenceEquals(_goalCts, cts)) _goalCts = null;
+        cts.Dispose();
+        if (generation == _goalGeneration)
+        {
+            _goalRunning = false;
+            _goalNextRunAt = DateTime.UtcNow.AddSeconds(1);
         }
     }
 
@@ -965,7 +978,6 @@ public class RimAgentGameComponent : GameComponent
                 });
                 break;
 
-            case GoalAuditVerdict.Continue:
             default:
                 // 稽核否決完成不等於把原本的暫停條件吃掉：回合上限、連續阻礙、連續沒有
                 // 有效工具行動都要照原樣暫停，否則目標可能一直空轉。
@@ -1135,7 +1147,7 @@ public class RimAgentGameComponent : GameComponent
         }
     }
 
-    private AutonomousConfig ToConfig(RimAgentSettings settings)
+    private static AutonomousConfig ToConfig(RimAgentSettings settings)
     {
         return new AutonomousConfig
         {
@@ -1154,9 +1166,9 @@ public class RimAgentGameComponent : GameComponent
         };
     }
 
-    private AutonomousSignals GatherSignals()
+    private static AutonomousSignals GatherSignals()
     {
-        return _autoWorld.GetAutonomousSignals();
+        return RimWorldGameWorld.GetAutonomousSignals();
     }
 
     /// <summary>持續性問題只警告一種一次（缺文案之類），免得每 500 tick 洗一次除錯記錄。</summary>
@@ -1247,37 +1259,45 @@ public class RimAgentGameComponent : GameComponent
         if (!allowed) return answered;
 
         string colonyState = DecisionAutonomousTriage.DescribeSignals(GatherSignals());
-        IReadOnlyList<ChoiceDecision> decisions = await ChoiceResponder.DecideAsync(choices, colonyState);
+        IReadOnlyList<ChoiceDecision> decisions = await ChoiceResponder.DecideAsync(choices, colonyState, _autoCts.Token);
         if (generation != _autoGeneration) return answered;
         string authorization = autoMode ? AutonomousPrompts.Build(_pack?.Autonomous, AutonomousTrigger.Choice) : null;
         foreach (ChoiceDecision decision in decisions)
         {
-            PendingChoiceInfo choice = decision.Choice;
-            // 前一個代答可能已讓這個抉擇消失（同一串對話框）：只答還在的。
-            if (!_autoWorld.GetPendingChoices().Any(c => string.Equals(c.Id, choice.Id, StringComparison.OrdinalIgnoreCase))) continue;
-            string preview = $"would answer \"{choice.Title}\" with option {decision.Option.Number}: {decision.Option.Text}.";
-            if (autoMode)
-            {
-                RiskVerdict verdict = await session.ClassifyRiskAsync(new RiskQuestion
-                {
-                    Instruction = authorization ?? string.Empty,
-                    ToolName = "choose_option",
-                    Arguments = System.Text.Json.JsonSerializer.Serialize(new { choiceId = choice.Id, option = decision.Option.Number }),
-                    Preview = preview
-                });
-                if (generation != _autoGeneration) return answered;
-                if (verdict == null || verdict.ShouldReject) continue;
-            }
-            CommandResult result = _autoWorld.ChooseOption(choice.Id, decision.Option.Number);
-            if (!result.Success) continue;
-            answered.Add(choice.Id);
-            string chosen = string.IsNullOrEmpty(result.Message) ? decision.Option.Text : result.Message;
-            session.DecisionReports.Add($"Answered \"{choice.Title}\" with \"{chosen}\".");
-            string notice = $"System One answered \"{choice.Title}\" with \"{chosen}\" (confidence {ToolText.Pct((float)decision.Confidence)}).";
-            session.Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Notice, Text = notice });
-            LogSystemOne("choice", notice);
+            if (!await ProcessSystemOneChoiceAsync(session, decision, answered, authorization, autoMode, generation)) return answered;
         }
         return answered;
+    }
+
+    /// <summary>代答單一個抉擇：確認抉擇仍存在、自主模式下風險分類、執行選項並記錄結果。回傳 false 表示應停止後續處理。</summary>
+    private async Task<bool> ProcessSystemOneChoiceAsync(
+        ColonyAgentSession session, ChoiceDecision decision, HashSet<string> answered, string authorization, bool autoMode, int generation)
+    {
+        PendingChoiceInfo choice = decision.Choice;
+        // 前一個代答可能已讓這個抉擇消失（同一串對話框）：只答還在的。
+        if (!_autoWorld.GetPendingChoices().Any(c => string.Equals(c.Id, choice.Id, StringComparison.OrdinalIgnoreCase))) return true;
+        string preview = $"would answer \"{choice.Title}\" with option {decision.Option.Number}: {decision.Option.Text}.";
+        if (autoMode)
+        {
+            RiskVerdict verdict = await session.ClassifyRiskAsync(new RiskQuestion
+            {
+                Instruction = authorization ?? string.Empty,
+                ToolName = "choose_option",
+                Arguments = System.Text.Json.JsonSerializer.Serialize(new { choiceId = choice.Id, option = decision.Option.Number }),
+                Preview = preview
+            }, _autoCts.Token);
+            if (generation != _autoGeneration) return false;
+            if (verdict == null || verdict.ShouldReject) return true;
+        }
+        CommandResult result = _autoWorld.ChooseOption(choice.Id, decision.Option.Number);
+        if (!result.Success) return true;
+        answered.Add(choice.Id);
+        string chosen = string.IsNullOrEmpty(result.Message) ? decision.Option.Text : result.Message;
+        session.DecisionReports.Add($"Answered \"{choice.Title}\" with \"{chosen}\".");
+        string notice = $"System One answered \"{choice.Title}\" with \"{chosen}\" (confidence {ToolText.Pct((float)decision.Confidence)}).";
+        session.Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Notice, Text = notice });
+        LogSystemOne("choice", notice);
+        return true;
     }
 
     /// <summary>
@@ -1295,7 +1315,7 @@ public class RimAgentGameComponent : GameComponent
             lastReply = last.Reply;
             hoursAgo = Math.Max(0, tick - last.Tick) / 2500f;
         }
-        TriageVerdict verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo);
+        TriageVerdict verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo, _autoCts.Token);
         if (generation != _autoGeneration || verdict == null || !verdict.Skip) return false;
         _scheduler.Defer(trigger, Current.Game != null ? Find.TickManager.TicksGame : tick);
         string notice = $"System One judged that {DescribeGiveUp(trigger)} needs no action yet " +
@@ -1338,34 +1358,19 @@ public class RimAgentGameComponent : GameComponent
         int instructionId = session.Transcript.CurrentInstructionId + 1;
         try
         {
-            AutonomousPack pack = _pack?.Autonomous;
-            if (pack != null && !AutonomousPrompts.HasTask(pack, trigger) && AutonomousPrompts.HasTask(pack, AutonomousTrigger.Interval))
-            {
-                // 章節缺失（通常是拼字錯誤）時 Build 會靜默退回 Interval：警告一次讓問題可見。
-                WarnOnce("RimAgent autonomous task missing section for " + trigger + ", falling back to Interval");
-            }
-            string instruction = AutonomousPrompts.Build(pack, trigger);
-            if (string.IsNullOrWhiteSpace(instruction))
-            {
-                // 自主任務文案缺檔：送空話只會燒 API，直接跳過本輪（沿用錯誤節流，只記一種一次）。
-                WarnOnce("RimAgent autonomous run skipped: Prompts/Autonomous.en.md is missing or has no task for " + trigger);
-                return;
-            }
+            string instruction = BuildAutonomousInstruction(trigger);
+            if (string.IsNullOrWhiteSpace(instruction)) return;
             if (!string.IsNullOrEmpty(detail)) instruction += "\n\n" + detail;
             // 不加 ConfigureAwait(false)：收尾的 RecordRun 要回主線程，
             // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
             string reply = await session.SendAsync(
                 instruction,
-                cts.Token,
                 autonomous: true,
                 maxToolSteps: session.Mode == AgentMode.Autonomous ? null : AutonomousRunMaxSteps,
                 reasoningOverride: ReasoningLevel.Low,
-                autonomousInfo: RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(trigger, tick, signals) : null);
-            if (DecisionAutonomousTriage.IsTriaged(trigger) && generation == _autoGeneration && Current.Game != null)
-            {
-                _lastAutoReplies[trigger] = (reply ?? string.Empty, Find.TickManager.TicksGame);
-                _triageNoticed.Remove(trigger);
-            }
+                autonomousInfo: RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(trigger, tick, signals) : null,
+                cancellationToken: cts.Token);
+            HandleAutonomousReply(trigger, reply, generation);
         }
         catch (InvalidOperationException)
         {
@@ -1382,6 +1387,40 @@ public class RimAgentGameComponent : GameComponent
         }
         // 讀檔／新局已把這個任務作廢：不要用舊遊戲的結果改新遊戲的排程器或冷卻。
         if (generation != _autoGeneration) return;
+        RecordAutonomousRun(session, trigger, tick, cts, config, instructionId);
+    }
+
+    /// <summary>組裝自主任務指令；缺章節時警告並退回 Interval。</summary>
+    private string BuildAutonomousInstruction(AutonomousTrigger trigger)
+    {
+        AutonomousPack pack = _pack?.Autonomous;
+        if (pack != null && !AutonomousPrompts.HasTask(pack, trigger) && AutonomousPrompts.HasTask(pack, AutonomousTrigger.Interval))
+        {
+            // 章節缺失（通常是拼字錯誤）時 Build 會靜默退回 Interval：警告一次讓問題可見。
+            WarnOnce("RimAgent autonomous task missing section for " + trigger + ", falling back to Interval");
+        }
+        string instruction = AutonomousPrompts.Build(pack, trigger);
+        if (string.IsNullOrWhiteSpace(instruction))
+        {
+            // 自主任務文案缺檔：送空話只會燒 API，直接跳過本輪（沿用錯誤節流，只記一種一次）。
+            WarnOnce("RimAgent autonomous run skipped: Prompts/Autonomous.en.md is missing or has no task for " + trigger);
+        }
+        return instruction;
+    }
+
+    /// <summary>收到自主任務回覆後，更新三分之一代答的最後回覆紀錄。</summary>
+    private void HandleAutonomousReply(AutonomousTrigger trigger, string reply, int generation)
+    {
+        if (DecisionAutonomousTriage.IsTriaged(trigger) && generation == _autoGeneration && Current.Game != null)
+        {
+            _lastAutoReplies[trigger] = (reply ?? string.Empty, Find.TickManager.TicksGame);
+            _triageNoticed.Remove(trigger);
+        }
+    }
+
+    /// <summary>自主任務結束後的紀錄：冷卻、巡視退避、工具配額計數，以及設定錯誤後的保持。</summary>
+    private void RecordAutonomousRun(ColonyAgentSession session, AutonomousTrigger trigger, int tick, CancellationTokenSource cts, AutonomousConfig config, int instructionId)
+    {
         // 冷卻、定期巡視與重試退避都從任務結束起算：一輪在高速下常跑掉十幾個遊戲小時，
         // 從起跑算的話一結束就全部到期，上一輪的效果還沒反映到訊號上就接著再跑。
         // 已回到主線程（上面的 await 沒加 ConfigureAwait(false)），讀得到結束當下的 tick；

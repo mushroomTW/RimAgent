@@ -62,16 +62,8 @@ internal sealed class DecisionToolPackSelector
             return Array.Empty<string>();
         }
 
-        var selected = new List<string>();
-        foreach (ToolPacks.Pack pack in candidates)
-        {
-            if (result != null && result.TryGet(pack.Id, out DecisionAnswer answer)
-                && (answer?.Probability ?? 0d) >= LoadThreshold)
-            {
-                selected.Add(pack.Id);
-            }
-        }
-        return selected;
+        return candidates.Where(pack => result != null && result.TryGet(pack.Id, out var answer)
+            && (answer?.Probability ?? 0d) >= LoadThreshold).Select(pack => pack.Id).ToList();
     }
 
     private IDecisionService ResolveService()

@@ -69,14 +69,19 @@ internal sealed class MapShotCapture : MonoBehaviour
         _target = RenderTexture.GetTemporary(layout.MapWidthPx, layout.MapHeightPx, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default, 1);
         _camera.targetTexture = _target;
 
-        Active.Add(this);
-        Camera.onPostRender += OnAnyPostRender;
+        Register(this);
+        Subscribe(this);
     }
+
+    private static void Register(MapShotCapture shot) => Active.Add(shot);
+    private static void Unregister(MapShotCapture shot) => Active.Remove(shot);
+    private static void Subscribe(MapShotCapture shot) => Camera.onPostRender += shot.OnAnyPostRender;
+    private static void Unsubscribe(MapShotCapture shot) => Camera.onPostRender -= shot.OnAnyPostRender;
 
     private void OnAnyPostRender(Camera camera)
     {
         if (camera != _camera || ++_renders < RendersBeforeCapture) return;
-        Camera.onPostRender -= OnAnyPostRender;
+        Unsubscribe(this);
         try
         {
             // 這兩幀之間玩家切了地圖或打開世界地圖，畫出來的就不是要的那張；不寫檔，讀圖端會逾時放棄。
@@ -122,8 +127,8 @@ internal sealed class MapShotCapture : MonoBehaviour
 
     private void OnDestroy()
     {
-        Camera.onPostRender -= OnAnyPostRender;
-        Active.Remove(this);
+        Unsubscribe(this);
+        Unregister(this);
         if (_camera != null) _camera.targetTexture = null;
         if (_target != null)
         {

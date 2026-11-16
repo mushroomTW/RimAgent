@@ -210,7 +210,7 @@ public sealed class McpManager
     {
         lock (_gate)
         {
-            if (_shutdown) throw new ObjectDisposedException(nameof(McpManager));
+            ObjectDisposedException.ThrowIf(_shutdown, nameof(McpManager));
             IMcpServer running;
             if (_clients.TryGetValue(entry.Name, out running))
             {
@@ -227,7 +227,7 @@ public sealed class McpManager
             IList<McpServerTool> tools = await server.ListToolsAsync(cancellationToken).ConfigureAwait(false);
             lock (_gate)
             {
-                if (_shutdown) throw new ObjectDisposedException(nameof(McpManager));
+                ObjectDisposedException.ThrowIf(_shutdown, nameof(McpManager));
                 IMcpServer existing;
                 if (_clients.TryGetValue(entry.Name, out existing))
                 {

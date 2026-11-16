@@ -13,6 +13,7 @@ public class BuildToolsTests
 {
     private FakeGameWorld _world;
     private BuildTools _tools;
+    private static readonly string[] _madeByComponent = ["Made by \"make component\" (at fabrication bench) -> 1."];
 
     [SetUp]
     public void SetUp()
@@ -548,7 +549,7 @@ public class BuildToolsTests
             Label = "component",
             Description = "Basic mechanical parts.",
             Stats = stats,
-            Facts = new[] { "Made by \"make component\" (at fabrication bench) -> 1." }
+            Facts = _madeByComponent,
         });
 
         string text = _tools.LookupDef("component");

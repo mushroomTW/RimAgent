@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using RimAgent.Agent;
 using RimAgent.Game;
@@ -7,8 +9,10 @@ using RimAgent.Tools;
 namespace RimAgent.Tests;
 
 [TestFixture]
-public class ObserveToolsTests
+public partial class ObserveToolsTests
 {
+    [GeneratedRegex(@"TakeScreenshot\(RimAgent_\d{8}_\d{6}\)")]
+    private static partial Regex TakeScreenshotRegex();
     private FakeGameWorld _world;
     private ObserveTools _tools;
 
@@ -74,7 +78,7 @@ public class ObserveToolsTests
     [Test]
     public void EmptyResourcesExplainThatOnlyStoredItemsAreCounted()
     {
-        _world.Resources = new ResourceSnapshot { TotalHumanEdibleNutrition = 0f, Items = new ResourceInfo[0] };
+        _world.Resources = new ResourceSnapshot { TotalHumanEdibleNutrition = 0f, Items = Array.Empty<ResourceInfo>() };
 
         string text = _tools.GetResources();
 
@@ -149,7 +153,7 @@ public class ObserveToolsTests
         _world.Research = new ResearchInfo
         {
             Current = new ResearchProjectInfo { DefName = "Electricity", Label = "electricity", Cost = 1600 },
-            Available = new ResearchProjectInfo[0]
+            Available = Array.Empty<ResearchProjectInfo>()
         };
 
         string text = _tools.SetResearch("none");
@@ -258,7 +262,7 @@ public class ObserveToolsTests
     {
         string defaultText = _tools.TakeScreenshot();
         Assert.That(defaultText, Does.StartWith("Screenshot saved:").And.Match(@"RimAgent_\d{8}_\d{6}\.png").And.Contain("1920x1080"));
-        Assert.That(_world.Calls.Exists(c => System.Text.RegularExpressions.Regex.IsMatch(c, @"TakeScreenshot\(RimAgent_\d{8}_\d{6}\)")), Is.True);
+        Assert.That(_world.Calls.Exists(c => TakeScreenshotRegex().IsMatch(c)), Is.True);
 
         string customText = _tools.TakeScreenshot("colony_base");
         Assert.That(customText, Does.StartWith("Screenshot saved:").And.Contain("colony_base.png").And.Contain("1920x1080"));

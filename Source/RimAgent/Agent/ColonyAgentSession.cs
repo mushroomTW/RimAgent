@@ -51,7 +51,6 @@ public sealed class ColonyAgentSession
     private readonly AgentToolRegistry _registry;
     private readonly SubagentTools _subagents;
     private readonly Func<ToolPermissions> _permissions;
-    private readonly IChatClient _inner;
     private readonly TokenTrackingChatClient _tokenUsage;
     private readonly Func<string, int?> _contextWindowLookup;
     private readonly Func<string, bool?> _visionLookup;
@@ -124,10 +123,7 @@ public sealed class ColonyAgentSession
             ChatOptions options = Volatile.Read(ref _current);
             if (options == null) return;
             var list = new List<AITool>(options.Tools ?? Array.Empty<AITool>());
-            foreach (AITool tool in tools)
-            {
-                if (!list.Contains(tool)) list.Add(tool);
-            }
+            list.AddRange(tools.Except(list));
             options.Tools = list;
         }
     }
@@ -198,9 +194,10 @@ public sealed class ColonyAgentSession
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
     public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionReasoningRouter router = null, Func<string, bool?> visionLookup = null)
     {
-        if (innerClient == null) throw new ArgumentNullException(nameof(innerClient));
-        if (world == null) throw new ArgumentNullException(nameof(world));
-        _permissions = permissions ?? throw new ArgumentNullException(nameof(permissions));
+        ArgumentNullException.ThrowIfNull(innerClient);
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(permissions);
+        _permissions = permissions;
 
         Transcript = new AgentTranscript();
         Undo = new WorkUndoStack();
@@ -251,8 +248,8 @@ public sealed class ColonyAgentSession
             () => ImageInputEnabled,
             path => LoadScreenshotForModelAsync(world, path));
         _runOptions = new RunOptionsCapture(_images);
-        _inner = _runOptions.AsMainThreadFunctionInvokingClient(maxSteps);
-        _invoking = _inner as FunctionInvokingChatClient;
+        var invokingClient = _runOptions.AsMainThreadFunctionInvokingClient(maxSteps);
+        _invoking = invokingClient as FunctionInvokingChatClient;
         // 經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話。不碰遊戲世界，不扣自主模式的工具額度。
         _toolPackLoader = new LoggingAIFunction(
             AIFunctionFactory.Create(typeof(ToolPackTools).GetMethod(nameof(ToolPackTools.LoadToolpack)),
@@ -273,7 +270,7 @@ public sealed class ColonyAgentSession
         _compaction = new CompactionProvider(new ToolResultCompactionStrategy(
             ShouldAutoCompact,
             AutoFoldPreservedGroups));
-        _agent = new ChatClientAgent(_inner, new ChatClientAgentOptions
+        _agent = new ChatClientAgent(invokingClient, new ChatClientAgentOptions
         {
             Name = "ColonyAgent",
             ChatOptions = new ChatOptions { Instructions = AgentPromptComposer.FallbackPreamble },
@@ -542,11 +539,7 @@ public sealed class ColonyAgentSession
     internal static long EstimateTokens(string text)
     {
         if (string.IsNullOrEmpty(text)) return 0;
-        long wide = 0;
-        foreach (char c in text)
-        {
-            if (c >= 0x2E80) wide++;
-        }
+        long wide = text.Count(c => c >= 0x2E80);
         return wide + (text.Length - wide + 3) / 4;
     }
 
@@ -680,9 +673,9 @@ public sealed class ColonyAgentSession
     /// <param name="autonomousInfo">自主任務的起跑脈絡，只寫進執行紀錄；帶了就視為自主任務。</param>
     /// <param name="images">玩家貼上的圖片（JPEG）；只在這句指令期間附給模型，不寫進對話歷史。</param>
     /// <returns>模型最後回覆的文字內容；發生錯誤或文字為空白時回傳 null。</returns>
+#pragma warning disable S107 // 公共方法參數多，但皆為選用參數，呼叫端可省略，無需重構
     public async Task<string> SendAsync(
         string userText,
-        CancellationToken cancellationToken = default,
         bool autonomous = false,
         int? maxToolSteps = null,
         bool goalRun = false,
@@ -690,8 +683,10 @@ public sealed class ColonyAgentSession
         ReasoningLevel? reasoningOverride = null,
         Action onAccepted = null,
         AutonomousRunInfo autonomousInfo = null,
-        IReadOnlyList<byte[]> images = null)
+        IReadOnlyList<byte[]> images = null,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(userText);
         if (string.IsNullOrWhiteSpace(userText)) return null;
         // 紀錄關閉時呼叫端不建脈絡，所以只能單向推導：有脈絡必是自主任務，反之不一定。
         autonomous |= autonomousInfo != null;
@@ -703,18 +698,17 @@ public sealed class ColonyAgentSession
         _interjections.Open();
         try
         {
-            string reply;
-            _images.SetPlayerImages(images);
-            try
+            var options = new InstructionOptions
             {
-                reply = await RunInstructionAsync(userText.Trim(), cancellationToken, autonomous, maxToolSteps, goalRun,
-                    displayText, reasoningOverride, onAccepted, echo: true, autonomousInfo: autonomousInfo).ConfigureAwait(false);
-            }
-            finally
-            {
-                // 圖片只屬於這句指令：之後的插話指令不再附。
-                _images.SetPlayerImages(null);
-            }
+                Autonomous = autonomous,
+                MaxToolSteps = maxToolSteps,
+                GoalRun = goalRun,
+                DisplayText = displayText,
+                ReasoningOverride = reasoningOverride,
+                OnAccepted = onAccepted,
+                AutonomousInfo = autonomousInfo
+            };
+            string reply = await RunInstructionWithImagesAsync(userText.Trim(), options, images, cancellationToken).ConfigureAwait(false);
             await RunLateInterjectionsAsync(cancellationToken).ConfigureAwait(false);
             return reply;
         }
@@ -723,6 +717,21 @@ public sealed class ColonyAgentSession
             // 例外路徑的保險：忙碌結束後不留下永遠送不出的插話。
             _interjections.CloseAndDiscard();
             Volatile.Write(ref _busy, 0);
+        }
+    }
+#pragma warning restore S107
+
+    private async Task<string> RunInstructionWithImagesAsync(string text, InstructionOptions options, IReadOnlyList<byte[]> imgs, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        _images.SetPlayerImages(imgs);
+        try
+        {
+            return await RunInstructionAsync(text.Trim(), options, echo: true, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _images.SetPlayerImages(null);
         }
     }
 
@@ -767,7 +776,7 @@ public sealed class ColonyAgentSession
             }
             string next = _interjections.TakeAllOrClose();
             if (next == null) return;
-            await RunInstructionAsync(next, cancellationToken, false, null, false, null, null, null, echo: false).ConfigureAwait(false);
+            await RunInstructionAsync(next, default, echo: false, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -783,30 +792,25 @@ public sealed class ColonyAgentSession
         });
     }
 
+    private readonly struct InstructionOptions
+    {
+        public bool Autonomous { get; init; }
+        public int? MaxToolSteps { get; init; }
+        public bool GoalRun { get; init; }
+        public string DisplayText { get; init; }
+        public ReasoningLevel? ReasoningOverride { get; init; }
+        public Action OnAccepted { get; init; }
+        public AutonomousRunInfo AutonomousInfo { get; init; }
+    }
+
     /// <summary>執行指令的核心非同步處理流程。</summary>
-    /// <param name="text">要送給模型的指令文字。</param>
-    /// <param name="cancellationToken">取消語彙基元。</param>
-    /// <param name="autonomous">是否為自主任務。</param>
-    /// <param name="maxToolSteps">工具呼叫上限步數。</param>
-    /// <param name="goalRun">是否為長期目標任務。</param>
-    /// <param name="displayText">顯示於對話介面的文字。</param>
-    /// <param name="reasoningOverride">覆寫思考強度。</param>
-    /// <param name="onAccepted">接受訊息後的通知回呼。</param>
-    /// <param name="echo">false 代表這句已經以插話顯示在對話裡，不再寫一次。</param>
-    /// <param name="autonomousInfo">自主任務的脈絡資訊。</param>
-    /// <returns>模型最後回覆的文字內容；發生錯誤或文字為空白時回傳 null。</returns>
     private async Task<string> RunInstructionAsync(
         string text,
-        CancellationToken cancellationToken,
-        bool autonomous,
-        int? maxToolSteps,
-        bool goalRun,
-        string displayText,
-        ReasoningLevel? reasoningOverride,
-        Action onAccepted,
+        InstructionOptions options,
         bool echo,
-        AutonomousRunInfo autonomousInfo = null)
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(text);
         // 新指令取代等待中的確認，先記錄捨棄，再建立新指令的編號。
         DiscardPendingConfirmation();
         // 句內分類器判定快取不跨指令，下一句重來。
@@ -814,28 +818,18 @@ public sealed class ColonyAgentSession
         int instructionId = Transcript.BeginInstruction();
         RunLogRecord runLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
         {
-            Instruction = RunLogRecord.Limit(displayText ?? text),
+            Instruction = RunLogRecord.Limit(options.DisplayText ?? text),
             Mode = Mode.ToString(),
-            Source = DetermineRunSource(goalRun, autonomous),
-            Autonomous = autonomousInfo
+            Source = DetermineRunSource(options.GoalRun, options.Autonomous),
+            Autonomous = options.AutonomousInfo
         } : null;
         _activeRunLog = runLog;
         string runOutcome = "finished";
-        if (echo)
-        {
-            Transcript.Add(new TranscriptEntry
-            {
-                Kind = TranscriptKind.User,
-                Text = displayText ?? text,
-                InstructionId = instructionId,
-                Autonomous = autonomous,
-                GoalRun = goalRun
-            });
-        }
-        onAccepted?.Invoke();
+        AddUserTranscriptEntryIfEcho(echo, options.DisplayText, text, instructionId, options.Autonomous, options.GoalRun);
+        options.OnAccepted?.Invoke();
         Undo.BeginFrame();
-        ConfirmGate.BeginToolBudget(maxToolSteps, autonomous, ConfirmAutonomousMajor?.Invoke() == true);
-        ApplyRunStepLimit(maxToolSteps);
+        ConfirmGate.BeginToolBudget(options.MaxToolSteps, options.Autonomous, ConfirmAutonomousMajor?.Invoke() == true);
+        ApplyRunStepLimit(options.MaxToolSteps);
 
         try
         {
@@ -843,20 +837,20 @@ public sealed class ColonyAgentSession
             _world.TakeNewGameErrors();
             if (_session == null)
             {
-                _session = RestoreOrCreateSession(cancellationToken);
+                _session = await RestoreOrCreateSession(cancellationToken);
             }
 
             AgentResponse response = await RunWithRetryOnContextTooLongAsync(
-                text, instructionId, reasoningOverride, cancellationToken).ConfigureAwait(false);
+                text, instructionId, options.ReasoningOverride, cancellationToken).ConfigureAwait(false);
 
             string reply = FinalAssistantText(response);
             bool hitStepLimit = HitStepLimit(response.Messages, _invoking?.MaximumIterationsPerRequest ?? 0);
             if (hitStepLimit) reply = StripToolCallMarkup(reply);
-            if (goalRun) runOutcome = "goal_reported_" + GoalProgress.ParseStatus(reply).ToString().ToLowerInvariant();
+            if (options.GoalRun) runOutcome = "goal_reported_" + GoalProgress.ParseStatus(reply).ToString().ToLowerInvariant();
             Transcript.Add(new TranscriptEntry
             {
                 Kind = TranscriptKind.Assistant,
-                Text = goalRun ? GoalProgress.VisibleReply(reply) : reply,
+                Text = options.GoalRun ? GoalProgress.VisibleReply(reply) : reply,
                 InstructionId = instructionId,
                 ToolsStripped = IsToolsStripped(response)
             });
@@ -870,37 +864,12 @@ public sealed class ColonyAgentSession
                 });
             }
             Undo.EndFrame(text);
-            IReadOnlyList<string> blocked = ConfirmGate.TakeBlocked();
-            if (blocked.Count > 0)
-            {
-                _pendingConfirmation = text;
-                _pendingGoalObjective = goalRun ? displayText : null;
-                Transcript.Add(new TranscriptEntry
-                {
-                    Kind = TranscriptKind.Notice,
-                    Text = $"{blocked.Count} command(s) waiting for confirmation. " +
-                           "Review the previews above, then press Confirm to execute " +
-                           "(or send a new instruction to discard).",
-                    InstructionId = instructionId
-                });
-            }
+            HandleBlockedConfirmations(text, options.GoalRun, options.DisplayText, instructionId);
             return reply;
         }
         catch (Exception ex)
         {
-            runOutcome = ex is OperationCanceledException ? "cancelled" : "error";
-            // 失敗那句可能只做了一半，但做了的部分仍該能復原；空框會被 EndFrame 丟掉。
-            Undo.EndFrame(text + " (failed)");
-            AgentErrorKind errorKind = Classify(ex);
-            if (!(cancellationToken.IsCancellationRequested && errorKind == AgentErrorKind.Cancelled))
-                Transcript.Add(new TranscriptEntry
-            {
-                Kind = TranscriptKind.Error,
-                ErrorKind = errorKind,
-                Text = ex.Message,
-                InstructionId = instructionId
-            });
-            return null;
+            return HandleInstructionError(ex, text, instructionId, cancellationToken, ref runOutcome);
         }
         finally
         {
@@ -910,6 +879,76 @@ public sealed class ColonyAgentSession
             ApplyRunStepLimit(null);
             PrepareSaveSnapshot();
         }
+    }
+
+    /// <summary>當 echo 為 true 時，將使用者指令寫入對話記錄。</summary>
+    private void AddUserTranscriptEntryIfEcho(
+        bool echo,
+        string displayText,
+        string text,
+        int instructionId,
+        bool autonomous,
+        bool goalRun)
+    {
+        if (echo)
+        {
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.User,
+                Text = displayText ?? text,
+                InstructionId = instructionId,
+                Autonomous = autonomous,
+                GoalRun = goalRun
+            });
+        }
+    }
+
+    /// <summary>處理 ConfirmGate 封鎖的工具呼叫，設定等待中的确認並記入對話記錄。</summary>
+    private void HandleBlockedConfirmations(
+        string text,
+        bool goalRun,
+        string displayText,
+        int instructionId)
+    {
+        IReadOnlyList<string> blocked = ConfirmGate.TakeBlocked();
+        if (blocked.Count > 0)
+        {
+            _pendingConfirmation = text;
+            _pendingGoalObjective = goalRun ? displayText : null;
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = $"{blocked.Count} command(s) waiting for confirmation. " +
+                       "Review the previews above, then press Confirm to execute " +
+                       "(or send a new instruction to discard).",
+                InstructionId = instructionId
+            });
+        }
+    }
+
+    /// <summary>處理指令執行例外：記錄錯誤結果、結束復原框架、寫入錯誤對話記錄。</summary>
+    private string HandleInstructionError(
+        Exception ex,
+        string text,
+        int instructionId,
+        CancellationToken cancellationToken,
+        ref string runOutcome)
+    {
+        runOutcome = ex is OperationCanceledException ? "cancelled" : "error";
+        // 失敗那句可能只做了一半，但做了的部分仍該能復原；空框會被 EndFrame 丟掉。
+        Undo.EndFrame(text + " (failed)");
+        AgentErrorKind errorKind = Classify(ex);
+        if (!(cancellationToken.IsCancellationRequested && errorKind == AgentErrorKind.Cancelled))
+        {
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Error,
+                ErrorKind = errorKind,
+                Text = ex.Message,
+                InstructionId = instructionId
+            });
+        }
+        return null;
     }
 
     private static string DetermineRunSource(bool goalRun, bool autonomous)
@@ -1118,7 +1157,7 @@ public sealed class ColonyAgentSession
     /// 只記工具名稱，重開遊戲即失效；MCP 工具永遠不記。
     /// </param>
     /// <returns>執行結果文字；若無等待中的確認則為 null。</returns>
-    public async Task<string> ConfirmAsync(CancellationToken cancellationToken = default, bool rememberForSession = false)
+    public async Task<string> ConfirmAsync(bool rememberForSession = false, CancellationToken cancellationToken = default)
     {
         string text = _pendingConfirmation;
         if (text == null || !ConfirmGate.HasPendingApprovals) return null;
@@ -1227,7 +1266,7 @@ public sealed class ColonyAgentSession
                 (entry.Failed ? "failed: " : string.Empty) + RunLogRecord.Limit(entry.Result));
         }
         string report = string.Join("\n", lines);
-        return report.Length <= 4000 ? report : report.Substring(0, 4000) + "…";
+        return report.Length <= 4000 ? report : report[..4000] + "…";
     }
 
     /// <summary>
@@ -1267,7 +1306,7 @@ public sealed class ColonyAgentSession
     private string SerializeSession(AgentSession session)
     {
         JsonElement document = _agent.SerializeSessionAsync(session, null, CancellationToken.None)
-            .GetAwaiter().GetResult();
+            .AsTask().GetAwaiter().GetResult();
         return document.GetRawText();
     }
 
@@ -1325,7 +1364,7 @@ public sealed class ColonyAgentSession
         provider.SetMessages(session, messages.GetRange(start, messages.Count - start));
     }
 
-    private AgentSession RestoreOrCreateSession(CancellationToken cancellationToken)
+    private async Task<AgentSession> RestoreOrCreateSession(CancellationToken cancellationToken)
     {
         string serialized = _serializedSession;
         _serializedSession = null;
@@ -1334,8 +1373,7 @@ public sealed class ColonyAgentSession
             try
             {
                 using JsonDocument document = JsonDocument.Parse(serialized);
-                return _agent.DeserializeSessionAsync(document.RootElement, null, cancellationToken)
-                    .GetAwaiter().GetResult();
+                return await _agent.DeserializeSessionAsync(document.RootElement, null, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -1343,7 +1381,7 @@ public sealed class ColonyAgentSession
                 Verse.Log.Warning("RimAgent: failed to restore agent session, starting fresh: " + ex.Message);
             }
         }
-        return _agent.CreateSessionAsync(cancellationToken).GetAwaiter().GetResult();
+        return await _agent.CreateSessionAsync(cancellationToken);
     }
 
     /// <summary>
@@ -1358,65 +1396,11 @@ public sealed class ColonyAgentSession
 
         List<ColonistInfo> colonists = _world.GetColonists().ToList();
         Dictionary<int, string> names = colonists.ToDictionary(c => c.Id, c => c.Name);
-        // 每筆復原前都重新查一次：同一 pawn、同一個工作類型連續改兩次時，
-        // 上一筆寫回舊值後，下一筆若拿第一次抓的快照就會誤判成「玩家改過」。
-        ColonistInfo FindPawn(int pawnId) => _world.GetColonists().FirstOrDefault(c => c.Id == pawnId);
         var failures = new List<string>();
-        int restored = 0;
         var blockedPriorities = new HashSet<(int, string)>();
         var blockedAssignments = new HashSet<(int, int)>();
-        for (int i = frame.Priorities.Count - 1; i >= 0; i--)
-        {
-            UndoWorkPriority p = frame.Priorities[i];
-            var key = (p.PawnId, p.WorkTypeDefName);
-            if (blockedPriorities.Contains(key)) continue;
-            // 復原只覆寫 Agent 真的寫入的那個值；玩家在這之後手動改過就保留玩家的選擇。
-            if (p.NewPriority >= 0)
-            {
-                ColonistInfo pawn = FindPawn(p.PawnId);
-                WorkPriorityInfo current = pawn?.WorkPriorities?.FirstOrDefault(w =>
-                    string.Equals(w.WorkTypeDefName, p.WorkTypeDefName, StringComparison.Ordinal));
-                if (current == null || current.Priority != p.NewPriority)
-                {
-                    blockedPriorities.Add(key);
-                    failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: changed since RimAgent; not overwritten.");
-                    continue;
-                }
-            }
-            CommandResult r = _world.SetWorkPriority(p.PawnId, p.WorkTypeDefName, p.OldPriority);
-            if (r.Success) restored++;
-            else
-            {
-                blockedPriorities.Add(key);
-                failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: {r.Message}");
-            }
-        }
-        for (int i = frame.Assignments.Count - 1; i >= 0; i--)
-        {
-            UndoTimeAssignment a = frame.Assignments[i];
-            var key = (a.PawnId, a.Hour);
-            if (blockedAssignments.Contains(key)) continue;
-            // 同優先級：玩家手動改過那一小時的作息就不覆寫。
-            if (!string.IsNullOrEmpty(a.NewAssignmentDefName))
-            {
-                ColonistInfo pawn = FindPawn(a.PawnId);
-                bool unchanged = pawn?.Timetable != null && a.Hour >= 0 && a.Hour < pawn.Timetable.Count
-                    && string.Equals(pawn.Timetable[a.Hour], a.NewAssignmentDefName, StringComparison.Ordinal);
-                if (!unchanged)
-                {
-                    blockedAssignments.Add(key);
-                    failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten.");
-                    continue;
-                }
-            }
-            CommandResult r = _world.SetTimeAssignment(a.PawnId, a.Hour, a.OldAssignmentDefName);
-            if (r.Success) restored++;
-            else
-            {
-                blockedAssignments.Add(key);
-                failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}");
-            }
-        }
+        int restored = RestorePriorities(frame, names, blockedPriorities, failures);
+        RestoreAssignments(frame, names, blockedAssignments, failures, ref restored);
 
         bool restoredManualPriorities = false;
         if (frame.OldUseWorkPriorities.HasValue && frame.NewUseWorkPriorities.HasValue
@@ -1449,6 +1433,73 @@ public sealed class ColonyAgentSession
     private static string NameOf(Dictionary<int, string> names, int pawnId)
     {
         return names.TryGetValue(pawnId, out string name) ? name : ("[" + pawnId + "]");
+    }
+
+    private void RestoreAssignments(UndoFrame frame, Dictionary<int, string> names,
+        HashSet<(int, int)> blockedAssignments, List<string> failures, ref int restored)
+    {
+        for (int i = frame.Assignments.Count - 1; i >= 0; i--)
+        {
+            UndoTimeAssignment a = frame.Assignments[i];
+            var key = (a.PawnId, a.Hour);
+            if (blockedAssignments.Contains(key)) continue;
+            // 同優先級：玩家手動改過那一小時的作息就不覆寫。
+            if (!string.IsNullOrEmpty(a.NewAssignmentDefName))
+            {
+                ColonistInfo pawn = _world.GetColonists().FirstOrDefault(c => c.Id == a.PawnId);
+                bool unchanged = pawn?.Timetable != null && a.Hour >= 0 && a.Hour < pawn.Timetable.Count
+                    && string.Equals(pawn.Timetable[a.Hour], a.NewAssignmentDefName, StringComparison.Ordinal);
+                if (!unchanged)
+                {
+                    blockedAssignments.Add(key);
+                    failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten.");
+                    continue;
+                }
+            }
+            CommandResult r = _world.SetTimeAssignment(a.PawnId, a.Hour, a.OldAssignmentDefName);
+            if (r.Success) restored++;
+            else
+            {
+                blockedAssignments.Add(key);
+                failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}");
+            }
+        }
+    }
+
+    private int RestorePriorities(UndoFrame frame, Dictionary<int, string> names,
+        HashSet<(int, string)> blockedPriorities, List<string> failures)
+    {
+        // 每筆復原前都重新查一次：同一 pawn、同一個工作類型連續改兩次時，
+        // 上一筆寫回舊值後，下一筆若拿第一次抓的快照就會誤判成「玩家改過」。
+        ColonistInfo FindPawn(int pawnId) => _world.GetColonists().FirstOrDefault(c => c.Id == pawnId);
+        int restored = 0;
+        for (int i = frame.Priorities.Count - 1; i >= 0; i--)
+        {
+            UndoWorkPriority p = frame.Priorities[i];
+            var key = (p.PawnId, p.WorkTypeDefName);
+            if (blockedPriorities.Contains(key)) continue;
+            // 復原只覆寫 Agent 真的寫入的那個值；玩家在這之後手動改過就保留玩家的選擇。
+            if (p.NewPriority >= 0)
+            {
+                ColonistInfo pawn = FindPawn(p.PawnId);
+                WorkPriorityInfo current = pawn?.WorkPriorities?.FirstOrDefault(w =>
+                    string.Equals(w.WorkTypeDefName, p.WorkTypeDefName, StringComparison.Ordinal));
+                if (current == null || current.Priority != p.NewPriority)
+                {
+                    blockedPriorities.Add(key);
+                    failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: changed since RimAgent; not overwritten.");
+                    continue;
+                }
+            }
+            CommandResult r = _world.SetWorkPriority(p.PawnId, p.WorkTypeDefName, p.OldPriority);
+            if (r.Success) restored++;
+            else
+            {
+                blockedPriorities.Add(key);
+                failures.Add($"{NameOf(names, p.PawnId)} {p.WorkTypeDefName}: {r.Message}");
+            }
+        }
+        return restored;
     }
 
     internal async Task<RimLLMChatOptions> BuildRunOptionsAsync(
@@ -1510,7 +1561,8 @@ public sealed class ColonyAgentSession
     {
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, LoadedPacks());
-        IList<AITool> tools = selected.Advertised;
+        // CA1859：使用 List<T> 而非 IList<T>（需支援 Add）。
+        List<AITool> tools = [.. selected.Advertised];
         if (tools.Count > 0) tools.Add(_scriptRunner);
         IReadOnlyList<ToolPacks.Pack> packs = selected.Packs;
         if (packs.Count > 0) tools.Add(_toolPackLoader);
@@ -1629,7 +1681,7 @@ public sealed class ColonyAgentSession
 
     /// <summary>裸 JSON 形式的工具呼叫：{"name": "...", "arguments"／"parameters": ...}。</summary>
     private static readonly Regex JsonToolCall = new(
-        "\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"(arguments|parameters)\"\\s*:", RegexOptions.CultureInvariant);
+        "\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"(arguments|parameters)\"\\s*:", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     /// <summary>
     /// 步數用完的最後一輪沒有工具定義，有些模型會把想呼叫的工具寫成純文字。

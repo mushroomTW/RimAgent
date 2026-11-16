@@ -58,7 +58,7 @@ public class ColonyAgentSessionTests
         await session.SendAsync("Handle the choice", autonomous: proactive);
 
         Assert.That(session.HasPendingConfirmation, Is.EqualTo(blocked));
-        Assert.That(_world.Calls.Any(), Is.EqualTo(!blocked));
+        Assert.That(_world.Calls.Count > 0, Is.EqualTo(!blocked));
         if (mode == AgentMode.Autonomous && proactive)
             Assert.That(session.Transcript.Snapshot().Single(e => e.ToolName == "choose_option").BudgetConsumed, Is.True);
     }
@@ -307,7 +307,7 @@ public class ColonyAgentSessionTests
         string reply = await session.SendAsync("anything");
 
         Assert.That(reply, Is.Null);
-        TranscriptEntry last = session.Transcript.Snapshot().Last();
+        TranscriptEntry last = session.Transcript.Snapshot()[^1];
         Assert.That(last.Kind, Is.EqualTo(TranscriptKind.Error));
         Assert.That(last.ErrorKind, Is.EqualTo(expected));
         Assert.That(last.Text, Does.Contain("boom"));
@@ -325,7 +325,7 @@ public class ColonyAgentSessionTests
 
         await session.SendAsync("anything");
 
-        Assert.That(session.Transcript.Snapshot().Last().ErrorKind, Is.EqualTo(AgentErrorKind.Configuration));
+        Assert.That(session.Transcript.Snapshot()[^1].ErrorKind, Is.EqualTo(AgentErrorKind.Configuration));
         Assert.That(session.Transcript.ErrorKindOf(session.Transcript.CurrentInstructionId), Is.EqualTo(AgentErrorKind.Configuration),
             "自主任務據此暫停一個遊戲日");
     }
@@ -396,7 +396,7 @@ public class ColonyAgentSessionTests
         _client.Reply("Nothing to do.");
         ColonyAgentSession session = NewSession();
 
-        await session.SendAsync("Routine inspection.", default, autonomous: true);
+        await session.SendAsync("Routine inspection.", autonomous: true);
         await session.SendAsync("player says hi");
 
         List<TranscriptEntry> users = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.User)];
@@ -414,7 +414,7 @@ public class ColonyAgentSessionTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        string reply = await session.SendAsync("stop me", cts.Token);
+        string reply = await session.SendAsync("stop me", cancellationToken: cts.Token);
 
         Assert.That(reply, Is.Null);
         Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Error), Is.False);
@@ -562,7 +562,7 @@ public class ColonyAgentSessionTests
         Assert.That(_world.Colonists[0].WorkPriorities.First(w => w.WorkTypeDefName == "Doctor").Priority, Is.EqualTo(3));
         Assert.That(session.Undo.CanUndo, Is.False);
         Assert.That(session.UndoLast(), Is.Null);
-        Assert.That(session.Transcript.Snapshot().Last().Kind, Is.EqualTo(TranscriptKind.Notice));
+        Assert.That(session.Transcript.Snapshot()[^1].Kind, Is.EqualTo(TranscriptKind.Notice));
     }
 
     [Test]
@@ -664,7 +664,7 @@ public class ColonyAgentSessionTests
         Assert.That(preview, Does.Contain("attack the bear"));
         Assert.That(_world.Calls, Is.Empty, "被擋下那次不可碰世界");
         Assert.That(session.HasPendingConfirmation, Is.True);
-        Assert.That(session.Transcript.Snapshot().Last().Kind, Is.EqualTo(TranscriptKind.Notice));
+        Assert.That(session.Transcript.Snapshot()[^1].Kind, Is.EqualTo(TranscriptKind.Notice));
 
         string done = await session.ConfirmAsync();
 
@@ -747,7 +747,7 @@ public class ColonyAgentSessionTests
 
         Assert.That(await session.ConfirmAsync(rememberForSession: true), Is.Null);
         Assert.That(session.HasPendingConfirmation, Is.True);
-        Assert.That(session.Transcript.Snapshot().Last().Text, Does.Contain("target disappeared"));
+        Assert.That(session.Transcript.Snapshot()[^1].Text, Does.Contain("target disappeared"));
         Assert.That(laterCalls, Is.Zero);
         Assert.That(await session.ConfirmAsync(), Does.Contain("Executed 1"));
         Assert.That(laterCalls, Is.EqualTo(1));
@@ -831,7 +831,7 @@ public class ColonyAgentSessionTests
         using (var cts = new CancellationTokenSource())
         {
             cts.Cancel();
-            Assert.That(await session.ConfirmAsync(cts.Token, rememberForSession: true), Is.Null);
+            Assert.That(await session.ConfirmAsync(rememberForSession: true, cancellationToken: cts.Token), Is.Null);
         }
         Assert.That(_world.Calls, Is.Empty, "取消時一個都不該執行");
 

@@ -36,7 +36,7 @@ public class RimAgentMod : Mod
     private static readonly Color SelectedFill = new Color(0.94f, 0.78f, 0.45f, 0.16f);
     private static readonly Color PanelBorder = new Color(0.4f, 0.41f, 0.43f);
 
-    private static readonly ToolCategory[] Categories = (ToolCategory[])Enum.GetValues(typeof(ToolCategory));
+    private static readonly ToolCategory[] Categories = Enum.GetValues<ToolCategory>();
 
     /// <summary>權限清單依影響程度分三組：只看、會改遊戲但改得回來、影響大。</summary>
     private static readonly (string Key, Color Color, ToolCategory[] Members)[] PermissionGroups =
@@ -47,10 +47,12 @@ public class RimAgentMod : Mod
     ];
 
     private static readonly RimAgentSettings.PermissionPreset[] Presets =
-        (RimAgentSettings.PermissionPreset[])Enum.GetValues(typeof(RimAgentSettings.PermissionPreset));
+        Enum.GetValues<RimAgentSettings.PermissionPreset>();
 
     /// <summary>主動照顧多久可以出手一次（遊戲分鐘）；0＝隨時。</summary>
     private static readonly int[] CooldownChoices = [0, 10, 30, 60];
+    private const string DecisionDefaultKey = "RimAgent.Settings.DecisionDefault";
+    private const string CustomIdPrefix = "custom_";
 
     // 設定頁每個 IMGUI 事件都會重畫：權限名稱、說明與提示快取起來，免得每幀翻譯。
     private static string[] _permissionLabels;
@@ -60,7 +62,7 @@ public class RimAgentMod : Mod
 
     // 權限清單與進階設定預設收合；只在本次遊戲期間記住，不寫入設定檔。
     private static bool _showPermissionList;
-    private static bool _showAdvanced;
+    private bool _showAdvanced;
 
     private Vector2 _settingsScrollPosition = Vector2.zero;
     private float _settingsHeight = 960f;
@@ -397,30 +399,34 @@ public class RimAgentMod : Mod
         float segWidth = (segRow.width - SubIndent) / CooldownChoices.Length;
         for (int i = 0; i < CooldownChoices.Length; i++)
         {
-            int minutes = CooldownChoices[i];
-            bool on = Settings.autonomousCooldownMinutes == minutes;
-            var seg = new Rect(segX + i * segWidth, segRow.y, segWidth - 2f, segRow.height);
-            Widgets.DrawBoxSolid(seg, on ? SelectedFill : PanelFill);
-            GUI.color = on ? Gold : PanelBorder;
-            Widgets.DrawBox(seg);
-            GUI.color = on ? Gold : Color.white;
-            Text.Anchor = TextAnchor.MiddleCenter;
-            string label = minutes == 0 ? "RimAgent.Settings.CooldownNow".Translate() : "RimAgent.Settings.CooldownEvery".Translate(minutes);
-            Widgets.Label(seg, label);
-            Text.Anchor = TextAnchor.UpperLeft;
-            GUI.color = Color.white;
-            if (Mouse.IsOver(seg))
-            {
-                Widgets.DrawHighlight(seg);
-                TooltipHandler.TipRegion(seg, "RimAgent.Settings.AutoCooldownTip".Translate());
-            }
-            if (Widgets.ButtonInvisible(seg)) Settings.autonomousCooldownMinutes = minutes;
+            DrawCooldownSegment(segRow, segX + i * segWidth, segWidth, CooldownChoices[i]);
         }
         listing.Gap(2f);
         string hint = "RimAgent.Settings.CooldownHint".Translate();
         if (!CooldownChoices.Contains(Settings.autonomousCooldownMinutes))
             hint += " " + "RimAgent.Settings.CooldownCustom".Translate(Settings.autonomousCooldownMinutes);
         DrawHint(listing, hint, SubIndent, Dim);
+    }
+
+    private static void DrawCooldownSegment(Rect segRow, float segX, float segWidth, int minutes)
+    {
+        bool on = Settings.autonomousCooldownMinutes == minutes;
+        var seg = new Rect(segX, segRow.y, segWidth - 2f, segRow.height);
+        Widgets.DrawBoxSolid(seg, on ? SelectedFill : PanelFill);
+        GUI.color = on ? Gold : PanelBorder;
+        Widgets.DrawBox(seg);
+        GUI.color = on ? Gold : Color.white;
+        Text.Anchor = TextAnchor.MiddleCenter;
+        string label = minutes == 0 ? "RimAgent.Settings.CooldownNow".Translate() : "RimAgent.Settings.CooldownEvery".Translate(minutes);
+        Widgets.Label(seg, label);
+        Text.Anchor = TextAnchor.UpperLeft;
+        GUI.color = Color.white;
+        if (Mouse.IsOver(seg))
+        {
+            Widgets.DrawHighlight(seg);
+            TooltipHandler.TipRegion(seg, "RimAgent.Settings.AutoCooldownTip".Translate());
+        }
+        if (Widgets.ButtonInvisible(seg)) Settings.autonomousCooldownMinutes = minutes;
     }
 
     /// <summary>決策模型的連線狀態一行，沒設定時附「前往」按鈕；下方是測試按鈕。</summary>
@@ -630,7 +636,7 @@ public class RimAgentMod : Mod
 
         string currentProv = Settings.decisionProvider;
         string shownProv = string.IsNullOrEmpty(currentProv)
-            ? "RimAgent.Settings.DecisionDefault".Translate().ToString()
+            ? DecisionDefaultKey.Translate().ToString()
             : currentProv;
 
         if (Widgets.ButtonText(provDropdownRect, shownProv.Truncate(provDropdownRect.width - 12f)))
@@ -639,7 +645,7 @@ public class RimAgentMod : Mod
             // 關掉後整段隱藏，可在主頁的決策模型開關重新啟用。
             var options = new List<FloatMenuOption>
             {
-                new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionProvider = string.Empty),
+                new FloatMenuOption(DecisionDefaultKey.Translate(), () => Settings.decisionProvider = string.Empty),
                 new FloatMenuOption("RimAgent.Settings.DecisionProviderNone".Translate(), () => Settings.decisionEnabled = false)
             };
             Find.WindowStack.Add(new FloatMenu(options));
@@ -661,7 +667,7 @@ public class RimAgentMod : Mod
 
         string currentModel = Settings.decisionModel;
         string shownModel = string.IsNullOrEmpty(currentModel)
-            ? "RimAgent.Settings.DecisionDefault".Translate().ToString()
+            ? DecisionDefaultKey.Translate().ToString()
             : currentModel;
 
         if (Widgets.ButtonText(modelDropdownRect, shownModel.Truncate(modelDropdownRect.width - 12f)))
@@ -669,7 +675,7 @@ public class RimAgentMod : Mod
             // 只列框架給出的模型（玩家在 RimLLM 決策分頁設定的那個），不另外向伺服器拉清單。
             var options = new List<FloatMenuOption>
             {
-                new FloatMenuOption("RimAgent.Settings.DecisionDefault".Translate(), () => Settings.decisionModel = string.Empty)
+                new FloatMenuOption(DecisionDefaultKey.Translate(), () => Settings.decisionModel = string.Empty)
             };
             string frameworkModel = availability?.Enabled == true ? availability.Model : null;
             if (!string.IsNullOrEmpty(frameworkModel))
@@ -735,14 +741,11 @@ public class RimAgentMod : Mod
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (categories != null)
         {
-            foreach (DecisionRouteCategory category in categories)
-            {
-                if (category != null && !string.IsNullOrWhiteSpace(category.id)) used.Add(category.id.Trim());
-            }
+            foreach (string id in categories.Where(c => c != null && !string.IsNullOrWhiteSpace(c.Id)).Select(c => c.Id.Trim())) used.Add(id);
         }
         int number = 1;
-        while (used.Contains("custom_" + number)) number++;
-        return "custom_" + number;
+        while (used.Contains(CustomIdPrefix + number)) number++;
+        return CustomIdPrefix + number;
     }
 
     private static void DrawDecisionRoutingSettings(Listing_Standard listing)
@@ -779,24 +782,24 @@ public class RimAgentMod : Mod
                 {
                     string id = NextCustomCategoryId(Settings.decisionCategories);
                     int nextNum = 1;
-                    if (id.Length > "custom_".Length) int.TryParse(id.Substring("custom_".Length), out nextNum);
-                    Settings.decisionCategories.Add(new DecisionRouteCategory(
-                        id,
-                        "RimAgent.Settings.DecisionCategoryCustomName".Translate(nextNum),
-                        "Custom category description"));
+                    if (id.Length > CustomIdPrefix.Length && int.TryParse(id[CustomIdPrefix.Length..], out nextNum))
+                    {
+                        Settings.decisionCategories.Add(new DecisionRouteCategory(
+                            id,
+                            "RimAgent.Settings.DecisionCategoryCustomName".Translate(nextNum),
+                            "Custom category description"));
+                    }
                 })
             };
 
-            foreach (DecisionRouteCategory builtIn in DecisionRouteCategory.CreateDefaultCategories())
+            foreach (DecisionRouteCategory builtIn in DecisionRouteCategory.CreateDefaultCategories()
+                .Where(b => !Settings.decisionCategories.Any(c => string.Equals(c.Id, b.Id, StringComparison.OrdinalIgnoreCase))))
             {
-                if (!Settings.decisionCategories.Any(c => string.Equals(c.id, builtIn.id, StringComparison.OrdinalIgnoreCase)))
+                DecisionRouteCategory captured = builtIn;
+                options.Add(new FloatMenuOption("RimAgent.Settings.DecisionCategoryRestore".Translate(captured.Name, captured.Id), () =>
                 {
-                    DecisionRouteCategory captured = builtIn;
-                    options.Add(new FloatMenuOption("RimAgent.Settings.DecisionCategoryRestore".Translate(captured.name, captured.id), () =>
-                    {
-                        Settings.decisionCategories.Add(captured);
-                    }));
-                }
+                    Settings.decisionCategories.Add(captured);
+                }));
             }
 
             Find.WindowStack.Add(new FloatMenu(options));
@@ -819,8 +822,8 @@ public class RimAgentMod : Mod
             Rect titleRect = new Rect(row.x, row.y + 2f, row.width - DeleteBtnWidth - 6f, 20f);
 
             Text.Font = GameFont.Tiny;
-            string displayName = string.IsNullOrEmpty(cat.name) ? cat.id : cat.name;
-            Widgets.Label(titleRect, $"{displayName} ({cat.id})");
+            string displayName = string.IsNullOrEmpty(cat.Name) ? cat.Id : cat.Name;
+            Widgets.Label(titleRect, $"{displayName} ({cat.Id})");
             Text.Font = GameFont.Small;
 
             if (Widgets.ButtonText(delRect, "RimAgent.Settings.DecisionCategoryDelete".Translate()))
@@ -831,9 +834,9 @@ public class RimAgentMod : Mod
             DrawReasoningRow(
                 listing,
                 "  " + "RimAgent.Settings.CategoryReasoning".Translate(),
-                () => cat.reasoning,
-                v => cat.reasoning = v,
-                cat.description);
+                () => cat.Reasoning,
+                v => cat.Reasoning = v,
+                cat.Description);
         }
 
         if (toDelete != null)
@@ -948,7 +951,7 @@ public class RimAgentMod : Mod
     private static void ShowReasoningDropdownMenu(Action<ReasoningLevel> setReasoning)
     {
         var options = new List<FloatMenuOption>();
-        foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
+        foreach (ReasoningLevel level in Enum.GetValues<ReasoningLevel>())
         {
             ReasoningLevel captured = level;
             options.Add(new FloatMenuOption(ReasoningKey(level).Translate(), () => setReasoning(captured)));

@@ -57,7 +57,7 @@ public sealed class GizmoTools
         string needle = gizmo?.Trim() ?? string.Empty;
         if (!int.TryParse(needle, out int _) && gizmos.Count(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase)) > 1)
             return ToolText.Error($"[{thingId}] has multiple buttons named \"{needle}\". Use a button number from list_gizmos.");
-        GizmoInfo picked = Resolve(gizmos, gizmo);
+        GizmoInfo picked = ResolveGizmo(gizmos, gizmo);
         if (picked == null)
         {
             string buttons = gizmos.Count == 0 ? "none" : string.Join("; ", gizmos.Select(g => g.Number + ") " + g.Label));
@@ -67,18 +67,8 @@ public sealed class GizmoTools
         {
             return ToolText.Error($"\"{picked.Label}\" is disabled" + (string.IsNullOrEmpty(picked.DisabledReason) ? "." : ": " + picked.DisabledReason));
         }
-        if (picked.Kind == GizmoInfo.UnsupportedKind)
-        {
-            return ToolText.Error($"\"{picked.Label}\" needs a menu choice or another kind of input that use_gizmo cannot give.");
-        }
-        if (picked.Kind == GizmoInfo.ToggleKind && target != null)
-        {
-            return ToolText.Error($"\"{picked.Label}\" is a toggle and takes no target.");
-        }
-        if (picked.Kind == GizmoInfo.TargetKind && target == null)
-        {
-            return ToolText.Error($"\"{picked.Label}\" needs a target: {TargetKinds(picked)}. Pass targetId (a thing id) or targetX and targetZ (a cell).");
-        }
+        string validationError = ValidateGizmoTarget(picked, target);
+        if (validationError != null) return ToolText.Error(validationError);
 
         string blocked = ToolText.Blocked(_gate, $"would press \"{picked.Label}\" on [{thingId}]" + (target == null ? "." : $" aimed at {target}."));
         if (blocked != null) return blocked;
@@ -99,6 +89,21 @@ public sealed class GizmoTools
         return " A dialog is open and waits for an answer (choose_option):\n" + string.Join("\n\n", dialogs.Select(ChoiceTools.Format));
     }
 
+    private static GizmoInfo ResolveGizmo(IReadOnlyList<GizmoInfo> gizmos, string input)
+    {
+        string needle = input?.Trim() ?? string.Empty;
+        if (needle.Length == 0) return null;
+        return Resolve(gizmos, input);
+    }
+
+    private static string ValidateGizmoTarget(GizmoInfo picked, MapTarget target)
+    {
+        if (picked.Kind == GizmoInfo.UnsupportedKind) return $"\"{picked.Label}\" needs a menu choice or another kind of input that use_gizmo cannot give.";
+        if (picked.Kind == GizmoInfo.ToggleKind && target != null) return $"\"{picked.Label}\" is a toggle and takes no target.";
+        if (picked.Kind == GizmoInfo.TargetKind && target == null) return $"\"{picked.Label}\" needs a target: {TargetKinds(picked)}. Pass targetId (a thing id) or targetX and targetZ (a cell).";
+        return null;
+    }
+
     /// <summary>序號優先；否則標籤完全相同，再退而求其次找唯一一個包含這段文字的。</summary>
     private static GizmoInfo Resolve(IReadOnlyList<GizmoInfo> gizmos, string input)
     {
@@ -107,7 +112,7 @@ public sealed class GizmoTools
         if (int.TryParse(needle, out int number)) return gizmos.FirstOrDefault(g => g.Number == number);
         GizmoInfo exact = gizmos.FirstOrDefault(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return exact;
-        List<GizmoInfo> partial = [.. gizmos.Where(g => g.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)];
+        List<GizmoInfo> partial = [.. gizmos.Where(g => g.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];
         return partial.Count == 1 ? partial[0] : null;
     }
 
@@ -122,7 +127,7 @@ public sealed class GizmoTools
         if (!string.IsNullOrEmpty(g.Description))
         {
             string description = g.Description.Replace('\n', ' ');
-            if (description.Length > MaxDescriptionChars) description = description.Substring(0, MaxDescriptionChars) + "…";
+            if (description.Length > MaxDescriptionChars) description = description[..MaxDescriptionChars] + "…";
             sb.Append(" — ").Append(description);
         }
         return sb.ToString();

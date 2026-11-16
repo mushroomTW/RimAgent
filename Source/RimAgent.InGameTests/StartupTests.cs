@@ -24,18 +24,20 @@ namespace RimAgent.InGameTests;
 [TestFixture(TestType.MainMenu)]
 internal sealed class StartupTests
 {
+    private StartupTests() { }
     private const string FrameworkPackageId = "GreenMushroom.RimLLMFramework";
+    private const string RimAgentModNotLoaded = "RimAgentMod is not loaded";
 
     /// <summary>
     /// RimAgent 的 Assemblies/ 每顆 DLL 都已載入，且 GetTypes 與每個欄位型別都解析得到
     /// （RimWorld 啟動會掃這兩層，缺閉包時只在 log 留 AggregateException，功能到用時才壞）。
     /// </summary>
     [Test]
-    public void ShippedAssembliesResolveAllTypesAndFields()
+    public static void ShippedAssembliesResolveAllTypesAndFields()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
-        Expect.IsNotNull(content, "RimAgentMod is not loaded");
+        Expect.IsNotNull(content, RimAgentModNotLoaded);
         if (content == null) return;
 
         List<string> shipped = TestHelpers.ShippedAssemblyNames(content);
@@ -44,44 +46,49 @@ internal sealed class StartupTests
         // 同名組件若已由遊戲或別的 mod 先載入，LoadFrom 會回傳那一份，名稱比對就會驗錯對象。
         string root = Path.GetFullPath(content.RootDir);
         foreach (string name in shipped)
+            CheckShippedAssembly(content, name, root, failures);
+        TestHelpers.AssertNone(failures, "shipped assemblies that do not fully resolve under CoreCLR");
+    }
+
+    private static void CheckShippedAssembly(ModContentPack content, string name, string root, List<string> failures)
+    {
+        Assembly assembly = content.assemblies.loadedAssemblies.FirstOrDefault(a => string.Equals(a.GetName().Name, name, StringComparison.OrdinalIgnoreCase));
+        if (assembly == null)
         {
-            Assembly assembly = content.assemblies.loadedAssemblies.FirstOrDefault(a => string.Equals(a.GetName().Name, name, StringComparison.OrdinalIgnoreCase));
-            if (assembly == null)
-            {
-                failures.Add($"{name}: shipped but not loaded by RimWorld for RimAgent");
-                continue;
-            }
-            string location = assembly.Location;
-            if (string.IsNullOrEmpty(location) || !Path.GetFullPath(location).StartsWith(root, StringComparison.OrdinalIgnoreCase))
-            {
-                failures.Add($"{name}: resolved to another copy ({Describe(assembly)})");
-                continue;
-            }
-            Type[] types;
+            failures.Add($"{name}: shipped but not loaded by RimWorld for RimAgent");
+            return;
+        }
+        string location = assembly.Location;
+        if (string.IsNullOrEmpty(location) || !Path.GetFullPath(location).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add($"{name}: resolved to another copy ({Describe(assembly)})");
+            return;
+        }
+        Type[] types;
+        try
+        {
+            types = assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            foreach (string message in ex.LoaderExceptions.Where(e => e != null).Select(e => e.Message).Distinct())
+                failures.Add($"{name}: GetTypes: {message}");
+            types = [.. ex.Types.Where(t => t != null)];
+        }
+        foreach (Type type in types)
+        {
             try
             {
-                types = assembly.GetTypes();
+#pragma warning disable S3011 // 故意存取非公開欄位以驗證 CoreCLR 下所有欄位都能解析
+                foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+#pragma warning restore S3011
+                    _ = field.FieldType;
             }
-            catch (ReflectionTypeLoadException ex)
+            catch (Exception ex)
             {
-                foreach (string message in ex.LoaderExceptions.Where(e => e != null).Select(e => e.Message).Distinct())
-                    failures.Add($"{name}: GetTypes: {message}");
-                types = [.. ex.Types.Where(t => t != null)];
-            }
-            foreach (Type type in types)
-            {
-                try
-                {
-                    foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-                        _ = field.FieldType;
-                }
-                catch (Exception ex)
-                {
-                    failures.Add($"{name}: fields of {type.FullName}: {ex.GetType().Name}: {ex.Message}");
-                }
+                failures.Add($"{name}: fields of {type.FullName}: {ex.GetType().Name}: {ex.Message}");
             }
         }
-        if (!TestHelpers.AssertNone(failures, "shipped assemblies that do not fully resolve under CoreCLR")) return;
     }
 
     /// <summary>
@@ -89,7 +96,7 @@ internal sealed class StartupTests
     /// 第二份 MEAI 會讓 IChatClient 等型別轉換全部失敗（RimAgent.csproj 的出貨白名單就是為此而設）。
     /// </summary>
     [Test]
-    public void NoSecondCopyOfSharedAssemblies()
+    public static void NoSecondCopyOfSharedAssemblies()
     {
         var failures = new List<string>();
         ModContentPack agent = TestHelpers.RimAgentContent;
@@ -119,11 +126,11 @@ internal sealed class StartupTests
     /// 名稱唯一且符合供應商的工具名規則。
     /// </summary>
     [Test]
-    public void ToolRegistryBuildsAgainstRealWorld()
+    public static void ToolRegistryBuildsAgainstRealWorld()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
-        Expect.IsNotNull(content, "RimAgentMod is not loaded");
+        Expect.IsNotNull(content, RimAgentModNotLoaded);
         if (content == null) return;
 
         AgentPack pack = AgentPackLoader.Load(Path.Combine(content.RootDir, "AgentPack"));
@@ -131,24 +138,23 @@ internal sealed class StartupTests
 
         IReadOnlyList<AgentToolDescriptor> tools = registry.Descriptors;
         if (tools.Count == 0) failures.Add("no tool was registered");
-        var validName = new Regex("^[a-zA-Z0-9_-]{1,64}$");
-        foreach (AgentToolDescriptor tool in tools)
-        {
-            if (!validName.IsMatch(tool.Name ?? string.Empty)) failures.Add($"invalid tool name \"{tool.Name}\"");
-        }
+        var validName = new Regex("^[a-zA-Z0-9_-]{1,64}$", RegexOptions.None, TimeSpan.FromSeconds(1));
+        failures.AddRange(tools
+            .Where(tool => !validName.IsMatch(tool.Name ?? string.Empty))
+            .Select(tool => $"invalid tool name \"{tool.Name}\""));
         foreach (IGrouping<string, AgentToolDescriptor> dup in tools.GroupBy(t => t.Name).Where(g => g.Count() > 1))
             failures.Add($"tool name {dup.Key} registered {dup.Count()} times");
         Log.Message($"{TestHelpers.LogPrefix}registered {tools.Count} tools");
-        if (!TestHelpers.AssertNone(failures, "tool registry problems")) return;
+        TestHelpers.AssertNone(failures, "tool registry problems");
     }
 
     /// <summary>從遊戲實際載入的 mod 資料夾讀擴充包：Skills/ 與 Agents/ 下每個資料夾都成為一個技能／子代理。</summary>
     [Test]
-    public void AgentPackLoadsFromModFolder()
+    public static void AgentPackLoadsFromModFolder()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
-        Expect.IsNotNull(content, "RimAgentMod is not loaded");
+        Expect.IsNotNull(content, RimAgentModNotLoaded);
         if (content == null) return;
 
         string root = Path.Combine(content.RootDir, "AgentPack");
@@ -174,11 +180,11 @@ internal sealed class StartupTests
     /// 在 RimAgent 出貨的每種語言都有 Keyed 條目（不在就退回英文、英文也沒有就顯示鍵名）。
     /// </summary>
     [Test]
-    public void EveryTranslationKeyExistsInShippedLanguages()
+    public static void EveryTranslationKeyExistsInShippedLanguages()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
-        Expect.IsNotNull(content, "RimAgentMod is not loaded");
+        Expect.IsNotNull(content, RimAgentModNotLoaded);
         if (content == null) return;
 
         List<string> keys = [.. LiteralTranslationKeys(typeof(RimAgentMod).Assembly, failures)
@@ -196,33 +202,36 @@ internal sealed class StartupTests
         if (languages.Count == 0) failures.Add("none of RimAgent's language folders matched a loaded language");
 
         foreach (LoadedLanguage language in languages)
-        {
-            List<string> missing;
-            if (language == LanguageDatabase.activeLanguage || language == LanguageDatabase.defaultLanguage)
-            {
-                // 遊戲已載入的語言：直接問遊戲，並挑出 RimAgent 自己的載入錯誤
-                // （重複鍵、壞掉的 XML、對不到 def 的 DefInjected；遊戲只在 log 留一句「N errors」）。
-                missing = [.. keys.Where(k => !language.HaveTextForKey(k))];
-                IEnumerable<string> loadErrors = language.loadErrors.Concat(language.defInjections.SelectMany(p => p.loadErrors));
-                foreach (string error in loadErrors.Where(e => e.Contains("RimAgent")))
-                    failures.Add($"{language.folderName}: {error}");
-            }
-            else
-            {
-                // 沒啟用的語言不強迫 LoadData（會把所有 mod 的該語言資料永久留在記憶體），改讀 RimAgent 自己的 Keyed 檔。
-                string folder = shipped.Contains(language.folderName) ? language.folderName : language.LegacyFolderName;
-                HashSet<string> keyed = ReadKeyedFiles(Path.Combine(languagesDir, folder, "Keyed"), language.folderName, failures);
-                missing = [.. keys.Where(k => !keyed.Contains(k))];
-            }
-            if (missing.Count > 0) failures.Add($"{language.folderName} is missing {missing.Count}: {string.Join(", ", missing)}");
-        }
+            CheckLanguageTranslationKeys(language, shipped, keys, failures, languagesDir);
         Log.Message($"{TestHelpers.LogPrefix}checked {keys.Count} keys in {string.Join(", ", languages.Select(l => l.folderName))}");
         if (!TestHelpers.AssertNone(failures, "missing translation keys")) return;
     }
 
+    private static void CheckLanguageTranslationKeys(LoadedLanguage language, HashSet<string> shipped, List<string> keys, List<string> failures, string languagesDir)
+    {
+        List<string> missing;
+        if (language == LanguageDatabase.activeLanguage || language == LanguageDatabase.defaultLanguage)
+        {
+            // 遊戲已載入的語言：直接問遊戲，並挑出 RimAgent 自己的載入錯誤
+            // （重複鍵、壞掉的 XML、對不到 def 的 DefInjected；遊戲只在 log 留一句「N errors」）。
+            missing = [.. keys.Where(k => !language.HaveTextForKey(k))];
+            IEnumerable<string> loadErrors = language.loadErrors.Concat(language.defInjections.SelectMany(p => p.loadErrors));
+            foreach (string error in loadErrors.Where(e => e.Contains("RimAgent")))
+                failures.Add($"{language.folderName}: {error}");
+        }
+        else
+        {
+            // 沒啟用的語言不強迫 LoadData（會把所有 mod 的該語言資料永久留在記憶體），改讀 RimAgent 自己的 Keyed 檔。
+            string folder = shipped.Contains(language.folderName) ? language.folderName : language.LegacyFolderName;
+            HashSet<string> keyed = ReadKeyedFiles(Path.Combine(languagesDir, folder, "Keyed"), language.folderName, failures);
+            missing = [.. keys.Where(k => !keyed.Contains(k))];
+        }
+        if (missing.Count > 0) failures.Add($"{language.folderName} is missing {missing.Count}: {string.Join(", ", missing)}");
+    }
+
     /// <summary>Agent 主按鈕的 def 已載入，worker 類別解析到 RimAgent 的型別。</summary>
     [Test]
-    public void MainButtonDefIsLoaded()
+    public static void MainButtonDefIsLoaded()
     {
         MainButtonDef def = DefDatabase<MainButtonDef>.GetNamedSilentFail("RimAgent");
         Expect.IsNotNull(def, "MainButtonDef RimAgent not found");
@@ -235,7 +244,7 @@ internal sealed class StartupTests
     /// ——模型拿到的 defName 必須打得回去。
     /// </summary>
     [Test]
-    public void DefCatalogsResolveByDefName()
+    public static void DefCatalogsResolveByDefName()
     {
         var failures = new List<string>();
         var world = new RimWorldGameWorld();
@@ -271,7 +280,7 @@ internal sealed class StartupTests
                     failures.Add($"{catalog.Key}: {entry.DefName} resolves to {resolved.Value.DefName}");
             }
         }
-        if (!TestHelpers.AssertNone(failures, "Def catalog problems")) return;
+        TestHelpers.AssertNone(failures, "Def catalog problems");
     }
 
     private static string Describe(Assembly assembly)
@@ -297,16 +306,16 @@ internal sealed class StartupTests
     /// <summary>以列舉組出的鍵，用 RimAgentMod 同一組鍵產生器，規則改了這裡跟著變。</summary>
     private static IEnumerable<string> DynamicTranslationKeys()
     {
-        foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
+        foreach (ReasoningLevel level in Enum.GetValues<ReasoningLevel>())
             yield return RimAgentMod.ReasoningKey(level);
-        foreach (ToolCategory category in (ToolCategory[])Enum.GetValues(typeof(ToolCategory)))
+        foreach (ToolCategory category in Enum.GetValues<ToolCategory>())
         {
             string key = RimAgentMod.PermissionKey(category);
             yield return key;
             yield return key + "Desc";
             yield return key + "Tip";
         }
-        foreach (RimAgentSettings.PermissionPreset preset in (RimAgentSettings.PermissionPreset[])Enum.GetValues(typeof(RimAgentSettings.PermissionPreset)))
+        foreach (RimAgentSettings.PermissionPreset preset in Enum.GetValues<RimAgentSettings.PermissionPreset>())
         {
             yield return RimAgentMod.PresetKey(preset);
             yield return RimAgentMod.PresetKey(preset) + "Desc";
@@ -330,46 +339,53 @@ internal sealed class StartupTests
                 failures.Add($"{language}: {Path.GetFileName(file)}: {ex.Message}");
                 continue;
             }
-            foreach (XElement element in doc.Root?.Elements() ?? [])
-            {
-                if (!keys.Add(element.Name.LocalName)) failures.Add($"{language}: duplicate key {element.Name.LocalName}");
-            }
+            failures.AddRange((doc.Root?.Elements() ?? [])
+                .Select(element => element.Name.LocalName)
+                .Where(name => !keys.Add(name))
+                .Select(name => $"{language}: duplicate key {name}"));
         }
         return keys;
     }
 
-    private static readonly Regex KeyLiteral = new(@"^RimAgent(\.[A-Za-z0-9_]+){2,}$");
+    private static readonly Regex KeyLiteral = new(@"^RimAgent(\.[A-Za-z0-9_]+){2,}$", RegexOptions.None, TimeSpan.FromSeconds(1));
 
     /// <summary>
     /// 掃描組件每個方法體的 ldstr，取出形如 RimAgent.X.Y 的字面字串（含 lambda 與 async 狀態機）。
     /// 解不開的方法記成失敗，不默默少掃。
     /// </summary>
-    private static IEnumerable<string> LiteralTranslationKeys(Assembly assembly, List<string> failures)
+    private static HashSet<string> LiteralTranslationKeys(Assembly assembly, List<string> failures)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
+#pragma warning disable S3011 // 故意使用非公開繫結旗標以存取組件內部
         const BindingFlags all = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+#pragma warning restore S3011
         foreach (Type type in assembly.GetTypes())
         {
             IEnumerable<MethodBase> methods = type.GetMethods(all).Cast<MethodBase>().Concat(type.GetConstructors(all));
+#pragma warning disable S3011 // 故意存取非公開成員以掃描翻譯鍵
             foreach (MethodBase method in methods)
-            {
-                byte[] il = method.GetMethodBody()?.GetILAsByteArray();
-                if (il == null) continue;
-                try
-                {
-                    foreach (int token in StringTokens(il))
-                    {
-                        string literal = method.Module.ResolveString(token);
-                        if (KeyLiteral.IsMatch(literal)) keys.Add(literal);
-                    }
-                }
-                catch (InvalidOperationException ex)
-                {
-                    failures.Add($"IL scan of {type.FullName}.{method.Name} stopped: {ex.Message}");
-                }
-            }
+#pragma warning restore S3011
+                ScanMethodILForKeys(method, keys, failures);
         }
         return keys;
+    }
+
+    private static void ScanMethodILForKeys(MethodBase method, HashSet<string> keys, List<string> failures)
+    {
+        byte[] il = method.GetMethodBody()?.GetILAsByteArray();
+        if (il == null) return;
+        try
+        {
+            foreach (int token in StringTokens(il))
+            {
+                string literal = method.Module.ResolveString(token);
+                if (KeyLiteral.IsMatch(literal)) keys.Add(literal);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            failures.Add($"IL scan of {method.DeclaringType?.FullName}.{method.Name} stopped: {ex.Message}");
+        }
     }
 
     private static readonly Dictionary<short, OpCode> OpCodesByValue = typeof(OpCodes)

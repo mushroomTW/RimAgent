@@ -15,6 +15,7 @@ public class SaveToolsTests
     private FakeGameWorld _world;
     private SaveLedger _ledger;
     private SaveTools _tools;
+    private static readonly string[] _saveToolNames = ["list_saves", "save_game", "load_save"];
 
     [SetUp]
     public void SetUp()
@@ -177,7 +178,7 @@ public class SaveToolsTests
 
         Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Time)).Select(t => t.Name), Has.None.EqualTo("load_save"));
         Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Save)).Select(t => t.Name),
-            Is.SupersetOf(new[] { "list_saves", "save_game", "load_save" }));
+            Is.SupersetOf(_saveToolNames));
     }
 }
 

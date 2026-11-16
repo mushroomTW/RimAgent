@@ -79,30 +79,7 @@ internal sealed partial class RimWorldGameWorld
         for (int i = 0; i < count; i++)
         {
             if (map.fogGrid.IsFogged(i)) continue;
-            thickRoof[i] = map.roofGrid.RoofAt(i)?.isThickRoof == true;
-            Building edifice = map.edificeGrid[i];
-            BuildingProperties building = edifice?.def.building;
-            if (building != null && building.isNaturalRock)
-            {
-                cells[i] = SurveyCell.Rock;
-                if (building.isResourceRock)
-                {
-                    if (!resourceIndex.TryGetValue(edifice.def, out short index))
-                    {
-                        resourceLabels.Add(edifice.def.label);
-                        index = (short)resourceLabels.Count;
-                        resourceIndex[edifice.def] = index;
-                    }
-                    resource[i] = index;
-                }
-                continue;
-            }
-            if (edifice != null)
-            {
-                cells[i] = SurveyCell.Structure;
-                continue;
-            }
-            cells[i] = ClassifyTerrain(map.terrainGrid.TerrainAt(i));
+            ProcessSurveyCell(map, i, cells, resource, thickRoof, resourceIndex, resourceLabels);
         }
 
         var rooms = new Dictionary<int, RoomInfo>();
@@ -135,6 +112,35 @@ internal sealed partial class RimWorldGameWorld
                 .Select(p => (p.Position.x, p.Position.z))
                 .ToList()
         };
+    }
+
+    private static void ProcessSurveyCell(Map map, int i, SurveyCell[] cells, short[] resource, bool[] thickRoof,
+        Dictionary<ThingDef, short> resourceIndex, List<string> resourceLabels)
+    {
+        thickRoof[i] = map.roofGrid.RoofAt(i)?.isThickRoof == true;
+        Building edifice = map.edificeGrid[i];
+        BuildingProperties building = edifice?.def.building;
+        if (building != null && building.isNaturalRock)
+        {
+            cells[i] = SurveyCell.Rock;
+            if (building.isResourceRock)
+            {
+                if (!resourceIndex.TryGetValue(edifice.def, out short index))
+                {
+                    resourceLabels.Add(edifice.def.label);
+                    index = (short)resourceLabels.Count;
+                    resourceIndex[edifice.def] = index;
+                }
+                resource[i] = index;
+            }
+            return;
+        }
+        if (edifice != null)
+        {
+            cells[i] = SurveyCell.Structure;
+            return;
+        }
+        cells[i] = ClassifyTerrain(map.terrainGrid.TerrainAt(i));
     }
 
     /// <summary>

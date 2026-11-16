@@ -38,6 +38,7 @@ internal sealed partial class RimWorldGameWorld
     private static readonly FieldInfo ConfigureIdeoNext = AccessTools.Field(typeof(Dialog_ConfigureIdeo), "nextAction");
     private static readonly FieldInfo LoadTransferables = AccessTools.Field(typeof(Dialog_LoadTransporters), "transferables");
     private static readonly MethodInfo LoadTryAccept = AccessTools.Method(typeof(Dialog_LoadTransporters), "TryAccept");
+    private static readonly char[] _commaSplit = [','];
 
     /// <summary>由工具開出來的選單、儀式與裝載畫面；玩家自己開的與自己的選目標狀態不算待回應。</summary>
     private static readonly HashSet<Window> AgentWindows = [];
@@ -100,7 +101,7 @@ internal sealed partial class RimWorldGameWorld
                 Title = "Choose a target on the map",
                 Text = DescribeActiveTarget(),
                 InputHint = "#thing id or x,z, for example #1234 or 40,62",
-                Options = Buttons("Use the target given as input", CancelLabel)
+                Options = Buttons("Use the target given as input", CancelLabel).ToList()
             };
         }
         PendingChoiceInfo landing = LandingChoice();
@@ -115,7 +116,7 @@ internal sealed partial class RimWorldGameWorld
                 {
                     Id = WindowChoicePrefix + ideo.ID,
                     Title = "Ideoligion of the new colony",
-                    Options = Buttons("Keep the current ideoligion")
+                    Options = Buttons("Keep the current ideoligion").ToList()
                 },
                 Dialog_ChooseThingsForNewColony colony => NewColonyChoice(colony),
                 Dialog_LoadTransporters load when AgentWindows.Contains(load) => LoadChoice(load),
@@ -131,7 +132,8 @@ internal sealed partial class RimWorldGameWorld
         return parameters == null ? string.Empty : "Accepts: " + DescribeTargets(parameters);
     }
 
-    private static IReadOnlyList<ChoiceOptionInfo> Buttons(params string[] labels)
+    // CA1859：傳回 IEnumerable<T> 而非 IReadOnlyList<T>，減少介面約束。
+    private static List<ChoiceOptionInfo> Buttons(params string[] labels)
     {
         return labels.Select((label, i) => new ChoiceOptionInfo { Number = i + 1, Text = label }).ToList();
     }
@@ -143,7 +145,7 @@ internal sealed partial class RimWorldGameWorld
             Id = id,
             Title = title,
             InputHint = TileInputHint,
-            Options = Buttons("Use the tile given as input", CancelLabel)
+            Options = Buttons("Use the tile given as input", CancelLabel).ToList()
         };
     }
 
@@ -198,7 +200,7 @@ internal sealed partial class RimWorldGameWorld
             Title = "Choose what comes along to the new colony",
             Text = "At most about 5 people, 5 animals and 7 item stacks; a refused selection reports why.\n" + NumberedThings(NewColonyCandidates(dialog).Select(t => t.LabelCap)),
             InputHint = "the numbers to bring, for example 1,2,9",
-            Options = Buttons("Accept the selection given as input", CancelLabel)
+            Options = Buttons("Accept the selection given as input", CancelLabel).ToList()
         };
     }
 
@@ -216,7 +218,7 @@ internal sealed partial class RimWorldGameWorld
             Title = "Choose what to load",
             Text = NumberedThings(transferables.Select(t => $"{t.LabelCap} x{t.MaxCount}")),
             InputHint = "number=count pairs, for example 1=1,4=50; a number alone loads all of it",
-            Options = Buttons("Load the selection given as input", CancelLabel)
+            Options = Buttons("Load the selection given as input", CancelLabel).ToList()
         };
     }
 
@@ -249,8 +251,9 @@ internal sealed partial class RimWorldGameWorld
         bool wasWorldTarget = Find.WorldTargeter.IsTargeting;
         CommandResult result = AnswerPendingUi(id, option, input) ?? AnswerDialogOrLetter(id, option);
         // 回答可能接著開下一步：新的選目標與選單交回 choose_option，回答不了的視窗收掉並回報。
-        _agentMapTarget |= !wasMapTarget && Find.Targeter.IsTargeting;
-        _agentWorldTarget |= !wasWorldTarget && Find.WorldTargeter.IsTargeting;
+        SetTargetingState(
+            _agentMapTarget || (!wasMapTarget && Find.Targeter.IsTargeting),
+            _agentWorldTarget || (!wasWorldTarget && Find.WorldTargeter.IsTargeting));
         if (_agentMapTarget) KeepCasterSelected();
         CommandResult windowFailure = CloseUnsupportedWindows(before, "the answer");
         return result.Success && windowFailure != null ? windowFailure : result;
@@ -348,14 +351,19 @@ internal sealed partial class RimWorldGameWorld
             targeter.StopTargeting();
             return CommandResult.Ok(CancelLabel);
         }
-        if (!TryParseMapTarget(input, out MapTarget target) || !TryResolveTarget(target, out LocalTargetInfo local, out string error))
+        if (!TryParseMapTarget(input, out MapTarget target) || !TryResolveTarget(target, out LocalTargetInfo local, out _))
         {
             return CommandResult.Fail("give #thing id or x,z");
         }
         try
         {
             CommandResult applied = ApplyTarget(targeter, "target", local, watch);
-            return applied.Success ? CommandResult.Ok(string.IsNullOrEmpty(applied.Message) ? "target " + input.Trim() : applied.Message) : applied;
+            if (applied.Success)
+            {
+                string message = string.IsNullOrEmpty(applied.Message) ? "target " + input.Trim() : applied.Message;
+                return CommandResult.Ok(message);
+            }
+            return applied;
         }
         finally
         {
@@ -487,7 +495,7 @@ internal sealed partial class RimWorldGameWorld
 
         List<Thing> candidates = NewColonyCandidates(dialog);
         var picked = new List<Thing>();
-        foreach (string part in (input ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+        foreach (string part in (input ?? string.Empty).Split(_commaSplit, StringSplitOptions.RemoveEmptyEntries))
         {
             if (!int.TryParse(part.Trim(), out int number) || number < 1 || number > candidates.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
             if (!picked.Contains(candidates[number - 1])) picked.Add(candidates[number - 1]);
@@ -498,7 +506,8 @@ internal sealed partial class RimWorldGameWorld
         itemCount.SetValue(dialog, picked.Count(items.Contains));
         var report = (AcceptanceReport)acceptance.GetValue(dialog);
         if (!report.Accepted) return CommandResult.Fail(report.Reason.NullOrEmpty() ? "the selection is not allowed" : report.Reason.StripTags());
-        bool onlySlaves = picked.OfType<Pawn>().Any(p => p.IsColonist) && picked.OfType<Pawn>().Where(p => p.IsColonist).All(p => p.IsSlaveOfColony);
+        var colonists = picked.OfType<Pawn>().Where(p => p.IsColonist);
+        bool onlySlaves = colonists.Any() && colonists.All(p => p.IsSlaveOfColony);
         // 同「接受」按鈕：後果確認框留給 choose_option。
         confirm.Invoke(dialog, [picked, onlySlaves]);
         return CommandResult.Ok(WithGameMessages($"selected {picked.Count}", watch));
@@ -514,8 +523,21 @@ internal sealed partial class RimWorldGameWorld
         if (LoadTransferables?.GetValue(dialog) is not List<TransferableOneWay> transferables || LoadTryAccept == null)
             return CommandResult.Fail("this game version does not expose this dialog");
         // 先全部驗過，再從零開始套用：上一次失敗留下的數量不能混進這次。
-        var counts = new List<(TransferableOneWay Row, int Count)>();
-        foreach (string part in (input ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+        CommandResult parseFail = ParseLoadCounts(input, transferables, out var counts);
+        if (parseFail != null) return parseFail;
+        foreach (TransferableOneWay row in transferables) row.AdjustTo(0);
+        foreach (TransferableOneWay row in transferables) row.AdjustTo(0);
+        foreach ((TransferableOneWay row, int rowCount) in counts) row.AdjustTo(rowCount);
+        // TryAccept 檢查失敗時丟訊息並回傳 false，視窗留著。
+        if (!(bool)LoadTryAccept.Invoke(dialog, null)) return Refused("the loading was refused", watch);
+        dialog.Close(false);
+        return CommandResult.Ok(WithGameMessages("loading started", watch));
+    }
+
+    private static CommandResult ParseLoadCounts(string input, List<TransferableOneWay> transferables, out List<(TransferableOneWay Row, int Count)> counts)
+    {
+        counts = new List<(TransferableOneWay Row, int Count)>();
+        foreach (string part in (input ?? string.Empty).Split(_commaSplit, StringSplitOptions.RemoveEmptyEntries))
         {
             string[] pair = part.Split('=');
             if (!int.TryParse(pair[0].Trim(), out int number) || number < 1 || number > transferables.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
@@ -526,11 +548,6 @@ internal sealed partial class RimWorldGameWorld
             if (!report.Accepted) return CommandResult.Fail($"{transferable.LabelCap}: " + (report.Reason.NullOrEmpty() ? "that count is not allowed" : report.Reason.StripTags()));
             counts.Add((transferable, count));
         }
-        foreach (TransferableOneWay row in transferables) row.AdjustTo(0);
-        foreach ((TransferableOneWay row, int rowCount) in counts) row.AdjustTo(rowCount);
-        // TryAccept 檢查失敗時丟訊息並回傳 false，視窗留著。
-        if (!(bool)LoadTryAccept.Invoke(dialog, null)) return Refused("the loading was refused", watch);
-        dialog.Close(false);
-        return CommandResult.Ok(WithGameMessages("loading started", watch));
+        return null;
     }
 }

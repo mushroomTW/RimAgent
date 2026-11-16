@@ -179,7 +179,7 @@ public class AgentPackTests
         Assert.That(pack.ClassifierPrompt, Does.Contain("\"risk\""));
         // 從 enum 推導，不寫死清單：新增觸發卻忘了寫章節時，這裡會直接紅掉。
         // （少了章節不會壞掉，只會靜靜退回 Interval —— 正是最難發現的那種 bug。）
-        foreach (AutonomousTrigger trigger in (AutonomousTrigger[])Enum.GetValues(typeof(AutonomousTrigger)))
+        foreach (AutonomousTrigger trigger in Enum.GetValues<AutonomousTrigger>())
         {
             if (trigger == AutonomousTrigger.None) continue;
             string name = trigger.ToString();

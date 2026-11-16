@@ -518,7 +518,7 @@ public class SubagentTests
                 return new ChatResponse(new ChatMessage(ChatRole.Assistant, "done"));
             }
             if (Interlocked.Increment(ref _children) >= _expectedChildren) _allStarted.TrySetResult(true);
-            Task finished = await Task.WhenAny(_allStarted.Task, Task.Delay(1000)).ConfigureAwait(false);
+            Task finished = await Task.WhenAny(_allStarted.Task, Task.Delay(1000, cancellationToken)).ConfigureAwait(false);
             string report = finished == _allStarted.Task ? "peers-seen" : "alone";
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, report));
         }

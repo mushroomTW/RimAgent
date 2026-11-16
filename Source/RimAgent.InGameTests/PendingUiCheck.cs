@@ -18,13 +18,20 @@ namespace RimAgent.InGameTests;
 /// </summary>
 internal static class PendingUiCheck
 {
-    public static bool LandingStarted;
+    public static bool LandingStarted { get; set; }
 
     private static readonly string[] ReflectedMembers =
     [
         "TilePickerValidator", "TilePickerChosen", "TilePickerTitle", "TilePickerAllowEscape", "TargeterCaster", "TilePickerStop", "WorldTargeterAction", "WorldTargeterCanSelect",
         "FloatMenuOptions", "LandingMarkerField", "ConfigureIdeoNext", "LoadTransferables", "LoadTryAccept"
     ];
+
+    private static readonly string[] _newColonyDialogFields =
+    [
+        "colonists", "animals", "relics", "items", "selected", "selectedItemCount", "cancel"
+    ];
+
+    private const string GameLogged = "game logged: ";
 
     public static List<string> Run(RimWorldGameWorld world)
     {
@@ -60,7 +67,7 @@ internal static class PendingUiCheck
             }
             Log.Message(TestHelpers.LogPrefix + "PendingUiCheck " + name + (failures.Count == before ? " ok" : " FAILED"));
         }
-        foreach (string error in world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+        foreach (string error in world.TakeNewGameErrors()) failures.Add(GameLogged + error);
         return failures;
     }
 
@@ -76,7 +83,7 @@ internal static class PendingUiCheck
 
     private static Pawn Colonist()
     {
-        return Find.CurrentMap.mapPawns.FreeColonistsSpawned.First();
+        return Find.CurrentMap.mapPawns.FreeColonistsSpawned[0];
     }
 
     private static IntVec3? FindClear(Map map, int width, int height)
@@ -102,9 +109,10 @@ internal static class PendingUiCheck
             if (holder == null || holder.GetValue(null) == null) failures.Add("missing game member behind " + name);
         }
         Type colony = typeof(Dialog_ChooseThingsForNewColony);
-        foreach (string field in new[] { "colonists", "animals", "relics", "items", "selected", "selectedItemCount", "cancel" })
+        foreach (string field in _newColonyDialogFields
+            .Where(f => AccessTools.Field(colony, f) == null))
         {
-            if (AccessTools.Field(colony, field) == null) failures.Add("new colony dialog has no field " + field);
+            failures.Add("new colony dialog has no field " + field);
         }
         if (AccessTools.Property(colony, "AcceptanceReport") == null) failures.Add("new colony dialog has no AcceptanceReport");
         if (AccessTools.Method(colony, "ConfirmArchonexusSettlementConsequences") == null) failures.Add("new colony dialog has no confirm method");
@@ -271,6 +279,7 @@ internal static class PendingUiCheck
 
         public override void DoWindowContents(UnityEngine.Rect inRect)
         {
+            // 此視窗僅顯示標題與封鎖問題，不需要自定義繪製內容，故保持空白。
         }
 
         protected override void Start()
@@ -571,7 +580,7 @@ internal static class PendingUiCheck
 public sealed class PendingUiCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentPendingUiCheck.xml";
-    private static bool _done;
+    private bool _done;
 
     public PendingUiCheckComponent(Verse.Game game)
     {

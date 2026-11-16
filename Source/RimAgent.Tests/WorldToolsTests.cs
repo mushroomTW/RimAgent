@@ -15,6 +15,8 @@ public class WorldToolsTests
 {
     private FakeGameWorld _world;
     private WorldTools _tools;
+    private static readonly string[] _silverCargo = ["silver x500"];
+    private static readonly CaravanMemberInfo[] _bobMember = [new CaravanMemberInfo { Id = 102, Name = "Bob" }];
 
     [SetUp]
     public void SetUp()
@@ -104,8 +106,8 @@ public class WorldToolsTests
     {
         _world.Forming.Add(new FormingCaravanInfo
         {
-            Id = 70, Status = "Gathering items", ExitX = 0, ExitZ = 30, Cargo = new[] { "silver x500" },
-            Members = new[] { new CaravanMemberInfo { Id = 102, Name = "Bob" } }
+            Id = 70, Status = "Gathering items", ExitX = 0, ExitZ = 30, Cargo = _silverCargo,
+            Members = _bobMember,
         });
 
         string text = _tools.ListCaravans();

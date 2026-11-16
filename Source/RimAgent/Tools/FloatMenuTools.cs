@@ -98,7 +98,7 @@ public sealed class FloatMenuTools
         if (int.TryParse(needle, out int number)) return options.FirstOrDefault(o => o.Number == number);
         FloatMenuOptionInfo exact = options.FirstOrDefault(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return exact;
-        List<FloatMenuOptionInfo> partial = [.. options.Where(o => o.Label.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)];
+        List<FloatMenuOptionInfo> partial = [.. options.Where(o => o.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];
         return partial.Count == 1 ? partial[0] : null;
     }
 

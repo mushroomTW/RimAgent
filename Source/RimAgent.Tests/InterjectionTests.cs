@@ -13,6 +13,9 @@ namespace RimAgent.Tests;
 public class InterjectionTests
 {
     private FakeGameWorld _world;
+    private static readonly ToolCategory[] _observeCategory = [ToolCategory.Observe];
+    private static readonly string[] _taskLook = ["look"];
+    private static readonly AgentSubagent _scoutSubagent = new() { Name = "scout", Description = "looks around", Categories = _observeCategory, ReadOnly = true, Body = "Look." };
 
     [SetUp]
     public void SetUp()
@@ -111,7 +114,7 @@ public class InterjectionTests
             });
         session = NewSession(client);
 
-        await session.SendAsync("build a wall", cts.Token);
+        await session.SendAsync("build a wall", cancellationToken: cts.Token);
 
         Assert.That(client.CallCount, Is.EqualTo(1), "按停止後不會再送出插話");
         Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("not delivered")), Is.True);
@@ -121,15 +124,15 @@ public class InterjectionTests
     public async Task SubagentToolsDoNotConsumeTheInterjection()
     {
         ColonyAgentSession session = null;
-        var subagent = new AgentSubagent { Name = "scout", Description = "looks around", Categories = new[] { ToolCategory.Observe }, ReadOnly = true, Body = "Look." };
+        var subagent = new AgentSubagent { Name = "scout", Description = "looks around", Categories = _observeCategory, ReadOnly = true, Body = "Look." };
         var client = new ScriptedChatClient()
-            .CallTool("delegate_task", new { agent = "scout", tasks = new[] { "look" } })
+            .CallTool("delegate_task", new { agent = "scout", tasks = _taskLook })
             // 子代理的第一步：先模擬玩家插話，再叫工具。
             .CallTool("get_colony_overview", null).Do(() => session.Interject("Hurry up."))
             .Reply("Scout report.")
             .Reply("Done.");
         session = new ColonyAgentSession(client, _world, () => ToolPermissions.All, 8, () => AgentMode.Autonomous,
-            subagentsProvider: () => new[] { subagent });
+            subagentsProvider: () => [_scoutSubagent]);
 
         await session.SendAsync("send the scout");
 

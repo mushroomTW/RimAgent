@@ -54,9 +54,11 @@ public sealed class SubagentTools
         Func<int?> remainingBudget = null, Action<ChatResponse> responseObserved = null)
 #pragma warning restore S107
     {
-        if (client == null) throw new ArgumentNullException(nameof(client));
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
+        ArgumentNullException.ThrowIfNull(transcript);
+        _transcript = transcript;
         _subagents = subagents ?? (() => Array.Empty<AgentSubagent>());
         _permissions = permissions ?? throw new ArgumentNullException(nameof(permissions));
         _model = model;
@@ -260,8 +262,8 @@ public sealed class SubagentTools
         var sb = new StringBuilder();
         for (int i = 0; i < reports.Length; i++)
         {
-            if (i > 0) sb.Append("\n\n");
-            sb.Append("[").Append(name).Append(" task ").Append(i + 1).Append("] ").Append(reports[i]);
+            if (i > 0) { sb.Append('\n'); sb.Append('\n'); }
+            sb.Append('[').Append(name).Append(" task ").Append(i + 1).Append("] ").Append(reports[i]);
         }
         return sb.ToString();
     }

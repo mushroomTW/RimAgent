@@ -39,7 +39,6 @@ public sealed class RetryExperimentComponent : GameComponent
     private float _startRealtime;
     private float _pausedSince = -1f;
     private string _timelinePath;
-    private RimWorldGameWorld _world;
 
     public RetryExperimentComponent(Verse.Game game)
     {
@@ -100,7 +99,6 @@ public sealed class RetryExperimentComponent : GameComponent
         Directory.CreateDirectory(folder);
         // 不清空：同一個隔離環境裡讀檔或開新局會重新 Start，以 "start" 註記分段，保留先前的取樣。
         _timelinePath = Path.Combine(folder, "RetryExperiment.jsonl");
-        _world = new RimWorldGameWorld();
         _startTick = tick;
         _startRealtime = Time.realtimeSinceStartup;
 
@@ -155,7 +153,7 @@ public sealed class RetryExperimentComponent : GameComponent
     {
         Map map = Find.CurrentMap;
         RimAgentGameComponent agent = RimAgentGameComponent.Instance;
-        AutonomousSignals s = _world.GetAutonomousSignals();
+        AutonomousSignals s = RimWorldGameWorld.GetAutonomousSignals();
 
         List<Thing> blueprints = map.listerThings.ThingsInGroup(ThingRequestGroup.Blueprint);
         List<Thing> frames = map.listerThings.ThingsInGroup(ThingRequestGroup.BuildingFrame);

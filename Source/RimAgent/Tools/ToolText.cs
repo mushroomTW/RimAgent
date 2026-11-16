@@ -62,7 +62,7 @@ internal static class ToolText
     public static string TruncateField(string value, int max)
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
-        return value.Length > max ? value.Substring(0, max) + "…" : value;
+        return value.Length > max ? value[..max] + "…" : value;
     }
 
     public static string Thing(ThingInfo t)

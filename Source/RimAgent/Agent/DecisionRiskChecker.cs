@@ -19,6 +19,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
 {
     public const double RiskThreshold = 0.6;
     public const double AuthorizedThreshold = 0.7;
+    private static readonly string[] _newlineSplit = ["\r\n", "\r", "\n"];
 
     private readonly IDecisionService _decisionService;
     private readonly Func<IDecisionService> _serviceFactory;
@@ -51,7 +52,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
 
     public async Task<RiskVerdict> ClassifyAsync(RiskQuestion question, CancellationToken cancellationToken)
     {
-        if (question == null) throw new ArgumentNullException(nameof(question));
+        ArgumentNullException.ThrowIfNull(question);
 
         // 鍵只用「玩家原話＋工具＋參數」：同一命令重試不重複呼叫決策模型
         string cacheKey = (question.Instruction ?? string.Empty) + "\n" +
@@ -118,9 +119,19 @@ public sealed class DecisionRiskChecker : IRiskChecker
             kind = kindAnswer.Value.Trim();
         }
 
-        string reason = !string.IsNullOrEmpty(kind)
-            ? "action kind: " + kind
-            : (risky ? "high risk action" : "unauthorized action");
+        string reason;
+        if (!string.IsNullOrEmpty(kind))
+        {
+            reason = "action kind: " + kind;
+        }
+        else if (risky)
+        {
+            reason = "high risk action";
+        }
+        else
+        {
+            reason = "unauthorized action";
+        }
 
         var verdict = new RiskVerdict
         {
@@ -214,7 +225,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
             ["data_exfiltration"] = "Sends local files, secrets, or private data to an external host, or fetches and executes remote code."
         };
 
-        string[] lines = markdown.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        string[] lines = markdown.Split(_newlineSplit, StringSplitOptions.None);
         string currentSection = null;
         var sectionLines = new List<string>();
 

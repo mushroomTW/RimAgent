@@ -21,6 +21,7 @@ public class CompactionTests
     private FakeGameWorld _world;
     private ScriptedChatClient _client;
     private ToolPermissions _permissions;
+    private static readonly string[] _modelNames = ["p:preferred", "p:backup", "p:unknown"];
 
     [SetUp]
     public void SetUp()
@@ -61,7 +62,7 @@ public class CompactionTests
     {
         var windows = new Dictionary<string, int?> { ["p:preferred"] = 128000, ["p:backup"] = 16000, ["p:unknown"] = null };
         int? result = ColonyAgentSession.MinimumKnownContextWindow(
-            new[] { "p:preferred", "p:backup", "p:unknown" }, model => windows[model]);
+            _modelNames, model => windows[model]);
         Assert.That(result, Is.EqualTo(16000));
     }
 
@@ -155,7 +156,7 @@ public class CompactionTests
         Assert.That(history.Count, Is.LessThanOrEqualTo(60));
         Assert.That(history[0].Role, Is.EqualTo(ChatRole.User), "裁切只能落在玩家訊息上");
         Assert.That(history[0].Text, Is.EqualTo("set doctor 16"));
-        Assert.That(history.Last().Text, Is.EqualTo("done 30"));
+        Assert.That(history[^1].Text, Is.EqualTo("done 30"));
     }
 
     [Test]
@@ -246,7 +247,7 @@ public class CompactionTests
         string result = await session.CompactAsync();
 
         Assert.That(result, Is.Null);
-        TranscriptEntry notice = session.Transcript.Snapshot().Last();
+        TranscriptEntry notice = session.Transcript.Snapshot()[^1];
         Assert.That(notice.Kind, Is.EqualTo(TranscriptKind.Notice));
         Assert.That(notice.Text, Does.Contain("Nothing to compact"));
         Assert.That(session.IsBusy, Is.False);
@@ -268,7 +269,7 @@ public class CompactionTests
         Assert.That(after.Count, Is.LessThan(before));
         Assert.That(after.Any(m => m.Text != null && m.Text.Contains("Summary of the colony so far.")), Is.True);
         Assert.That(result, Does.Contain(before + " -> " + after.Count));
-        TranscriptEntry notice = session.Transcript.Snapshot().Last();
+        TranscriptEntry notice = session.Transcript.Snapshot()[^1];
         Assert.That(notice.Kind, Is.EqualTo(TranscriptKind.Notice));
         // 可見對話紀錄不受影響：6 句指令的 User 條目都在。
         Assert.That(session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.User), Is.EqualTo(6));
@@ -293,7 +294,7 @@ public class CompactionTests
         Assert.That(_client.CallCount, Is.EqualTo(callsBefore + 1), "壓縮應呼叫摘要 client 一次");
         Assert.That(result, Is.Null);
         Assert.That(session.History.Count, Is.EqualTo(before), "失敗時歷史保持不變");
-        TranscriptEntry notice = session.Transcript.Snapshot().Last();
+        TranscriptEntry notice = session.Transcript.Snapshot()[^1];
         Assert.That(notice.Kind, Is.EqualTo(TranscriptKind.Notice));
         Assert.That(notice.Text, Does.Contain("No compaction").And.Contain("summarizer failed"));
         Assert.That(session.IsBusy, Is.False);

@@ -110,7 +110,7 @@ public sealed class WorldTools
         int tileId = target.Value;
         if (tileId < 0)
         {
-            tileId = from.Value != null ? from.Value.Tile : (_world.GetMaps().FirstOrDefault(m => m.IsCurrent)?.Tile ?? -1);
+            tileId = ResolveOriginTile(from);
             if (tileId < 0) return ToolText.Error("give a tile id or a world object id.");
         }
 
@@ -120,6 +120,33 @@ public sealed class WorldTools
         TravelEstimateInfo estimate = TravelByTile(originId, new[] { tileId }).Values.FirstOrDefault();
 
         var sb = new StringBuilder();
+        AppendTileInfo(sb, info);
+        AppendSettleInfo(sb, info);
+        sb.Append("From ").Append(DescribeOrigin(survey)).Append(": ").AppendLine(estimate == null ? "unknown" : Travel(estimate));
+        AppendWorldObjects(sb, info);
+        AppendCaravanOrders(sb, from, tileId);
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>當沒給 tile id 時，從車隊或當前地圖推導原點格子；找不到時回 -1。</summary>
+    private int ResolveOriginTile(Result<CaravanInfo> from)
+    {
+        if (from.Value != null) return from.Value.Tile;
+        return _world.GetMaps().FirstOrDefault(m => m.IsCurrent)?.Tile ?? -1;
+    }
+
+    /// <summary>把車隊在該格的可下達指令寫入摘要；沒有車隊或沒有指令則不寫。</summary>
+    private void AppendCaravanOrders(StringBuilder sb, Result<CaravanInfo> from, int tileId)
+    {
+        if (from.Value == null) return;
+        CaravanOptionsInfo options = _world.GetCaravanOptions(from.Value.Id, tileId);
+        if (!string.IsNullOrEmpty(options.Error)) { sb.Append("Orders: ").AppendLine(options.Error); return; }
+        sb.Append("Orders for ").Append(from.Value.Name).AppendLine(" on this tile (send_caravan):");
+        foreach (FloatMenuOptionInfo o in options.Options) sb.AppendLine(FormatOption(o));
+    }
+
+    private static void AppendTileInfo(StringBuilder sb, WorldTileInfo info)
+    {
         sb.Append("Tile ").Append(string.IsNullOrEmpty(info.TileLayer) ? string.Empty : info.TileLayer + ":").Append(info.Tile).Append(": ").Append(info.Biome).Append(", ").Append(info.Hilliness);
         if (!string.IsNullOrEmpty(info.Feature)) sb.Append(" | feature: ").Append(info.Feature);
         if (!string.IsNullOrEmpty(info.Landmark)) sb.Append(" | landmark: ").Append(info.Landmark);
@@ -132,26 +159,31 @@ public sealed class WorldTools
         if (info.WaterCovered) sb.Append(", water");
         if (info.Impassable) sb.Append(", impassable");
         sb.AppendLine();
-        sb.Append("A colony can be founded here: ").AppendLine(info.CanSettle ? "yes" : "no" + (string.IsNullOrEmpty(info.SettleBlockedReason) ? string.Empty : " (" + info.SettleBlockedReason + ")"));
-        sb.Append("From ").Append(DescribeOrigin(survey)).Append(": ").AppendLine(estimate == null ? "unknown" : Travel(estimate));
+    }
+
+    private static void AppendSettleInfo(StringBuilder sb, WorldTileInfo info)
+    {
+        string settleText;
+        if (info.CanSettle)
+        {
+            settleText = "yes";
+        }
+        else
+        {
+            string reasonSuffix = string.IsNullOrEmpty(info.SettleBlockedReason) ? string.Empty : " (" + info.SettleBlockedReason + ")";
+            settleText = "no" + reasonSuffix;
+        }
+        sb.Append("A colony can be founded here: ").AppendLine(settleText);
+    }
+
+    private static void AppendWorldObjects(StringBuilder sb, WorldTileInfo info)
+    {
         if (info.Objects.Count == 0) sb.AppendLine("No world objects on this tile.");
         else
         {
             sb.AppendLine("World objects here:");
             foreach (WorldObjectInfo o in info.Objects) sb.Append("- ").AppendLine(FormatObject(o, null));
         }
-
-        if (from.Value != null)
-        {
-            CaravanOptionsInfo options = _world.GetCaravanOptions(from.Value.Id, tileId);
-            if (!string.IsNullOrEmpty(options.Error)) sb.Append("Orders: ").AppendLine(options.Error);
-            else
-            {
-                sb.Append("Orders for ").Append(from.Value.Name).AppendLine(" on this tile (send_caravan):");
-                foreach (FloatMenuOptionInfo o in options.Options) sb.AppendLine(FormatOption(o));
-            }
-        }
-        return sb.ToString().Trim();
     }
 
     [AgentTool("send_caravan", ToolCategory.Trade, ToolRisk.Confirm)]
@@ -269,7 +301,7 @@ public sealed class WorldTools
                 : Result<CaravanInfo>.Fail(ToolText.Error($"no caravan has id {id}. Yours: {Candidates(caravans)}"));
         }
         List<CaravanInfo> exact = [.. caravans.Where(c => string.Equals(c.Name, needle, StringComparison.OrdinalIgnoreCase))];
-        List<CaravanInfo> hits = exact.Count > 0 ? exact : [.. caravans.Where(c => c.Name.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0)];
+        List<CaravanInfo> hits = exact.Count > 0 ? exact : [.. caravans.Where(c => c.Name.Contains(needle, StringComparison.OrdinalIgnoreCase))];
         if (hits.Count == 1) return Result<CaravanInfo>.Ok(hits[0]);
         return Result<CaravanInfo>.Fail(ToolText.Error(hits.Count == 0
             ? $"no caravan is named \"{needle}\". Yours: {Candidates(caravans)}"
@@ -329,7 +361,7 @@ public sealed class WorldTools
             return Result<FloatMenuOptionInfo>.Ok(byNumber);
         }
         List<FloatMenuOptionInfo> exact = [.. options.Where(o => string.Equals(o.Label, text, StringComparison.OrdinalIgnoreCase))];
-        List<FloatMenuOptionInfo> hits = exact.Count > 0 ? exact : [.. options.Where(o => o.Label.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)];
+        List<FloatMenuOptionInfo> hits = exact.Count > 0 ? exact : [.. options.Where(o => o.Label.Contains(text, StringComparison.OrdinalIgnoreCase))];
         if (hits.Count == 1) return Result<FloatMenuOptionInfo>.Ok(hits[0]);
         return Result<FloatMenuOptionInfo>.Fail(ToolText.Error(hits.Count == 0
             ? $"no order matches \"{text}\". Orders now: {OrderList(options)}"
@@ -371,7 +403,7 @@ public sealed class WorldTools
 
     private static bool Contains(string text, string needle)
     {
-        return !string.IsNullOrEmpty(text) && text.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+        return !string.IsNullOrEmpty(text) && text.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
     // ---- 格式 ----

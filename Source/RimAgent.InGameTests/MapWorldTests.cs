@@ -4,6 +4,7 @@ using System.Linq;
 using DevTools.Testing;
 using HarmonyLib;
 using RimAgent.Game;
+using RimAgent.Tools;
 using RimWorld;
 using RimWorld.Planet;
 using Verse;
@@ -34,6 +35,28 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
     };
 
     private RimWorldGameWorld _world;
+    private const string GameLogged = "game logged: ";
+    private const string CommandFailed = "command failed: ";
+    private static readonly string[] _multiCellFurniture = ["DoubleBed", "Table2x2c", "Table2x4c"];
+
+    /// <summary>BuildingInfoMatchesVanillaDefs 中反覆使用的原版建築規格預期關鍵字，避免每次測試都重新建立陣列。</summary>
+    private static readonly string[] _reactorExpectedText =
+    {
+        "Size: 6x7", "makes it 7x6", "Heavy support", "must not be under a roof", "Ship part"
+    };
+
+    /// <summary>Caravan 測試清理所需的所有狀態，避免 CleanupCaravanTest 參數過多。</summary>
+    private sealed class CaravanTestContext
+    {
+        public Pawn Colonist { get; init; }
+        public Lord Lord { get; init; }
+        public List<Thing> Spawned { get; init; }
+        public Pawn Animal { get; init; }
+        public bool CreatedAnimal { get; init; }
+        public Dictionary<IntVec3, bool> HomeBefore { get; init; }
+        public Map Map { get; init; }
+        public HashSet<Letter> LettersBefore { get; init; }
+    }
 
     [SetUp]
     public void SetUp()
@@ -147,7 +170,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             Run($"GetCaravanOptions({caravan.LabelCap})", () => _world.GetCaravanOptions(caravan.ID, caravan.Tile.tileId), failures);
         }
 
-        foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+        foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
         TestHelpers.AssertNone(failures, "queries that failed on the real map");
     }
 
@@ -177,7 +200,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             foreach (Pawn other in others) Traverse.Create(other.workSettings).Field("workGiversDirty").SetValue(false);
 
             CommandResult result = _world.SetWorkPriority(pawn.thingIDNumber, workType.defName, target);
-            if (!result.Success) failures.Add("command failed: " + result.Error);
+            if (!result.Success) failures.Add(CommandFailed + result.Error);
             if (!Current.Game.playSettings.useWorkPriorities) failures.Add("manual priorities were not turned on for priority " + target);
             if (pawn.workSettings.GetPriority(workType) != target)
                 failures.Add($"{pawn.LabelShort} {workType.defName}: vanilla priority {pawn.workSettings.GetPriority(workType)}, expected {target}");
@@ -210,7 +233,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         try
         {
             CommandResult result = _world.SetTimeAssignment(pawn.thingIDNumber, hour, target.defName);
-            if (!result.Success) failures.Add("command failed: " + result.Error);
+            if (!result.Success) failures.Add(CommandFailed + result.Error);
             if (pawn.timetable.GetAssignment(hour) != target)
                 failures.Add($"hour {hour}: vanilla {pawn.timetable.GetAssignment(hour)?.defName}, expected {target.defName}");
         }
@@ -289,10 +312,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
 
             if (zone != null)
             {
-                CommandResult deleted = _world.DeleteZone(zone.ID);
-                if (!deleted.Success) failures.Add("delete failed: " + deleted.Error);
-                if (map.zoneManager.AllZones.Contains(zone) || rect.Cells.Any(c => map.zoneManager.ZoneAt(c) != null))
-                    failures.Add("zone still present after delete");
+                CheckZoneCanBeDeleted(zone, rect, map, failures);
             }
         }
         finally
@@ -300,6 +320,14 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             if (zone != null && map.zoneManager.AllZones.Contains(zone)) zone.Delete();
         }
         TestHelpers.AssertNone(failures, "stockpile zone");
+    }
+
+    private void CheckZoneCanBeDeleted(Zone zone, CellRect rect, Map map, List<string> failures)
+    {
+        CommandResult deleted = _world.DeleteZone(zone.ID);
+        if (!deleted.Success) failures.Add("delete failed: " + deleted.Error);
+        if (map.zoneManager.AllZones.Contains(zone) || rect.Cells.Any(c => map.zoneManager.ZoneAt(c) != null))
+            failures.Add("zone still present after delete");
     }
 
     [Test]
@@ -321,7 +349,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         try
         {
             CommandResult result = _world.TryPlaceBlueprint(wall.defName, cell.x, cell.z, 0, null);
-            if (!result.Success) failures.Add("command failed: " + result.Error);
+            if (!result.Success) failures.Add(CommandFailed + result.Error);
             Blueprint_Build blueprint = cell.GetThingList(map).OfType<Blueprint_Build>().FirstOrDefault(b => b.def.entityDefToBuild == wall);
             if (blueprint == null) failures.Add($"no vanilla wall blueprint at {cell}");
             else if (blueprint.stuffToUse != stuff) failures.Add($"blueprint stuff {blueprint.stuffToUse?.defName}, expected {stuff?.defName}");
@@ -350,7 +378,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         Map map = Find.CurrentMap;
         _world.TakeNewGameErrors();
         // 不需研發、至少 2x2 的家具；雙人床與桌子都是。
-        ThingDef def = new[] { "DoubleBed", "Table2x2c", "Table2x4c" }
+        ThingDef def = _multiCellFurniture
             .Select(n => DefDatabase<ThingDef>.GetNamedSilentFail(n))
             .FirstOrDefault(d => d != null && d.BuildableByPlayer && d.IsResearchFinished && d.size.x >= 2 && d.size.z >= 2);
         if (def == null)
@@ -380,28 +408,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         try
         {
             for (int rot = 0; rot < 4; rot++)
-            {
-                string text = build.PlaceBlueprint(def.defName, "single", center.x, center.z, center.x, center.z, rot, string.Empty);
-                Blueprint_Build placed = free.Cells.SelectMany(c => c.GetThingList(map)).OfType<Blueprint_Build>().Distinct().FirstOrDefault();
-                if (placed == null)
-                {
-                    failures.Add($"rot {rot}: no blueprint was placed: {text}");
-                    continue;
-                }
-                CellRect vanilla = placed.OccupiedRect();
-                string wantRect = $"({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})";
-                if (!text.Contains("covers " + wantRect)) failures.Add($"rot {rot}: reply should say 'covers {wantRect}': {text}");
-                if (!text.Contains($"Size {vanilla.Width}x{vanilla.Height}, rotation {rot}")) failures.Add($"rot {rot}: reply should say 'Size {vanilla.Width}x{vanilla.Height}, rotation {rot}': {text}");
-
-                // 往佔格左下角放一道牆：原版回「空間已被占用」，附上擋住的藍圖 id 與範圍。
-                // 不能放同一件：CanReplace 讓同種藍圖直接取代舊的，那是原版的「改朝向」行為。
-                CommandResult overlap = _world.TryPlaceBlueprint(ThingDefOf.Wall.defName, vanilla.minX, vanilla.minZ, 0, null);
-                if (overlap.Success) failures.Add($"rot {rot}: an overlapping blueprint was accepted");
-                else if (!overlap.Message.Contains("#" + placed.thingIDNumber) || !overlap.Message.Contains(wantRect))
-                    failures.Add($"rot {rot}: refusal should name #{placed.thingIDNumber} {wantRect}: {overlap.Message}");
-
-                placed.Destroy();
-            }
+                CheckBlueprintRotation(build, def, map, center, free, rot, failures);
         }
         finally
         {
@@ -410,8 +417,33 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
                 if (!t.Destroyed) t.Destroy();
             }
         }
-        foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+        foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
         TestHelpers.AssertNone(failures, "multi-cell blueprint footprint");
+    }
+
+    /// <summary>驗證單一朝向的多格藍圖：佔格描述、尺寸／旋轉文字，以及與牆重疊時的拒絕訊息。</summary>
+    private void CheckBlueprintRotation(RimAgent.Tools.BuildTools build, ThingDef def, Map map, IntVec3 center, CellRect free, int rot, List<string> failures)
+    {
+        string text = build.PlaceBlueprint(def.defName, "single", center.x, center.z, center.x, center.z, rot, string.Empty);
+        Blueprint_Build placed = free.Cells.SelectMany(c => c.GetThingList(map)).OfType<Blueprint_Build>().Distinct().FirstOrDefault();
+        if (placed == null)
+        {
+            failures.Add($"rot {rot}: no blueprint was placed: {text}");
+            return;
+        }
+        CellRect vanilla = placed.OccupiedRect();
+        string wantRect = $"({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})";
+        if (!text.Contains("covers " + wantRect)) failures.Add($"rot {rot}: reply should say 'covers {wantRect}': {text}");
+        if (!text.Contains($"Size {vanilla.Width}x{vanilla.Height}, rotation {rot}")) failures.Add($"rot {rot}: reply should say 'Size {vanilla.Width}x{vanilla.Height}, rotation {rot}': {text}");
+
+        // 往佔格左下角放一道牆：原版回「空間已被占用」，附上擋住的藍圖 id 與範圍。
+        // 不能放同一件：CanReplace 讓同種藍圖直接取代舊的，那是原版的「改朝向」行為。
+        CommandResult overlap = _world.TryPlaceBlueprint(ThingDefOf.Wall.defName, vanilla.minX, vanilla.minZ, 0, null);
+        if (overlap.Success) failures.Add($"rot {rot}: an overlapping blueprint was accepted");
+        else if (!overlap.Message.Contains("#" + placed.thingIDNumber) || !overlap.Message.Contains(wantRect))
+            failures.Add($"rot {rot}: refusal should name #{placed.thingIDNumber} {wantRect}: {overlap.Message}");
+
+        placed.Destroy();
     }
 
     /// <summary>
@@ -436,6 +468,21 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             Expect.IsNotNull(info, "GetBuildingInfo(Ship_Reactor) returned null");
             return;
         }
+        CheckReactorInfo(info, reactor, failures);
+
+        string text = new RimAgent.Tools.BuildTools(_world).LookupDef("Ship_Reactor");
+        failures.AddRange(_reactorExpectedText
+            .Where(want => !text.Contains(want))
+            .Select(want => $"tool text lacks '{want}': {text}"));
+
+        CheckMiscBuildingInfo(failures);
+        CheckOccupiedRect(failures);
+        TestHelpers.AssertNone(failures, "building info vs vanilla defs");
+    }
+
+    /// <summary>檢查 Ship_Reactor 的建築規格是否與原版 Def 一致。</summary>
+    private static void CheckReactorInfo(BuildingInfo info, ThingDef reactor, List<string> failures)
+    {
         if (info.Width != reactor.size.x || info.Height != reactor.size.z || info.Width != 6 || info.Height != 7) failures.Add($"size {info.Width}x{info.Height}, def {reactor.size}");
         if (info.TerrainAffordance != reactor.terrainAffordanceNeeded.defName || info.TerrainAffordance != "Heavy") failures.Add("affordance " + info.TerrainAffordance);
         if (!info.ShipPart || !reactor.building.shipPart) failures.Add("ship part flag");
@@ -446,13 +493,11 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         if (info.Research.Count != reactor.researchPrerequisites.Count || info.Research.Zip(reactor.researchPrerequisites, (i, r) => i.Done != (playing && r.IsFinished)).Any(x => x)) failures.Add("research prerequisites");
         if (info.Costs.Sum(c => c.Count) != reactor.costList.Sum(c => c.count) || info.Costs.Count != reactor.costList.Count) failures.Add("costs");
         if (Math.Abs(info.PowerWatts - reactor.GetCompProperties<CompProperties_Power>().PowerConsumption) > 0.01f) failures.Add("power " + info.PowerWatts);
+    }
 
-        string text = new RimAgent.Tools.BuildTools(_world).LookupDef("Ship_Reactor");
-        foreach (string want in new[] { "Size: 6x7", "makes it 7x6", "Heavy support", "must not be under a roof", "Ship part" })
-        {
-            if (!text.Contains(want)) failures.Add($"tool text lacks '{want}': {text}");
-        }
-
+    /// <summary>檢查互動格、材料成本、地板旗標與不存在的建築定義。</summary>
+    private void CheckMiscBuildingInfo(List<string> failures)
+    {
         // 有互動格的建築、要選材料的建築、地板：欄位與 Def 一致。
         ThingDef withCell = DefDatabase<ThingDef>.AllDefsListForReading.FirstOrDefault(d => d.BuildableByPlayer && d.HasSingleOrMultipleInteractionCells);
         if (withCell != null)
@@ -466,8 +511,11 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         TerrainDef floor = DefDatabase<TerrainDef>.AllDefsListForReading.FirstOrDefault(t => t.BuildableByPlayer);
         if (floor != null && !_world.GetBuildingInfo(floor.defName).IsTerrain) failures.Add("terrain flag of " + floor.defName);
         if (_world.GetBuildingInfo("NoSuchBuildableDef") != null) failures.Add("unknown def should return null");
+    }
 
-        // 佔格公式對照原版：每種尺寸取一個可建造的 ThingDef，四個朝向。
+    /// <summary>將可建造項目的佔格公式與原版 GenAdj.OccupiedRect 做四個朝向的比對。</summary>
+    private void CheckOccupiedRect(List<string> failures)
+    {
         var origin = new IntVec3(50, 0, 60);
         foreach (ThingDef d in DefDatabase<ThingDef>.AllDefsListForReading.Where(x => x.BuildableByPlayer).GroupBy(x => x.size).Select(g => g.First()))
         {
@@ -480,7 +528,6 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
                     failures.Add($"{d.defName} {d.size} rot {rot}: ours {mine}, vanilla ({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})");
             }
         }
-        TestHelpers.AssertNone(failures, "building info vs vanilla defs");
     }
 
     /// <summary>lookup_def 對原版 Def 的知識內容（見 LookupDefCheck）。</summary>
@@ -506,78 +553,107 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             ThingDefOf.Ship_Reactor, ThingDefOf.Ship_Engine, ThingDefOf.Ship_Engine, ThingDefOf.Ship_Engine,
             ThingDefOf.Ship_ComputerCore, ThingDefOf.Ship_SensorCluster, ThingDefOf.Ship_CryptosleepCasket, ThingDefOf.Ship_Beam
         ];
-        int width = parts.Sum(p => p.size.x);
-        int height = parts.Max(p => p.size.z);
-        // 整艘船很大，殖民者附近常常放不下；全圖每 4 格試一個角落。
-        Predicate<IntVec3> clear = c => !c.Fogged(map) && c.Standable(map) && !map.roofGrid.Roofed(c)
-            && c.GetEdifice(map) == null && c.GetThingList(map).All(t => t is Plant);
-        CellRect? found = null;
-        // 離地圖邊緣留一格：原版 ShipUtility.ShipBuildingsAttachedTo 會讀零件外圍的格子，不檢查是否在圖內。
-        for (int cx = 1; found == null && cx + width < map.Size.x - 1; cx += 4)
-        {
-            for (int cz = 1; cz + height < map.Size.z - 1; cz += 4)
-            {
-                var candidate = new CellRect(cx, cz, width, height);
-                if (candidate.Cells.All(c => clear(c))) { found = candidate; break; }
-            }
-        }
+        CellRect? found = FindShipArea(map, parts);
         if (found == null)
         {
-            TestHelpers.Skip(nameof(ShipPartsExposeStartupLaunchAndReport), $"no clear unroofed {width}x{height} area near the colonists");
+            TestHelpers.Skip(nameof(ShipPartsExposeStartupLaunchAndReport), $"no clear unroofed {parts.Sum(p => p.size.x)}x{parts.Max(p => p.size.z)} area near the colonists");
             return;
         }
-        var spawned = new List<Building>();
         var windowsBefore = new HashSet<Window>(Find.WindowStack.Windows);
         var failures = new List<string>();
+        List<Building> spawned = [];
         try
         {
-            int x = found.Value.minX;
-            foreach (ThingDef def in parts)
-            {
-                var probe = new IntVec3(x, 0, found.Value.minZ);
-                CellRect occupied = GenAdj.OccupiedRect(probe, Rot4.North, def.size);
-                IntVec3 center = probe + (probe - new IntVec3(occupied.minX, 0, occupied.minZ));
-                Thing part = ThingMaker.MakeThing(def, def.MadeFromStuff ? GenStuff.DefaultStuffFor(def) : null);
-                part.SetFaction(Faction.OfPlayer);
-                spawned.Add((Building)GenSpawn.Spawn(part, center, map, Rot4.North));
-                x += def.size.x;
-            }
+            spawned = SpawnShipParts(map, parts, found.Value);
             Building core = spawned.First(b => b.def == ThingDefOf.Ship_ComputerCore);
             Building reactor = spawned.First(b => b.def == ThingDefOf.Ship_Reactor);
             List<string> vanillaReasons = [.. ShipUtility.LaunchFailReasons(core)];
             if (vanillaReasons.Any(r => r.StartsWith("ShipReportMissingPart".Translate(), StringComparison.Ordinal)))
                 failures.Add("test layout is not connected: " + string.Join("; ", vanillaReasons));
 
-            string launchLabel = "CommandShipLaunch".Translate();
-            GizmoInfo launch = _world.GetGizmos(core.thingIDNumber)?.FirstOrDefault(g => g.Label == launchLabel);
-            if (launch == null) failures.Add("the computer core has no launch button");
-            else if (!launch.Disabled || string.IsNullOrEmpty(launch.DisabledReason)) failures.Add("launch is not disabled with a reason before startup");
-
-            string startupLabel = "CommandShipStartup".Translate();
-            GizmoInfo startup = _world.GetGizmos(reactor.thingIDNumber)?.FirstOrDefault(g => g.Label == startupLabel);
-            if (startup == null) failures.Add("the hibernating reactor has no startup button");
-            else if (startup.Kind != GizmoInfo.ActionKind) failures.Add("startup button kind is " + startup.Kind);
-
+            CheckLaunchGizmo(core, failures);
+            CheckStartupGizmo(reactor, failures);
             Building beam = spawned.First(b => b.def == ThingDefOf.Ship_Beam);
-            string reportLabel = "CommandShipLaunchReport".Translate();
-            GizmoInfo report = _world.GetGizmos(beam.thingIDNumber)?.FirstOrDefault(g => g.Label == reportLabel);
-            if (report == null) failures.Add("the beam has no launch report button");
-            else
-            {
-                CommandResult pressed = _world.UseGizmo(beam.thingIDNumber, report.Number, report.Label, null);
-                if (!pressed.Success) failures.Add("pressing the launch report failed: " + pressed.Error);
-                string cannot = "ShipReportCannotLaunch".Translate();
-                if (!_world.GetPendingChoices().Any(c => c.Text.Contains(cannot)))
-                    failures.Add("the launch report dialog is not listed among pending choices");
-            }
+            CheckReportGizmo(beam, failures);
         }
         finally
         {
             foreach (Window window in Find.WindowStack.Windows.Where(w => !windowsBefore.Contains(w)).ToList()) window.Close(false);
             foreach (Building part in spawned.Where(b => !b.Destroyed)) part.Destroy();
         }
-        foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+        foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
         TestHelpers.AssertNone(failures, "ship parts");
+    }
+
+    /// <summary>在全圖每 4 格試一個角落，找到可放下整艘船（不霧、可站、無屋頂、無建築、全為植物）的空地。</summary>
+    private static CellRect? FindShipArea(Map map, ThingDef[] parts)
+    {
+        int width = parts.Sum(p => p.size.x);
+        int height = parts.Max(p => p.size.z);
+        Predicate<IntVec3> clear = c => !c.Fogged(map) && c.Standable(map) && !map.roofGrid.Roofed(c)
+            && c.GetEdifice(map) == null && c.GetThingList(map).All(t => t is Plant);
+        // 離地圖邊緣留一格：原版 ShipUtility.ShipBuildingsAttachedTo 會讀零件外圍的格子，不檢查是否在圖內。
+        for (int cx = 1; cx + width < map.Size.x - 1; cx += 4)
+        {
+            for (int cz = 1; cz + height < map.Size.z - 1; cz += 4)
+            {
+                var candidate = new CellRect(cx, cz, width, height);
+                if (candidate.Cells.All(c => clear(c))) return candidate;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>依零件尺寸由西到東在空地上生成船上的全部建築。</summary>
+    private static List<Building> SpawnShipParts(Map map, ThingDef[] parts, CellRect found)
+    {
+        var spawned = new List<Building>();
+        int x = found.minX;
+        foreach (ThingDef def in parts)
+        {
+            var probe = new IntVec3(x, 0, found.minZ);
+            CellRect occupied = GenAdj.OccupiedRect(probe, Rot4.North, def.size);
+            IntVec3 center = probe + (probe - new IntVec3(occupied.minX, 0, occupied.minZ));
+            Thing part = ThingMaker.MakeThing(def, def.MadeFromStuff ? GenStuff.DefaultStuffFor(def) : null);
+            part.SetFaction(Faction.OfPlayer);
+            spawned.Add((Building)GenSpawn.Spawn(part, center, map, Rot4.North));
+            x += def.size.x;
+        }
+        return spawned;
+    }
+
+    /// <summary>檢查電腦核心的發射按鈕：在啟動前應為停用並帶原因。</summary>
+    private void CheckLaunchGizmo(Building core, List<string> failures)
+    {
+        string launchLabel = "CommandShipLaunch".Translate();
+        GizmoInfo launch = _world.GetGizmos(core.thingIDNumber)?.FirstOrDefault(g => g.Label == launchLabel);
+        if (launch == null) failures.Add("the computer core has no launch button");
+        else if (!launch.Disabled || string.IsNullOrEmpty(launch.DisabledReason)) failures.Add("launch is not disabled with a reason before startup");
+    }
+
+    /// <summary>檢查反應爐的啟動按鈕：應存在且種類為動作。</summary>
+    private void CheckStartupGizmo(Building reactor, List<string> failures)
+    {
+        string startupLabel = "CommandShipStartup".Translate();
+        GizmoInfo startup = _world.GetGizmos(reactor.thingIDNumber)?.FirstOrDefault(g => g.Label == startupLabel);
+        if (startup == null) failures.Add("the hibernating reactor has no startup button");
+        else if (startup.Kind != GizmoInfo.ActionKind) failures.Add("startup button kind is " + startup.Kind);
+    }
+
+    /// <summary>檢查光束的發射報告按鈕：按下應成功，且「無法發射」對話框應列在待處理選擇中。</summary>
+    private void CheckReportGizmo(Building beam, List<string> failures)
+    {
+        string reportLabel = "CommandShipLaunchReport".Translate();
+        GizmoInfo report = _world.GetGizmos(beam.thingIDNumber)?.FirstOrDefault(g => g.Label == reportLabel);
+        if (report == null) failures.Add("the beam has no launch report button");
+        else
+        {
+            CommandResult pressed = _world.UseGizmo(beam.thingIDNumber, report.Number, report.Label, null);
+            if (!pressed.Success) failures.Add("pressing the launch report failed: " + pressed.Error);
+            string cannot = "ShipReportCannotLaunch".Translate();
+            if (!_world.GetPendingChoices().Any(c => c.Text.Contains(cannot)))
+                failures.Add("the launch report dialog is not listed among pending choices");
+        }
     }
 
     [Test]
@@ -599,7 +675,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
     {
         if (TestHelpers.SkipWithoutMap(nameof(UnclaimedBedOffsetsBedlessColonists))) return;
         Map map = Find.CurrentMap;
-        int before = _world.GetAutonomousSignals().BedlessCount;
+        int before = RimWorldGameWorld.GetAutonomousSignals().BedlessCount;
         if (before == 0)
         {
             TestHelpers.Skip(nameof(UnclaimedBedOffsetsBedlessColonists), "no colonist is short of a bed");
@@ -623,8 +699,9 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         TestHelpers.AssertNone(failures, "bedless signal");
     }
 
+#pragma warning disable S107 // 私有輔助方法，參數皆為床檢查相關，無需重構
     /// <summary>生成一張床（可再設定用途），比對沒床人數是否符合預期，再拆掉。</summary>
-    private void CheckBed(Map map, IntVec3 cell, ThingDef def, Action<Building_Bed> configure, int expected, int before,
+    private static void CheckBed(Map map, IntVec3 cell, ThingDef def, Action<Building_Bed> configure, int expected, int before,
         string label, List<string> failures)
     {
         var bed = (Building_Bed)ThingMaker.MakeThing(def, GenStuff.DefaultStuffFor(def));
@@ -633,7 +710,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         {
             GenSpawn.Spawn(bed, cell, map, Rot4.North);
             configure?.Invoke(bed);
-            int after = _world.GetAutonomousSignals().BedlessCount;
+            int after = RimWorldGameWorld.GetAutonomousSignals().BedlessCount;
             if (after != expected) failures.Add($"{label}: bedless {before} -> {after}, expected {expected}");
         }
         finally
@@ -641,6 +718,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             if (!bed.Destroyed) bed.Destroy();
         }
     }
+#pragma warning restore S107
 
     [Test]
     public void SetTimeSpeedWritesTickManager()
@@ -652,7 +730,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         try
         {
             CommandResult result = _world.SetTimeSpeed(target.ToString());
-            if (!result.Success) failures.Add("command failed: " + result.Error);
+            if (!result.Success) failures.Add(CommandFailed + result.Error);
             if (Find.TickManager.CurTimeSpeed != target) failures.Add($"tick manager at {Find.TickManager.CurTimeSpeed}, expected {target}");
             if (_world.SetTimeSpeed("Ultrafast").Success) failures.Add("Ultrafast was accepted");
         }
@@ -682,37 +760,14 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         {
             QuestInfo info = _world.GetQuests().FirstOrDefault(q => q.Id == quest.id);
             if (info == null) failures.Add("generated quest is missing from GetQuests");
-            else
-            {
-                if (info.State != QuestInfo.AvailableState) failures.Add("state is " + info.State + ", expected available");
-                if (string.IsNullOrEmpty(info.Name)) failures.Add("empty name");
-                if (info.CanAccept != QuestUtility.CanAcceptQuest(quest).Accepted) failures.Add("CanAccept differs from vanilla");
-            }
+            else CheckQuestInfo(info, quest, failures);
 
             CommandResult dismiss = _world.SetQuestDismissed(quest.id, true);
             if (!dismiss.Success || !quest.dismissed) failures.Add("dismiss did not set quest.dismissed: " + dismiss.Error);
             CommandResult restore = _world.SetQuestDismissed(quest.id, false);
             if (!restore.Success || quest.dismissed) failures.Add("restore did not clear quest.dismissed: " + restore.Error);
 
-            if (QuestUtility.CanAcceptQuest(quest).Accepted)
-            {
-                int accepter = quest.RequiresAccepter
-                    ? PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoSuspended
-                        .FirstOrDefault(p => QuestUtility.CanPawnAcceptQuest(p, quest))?.thingIDNumber ?? 0
-                    : 0;
-                // 有獎勵選項的任務只能「以此獎勵接受」，選第一組。
-                int reward = quest.PartsListForReading.OfType<QuestPart_Choice>().Any() ? 1 : 0;
-                CommandResult accept = _world.AcceptQuest(quest.id, reward, accepter);
-                if (!accept.Success) failures.Add("accept failed: " + accept.Error);
-                else if (quest.State != QuestState.Ongoing) failures.Add("after accept the quest state is " + quest.State);
-                if (_world.AcceptQuest(quest.id, reward, accepter).Success) failures.Add("accepting twice succeeded");
-                if (!_world.GetQuests().Any(q => q.Id == quest.id && q.State == QuestInfo.ActiveState))
-                    failures.Add("accepted quest is not listed as active");
-            }
-            else
-            {
-                failures.Add("item stash quest cannot be accepted: " + QuestUtility.CanAcceptQuest(quest).Reason);
-            }
+            TryAcceptQuest(quest, failures);
         }
         finally
         {
@@ -720,6 +775,36 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             Find.QuestManager.Remove(quest);
         }
         TestHelpers.AssertNone(failures, "quests");
+    }
+
+    /// <summary>檢查從 GetQuests 讀回的任務資訊是否與原版一致。</summary>
+    private static void CheckQuestInfo(QuestInfo info, Quest quest, List<string> failures)
+    {
+        if (info.State != QuestInfo.AvailableState) failures.Add("state is " + info.State + ", expected available");
+        if (string.IsNullOrEmpty(info.Name)) failures.Add("empty name");
+        if (info.CanAccept != QuestUtility.CanAcceptQuest(quest).Accepted) failures.Add("CanAccept differs from vanilla");
+    }
+
+    /// <summary>當任務可接受時執行接受，並驗證狀態與重複接受被擋下；否則記錄無法接受的原因。</summary>
+    private void TryAcceptQuest(Quest quest, List<string> failures)
+    {
+        if (!QuestUtility.CanAcceptQuest(quest).Accepted)
+        {
+            failures.Add("item stash quest cannot be accepted: " + QuestUtility.CanAcceptQuest(quest).Reason);
+            return;
+        }
+        int accepter = quest.RequiresAccepter
+            ? PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_FreeColonists_NoSuspended
+                .FirstOrDefault(p => QuestUtility.CanPawnAcceptQuest(p, quest))?.thingIDNumber ?? 0
+            : 0;
+        // 有獎勵選項的任務只能「以此獎勵接受」，選第一組。
+        int reward = quest.PartsListForReading.OfType<QuestPart_Choice>().Any() ? 1 : 0;
+        CommandResult accept = _world.AcceptQuest(quest.id, reward, accepter);
+        if (!accept.Success) failures.Add("accept failed: " + accept.Error);
+        else if (quest.State != QuestState.Ongoing) failures.Add("after accept the quest state is " + quest.State);
+        if (_world.AcceptQuest(quest.id, reward, accepter).Success) failures.Add("accepting twice succeeded");
+        if (!_world.GetQuests().Any(q => q.Id == quest.id && q.State == QuestInfo.ActiveState))
+            failures.Add("accepted quest is not listed as active");
     }
 
     /// <summary>依序嘗試產生任務，取第一個生成後仍待玩家接受的；生成失敗或自動接受的會移除。</summary>
@@ -793,8 +878,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
 
     private void CheckMortarTargets(Map map, Building_TurretGun mortar, GizmoInfo gizmo, List<string> failures)
     {
-        if (gizmo.Kind != GizmoInfo.TargetKind) failures.Add("kind is " + gizmo.Kind + ", expected target");
-        if (string.IsNullOrEmpty(gizmo.TargetHint)) failures.Add("no target hint");
+        CheckGizmoIsTarget(gizmo, failures);
 
         CommandResult none = _world.UseGizmo(mortar.thingIDNumber, gizmo.Number, gizmo.Label, null);
         if (none.Success) failures.Add("pressing without a target succeeded");
@@ -803,14 +887,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
 
         Verb verb = mortar.AttackVerb;
         IntVec3 pos = mortar.Position;
-        IntVec3 farCorner = new[] { new IntVec3(0, 0, 0), new IntVec3(map.Size.x - 1, 0, 0), new IntVec3(0, 0, map.Size.z - 1), new IntVec3(map.Size.x - 1, 0, map.Size.z - 1) }
-            .OrderByDescending(c => (c - pos).LengthHorizontal).First();
-        // 小地圖整張都在迫擊砲射程內，就改用低於最小射程的近處格子測拒絕。
-        IntVec3 bad = verb.CanHitTarget(farCorner)
-            ? GenRadial.RadialCellsAround(pos, Math.Min(verb.verbProps.minRange, 20f), false)
-                .Where(c => c.InBounds(map) && (c - pos).LengthHorizontal >= 2f && !verb.CanHitTarget(c))
-                .DefaultIfEmpty(IntVec3.Invalid).First()
-            : farCorner;
+        IntVec3 bad = FindOutOfRangeCell(map, pos, verb);
         if (!bad.IsValid)
         {
             Log.Message(TestHelpers.LogPrefix + "mortar can hit every cell tried; skipping the out-of-range check");
@@ -824,14 +901,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         }
 
         // 迫擊砲射程遠超過 GenRadial 的半徑上限（約 80 格），改從全圖格子挑。
-        float minDistance = verb.verbProps.minRange + 3f;
-        float maxDistance = verb.EffectiveRange * 0.7f;
-        IntVec3 cell = map.AllCells
-            .Where(c => (c - pos).LengthHorizontal > minDistance && (c - pos).LengthHorizontal < maxDistance)
-            .OrderBy(c => (c - pos).LengthHorizontalSquared)
-            .Where(c => verb.CanHitTarget(c))
-            .DefaultIfEmpty(IntVec3.Invalid)
-            .First();
+        IntVec3 cell = FindInRangeCell(map, pos, verb);
         if (!cell.IsValid)
         {
             TestHelpers.Skip(nameof(MortarGizmoTakesACellTarget), "no cell in the mortar's range to aim at");
@@ -841,6 +911,39 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         if (!hit.Success) failures.Add("aiming at " + cell + " failed: " + hit.Error);
         else if (mortar.ForcedTarget.Cell != cell) failures.Add($"forced target is {mortar.ForcedTarget}, expected cell {cell}");
         if (Find.Targeter.IsTargeting) failures.Add("targeter was left active after aiming");
+    }
+
+    private static void CheckGizmoIsTarget(GizmoInfo gizmo, List<string> failures)
+    {
+        if (gizmo.Kind != GizmoInfo.TargetKind) failures.Add("kind is " + gizmo.Kind + ", expected target");
+        if (string.IsNullOrEmpty(gizmo.TargetHint)) failures.Add("no target hint");
+    }
+
+    private static IntVec3 FindOutOfRangeCell(Map map, IntVec3 pos, Verb verb)
+    {
+        IntVec3 farCorner = new[]
+        {
+            new IntVec3(0, 0, 0), new IntVec3(map.Size.x - 1, 0, 0),
+            new IntVec3(0, 0, map.Size.z - 1), new IntVec3(map.Size.x - 1, 0, map.Size.z - 1)
+        }
+        .OrderByDescending(c => (c - pos).LengthHorizontal).First();
+        // 小地圖整張都在迫擊砲射程內，就改用低於最小射程的近處格子測拒絕。
+        return verb.CanHitTarget(farCorner)
+            ? GenRadial.RadialCellsAround(pos, Math.Min(verb.verbProps.minRange, 20f), false)
+                .Where(c => c.InBounds(map) && (c - pos).LengthHorizontal >= 2f && !verb.CanHitTarget(c))
+                .DefaultIfEmpty(IntVec3.Invalid).First()
+            : farCorner;
+    }
+
+    private static IntVec3 FindInRangeCell(Map map, IntVec3 pos, Verb verb)
+    {
+        float minDistance = verb.verbProps.minRange + 3f;
+        float maxDistance = verb.EffectiveRange * 0.7f;
+        return map.AllCells
+            .Where(c => (c - pos).LengthHorizontal > minDistance && (c - pos).LengthHorizontal < maxDistance && verb.CanHitTarget(c))
+            .OrderBy(c => (c - pos).LengthHorizontalSquared)
+            .DefaultIfEmpty(IntVec3.Invalid)
+            .First();
     }
 
     /// <summary>
@@ -949,19 +1052,24 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
                 if (_world.UseFloatMenuOption(pawn.thingIDNumber, MapTarget.OfThing(item.thingIDNumber), menu.Options.Count + 5, first.Label).Success)
                     failures.Add("an option number past the end was run");
             }
-            if (_world.GetFloatMenuOptions(pawn.thingIDNumber, MapTarget.OfCell(-5, -5)).Error.Length == 0)
-                failures.Add("a cell outside the map produced a menu");
-            if (_world.GetFloatMenuOptions(-1, MapTarget.OfThing(item.thingIDNumber)).Error.Length == 0)
-                failures.Add("an unknown colonist produced a menu");
         }
         finally
         {
             if (!item.Destroyed) item.Destroy();
         }
         CheckGotoOption(map, pawn, failures);
+        CheckInvalidTargetsDontProduceMenus(pawn, item, failures);
         // 選單在這條呼叫路徑（不在 OnGUI 裡）建構選項時若出錯，原版供應者會記 log 並略過，選單變空；這裡把它當失敗。
-        foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+        foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
         TestHelpers.AssertNone(failures, "right-click menu");
+    }
+
+    private void CheckInvalidTargetsDontProduceMenus(Pawn pawn, Thing item, List<string> failures)
+    {
+        if (_world.GetFloatMenuOptions(pawn.thingIDNumber, MapTarget.OfCell(-5, -5)).Error.Length == 0)
+            failures.Add("a cell outside the map produced a menu");
+        if (_world.GetFloatMenuOptions(-1, MapTarget.OfThing(item.thingIDNumber)).Error.Length == 0)
+            failures.Add("an unknown colonist produced a menu");
     }
 
     private void CheckMenuMatchesVanilla(Pawn pawn, MapTarget target, UnityEngine.Vector3 clickPosition, List<string> failures)
@@ -1043,32 +1151,73 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         var expected = Find.WorldObjects.AllWorldObjects
             .Where(o => o.Spawned && o.Tile.Valid && o.Tile.Layer == origin.Layer && o is not RoutePlannerWaypoint && !(o is Caravan { IsPlayerControlled: true }))
             .ToDictionary(o => o.ID);
-        foreach (WorldObjectInfo info in survey.Objects)
-        {
-            if (!expected.TryGetValue(info.Id, out WorldObject obj))
-            {
-                failures.Add($"[{info.Id}] {info.Label} is not a vanilla world object of this layer");
-                continue;
-            }
-            if (info.Tile != obj.Tile.tileId) failures.Add($"{obj.LabelCap}: tile {info.Tile}, vanilla {obj.Tile.tileId}");
-            float distance = Find.WorldGrid.ApproxDistanceInTiles(origin, obj.Tile);
-            if (Math.Abs(info.DistanceTiles - distance) > 0.01f) failures.Add($"{obj.LabelCap}: distance {info.DistanceTiles}, vanilla {distance}");
-            bool hostile = obj.Faction != null && obj.Faction != Faction.OfPlayer && obj.Faction.HostileTo(Faction.OfPlayer);
-            if (info.Hostile != hostile) failures.Add($"{obj.LabelCap}: hostile {info.Hostile}, vanilla {hostile}");
-            if (obj is Settlement settlement)
-            {
-                string kind = settlement.Faction == Faction.OfPlayer ? WorldObjectInfo.PlayerSettlementKind : WorldObjectInfo.FactionSettlementKind;
-                if (info.Kind != kind) failures.Add($"{obj.LabelCap}: kind {info.Kind}, expected {kind}");
-                if (info.HasMap != settlement.HasMap) failures.Add($"{obj.LabelCap}: HasMap {info.HasMap}, vanilla {settlement.HasMap}");
-            }
-            if (obj is Site && info.Kind != WorldObjectInfo.SiteKind) failures.Add($"{obj.LabelCap}: a site listed as {info.Kind}");
-        }
-        foreach (WorldObject obj in expected.Values.Where(o => survey.Objects.All(i => i.Id != o.ID)))
-            failures.Add($"{obj.LabelCap} [{obj.ID}] is missing from the survey");
-        if (!survey.Objects.Any(o => o.Kind == WorldObjectInfo.PlayerSettlementKind && o.HasMap))
-            failures.Add("the home settlement with a map is not in the survey");
+        CheckSurveyObjects(survey, expected, origin, failures);
+        CheckMissingObjects(expected, survey, failures);
+        CheckHomeSettlementInSurvey(survey, failures);
 
         IReadOnlyList<TravelEstimateInfo> estimates = _world.GetTravelEstimates(-1, survey.Objects.Take(5).Select(o => o.Tile).ToList());
+        CheckTravelEstimates(estimates, origin, failures);
+
+        WorldTileInfo tile = _world.GetWorldTile(origin.tileId, -1);
+        RimWorld.Planet.Tile vanillaTile = Find.WorldGrid[origin];
+        CheckWorldTile(tile, vanillaTile, failures);
+
+        foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
+        TestHelpers.AssertNone(failures, "world survey and tile");
+    }
+
+    /// <summary>把調查回傳的每個世界物件與原版定義逐一比對。</summary>
+    private static void CheckSurveyObjects(WorldSurveyInfo survey, Dictionary<int, WorldObject> expected, PlanetTile origin, List<string> failures)
+    {
+        foreach (WorldObjectInfo info in survey.Objects)
+            CheckOneSurveyObject(expected, origin, info, failures);
+    }
+
+    /// <summary>比對單一調查物件：是否存在、佔格格、距離、敵對、定居點與地點旗標。</summary>
+    private static void CheckOneSurveyObject(Dictionary<int, WorldObject> expected, PlanetTile origin, WorldObjectInfo info, List<string> failures)
+    {
+        if (!expected.TryGetValue(info.Id, out WorldObject obj))
+        {
+            failures.Add($"[{info.Id}] {info.Label} is not a vanilla world object of this layer");
+            return;
+        }
+        if (info.Tile != obj.Tile.tileId) failures.Add($"{obj.LabelCap}: tile {info.Tile}, vanilla {obj.Tile.tileId}");
+        float distance = Find.WorldGrid.ApproxDistanceInTiles(origin, obj.Tile);
+        if (Math.Abs(info.DistanceTiles - distance) > 0.01f) failures.Add($"{obj.LabelCap}: distance {info.DistanceTiles}, vanilla {distance}");
+        bool hostile = obj.Faction != null && obj.Faction != Faction.OfPlayer && obj.Faction.HostileTo(Faction.OfPlayer);
+        if (info.Hostile != hostile) failures.Add($"{obj.LabelCap}: hostile {info.Hostile}, vanilla {hostile}");
+        CheckSettlement(obj, info, failures);
+        if (obj is Site && info.Kind != WorldObjectInfo.SiteKind) failures.Add($"{obj.LabelCap}: a site listed as {info.Kind}");
+    }
+
+    /// <summary>定居點的種類與地圖旗標是否與原版一致。</summary>
+    private static void CheckSettlement(WorldObject obj, WorldObjectInfo info, List<string> failures)
+    {
+        if (obj is Settlement settlement)
+        {
+            string kind = settlement.Faction == Faction.OfPlayer ? WorldObjectInfo.PlayerSettlementKind : WorldObjectInfo.FactionSettlementKind;
+            if (info.Kind != kind) failures.Add($"{obj.LabelCap}: kind {info.Kind}, expected {kind}");
+            if (info.HasMap != settlement.HasMap) failures.Add($"{obj.LabelCap}: HasMap {info.HasMap}, vanilla {settlement.HasMap}");
+        }
+    }
+
+    /// <summary>原版有但調查清單缺失的世界物件。</summary>
+    private static void CheckMissingObjects(Dictionary<int, WorldObject> expected, WorldSurveyInfo survey, List<string> failures)
+    {
+        foreach (WorldObject obj in expected.Values.Where(o => survey.Objects.All(i => i.Id != o.ID)))
+            failures.Add($"{obj.LabelCap} [{obj.ID}] is missing from the survey");
+    }
+
+    /// <summary>自家殖民地是否出現在調查清單中。</summary>
+    private static void CheckHomeSettlementInSurvey(WorldSurveyInfo survey, List<string> failures)
+    {
+        if (!survey.Objects.Any(o => o.Kind == WorldObjectInfo.PlayerSettlementKind && o.HasMap))
+            failures.Add("the home settlement with a map is not in the survey");
+    }
+
+    /// <summary>旅行時間估算是否與原版可達性一致。</summary>
+    private static void CheckTravelEstimates(IReadOnlyList<TravelEstimateInfo> estimates, PlanetTile origin, List<string> failures)
+    {
         foreach (TravelEstimateInfo e in estimates)
         {
             PlanetTile to = new PlanetTile(e.Tile, origin.Layer);
@@ -1076,9 +1225,11 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             if (e.Reachable != reachable) failures.Add($"tile {e.Tile}: reachable {e.Reachable}, vanilla {reachable}");
             if (e.Reachable && to != origin && e.Ticks <= 0) failures.Add($"tile {e.Tile}: reachable but no travel time");
         }
+    }
 
-        WorldTileInfo tile = _world.GetWorldTile(origin.tileId, -1);
-        RimWorld.Planet.Tile vanillaTile = Find.WorldGrid[origin];
+    /// <summary>起點磚塊資訊與原版 Tile 的比對，以及超出世界範圍的磚塊應被拒絕。</summary>
+    private void CheckWorldTile(WorldTileInfo tile, RimWorld.Planet.Tile vanillaTile, List<string> failures)
+    {
         if (!string.IsNullOrEmpty(tile.Error)) failures.Add("home tile: " + tile.Error);
         if (tile.Biome != vanillaTile.PrimaryBiome.LabelCap) failures.Add($"biome {tile.Biome}, vanilla {vanillaTile.PrimaryBiome.LabelCap}");
         if (tile.Hilliness != vanillaTile.hilliness.GetLabelCap()) failures.Add($"hilliness {tile.Hilliness}, vanilla {vanillaTile.hilliness.GetLabelCap()}");
@@ -1086,9 +1237,6 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         if (tile.CanSettle || string.IsNullOrEmpty(tile.SettleBlockedReason)) failures.Add("the home tile claims a colony could be founded there, or gives no reason");
         if (!tile.Objects.Any(o => o.Kind == WorldObjectInfo.PlayerSettlementKind)) failures.Add("the home settlement is not on its own tile");
         if (string.IsNullOrEmpty(_world.GetWorldTile(int.MaxValue, -1).Error)) failures.Add("a tile id outside the world was accepted");
-
-        foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
-        TestHelpers.AssertNone(failures, "world survey and tile");
     }
 
     /// <summary>
@@ -1135,12 +1283,17 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         }
         finally
         {
-            if (!quest.Historical) quest.End(QuestEndOutcome.Unknown, sendLetter: false, playSound: false);
-            Find.QuestManager.Remove(quest);
-            foreach (WorldObject created in Find.WorldObjects.AllWorldObjects.Where(o => !worldObjectsBefore.Contains(o)).ToList())
-                if (!created.Destroyed) created.Destroy();
+            CleanupQuest(quest, worldObjectsBefore);
         }
         TestHelpers.AssertNone(failures, "quest links");
+    }
+
+    private static void CleanupQuest(Quest quest, HashSet<WorldObject> worldObjectsBefore)
+    {
+        if (!quest.Historical) quest.End(QuestEndOutcome.Unknown, sendLetter: false, playSound: false);
+        Find.QuestManager.Remove(quest);
+        foreach (WorldObject created in Find.WorldObjects.AllWorldObjects.Where(o => !worldObjectsBefore.Contains(o)).ToList())
+            if (!created.Destroyed) created.Destroy();
     }
 
     private static List<WorldObject> QuestTargets(Quest quest) =>
@@ -1156,22 +1309,10 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
     {
         if (TestHelpers.SkipWithoutMap(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap))) return;
         Map map = Find.CurrentMap;
-        if (map.Parent is not Settlement || map.Parent.Faction != Faction.OfPlayer)
-        {
-            TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "the current map is not a player settlement");
-            return;
-        }
-        List<Pawn> colonists = [.. map.mapPawns.FreeColonistsSpawned.Where(p => !p.Downed && !p.Drafted && p.IsFreeNonSlaveColonist)];
-        if (colonists.Count < 2)
-        {
-            TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "needs at least two free colonists so the colony is never empty");
-            return;
-        }
-
+        if (!TrySetupCaravanTest(map, out var pawn)) return;
         var failures = new List<string>();
         _world.TakeNewGameErrors();
         var lettersBefore = new HashSet<Letter>(Find.LetterStack.LettersListForReading);
-        Pawn pawn = colonists[0];
         Caravan caravan = null;
         try
         {
@@ -1189,18 +1330,11 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             CheckCaravanQuery(caravan, pawn, failures);
 
             // 單純前往相鄰的可走格（不是家）。
-            var neighbors = new List<PlanetTile>();
-            Find.WorldGrid.GetTileNeighbors(caravan.Tile, neighbors);
-            PlanetTile next = neighbors.Where(t => t != map.Tile && !Find.World.Impassable(t) && caravan.CanReach(t))
-                .DefaultIfEmpty(PlanetTile.Invalid).First();
-            if (!next.Valid)
-            {
-                TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "no passable neighbouring tile to travel to");
-            }
-            else
-            {
+            PlanetTile next = FindNextTravelTile(map, caravan);
+            if (next.Valid)
                 CheckTravelControls(caravan, next, failures);
-            }
+            else
+                TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "no passable neighbouring tile to travel to");
 
             CheckEnterHomeMap(caravan, pawn, map, failures);
         }
@@ -1216,10 +1350,44 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             foreach (Letter letter in Find.LetterStack.LettersListForReading.Where(l => !lettersBefore.Contains(l)).ToList())
                 Find.LetterStack.RemoveLetter(letter);
         }
+        AssertCaravanEndState(pawn, map, failures);
+        foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
+        TestHelpers.AssertNone(failures, "caravan journey");
+    }
+
+    /// <summary>檢查地圖與殖民者前提，不符則跳過測試並回傳 false；符合則輸出殖民者清單與目標 pawn。</summary>
+    private static bool TrySetupCaravanTest(Map map, out Pawn pawn)
+    {
+        pawn = null;
+        if (map.Parent is not Settlement || map.Parent.Faction != Faction.OfPlayer)
+        {
+            TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "the current map is not a player settlement");
+            return false;
+        }
+        List<Pawn> colonists = [.. map.mapPawns.FreeColonistsSpawned.Where(p => !p.Downed && !p.Drafted && p.IsFreeNonSlaveColonist)];
+        if (colonists.Count < 2)
+        {
+            TestHelpers.Skip(nameof(CaravanTravelsPausesStopsAndEntersTheHomeMap), "needs at least two free colonists so the colony is never empty");
+            return false;
+        }
+        pawn = colonists[0];
+        return true;
+    }
+
+    /// <summary>斷言殖民者已回到家園地圖且沒有殘留的目標選擇器。</summary>
+    private static void AssertCaravanEndState(Pawn pawn, Map map, List<string> failures)
+    {
         if (!pawn.Spawned || pawn.Map != map) failures.Add($"{pawn.LabelShort} did not end up back on the home map");
         if (Find.Targeter.IsTargeting || Find.WorldTargeter.IsTargeting) failures.Add("a targeter was left open");
-        foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
-        TestHelpers.AssertNone(failures, "caravan journey");
+    }
+
+    /// <summary>從商隊所在格挑選一個可達、非自家且非通行禁止的相鄰格。</summary>
+    private static PlanetTile FindNextTravelTile(Map map, Caravan caravan)
+    {
+        var neighbors = new List<PlanetTile>();
+        Find.WorldGrid.GetTileNeighbors(caravan.Tile, neighbors);
+        return neighbors.Where(t => t != map.Tile && !Find.World.Impassable(t) && caravan.CanReach(t))
+            .DefaultIfEmpty(PlanetTile.Invalid).First();
     }
 
     private void CheckCaravanQuery(Caravan caravan, Pawn pawn, List<string> failures)
@@ -1230,6 +1398,17 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             failures.Add("the new caravan is missing from GetCaravans");
             return;
         }
+        CheckCaravanBasics(info, caravan, pawn, failures);
+        bool settleBlocked = SettleInEmptyTileUtility.SettleCommand(caravan).Disabled;
+        CheckCaravanSettleCamp(info, caravan, settleBlocked, failures);
+        WorldSurveyInfo survey = _world.GetWorldSurvey(caravan.ID);
+        CheckCaravanSurvey(survey, caravan, failures);
+        CheckSettleCommands(caravan, settleBlocked, failures);
+    }
+
+    /// <summary>比對商隊的基本欄位：格子、成員、移動中、目的地、載重與食物天數。</summary>
+    private static void CheckCaravanBasics(CaravanInfo info, Caravan caravan, Pawn pawn, List<string> failures)
+    {
         if (info.Tile != caravan.Tile.tileId) failures.Add($"caravan tile {info.Tile}, vanilla {caravan.Tile.tileId}");
         if (info.Members.Count != 1 || info.Members[0].Id != pawn.thingIDNumber || info.Members[0].Kind != CaravanMemberInfo.ColonistKind)
             failures.Add("caravan members do not match the one colonist that left");
@@ -1237,14 +1416,26 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
         if (info.DestinationTile != -1) failures.Add("a fresh caravan reports destination " + info.DestinationTile);
         if (Math.Abs(info.MassCapacity - caravan.MassCapacity) > 0.01f) failures.Add($"mass capacity {info.MassCapacity}, vanilla {caravan.MassCapacity}");
         if (Math.Abs(info.FoodDays - DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(caravan)) > 0.01f) failures.Add("food days differ from vanilla");
-        bool settleBlocked = SettleInEmptyTileUtility.SettleCommand(caravan).Disabled;
+    }
+
+    /// <summary>比對定居與露營指令的 disabled 狀態。</summary>
+    private static void CheckCaravanSettleCamp(CaravanInfo info, Caravan caravan, bool settleBlocked, List<string> failures)
+    {
         if (info.CanSettle == settleBlocked) failures.Add($"CanSettle {info.CanSettle}, vanilla command disabled {settleBlocked}");
         if (settleBlocked && string.IsNullOrEmpty(info.SettleBlockedReason)) failures.Add("settling is blocked but no reason is given");
         if (info.CanCamp == SettleInEmptyTileUtility.SetupCamp(caravan).Disabled) failures.Add("CanCamp differs from the vanilla camp command");
+    }
 
-        WorldSurveyInfo survey = _world.GetWorldSurvey(caravan.ID);
+    /// <summary>從商隊視角發出的調查，起點應為商隊本身且不應列出商隊自己。</summary>
+    private static void CheckCaravanSurvey(WorldSurveyInfo survey, Caravan caravan, List<string> failures)
+    {
         if (!survey.OriginIsCaravan || survey.OriginTile != caravan.Tile.tileId) failures.Add("a survey from the caravan does not start at the caravan");
         if (survey.Objects.Any(o => o.Id == caravan.ID)) failures.Add("the survey lists the caravan it starts from");
+    }
+
+    /// <summary>驗證定居命令：原版封鎖時應被拒絕，且未知動作不應成功。</summary>
+    private void CheckSettleCommands(Caravan caravan, bool settleBlocked, List<string> failures)
+    {
         // 沒打算在這裡真的定居：只在原版也說不行時驗證命令會被擋下。
         if (settleBlocked)
         {
@@ -1263,22 +1454,43 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             failures.Add("no orders for the neighbouring tile: " + options.Error);
             return;
         }
+        CheckFirstTravelOption(options, next, failures);
+        CheckStaleSendRejected(caravan, next, failures);
+        FloatMenuOptionInfo travel = options.Options[0];
+        CheckSendSucceeds(caravan, next, travel, failures);
+        CheckMovementControls(caravan, failures);
+    }
+
+    /// <summary>首個下單選項應為前往目標格，且不應出現開發者模式指令。</summary>
+    private static void CheckFirstTravelOption(CaravanOptionsInfo options, PlanetTile next, List<string> failures)
+    {
         FloatMenuOptionInfo travel = options.Options[0];
         if (travel.Disabled || !travel.Label.StartsWith("Travel to tile " + next.tileId, StringComparison.Ordinal))
             failures.Add($"first order is \"{travel.Label}\" (disabled {travel.Disabled})");
         if (options.Options.Any(o => o.Label.Contains("(Dev:"))) failures.Add("a developer-mode order was offered");
+    }
 
-        // 過期的標籤擋下，商隊不動。
+    /// <summary>用過期標籤下單應被拒絕，且商隊不得開始移動。</summary>
+    private void CheckStaleSendRejected(Caravan caravan, PlanetTile next, List<string> failures)
+    {
         CommandResult stale = _world.SendCaravan(caravan.ID, next.tileId, 1, "Travel somewhere else");
         if (stale.Success || caravan.pather.Moving) failures.Add("an order with a wrong label was carried out");
+    }
 
+    /// <summary>正確下單後，商隊與 GetCaravans 應顯示目的地與預估到達時間。</summary>
+    private void CheckSendSucceeds(Caravan caravan, PlanetTile next, FloatMenuOptionInfo travel, List<string> failures)
+    {
         CommandResult sent = _world.SendCaravan(caravan.ID, next.tileId, travel.Number, travel.Label);
         if (!sent.Success) failures.Add("send failed: " + sent.Error);
         if (!caravan.pather.Moving || caravan.pather.Destination != next) failures.Add("the caravan's pather has no destination " + next.tileId);
         CaravanInfo moving = _world.GetCaravans().First(c => c.Id == caravan.ID);
         if (!moving.Moving || moving.DestinationTile != next.tileId) failures.Add($"GetCaravans destination {moving.DestinationTile}, expected {next.tileId}");
         if (moving.EtaTicks <= 0) failures.Add("a travelling caravan has no arrival estimate");
+    }
 
+    /// <summary>暫停／繼續／停止商隊移動的狀態應與原版一致。</summary>
+    private void CheckMovementControls(Caravan caravan, List<string> failures)
+    {
         if (!_world.SetCaravanMovement(caravan.ID, CaravanMovementAction.Pause).Success || !caravan.pather.Paused) failures.Add("pause did not pause the pather");
         if (!_world.GetCaravans().First(c => c.Id == caravan.ID).Paused) failures.Add("GetCaravans does not show the pause");
         if (!_world.SetCaravanMovement(caravan.ID, CaravanMovementAction.Resume).Success || caravan.pather.Paused) failures.Add("resume did not clear the pause");
@@ -1375,15 +1587,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             spawned.Add(silver);
             spawned.Add(food);
 
-            animal = map.mapPawns.PawnsInFaction(Faction.OfPlayer)
-                .FirstOrDefault(p => p.Spawned && p.RaceProps.Animal && p.RaceProps.allowedOnCaravan && !p.Downed && !p.Drafted && p.GetLord() == null);
-            if (animal == null)
-            {
-                animal = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Muffalo, Faction.OfPlayer));
-                GenSpawn.Spawn(animal, cells[2], map);
-                createdAnimal = true;
-            }
-
+            animal = EnsureCaravanAnimal(map, cells, out createdAnimal);
             CheckCaravanCargoQuery(silver, food, failures);
 
             var request = new CaravanRequest
@@ -1401,126 +1605,210 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             }
             CheckPlanMatchesVanilla(plan, colonist, animal, silver, food, destination, map, failures);
 
-            // 沒選目的地、超過現有數量：原版視窗不讓送出。
-            CaravanPlanInfo noRoute = _world.PlanCaravan(new CaravanRequest { PawnIds = request.PawnIds, Cargo = request.Cargo, DestinationTile = -1 });
-            if (noRoute.Blockers.Count == 0) failures.Add("a plan without a destination has no blocker");
-            if (_world.FormCaravan(new CaravanRequest { PawnIds = request.PawnIds, Cargo = request.Cargo, DestinationTile = -1 }).Success)
-                failures.Add("forming without a destination succeeded");
-            CaravanPlanInfo tooMuch = _world.PlanCaravan(new CaravanRequest
-            {
-                PawnIds = request.PawnIds,
-                Cargo = new[] { new TradeLine { DefName = silver.def.defName, Count = 999999 } },
-                DestinationTile = destination.tileId
-            });
-            if (string.IsNullOrEmpty(tooMuch.Error)) failures.Add("asking for more silver than the colony has was not an error");
+            CheckInvalidPlans(request, silver, destination, failures);
+            int steelAvailable = SpawnSteelCargo(map, cells, spawned);
+            CheckOverloadedPlan(colonist, steelAvailable, destination, map, failures);
 
-            // 超重：三堆鋼，遠超一個人加一隻動物扛得動的量。
-            for (int i = 3; i < 6; i++)
-            {
-                Thing steel = GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Steel), cells[i], map);
-                steel.stackCount = steel.def.stackLimit;
-                spawned.Add(steel);
-            }
-            int steelAvailable = spawned.Where(t => t.def == ThingDefOf.Steel).Sum(t => t.stackCount);
-            CaravanPlanInfo heavy = _world.PlanCaravan(new CaravanRequest
-            {
-                PawnIds = new[] { colonist.thingIDNumber },
-                Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } },
-                DestinationTile = destination.tileId
-            });
-            string tooBig = "TooBigCaravanMassUsage".Translate().Resolve();
-            if (string.IsNullOrEmpty(heavy.Error) && heavy.MassUsage > heavy.MassCapacity && !heavy.Blockers.Contains(tooBig))
-                failures.Add("an overloaded plan does not carry the game's reason: " + string.Join("; ", heavy.Blockers.ToArray()));
-            if (string.IsNullOrEmpty(heavy.Error) && heavy.MassUsage > heavy.MassCapacity)
-            {
-                int lordsBefore = map.lordManager.lords.Count;
-                CommandResult refused = _world.FormCaravan(new CaravanRequest { PawnIds = new[] { colonist.thingIDNumber },
-                    Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } }, DestinationTile = destination.tileId });
-                if (refused.Success || map.lordManager.lords.Count != lordsBefore || colonist.IsFormingCaravan())
-                    failures.Add("an overloaded caravan was formed");
-            }
-
-            if (plan.Blockers.Count > 0)
-            {
-                TestHelpers.AssertNone(failures, "caravan planning");
-                TestHelpers.Skip(nameof(CaravanPlansFormsAndCancelsWithVanillaState),
-                    "vanilla would refuse this caravan here, so forming is not exercised: " + string.Join("; ", plan.Blockers.ToArray()));
-                return;
-            }
+            if (ShouldSkipForming(plan, failures)) return;
 
             // 送出：原版集結狀態。
             CommandResult formed = _world.FormCaravan(request);
-            if (!formed.Success)
-            {
-                failures.Add("forming failed: " + formed.Error);
-                TestHelpers.AssertNone(failures, "caravan forming");
-            }
-            if (!colonist.IsFormingCaravan() || !animal.IsFormingCaravan()) failures.Add("the colonist and the animal are not forming a caravan");
-            colonist.TryGetFormingCaravanLord(out lord);
-            if (lord?.LordJob is not LordJob_FormAndSendCaravan job) failures.Add("the colonist's lord is not a LordJob_FormAndSendCaravan");
-            else
-            {
-                int silverQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == ThingDefOf.Silver).Sum(t => t.CountToTransfer);
-                int foodQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == foodDef).Sum(t => t.CountToTransfer);
-                if (silverQueued != 100 || foodQueued != 30) failures.Add($"the lord job queues silver {silverQueued}, food {foodQueued}; expected 100 and 30");
-                if (job.transferables.Any(t => t.AnyThing is Pawn)) failures.Add("pawns were left in the lord job's item list");
-                if (!lord.ownedPawns.Contains(colonist) || !lord.ownedPawns.Contains(animal)) failures.Add("the lord does not own both members");
-            }
-            FormingCaravanInfo listed = _world.GetFormingCaravans().FirstOrDefault(f => lord != null && f.Id == lord.loadID);
-            if (listed == null) failures.Add("GetFormingCaravans does not list the new caravan");
-            else
-            {
-                if (!listed.Members.Any(m => m.Id == colonist.thingIDNumber) || !listed.Members.Any(m => m.Id == animal.thingIDNumber))
-                    failures.Add("the forming caravan lists the wrong members");
-                if (!listed.Cargo.Any(c => c.EndsWith(" x100", StringComparison.Ordinal))) failures.Add("the forming caravan does not list the silver: " + string.Join(", ", listed.Cargo.ToArray()));
-                if (string.IsNullOrEmpty(listed.Status)) failures.Add("the forming caravan has no status");
-            }
+            CheckFormed(formed, failures);
+            lord = CheckFormedCaravanState(colonist, animal, foodDef, failures);
+            CheckListedFormingCaravan(lord, colonist, animal, failures);
             if (Find.WorldObjects.Caravans.Any(c => c.PawnsListForReading.Contains(colonist))) failures.Add("the caravan left the map within the same frame");
 
             // 中止：成員恢復平常，貨物沒動。
-            if (listed != null)
-            {
-                CommandResult cancelled = _world.CancelFormingCaravan(listed.Id);
-                if (!cancelled.Success) failures.Add("cancelling failed: " + cancelled.Error);
-            }
-            if (colonist.IsFormingCaravan() || animal.IsFormingCaravan() || colonist.GetLord() is Lord leftover && leftover.LordJob is LordJob_FormAndSendCaravan)
-                failures.Add("the members still belong to a forming lord after cancelling");
-            if (_world.GetFormingCaravans().Any(f => lord != null && f.Id == lord.loadID)) failures.Add("the cancelled caravan is still listed");
-            if (_world.CancelFormingCaravan(lord?.loadID ?? -12345).Success) failures.Add("cancelling a caravan that no longer exists succeeded");
-            if (!silver.Spawned || silver.stackCount != 300 || !food.Spawned || food.stackCount != 40) failures.Add("cancelling changed the cargo on the ground");
-            if (colonist.inventory.innerContainer.Any(t => t.def == ThingDefOf.Silver || t.def == foodDef)) failures.Add("the colonist still carries cargo after cancelling");
+            CheckCancelFormingCaravan(colonist, animal, lord, silver, food, foodDef, failures);
             lord = null;
         }
         finally
         {
-            Lord stuck = colonist.GetLord();
-            if (lord != null && lord.lordManager != null) CaravanFormingUtility.StopFormingCaravan(lord);
-            else if (stuck != null && stuck.LordJob is LordJob_FormAndSendCaravan) CaravanFormingUtility.StopFormingCaravan(stuck);
-            foreach (Thing thing in spawned.Where(t => !t.Destroyed)) thing.Destroy();
-            // 放下的貨物若被撿了又放，清掉殖民者身上殘留的測試物品。
-            foreach (Thing carried in colonist.inventory.innerContainer.Where(t => t.def == ThingDefOf.Silver || t.def == ThingDefOf.Steel).ToList())
-                carried.Destroy();
-            if (createdAnimal && animal != null && !animal.Destroyed) animal.Destroy();
-            foreach (KeyValuePair<IntVec3, bool> before in homeBefore) map.areaManager.Home[before.Key] = before.Value;
-            foreach (Letter letter in Find.LetterStack.LettersListForReading.Where(l => !lettersBefore.Contains(l)).ToList())
-                Find.LetterStack.RemoveLetter(letter);
+            CleanupCaravanTest(new CaravanTestContext
+            {
+                Colonist = colonist,
+                Lord = lord,
+                Spawned = spawned,
+                Animal = animal,
+                CreatedAnimal = createdAnimal,
+                HomeBefore = homeBefore,
+                Map = map,
+                LettersBefore = lettersBefore
+            });
         }
-        foreach (string error in _world.TakeNewGameErrors()) failures.Add("game logged: " + error);
+        foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
         TestHelpers.AssertNone(failures, "caravan forming");
     }
+
+    /// <summary>若地圖上沒可用的殖民地動物，就生成一隻獼牛並放在貨物格上；回傳動物與是否新建。</summary>
+    private static Pawn EnsureCaravanAnimal(Map map, List<IntVec3> cells, out bool createdAnimal)
+    {
+        createdAnimal = false;
+        Pawn animal = map.mapPawns.PawnsInFaction(Faction.OfPlayer)
+            .FirstOrDefault(p => p.Spawned && p.RaceProps.Animal && p.RaceProps.allowedOnCaravan && !p.Downed && !p.Drafted && p.GetLord() == null);
+        if (animal == null)
+        {
+            animal = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Muffalo, Faction.OfPlayer));
+            GenSpawn.Spawn(animal, cells[2], map);
+            createdAnimal = true;
+        }
+        return animal;
+    }
+
+    /// <summary>沒選目的地與超過現有庫存的規劃，都應被原版視窗擋下。</summary>
+    private void CheckInvalidPlans(CaravanRequest request, Thing silver, PlanetTile destination, List<string> failures)
+    {
+        CaravanPlanInfo noRoute = _world.PlanCaravan(new CaravanRequest { PawnIds = request.PawnIds, Cargo = request.Cargo, DestinationTile = -1 });
+        if (noRoute.Blockers.Count == 0) failures.Add("a plan without a destination has no blocker");
+        if (_world.FormCaravan(new CaravanRequest { PawnIds = request.PawnIds, Cargo = request.Cargo, DestinationTile = -1 }).Success)
+            failures.Add("forming without a destination succeeded");
+        CaravanPlanInfo tooMuch = _world.PlanCaravan(new CaravanRequest
+        {
+            PawnIds = request.PawnIds,
+            Cargo = new[] { new TradeLine { DefName = silver.def.defName, Count = 999999 } },
+            DestinationTile = destination.tileId
+        });
+        if (string.IsNullOrEmpty(tooMuch.Error)) failures.Add("asking for more silver than the colony has was not an error");
+    }
+
+    /// <summary>生成三堆鋼作為超重貨物，並回傳可用的鋼總量。</summary>
+    private static int SpawnSteelCargo(Map map, List<IntVec3> cells, List<Thing> spawned)
+    {
+        for (int i = 3; i < 6; i++)
+        {
+            Thing steel = GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Steel), cells[i], map);
+            steel.stackCount = steel.def.stackLimit;
+            spawned.Add(steel);
+        }
+        return spawned.Where(t => t.def == ThingDefOf.Steel).Sum(t => t.stackCount);
+    }
+
+    /// <summary>超重規劃應帶原版過載原因，且嘗試集結應被拒絕。</summary>
+    private void CheckOverloadedPlan(Pawn colonist, int steelAvailable, PlanetTile destination, Map map, List<string> failures)
+    {
+        CaravanPlanInfo heavy = _world.PlanCaravan(new CaravanRequest
+        {
+            PawnIds = new[] { colonist.thingIDNumber },
+            Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } },
+            DestinationTile = destination.tileId
+        });
+        string tooBig = "TooBigCaravanMassUsage".Translate().Resolve();
+        if (string.IsNullOrEmpty(heavy.Error) && heavy.MassUsage > heavy.MassCapacity && !heavy.Blockers.Contains(tooBig))
+            failures.Add("an overloaded plan does not carry the game's reason: " + string.Join("; ", heavy.Blockers.ToArray()));
+        if (string.IsNullOrEmpty(heavy.Error) && heavy.MassUsage > heavy.MassCapacity)
+        {
+            int lordsBefore = map.lordManager.lords.Count;
+            CommandResult refused = _world.FormCaravan(new CaravanRequest { PawnIds = new[] { colonist.thingIDNumber },
+                Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } }, DestinationTile = destination.tileId });
+            if (refused.Success || map.lordManager.lords.Count != lordsBefore || colonist.IsFormingCaravan())
+                failures.Add("an overloaded caravan was formed");
+        }
+    }
+
+    /// <summary>原版會拒絕集結時，測試應跳過後續的集結驗證。</summary>
+    private static bool ShouldSkipForming(CaravanPlanInfo plan, List<string> failures)
+    {
+        if (plan.Blockers.Count > 0)
+        {
+            TestHelpers.AssertNone(failures, "caravan planning");
+            TestHelpers.Skip(nameof(CaravanPlansFormsAndCancelsWithVanillaState),
+                "vanilla would refuse this caravan here, so forming is not exercised: " + string.Join("; ", plan.Blockers.ToArray()));
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>集結命令成功與否應被記錄，失敗時即斷言。</summary>
+    private static void CheckFormed(CommandResult formed, List<string> failures)
+    {
+        if (!formed.Success)
+        {
+            failures.Add("forming failed: " + formed.Error);
+            TestHelpers.AssertNone(failures, "caravan forming");
+        }
+    }
+
+    /// <summary>檢查集結領主與其貨物佇列是否與原版一致，並回傳領主。</summary>
+    private static Lord CheckFormedCaravanState(Pawn colonist, Pawn animal, ThingDef foodDef, List<string> failures)
+    {
+        if (!colonist.IsFormingCaravan() || !animal.IsFormingCaravan()) failures.Add("the colonist and the animal are not forming a caravan");
+        colonist.TryGetFormingCaravanLord(out Lord lord);
+        if (lord?.LordJob is not LordJob_FormAndSendCaravan job) failures.Add("the colonist's lord is not a LordJob_FormAndSendCaravan");
+        else
+        {
+            int silverQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == ThingDefOf.Silver).Sum(t => t.CountToTransfer);
+            int foodQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == foodDef).Sum(t => t.CountToTransfer);
+            if (silverQueued != 100 || foodQueued != 30) failures.Add($"the lord job queues silver {silverQueued}, food {foodQueued}; expected 100 and 30");
+            if (job.transferables.Any(t => t.AnyThing is Pawn)) failures.Add("pawns were left in the lord job's item list");
+            if (!lord.ownedPawns.Contains(colonist) || !lord.ownedPawns.Contains(animal)) failures.Add("the lord does not own both members");
+        }
+        return lord;
+    }
+
+    /// <summary>集結中的商隊應列在 GetFormingCaravans，成員與貨物正確。</summary>
+    private void CheckListedFormingCaravan(Lord lord, Pawn colonist, Pawn animal, List<string> failures)
+    {
+        FormingCaravanInfo listed = _world.GetFormingCaravans().FirstOrDefault(f => lord != null && f.Id == lord.loadID);
+        if (listed == null) failures.Add("GetFormingCaravans does not list the new caravan");
+        else
+        {
+            if (!listed.Members.Any(m => m.Id == colonist.thingIDNumber) || !listed.Members.Any(m => m.Id == animal.thingIDNumber))
+                failures.Add("the forming caravan lists the wrong members");
+            if (!listed.Cargo.Any(c => c.EndsWith(" x100", StringComparison.Ordinal))) failures.Add("the forming caravan does not list the silver: " + string.Join(", ", listed.Cargo.ToArray()));
+            if (string.IsNullOrEmpty(listed.Status)) failures.Add("the forming caravan has no status");
+        }
+    }
+
+    /// <summary>取消集結後，成員應恢復平常、貨物原封不動、集結清單應移除。</summary>
+    private void CheckCancelFormingCaravan(Pawn colonist, Pawn animal, Lord lord, Thing silver, Thing food, ThingDef foodDef, List<string> failures)
+    {
+        FormingCaravanInfo listed = _world.GetFormingCaravans().FirstOrDefault(f => lord != null && f.Id == lord.loadID);
+        if (listed != null)
+        {
+            CommandResult cancelled = _world.CancelFormingCaravan(listed.Id);
+            if (!cancelled.Success) failures.Add("cancelling failed: " + cancelled.Error);
+        }
+        if (colonist.IsFormingCaravan() || animal.IsFormingCaravan() || colonist.GetLord() is Lord leftover && leftover.LordJob is LordJob_FormAndSendCaravan)
+            failures.Add("the members still belong to a forming lord after cancelling");
+        if (_world.GetFormingCaravans().Any(f => lord != null && f.Id == lord.loadID)) failures.Add("the cancelled caravan is still listed");
+        if (_world.CancelFormingCaravan(lord?.loadID ?? -12345).Success) failures.Add("cancelling a caravan that no longer exists succeeded");
+        if (!silver.Spawned || silver.stackCount != 300 || !food.Spawned || food.stackCount != 40) failures.Add("cancelling changed the cargo on the ground");
+        if (colonist.inventory.innerContainer.Any(t => t.def == ThingDefOf.Silver || t.def == foodDef)) failures.Add("the colonist still carries cargo after cancelling");
+    }
+
+    /// <summary>測試結束後的清理：停止集結、銷毀生成的物件、還原家園區、移除新信件。</summary>
+    private static void CleanupCaravanTest(CaravanTestContext ctx)
+    {
+        Lord stuck = ctx.Colonist.GetLord();
+        if (ctx.Lord != null && ctx.Lord.lordManager != null) CaravanFormingUtility.StopFormingCaravan(ctx.Lord);
+        else if (stuck != null && stuck.LordJob is LordJob_FormAndSendCaravan) CaravanFormingUtility.StopFormingCaravan(stuck);
+        foreach (Thing thing in ctx.Spawned.Where(t => !t.Destroyed)) thing.Destroy();
+        // 放下的貨物若被撿了又放，清掉殖民者身上殘留的測試物品。
+        foreach (Thing carried in ctx.Colonist.inventory.innerContainer.Where(t => t.def == ThingDefOf.Silver || t.def == ThingDefOf.Steel).ToList())
+            carried.Destroy();
+        if (ctx.CreatedAnimal && ctx.Animal != null && !ctx.Animal.Destroyed) ctx.Animal.Destroy();
+        foreach (KeyValuePair<IntVec3, bool> before in ctx.HomeBefore) ctx.Map.areaManager.Home[before.Key] = before.Value;
+        foreach (Letter letter in Find.LetterStack.LettersListForReading.Where(l => !ctx.LettersBefore.Contains(l)).ToList())
+            Find.LetterStack.RemoveLetter(letter);
+    }
+
 
     private void CheckCaravanCargoQuery(Thing silver, Thing food, List<string> failures)
     {
         IReadOnlyList<CaravanCargoInfo> cargo = _world.GetCaravanCargo();
         CaravanCargoInfo silverInfo = cargo.FirstOrDefault(c => c.DefName == silver.def.defName);
         CaravanCargoInfo foodInfo = cargo.FirstOrDefault(c => c.DefName == food.def.defName);
-        if (silverInfo == null || silverInfo.Count < 300) failures.Add("the cargo query does not list the 300 silver we put in the home area");
-        else if (Math.Abs(silverInfo.MassEach - silver.def.BaseMass) > 0.0001f) failures.Add("silver mass per unit differs from the def");
-        if (foodInfo == null || foodInfo.Count < 40) failures.Add("the cargo query does not list the food we put in the home area");
-        // 不在清單裡的不能出現：被預約的東西、非物品。
-        if (cargo.Any(c => string.IsNullOrEmpty(c.DefName) || c.Count <= 0)) failures.Add("the cargo query lists an empty entry");
+        if (MissingOrTooFew(silverInfo, 300)) failures.Add("the cargo query does not list the 300 silver we put in the home area");
+        else if (MassMismatch(silverInfo, silver.def.BaseMass)) failures.Add("silver mass per unit differs from the def");
+        if (MissingOrTooFew(foodInfo, 40)) failures.Add("the cargo query does not list the food we put in the home area");
+        if (HasEmptyEntry(cargo)) failures.Add("the cargo query lists an empty entry");
     }
 
+    private static bool MissingOrTooFew(CaravanCargoInfo info, int min) => info == null || info.Count < min;
+    private static bool MassMismatch(CaravanCargoInfo info, float expected) => Math.Abs(info.MassEach - expected) > 0.0001f;
+    private static bool HasEmptyEntry(IReadOnlyList<CaravanCargoInfo> cargo) => cargo.Any(c => string.IsNullOrEmpty(c.DefName) || c.Count <= 0);
+
+#pragma warning disable S107 // 私有輔助方法，參數皆為規劃對照相關，無需重構
     /// <summary>規劃的數字逐項對照原版計算器（用測試自己組的 transferable，不經轉接層的草稿）。</summary>
     private static void CheckPlanMatchesVanilla(CaravanPlanInfo plan, Pawn colonist, Pawn animal, Thing silver, Thing food,
         PlanetTile destination, Map map, List<string> failures)
@@ -1559,14 +1847,7 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
             eta = CaravanArrivalTimeEstimator.EstimatedTicksToArrive(map.Tile, destination, path, 0f, ticksPerMove, Find.TickManager.TicksAbs);
         }
 
-        if (Math.Abs(plan.MassUsage - usage) > 0.01f) failures.Add($"mass usage {plan.MassUsage}, vanilla {usage}");
-        if (Math.Abs(plan.MassCapacity - capacity) > 0.01f) failures.Add($"mass capacity {plan.MassCapacity}, vanilla {capacity}");
-        if (plan.TicksPerMove != ticksPerMove) failures.Add($"ticks per move {plan.TicksPerMove}, vanilla {ticksPerMove}");
-        if (Math.Abs(plan.TilesPerDay - tilesPerDay) > 0.01f) failures.Add($"tiles per day {plan.TilesPerDay}, vanilla {tilesPerDay}");
-        if (Math.Abs(plan.FoodDays - foodDays) > 0.05f) failures.Add($"days of food {plan.FoodDays}, vanilla {foodDays}");
-        if (Math.Abs(plan.Visibility - visibility) > 0.001f) failures.Add($"visibility {plan.Visibility}, vanilla {visibility}");
-        if (Math.Abs(plan.ForagedPerDay - foraged.Item2) > 0.001f) failures.Add($"foraged per day {plan.ForagedPerDay}, vanilla {foraged.Item2}");
-        if (Math.Abs(plan.EtaTicks - eta) > 60) failures.Add($"arrival estimate {plan.EtaTicks} ticks, vanilla {eta}");
+        CheckPlanNumbers(plan, usage, capacity, ticksPerMove, tilesPerDay, foodDays, visibility, foraged.Item2, eta, failures);
         if (plan.DestinationTile != destination.tileId || !plan.DestinationReachable) failures.Add("the plan does not report the destination as reachable");
         if (plan.Members.Count != 2 || plan.Members.All(m => m.Kind != CaravanMemberInfo.AnimalKind)) failures.Add("the plan does not list the animal as an animal");
         if (plan.Cargo.Sum(c => c.Count) != 130) failures.Add("the plan lists " + plan.Cargo.Sum(c => c.Count) + " cargo items, expected 130");
@@ -1575,6 +1856,21 @@ internal sealed class MapWorldTests : IMapGeneration, IWorldGeneration
                               || plan.Warnings.Contains("DaysWorthOfFoodWarningDialog_NoFood".Translate().Resolve());
         if ((foodDays < 5f) != warnsAboutFood) failures.Add($"food warning {warnsAboutFood} with {foodDays} days of food");
     }
+#pragma warning restore S107
+
+#pragma warning disable S107 // 私有輔助方法，參數皆為對照原版數值，無需重構
+    private static void CheckPlanNumbers(CaravanPlanInfo plan, float usage, float capacity, int ticksPerMove, float tilesPerDay, float foodDays, float visibility, float foragedPerDay, int etaTicks, List<string> failures)
+    {
+        if (Math.Abs(plan.MassUsage - usage) > 0.01f) failures.Add($"mass usage {plan.MassUsage}, vanilla {usage}");
+        if (Math.Abs(plan.MassCapacity - capacity) > 0.01f) failures.Add($"mass capacity {plan.MassCapacity}, vanilla {capacity}");
+        if (plan.TicksPerMove != ticksPerMove) failures.Add($"ticks per move {plan.TicksPerMove}, vanilla {ticksPerMove}");
+        if (Math.Abs(plan.TilesPerDay - tilesPerDay) > 0.01f) failures.Add($"tiles per day {plan.TilesPerDay}, vanilla {tilesPerDay}");
+        if (Math.Abs(plan.FoodDays - foodDays) > 0.05f) failures.Add($"days of food {plan.FoodDays}, vanilla {foodDays}");
+        if (Math.Abs(plan.Visibility - visibility) > 0.001f) failures.Add($"visibility {plan.Visibility}, vanilla {visibility}");
+        if (Math.Abs(plan.ForagedPerDay - foragedPerDay) > 0.001f) failures.Add($"foraged per day {plan.ForagedPerDay}, vanilla {foragedPerDay}");
+        if (Math.Abs(plan.EtaTicks - etaTicks) > 60) failures.Add($"arrival estimate {plan.EtaTicks} ticks, vanilla {etaTicks}");
+    }
+#pragma warning restore S107
 
     private static KeyValuePair<string, Func<object>> Query(string name, Func<object> call) =>
         new(name, call);

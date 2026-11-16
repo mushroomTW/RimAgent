@@ -45,6 +45,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
     private bool RequiresExplicitConfirmation =>
         _gate != null && _gate.RequiresExplicitConfirmation(Name);
 
+#pragma warning disable S107 // 建構子參數皆為相依元件，無需重構
     public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, IRiskChecker classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true, AgentActivityTracker activity = null)
         : base(inner)
     {
@@ -59,6 +60,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         _consumesBudget = consumesBudget;
         _activity = activity;
     }
+#pragma warning restore S107
 
     protected override async ValueTask<object> InvokeCoreAsync(
         AIFunctionArguments arguments,

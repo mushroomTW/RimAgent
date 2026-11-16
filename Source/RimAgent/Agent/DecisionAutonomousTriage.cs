@@ -102,7 +102,7 @@ public sealed class DecisionAutonomousTriage
             return sb.ToString();
         }
         string reply = lastRunReply.Trim();
-        if (reply.Length > LastRunTailChars) reply = "[...]" + reply.Substring(reply.Length - LastRunTailChars);
+        if (reply.Length > LastRunTailChars) reply = "[...]" + reply[(reply.Length - LastRunTailChars)..];
         sb.Append("<last_run");
         if (hoursSinceLastRun.HasValue)
         {

@@ -11,7 +11,7 @@ namespace RimAgent.Tools;
 /// <summary>十二類工具各自的開關，以 <see cref="ToolCategory"/> 順序存成陣列。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
 public sealed class ToolPermissions
 {
-    private static readonly int CategoryCount = Enum.GetValues(typeof(ToolCategory)).Length;
+    private static readonly int CategoryCount = Enum.GetValues<ToolCategory>().Length;
     private readonly bool[] _flags = new bool[CategoryCount];
 
     /// <summary>所有工具類別權限皆開啟的執行個體。</summary>
@@ -63,7 +63,6 @@ public sealed class AgentToolRegistry
 
     private readonly List<Entry> _tools = [];
     private readonly IGameWorld _world;
-    private readonly AgentTranscript _transcript;
     private readonly ConfirmationGate _gate;
     private readonly IRiskChecker _classifier;
     private readonly PlayerInterjections _interjections;
@@ -82,10 +81,9 @@ public sealed class AgentToolRegistry
     public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, IRiskChecker classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null, Func<bool> layoutsEnabled = null)
 #pragma warning restore S107
     {
-        if (world == null) throw new ArgumentNullException(nameof(world));
-        if (transcript == null) throw new ArgumentNullException(nameof(transcript));
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(transcript);
         _world = world;
-        _transcript = transcript;
         _gate = gate;
         _classifier = classifier;
         _interjections = interjections;
@@ -187,7 +185,7 @@ public sealed class AgentToolRegistry
 
     private IEnumerable<Entry> Allowed(ToolPermissions permissions)
     {
-        if (permissions == null) throw new ArgumentNullException(nameof(permissions));
+        ArgumentNullException.ThrowIfNull(permissions);
         return _tools.Where(t => permissions.Allows(t.Category));
     }
 
@@ -198,7 +196,7 @@ public sealed class AgentToolRegistry
     /// <summary>子代理專用版本；輸出儲存由 <see cref="SubagentTools"/> 在每次任務的呼叫流程上指定。</summary>
     public IList<AITool> SelectForSubagent(ToolPermissions permissions, IReadOnlyList<ToolCategory> categories, bool readOnly)
     {
-        if (permissions == null) throw new ArgumentNullException(nameof(permissions));
+        ArgumentNullException.ThrowIfNull(permissions);
         var scoped = new ToolPermissions();
         foreach (ToolCategory category in categories ?? Array.Empty<ToolCategory>())
         {

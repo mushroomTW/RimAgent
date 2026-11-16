@@ -31,7 +31,7 @@ public sealed class ZoneTools
         sb.Append(zones.Count == 1 ? "1 zone:" : zones.Count + " zones:").AppendLine();
         foreach (ZoneInfo z in zones)
         {
-            sb.Append("[").Append(z.Id).Append("] ").Append(z.Label);
+            sb.Append('[').Append(z.Id).Append("] ").Append(z.Label);
             sb.Append(" (").Append(z.Kind).Append(", ").Append(z.CellCount).Append(z.CellCount == 1 ? " cell)" : " cells)").AppendLine();
         }
         return sb.ToString().Trim();

@@ -65,29 +65,39 @@ public static class SaveFileScanner
         bool more = reader.Read();
         while (more && (colonyId == null || tick == null))
         {
-            if (reader.NodeType == XmlNodeType.Element)
-            {
-                string parent = parents.Count > 0 ? parents[parents.Count - 1] : null;
-                if (colonyId == null && reader.Name == ColonyIdNode)
-                {
-                    colonyId = reader.ReadElementContentAsString().Trim();
-                    more = !reader.EOF;
-                    continue;
-                }
-                if (tick == null && reader.Name == TicksNode && parent == TickManagerNode)
-                {
-                    tick = int.TryParse(reader.ReadElementContentAsString().Trim(), out int value) ? value : 0;
-                    more = !reader.EOF;
-                    continue;
-                }
-                if (!reader.IsEmptyElement) parents.Add(reader.Name);
-            }
-            else if (reader.NodeType == XmlNodeType.EndElement && parents.Count > 0)
-            {
-                parents.RemoveAt(parents.Count - 1);
-            }
-            more = reader.Read();
+            more = ProcessXmlNode(reader, parents, ref colonyId, ref tick);
         }
         return new Scan(colonyId ?? string.Empty, tick ?? 0);
+    }
+
+    private static bool ProcessXmlNode(XmlReader reader, List<string> parents, ref string colonyId, ref int? tick)
+    {
+        switch (reader.NodeType)
+        {
+            case XmlNodeType.Element:
+                return ProcessXmlElement(reader, parents, ref colonyId, ref tick);
+            case XmlNodeType.EndElement:
+                if (parents.Count > 0) parents.RemoveAt(parents.Count - 1);
+                break;
+        }
+        return reader.Read();
+    }
+
+    private static bool ProcessXmlElement(XmlReader reader, List<string> parents, ref string colonyId, ref int? tick)
+    {
+        string name = reader.Name;
+        if (colonyId == null && name == ColonyIdNode)
+        {
+            colonyId = reader.ReadElementContentAsString().Trim();
+            return !reader.EOF;
+        }
+        string parent = parents.Count > 0 ? parents[parents.Count - 1] : null;
+        if (tick == null && name == TicksNode && parent == TickManagerNode)
+        {
+            tick = int.TryParse(reader.ReadElementContentAsString().Trim(), out int value) ? value : 0;
+            return !reader.EOF;
+        }
+        if (!reader.IsEmptyElement) parents.Add(name);
+        return reader.Read();
     }
 }

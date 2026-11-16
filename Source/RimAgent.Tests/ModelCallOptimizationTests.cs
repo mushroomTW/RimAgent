@@ -114,7 +114,8 @@ public class ModelCallOptimizationTests
         await session.SendAsync("who is here? who is here?");
 
         Assert.That(_world.ColonistQueryCount, Is.EqualTo(2), "重複查詢仍讀取即時世界");
-        IReadOnlyList<TranscriptEntry> tools = session.Transcript.Snapshot()
+        // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
+        List<TranscriptEntry> tools = session.Transcript.Snapshot()
             .Where(e => e.Kind == TranscriptKind.Tool).ToList();
         Assert.That(tools.Count, Is.EqualTo(2), "行動紀錄照記兩次");
         Assert.That(tools[0].Result, Does.Not.Contain("Changed by player"));
@@ -133,7 +134,8 @@ public class ModelCallOptimizationTests
 
         await session.SendAsync("how is Nobody? how is Nobody?");
 
-        IReadOnlyList<TranscriptEntry> tools = session.Transcript.Snapshot()
+        // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
+        List<TranscriptEntry> tools = session.Transcript.Snapshot()
             .Where(e => e.Kind == TranscriptKind.Tool).ToList();
         Assert.That(tools.All(t => t.Failed), Is.True, "查詢失敗均有記錄");
         Assert.That(tools[1].Result, Does.Not.Contain("already failed"), "允許原樣重試一次");
@@ -274,7 +276,8 @@ public class ModelCallOptimizationTests
 
         await session.SendAsync("check skills");
 
-        IReadOnlyList<TranscriptEntry> tools = session.Transcript.Snapshot()
+        // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
+        List<TranscriptEntry> tools = session.Transcript.Snapshot()
             .Where(e => e.Kind == TranscriptKind.Tool).ToList();
         Assert.That(tools[0].Result, Does.Contain("Draft everyone."));
         Assert.That(tools[0].Failed, Is.False);
@@ -286,7 +289,7 @@ public class ModelCallOptimizationTests
     public void EmptySkillListStillOffersReadSkill()
     {
         var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null,
-            skills: () => new AgentSkill[0]);
+            skills: () => Array.Empty<AgentSkill>());
 
         Assert.That(registry.Descriptors.Any(d => d.Name == "read_skill"), Is.True,
             "正式環境永遠帶技能提供者，工具數恆為 60（含零技能時）");

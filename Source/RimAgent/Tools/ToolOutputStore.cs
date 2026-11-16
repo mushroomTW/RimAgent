@@ -39,7 +39,7 @@ internal sealed class ToolOutputStore
     /// </summary>
     public static IDisposable EnterScope(ToolOutputStore store)
     {
-        if (store == null) throw new ArgumentNullException(nameof(store));
+        ArgumentNullException.ThrowIfNull(store);
         ToolOutputStore previous = Scoped.Value;
         Scoped.Value = store;
         return new ScopeExit(previous);
@@ -64,7 +64,7 @@ internal sealed class ToolOutputStore
     {
         if (text.Length > MaxTotalChars)
         {
-            text = text.Substring(0, ToolOutputLimit.AlignToCharBoundary(text, MaxTotalChars)) +
+            text = text[..ToolOutputLimit.AlignToCharBoundary(text, MaxTotalChars)] +
                    "\n[saved output stops here: only the first " + MaxTotalChars.ToString(CultureInfo.InvariantCulture) + " characters were kept]";
         }
         lock (_lock)

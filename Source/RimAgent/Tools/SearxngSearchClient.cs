@@ -36,7 +36,7 @@ internal sealed class SearxngSearchClient
             if (!response.IsSuccessStatusCode)
                 return ToolText.Error("SearXNG returned HTTP " + (int)response.StatusCode +
                     ". Check that the service is running and JSON output is enabled.");
-            string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return FormatResults(body);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -72,9 +72,9 @@ internal sealed class SearxngSearchClient
                 string resultUrl = Field(result, "url");
                 if (title.Length == 0 || !Uri.TryCreate(resultUrl, UriKind.Absolute, out Uri resultUri) ||
                     (resultUri.Scheme != Uri.UriSchemeHttp && resultUri.Scheme != Uri.UriSchemeHttps)) continue;
-                text.Append("\n").Append(++count).Append(". ").Append(title);
-                text.Append("\n   URL: ").Append(resultUrl);
-                text.Append("\n   ").Append(Field(result, "content"));
+                text.Append('\n').Append(++count).Append(". ").Append(title);
+                text.Append('\n').Append("   URL: ").Append(resultUrl);
+                text.Append('\n').Append("   ").Append(Field(result, "content"));
                 if (count == 5) break;
             }
             return count == 0 ? "No web search results from the selected non-Bing engines." : text.ToString();

@@ -99,7 +99,7 @@ public sealed class SdkMcpServer : IMcpServer
 
     private async Task<McpClient> EnsureConnectedAsync(CancellationToken cancellationToken)
     {
-        if (_disposed) throw new ObjectDisposedException(Name);
+        ObjectDisposedException.ThrowIf(_disposed, Name);
         if (_client != null) return _client;
         var transport = new StdioClientTransport(new StdioClientTransportOptions
         {

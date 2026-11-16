@@ -61,34 +61,25 @@ public sealed class DecisionReasoningRouter
         float minConfidence = settings != null ? settings.decisionRoutingMinConfidence : 0.6f;
 
         if (activeCategories.Count == 0)
-        {
             return FallbackRoute(fallbackReasoning, "No categories configured.");
-        }
 
-        var options = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (DecisionRouteCategory cat in activeCategories)
-        {
-            if (!string.IsNullOrWhiteSpace(cat.id) && !string.IsNullOrWhiteSpace(cat.description))
-            {
-                options[cat.id.Trim()] = cat.description.Trim();
-            }
-        }
-
+        var options = BuildCategoryOptions(activeCategories);
         if (options.Count == 0)
-        {
             return FallbackRoute(fallbackReasoning, "No valid category options available.");
-        }
 
         IDecisionService service = _decisionService ?? ResolveService();
         if (service == null)
-        {
             return FallbackRoute(fallbackReasoning, "Decision model service is unavailable or not configured.");
-        }
 
         var question = DecisionQuestion.Choice(QuestionId, "Classify the instruction into the most appropriate category.", options);
         var plan = DecisionPlan.Of(question);
         string state = Describe(request, _historyProvider?.Invoke());
 
+        return await EvaluateAndRoute(service, state, plan, fallbackReasoning, minConfidence, activeCategories, ct);
+    }
+
+    private static async Task<DecisionRoute> EvaluateAndRoute(IDecisionService service, string state, DecisionPlan plan, ReasoningLevel fallbackReasoning, float minConfidence, List<DecisionRouteCategory> activeCategories, CancellationToken ct)
+    {
         DecisionResult result;
         try
         {
@@ -104,37 +95,43 @@ public sealed class DecisionReasoningRouter
         }
 
         if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || string.IsNullOrWhiteSpace(answer?.Value))
-        {
             return FallbackRoute(fallbackReasoning, "Decision model returned no category answer.");
-        }
 
         double confidence = answer.Confidence ?? answer.Probability ?? 0d;
         if (confidence < minConfidence)
-        {
             return FallbackRoute(fallbackReasoning,
                 $"Decision confidence {confidence:F2} is below threshold {minConfidence:F2}.");
-        }
 
         string selectedId = answer.Value.Trim();
-        DecisionRouteCategory matched = activeCategories.FirstOrDefault(c =>
-            string.Equals(c.id?.Trim(), selectedId, StringComparison.OrdinalIgnoreCase));
-
+        DecisionRouteCategory matched = FindMatchedCategory(activeCategories, selectedId);
         if (matched == null)
-        {
             return FallbackRoute(fallbackReasoning, $"Selected category '{selectedId}' not found in categories.");
-        }
-
-        ReasoningLevel resolvedReasoning = matched.reasoning != ReasoningLevel.Auto
-            ? matched.reasoning
-            : fallbackReasoning;
 
         return new DecisionRoute
         {
-            CategoryId = matched.id,
-            Reasoning = resolvedReasoning,
+            CategoryId = matched.Id,
+            Reasoning = ResolveReasoningLevel(matched, fallbackReasoning),
             Confidence = confidence,
-            Reason = $"Routed to category '{matched.id}' with confidence {confidence:F2}."
+            Reason = $"Routed to category '{matched.Id}' with confidence {confidence:F2}."
         };
+    }
+
+    private static Dictionary<string, string> BuildCategoryOptions(List<DecisionRouteCategory> categories)
+    {
+        return categories
+            .Where(cat => !string.IsNullOrWhiteSpace(cat.Id) && !string.IsNullOrWhiteSpace(cat.Description))
+            .ToDictionary(cat => cat.Id.Trim(), cat => cat.Description.Trim(), StringComparer.Ordinal);
+    }
+
+    private static DecisionRouteCategory FindMatchedCategory(List<DecisionRouteCategory> categories, string selectedId)
+    {
+        return categories.FirstOrDefault(c =>
+            string.Equals(c.Id?.Trim(), selectedId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static ReasoningLevel ResolveReasoningLevel(DecisionRouteCategory matched, ReasoningLevel fallbackReasoning)
+    {
+        return matched.Reasoning != ReasoningLevel.Auto ? matched.Reasoning : fallbackReasoning;
     }
 
     private static DecisionRoute FallbackRoute(ReasoningLevel fallbackReasoning, string reason)
@@ -156,10 +153,10 @@ public sealed class DecisionReasoningRouter
         {
             if (category == null) continue;
             copy.Add(new DecisionRouteCategory(
-                category.id,
-                category.name,
-                category.description,
-                category.reasoning));
+                category.Id,
+                category.Name,
+                category.Description,
+                category.Reasoning));
         }
         return copy;
     }
@@ -177,38 +174,45 @@ public sealed class DecisionReasoningRouter
     public static string Describe(string request, IEnumerable<ChatMessage> history = null)
     {
         var sb = new StringBuilder();
-        if (history != null)
-        {
-            var relevant = history
-                .Where(m => (m.Role == ChatRole.User || m.Role == ChatRole.Assistant) && !string.IsNullOrWhiteSpace(m.Text))
-                .ToList();
-            int take = Math.Min(relevant.Count, MaxHistoryTurns * 2);
-            if (take > 0)
-            {
-                var slice = relevant.GetRange(relevant.Count - take, take);
-                sb.AppendLine("<recent_history>");
-                foreach (ChatMessage msg in slice)
-                {
-                    string text = msg.Text?.Trim() ?? string.Empty;
-                    if (msg.Role == ChatRole.User)
-                    {
-                        if (text.Length > UserTextHeadChars) text = text.Substring(0, UserTextHeadChars) + "…";
-                        sb.AppendLine($"user: {Escape(text)}");
-                    }
-                    else if (msg.Role == ChatRole.Assistant)
-                    {
-                        if (text.Length > ReplyHeadChars + ReplyTailChars)
-                        {
-                            text = text.Substring(0, ReplyHeadChars).TrimEnd() + "\n[...]\n" + text.Substring(text.Length - ReplyTailChars).TrimStart();
-                        }
-                        sb.AppendLine($"assistant: {Escape(text)}");
-                    }
-                }
-                sb.AppendLine("</recent_history>");
-            }
-        }
+        AppendRecentHistory(sb, history);
         sb.Append("<instruction>\n").Append(Escape(request?.Trim() ?? string.Empty)).Append("\n</instruction>");
         return sb.ToString();
+    }
+
+    /// <summary>把最近的對話片段寫入 sb：最多取前幾輪的 User/Assistant 訊息，並包在 <recent_history> 標籤內。</summary>
+    private static void AppendRecentHistory(StringBuilder sb, IEnumerable<ChatMessage> history)
+    {
+        if (history == null) return;
+        var relevant = history
+            .Where(m => (m.Role == ChatRole.User || m.Role == ChatRole.Assistant) && !string.IsNullOrWhiteSpace(m.Text))
+            .ToList();
+        int take = Math.Min(relevant.Count, MaxHistoryTurns * 2);
+        if (take > 0)
+        {
+            var slice = relevant.GetRange(relevant.Count - take, take);
+            sb.AppendLine("<recent_history>");
+            foreach (ChatMessage msg in slice) AppendMessage(sb, msg);
+            sb.AppendLine("</recent_history>");
+        }
+    }
+
+    /// <summary>把一條對話訊息的摘要寫入 sb：使用者訊息取頭 600 字、回答取頭 300 尾 300 字。</summary>
+    private static void AppendMessage(StringBuilder sb, ChatMessage msg)
+    {
+        string text = msg.Text?.Trim() ?? string.Empty;
+        if (msg.Role == ChatRole.User)
+        {
+            if (text.Length > UserTextHeadChars) text = text[..UserTextHeadChars] + "…";
+            sb.AppendLine($"user: {Escape(text)}");
+        }
+        else if (msg.Role == ChatRole.Assistant)
+        {
+            if (text.Length > ReplyHeadChars + ReplyTailChars)
+            {
+                text = text.Substring(0, ReplyHeadChars).TrimEnd() + "\n[...]\n" + text.Substring(text.Length - ReplyTailChars).TrimStart();
+            }
+            sb.AppendLine($"assistant: {Escape(text)}");
+        }
     }
 
     private static string Escape(string value)

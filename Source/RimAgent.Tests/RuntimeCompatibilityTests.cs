@@ -19,7 +19,7 @@ public class RuntimeCompatibilityTests
     /// 直接碰 Unity InternalCall 的方法只能在遊戲內驗證，逐一登記：
     /// 新增這類方法時必須明確列入，不能靠數量門檻混過去。
     /// </summary>
-    private static readonly HashSet<string> AllowedUnityNative =
+    private static readonly HashSet<string> _allowedUnityNative =
     [
         "RimAgent.UI.Window_Agent.DrawBottomBar",          // 輸入列
         "RimAgent.UI.Window_Agent.DrawInputField",         // 輸入列
@@ -60,7 +60,7 @@ public class RuntimeCompatibilityTests
                     // 直接呼叫 Unity InternalCall（Event.current 等）的方法在標準測試主機上無法 JIT
                     // （「ECall 方法必須封裝在系統模組中」）；那是 Unity 原生實作，只能在遊戲內驗證。
                     string name = $"{type.FullName}.{method.Name}";
-                    if (!AllowedUnityNative.Contains(name)) failures.Add(name + ": 未登記的 Unity InternalCall 方法");
+                    if (!_allowedUnityNative.Contains(name)) failures.Add(name + ": 未登記的 Unity InternalCall 方法");
                 }
                 catch (Exception ex)
                 {

@@ -545,8 +545,8 @@ internal sealed class FakeGameWorld : IGameWorld
         if (!string.IsNullOrEmpty(query.DefName)) result = result.Where(t => string.Equals(t.DefName, query.DefName, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrEmpty(query.LabelContains))
         {
-            result = result.Where(t => t.Label.IndexOf(query.LabelContains, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                       t.DefName.IndexOf(query.LabelContains, StringComparison.OrdinalIgnoreCase) >= 0);
+            result = result.Where(t => t.Label.Contains(query.LabelContains, StringComparison.OrdinalIgnoreCase) ||
+                                       t.DefName.Contains(query.LabelContains, StringComparison.OrdinalIgnoreCase));
         }
         if (query.Area.HasValue) result = result.Where(t => query.Area.Value.Contains(t.X, t.Z));
         // 與真實世界層同一規則：放行的在前，同組依距離殖民者平均位置（沒有殖民者則地圖中心）由近到遠。
@@ -831,7 +831,7 @@ internal sealed class FakeGameWorld : IGameWorld
         List<ThingInfo> changed = [.. Things
             .Where(t => (t.Kind == ThingKind.Item) && t.Forbidden != forbidden)
             .Where(t => !area.HasValue || area.Value.Contains(t.X, t.Z))
-            .Where(t => string.IsNullOrEmpty(labelContains) || t.Label.IndexOf(labelContains, StringComparison.OrdinalIgnoreCase) >= 0)];
+            .Where(t => string.IsNullOrEmpty(labelContains) || t.Label.Contains(labelContains, StringComparison.OrdinalIgnoreCase))];
         if (changed.Count == 0) return CommandResult.Fail("no visible item or corpse there");
         foreach (ThingInfo t in changed) t.Forbidden = forbidden;
         return CommandResult.Ok($"{changed.Count} item(s): {string.Join(", ", changed.Select(t => t.Label))}");

@@ -431,10 +431,11 @@ public partial class Window_Agent : Window
             return;
         }
         AgentActivity activity = session.Activity.Current;
-        int state = session.HasPendingConfirmation ? 1
-            : session.IsBusy ? 2
-            : session.Transcript.Version != _collapsedVersion ? 3
-            : 0;
+        int state;
+        if (session.HasPendingConfirmation) state = 1;
+        else if (session.IsBusy) state = 2;
+        else if (session.Transcript.Version != _collapsedVersion) state = 3;
+        else state = 0;
         if (state == _bubbleState && (state != 2 || activity == _bubbleActivity)) return;
         _bubbleState = state;
         _bubbleActivity = activity;
@@ -461,12 +462,14 @@ public partial class Window_Agent : Window
             };
             var pixels = new Color[size * size];
             for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
             {
-                float dx = x + 0.5f - radius;
-                float dy = y + 0.5f - radius;
-                float coverage = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy));
-                pixels[y * size + x] = new Color(1f, 1f, 1f, coverage);
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x + 0.5f - radius;
+                    float dy = y + 0.5f - radius;
+                    float coverage = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy));
+                    pixels[y * size + x] = new Color(1f, 1f, 1f, coverage);
+                }
             }
             _discTex.SetPixels(pixels);
             _discTex.Apply();
@@ -489,51 +492,23 @@ public partial class Window_Agent : Window
         // 內縮要容得下外光暈 4px 加浮動 2.5px，否則上下會被視窗邊界截掉。
         Rect avatar = new Rect(avatarSlot.x, avatarSlot.y + bob, AvatarSize, AvatarSize).ContractedBy(7f);
         bool hover = Mouse.IsOver(avatarSlot);
-        Color ring = pending ? PauseColor : busy ? Color.Lerp(BorderColor, ToolActionColor, pulse) : BorderColor;
+        Color ring = ResolveRingColor(pending, busy, pulse);
 
-        if (busy || pending || hover)
-        {
-            GUI.color = new Color(ring.r, ring.g, ring.b, busy || pending ? 0.18f + 0.22f * pulse : 0.22f);
-            GUI.DrawTexture(avatar.ExpandedBy(4f), DiscTex);
-        }
+        DrawRingGlow(avatar, ring, busy, pending, hover, pulse);
         GUI.color = ring;
         GUI.DrawTexture(avatar, DiscTex);
         GUI.color = new Color(0.06f, 0.09f, 0.12f, 0.96f);
         GUI.DrawTexture(avatar.ContractedBy(2.5f), DiscTex);
         GUI.color = hover ? Color.white : new Color(1f, 1f, 1f, 0.88f);
         GUI.DrawTexture(avatar.ContractedBy(8f), IconTex);
-        if (unread)
-        {
-            var dot = new Rect(avatar.xMax - 15f, avatar.y + 1f, 13f, 13f);
-            GUI.color = new Color(0.06f, 0.09f, 0.12f, 1f);
-            GUI.DrawTexture(dot.ExpandedBy(1.5f), DiscTex);
-            GUI.color = NoticeColor;
-            GUI.DrawTexture(dot, DiscTex);
-        }
+        DrawUnreadDot(avatar, unread);
         GUI.color = Color.white;
         TooltipHandler.TipRegion(avatarSlot, "RimAgent.Window.ExpandTip".Translate());
 
         // 泡泡寬度只能在 OnGUI 量；量好留給 WindowUpdate 排版（GUI.Window 會覆蓋這裡改的 windowRect）。
         Text.Font = GameFont.Small;
-        if (_bubbleText != _bubbleMeasuredText)
-        {
-            _bubbleMeasuredText = _bubbleText;
-            _bubbleWidth = _bubbleText == null ? 0f : Mathf.Min(Text.CalcSize(_bubbleText).x + 24f, AvatarBubbleMaxWidth);
-        }
-        if (_bubbleText != null && inRect.width > AvatarSize + AvatarBubbleGap)
-        {
-            var bubble = new Rect(
-                _bubbleOnLeft ? inRect.x : inRect.x + AvatarSize + AvatarBubbleGap,
-                inRect.y + (AvatarSize - AvatarBubbleHeight) / 2f,
-                inRect.width - AvatarSize - AvatarBubbleGap, AvatarBubbleHeight);
-            if (Event.current.type == EventType.Repaint) GetBubbleStyle().Draw(bubble, false, false, false, false);
-            Text.Anchor = TextAnchor.MiddleLeft;
-            GUI.color = new Color(0.90f, 0.93f, 0.96f);
-            Rect labelRect = bubble.ContractedBy(12f, 0f);
-            Widgets.Label(labelRect, _bubbleText.Truncate(labelRect.width));
-            GUI.color = Color.white;
-            Text.Anchor = TextAnchor.UpperLeft;
-        }
+        UpdateBubbleWidth();
+        DrawBubble(inRect);
 
         // 不吃掉事件：交給視窗本身的 DragWindow 處理拖曳，放開時在 WindowUpdate 判斷是不是點擊。
         if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && Mouse.IsOver(inRect))
@@ -541,6 +516,59 @@ public partial class Window_Agent : Window
             _iconPressed = true;
             _iconPressPos = _avatarPos;
         }
+    }
+
+    /// <summary>依等待中／忙碌／閒置狀態解析外環顏色。</summary>
+    private static Color ResolveRingColor(bool pending, bool busy, float pulse)
+    {
+        if (pending) return PauseColor;
+        if (busy) return Color.Lerp(BorderColor, ToolActionColor, pulse);
+        return BorderColor;
+    }
+
+    /// <summary>繪製忙碌／等待中／懸停時的外環暈圈。</summary>
+    private static void DrawRingGlow(Rect avatar, Color ring, bool busy, bool pending, bool hover, float pulse)
+    {
+        if (busy || pending || hover)
+        {
+            GUI.color = new Color(ring.r, ring.g, ring.b, busy || pending ? 0.18f + 0.22f * pulse : 0.22f);
+            GUI.DrawTexture(avatar.ExpandedBy(4f), DiscTex);
+        }
+    }
+
+    /// <summary>繪製未讀標記點。</summary>
+    private static void DrawUnreadDot(Rect avatar, bool unread)
+    {
+        if (!unread) return;
+        var dot = new Rect(avatar.xMax - 15f, avatar.y + 1f, 13f, 13f);
+        GUI.color = new Color(0.06f, 0.09f, 0.12f, 1f);
+        GUI.DrawTexture(dot.ExpandedBy(1.5f), DiscTex);
+        GUI.color = NoticeColor;
+        GUI.DrawTexture(dot, DiscTex);
+    }
+
+    /// <summary>繪製氣泡文字；寬度必須在 OnGUI 量測，結果留給 WindowUpdate 排版。</summary>
+    private void DrawBubble(Rect inRect)
+    {
+        if (_bubbleText == null || inRect.width <= AvatarSize + AvatarBubbleGap) return;
+        var bubble = new Rect(
+            _bubbleOnLeft ? inRect.x : inRect.x + AvatarSize + AvatarBubbleGap,
+            inRect.y + (AvatarSize - AvatarBubbleHeight) / 2f,
+            inRect.width - AvatarSize - AvatarBubbleGap, AvatarBubbleHeight);
+        if (Event.current.type == EventType.Repaint) GetBubbleStyle().Draw(bubble, false, false, false, false);
+        Text.Anchor = TextAnchor.MiddleLeft;
+        GUI.color = new Color(0.90f, 0.93f, 0.96f);
+        Rect labelRect = bubble.ContractedBy(12f, 0f);
+        Widgets.Label(labelRect, _bubbleText.Truncate(labelRect.width));
+        GUI.color = Color.white;
+        Text.Anchor = TextAnchor.UpperLeft;
+    }
+
+    private void UpdateBubbleWidth()
+    {
+        if (_bubbleText == _bubbleMeasuredText) return;
+        _bubbleMeasuredText = _bubbleText;
+        _bubbleWidth = _bubbleText == null ? 0f : Mathf.Min(Text.CalcSize(_bubbleText).x + 24f, AvatarBubbleMaxWidth);
     }
 
     public override void DoWindowContents(Rect inRect)
@@ -653,8 +681,9 @@ public partial class Window_Agent : Window
         };
         var pixels = new Color[size * size];
         for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
         {
+            for (int x = 0; x < size; x++)
+            {
             float dx = Mathf.Max(0f, Mathf.Abs(x + 0.5f - half) - (half - r));
             float dy = Mathf.Max(0f, Mathf.Abs(y + 0.5f - half) - (half - r));
             float distance = Mathf.Sqrt(dx * dx + dy * dy);
@@ -666,6 +695,7 @@ public partial class Window_Agent : Window
                 alpha = Mathf.Sqrt(Mathf.Clamp01(reach - Mathf.Abs(distance - (r - 0.5f))));
             }
             pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+        }
         }
         texture.SetPixels(pixels);
         texture.Apply();
@@ -749,9 +779,9 @@ public partial class Window_Agent : Window
         {
             float ratio = Mathf.Clamp01((float)status.LastInputTokens.Value / status.ContextWindow.Value);
             int percent = Mathf.Clamp(Mathf.CeilToInt(ratio * 100f), ratio > 0f ? 1 : 0, 100);
-            GUI.color = percent >= 90 ? EmergencyColor
-                : status.AutoCompactEnabled && percent >= status.Threshold ? PauseColor
-                : ToolActionColor;
+            if (percent >= 90) GUI.color = EmergencyColor;
+            else if (status.AutoCompactEnabled && percent >= status.Threshold) GUI.color = PauseColor;
+            else GUI.color = ToolActionColor;
             if (percent > 0) GUI.DrawTexture(rect, GetGaugeArc(percent));
         }
         GUI.color = old;
@@ -772,8 +802,9 @@ public partial class Window_Agent : Window
         };
         var pixels = new Color[size * size];
         for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
         {
+            for (int x = 0; x < size; x++)
+            {
             float dx = x + 0.5f - half;
             float dy = y + 0.5f - half; // 貼圖 y 向上
             float distance = Mathf.Sqrt(dx * dx + dy * dy);
@@ -783,6 +814,7 @@ public partial class Window_Agent : Window
             if (angle < 0f) angle += Mathf.PI * 2f;
             if (angle / (Mathf.PI * 2f) > limit) alpha = 0f;
             pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+        }
         }
         texture.SetPixels(pixels);
         texture.Apply();
@@ -818,19 +850,10 @@ public partial class Window_Agent : Window
             _gaugeClosedPanel = ContextPanel.ClosedThisFrame;
         if (Widgets.ButtonInvisible(gaugeRect.ExpandedBy(2f)) && !_gaugeClosedPanel)
         {
-            ContextPanel.Toggle(session, new Vector2(windowRect.x + gaugeRect.xMax + 2f, windowRect.y + gaugeRect.yMax + 6f));
+            ContextPanel.ToggleContextPanel(session, new Vector2(windowRect.x + gaugeRect.xMax + 2f, windowRect.y + gaugeRect.yMax + 6f));
         }
         // 提示字串只在滑鼠停在上面時才組。
-        if (Mouse.IsOver(gaugeRect))
-        {
-            string compact = status.AutoCompactEnabled
-                ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
-                : "RimAgent.Context.CompactOff".Translate(status.Messages);
-            string window = status.ContextWindow.HasValue
-                ? "RimAgent.Context.WindowKnown".Translate(status.ContextWindow.Value.ToString("N0"))
-                : "RimAgent.Context.WindowUnknown".Translate();
-            TooltipHandler.TipRegion(gaugeRect,"RimAgent.Context.Tooltip".Translate(window, compact));
-        }
+        if (Mouse.IsOver(gaugeRect)) DrawContextGaugeTooltip(gaugeRect, status);
         GUI.color = Color.white;
         Text.Anchor = TextAnchor.UpperLeft;
         Text.Font = GameFont.Small;
@@ -870,6 +893,17 @@ public partial class Window_Agent : Window
         }
     }
 
+    private static void DrawContextGaugeTooltip(Rect gaugeRect, ColonyAgentSession.ContextStatus status)
+    {
+        string compact = status.AutoCompactEnabled
+            ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
+            : "RimAgent.Context.CompactOff".Translate(status.Messages);
+        string window = status.ContextWindow.HasValue
+            ? "RimAgent.Context.WindowKnown".Translate(status.ContextWindow.Value.ToString("N0"))
+            : "RimAgent.Context.WindowUnknown".Translate();
+        TooltipHandler.TipRegion(gaugeRect, "RimAgent.Context.Tooltip".Translate(window, compact));
+    }
+
     private void DrawTranscript(Rect outRect, ColonyAgentSession session)
     {
         float width = outRect.width - 16f;
@@ -887,22 +921,8 @@ public partial class Window_Agent : Window
         float y = 0f;
         TranscriptEntry clickedTool = null;
         TranscriptEntry clickedGroup = null;
-        foreach (TranscriptLine line in _lines)
-        {
-            if (line.TurnStart)
-            {
-                if (y + TurnGap >= visibleTop && y <= visibleBottom)
-                {
-                    Widgets.DrawBoxSolid(new Rect(0f, y + TurnGap / 2f, lineWidth, 1f), DividerColor);
-                }
-                y += TurnGap;
-            }
-            if (y + line.Height >= visibleTop && y <= visibleBottom)
-            {
-                DrawTranscriptLine(line, y, lineWidth, width, scrollLayout.MouseOnJump, ref clickedTool, ref clickedGroup);
-            }
-            y += line.Height + EntryGap;
-        }
+        var drawContext = new TranscriptDrawContext(visibleTop, visibleBottom, lineWidth, width, scrollLayout.MouseOnJump);
+        DrawTranscriptLines(_lines, y, in drawContext, ref clickedTool, ref clickedGroup, out y);
         if (working != null)
         {
             Widgets.Label(new Rect(0f, y, width, workingHeight), working);
@@ -925,6 +945,45 @@ public partial class Window_Agent : Window
         if (scrollLayout.ShowJump)
         {
             DrawJumpButton(scrollLayout.JumpRect);
+        }
+    }
+
+    private void DrawTranscriptLines(List<TranscriptLine> lines, float y, in TranscriptDrawContext ctx, ref TranscriptEntry clickedTool, ref TranscriptEntry clickedGroup, out float outY)
+    {
+        outY = y;
+        foreach (TranscriptLine line in lines)
+        {
+            if (line.TurnStart)
+            {
+                if (outY + TurnGap >= ctx.VisibleTop && outY <= ctx.VisibleBottom)
+                {
+                    Widgets.DrawBoxSolid(new Rect(0f, outY + TurnGap / 2f, ctx.LineWidth, 1f), DividerColor);
+                }
+                outY += TurnGap;
+            }
+            if (outY + line.Height >= ctx.VisibleTop && outY <= ctx.VisibleBottom)
+            {
+                DrawTranscriptLine(line, outY, ctx.LineWidth, ctx.Width, ctx.MouseOnJump, ref clickedTool, ref clickedGroup);
+            }
+            outY += line.Height + EntryGap;
+        }
+    }
+
+    private readonly struct TranscriptDrawContext
+    {
+        public readonly float VisibleTop;
+        public readonly float VisibleBottom;
+        public readonly float LineWidth;
+        public readonly float Width;
+        public readonly bool MouseOnJump;
+
+        public TranscriptDrawContext(float visibleTop, float visibleBottom, float lineWidth, float width, bool mouseOnJump)
+        {
+            VisibleTop = visibleTop;
+            VisibleBottom = visibleBottom;
+            LineWidth = lineWidth;
+            Width = width;
+            MouseOnJump = mouseOnJump;
         }
     }
 
@@ -1016,49 +1075,79 @@ public partial class Window_Agent : Window
         switch (line.Kind)
         {
             case LineKind.Screenshot:
-                DrawScreenshotPreview(lineRect, line.ImagePath);
+                DrawScreenshotLine(lineRect, line);
                 break;
             case LineKind.PlayerBubble:
-                float bubbleRight = Mathf.Min(lineRect.xMax, visibleWidth);
-                var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
-                GUI.Box(bubble, GUIContent.none, GetBubbleStyle());
-                DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
+                DrawPlayerBubbleLine(lineRect, line, y, visibleWidth);
                 break;
             case LineKind.ToolGroupHeader:
-                if (!mouseOnJump)
-                {
-                    if (Mouse.IsOver(lineRect))
-                    {
-                        Widgets.DrawHighlight(lineRect);
-                        if (_toolGroupToggleTip == null) _toolGroupToggleTip = "RimAgent.ToolGroup.ToggleTip".Translate();
-                        TooltipHandler.TipRegion(lineRect, _toolGroupToggleTip);
-                    }
-                    if (Widgets.ButtonInvisible(lineRect)) clickedGroup = line.GroupFirst;
-                }
-                Widgets.Label(lineRect, line.Text);
+                DrawToolGroupHeaderLine(lineRect, line, mouseOnJump, ref clickedGroup);
                 break;
             case LineKind.Table:
-                if (!mouseOnJump) CopyToolHeaderOnRightClick(lineRect, line.PlainText);
-                line.Table.Draw(lineRect);
+                DrawTableLine(lineRect, line, mouseOnJump);
                 break;
             case LineKind.ToolHeader:
-                if (!mouseOnJump)
-                {
-                    CopyToolHeaderOnRightClick(lineRect, line.PlainText);
-                    if (Mouse.IsOver(lineRect))
-                    {
-                        Widgets.DrawHighlight(lineRect);
-                        if (_toolToggleTip == null) _toolToggleTip = "RimAgent.Tool.ToggleTip".Translate();
-                        TooltipHandler.TipRegion(lineRect, _toolToggleTip);
-                    }
-                    if (Widgets.ButtonInvisible(lineRect)) clickedTool = line.Entry;
-                }
-                Widgets.Label(lineRect, line.Text);
+                DrawToolHeaderLine(lineRect, line, mouseOnJump, ref clickedTool);
                 break;
             default:
-                DrawSelectableLine(lineRect, line.Text, line.PlainText);
+                DrawDefaultLine(lineRect, line);
                 break;
         }
+    }
+
+    private void DrawScreenshotLine(Rect lineRect, TranscriptLine line)
+    {
+        DrawScreenshotPreview(lineRect, line.ImagePath);
+    }
+
+    private static void DrawPlayerBubbleLine(Rect lineRect, TranscriptLine line, float y, float visibleWidth)
+    {
+        float bubbleRight = Mathf.Min(lineRect.xMax, visibleWidth);
+        var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
+        GUI.Box(bubble, GUIContent.none, GetBubbleStyle());
+        DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
+    }
+
+    private void DrawToolGroupHeaderLine(Rect lineRect, TranscriptLine line, bool mouseOnJump, ref TranscriptEntry clickedGroup)
+    {
+        if (!mouseOnJump)
+        {
+            if (Mouse.IsOver(lineRect))
+            {
+                Widgets.DrawHighlight(lineRect);
+                if (_toolGroupToggleTip == null) _toolGroupToggleTip = "RimAgent.ToolGroup.ToggleTip".Translate();
+                TooltipHandler.TipRegion(lineRect, _toolGroupToggleTip);
+            }
+            if (Widgets.ButtonInvisible(lineRect)) clickedGroup = line.GroupFirst;
+        }
+        Widgets.Label(lineRect, line.Text);
+    }
+
+    private static void DrawTableLine(Rect lineRect, TranscriptLine line, bool mouseOnJump)
+    {
+        if (!mouseOnJump) CopyToolHeaderOnRightClick(lineRect, line.PlainText);
+        line.Table.Draw(lineRect);
+    }
+
+    private void DrawToolHeaderLine(Rect lineRect, TranscriptLine line, bool mouseOnJump, ref TranscriptEntry clickedTool)
+    {
+        if (!mouseOnJump)
+        {
+            CopyToolHeaderOnRightClick(lineRect, line.PlainText);
+            if (Mouse.IsOver(lineRect))
+            {
+                Widgets.DrawHighlight(lineRect);
+                if (_toolToggleTip == null) _toolToggleTip = "RimAgent.Tool.ToggleTip".Translate();
+                TooltipHandler.TipRegion(lineRect, _toolToggleTip);
+            }
+            if (Widgets.ButtonInvisible(lineRect)) clickedTool = line.Entry;
+        }
+        Widgets.Label(lineRect, line.Text);
+    }
+
+    private static void DrawDefaultLine(Rect lineRect, TranscriptLine line)
+    {
+        DrawSelectableLine(lineRect, line.Text, line.PlainText);
     }
 
     private void DrawJumpButton(Rect jumpRect)
@@ -1096,8 +1185,9 @@ public partial class Window_Agent : Window
         };
         var pixels = new Color[size * size];
         for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
         {
+            for (int x = 0; x < size; x++)
+            {
             float dx = Mathf.Max(0f, Mathf.Abs(x - BubbleRadius) - 0.5f);
             float dy = Mathf.Max(0f, Mathf.Abs(y - BubbleRadius) - 0.5f);
             float distance = Mathf.Sqrt(dx * dx + dy * dy);
@@ -1106,6 +1196,7 @@ public partial class Window_Agent : Window
             Color color = Color.Lerp(BubbleColor, BubbleBorderColor, border);
             color.a *= coverage;
             pixels[y * size + x] = color;
+        }
         }
         texture.SetPixels(pixels);
         texture.Apply();
@@ -1605,7 +1696,7 @@ public partial class Window_Agent : Window
         if (string.IsNullOrEmpty(text)) return false;
         for (int i = 0; i < keywords.Length; i++)
         {
-            if (text.IndexOf(keywords[i], StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (text.Contains(keywords[i], StringComparison.OrdinalIgnoreCase)) return true;
         }
         return false;
     }
@@ -1673,7 +1764,7 @@ public partial class Window_Agent : Window
                     + " " + EscapeRichText(entry.Arguments) + ColorTagClose, LineKind.Text);
             }
 
-            string resultStr = entry.Result.Length > MaxResultChars ? entry.Result.Substring(0, MaxResultChars) + "…" : entry.Result;
+            string resultStr = entry.Result.Length > MaxResultChars ? entry.Result[..MaxResultChars] + "…" : entry.Result;
             string resColorHex = entry.Failed ? EmergencyHex : SubTextHex;
             yield return (ColorTagPrefix + resColorHex + ">" + "RimAgent.Tool.Result".Translate()
                 + " " + EscapeRichText(resultStr) + ColorTagClose, LineKind.Text);
@@ -1779,7 +1870,7 @@ public partial class Window_Agent : Window
         return reasoningRect;
     }
 
-    private void DrawReasoningMenu(Rect reasoningRect, string reasoningStatus, bool enabled, RimAgentSettings settings)
+    private static void DrawReasoningMenu(Rect reasoningRect, string reasoningStatus, bool enabled, RimAgentSettings settings)
     {
         if (DrawUnifiedButton(reasoningRect, reasoningStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
@@ -1791,7 +1882,7 @@ public partial class Window_Agent : Window
                     tooltip = new TipSignal("RimAgent.Reasoning.RoutingTip".Translate())
                 });
             }
-            foreach (ReasoningLevel level in (ReasoningLevel[])Enum.GetValues(typeof(ReasoningLevel)))
+            foreach (ReasoningLevel level in Enum.GetValues<ReasoningLevel>())
             {
                 options.Add(new FloatMenuOption(ReasoningLabel(level), () => SetReasoning(settings, level)));
             }
@@ -2031,7 +2122,7 @@ public partial class Window_Agent : Window
         if (e.type != EventType.KeyDown || e.keyCode != KeyCode.V || !(e.control || e.command)) return;
         if (session?.ImageInputEnabled != true) return;
         byte[] jpeg = ClipboardImage.TryRead();
-        if (jpeg == null) return;
+        if (jpeg.Length == 0) return;
         e.Use();
         if (_pastedImages.Count >= MaxPastedImages)
         {
@@ -2057,10 +2148,10 @@ public partial class Window_Agent : Window
         }
     }
 
-    /// <summary>取出貼上的圖片並清空縮圖；沒有圖片時回傳 null。</summary>
+    /// <summary>取出貼上的圖片並清空縮圖；沒有圖片時回傳空陣列。</summary>
     private List<byte[]> TakePastedImages()
     {
-        if (_pastedImages.Count == 0) return null;
+        if (_pastedImages.Count == 0) return [];
         List<byte[]> images = _pastedImages.Select(p => p.Jpeg).ToList();
         foreach (PastedImage image in _pastedImages) UnityEngine.Object.Destroy(image.Thumbnail);
         _pastedImages.Clear();
@@ -2113,32 +2204,42 @@ public partial class Window_Agent : Window
 
         if (key == KeyCode.UpArrow)
         {
-            if (_historyIndex < 0)
-            {
-                _historyDraft = _input;
-                _historyIndex = InputHistory.Count - 1;
-            }
-            else if (_historyIndex > 0)
-            {
-                _historyIndex--;
-            }
-            SetInput(InputHistory[_historyIndex]);
+            NavigateHistoryUp();
         }
         else if (_historyIndex >= 0)
         {
-            _historyIndex++;
-            if (_historyIndex >= InputHistory.Count)
-            {
-                _historyIndex = -1;
-                SetInput(_historyDraft);
-            }
-            else
-            {
-                SetInput(InputHistory[_historyIndex]);
-            }
+            NavigateHistoryDown();
         }
         Event.current.Use();
         return true;
+    }
+
+    private void NavigateHistoryUp()
+    {
+        if (_historyIndex < 0)
+        {
+            _historyDraft = _input;
+            _historyIndex = InputHistory.Count - 1;
+        }
+        else if (_historyIndex > 0)
+        {
+            _historyIndex--;
+        }
+        SetInput(InputHistory[_historyIndex]);
+    }
+
+    private void NavigateHistoryDown()
+    {
+        _historyIndex++;
+        if (_historyIndex >= InputHistory.Count)
+        {
+            _historyIndex = -1;
+            SetInput(_historyDraft);
+        }
+        else
+        {
+            SetInput(InputHistory[_historyIndex]);
+        }
     }
 
     private static void RememberInput(string text)
@@ -2214,7 +2315,7 @@ public partial class Window_Agent : Window
     private void AcceptSkill(string name)
     {
         SlashCommands.TryGetSkillToken(_input, out _, out int start);
-        SetInput(_input.Substring(0, start) + "$" + name + " ");
+        SetInput(_input[..start] + "$" + name + " ");
     }
 
     private void DrawSkillPopup(Rect bottom)
@@ -2476,7 +2577,7 @@ public partial class Window_Agent : Window
         for (int i = 0; i < goals.Count; i++)
         {
             string title = goals[i].Replace('\r', ' ').Replace('\n', ' ');
-            if (title.Length > 180) title = title.Substring(0, 180) + "…";
+            if (title.Length > 180) title = title[..180] + "…";
             sb.Append('\n').Append(i + 1).Append(". ").Append(title);
             if (i == 0)
             {
@@ -2489,7 +2590,7 @@ public partial class Window_Agent : Window
         if (!string.IsNullOrWhiteSpace(component.GoalLastProgress))
         {
             string progress = component.GoalLastProgress.Replace('\r', ' ').Replace('\n', ' ');
-            if (progress.Length > 240) progress = progress.Substring(0, 240) + "…";
+            if (progress.Length > 240) progress = progress[..240] + "…";
             sb.Append('\n').Append("RimAgent.Goal.Progress".Translate(progress));
         }
         return sb.ToString();
@@ -2541,7 +2642,7 @@ public partial class Window_Agent : Window
     {
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
-        Observe(session, session.ConfirmAsync(_cts.Token, rememberForSession));
+        Observe(session, session.ConfirmAsync(rememberForSession, _cts.Token));
     }
 
     private void Compact(ColonyAgentSession session)
@@ -2580,33 +2681,48 @@ public partial class Window_Agent : Window
         if (text.Length == 0) return;
         // 執行中插話；確認、壓縮等非指令的忙碌不收，輸入框內容留著等忙完再送。
         // 剛好在這瞬間跑完的照一般指令送出。
-        bool interjected = false;
-        if (text[0] != '/' && session.IsBusy)
-        {
-            interjected = session.Interject(text);
-            if (!interjected && session.IsBusy)
-            {
-                Notice(session, "RimAgent.Slash.Busy".Translate());
-                return;
-            }
-        }
-        if (!interjected && text[0] != '/')
-        {
-            ProbeCapabilities();
-            if (_capabilityWarning != null) return;
-            // 貼圖後換成不支援圖片的模型：圖片送出時會被丟掉，先擋下並保留輸入與圖片，讓玩家移除圖片或換回模型。
-            if (_pastedImages.Count > 0 && !session.ImageInputEnabled)
-            {
-                Notice(session, "RimAgent.ImagesUnsupported".Translate());
-                return;
-            }
-        }
+        bool interjected = TryInterject(session, text);
+        if (!interjected && text[0] != '/' && !ProbeAndValidateImages(session)) return;
         _input = string.Empty;
         RememberInput(text);
         _historyIndex = -1;
         _scrollToBottom = true;
         if (interjected) return;
 
+        List<byte[]> images = TakePastedImages();
+        HandleSlashOrSend(session, text, images);
+    }
+
+    /// <summary>嘗試將輸入當執行中的揬話；回傳 true 表示已送出或已擋下，呼叫端應在清除輸入後結束。</summary>
+    private static bool TryInterject(ColonyAgentSession session, string text)
+    {
+        if (text[0] == '/' || !session.IsBusy) return false;
+        bool interjected = session.Interject(text);
+        if (!interjected && session.IsBusy)
+        {
+            Notice(session, "RimAgent.Slash.Busy".Translate());
+            return true;
+        }
+        return interjected;
+    }
+
+    /// <summary>探勘模型能力並檢查貼圖是否可送；若應擋下送出則回傳 false。</summary>
+    private bool ProbeAndValidateImages(ColonyAgentSession session)
+    {
+        ProbeCapabilities();
+        if (_capabilityWarning != null) return false;
+        // 貼圖後換成不支援圖片的模型：圖片送出時會被丟掉，先擋下並保留輸入與圖片，讓玩家移除圖片或換回模型。
+        if (_pastedImages.Count > 0 && !session.ImageInputEnabled)
+        {
+            Notice(session, "RimAgent.ImagesUnsupported".Translate());
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>處理斜線指令，或一般文字送給模型。</summary>
+    private void HandleSlashOrSend(ColonyAgentSession session, string text, List<byte[]> images)
+    {
         if (SlashCommands.TryParse(text, out SlashCommand command, out string args))
         {
             if (command != null) RunSlash(session, command, args);
@@ -2615,9 +2731,8 @@ public partial class Window_Agent : Window
         }
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
-        List<byte[]> images = TakePastedImages();
-        string display = images == null ? null : text + " " + "RimAgent.ImagesAttached".Translate(images.Count);
-        Observe(session, session.SendAsync(text, _cts.Token, displayText: display, images: images));
+        string display = images.Count == 0 ? null : text + " " + "RimAgent.ImagesAttached".Translate(images.Count);
+        Observe(session, session.SendAsync(text, displayText: display, images: images, cancellationToken: _cts.Token));
     }
 
     private void ProbeCapabilities()

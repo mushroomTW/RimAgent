@@ -172,8 +172,8 @@ public static class AgentPackLoader
             // 忘了收尾的註解只略過開頭那一行，免得整份檔案後面的章節無聲消失。
             if (inComment || line.StartsWith("<!--", StringComparison.Ordinal))
             {
-                inComment = line.IndexOf("-->", StringComparison.Ordinal) < 0
-                    && (inComment || lines.Skip(i + 1).Any(l => l.IndexOf("-->", StringComparison.Ordinal) >= 0));
+                inComment = !line.Contains("-->", StringComparison.Ordinal)
+                    && (inComment || lines.Skip(i + 1).Any(l => l.Contains("-->", StringComparison.Ordinal)));
                 continue;
             }
             // Lines 已 Trim（含 \r），標題行即整行比對。
@@ -197,7 +197,8 @@ public static class AgentPackLoader
         return sections;
     }
 
-    private static void FlushSection(IDictionary<string, string> sections, ref string current, System.Text.StringBuilder body)
+    // CA1859：使用 Dictionary<TKey, TValue> 而非 IDictionary<TKey, TValue>。
+    private static void FlushSection(Dictionary<string, string> sections, ref string current, System.Text.StringBuilder body)
     {
         if (current == null) return;
         if (current.Length > 0 && body.Length > 0)
@@ -268,7 +269,7 @@ public static class AgentPackLoader
         subagent.Name = subagent.Name.Trim().ToLowerInvariant();
         if (categories.Count > 0) subagent.Categories = categories;
         if (subagent.Description.Length == 0) subagent.Description = FirstLine(body);
-        if (body.Length > MaxSubagentChars) body = body.Substring(0, MaxSubagentChars) + "\n[agent prompt truncated]";
+        if (body.Length > MaxSubagentChars) body = body[..MaxSubagentChars] + "\n[agent prompt truncated]";
         subagent.Body = body;
         return subagent;
     }
@@ -340,7 +341,7 @@ public static class AgentPackLoader
         }
         if (body.Length > MaxSkillChars)
         {
-            body = body.Substring(0, MaxSkillChars) + "\n[skill truncated]";
+            body = body[..MaxSkillChars] + "\n[skill truncated]";
         }
         return new AgentSkill { Name = name, Description = description, Body = body };
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace RimAgent.Game;
 
@@ -61,15 +62,7 @@ public sealed class MapShotLayout
         int byHeight = (MaxEdge - bottom - top) / cellsHigh;
         int ppc = Math.Max(1, Math.Min(MaxPixelsPerCell, Math.Min(byWidth, byHeight)));
 
-        int step = GridSteps[GridSteps.Length - 1];
-        foreach (int candidate in GridSteps)
-        {
-            if (candidate * ppc >= MinGridSpacingPixels)
-            {
-                step = candidate;
-                break;
-            }
-        }
+        int step = GridSteps.FirstOrDefault(candidate => candidate * ppc >= MinGridSpacingPixels, GridSteps[GridSteps.Length - 1]);
         return new MapShotLayout(rect, ppc, step, left, right, bottom, top);
     }
 }
@@ -97,8 +90,8 @@ public static class MapShotOverlay
     /// <param name="mapPixels">渲染結果，大小須為 MapWidthPx x MapHeightPx。</param>
     public static byte[] Compose(byte[] mapPixels, MapShotLayout layout)
     {
-        if (mapPixels == null) throw new ArgumentNullException(nameof(mapPixels));
-        if (layout == null) throw new ArgumentNullException(nameof(layout));
+        ArgumentNullException.ThrowIfNull(mapPixels);
+        ArgumentNullException.ThrowIfNull(layout);
         int mapW = layout.MapWidthPx;
         int mapH = layout.MapHeightPx;
         if (mapPixels.Length != mapW * mapH * 4) throw new ArgumentException($"expected {mapW}x{mapH} RGBA pixels", nameof(mapPixels));
@@ -116,11 +109,22 @@ public static class MapShotOverlay
             for (int x = 0; x < mapW; x++) image[dst + x * 4 + 3] = 255;
         }
 
+        // 直線：x 為 step 倍數的格子西緣。
+        DrawVerticalGridLines(image, layout);
+        // 橫線：z 為 step 倍數的格子南緣。
+        DrawHorizontalGridLines(image, layout);
+        return image;
+    }
+
+    private static void DrawVerticalGridLines(byte[] image, MapShotLayout layout)
+    {
+        int width = layout.ImageWidth;
+        int height = layout.ImageHeight;
+        int mapH = layout.MapHeightPx;
         CellRectSpec rect = layout.Rect;
         int ppc = layout.PixelsPerCell;
         int step = layout.GridStep;
 
-        // 直線：x 為 step 倍數的格子西緣。
         for (int cx = FirstMultiple(rect.MinX, step); cx <= rect.MaxX; cx += step)
         {
             int px = layout.LeftMargin + (cx - rect.MinX) * ppc;
@@ -130,8 +134,17 @@ public static class MapShotOverlay
             int labelX = Math.Min(px + 1, width - DigitFont.TextWidth(label) - 1);
             DigitFont.Draw(image, width, height, label, labelX, layout.BottomMargin - DigitFont.Padding - DigitFont.GlyphHeight, LabelColor);
         }
+    }
 
-        // 橫線：z 為 step 倍數的格子南緣。
+    private static void DrawHorizontalGridLines(byte[] image, MapShotLayout layout)
+    {
+        int width = layout.ImageWidth;
+        int height = layout.ImageHeight;
+        int mapW = layout.MapWidthPx;
+        CellRectSpec rect = layout.Rect;
+        int ppc = layout.PixelsPerCell;
+        int step = layout.GridStep;
+
         for (int cz = FirstMultiple(rect.MinZ, step); cz <= rect.MaxZ; cz += step)
         {
             int py = layout.BottomMargin + (cz - rect.MinZ) * ppc;
@@ -141,7 +154,6 @@ public static class MapShotOverlay
             int labelY = Math.Min(py + 1, height - DigitFont.GlyphHeight - 1);
             DigitFont.Draw(image, width, height, label, layout.LeftMargin - DigitFont.Padding - DigitFont.TextWidth(label), labelY, LabelColor);
         }
-        return image;
     }
 
     private static int FirstMultiple(int min, int step)
@@ -194,24 +206,33 @@ internal static class DigitFont
             int digit = text[n] - '0';
             if (digit < 0 || digit > 9) continue;
             int gx = x + n * (GlyphWidth + Gap);
-            for (int row = 0; row < 5; row++)
+            DrawDigit(image, width, height, digit, gx, y, color);
+        }
+    }
+
+    private static void DrawDigit(byte[] image, int width, int height, int digit, int gx, int y, byte[] color)
+    {
+        for (int row = 0; row < 5; row++)
+        {
+            int bits = Glyphs[digit][row];
+            for (int col = 0; col < 3; col++)
             {
-                int bits = Glyphs[digit][row];
-                for (int col = 0; col < 3; col++)
+                if ((bits & (4 >> col)) == 0) continue;
+                for (int sy = 0; sy < Scale; sy++)
                 {
-                    if ((bits & (4 >> col)) == 0) continue;
-                    for (int sy = 0; sy < Scale; sy++)
+                    for (int sx = 0; sx < Scale; sx++)
                     {
-                        for (int sx = 0; sx < Scale; sx++)
-                        {
-                            int px = gx + col * Scale + sx;
-                            int py = y + (4 - row) * Scale + sy;
-                            if (px < 0 || py < 0 || px >= width || py >= height) continue;
-                            MapShotOverlay.Set(image, (py * width + px) * 4, color, 255);
-                        }
+                        DrawPixel(image, width, height, gx + col * Scale + sx, y + (4 - row) * Scale + sy, color);
                     }
                 }
             }
         }
+    }
+
+    /// <summary>把一個縮放後的像素寫入圖片；超出圖片範圍的像素略過。</summary>
+    private static void DrawPixel(byte[] image, int width, int height, int px, int py, byte[] color)
+    {
+        if (px < 0 || py < 0 || px >= width || py >= height) return;
+        MapShotOverlay.Set(image, (py * width + px) * 4, color, 255);
     }
 }

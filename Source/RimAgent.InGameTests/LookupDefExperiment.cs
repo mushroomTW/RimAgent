@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using RimAgent.Agent;
 using Verse;
 
@@ -25,7 +26,7 @@ public sealed class LookupDefExperimentComponent : GameComponent
         "零部件除了自己做，還能從哪裡取得？只要回答，不要下任何指令。"
     ];
 
-    private static bool _started;
+    private bool _started;
     private float _readyAt = -1f;
 
     public LookupDefExperimentComponent(Verse.Game game)
@@ -39,10 +40,10 @@ public sealed class LookupDefExperimentComponent : GameComponent
         if (_readyAt < 0f) _readyAt = UnityEngine.Time.realtimeSinceStartup + 5f;
         if (UnityEngine.Time.realtimeSinceStartup < _readyAt) return;
         _started = true;
-        RunAsync();
+        _ = RunAsync();
     }
 
-    private static async void RunAsync()
+    private static async Task RunAsync()
     {
         try
         {
@@ -93,6 +94,6 @@ public sealed class LookupDefExperimentComponent : GameComponent
     private static string Short(string text, int max)
     {
         string flat = (text ?? string.Empty).Replace("\r", string.Empty).Replace("\n", " / ");
-        return flat.Length > max ? flat.Substring(0, max) + "…" : flat;
+        return flat.Length > max ? flat[..max] + "…" : flat;
     }
 }

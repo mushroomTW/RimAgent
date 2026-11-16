@@ -38,7 +38,7 @@ public sealed class AnimalTools
             sb.Append(tame.Count == 1 ? "1 colony animal:" : tame.Count + " colony animals:").AppendLine();
             foreach (AnimalInfo a in tame)
             {
-                sb.Append("[").Append(a.Id).Append("] ").Append(a.Name);
+                sb.Append('[').Append(a.Id).Append("] ").Append(a.Name);
                 sb.Append(" (area: ").Append(string.IsNullOrEmpty(a.Area) ? UnrestrictedKeyword : a.Area).Append(')');
                 sb.Append(" (health ").Append(ToolText.Pct(a.HealthPercent)).Append(')');
                 if (a.Downed) sb.Append(" DOWNED");

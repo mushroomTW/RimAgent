@@ -7,6 +7,7 @@ using Verse;
 
 namespace RimAgent.UI;
 
+#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     /// <summary>
@@ -62,7 +63,7 @@ public partial class Window_Agent
         }
 
         /// <summary>開或關；anchor 是面板右上角要貼齊的螢幕座標。</summary>
-        public static void Toggle(ColonyAgentSession session, Vector2 anchorTopRight)
+        public static void ToggleContextPanel(ColonyAgentSession session, Vector2 anchorTopRight)
         {
             ContextPanel existing = Find.WindowStack.WindowOfType<ContextPanel>();
             if (existing != null)
@@ -83,22 +84,17 @@ public partial class Window_Agent
         public override void PostClose()
         {
             base.PostClose();
+            MarkClosed();
+        }
+
+        private static void MarkClosed()
+        {
             _closedFrame = Time.frameCount;
         }
 
         public override void DoWindowContents(Rect inRect)
         {
-            // session 被重建（讀檔、重置）後舊物件不再更新，面板直接關掉。
-            if (RimAgentGameComponent.Instance?.Session != _session)
-            {
-                Close(false);
-                return;
-            }
-            if (Time.realtimeSinceStartup >= _nextRefresh)
-            {
-                _nextRefresh = Time.realtimeSinceStartup + RefreshSeconds;
-                _parts = _session.GetContextBreakdown();
-            }
+            if (!EnsureSessionAndRefresh()) return;
 
             ColonyAgentSession.ContextStatus status = _session.GetContextStatus();
             long estimated = _parts.Sum(p => p.Tokens);
@@ -111,60 +107,16 @@ public partial class Window_Agent
             float y = Pad;
             float width = inRect.width - Pad * 2f;
 
-            Text.Font = GameFont.Small;
-            GUI.color = TitleColor;
-            Widgets.Label(new Rect(Pad, y, width, 24f), "RimAgent.ContextPanel.Title".Translate());
-            y += 26f;
+            y = DrawUsageOverview(y, width, used, window);
 
-            // 總覽：已使用比例與用量／上限。
-            string usedLabel = window is > 0
-                ? "RimAgent.ContextPanel.Used".Translate(Mathf.RoundToInt(100f * used / window.Value)).ToString()
-                : "RimAgent.ContextPanel.WindowUnknown".Translate().ToString();
-            GUI.color = Color.white;
-            Widgets.Label(new Rect(Pad, y, width, 24f), usedLabel);
-            Text.Anchor = TextAnchor.MiddleRight;
-            GUI.color = ToolTextColor;
-            Widgets.Label(new Rect(Pad, y, width, 24f), window is > 0 ? FormatTokens(used) + " / " + FormatTokens(window.Value) : FormatTokens(used));
-            Text.Anchor = TextAnchor.UpperLeft;
-            y += 26f;
+            y = DrawUsageBar(y, width, _parts, scale, used, window, status);
 
-            // 堆疊長條：各類別依序排開，剩下的是可用空間；門檻位置畫一條直線。
-            var bar = new Rect(Pad, y, width, BarHeight);
-            DrawRoundedBox(bar, FreeColor, Color.clear, BarHeight / 2f);
-            double total = window is > 0 ? window.Value : Math.Max(1, used);
-            float x = bar.x;
-            foreach (ColonyAgentSession.ContextPart part in _parts)
-            {
-                float w = (float)(bar.width * Math.Min(1d, part.Tokens * scale / total));
-                if (w < 0.5f) continue;
-                w = Mathf.Min(w, bar.xMax - x);
-                Widgets.DrawBoxSolid(new Rect(x, bar.y, w, bar.height), PartColors[part.Key]);
-                x += w + 1f;
-                if (x >= bar.xMax) break;
-            }
-            if (window is > 0 && status.AutoCompactEnabled)
-            {
-                float mark = bar.x + bar.width * status.Threshold / 100f;
-                Widgets.DrawBoxSolid(new Rect(mark - 1f, bar.y - 3f, 2f, bar.height + 6f), PauseColor);
-            }
-            y += BarHeight + 12f;
-
-            // 各類別明細。
-            Text.Font = GameFont.Small;
-            foreach (ColonyAgentSession.ContextPart part in _parts)
-            {
-                y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), (long)Math.Round(part.Tokens * scale), window);
-            }
-            if (window is > 0)
-            {
-                y = DrawRow(y, width, FreeColor, "RimAgent.ContextPanel.Free".Translate(), Math.Max(0, window.Value - used), window);
-            }
+            y = DrawPartsDetail(y, width, _parts, scale, used, window);
 
             y += 6f;
             Widgets.DrawBoxSolid(new Rect(Pad, y, width, 1f), DividerColor);
             y += 8f;
 
-            // 自動壓縮門檻與剩餘量。
             GUI.color = ToolTextColor;
             Text.Font = GameFont.Tiny;
             string compact;
@@ -189,8 +141,83 @@ public partial class Window_Agent
             GUI.color = Color.white;
             Text.Font = GameFont.Small;
 
-            // 內容高度決定面板高度；下一幀生效。
             if (Mathf.Abs(windowRect.height - y) > 0.5f) windowRect.height = y;
+        }
+
+        /// <summary>確認面板對應的 session 仍有效，並在到期時重新擷取脈絡分類；回傳 false 表示面板已關閉，應停止繪製。</summary>
+        private bool EnsureSessionAndRefresh()
+        {
+            if (RimAgentGameComponent.Instance?.Session != _session)
+            {
+                Close(false);
+                return false;
+            }
+            if (Time.realtimeSinceStartup >= _nextRefresh)
+            {
+                _nextRefresh = Time.realtimeSinceStartup + RefreshSeconds;
+                _parts = _session.GetContextBreakdown();
+            }
+            return true;
+        }
+
+        /// <summary>繪製標題與使用量總覽，回傳下一個 y 座標。</summary>
+        private static float DrawUsageOverview(float y, float width, long used, long? window)
+        {
+            Text.Font = GameFont.Small;
+            GUI.color = TitleColor;
+            Widgets.Label(new Rect(Pad, y, width, 24f), "RimAgent.ContextPanel.Title".Translate());
+            y += 26f;
+
+            string usedLabel = window is > 0
+                ? "RimAgent.ContextPanel.Used".Translate(Mathf.RoundToInt(100f * used / window.Value)).ToString()
+                : "RimAgent.ContextPanel.WindowUnknown".Translate().ToString();
+            GUI.color = Color.white;
+            Widgets.Label(new Rect(Pad, y, width, 24f), usedLabel);
+            Text.Anchor = TextAnchor.MiddleRight;
+            GUI.color = ToolTextColor;
+            Widgets.Label(new Rect(Pad, y, width, 24f), window is > 0 ? FormatTokens(used) + " / " + FormatTokens(window.Value) : FormatTokens(used));
+            Text.Anchor = TextAnchor.UpperLeft;
+            y += 26f;
+            return y;
+        }
+
+        /// <summary>繪製堆疊長條與自動壓縮門檻標記，回傳下一個 y 座標。</summary>
+        private static float DrawUsageBar(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, double scale, long used, long? window, ColonyAgentSession.ContextStatus status)
+        {
+            var bar = new Rect(Pad, y, width, BarHeight);
+            DrawRoundedBox(bar, FreeColor, Color.clear, BarHeight / 2f);
+            double total = window is > 0 ? window.Value : Math.Max(1, used);
+            float x = bar.x;
+            foreach (ColonyAgentSession.ContextPart part in parts)
+            {
+                float w = (float)(bar.width * Math.Min(1d, part.Tokens * scale / total));
+                if (w < 0.5f) continue;
+                w = Mathf.Min(w, bar.xMax - x);
+                Widgets.DrawBoxSolid(new Rect(x, bar.y, w, bar.height), PartColors[part.Key]);
+                x += w + 1f;
+                if (x >= bar.xMax) break;
+            }
+            if (window is > 0 && status.AutoCompactEnabled)
+            {
+                float mark = bar.x + bar.width * status.Threshold / 100f;
+                Widgets.DrawBoxSolid(new Rect(mark - 1f, bar.y - 3f, 2f, bar.height + 6f), PauseColor);
+            }
+            return y + BarHeight + 12f;
+        }
+
+        /// <summary>繪製各類別明細列，回傳下一個 y 座標。</summary>
+        private static float DrawPartsDetail(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, double scale, long used, long? window)
+        {
+            Text.Font = GameFont.Small;
+            foreach (ColonyAgentSession.ContextPart part in parts)
+            {
+                y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), (long)Math.Round(part.Tokens * scale), window);
+            }
+            if (window is > 0)
+            {
+                y = DrawRow(y, width, FreeColor, "RimAgent.ContextPanel.Free".Translate(), Math.Max(0, window.Value - used), window);
+            }
+            return y;
         }
 
         private static float DrawRow(float y, float width, Color color, string label, long tokens, long? window)

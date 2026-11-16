@@ -23,6 +23,9 @@ public class DecisionRoutingTests
     private RimAgentSettings _settings;
     private RimAgentSettings _originalSettings;
 
+    private static readonly string[] _defaultCategories = ["observe", "routine", "build", "risky"];
+    private static readonly string[] _customIds = ["custom_1", "custom_3", "custom_5"];
+
     [SetUp]
     public void SetUp()
     {
@@ -42,31 +45,31 @@ public class DecisionRoutingTests
             [
                 new DecisionRouteCategory
                 {
-                    id = "observe",
-                    name = "查詢解釋",
-                    description = "Read colony state and explain.",
-                    reasoning = ReasoningLevel.Off
+                    Id = "observe",
+                    Name = "查詢解釋",
+                    Description = "Read colony state and explain.",
+                    Reasoning = ReasoningLevel.Off
                 },
                 new DecisionRouteCategory
                 {
-                    id = "routine",
-                    name = "日常維護",
-                    description = "Routine maintenance and work priorities.",
-                    reasoning = ReasoningLevel.Auto
+                    Id = "routine",
+                    Name = "日常維護",
+                    Description = "Routine maintenance and work priorities.",
+                    Reasoning = ReasoningLevel.Auto
                 },
                 new DecisionRouteCategory
                 {
-                    id = "build",
-                    name = "建造生產",
-                    description = "Construct, deconstruct, and bills.",
-                    reasoning = ReasoningLevel.High
+                    Id = "build",
+                    Name = "建造生產",
+                    Description = "Construct, deconstruct, and bills.",
+                    Reasoning = ReasoningLevel.High
                 },
                 new DecisionRouteCategory
                 {
-                    id = "risky",
-                    name = "高風險規劃",
-                    description = "Combat, trade, medical, surgery.",
-                    reasoning = ReasoningLevel.High
+                    Id = "risky",
+                    Name = "高風險規劃",
+                    Description = "Combat, trade, medical, surgery.",
+                    Reasoning = ReasoningLevel.High
                 }
             ]
         };
@@ -216,17 +219,17 @@ public class DecisionRoutingTests
                 [
                     new DecisionRouteCategory
                     {
-                        id = "scouting",
-                        name = "斥候偵察",
-                        description = "Scout the external world and neighbors.",
-                        reasoning = ReasoningLevel.Medium
+                        Id = "scouting",
+                        Name = "斥候偵察",
+                        Description = "Scout the external world and neighbors.",
+                        Reasoning = ReasoningLevel.Medium
                     },
                     new DecisionRouteCategory
                     {
-                        id = "risky",
-                        name = "危險動作",
-                        description = "Surgery and risky maneuvers.",
-                        reasoning = ReasoningLevel.High
+                        Id = "risky",
+                        Name = "危險動作",
+                        Description = "Surgery and risky maneuvers.",
+                        Reasoning = ReasoningLevel.High
                     }
                 ]
             };
@@ -260,16 +263,16 @@ public class DecisionRoutingTests
             Assert.That(loaded.decisionCategories, Has.Count.EqualTo(2));
 
             DecisionRouteCategory cat0 = loaded.decisionCategories[0];
-            Assert.That(cat0.id, Is.EqualTo("scouting"));
-            Assert.That(cat0.name, Is.EqualTo("斥候偵察"));
-            Assert.That(cat0.description, Is.EqualTo("Scout the external world and neighbors."));
-            Assert.That(cat0.reasoning, Is.EqualTo(ReasoningLevel.Medium));
+            Assert.That(cat0.Id, Is.EqualTo("scouting"));
+            Assert.That(cat0.Name, Is.EqualTo("斥候偵察"));
+            Assert.That(cat0.Description, Is.EqualTo("Scout the external world and neighbors."));
+            Assert.That(cat0.Reasoning, Is.EqualTo(ReasoningLevel.Medium));
 
             DecisionRouteCategory cat1 = loaded.decisionCategories[1];
-            Assert.That(cat1.id, Is.EqualTo("risky"));
-            Assert.That(cat1.name, Is.EqualTo("危險動作"));
-            Assert.That(cat1.description, Is.EqualTo("Surgery and risky maneuvers."));
-            Assert.That(cat1.reasoning, Is.EqualTo(ReasoningLevel.High));
+            Assert.That(cat1.Id, Is.EqualTo("risky"));
+            Assert.That(cat1.Name, Is.EqualTo("危險動作"));
+            Assert.That(cat1.Description, Is.EqualTo("Surgery and risky maneuvers."));
+            Assert.That(cat1.Reasoning, Is.EqualTo(ReasoningLevel.High));
         }
         finally
         {
@@ -299,7 +302,7 @@ public class DecisionRoutingTests
             Assert.That(loaded, Is.Not.Null);
             Assert.That(loaded.decisionCategories, Is.Not.Null);
             Assert.That(loaded.decisionCategories, Has.Count.EqualTo(4));
-            Assert.That(loaded.decisionCategories.Select(c => c.id), Is.EqualTo(new[] { "observe", "routine", "build", "risky" }));
+            Assert.That(loaded.decisionCategories.Select(c => c.Id), Is.EqualTo(_defaultCategories));
             Assert.That(loaded.reasoningRouting, Is.False);
             Assert.That(loaded.decisionFallbackReasoning, Is.EqualTo(ReasoningLevel.Auto));
             Assert.That(loaded.decisionRoutingMinConfidence, Is.EqualTo(0.6f).Within(0.001f));
@@ -500,8 +503,8 @@ public class DecisionRoutingTests
         categories.Add(new DecisionRouteCategory(second, "new", "description"));
         string third = RimAgentMod.NextCustomCategoryId(categories);
 
-        Assert.That(new[] { first, second, third }, Is.EqualTo(new[] { "custom_1", "custom_3", "custom_5" }));
-        Assert.That(categories.Select(c => c.id).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+        Assert.That(new[] { first, second, third }, Is.EqualTo(_customIds));
+        Assert.That(categories.Select(c => c.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
             Is.EqualTo(categories.Count));
     }
 

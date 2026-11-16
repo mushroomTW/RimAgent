@@ -64,9 +64,7 @@ public sealed class QuestTools
         QuestRewardInfo option = null;
         if (quest.RewardOptions.Count > 0)
         {
-            option = quest.RewardOptions.Count == 1 && reward <= 1
-                ? quest.RewardOptions[0]
-                : quest.RewardOptions.FirstOrDefault(o => o.Number == reward);
+            option = SelectRewardOption(quest, reward);
             if (option == null)
             {
                 return ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] needs a reward choice. Choices: " + FormatRewardOptions(quest));
@@ -94,6 +92,14 @@ public sealed class QuestTools
         string summary = $"Accepted quest \"{quest.Name}\" [{quest.Id}]" + RewardClause(option) + AccepterClause(picked) + ".";
         return string.IsNullOrEmpty(picked?.Warning) ? summary : summary + " Warning from the game: " + picked.Warning;
     }
+
+    private static QuestRewardInfo SelectRewardOption(QuestInfo quest, int reward)
+    {
+        if (quest.RewardOptions.Count == 0) return null;
+        if (quest.RewardOptions.Count == 1 && reward <= 1) return quest.RewardOptions[0];
+        return quest.RewardOptions.FirstOrDefault(o => o.Number == reward);
+    }
+
 
     [AgentTool("dismiss_quest", ToolCategory.Observe, ToolRisk.Safe)]
     [Description("Dismisses an available quest, like the dismiss button in the Quests tab, or restores a dismissed one. The quest still expires on schedule; it is only hidden from the available list (list_quests with includeDismissed shows it). Accepted quests cannot be dismissed.")]

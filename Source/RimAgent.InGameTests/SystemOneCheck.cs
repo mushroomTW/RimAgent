@@ -32,12 +32,14 @@ internal static class SystemOneCheck
         {
             Interlocked.Increment(ref Calls);
             // 真模型的回應來自背景執行緒：呼叫端之後碰遊戲物件必須已回到主線程。
-            await Task.Delay(30).ConfigureAwait(false);
+            await Task.Delay(30, cancellationToken).ConfigureAwait(false);
             return _reply(plan);
         }
     }
 
     private static readonly Type Comp = typeof(RimAgentGameComponent);
+    private const string Accept = "Accept";
+    private const string TriageSkipsAsync = "TriageSkipsAsync";
 
     private static T Field<T>(object target, string name) => (T)AccessTools.Field(Comp, name).GetValue(target);
 
@@ -70,17 +72,16 @@ internal static class SystemOneCheck
 
     private static async Task CheckChoiceAsync(RimAgentGameComponent comp, RimAgentSettings settings, ColonyAgentSession session, List<string> failures)
     {
-        string pressed = null;
-        bool onMainThread = false;
-        var dialog = new Dialog_MessageBox("A wanderer asks to join.", "Accept", () =>
+        var state = new ChoiceProbeState();
+        var dialog = new Dialog_MessageBox("A wanderer asks to join.", Accept, () =>
         {
-            pressed = "Accept";
-            onMainThread = UnityData.IsInMainThread;
-        }, "Reject", () => pressed = "Reject", "System One check");
+            state.Pressed = Accept;
+            state.OnMainThread = UnityData.IsInMainThread;
+        }, "Reject", () => state.Pressed = "Reject", "System One check");
         Find.WindowStack.Add(dialog);
         var stub = new StubDecisionService(plan => new DecisionResult(plan.Questions.ToDictionary(
             q => q.Id,
-            q => new DecisionAnswer { Value = q.Options.First(o => o.Value == "Accept").Key, Confidence = 0.9 })));
+            q => new DecisionAnswer { Value = q.Options.First(o => o.Value == Accept).Key, Confidence = 0.9 })));
         AccessTools.Field(Comp, "_choiceResponder").SetValue(comp, new DecisionChoiceResponder(stub, () => "Pick what helps the colony."));
         try
         {
@@ -92,38 +93,79 @@ internal static class SystemOneCheck
             }
             int generation = Field<int>(comp, "_autoGeneration");
 
-            // 確認模式不代答，也不問決策模型。
-            settings.mode = AgentMode.Confirm;
-            HashSet<string> none = await Call<HashSet<string>>(comp, "AnswerChoicesWithSystemOneAsync", session, choices, generation);
-            if (none.Count != 0 || stub.Calls != 0 || pressed != null) failures.Add($"confirm mode answered: {none.Count}, calls {stub.Calls}, pressed {pressed}");
-
-            // 執行模式且要求自主重大動作確認：同樣不代答。
-            settings.mode = AgentMode.Execute;
-            none = await Call<HashSet<string>>(comp, "AnswerChoicesWithSystemOneAsync", session, choices, generation);
-            if (none.Count != 0 || stub.Calls != 0) failures.Add("execute mode with confirmation answered");
-
-            // 完整權限：走完整的抉擇任務流程；全答完就不叫主 LLM。
-            settings.mode = AgentMode.Autonomous;
-            int noticesBefore = Notices(session, "System One answered");
-            object config = AccessTools.Method(Comp, "ToConfig").Invoke(comp, [settings]);
-            AccessTools.Field(Comp, "_autoRunning").SetValue(comp, true);
-            await (Task)AccessTools.Method(Comp, "RunChoiceGuardedAsync").Invoke(comp, [session, choices, Find.TickManager.TicksGame, config]);
-
-            if (pressed != "Accept") failures.Add("dialog not answered with Accept, pressed " + (pressed ?? "nothing"));
-            if (!onMainThread) failures.Add("dialog button ran off the main thread");
-            if (Find.WindowStack.Windows.Contains(dialog)) failures.Add("dialog still open");
-            if (stub.Calls != 1) failures.Add("decision model calls " + stub.Calls);
-            if (Notices(session, "System One answered") != noticesBefore + 1) failures.Add("no transcript notice for the answer");
-            string reports = session.DecisionReports.TakeAll();
-            if (reports == null || !reports.Contains("Accept")) failures.Add("main model report missing: " + (reports ?? "null"));
-            if (Field<bool>(comp, "_autoRunning")) failures.Add("_autoRunning still set");
-            if (session.IsBusy) failures.Add("main model was started although every choice was answered");
+            var ctx = new ChoiceCheckContext
+            {
+                GameComponent = comp,
+                Settings = settings,
+                Session = session,
+                Choices = choices,
+                Generation = generation,
+                Stub = stub,
+                State = state,
+                Failures = failures
+            };
+            await CheckConfirmModeAsync(ctx);
+            await CheckExecuteModeAsync(ctx);
+            await CheckAutonomousModeAsync(ctx, dialog);
         }
         finally
         {
             if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(false);
             AccessTools.Field(Comp, "_choiceResponder").SetValue(comp, null);
         }
+    }
+
+    /// <summary>紀錄對話框被按下按鈕與所屬執行緒狀態。</summary>
+    private sealed class ChoiceProbeState
+    {
+        public string Pressed;
+        public bool OnMainThread;
+    }
+
+    /// <summary>抉擇測試跨模式驗證所需的上下文參數。</summary>
+    private sealed class ChoiceCheckContext
+    {
+        public RimAgentGameComponent GameComponent;
+        public RimAgentSettings Settings;
+        public ColonyAgentSession Session;
+        public List<PendingChoiceInfo> Choices;
+        public int Generation;
+        public StubDecisionService Stub;
+        public ChoiceProbeState State;
+        public List<string> Failures;
+    }
+
+    private static async Task CheckConfirmModeAsync(ChoiceCheckContext ctx)
+    {
+        ctx.Settings.mode = AgentMode.Confirm;
+        HashSet<string> none = await Call<HashSet<string>>(Comp, "AnswerChoicesWithSystemOneAsync", ctx.Session, ctx.Choices, ctx.Generation);
+        if (none.Count != 0 || ctx.Stub.Calls != 0 || ctx.State.Pressed != null) ctx.Failures.Add($"confirm mode answered: {none.Count}, calls {ctx.Stub.Calls}, pressed {ctx.State.Pressed}");
+    }
+
+    private static async Task CheckExecuteModeAsync(ChoiceCheckContext ctx)
+    {
+        ctx.Settings.mode = AgentMode.Execute;
+        HashSet<string> none = await Call<HashSet<string>>(Comp, "AnswerChoicesWithSystemOneAsync", ctx.Session, ctx.Choices, ctx.Generation);
+        if (none.Count != 0 || ctx.Stub.Calls != 0) ctx.Failures.Add("execute mode with confirmation answered");
+    }
+
+    private static async Task CheckAutonomousModeAsync(ChoiceCheckContext ctx, Dialog_MessageBox dialog)
+    {
+        ctx.Settings.mode = AgentMode.Autonomous;
+        int noticesBefore = Notices(ctx.Session, "System One answered");
+        object config = AccessTools.Method(Comp, "ToConfig").Invoke(Comp, [ctx.Settings]);
+        AccessTools.Field(Comp, "_autoRunning").SetValue(ctx.GameComponent, true);
+        await (Task)AccessTools.Method(Comp, "RunChoiceGuardedAsync").Invoke(Comp, [ctx.Session, ctx.Choices, Find.TickManager.TicksGame, config]);
+
+        if (ctx.State.Pressed != Accept) ctx.Failures.Add("dialog not answered with Accept, pressed " + (ctx.State.Pressed ?? "nothing"));
+        if (!ctx.State.OnMainThread) ctx.Failures.Add("dialog button ran off the main thread");
+        if (Find.WindowStack.Windows.Contains(dialog)) ctx.Failures.Add("dialog still open");
+        if (ctx.Stub.Calls != 1) ctx.Failures.Add("decision model calls " + ctx.Stub.Calls);
+        if (Notices(ctx.Session, "System One answered") != noticesBefore + 1) ctx.Failures.Add("no transcript notice for the answer");
+        string reports = ctx.Session.DecisionReports.TakeAll();
+        if (reports == null || !reports.Contains(Accept)) ctx.Failures.Add("main model report missing: " + (reports ?? "null"));
+        if (Field<bool>(ctx.GameComponent, "_autoRunning")) ctx.Failures.Add("_autoRunning still set");
+        if (ctx.Session.IsBusy) ctx.Failures.Add("main model was started although every choice was answered");
     }
 
     private static async Task CheckTriageAsync(RimAgentGameComponent comp, ColonyAgentSession session, List<string> failures)
@@ -141,16 +183,16 @@ internal static class SystemOneCheck
             int generation = Field<int>(comp, "_autoGeneration");
             int before = Notices(session, "System One judged");
 
-            bool skip = await Call<bool>(comp, "TriageSkipsAsync", session, AutonomousTrigger.BedShortage, signals, tick, generation);
+            bool skip = await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation);
             if (!skip) failures.Add("low need was not skipped");
-            skip = await Call<bool>(comp, "TriageSkipsAsync", session, AutonomousTrigger.BedShortage, signals, tick, generation);
+            skip = await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation);
             if (!skip) failures.Add("second low need was not skipped");
             if (Notices(session, "System One judged") != before + 1) failures.Add("triage notice not shown exactly once per wait");
 
             need = 0.9;
-            if (await Call<bool>(comp, "TriageSkipsAsync", session, AutonomousTrigger.BedShortage, signals, tick, generation)) failures.Add("high need was skipped");
+            if (await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation)) failures.Add("high need was skipped");
             int calls = stub.Calls;
-            if (await Call<bool>(comp, "TriageSkipsAsync", session, AutonomousTrigger.Fire, signals, tick, generation)) failures.Add("fire was skipped");
+            if (await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.Fire, signals, tick, generation)) failures.Add("fire was skipped");
             if (stub.Calls != calls) failures.Add("fire was sent to the decision model");
             if (stub.Calls != 3) failures.Add("triage decision calls " + stub.Calls);
         }
@@ -165,7 +207,7 @@ internal static class SystemOneCheck
 public sealed class SystemOneCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentSystemOneCheck.xml";
-    private static bool _started;
+    private bool _started;
 
     public SystemOneCheckComponent(Verse.Game game)
     {
