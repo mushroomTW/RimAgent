@@ -118,6 +118,18 @@ public class DecisionRoutingTests
     }
 
     [Test]
+    [SetCulture("de-DE")]
+    public async Task ReasonUsesInvariantNumbersUnderCommaDecimalCulture()
+    {
+        _fakeDecision.ReplyRoute("build", 0.45);
+        var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
+
+        DecisionRoute route = await router.ResolveAsync("maybe do some construction", _settings.decisionCategories);
+
+        Assert.That(route.Reason, Does.Contain("0.45").And.Contain("0.60"));
+    }
+
+    [Test]
     public async Task DecisionServiceFailureFallsBackGracefully()
     {
         _fakeDecision.Throw(new InvalidOperationException("API timeout"));
@@ -511,8 +523,7 @@ public class DecisionRoutingTests
     private static void RegisterTypeInGenTypes(Type type)
     {
         var cacheField = typeof(GenTypes).GetField("typeCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        var cache = cacheField?.GetValue(null) as System.Collections.IDictionary;
-        if (cache == null)
+        if (cacheField?.GetValue(null) is not System.Collections.IDictionary cache)
         {
             typeof(GenTypes).GetMethod("ClearCache", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
             cache = cacheField?.GetValue(null) as System.Collections.IDictionary;

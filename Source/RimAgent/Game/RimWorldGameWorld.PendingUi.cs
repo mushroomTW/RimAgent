@@ -536,11 +536,10 @@ internal sealed partial class RimWorldGameWorld
             dialog.Close();
             return CommandResult.Ok(CancelLabel);
         }
-        var selected = AccessTools.Field(type, "selected")?.GetValue(dialog) as HashSet<Thing>;
         FieldInfo itemCount = AccessTools.Field(type, "selectedItemCount");
         PropertyInfo acceptance = AccessTools.Property(type, "AcceptanceReport");
         MethodInfo confirm = AccessTools.Method(type, "ConfirmArchonexusSettlementConsequences");
-        if (selected == null || itemCount == null || acceptance == null || confirm == null) return CommandResult.Fail("this game version does not expose this dialog");
+        if (AccessTools.Field(type, "selected")?.GetValue(dialog) is not HashSet<Thing> selected || itemCount == null || acceptance == null || confirm == null) return CommandResult.Fail("this game version does not expose this dialog");
 
         List<Thing> candidates = NewColonyCandidates(dialog);
         var picked = new List<Thing>();

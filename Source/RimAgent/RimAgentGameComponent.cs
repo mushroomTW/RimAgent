@@ -309,7 +309,7 @@ public partial class RimAgentGameComponent : GameComponent
         if (_goals == null) _goals = [];
         List<AgentMemoryEntry> memories = Scribe.mode == LoadSaveMode.Saving
             ? _saveMemory.Snapshot() : null;
-        if (memories != null) memories.AddRange(_pendingGlobalMigration);
+        memories?.AddRange(_pendingGlobalMigration);
         Scribe_Collections.Look(ref memories, "agentMemories", LookMode.Deep);
         if (Scribe.mode == LoadSaveMode.LoadingVars)
         {

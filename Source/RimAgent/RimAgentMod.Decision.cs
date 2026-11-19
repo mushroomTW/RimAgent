@@ -81,8 +81,8 @@ public partial class RimAgentMod
             // 關掉後整段隱藏，可在主頁的決策模型開關重新啟用。
             var options = new List<FloatMenuOption>
             {
-                new FloatMenuOption(DecisionDefaultKey.Translate(), () => Settings.decisionProvider = string.Empty),
-                new FloatMenuOption("RimAgent.Settings.DecisionProviderNone".Translate(), () => Settings.decisionEnabled = false)
+                new(DecisionDefaultKey.Translate(), () => Settings.decisionProvider = string.Empty),
+                new("RimAgent.Settings.DecisionProviderNone".Translate(), () => Settings.decisionEnabled = false)
             };
             Find.WindowStack.Add(new FloatMenu(options));
         }
@@ -111,7 +111,7 @@ public partial class RimAgentMod
             // 只列框架給出的模型（玩家在 RimLLM 決策分頁設定的那個），不另外向伺服器拉清單。
             var options = new List<FloatMenuOption>
             {
-                new FloatMenuOption(DecisionDefaultKey.Translate(), () => Settings.decisionModel = string.Empty)
+                new(DecisionDefaultKey.Translate(), () => Settings.decisionModel = string.Empty)
             };
             string frameworkModel = availability?.Enabled == true ? availability.Model : null;
             if (!string.IsNullOrEmpty(frameworkModel))
@@ -214,7 +214,7 @@ public partial class RimAgentMod
         {
             var options = new List<FloatMenuOption>
             {
-                new FloatMenuOption("RimAgent.Settings.DecisionCategoryAddCustom".Translate(), () =>
+                new("RimAgent.Settings.DecisionCategoryAddCustom".Translate(), () =>
                 {
                     string id = NextCustomCategoryId(Settings.decisionCategories);
                     int nextNum = 1;

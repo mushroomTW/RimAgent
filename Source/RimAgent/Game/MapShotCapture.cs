@@ -140,7 +140,10 @@ internal sealed class MapShotCapture : MonoBehaviour
     {
         Unsubscribe(this);
         Unregister(this);
+        // Unity 物件已銷毀時只有多載的 != 會判成 null；?. 只看參考，會碰到已銷毀的攝影機。
+#pragma warning disable IDE0031
         if (_camera != null) _camera.targetTexture = null;
+#pragma warning restore IDE0031
         if (_target != null)
         {
             RenderTexture.ReleaseTemporary(_target);

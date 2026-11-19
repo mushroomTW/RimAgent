@@ -26,14 +26,14 @@ public partial class RimAgentMod : Mod
     private const float SubIndent = 28f;
     private const string FrameworkPackageId = "GreenMushroom.RimLLMFramework";
 
-    private static readonly Color Gold = new Color(0.94f, 0.78f, 0.45f);
-    private static readonly Color Green = new Color(0.44f, 0.75f, 0.45f);
-    private static readonly Color Yellow = new Color(0.88f, 0.72f, 0.31f);
-    private static readonly Color Red = new Color(0.88f, 0.42f, 0.37f);
-    private static readonly Color Dim = new Color(0.66f, 0.67f, 0.69f);
-    private static readonly Color PanelFill = new Color(1f, 1f, 1f, 0.05f);
-    private static readonly Color SelectedFill = new Color(0.94f, 0.78f, 0.45f, 0.16f);
-    private static readonly Color PanelBorder = new Color(0.4f, 0.41f, 0.43f);
+    private static readonly Color Gold = new(0.94f, 0.78f, 0.45f);
+    private static readonly Color Green = new(0.44f, 0.75f, 0.45f);
+    private static readonly Color Yellow = new(0.88f, 0.72f, 0.31f);
+    private static readonly Color Red = new(0.88f, 0.42f, 0.37f);
+    private static readonly Color Dim = new(0.66f, 0.67f, 0.69f);
+    private static readonly Color PanelFill = new(1f, 1f, 1f, 0.05f);
+    private static readonly Color SelectedFill = new(0.94f, 0.78f, 0.45f, 0.16f);
+    private static readonly Color PanelBorder = new(0.4f, 0.41f, 0.43f);
 
     private static readonly ToolCategory[] Categories = Enum.GetValues<ToolCategory>();
 

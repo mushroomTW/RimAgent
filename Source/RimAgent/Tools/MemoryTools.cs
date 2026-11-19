@@ -54,6 +54,7 @@ internal static class MemoryTools
         // InvokingContext 必須有 agent；這個 agent 只用來取工具，不會送出任何請求。
         var dummyClient = new ChatClientAgent(new NoOpChatClient());
         var context = new AIContextProvider.InvokingContext(dummyClient, null, new AIContext());
+        // 同步等待：前提是 provider 只回傳工具清單、不 await 需要回到主執行緒的工作；升級 SDK 時要重新確認。
         AIContext provided = provider.InvokingAsync(context).AsTask().GetAwaiter().GetResult();
 #pragma warning restore MAAI001
         return [.. provided.Tools.OfType<AIFunction>()

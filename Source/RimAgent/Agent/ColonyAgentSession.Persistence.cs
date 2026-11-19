@@ -48,6 +48,10 @@ public sealed partial class ColonyAgentSession
         UnloadToolPacks();
     }
 
+    /// <remarks>
+    /// 呼叫端是同步的（背景續行上的快照，或快照失敗時主執行緒上的存檔），只能同步等待。前提是 SDK 的序列化不會 await 需要回到
+    /// 主執行緒的工作，否則會卡死；升級 Microsoft.Agents.AI 時要重新確認這點。
+    /// </remarks>
     private string SerializeSession(AgentSession session)
     {
         JsonElement document = _agent.SerializeSessionAsync(session, null, CancellationToken.None)

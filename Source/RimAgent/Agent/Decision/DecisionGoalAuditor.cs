@@ -117,21 +117,22 @@ public sealed class DecisionGoalAuditor
         };
     }
 
+    /// <remarks>理由會交給模型，百分比固定用不隨地區變動的格式（例如 75%）。</remarks>
     private static string BuildReason(bool allDone, bool remaining, bool needsUser, double pAllDone, double pRemaining, double pNeedsUser)
     {
         if (needsUser)
         {
-            return $"Decision audit indicated player input is required (needs_user: {pNeedsUser:P0}).";
+            return FormattableString.Invariant($"Decision audit indicated player input is required (needs_user: {pNeedsUser:0%}).");
         }
         if (remaining)
         {
-            return $"Decision audit found unfinished follow-up steps mentioned by the assistant (remaining: {pRemaining:P0}).";
+            return FormattableString.Invariant($"Decision audit found unfinished follow-up steps mentioned by the assistant (remaining: {pRemaining:0%}).");
         }
         if (!allDone)
         {
-            return $"Decision audit found goal requirements not yet verified or complete (all_done: {pAllDone:P0}).";
+            return FormattableString.Invariant($"Decision audit found goal requirements not yet verified or complete (all_done: {pAllDone:0%}).");
         }
-        return $"Decision audit verified that all requirements are complete (all_done: {pAllDone:P0}).";
+        return FormattableString.Invariant($"Decision audit verified that all requirements are complete (all_done: {pAllDone:0%}).");
     }
 
     public static string Describe(string objective, string reply, string toolEvidence = null)

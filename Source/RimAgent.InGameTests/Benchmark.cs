@@ -69,7 +69,7 @@ public sealed class BenchmarkComponent : GameComponent
     ];
 
     private static BenchTask StockpileTask() =>
-        new BenchTask
+        new()
         {
             Id = "stockpile",
             Instruction = "在殖民者附近建立一個大約 6x6 的儲存區。",
@@ -78,7 +78,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask RiceFieldTask() =>
-        new BenchTask
+        new()
         {
             Id = "rice_field",
             Instruction = "在殖民者附近開一塊至少 30 格的水稻田。",
@@ -87,7 +87,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask ResearchBenchTask() =>
-        new BenchTask
+        new()
         {
             Id = "research_bench",
             Instruction = "在殖民者附近放一張簡易研究台的藍圖。",
@@ -96,7 +96,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask WoodRoomTask() =>
-        new BenchTask
+        new()
         {
             Id = "wood_room",
             Instruction = "在殖民者附近的空地上，用木頭規劃一間內部 5x5 的小房間藍圖（四面牆加一扇門）。",
@@ -112,7 +112,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask ResearchPriorityTask() =>
-        new BenchTask
+        new()
         {
             Id = "research_priority",
             Instruction = "讓每一位能做研究的殖民者，把研究工作的優先級設為 1。",
@@ -121,7 +121,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask CutTreesTask() =>
-        new BenchTask
+        new()
         {
             Id = "cut_trees",
             Instruction = "標記砍伐殖民者附近的 5 棵樹。",
@@ -130,7 +130,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask FoodReportTask() =>
-        new BenchTask
+        new()
         {
             Id = "food_report",
             Instruction = "告訴我殖民地目前的食物存量大概能撐幾天。只要回答，不要下任何指令。",
@@ -139,7 +139,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask TwoRoomHouseTask() =>
-        new BenchTask
+        new()
         {
             Id = "two_room_house",
             Tier = Hard,
@@ -161,7 +161,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask FreezerTask() =>
-        new BenchTask
+        new()
         {
             Id = "freezer",
             Tier = Hard,
@@ -181,7 +181,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask CornStorageTask() =>
-        new BenchTask
+        new()
         {
             Id = "corn_storage",
             Tier = Hard,
@@ -196,7 +196,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask KitchenBillsTask() =>
-        new BenchTask
+        new()
         {
             Id = "kitchen_bills",
             Tier = Hard,
@@ -213,7 +213,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask InjuredCareTask() =>
-        new BenchTask
+        new()
         {
             Id = "injured_care",
             Tier = Hard,
@@ -233,7 +233,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask DailyScheduleTask() =>
-        new BenchTask
+        new()
         {
             Id = "daily_schedule",
             Tier = Hard,
@@ -244,7 +244,7 @@ public sealed class BenchmarkComponent : GameComponent
         };
 
     private static BenchTask DefendTask() =>
-        new BenchTask
+        new()
         {
             Id = "defend",
             Tier = Hard,

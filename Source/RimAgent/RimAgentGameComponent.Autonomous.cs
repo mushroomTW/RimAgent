@@ -449,7 +449,8 @@ public partial class RimAgentGameComponent
             AutonomousTrigger.EmergencyMedical =>
                 $"medical emergencies. {signals.DownedOrBleedingCount} colonist(s) remain downed or bleeding. Ensure doctors are prioritized and medicine is accessible.",
             AutonomousTrigger.FoodShortage =>
-                $"food shortage. Current food per colonist is {(signals.FoodNutrition / Math.Max(1, signals.ColonistCount)):F1} nutrition.",
+                // 會送進模型提示，數字固定用不隨地區變動的格式。
+                FormattableString.Invariant($"food shortage. Current food per colonist is {(signals.FoodNutrition / Math.Max(1, signals.ColonistCount)):F1} nutrition."),
             _ => $"condition: {trigger}."
         };
         return $"This is retry #{attempt} for {diagnostic}";

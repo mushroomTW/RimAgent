@@ -140,6 +140,18 @@ false: The agent is not waiting for player guidance or input.
     }
 
     [Test]
+    [SetCulture("fr-FR")]
+    public async Task AuditReasonUsesInvariantPercentUnderFrenchCulture()
+    {
+        var fake = new FakeDecisionService().ReplyGoal(allDone: 0.85, remaining: 0.15, needsUser: 0.05);
+        var auditor = new DecisionGoalAuditor(fake, criteriaProvider: () => SampleGoalCriteria);
+
+        GoalAuditResult result = await auditor.AuditAsync("Build 3 beds", "Built 3 beds in barracks.\n[[GOAL:COMPLETE]]");
+
+        Assert.That(result.Reason, Does.Contain("(all_done: 85%)"));
+    }
+
+    [Test]
     public async Task AuditAsyncIncludesToolEvidenceInTheDecisionState()
     {
         var fake = new FakeDecisionService().ReplyGoal(allDone: 0.9, remaining: 0.1, needsUser: 0.0);
@@ -219,8 +231,8 @@ false: The agent is not waiting for player guidance or input.
     [Test]
     public void DescribeKeepsHeadAndTailOfVeryLongReply()
     {
-        string head = new string('h', 3000);
-        string tail = new string('t', 3000);
+        string head = new('h', 3000);
+        string tail = new('t', 3000);
         string longReply = head + new string('x', 20000) + tail;
         string state = DecisionGoalAuditor.Describe("build base", longReply);
 

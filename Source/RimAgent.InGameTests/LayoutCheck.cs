@@ -28,7 +28,7 @@ internal static class LayoutCheck
 
     private static readonly Spec[] Specs =
     {
-        new Spec
+        new()
         {
             Layout = "RimAgent_StarterCabin13",
             Rooms = new[]
@@ -38,7 +38,7 @@ internal static class LayoutCheck
             },
             Extra = CheckStarterCabin13Extra,
         },
-        new Spec
+        new()
         {
             Layout = "RimAgent_TrapCorridorStarter13",
             Rooms = new[] { ("hall", 6, 9), ("prison", 2, 3), ("research", 10, 3) },
@@ -52,13 +52,13 @@ internal static class LayoutCheck
                 Building endTable = L(2, 8).GetEdifice(map);
                 foreach ((int x, int z) in new[] { (1, 8), (2, 9), (3, 8) })
                 {
-                    if (!(L(x, z).GetEdifice(map) is Building_Bed bed)) { failures.Add($"no bed at local ({x},{z})"); continue; }
+                    if (L(x, z).GetEdifice(map) is not Building_Bed bed) { failures.Add($"no bed at local ({x},{z})"); continue; }
                     if (endTable == null || !bed.GetSleepingSlotPos(0).AdjacentToCardinal(endTable.Position))
                         failures.Add($"bed at local ({x},{z}) does not have its head at the end table");
                 }
             }
         },
-        new Spec
+        new()
         {
             Layout = "RimAgent_Freezer13",
             Rooms = new[] { ("freezer", 6, 9), ("butcher", 10, 2) },
@@ -94,7 +94,7 @@ internal static class LayoutCheck
             builtCenters.Add((spec.Layout, center));
 
             int ox = plan.Rect.MinX, oz = plan.Rect.MinZ;
-            IntVec3 L(int x, int z) => new IntVec3(ox + x, 0, oz + z);
+            IntVec3 L(int x, int z) => new(ox + x, 0, oz + z);
             CheckSpecRooms(map, spec, L, failures);
         }
 
@@ -364,7 +364,7 @@ public sealed class LayoutCheckComponent : GameComponent
 {
     private const string MarkerFileName = "RimAgentLayoutCheck.xml";
     private bool _done;
-    private readonly List<(string Layout, IntVec3 Center)> _shots = new List<(string, IntVec3)>();
+    private readonly List<(string Layout, IntVec3 Center)> _shots = new();
     private int _shotFrame = -1;
     private int _nextAimFrame = -1;
 

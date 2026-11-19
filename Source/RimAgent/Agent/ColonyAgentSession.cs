@@ -34,6 +34,8 @@ public sealed partial class ColonyAgentSession
     /// <summary>手動 /compact 保留的最近組數：比自動折疊更積極，壓完只留最近一兩輪。</summary>
     private const int ManualSummaryPreservedGroups = 4;
 
+    // 以下各層 chat client 都包著外部傳入、與框架共用的 innerClient，本類別不擁有它，
+    // 所以刻意不實作 IDisposable：DelegatingChatClient.Dispose 會連內層一起釋放。
     private readonly ChatClientAgent _agent;
     private readonly RunOptionsCapture _runOptions;
     private readonly FunctionInvokingChatClient _invoking;

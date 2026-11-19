@@ -2,6 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>14.0</LangVersion>
+    <!-- 讓 .editorconfig 中標為 warning 的程式碼風格規則在建置時也會檢查，不只在 IDE 顯示。 -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- 預設為安裝在 RimWorld/Mods 下的工作樹；其他位置請指定 RimWorldDir。 -->
     <RimWorldDir Condition="'$(RimWorldDir)' == '' and '$(RIMWORLD_DIR)' != ''">$(RIMWORLD_DIR)</RimWorldDir>
     <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\</RimWorldDir>

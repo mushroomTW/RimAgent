@@ -100,7 +100,7 @@ public sealed class DecisionReasoningRouter
         double confidence = answer.Confidence ?? answer.Probability ?? 0d;
         if (confidence < minConfidence)
             return FallbackRoute(fallbackReasoning,
-                $"Decision confidence {confidence:F2} is below threshold {minConfidence:F2}.");
+                FormattableString.Invariant($"Decision confidence {confidence:F2} is below threshold {minConfidence:F2}."));
 
         string selectedId = answer.Value.Trim();
         DecisionRouteCategory matched = FindMatchedCategory(activeCategories, selectedId);
@@ -112,7 +112,7 @@ public sealed class DecisionReasoningRouter
             CategoryId = matched.Id,
             Reasoning = ResolveReasoningLevel(matched, fallbackReasoning),
             Confidence = confidence,
-            Reason = $"Routed to category '{matched.Id}' with confidence {confidence:F2}."
+            Reason = FormattableString.Invariant($"Routed to category '{matched.Id}' with confidence {confidence:F2}.")
         };
     }
 
