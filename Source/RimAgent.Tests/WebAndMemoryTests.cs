@@ -96,20 +96,20 @@ public class WebAndMemoryTests
     }
 
     [Test]
-    public void MemoryStoreRejectsOversizedAndExtraFiles()
+    public async Task MemoryStoreRejectsOversizedAndExtraFiles()
     {
         var memory = new AgentMemoryStore();
-        Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
             memory.WriteAsync("big.md", new string('x', AgentMemoryStore.MaxFileChars + 1)));
 
         for (int i = 0; i < AgentMemoryStore.MaxFiles; i++)
             memory.WriteAsync("note" + i + ".md", "value").GetAwaiter().GetResult();
-        Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync("extra.md", "value"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync("extra.md", "value"));
         // 描述檔與索引不佔檔數；既有檔案仍可覆寫。
-        Assert.DoesNotThrowAsync(() => memory.WriteAsync("note0_description.md", "desc"));
-        Assert.DoesNotThrowAsync(() => memory.WriteAsync(AgentMemoryStore.IndexFileName, "# Memory Index"));
-        Assert.DoesNotThrowAsync(() => memory.WriteAsync("note0.md", "updated"));
-        Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync(new string('n', AgentMemoryStore.MaxNameChars + 1), "value"));
+        await Assert.DoesNotThrowAsync(() => memory.WriteAsync("note0_description.md", "desc"));
+        await Assert.DoesNotThrowAsync(() => memory.WriteAsync(AgentMemoryStore.IndexFileName, "# Memory Index"));
+        await Assert.DoesNotThrowAsync(() => memory.WriteAsync("note0.md", "updated"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync(new string('n', AgentMemoryStore.MaxNameChars + 1), "value"));
     }
 
     [Test]

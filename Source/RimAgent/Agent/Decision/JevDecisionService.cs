@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
-using Kkdev92.Jev;
 using RimLLM_Framework;
+using TypeSafeAI;
 
 namespace RimAgent.Agent;
 
 /// <summary>
 /// 把 RimAgent 的決策計畫轉成 TypeSafe System One 的請求，並把答案轉回 RimAgent 的形狀。
 ///
-/// Kkdev92.Jev 的型別只出現在方法內（不進任何欄位）：RimWorld 啟動時會掃描組件的欄位型別
+/// TypeSafeAI 的型別只出現在方法內（不進任何欄位）：RimWorld 啟動時會掃描組件的欄位型別
 /// 並要求全部能解析，欄位若直接引用 SDK 型別會讓載入順序變成硬性相依。
 /// </summary>
 public sealed class JevDecisionService : IDecisionService
@@ -36,19 +37,18 @@ public sealed class JevDecisionService : IDecisionService
         if (_client == null) throw new DecisionUnavailableException("decision service is not available");
         if (string.IsNullOrWhiteSpace(state)) throw new ArgumentException("decision state is empty", nameof(state));
 
-        var builder = new JevDecisionPlanBuilder();
-        var nouls = new Dictionary<string, JevNoulHandle>(StringComparer.Ordinal);
-        var choices = new Dictionary<string, JevChoiceHandle<string>>(StringComparer.Ordinal);
-        var scores = new Dictionary<string, JevScoreHandle>(StringComparer.Ordinal);
+        var questionSet = new QuestionSet();
+        var nouls = new Dictionary<string, NoulHandle>(StringComparer.Ordinal);
+        var choices = new Dictionary<string, ChoiceHandle>(StringComparer.Ordinal);
+        var scores = new Dictionary<string, ScoreHandle>(StringComparer.Ordinal);
 
         foreach (DecisionQuestion question in plan.Questions)
         {
             if (question == null || string.IsNullOrWhiteSpace(question.Id)) continue;
-            ProcessQuestion(question, builder, nouls, choices, scores);
+            ProcessQuestion(question, questionSet, nouls, choices, scores);
         }
 
-        JevDecisionPlan jevPlan = builder.Build();
-        JevResult result = await CallDecisionServiceAsync(state, jevPlan, cancellationToken);
+        QuestionSetResult result = await CallDecisionServiceAsync(state, questionSet, cancellationToken);
 
         var answers = new Dictionary<string, DecisionAnswer>(StringComparer.Ordinal);
         ProcessNoulAnswers(result, nouls, answers);
@@ -57,7 +57,7 @@ public sealed class JevDecisionService : IDecisionService
         return new DecisionResult(answers);
     }
 
-    private async Task<JevResult> CallDecisionServiceAsync(string state, JevDecisionPlan jevPlan, CancellationToken cancellationToken)
+    private async Task<QuestionSetResult> CallDecisionServiceAsync(string state, QuestionSet questionSet, CancellationToken cancellationToken)
     {
         try
         {
@@ -66,8 +66,8 @@ public sealed class JevDecisionService : IDecisionService
             // 未指定供應商時走 EvaluateAsync，才能使用 RimLLM Framework 的決策備援鏈；
             // 呼叫端明確指定供應商時才走 EvaluateWithProviderAsync（依框架契約不換家）。
             return await (string.IsNullOrWhiteSpace(provider)
-                ? _client.EvaluateAsync(state, jevPlan, model, cancellationToken)
-                : _client.EvaluateWithProviderAsync(state, jevPlan, provider, model, cancellationToken))
+                ? _client.EvaluateAsync(state, questionSet, model, cancellationToken)
+                : _client.EvaluateWithProviderAsync(state, questionSet, provider, model, cancellationToken))
                 .ConfigureAwait(false);
         }
         catch (RimLLMException ex)
@@ -82,81 +82,80 @@ public sealed class JevDecisionService : IDecisionService
         }
     }
 
-    private static void ProcessNoulAnswers(JevResult result, Dictionary<string, JevNoulHandle> nouls, Dictionary<string, DecisionAnswer> answers)
+    private static void ProcessNoulAnswers(QuestionSetResult result, Dictionary<string, NoulHandle> nouls, Dictionary<string, DecisionAnswer> answers)
     {
-        foreach (KeyValuePair<string, JevNoulHandle> entry in nouls)
+        foreach (KeyValuePair<string, NoulHandle> entry in nouls)
         {
             NoulAnswer answer = result.Get(entry.Value);
             answers[entry.Key] = new DecisionAnswer { Probability = answer.Probability };
         }
     }
 
-    private static void ProcessChoiceAnswers(JevResult result, Dictionary<string, JevChoiceHandle<string>> choices, Dictionary<string, DecisionAnswer> answers)
+    private static void ProcessChoiceAnswers(QuestionSetResult result, Dictionary<string, ChoiceHandle> choices, Dictionary<string, DecisionAnswer> answers)
     {
-        foreach (KeyValuePair<string, JevChoiceHandle<string>> entry in choices)
+        foreach (KeyValuePair<string, ChoiceHandle> entry in choices)
         {
-            ChoiceAnswer<string> answer = result.Get(entry.Value);
+            ChoiceAnswer answer = result.Get(entry.Value);
             var probabilities = new Dictionary<string, double>(StringComparer.Ordinal);
-            for (int i = 0; i < answer.OptionCount; i++)
+            foreach (KeyValuePair<string, double> option in answer.Probabilities)
             {
-                probabilities[answer.GetLabel(i)] = answer.GetProbability(i);
+                probabilities[option.Key] = option.Value;
             }
             answers[entry.Key] = new DecisionAnswer
             {
-                Value = answer.Value,
+                Value = answer.Choice,
                 Confidence = answer.Confidence,
-                Probability = answer.GetProbability(answer.Label),
+                Probability = answer.ProbabilityOf(answer.Choice),
                 Probabilities = probabilities
             };
         }
     }
 
-    private static void ProcessScoreAnswers(JevResult result, Dictionary<string, JevScoreHandle> scores, Dictionary<string, DecisionAnswer> answers)
+    private static void ProcessScoreAnswers(QuestionSetResult result, Dictionary<string, ScoreHandle> scores, Dictionary<string, DecisionAnswer> answers)
     {
-        foreach (KeyValuePair<string, JevScoreHandle> entry in scores)
+        foreach (KeyValuePair<string, ScoreHandle> entry in scores)
         {
             ScoreAnswer answer = result.Get(entry.Value);
             var probabilities = new Dictionary<string, double>(StringComparer.Ordinal);
-            for (int i = 0; i < answer.LevelCount; i++)
+            foreach (ScoreLevel level in answer.Levels)
             {
-                probabilities[LevelLabel(answer.Legend, i)] = answer.GetProbability(i);
+                probabilities[LevelLabel(level)] = level.Probability;
             }
             answers[entry.Key] = new DecisionAnswer
             {
-                Score = answer.Value,
+                Score = answer.Score,
                 Confidence = answer.Confidence,
                 Probabilities = probabilities
             };
         }
     }
 
-    private static void ProcessQuestion(DecisionQuestion question, JevDecisionPlanBuilder builder,
-        Dictionary<string, JevNoulHandle> nouls, Dictionary<string, JevChoiceHandle<string>> choices,
-        Dictionary<string, JevScoreHandle> scores)
+    private static void ProcessQuestion(DecisionQuestion question, QuestionSet questionSet,
+        Dictionary<string, NoulHandle> nouls, Dictionary<string, ChoiceHandle> choices,
+        Dictionary<string, ScoreHandle> scores)
     {
-        JevContent instructions = JevContent.FromText(question.Instructions ?? string.Empty);
+        TypeSafeContent instructions = TypeSafeContent.FromText(question.Instructions ?? string.Empty);
         switch (question.Type)
         {
             case DecisionQuestionType.Noul:
             {
-                JevNoulCriteria criteria = BuildNoulCriteria(question);
-                nouls[question.Id] = builder.AddNoul(question.Id, instructions, criteria);
+                nouls[question.Id] = questionSet.Noul(instructions,
+                    OptionalText(question.WhenTrue), OptionalText(question.WhenFalse), question.Id);
                 break;
             }
             case DecisionQuestionType.Choice:
             {
-                var options = new List<JevChoiceOption<string>>();
+                var options = new Dictionary<string, TypeSafeContent?>(StringComparer.Ordinal);
                 if (question.Options != null)
                 {
                     foreach (KeyValuePair<string, string> option in question.Options)
                     {
-                        options.Add(new JevChoiceOption<string>(option.Key, option.Key,
-                            JevContent.FromText(option.Value ?? string.Empty)));
+                        options[option.Key] = TypeSafeContent.FromText(option.Value ?? string.Empty);
                     }
                 }
                 if (options.Count > 0)
                 {
-                    choices[question.Id] = builder.AddChoice(question.Id, instructions, options.ToArray());
+                    choices[question.Id] = questionSet.Choice(instructions, options, question.Id);
                 }
                 break;
             }
@@ -164,40 +163,23 @@ public sealed class JevDecisionService : IDecisionService
             {
                 if (question.Levels != null && question.Levels.Count > 0)
                 {
-                    scores[question.Id] = builder.AddScore(question.Id, instructions, ToContentArray(question.Levels));
+                    scores[question.Id] = questionSet.Score(instructions, question.Levels, question.Id);
                 }
                 break;
             }
         }
     }
 
-    /// <summary>評分題的等級名稱在圖例裡；取不到就用序號代替。</summary>
-    private static string LevelLabel(System.Collections.Immutable.ImmutableArray<System.Text.Json.JsonElement> legend, int index)
+    /// <summary>評分題的等級名稱取自等級說明；取不到就用序號代替。</summary>
+    private static string LevelLabel(ScoreLevel level)
     {
-        if (index < 0 || index >= legend.Length) return index.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        System.Text.Json.JsonElement element = legend[index];
-        if (element.ValueKind == System.Text.Json.JsonValueKind.String) return element.GetString() ?? string.Empty;
-        return element.ToString();
+        if (level.Description is TypeSafeContent description && !description.IsEmpty) return description.ToString();
+        return level.Index.ToString(CultureInfo.InvariantCulture);
     }
 
-    /// <summary>把唯讀清單複製成陣列（SDK 的簽章要 ReadOnlySpan）。</summary>
-    private static JevContent[] ToContentArray(IReadOnlyList<string> values)
+    /// <summary>是非題的單段說明；空白時回 null，讓 SDK 視為沒帶這段判準。</summary>
+    private static TypeSafeContent? OptionalText(string text)
     {
-        var array = new JevContent[values.Count];
-        for (int i = 0; i < values.Count; i++) array[i] = JevContent.FromText(values[i] ?? string.Empty);
-        return array;
-    }
-
-    /// <summary>
-    /// 是非題的兩段說明；兩者都沒有時回 default（SDK 以 IsEmpty 判定「沒帶判準」）。
-    /// </summary>
-    private static JevNoulCriteria BuildNoulCriteria(DecisionQuestion question)
-    {
-        string whenTrue = question.WhenTrue;
-        string whenFalse = question.WhenFalse;
-        if (string.IsNullOrWhiteSpace(whenTrue) && string.IsNullOrWhiteSpace(whenFalse)) return default;
-        return new JevNoulCriteria(
-            JevContent.FromText(whenTrue ?? string.Empty),
-            JevContent.FromText(whenFalse ?? string.Empty));
+        return string.IsNullOrWhiteSpace(text) ? (TypeSafeContent?)null : TypeSafeContent.FromText(text);
     }
 }

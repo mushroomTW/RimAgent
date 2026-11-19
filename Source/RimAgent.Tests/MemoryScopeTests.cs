@@ -103,7 +103,7 @@ public class MemoryScopeTests
     }
 
     [Test]
-    public void FileLimitsAreCountedPerScope()
+    public async Task FileLimitsAreCountedPerScope()
     {
         ScopedMemoryStore memory = NewMemory(new AgentMemoryStore());
         for (int i = 0; i < AgentMemoryStore.MaxFiles; i++)
@@ -111,8 +111,8 @@ public class MemoryScopeTests
             memory.WriteAsync("global_note" + i + ".md", "value").GetAwaiter().GetResult();
         }
 
-        Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync("global_extra.md", "value"));
-        Assert.DoesNotThrowAsync(() => memory.WriteAsync("extra.md", "value"), "局內記憶的名額不受全域記憶影響");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync("global_extra.md", "value"));
+        await Assert.DoesNotThrowAsync(() => memory.WriteAsync("extra.md", "value"), "局內記憶的名額不受全域記憶影響");
     }
 
     [Test]

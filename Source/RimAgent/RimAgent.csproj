@@ -45,9 +45,9 @@
       <HintPath>$(RimLLMDir)Microsoft.Extensions.AI.Abstractions.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- 決策模型 SDK（TypeSafe System One / Jev），隨框架出貨；型別只用在方法內，不進欄位。 -->
-    <Reference Include="Kkdev92.Jev">
-      <HintPath>$(RimLLMDir)Kkdev92.Jev.dll</HintPath>
+    <!-- 決策模型 SDK（TypeSafe System One / TypeSafeAI），隨框架出貨；型別只用在方法內，不進欄位。 -->
+    <Reference Include="TypeSafeAI">
+      <HintPath>$(RimLLMDir)TypeSafeAI.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
@@ -66,13 +66,13 @@
 
   <ItemGroup>
     <!-- Microsoft Agent Framework：只用 ChatClientAgent 置換工具迴圈，不碰 Workflows。 -->
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.28.0" ExcludeAssets="runtime" />
     <!-- MEAI 版本跟框架出貨的 DLL 一致；Agent Framework 只間接要求較舊的版本，編譯時會與框架衝突（CS1705）。 -->
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" ExcludeAssets="runtime" />
     <!-- RimWorld 參考組件（Krafs.Rimworld.Ref）：提供 Assembly-CSharp/UnityStubs/Waylith/ObjectPool 等編譯參考，執行期由遊戲提供。 -->
     <PackageReference Include="Krafs.Rimworld.Ref" Version="1.7.4982-unstable" />
     <!-- 官方 MCP SDK（stdio client）：遊戲內 agent 呼叫本機 MCP 伺服器。執行期 DLL 見下方出貨白名單。 -->
-    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" ExcludeAssets="runtime" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.4.0" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <!--
@@ -85,16 +85,16 @@
   -->
   <Target Name="CopyAgentFrameworkAssemblies" AfterTargets="Build">
     <ItemGroup>
-      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai\1.21.0\lib\net10.0\Microsoft.Agents.AI.dll" />
-      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai.abstractions\1.21.0\lib\net10.0\Microsoft.Agents.AI.Abstractions.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai\1.28.0\lib\net10.0\Microsoft.Agents.AI.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.agents.ai.abstractions\1.28.0\lib\net10.0\Microsoft.Agents.AI.Abstractions.dll" />
       <!-- .NET 10 版 Agent Framework 的公開型別繼承 EvaluationResult，遊戲掃描型別時就需要此組件。 -->
-      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.ai.evaluation\10.10.0\lib\net10.0\Microsoft.Extensions.AI.Evaluation.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.ai.evaluation\10.11.0\lib\net10.0\Microsoft.Extensions.AI.Evaluation.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.compliance.abstractions\10.10.0\lib\net10.0\Microsoft.Extensions.Compliance.Abstractions.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.vectordata.abstractions\10.10.0\lib\net10.0\Microsoft.Extensions.VectorData.Abstractions.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.filesystemglobbing\10.0.12\lib\net10.0\Microsoft.Extensions.FileSystemGlobbing.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\net8.0\Microsoft.ML.Tokenizers.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)google.protobuf\3.30.2\lib\net5.0\Google.Protobuf.dll" />
-      <BundledAssemblies Include="$(NuGetPackageRoot)modelcontextprotocol.core\2.2.0\lib\net10.0\ModelContextProtocol.Core.dll" />
+      <BundledAssemblies Include="$(NuGetPackageRoot)modelcontextprotocol.core\2.4.0\lib\net10.0\ModelContextProtocol.Core.dll" />
       <!-- SmashTools bundled DLLs -->
       <BundledAssemblies Include="$(SmashToolsDir)SmashTools.dll" />
       <BundledAssemblies Include="$(SmashToolsDir)CoreLib.dll" />

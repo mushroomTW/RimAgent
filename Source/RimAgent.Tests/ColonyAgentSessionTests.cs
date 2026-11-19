@@ -184,7 +184,7 @@ public class ColonyAgentSessionTests
         _client.CallTool("get_colony_overview", null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具
         ColonyAgentSession session = NewSession(maxSteps: 3);
 
-        Assert.DoesNotThrowAsync(async () => await session.SendAsync("loop forever"));
+        await Assert.DoesNotThrowAsync(async () => await session.SendAsync("loop forever"));
 
         Assert.That(_client.CallCount, Is.LessThanOrEqualTo(4));
         Assert.That(session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool), Is.LessThanOrEqualTo(3));
@@ -468,7 +468,7 @@ public class ColonyAgentSessionTests
         session.UpdateMaxSteps(2);
 
         Assert.That(session.MaxSteps, Is.EqualTo(2));
-        Assert.DoesNotThrowAsync(async () => await session.SendAsync("loop forever"));
+        await Assert.DoesNotThrowAsync(async () => await session.SendAsync("loop forever"));
 
         Assert.That(_client.CallCount, Is.LessThanOrEqualTo(3));
         Assert.That(session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Tool), Is.LessThanOrEqualTo(2));

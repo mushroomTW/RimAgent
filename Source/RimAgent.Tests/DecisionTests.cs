@@ -302,7 +302,7 @@ What is the most significant effect of this action?
     }
 
     [Test]
-    public void CancellationPropagatesInsteadOfFallingBack()
+    public async Task CancellationPropagatesInsteadOfFallingBack()
     {
         var fakeService = new FakeDecisionService().Reply(0.1, 0.9);
         var checker = new DecisionRiskChecker(fakeService, null, () => SampleCriteria);
@@ -310,7 +310,7 @@ What is the most significant effect of this action?
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.ThrowsAsync<OperationCanceledException>(() =>
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
             checker.ClassifyAsync(new RiskQuestion(), cts.Token));
         Assert.That(fakeService.EvaluateCount, Is.EqualTo(0));
     }

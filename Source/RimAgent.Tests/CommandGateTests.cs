@@ -230,7 +230,7 @@ public class CommandGateTests
         gate.RegisterPendingApproval("failed", _ => throw new InvalidOperationException("failed"));
         gate.RegisterPendingApproval("later", _ => { laterCalls++; return Task.FromResult<object>(null); });
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await gate.ApprovePendingAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await gate.ApprovePendingAsync(CancellationToken.None));
         Assert.That(gate.HasPendingApprovals, Is.True);
         Assert.That(await gate.ApprovePendingAsync(CancellationToken.None), Is.EqualTo(1));
         Assert.That(laterCalls, Is.EqualTo(1));
@@ -243,7 +243,7 @@ public class CommandGateTests
         gate.RegisterPendingApproval("set_schedule", _ => Task.FromResult<object>("Error: target disappeared"));
         gate.RegisterPendingApproval("set_work_priorities", _ => Task.FromResult<object>("ok"));
 
-        var error = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await gate.ApprovePendingAsync(CancellationToken.None, rememberForSession: true));
         Assert.That(error.Message, Does.Contain("target disappeared"));
         Assert.That(gate.IsApprovedForSession("set_schedule"), Is.False);

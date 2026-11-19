@@ -1205,9 +1205,10 @@ public class RimAgentGameComponent : GameComponent
     {
         // 收尾只准清掉自己那一代；讀檔後新的一輪可能已經開始，舊的 finally 不能把它的旗標關掉。
         int generation = _autoGeneration;
+        CancellationToken token = BeginAutoCts().Token;
         try
         {
-            if (signals.HasValue && await TriageSkipsAsync(session, trigger, signals.Value, tick, generation)) return;
+            if (signals.HasValue && await TriageSkipsAsync(session, trigger, signals.Value, tick, generation, token)) return;
             if (generation != _autoGeneration) return;
             await RunAutonomousAsync(session, trigger, tick, config, signals, generation, detail);
         }
@@ -1224,9 +1225,10 @@ public class RimAgentGameComponent : GameComponent
     private async Task RunChoiceGuardedAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int tick, AutonomousConfig config)
     {
         int generation = _autoGeneration;
+        CancellationToken token = BeginAutoCts().Token;
         try
         {
-            HashSet<string> answered = await AnswerChoicesWithSystemOneAsync(session, choices, generation);
+            HashSet<string> answered = await AnswerChoicesWithSystemOneAsync(session, choices, generation, token);
             if (generation != _autoGeneration) return;
             bool leftover = _autoWorld.GetPendingChoices().Any(c => choices.Any(o => o.Id == c.Id) && !answered.Contains(c.Id));
             if (answered.Count > 0 && !leftover) return;
@@ -1247,7 +1249,7 @@ public class RimAgentGameComponent : GameComponent
     /// 自動模式另經同一個風險分類器放行。每個成功的代答都寫進對話、執行紀錄，並在下一句交給主 LLM。
     /// 回傳成功代答的抉擇 id。
     /// </summary>
-    private async Task<HashSet<string>> AnswerChoicesWithSystemOneAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int generation)
+    private async Task<HashSet<string>> AnswerChoicesWithSystemOneAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int generation, CancellationToken cancellationToken)
     {
         var answered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         RimAgentSettings settings = RimAgentMod.Settings;
@@ -1259,19 +1261,19 @@ public class RimAgentGameComponent : GameComponent
         if (!allowed) return answered;
 
         string colonyState = DecisionAutonomousTriage.DescribeSignals(GatherSignals());
-        IReadOnlyList<ChoiceDecision> decisions = await ChoiceResponder.DecideAsync(choices, colonyState, _autoCts.Token);
+        IReadOnlyList<ChoiceDecision> decisions = await ChoiceResponder.DecideAsync(choices, colonyState, cancellationToken);
         if (generation != _autoGeneration) return answered;
         string authorization = autoMode ? AutonomousPrompts.Build(_pack?.Autonomous, AutonomousTrigger.Choice) : null;
         foreach (ChoiceDecision decision in decisions)
         {
-            if (!await ProcessSystemOneChoiceAsync(session, decision, answered, authorization, autoMode, generation)) return answered;
+            if (!await ProcessSystemOneChoiceAsync(session, decision, answered, authorization, autoMode, generation, cancellationToken)) return answered;
         }
         return answered;
     }
 
     /// <summary>代答單一個抉擇：確認抉擇仍存在、自主模式下風險分類、執行選項並記錄結果。回傳 false 表示應停止後續處理。</summary>
     private async Task<bool> ProcessSystemOneChoiceAsync(
-        ColonyAgentSession session, ChoiceDecision decision, HashSet<string> answered, string authorization, bool autoMode, int generation)
+        ColonyAgentSession session, ChoiceDecision decision, HashSet<string> answered, string authorization, bool autoMode, int generation, CancellationToken cancellationToken)
     {
         PendingChoiceInfo choice = decision.Choice;
         // 前一個代答可能已讓這個抉擇消失（同一串對話框）：只答還在的。
@@ -1285,7 +1287,7 @@ public class RimAgentGameComponent : GameComponent
                 ToolName = "choose_option",
                 Arguments = System.Text.Json.JsonSerializer.Serialize(new { choiceId = choice.Id, option = decision.Option.Number }),
                 Preview = preview
-            }, _autoCts.Token);
+            }, cancellationToken);
             if (generation != _autoGeneration) return false;
             if (verdict == null || verdict.ShouldReject) return true;
         }
@@ -1304,7 +1306,7 @@ public class RimAgentGameComponent : GameComponent
     /// 基地狀況觸發先問 System One；判定不必處理就退回這次嘗試、稍後再問，不叫主 LLM。
     /// 決策模型不可用時回傳 false（照常叫主 LLM）。
     /// </summary>
-    private async Task<bool> TriageSkipsAsync(ColonyAgentSession session, AutonomousTrigger trigger, AutonomousSignals signals, int tick, int generation)
+    private async Task<bool> TriageSkipsAsync(ColonyAgentSession session, AutonomousTrigger trigger, AutonomousSignals signals, int tick, int generation, CancellationToken cancellationToken)
     {
         RimAgentSettings settings = RimAgentMod.Settings;
         if (settings == null || !settings.decisionTriageUpkeep || !DecisionAutonomousTriage.IsTriaged(trigger)) return false;
@@ -1315,7 +1317,7 @@ public class RimAgentGameComponent : GameComponent
             lastReply = last.Reply;
             hoursAgo = Math.Max(0, tick - last.Tick) / 2500f;
         }
-        TriageVerdict verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo, _autoCts.Token);
+        TriageVerdict verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo, cancellationToken);
         if (generation != _autoGeneration || verdict == null || !verdict.Skip) return false;
         _scheduler.Defer(trigger, Current.Game != null ? Find.TickManager.TicksGame : tick);
         string notice = $"System One judged that {DescribeGiveUp(trigger)} needs no action yet " +
@@ -1346,12 +1348,22 @@ public class RimAgentGameComponent : GameComponent
         }
     }
 
-    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation, string detail)
+    /// <summary>
+    /// 每一輪自主任務（含 System One 篩選與代答）進場時換一個新的 CTS，
+    /// 避免讀檔後尚未建立（null）或沿用上一輪已取消的 token。
+    /// </summary>
+    private CancellationTokenSource BeginAutoCts()
     {
-        // 起跑前遊戲已被換掉（例如排程器在同一幀觸發後玩家立刻讀檔）：不建立 CTS，也不碰任何狀態。
-        if (generation != _autoGeneration) return;
         _autoCts?.Dispose();
         _autoCts = new CancellationTokenSource();
+        return _autoCts;
+    }
+
+    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation, string detail)
+    {
+        // 起跑前遊戲已被換掉（例如排程器在同一幀觸發後玩家立刻讀檔）：不碰任何狀態。
+        if (generation != _autoGeneration) return;
+        // 沿用 guard 進場時建立的這一輪 CTS：篩選或代答期間按下停止，主 LLM 這一輪也跟著取消。
         CancellationTokenSource cts = _autoCts;
         // 送出前先算好這句會拿到的編號：busy 旗標保證成功送出的那句取的是下一個號；
         // 送完才讀 CurrentInstructionId 的話，玩家在旗標釋放的瞬間送指令會讓我們數到別句。

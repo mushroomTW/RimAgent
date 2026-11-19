@@ -278,13 +278,13 @@ public partial class AutoModeTests
     }
 
     [Test]
-    public void CancellationPropagatesInsteadOfFailingClosed()
+    public async Task CancellationPropagatesInsteadOfFailingClosed()
     {
         var client = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
         var classifier = new RiskClassifier(client, systemPrompt: () => "test classifier prompt");
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        Assert.ThrowsAsync<OperationCanceledException>(() => classifier.ClassifyAsync(new RiskQuestion(), cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => classifier.ClassifyAsync(new RiskQuestion(), cts.Token));
     }
 
     [Test]

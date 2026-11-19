@@ -138,14 +138,14 @@ internal static class SystemOneCheck
     private static async Task CheckConfirmModeAsync(ChoiceCheckContext ctx)
     {
         ctx.Settings.mode = AgentMode.Confirm;
-        HashSet<string> none = await Call<HashSet<string>>(Comp, "AnswerChoicesWithSystemOneAsync", ctx.Session, ctx.Choices, ctx.Generation);
+        HashSet<string> none = await Call<HashSet<string>>(ctx.GameComponent,"AnswerChoicesWithSystemOneAsync", ctx.Session, ctx.Choices, ctx.Generation, CancellationToken.None);
         if (none.Count != 0 || ctx.Stub.Calls != 0 || ctx.State.Pressed != null) ctx.Failures.Add($"confirm mode answered: {none.Count}, calls {ctx.Stub.Calls}, pressed {ctx.State.Pressed}");
     }
 
     private static async Task CheckExecuteModeAsync(ChoiceCheckContext ctx)
     {
         ctx.Settings.mode = AgentMode.Execute;
-        HashSet<string> none = await Call<HashSet<string>>(Comp, "AnswerChoicesWithSystemOneAsync", ctx.Session, ctx.Choices, ctx.Generation);
+        HashSet<string> none = await Call<HashSet<string>>(ctx.GameComponent,"AnswerChoicesWithSystemOneAsync", ctx.Session, ctx.Choices, ctx.Generation, CancellationToken.None);
         if (none.Count != 0 || ctx.Stub.Calls != 0) ctx.Failures.Add("execute mode with confirmation answered");
     }
 
@@ -155,7 +155,7 @@ internal static class SystemOneCheck
         int noticesBefore = Notices(ctx.Session, "System One answered");
         object config = AccessTools.Method(Comp, "ToConfig").Invoke(Comp, [ctx.Settings]);
         AccessTools.Field(Comp, "_autoRunning").SetValue(ctx.GameComponent, true);
-        await (Task)AccessTools.Method(Comp, "RunChoiceGuardedAsync").Invoke(Comp, [ctx.Session, ctx.Choices, Find.TickManager.TicksGame, config]);
+        await (Task)AccessTools.Method(Comp, "RunChoiceGuardedAsync").Invoke(ctx.GameComponent, [ctx.Session, ctx.Choices, Find.TickManager.TicksGame, config]);
 
         if (ctx.State.Pressed != Accept) ctx.Failures.Add("dialog not answered with Accept, pressed " + (ctx.State.Pressed ?? "nothing"));
         if (!ctx.State.OnMainThread) ctx.Failures.Add("dialog button ran off the main thread");
@@ -183,16 +183,16 @@ internal static class SystemOneCheck
             int generation = Field<int>(comp, "_autoGeneration");
             int before = Notices(session, "System One judged");
 
-            bool skip = await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation);
+            bool skip = await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation, CancellationToken.None);
             if (!skip) failures.Add("low need was not skipped");
-            skip = await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation);
+            skip = await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation, CancellationToken.None);
             if (!skip) failures.Add("second low need was not skipped");
             if (Notices(session, "System One judged") != before + 1) failures.Add("triage notice not shown exactly once per wait");
 
             need = 0.9;
-            if (await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation)) failures.Add("high need was skipped");
+            if (await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation, CancellationToken.None)) failures.Add("high need was skipped");
             int calls = stub.Calls;
-            if (await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.Fire, signals, tick, generation)) failures.Add("fire was skipped");
+            if (await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.Fire, signals, tick, generation, CancellationToken.None)) failures.Add("fire was skipped");
             if (stub.Calls != calls) failures.Add("fire was sent to the decision model");
             if (stub.Calls != 3) failures.Add("triage decision calls " + stub.Calls);
         }

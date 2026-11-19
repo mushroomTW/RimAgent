@@ -194,14 +194,14 @@ false: The agent is not waiting for player guidance or input.
     }
 
     [Test]
-    public void AuditAsyncRethrowsWhenCancellationTokenCancelled()
+    public async Task AuditAsyncRethrowsWhenCancellationTokenCancelled()
     {
         var cts = new CancellationTokenSource();
         cts.Cancel();
         var fake = new FakeDecisionService();
         var auditor = new DecisionGoalAuditor(fake, criteriaProvider: () => SampleGoalCriteria);
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await auditor.AuditAsync("Build 3 beds", "Done.\n[[GOAL:COMPLETE]]", cancellationToken: cts.Token);
         });

@@ -231,7 +231,7 @@ public class CompactionTests
         Task<string> running = session.SendAsync("第一則對話", onAccepted: () => accepted++);
         Assert.That(accepted, Is.EqualTo(1));
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await session.SendAsync("忙碌時的對話", onAccepted: () => accepted++));
         Assert.That(accepted, Is.EqualTo(1));
 
@@ -308,7 +308,7 @@ public class CompactionTests
         Task<string> running = session.SendAsync("hello");
         Assert.That(session.IsBusy, Is.True);
 
-        Assert.ThrowsAsync<InvalidOperationException>(() => session.CompactAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => session.CompactAsync());
 
         gate.Release("done");
         Assert.That(await running, Is.EqualTo("done"));
