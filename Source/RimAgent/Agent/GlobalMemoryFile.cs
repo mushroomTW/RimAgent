@@ -37,6 +37,9 @@ public static class GlobalMemoryFile
         }
     }
 
+    /// <summary>全域記憶寫入鎖；呼叫端需要讓「取快照＋寫檔」不可分割時也用這把（可重入）。</summary>
+    internal static readonly object Gate = new();
+
     /// <summary>寫回全域記憶；先寫暫存檔再原子換檔，任何時間點中斷都至少留著完整的舊檔或新檔。</summary>
     public static void Save(string path, IReadOnlyList<AgentMemoryEntry> entries)
     {
@@ -49,10 +52,21 @@ public static class GlobalMemoryFile
         }
         string folder = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
-        string temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(document, Options), Utf8);
-        if (File.Exists(path)) File.Replace(temp, path, null);
-        else File.Move(temp, path);
+        // 序列化存檔：多條寫入同時進來時，共用暫存檔會互相覆蓋或搶不到檔案。
+        lock (Gate)
+        {
+            string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temp, JsonSerializer.Serialize(document, Options), Utf8);
+                if (File.Exists(path)) File.Replace(temp, path, null);
+                else File.Move(temp, path);
+            }
+            finally
+            {
+                if (File.Exists(temp)) File.Delete(temp);
+            }
+        }
     }
 
     private static List<AgentMemoryEntry> ToEntries(MemoryDocumentDto document)

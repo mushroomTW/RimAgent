@@ -793,7 +793,7 @@ public class RimAgentMod : Mod
             };
 
             foreach (DecisionRouteCategory builtIn in DecisionRouteCategory.CreateDefaultCategories()
-                .Where(b => !Settings.decisionCategories.Any(c => string.Equals(c.Id, b.Id, StringComparison.OrdinalIgnoreCase))))
+                .Where(b => !Settings.decisionCategories.Any(c => c != null && string.Equals(c.Id, b.Id, StringComparison.OrdinalIgnoreCase))))
             {
                 DecisionRouteCategory captured = builtIn;
                 options.Add(new FloatMenuOption("RimAgent.Settings.DecisionCategoryRestore".Translate(captured.Name, captured.Id), () =>

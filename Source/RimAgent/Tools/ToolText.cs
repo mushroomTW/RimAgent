@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -17,12 +18,12 @@ internal static class ToolText
 
     public static string Error(string message)
     {
-        return message.StartsWith(ErrorPrefix) ? message : ErrorPrefix + message;
+        return message.StartsWith(ErrorPrefix, StringComparison.Ordinal) ? message : ErrorPrefix + message;
     }
 
     public static string Confirmation(string preview)
     {
-        return preview.StartsWith(ConfirmationPrefix) ? preview : ConfirmationPrefix + preview;
+        return preview.StartsWith(ConfirmationPrefix, StringComparison.Ordinal) ? preview : ConfirmationPrefix + preview;
     }
 
     /// <summary>

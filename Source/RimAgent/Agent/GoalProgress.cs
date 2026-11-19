@@ -204,8 +204,8 @@ public static class GoalProgress
     {
         Match match = StatusMarker.Match(reply.TrimEnd(' ', '\t', '\r', '\n'));
         if (match.Groups[2].Success) return match.Groups[2].Value.ToLowerInvariant();
-        string description = Regex.Replace(VisibleReply(reply), @"\s+", " ", RegexOptions.None, TimeSpan.FromSeconds(1)).Trim().ToLowerInvariant();
-        return description.Length == 0 ? "unspecified" : description.Substring(0, Math.Min(120, description.Length));
+        // 沒寫代號時用固定鍵：連續幾輪都沒寫代號的 BLOCKED 才會累計，不因每次說法不同而一直歸零。
+        return "unspecified";
     }
 
     private static string EscapeXml(string value)

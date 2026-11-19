@@ -16,6 +16,9 @@ internal sealed class ToolOutputTools
     /// <summary>一次讀回的字元數；留空間給標頭與可能附加的遊戲錯誤。</summary>
     public const int SliceChars = 6000;
 
+    /// <summary>find 對單行超過此長度的符合行只列出這麼多字的命中片段。</summary>
+    private const int ExcerptChars = 400;
+
     private readonly ToolOutputStore _store;
 
     public ToolOutputTools(ToolOutputStore store = null)
@@ -54,6 +57,18 @@ internal sealed class ToolOutputTools
         return header + text[start..end] + footer;
     }
 
+    /// <summary>過長的符合行只列出命中處前後的片段，並註明命中位置，讓模型改用 offset 讀那一段。</summary>
+    private static string ExcerptEntry(int lineStart, string line, string find)
+    {
+        int hit = Math.Max(0, line.IndexOf(find, StringComparison.OrdinalIgnoreCase));
+        int from = ToolOutputLimit.AlignToCharBoundary(line, Math.Max(0, hit - ExcerptChars / 2));
+        int to = ToolOutputLimit.AlignToCharBoundary(line, Math.Min(line.Length, from + ExcerptChars));
+        int absolute = lineStart + hit;
+        return "@" + lineStart.ToString(CultureInfo.InvariantCulture) + " (long line, " + line.Length.ToString(CultureInfo.InvariantCulture) +
+            " chars; match at offset " + absolute.ToString(CultureInfo.InvariantCulture) + ", read a slice from there): " +
+            (from > 0 ? "..." : string.Empty) + line[from..to] + (to < line.Length ? "..." : string.Empty) + "\n";
+    }
+
     private static string Find(string id, string text, string find)
     {
         var sb = new StringBuilder();
@@ -66,7 +81,9 @@ internal sealed class ToolOutputTools
             if (line.Contains(find, StringComparison.OrdinalIgnoreCase))
             {
                 matches++;
-                string entry = "@" + lineStart.ToString(CultureInfo.InvariantCulture) + ": " + line + "\n";
+                string entry = line.Length > ExcerptChars
+                    ? ExcerptEntry(lineStart, line, find)
+                    : "@" + lineStart.ToString(CultureInfo.InvariantCulture) + ": " + line + "\n";
                 if (sb.Length + entry.Length <= SliceChars)
                 {
                     sb.Append(entry);

@@ -27,9 +27,9 @@ internal static class LatexMath
         RegexOptions.Compiled,
         RegexTimeout);
 
-    /// <summary>$...$ 行內數學：開頭 $ 後非空白、結尾 $ 前非空白；排除 $$ 與 \$。</summary>
+    /// <summary>$...$ 行內數學：開頭 $ 後非空白、結尾 $ 前非空白、後面不接數字（排除 "$5-$10" 這類金額區間）；排除 $$ 與 \$。</summary>
     private static readonly Regex InlineMath = new(
-        @"(?<!\\)(?<!\$)\$(?!\$)(?!\s)(?<body>[^$\n]+?)(?<!\s)(?<!\\)\$(?!\$)",
+        @"(?<!\\)(?<!\$)\$(?!\$)(?!\s)(?<body>[^$\n]+?)(?<!\s)(?<!\\)\$(?!\$)(?!\d)",
         RegexOptions.Compiled,
         RegexTimeout);
 

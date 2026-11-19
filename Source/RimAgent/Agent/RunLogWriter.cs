@@ -57,9 +57,13 @@ public sealed class RunLogRecord
         });
     }
 
+    // 一份紀錄只擷取一次；重複呼叫會讓工具計數與步驟翻倍。
+    private bool _transcriptCaptured;
+
     public void CaptureTranscript(IReadOnlyList<TranscriptEntry> entries, int instructionId)
     {
-        if (entries == null) return;
+        if (entries == null || _transcriptCaptured) return;
+        _transcriptCaptured = true;
         List<TranscriptEntry> own = [.. entries.Where(e => e.InstructionId == instructionId)];
         foreach (TranscriptEntry tool in own.Where(e => e.Kind == TranscriptKind.Tool))
         {
@@ -166,20 +170,41 @@ public sealed class RunLogWriter
         string json = JsonSerializer.Serialize(record);
         lock (_gate)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
-            bool exists = File.Exists(FilePath);
-            if (!exists) _lineCount = 0;
-            else if (_lineCount < 0) _lineCount = File.ReadLines(FilePath, Utf8).Count();
-            long size = exists ? new FileInfo(FilePath).Length : 0;
-            string line = json + Environment.NewLine;
-            if (_lineCount < MaxRuns && size + Utf8.GetByteCount(line) <= MaxFileBytes)
+            try
             {
-                File.AppendAllText(FilePath, line, Utf8);
-                _lineCount++;
-                return;
+                AppendLocked(json);
             }
-            RewriteTrimmed(json);
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // 紀錄只是診斷用：檔案被鎖或磁碟滿時丟掉這一筆，不能讓例外傳到遊戲線程。
+                _lineCount = -1;
+                try
+                {
+                    Verse.Log.Warning("RimAgent: could not write run log " + FilePath + " (" + ex.Message + ")");
+                }
+                catch (Exception)
+                {
+                    // 日誌不可用（例如在遊戲外執行）不該再丟例外。
+                }
+            }
         }
+    }
+
+    private void AppendLocked(string json)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
+        bool exists = File.Exists(FilePath);
+        if (!exists) _lineCount = 0;
+        else if (_lineCount < 0) _lineCount = File.ReadLines(FilePath, Utf8).Count();
+        long size = exists ? new FileInfo(FilePath).Length : 0;
+        string line = json + Environment.NewLine;
+        if (_lineCount < MaxRuns && size + Utf8.GetByteCount(line) <= MaxFileBytes)
+        {
+            File.AppendAllText(FilePath, line, Utf8);
+            _lineCount++;
+            return;
+        }
+        RewriteTrimmed(json);
     }
 
     /// <summary>從最新往回保留，直到筆數或位元組碰到裁切目標。</summary>
@@ -197,7 +222,17 @@ public sealed class RunLogWriter
             bytes = next;
             keep++;
         }
-        File.WriteAllLines(FilePath, lines.GetRange(lines.Count - keep, keep), Utf8);
+        // 先寫暫存檔再換檔：寫到一半失敗或當機時，原檔仍完整。
+        string temp = FilePath + ".tmp";
+        try
+        {
+            File.WriteAllLines(temp, lines.GetRange(lines.Count - keep, keep), Utf8);
+            File.Replace(temp, FilePath, null);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
         _lineCount = keep;
     }
 }

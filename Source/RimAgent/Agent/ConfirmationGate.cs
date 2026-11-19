@@ -114,9 +114,15 @@ public sealed class ConfirmationGate
     /// <param name="cancellationToken">取消語彙基元。</param>
     /// <param name="rememberForSession">把這批工具記成「本局不再問」；MCP 工具不記（見 <see cref="CanRememberForSession"/>）。</param>
     /// <returns>成功執行的工具呼叫數量。</returns>
+    /// <remarks>
+    /// 中途失敗或取消時：已移出待確認的項目（已執行的與出事的那一個）不會重試，
+    /// 它們對應的預覽也從 blocked 前段移除（假設預覽與待確認同序登記）；
+    /// 尚未執行的項目留在待確認，其預覽保留，玩家可再核准或捨棄。
+    /// </remarks>
     internal async Task<int> ApprovePendingAsync(CancellationToken cancellationToken, bool rememberForSession = false)
     {
         lock (_gate) _lastApprovalExecutedCount = 0;
+        int removedFromPending = 0;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -131,12 +137,21 @@ public sealed class ConfirmationGate
                 // 開始執行前移除目前項目；失敗時無法保證它沒有部分生效，因此不可自動重試。
                 approval = _pending[0];
                 _pending.RemoveAt(0);
+                removedFromPending++;
             }
-            // 核准後會直接執行工具；續行必須留在呼叫端的主線程，否則第二批命令會落到執行緒池碰遊戲狀態。
-            object result = await approval.ExecuteAsync(cancellationToken);
-            // 工具通常以錯誤文字回報失敗而非拋出例外；失敗不可記成永久放行。
-            if ((result?.ToString() ?? string.Empty).StartsWith("Error: ", StringComparison.Ordinal))
-                throw new InvalidOperationException(result.ToString());
+            try
+            {
+                // 核准後會直接執行工具；續行必須留在呼叫端的主線程，否則第二批命令會落到執行緒池碰遊戲狀態。
+                object result = await approval.ExecuteAsync(cancellationToken);
+                // 工具通常以錯誤文字回報失敗而非拋出例外；失敗不可記成永久放行。
+                if ((result?.ToString() ?? string.Empty).StartsWith("Error: ", StringComparison.Ordinal))
+                    throw new InvalidOperationException(result.ToString());
+            }
+            catch
+            {
+                lock (_gate) _blocked.RemoveRange(0, Math.Min(removedFromPending, _blocked.Count));
+                throw;
+            }
             lock (_gate) _lastApprovalExecutedCount++;
             // 執行成功才記：中途失敗或取消時，沒真的跑過的工具不該被永久放行。
             if (rememberForSession && CanRememberForSession(approval.ToolName))
@@ -278,8 +293,8 @@ public sealed class ConfirmationGate
     {
         if (string.IsNullOrEmpty(error)) return;
         string key = QueryCacheKey(toolName, arguments);
-        int count = _failedCalls.TryGet(key, out FailedCall previous) ? previous.Count : 0;
-        _failedCalls.Store(key, new FailedCall { Count = count + 1, Error = error });
+        _failedCalls.AddOrUpdate(key, (exists, previous) =>
+            new FailedCall { Count = (exists ? previous.Count : 0) + 1, Error = error });
     }
 
     private const int MaxIdenticalFailures = 2;

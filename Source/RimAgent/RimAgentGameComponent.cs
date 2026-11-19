@@ -148,6 +148,60 @@ public class RimAgentGameComponent : GameComponent
     // RimAgent.Game 命名空間會遮蔽 Verse.Game，這裡要寫全名。
     public RimAgentGameComponent(Verse.Game game)
     {
+        // 遊戲建立元件時一定帶 Game；離線單元測試傳 null 建構，不登記、不打補丁。
+        if (game != null) ReplaceLive(this);
+    }
+
+    /// <summary>目前活著的元件；新局／讀檔會建立新的元件，舊的得由這裡找到並收掉。</summary>
+    private static RimAgentGameComponent _live;
+    /// <summary>回主選單的補丁只打一次。</summary>
+    private static bool _menuPatched;
+
+    /// <summary>遊戲被換掉或回到主選單、舊元件已被收尾時觸發（主線程）；視窗據此取消進行中的玩家指令。</summary>
+    public static event Action GameTornDown;
+
+    /// <summary>登記新的活元件並收掉舊的；舊元件的 CTS 與 MCP 行程屬於上一局，新元件的同名操作碰不到。</summary>
+    private static void ReplaceLive(RimAgentGameComponent next)
+    {
+        RimAgentGameComponent old = Interlocked.Exchange(ref _live, next);
+        old?.Teardown();
+        EnsureMenuPatched();
+    }
+
+    /// <summary>
+    /// 回主選單時 RimWorld 只丟掉 Game，不通知任何遊戲元件（GenScene.GoToMainMenu），
+    /// 所以在它前面掛 Harmony prefix 收尾；prefix 跑在主線程、Current.Game 還沒清掉。
+    /// </summary>
+    private static void EnsureMenuPatched()
+    {
+        if (_menuPatched) return;
+        _menuPatched = true;
+        new HarmonyLib.Harmony("greenmushroom.rimagent.lifecycle").Patch(
+            HarmonyLib.AccessTools.Method(typeof(GenScene), nameof(GenScene.GoToMainMenu)),
+            prefix: new HarmonyLib.HarmonyMethod(typeof(RimAgentGameComponent), nameof(GoToMainMenuPrefix)));
+    }
+
+    private static void GoToMainMenuPrefix()
+    {
+        Interlocked.Exchange(ref _live, null)?.Teardown();
+    }
+
+    /// <summary>
+    /// 這一局結束：取消自主任務與持續目標、讓其收尾失效、關掉 MCP server，並通知視窗。
+    /// 讀檔時新元件在背景執行緒建構（Root_Play 的非同步 LongEvent），所以碰 UI 的部分排回主線程。
+    /// </summary>
+    private void Teardown()
+    {
+        PrepareForReload();
+        _mcp?.Shutdown();
+        if (UnityData.IsInMainThread) NotifyTornDown();
+        else LongEventHandler.ExecuteWhenFinished(NotifyTornDown);
+    }
+
+    private static void NotifyTornDown()
+    {
+        RimWorldGameWorld.ResetAgentUiState();
+        GameTornDown?.Invoke();
     }
 
     public static RimAgentGameComponent Instance => Current.Game?.GetComponent<RimAgentGameComponent>();
@@ -493,6 +547,7 @@ public class RimAgentGameComponent : GameComponent
 
     public override void StartedNewGame()
     {
+        RimWorldGameWorld.ResetAgentUiState();
         _session = null;
         _loadedTranscript = null;
         _loadedUndoFrames = null;
@@ -528,6 +583,7 @@ public class RimAgentGameComponent : GameComponent
 
     public override void LoadedGame()
     {
+        RimWorldGameWorld.ResetAgentUiState();
         _session = null;
         // LoadingVars 已重新載入全域記憶；保留未成功寫入的遷移資料。
         _goalCts?.Cancel();
@@ -1354,7 +1410,7 @@ public class RimAgentGameComponent : GameComponent
     /// </summary>
     private CancellationTokenSource BeginAutoCts()
     {
-        _autoCts?.Dispose();
+        // 不 Dispose 舊的：還在收尾的上一輪可能仍要讀它的 Token；交給 GC 即可（沒有計時器或等待把手）。
         _autoCts = new CancellationTokenSource();
         return _autoCts;
     }
@@ -1384,9 +1440,10 @@ public class RimAgentGameComponent : GameComponent
                 cancellationToken: cts.Token);
             HandleAutonomousReply(trigger, reply, generation);
         }
-        catch (InvalidOperationException)
+        catch (AgentBusyException)
         {
-            // 玩家在同一幀搶先送了指令：這次沒跑，不算一次自主任務、不吃冷卻。
+            // 玩家在同一幀搶先送了指令（session 被占用）：這次沒跑，不算一次自主任務、不吃冷卻。
+            // 其他 InvalidOperationException 落到下面的通用 catch，照一般失敗記錄並套用冷卻。
             return;
         }
         catch (OperationCanceledException)

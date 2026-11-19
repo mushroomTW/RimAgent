@@ -7,11 +7,11 @@ using Verse;
 
 namespace RimAgent;
 
-/// <summary>玩家可調的設定：十二類工具權限、執行模式與背景排程選項。</summary>
+/// <summary>玩家可調的設定：十六類工具權限、執行模式與背景排程選項。</summary>
 public class RimAgentSettings : ModSettings
 {
 #pragma warning disable S1104 // RimWorld ModSettings and Listing_Standard require public fields passed by ref
-    /// <summary>十二類工具開關，Taxi <see cref="ToolCategory"/> 順序存放；Scribe 鍵沿用舊欄位名，舊存檔與舊設定相容。</summary>
+    /// <summary>十六類工具開關，Taxi <see cref="ToolCategory"/> 順序存放；Scribe 鍵沿用舊欄位名，舊存檔與舊設定相容。</summary>
     public bool[] allowByCategory = DefaultAllows();
     /// <summary>執行模式：詢問／確認／自動／自主，見 <see cref="AgentMode"/>。</summary>
     public AgentMode mode = AgentMode.Confirm;
@@ -197,7 +197,7 @@ public class RimAgentSettings : ModSettings
     }
 
     /// <summary>
-    /// 設定頁的「恢復預設」：權限、主動照顧、決策模型、模型分工、壓縮、搜尋與紀錄回到新安裝的值。
+    /// 設定頁的「恢復預設」：權限、主動照顧、決策模型、模型分工、壓縮、搜尋、紀錄、模組化房型與圖片輸入回到新安裝的值。
     /// Agent 視窗裡選的模型、思考強度、執行模式與視窗位置不在設定頁，保留不動。
     /// </summary>
     public void ResetToDefaults()
@@ -228,6 +228,8 @@ public class RimAgentSettings : ModSettings
         autoCompact = fresh.autoCompact;
         autoCompactThreshold = fresh.autoCompactThreshold;
         recordRuns = fresh.recordRuns;
+        layouts = fresh.layouts;
+        imageInput = fresh.imageInput;
     }
 
     private void EnsureAllows()

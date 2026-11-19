@@ -34,12 +34,21 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
     private readonly Func<bool> _enabled;
     private readonly Func<string, Task<byte[]>> _load;
     private readonly ConcurrentDictionary<string, byte[]> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _failedPaths = new(StringComparer.OrdinalIgnoreCase);
     private volatile IReadOnlyList<byte[]> _playerImages;
+    private volatile string _instructionText;
 
-    /// <summary>設定本句指令要附的玩家圖片（JPEG）；指令結束時以 null 清除。</summary>
-    public void SetPlayerImages(IReadOnlyList<byte[]> images)
+    /// <summary>
+    /// 設定本句指令要附的玩家圖片（JPEG）；指令結束時以 null 清除。
+    /// <paramref name="instructionText"/> 是這句指令的原文：圖片附在含此文字的使用者訊息上
+    /// （而不是最後一則使用者訊息，後者可能是後來才加入的訊息）；找不到或沒給時退回最後一則。
+    /// 每次呼叫也清掉讀圖失敗的記錄，讓失敗只在同一句指令內不重試。
+    /// </summary>
+    public void SetPlayerImages(IReadOnlyList<byte[]> images, string instructionText = null)
     {
         _playerImages = images != null && images.Count > 0 ? images : null;
+        _instructionText = string.IsNullOrWhiteSpace(instructionText) ? null : instructionText.Trim();
+        _failedPaths.Clear();
     }
 
     /// <param name="innerClient">下一層 client。</param>
@@ -83,8 +92,9 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         IReadOnlyList<byte[]> playerImages = _playerImages;
         if (playerImages != null && lastUser >= 0)
         {
+            int target = FindInstructionMessage(list, lastUser);
             copy = [.. list];
-            copy[lastUser] = WithImages(list[lastUser], playerImages);
+            copy[target] = WithImages(list[target], playerImages);
         }
 
         if (TryFindLatestScreenshot(list, lastUser + 1, out int toolIndex, out string path))
@@ -104,6 +114,22 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
             }
         }
         return copy ?? messages;
+    }
+
+    /// <summary>找本句指令的原始使用者訊息：由後往前找含指令原文的那則；沒設定原文或找不到就用最後一則使用者訊息。</summary>
+    private int FindInstructionMessage(List<ChatMessage> list, int lastUser)
+    {
+        string text = _instructionText;
+        if (text == null) return lastUser;
+        for (int i = lastUser; i >= 0; i--)
+        {
+            if (list[i].Role == ChatRole.User
+                && (list[i].Text ?? string.Empty).Contains(text, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+        return lastUser;
     }
 
     /// <summary>複製一則訊息並在內容後面加上圖片；原訊息屬於對話歷史，不能直接改。</summary>
@@ -165,6 +191,8 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
     private async Task<byte[]> LoadAsync(string path, CancellationToken cancellationToken)
     {
         if (_cache.TryGetValue(path, out byte[] cached)) return cached;
+        // 這句指令內已確定讀不到：迴圈每一輪都會再進來，不要每次重試 20 次 × 100ms。
+        if (_failedPaths.ContainsKey(path)) return null;
         for (int attempt = 0; attempt < MaxLoadAttempts; attempt++)
         {
             byte[] image = await _load(path).ConfigureAwait(false);
@@ -176,6 +204,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
             }
             await Task.Delay(RetryDelay, cancellationToken).ConfigureAwait(false);
         }
+        _failedPaths[path] = 0;
         return null;
     }
 }

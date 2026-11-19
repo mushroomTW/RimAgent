@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using RimAgent.Agent;
@@ -236,6 +237,8 @@ public partial class Window_Agent : Window
     private string _capabilityWarning;
     private DateTime _nextCapabilityProbe;
     private CancellationTokenSource _cts;
+    /// <summary>被新一輪取代、但舊工作可能還在跑的 CTS 與其工作；停止時一併取消，工作結束後釋放。</summary>
+    private readonly List<(CancellationTokenSource Cts, Task Work)> _retiredCts = [];
     private int _slashIndex;
     private int _skillIndex;
     private bool _posInitialized;
@@ -265,6 +268,23 @@ public partial class Window_Agent : Window
         preventCameraMotion = false;
         soundAppear = null;
         soundClose = SoundDefOf.TabClose;
+        RimAgentGameComponent.GameTornDown += OnGameTornDown;
+    }
+
+    /// <summary>
+    /// 遊戲被換掉或回主選單時視窗不會收到 PostClose：取消進行中的指令並釋放截圖貼圖（事件在主線程觸發）。
+    /// </summary>
+    private void OnGameTornDown()
+    {
+        RimAgentGameComponent.GameTornDown -= OnGameTornDown;
+        CancelRunCts();
+        ReleaseScreenshotTextures();
+    }
+
+    private void ReleaseScreenshotTextures()
+    {
+        foreach (Texture2D texture in _screenshotTextures.Values) UnityEngine.Object.Destroy(texture);
+        _screenshotTextures.Clear();
     }
 
     public static bool IsOpenNow => Find.WindowStack != null && Find.WindowStack.IsOpen<Window_Agent>();
@@ -341,11 +361,11 @@ public partial class Window_Agent : Window
         base.PostClose();
         Find.WindowStack.WindowOfType<ContextPanel>()?.Close(false);
         // 關窗後不該再讓進行中的對話繼續跑；下一次送出會建立新的 CTS。
-        _cts?.Cancel();
-        _cts?.Dispose();
+        RimAgentGameComponent.GameTornDown -= OnGameTornDown;
+        CancelRunCts();
+        // 已取消的 CTS 可能仍被收尾中的工作讀取 Token，不 Dispose，交給 GC。
         _cts = null;
-        foreach (Texture2D texture in _screenshotTextures.Values) UnityEngine.Object.Destroy(texture);
-        _screenshotTextures.Clear();
+        ReleaseScreenshotTextures();
         _screenshotOrder.Clear();
         _screenshotFailedAt.Clear();
         _pendingScreenshot = null;
@@ -1402,8 +1422,17 @@ public partial class Window_Agent : Window
 
             RenderTexture.active = step;
             var preview = new Texture2D(step.width, step.height, TextureFormat.RGBA32, false);
-            preview.ReadPixels(new Rect(0f, 0f, step.width, step.height), 0, 0);
-            preview.Apply(false, true);
+            try
+            {
+                preview.ReadPixels(new Rect(0f, 0f, step.width, step.height), 0, 0);
+                preview.Apply(false, true);
+            }
+            catch
+            {
+                // 失敗時 preview 沒人會接手，要自己銷毀，免得洩漏貼圖。
+                UnityEngine.Object.Destroy(preview);
+                throw;
+            }
             return preview;
         }
         finally
@@ -2085,7 +2114,7 @@ public partial class Window_Agent : Window
 
     private void StopRun()
     {
-        _cts?.Cancel();
+        CancelRunCts();
         RimAgentGameComponent component = RimAgentGameComponent.Instance;
         component?.StopAutonomousRun();
         if (component?.IsGoalRunning == true) component.PauseGoal();
@@ -2640,16 +2669,48 @@ public partial class Window_Agent : Window
 
     private void Confirm(ColonyAgentSession session, bool rememberForSession)
     {
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
-        Observe(session, session.ConfirmAsync(rememberForSession, _cts.Token));
+        Observe(session, session.ConfirmAsync(rememberForSession, BeginRunCts().Token));
     }
 
     private void Compact(ColonyAgentSession session)
     {
-        _cts?.Dispose();
+        Observe(session, session.CompactAsync(BeginRunCts().Token));
+    }
+
+    /// <summary>
+    /// 換上新一輪的 CTS。舊的若還有未完成的工作握著它，就先收進 _retiredCts（停止時一併取消）而不 Dispose；
+    /// 舊工作已結束才安全釋放。
+    /// </summary>
+    private CancellationTokenSource BeginRunCts()
+    {
+        CancellationTokenSource old = _cts;
+        if (old != null)
+        {
+            if (_observedTask == null || _observedTask.IsCompleted) old.Dispose();
+            else _retiredCts.Add((old, _observedTask));
+        }
+        DisposeFinishedRetiredCts();
         _cts = new CancellationTokenSource();
-        Observe(session, session.CompactAsync(_cts.Token));
+        return _cts;
+    }
+
+    /// <summary>取消目前與已退役但仍在跑的 CTS（停止鍵、關窗、遊戲被換掉）。</summary>
+    private void CancelRunCts()
+    {
+        _cts?.Cancel();
+        foreach ((CancellationTokenSource cts, Task _) in _retiredCts) cts.Cancel();
+        DisposeFinishedRetiredCts();
+    }
+
+    /// <summary>工作已結束的退役 CTS 不會再有人讀，釋放並移出清單；仍在跑的留著。</summary>
+    private void DisposeFinishedRetiredCts()
+    {
+        _retiredCts.RemoveAll(r =>
+        {
+            if (!r.Work.IsCompleted) return false;
+            r.Cts.Dispose();
+            return true;
+        });
     }
 
     /// <summary>
@@ -2671,7 +2732,17 @@ public partial class Window_Agent : Window
         _observedSession = null;
         if (task.IsFaulted && session != null)
         {
-            Notice(session, "RimAgent.Slash.Busy".Translate());
+            // 只有「同幀被自主任務搶先」的忙碌衝突才提示忙碌；其他失敗留下紀錄並顯示一般錯誤。
+            Exception error = task.Exception?.GetBaseException();
+            if (error is AgentBusyException)
+            {
+                Notice(session, "RimAgent.Slash.Busy".Translate());
+            }
+            else
+            {
+                Log.Warning("RimAgent request failed: " + error);
+                Notice(session, "RimAgent.Error.Unknown".Translate(error?.Message ?? string.Empty));
+            }
         }
     }
 
@@ -2729,10 +2800,8 @@ public partial class Window_Agent : Window
             else Notice(session, "RimAgent.Slash.Unknown".Translate(text));
             return;
         }
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
         string display = images.Count == 0 ? null : text + " " + "RimAgent.ImagesAttached".Translate(images.Count);
-        Observe(session, session.SendAsync(text, displayText: display, images: images, cancellationToken: _cts.Token));
+        Observe(session, session.SendAsync(text, displayText: display, images: images, cancellationToken: BeginRunCts().Token));
     }
 
     private void ProbeCapabilities()
@@ -2740,9 +2809,9 @@ public partial class Window_Agent : Window
         _nextCapabilityProbe = DateTime.UtcNow.AddSeconds(2);
         // 框架換掉模型後，清掉 RimAgent 殘留的舊指定，免得繼續打不存在的模型。
         RimAgentSettings settings = RimAgentMod.Settings;
-        if (settings != null && settings.ClearAgentModelIfMissing(ConfiguredModels())) settings.Write();
         try
         {
+            if (settings != null && settings.ClearAgentModelIfMissing(ConfiguredModels())) TryWriteSettings(settings);
             _capabilityWarning = CheckFunctionCalling() ? null : "RimAgent.NoFunctionCalling".Translate().ToString();
         }
         catch (RimLLMException ex)
@@ -2756,6 +2825,25 @@ public partial class Window_Agent : Window
         catch (Exception ex) when (ex is MissingMethodException || ex is TypeLoadException)
         {
             _capabilityWarning = "RimAgent.FrameworkTooOld".Translate();
+        }
+        catch (Exception ex)
+        {
+            // 其他未預期的例外：不冒到 UI 繪製迴圈，也不誤報成「沒有供應商」；記一次警告留下原因（每兩秒重探，不洗版）。
+            Log.WarningOnce("RimAgent: capability probe failed: " + ex, "RimAgent.ProbeCapabilities".GetHashCode());
+            _capabilityWarning = "RimAgent.Error.Unknown".Translate(ex.Message);
+        }
+    }
+
+    /// <summary>寫設定檔失敗（例如檔案被鎖）只記一次警告，不影響能力探測的結果。</summary>
+    private static void TryWriteSettings(RimAgentSettings settings)
+    {
+        try
+        {
+            settings.Write();
+        }
+        catch (Exception ex)
+        {
+            Log.WarningOnce("RimAgent: could not save settings: " + ex.Message, "RimAgent.SettingsWrite".GetHashCode());
         }
     }
 
@@ -2794,7 +2882,17 @@ public partial class Window_Agent : Window
     /// <summary>表格格子交給框架的格子轉換（保留「射擊 12**」這類熱情星號），再套上內文顏色。</summary>
     private static string RenderCell(string cell)
     {
-        return ColorTagPrefix + TextHex + ">" + RimLLM_Framework.Mod.RimLLMMarkdown.CellToRichText(LatexMath.ConvertMath(cell)) + ColorTagClose;
+        string math;
+        try
+        {
+            math = LatexMath.ConvertMath(cell);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // 病態輸入讓數學轉換逾時：這格就照原文顯示，不讓例外冒到繪製迴圈。
+            math = cell;
+        }
+        return ColorTagPrefix + TextHex + ">" + RimLLM_Framework.Mod.RimLLMMarkdown.CellToRichText(math) + ColorTagClose;
     }
 
     /// <summary>記住上一次的輸入值與組好的字串；值沒變就直接回傳，不重新翻譯與格式化。</summary>

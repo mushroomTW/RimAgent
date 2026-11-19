@@ -91,14 +91,27 @@ public sealed class ProductionTools
     }
 
     [AgentTool("delete_bill", ToolCategory.Production, ToolRisk.Confirm)]
-    [Description("Deletes one bill from a work table by its number from list_bills. Gathered materials stay where they are.")]
+    [Description("Deletes one bill from a work table by its number from list_bills. Numbers shift down after every delete: when deleting several, go from the highest number to the lowest or pass expectedLabel. Gathered materials stay where they are.")]
     public string DeleteBill(
         [Description("Work table id in square brackets from list_bills.")] string table,
-        [Description("Bill number in square brackets from list_bills.")] int bill)
+        [Description("Bill number in square brackets from list_bills.")] int bill,
+        [Description("Optional safety check: the bill's label from list_bills; nothing is deleted if that number now points to a different bill.")] string expectedLabel = "")
     {
         Result<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
         if (!target.Success) return target.Error;
         if (bill < 1) return ToolText.Error($"bill number must be at least 1, not {bill}.");
+
+        string expected = (expectedLabel ?? string.Empty).Trim();
+        if (expected.Length > 0)
+        {
+            List<BillInfo> current = [.. _world.GetBills(target.Value.Id)];
+            BillInfo atNumber = current.FirstOrDefault(b => b.Index == bill);
+            if (atNumber != null && !atNumber.Label.Contains(expected, StringComparison.OrdinalIgnoreCase))
+            {
+                string now = string.Join(", ", current.Select(b => $"[{b.Index}] {b.Label}"));
+                return ToolText.Error($"bill [{bill}] is now \"{atNumber.Label}\", not \"{expected}\"; numbers shift after each delete. Current bills: {now}.");
+            }
+        }
 
         string blocked = ToolText.Blocked(_gate, $"would delete bill [{bill}] from {target.Value.Label} [{target.Value.Id}].");
         if (blocked != null) return blocked;

@@ -118,9 +118,14 @@ public sealed class DecisionReasoningRouter
 
     private static Dictionary<string, string> BuildCategoryOptions(List<DecisionRouteCategory> categories)
     {
-        return categories
-            .Where(cat => !string.IsNullOrWhiteSpace(cat.Id) && !string.IsNullOrWhiteSpace(cat.Description))
-            .ToDictionary(cat => cat.Id.Trim(), cat => cat.Description.Trim(), StringComparer.Ordinal);
+        // 與 FindMatchedCategory 一致用 OrdinalIgnoreCase；重複或僅大小寫不同的 id 以先出現者為準，避免 ToDictionary 擲例外。
+        var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (DecisionRouteCategory cat in categories)
+        {
+            if (string.IsNullOrWhiteSpace(cat.Id) || string.IsNullOrWhiteSpace(cat.Description)) continue;
+            options.TryAdd(cat.Id.Trim(), cat.Description.Trim());
+        }
+        return options;
     }
 
     private static DecisionRouteCategory FindMatchedCategory(List<DecisionRouteCategory> categories, string selectedId)

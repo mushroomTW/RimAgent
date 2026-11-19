@@ -57,8 +57,9 @@ internal sealed class DecisionToolPackSelector
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            DecisionDiagnostics.Warn(nameof(DecisionToolPackSelector), ex);
             return Array.Empty<string>();
         }
 

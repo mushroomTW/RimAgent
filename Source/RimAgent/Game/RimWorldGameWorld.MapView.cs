@@ -47,7 +47,10 @@ internal sealed partial class RimWorldGameWorld
         }
     }
 
-    /// <summary>在遊戲截圖資料夾找一個不重複的檔名並記下資料夾（供 <see cref="ReadScreenshotFile"/> 驗證路徑）。</summary>
+    /// <summary>已預約但可能尚未寫出的截圖路徑；檔案要過幾幀才寫入，只靠 File.Exists 會讓同秒的兩次請求撞名。</summary>
+    private static readonly HashSet<string> ReservedScreenshotPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>在遊戲截圖資料夾找一個不重複（磁碟上沒有、也沒被預約）的檔名並記下資料夾（供 <see cref="ReadScreenshotFile"/> 驗證路徑）。</summary>
     private string ReserveScreenshotPath(string filename)
     {
         string baseName = Tools.ObserveTools.ResolveScreenshotName(filename);
@@ -55,9 +58,12 @@ internal sealed partial class RimWorldGameWorld
         _screenshotFolder = folder;
         string fullPath = Path.Combine(folder, baseName + ".png");
         int counter = 1;
-        while (File.Exists(fullPath))
+        lock (ReservedScreenshotPaths)
         {
-            fullPath = Path.Combine(folder, $"{baseName}_{counter++}.png");
+            while (File.Exists(fullPath) || !ReservedScreenshotPaths.Add(fullPath))
+            {
+                fullPath = Path.Combine(folder, $"{baseName}_{counter++}.png");
+            }
         }
         return fullPath;
     }
@@ -84,7 +90,7 @@ internal sealed partial class RimWorldGameWorld
 
         var rooms = new Dictionary<int, RoomInfo>();
         List<RoomInfo> indoor = map.regionGrid.AllRooms
-            .Where(r => !r.PsychologicallyOutdoors && !r.TouchesMapEdge && r.CellCount > 0)
+            .Where(r => !r.PsychologicallyOutdoors && !r.TouchesMapEdge && r.CellCount > 0 && !r.Fogged)
             .Select(r => ToRoom(r, rooms))
             .ToList();
 

@@ -68,13 +68,24 @@ internal static class ClipboardImage
                 CloseClipboard();
             }
             if (data == null) return [];
-            return hasPng ? ModelImageEncoder.FromEncoded(data) : FromDib(data);
+            try
+            {
+                return hasPng ? ModelImageEncoder.FromEncoded(data) : FromDib(data);
+            }
+            catch (Exception)
+            {
+                // 剪貼簿內容是外部資料，解碼失敗（壞檔、不支援的格式）就當作沒有圖片，不讓例外冒到 UI。
+                return [];
+            }
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
             return [];
         }
     }
+
+    /// <summary>剪貼簿區塊上限（256 MB）；更大的視為異常資料，複製前就拒絕。</summary>
+    private const ulong MaxClipboardBytes = 256UL * 1024 * 1024;
 
     private static byte[] ReadFormat(uint format)
     {
@@ -85,7 +96,7 @@ internal static class ClipboardImage
         try
         {
             ulong size = GlobalSize(handle).ToUInt64();
-            if (size == 0 || size > int.MaxValue) return [];
+            if (size == 0 || size > MaxClipboardBytes) return [];
             var data = new byte[(int)size];
             Marshal.Copy(pointer, data, 0, data.Length);
             return data;

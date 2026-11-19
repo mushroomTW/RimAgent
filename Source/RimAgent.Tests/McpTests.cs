@@ -18,6 +18,7 @@ internal sealed class FakeMcpServer : IMcpServer
     public readonly List<string> Calls = [];
     public bool Disposed { get; private set; }
     public bool FailList { get; set; }
+    public bool CancelCall { get; set; }
 
     public FakeMcpServer()
     {
@@ -41,6 +42,7 @@ internal sealed class FakeMcpServer : IMcpServer
     public Task<string> CallAsync(string tool, string argsJson, CancellationToken cancellationToken)
     {
         Calls.Add(tool + "|" + argsJson);
+        if (CancelCall) throw new OperationCanceledException(cancellationToken);
         string result;
         if (!_results.TryGetValue(tool ?? string.Empty, out result))
         {
@@ -243,6 +245,23 @@ public class McpManagerTests
         string second = await manager.ListToolsAsync(CancellationToken.None);
         Assert.That(second, Does.Contain("fetch"));
         Assert.That(_created, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void CallerCancellationDoesNotDropClient()
+    {
+        _fake.Returns("fetch", "ok");
+        McpManager manager = ManagerFor("{\"servers\": [{\"name\": \"web\", \"command\": \"c\", \"enabled\": true}]}");
+        _fake.CancelCall = true;
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.That(async () => await manager.CallAsync("web", "fetch", "{}", cts.Token), Throws.InstanceOf<OperationCanceledException>());
+
+        Assert.That(_fake.Disposed, Is.False);
+        _fake.CancelCall = false;
+        Assert.That(manager.CallAsync("web", "fetch", "{}", CancellationToken.None).Result, Is.EqualTo("ok"));
+        Assert.That(_created, Is.EqualTo(1));
     }
 
     [Test]

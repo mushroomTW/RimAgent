@@ -866,6 +866,10 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         Quest quest = FindQuest(questId);
         if (quest == null) return CommandResult.Fail(QuestNotFound);
         if (quest.Historical) return CommandResult.Fail("the quest has already expired or ended");
+        // 任務分頁只在「可接」與「進行中」列出可拒絕的任務；隱藏或已從介面收起的任務玩家看不到鈕。
+        if (quest.hidden || quest.hiddenInUI) return CommandResult.Fail(QuestNotFound);
+        if (dismissed && quest.State != QuestState.NotYetAccepted && quest.State != QuestState.Ongoing)
+            return CommandResult.Fail("only available or ongoing quests can be dismissed");
         quest.dismissed = dismissed;
         foreach (Quest subquest in quest.GetSubquests())
         {
@@ -1398,7 +1402,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         var threats = new List<ThreatInfo>();
         foreach (Pawn pawn in map.mapPawns.AllPawnsSpawned)
         {
-            if (pawn.Dead || !pawn.HostileTo(Faction.OfPlayer)) continue;
+            if (pawn.Dead || !pawn.HostileTo(Faction.OfPlayer) || pawn.Fogged()) continue;
             string kind = ResolveThreatKind(pawn);
             threats.Add(new ThreatInfo
             {
@@ -1413,6 +1417,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         }
         foreach (Thing fire in map.listerThings.ThingsOfDef(ThingDefOf.Fire))
         {
+            if (fire.Fogged()) continue;
             threats.Add(new ThreatInfo { Id = fire.thingIDNumber, Label = fire.Label, Kind = "Fire", X = fire.Position.x, Z = fire.Position.z });
         }
         return threats;
@@ -1578,6 +1583,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         string label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID);
         if (map == Map) return CommandResult.Ok($"{label} is already the current map.");
         Current.Game.CurrentMap = map;
+        // 讓畫面跟著切換：TryJump 會離開世界地圖並把鏡頭移到該地圖。
+        CameraJumper.TryJump(map.Center, map);
         return CommandResult.Ok($"Switched to {label} [{mapId}]. Later tools now operate on this map.");
     }
 
@@ -1640,7 +1647,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     private static bool MatchesQuery(Thing t, ThingQuery query, bool hasDefName, bool hasNeedle)
     {
-        if (!t.Spawned) return false;
+        if (!t.Spawned || (!query.IncludeFogged && t.Fogged())) return false;
         if (query.Area.HasValue && !query.Area.Value.Contains(t.Position.x, t.Position.z)) return false;
         ThingKind? kind = KindOf(t);
         if (kind == null || (query.Kind != ThingKind.Any && kind != query.Kind)) return false;
@@ -1920,11 +1927,16 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             return CommandResult.Fail($"{recipe.label} is not available on {pawn.LabelShort} right now");
         if (pawn.BillStack.Bills.OfType<Bill_Medical>().Any(b => b.recipe == recipe && b.Part == part))
             return CommandResult.Fail($"{recipe.label} is already scheduled on {pawn.LabelShort}");
-        var bill = new Bill_Medical(recipe, null) { Part = part };
-        pawn.BillStack.AddBill(bill);
+        // 與原版 HealthCardUtility.CreateSurgeryBill 一致（含知識進度與 Part 指派）；不送訊息，避免彈出「無人具備技能」對話框卡住流程，警告改寫進結果。
+        HealthCardUtility.CreateSurgeryBill(pawn, recipe, part, null, sendMessages: false);
         string detail = $"Scheduled {recipe.label} on {pawn.LabelShort}";
         if (part != null) detail += $" ({part.LabelCap})";
-        return CommandResult.Ok(detail + ".");
+        detail += ".";
+        if (pawn.Faction != null && !pawn.Faction.Hidden && !pawn.Faction.HostileTo(Faction.OfPlayer) && recipe.Worker.IsViolationOnPawn(pawn, part, Faction.OfPlayer))
+            detail += $" Warning: this operation will anger {pawn.HomeFaction?.Name ?? "their faction"}.";
+        if (!Map.mapPawns.PawnsInFaction(Faction.OfPlayer).Any(p => (p.IsFreeColonist || p.IsColonyMechPlayerControlled) && recipe.PawnSatisfiesSkillRequirements(p)))
+            detail += " Warning: no colonist has the skill required for this surgery.";
+        return CommandResult.Ok(detail);
     }
 
     private static CommandResult CheckSurgeryResearch(RecipeDef recipe)
@@ -2005,16 +2017,55 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (pawn == null) return CommandResult.Fail("prisoner not found");
         PrisonerInteractionModeDef mode = DefDatabase<PrisonerInteractionModeDef>.GetNamedSilentFail(modeDefName);
         if (mode == null) return CommandResult.Fail($"unknown prisoner interaction mode {modeDefName}");
+        string hidden = WhyPrisonerModeHidden(pawn, mode);
+        if (hidden != null) return CommandResult.Fail(hidden);
         pawn.guest.SetExclusiveInteraction(mode);
         return CommandResult.Ok();
+    }
+
+    /// <summary>
+    /// 照 ITab_Pawn_Visitor 內 CanUsePrisonerInteractionMode（區域函式，無法直接呼叫）判斷該模式在介面上是否被隱藏。
+    /// 傳回 null 代表可用，否則為拒絕原因。
+    /// </summary>
+    private static string WhyPrisonerModeHidden(Pawn pawn, PrisonerInteractionModeDef mode)
+    {
+        string cannot = $"{mode.label} is not available for {pawn.LabelShort}";
+        if (!pawn.guest.Recruitable && mode.hideIfNotRecruitable) return $"{cannot}: not recruitable";
+        if (pawn.IsWildMan() && !mode.allowOnWildMan) return $"{cannot}: wild men cannot use it";
+        if (mode.hideIfNoBloodfeeders && pawn.MapHeld != null
+            && !(ModsConfig.BiotechActive && pawn.MapHeld.mapPawns.FreeColonistsAndPrisonersSpawned.Any(p => p.IsBloodfeeder())))
+            return $"{cannot}: the colony has no bloodfeeder";
+        if (mode.hideOnHemogenicPawns && ModsConfig.BiotechActive && pawn.genes != null && pawn.genes.HasActiveGene(GeneDefOf.Hemogenic))
+            return $"{cannot}: hemogenic pawns cannot use it";
+        if (!mode.allowInClassicIdeoMode && Find.IdeoManager.classicMode) return $"{cannot}: not allowed in classic ideology mode";
+        if (ModsConfig.AnomalyActive)
+        {
+            if (mode.hideIfNotStudiableAsPrisoner
+                && !(pawn.TryGetComp<CompStudiable>(out CompStudiable studiable) && studiable.EverStudiable()
+                     && pawn.kindDef.studiableAsPrisoner && !pawn.everLostEgo))
+                return $"{cannot}: not studiable as a prisoner";
+            if (mode.hideIfGrayFleshNotAppeared && !Find.Anomaly.hasSeenGrayFlesh) return $"{cannot}: gray flesh has not appeared yet";
+        }
+        return null;
     }
 
     public CommandResult ReleasePrisoner(int pawnId)
     {
         Pawn pawn = FindPrisoner(pawnId);
         if (pawn == null) return CommandResult.Fail("prisoner not found");
+        // 釋放後 HomeFaction／狀態會變，先記下原版 ShouldStayOnMapOnRelease 的條件。
+        bool staysOnMap = pawn.IsWildMan() || (pawn.HomeFaction != null && pawn.HomeFaction.IsPlayer);
+        bool downed = pawn.Downed;
         GenGuest.PrisonerRelease(pawn);
-        return CommandResult.Ok($"{pawn.LabelShort} was released and left the colony.");
+        // 與 JobDriver_ReleasePrisoner 收尾一致：沒被留下等死才加「健康囚犯被釋放」想法，並送任務訊號。
+        if (pawn.Spawned && !PawnBanishUtility.WouldBeLeftToDie(pawn, pawn.Map.Tile))
+            GenGuest.AddHealthyPrisonerReleasedThoughts(pawn);
+        QuestUtility.SendQuestTargetSignals(pawn.questTags, "Released", pawn.Named("SUBJECT"));
+        if (staysOnMap)
+            return CommandResult.Ok($"{pawn.LabelShort} is no longer a prisoner but stays on the map (they are not leaving the colony).");
+        if (downed)
+            return CommandResult.Ok($"{pawn.LabelShort} was released but is downed and cannot walk out; they stay on the map until they recover.");
+        return CommandResult.Ok($"{pawn.LabelShort} was released and is walking toward the map edge to leave.");
     }
 
     private static Pawn FindPrisoner(int id)
@@ -2024,7 +2075,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     public IReadOnlyList<AnimalInfo> GetAnimals()
     {
-        return Map.mapPawns.AllPawnsSpawned.Where(p => p.RaceProps.Animal).Select(ToAnimal).ToList();
+        return Map.mapPawns.AllPawnsSpawned.Where(p => p.RaceProps.Animal && !p.Fogged()).Select(ToAnimal).ToList();
     }
 
     private static AnimalInfo ToAnimal(Pawn pawn)
@@ -2051,18 +2102,24 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     [SuppressMessage("Major Code Smell", "S2365:Properties should not copy collections", Justification = "Implements IGameWorld property contract border reflects dynamic game state")]
     public IReadOnlyList<DefInfo> AnimalAreas =>
         Map.areaManager.AllAreas
+            .Where(a => a.AssignableAsAllowed())
             .Select(a => new DefInfo(a.Label, a.Label))
             .ToList();
 
     public CommandResult TameAnimal(int pawnId)
     {
         Map map = Map;
-        Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == pawnId && p.RaceProps.Animal);
+        Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == pawnId && p.RaceProps.Animal && !p.Fogged());
         if (pawn == null) return CommandResult.Fail("animal not found");
         if (pawn.Dead) return CommandResult.Fail($"{pawn.LabelShort} is dead");
         if (pawn.Faction == Faction.OfPlayer) return CommandResult.Fail($"{pawn.LabelShort} is already tame");
+        // 照 Designator_Tame.CanDesignateThing。
+        if (!TameUtility.CanTame(pawn)) return CommandResult.Fail($"{pawn.LabelShort} cannot be tamed");
+        if (pawn.health.hediffSet.HasHediff(HediffDefOf.Scaria)) return CommandResult.Fail($"{pawn.LabelShort} has scaria and cannot be tamed");
         if (map.designationManager.DesignationOn(pawn, DesignationDefOf.Tame) != null)
             return CommandResult.Fail($"{pawn.LabelShort} is already marked for taming");
+        // 照 Designator_Tame.DesignateThing：先清掉該動物身上其他指派（例如狩獵）。
+        map.designationManager.RemoveAllDesignationsOn(pawn);
         map.designationManager.AddDesignation(new Designation(pawn, DesignationDefOf.Tame));
         return CommandResult.Ok($"Marked {pawn.LabelShort} for taming. A handler will attempt it when available.");
     }
@@ -2074,8 +2131,14 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         TrainableDef training = DefDatabase<TrainableDef>.GetNamedSilentFail(trainableDefName);
         if (training == null) return CommandResult.Fail($"unknown animal training {trainableDefName}");
         if (pawn.training == null) return CommandResult.Fail($"{pawn.LabelShort} cannot be trained");
-        if (enable && !pawn.training.CanBeTrained(training))
-            return CommandResult.Fail($"{pawn.LabelShort} cannot learn {training.label}");
+        if (enable)
+        {
+            AcceptanceReport canTrain = pawn.training.CanAssignToTrain(training);
+            if (!canTrain.Accepted)
+                return CommandResult.Fail(string.IsNullOrEmpty(canTrain.Reason)
+                    ? $"{pawn.LabelShort} cannot learn {training.label}"
+                    : $"{pawn.LabelShort} cannot learn {training.label}: {canTrain.Reason}");
+        }
         pawn.training.SetWantedRecursive(training, enable);
         return CommandResult.Ok(enable
             ? $"{pawn.LabelShort} will now be trained in {training.label}."
@@ -2093,7 +2156,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             pawn.playerSettings.AreaRestrictionInPawnCurrentMap = null;
             return CommandResult.Ok($"{pawn.LabelShort}'s allowed area is now unrestricted.");
         }
-        Area area = Map.areaManager.AllAreas.FirstOrDefault(a => string.Equals(a.Label, label, StringComparison.OrdinalIgnoreCase));
+        Area area = Map.areaManager.AllAreas.FirstOrDefault(a => a.AssignableAsAllowed() && string.Equals(a.Label, label, StringComparison.OrdinalIgnoreCase));
         if (area == null) return CommandResult.Fail($"unknown animal area {label}");
         pawn.playerSettings.AreaRestrictionInPawnCurrentMap = area;
         return CommandResult.Ok($"{pawn.LabelShort}'s allowed area is now {area.Label}.");
@@ -2190,6 +2253,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             plant = DefDatabase<ThingDef>.GetNamedSilentFail(plantDefName);
             if (plant == null || plant.category != ThingCategory.Plant || plant.plant == null)
                 return CommandResult.Fail($"{plantDefName} is not a growable plant");
+            // 與 GrowablePlants 清單及 Command_SetPlantToGrow 一致：可播種、地面標籤、研究已完成。
+            if (!plant.plant.Sowable || !plant.plant.sowTags.Contains("Ground"))
+                return CommandResult.Fail($"{plant.label} cannot be sown in a growing zone");
+            if (plant.plant.sowResearchPrerequisites != null && plant.plant.sowResearchPrerequisites.Any(r => !r.IsFinished))
+                return CommandResult.Fail($"{plant.label} needs research first");
         }
         return null;
     }
@@ -2290,7 +2358,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         {
             ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(defName);
             if (def == null) return CommandResult.Fail($"unknown stored item {defName}");
+            // 與 StorageFilterables 一致：只有物品能放進儲存篩選器。
+            if (def.category != ThingCategory.Item) return CommandResult.Fail($"{defName} is not a storable item");
         }
+        string conflict = allows.FirstOrDefault(a => disallows.Any(d => string.Equals(a, d, StringComparison.OrdinalIgnoreCase)));
+        if (conflict != null) return CommandResult.Fail($"{conflict} is listed as both allowed and disallowed");
         foreach (string defName in allows)
         {
             ThingDef def = DefDatabase<ThingDef>.GetNamed(defName);
@@ -2372,11 +2444,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (!recipe.AvailableOnNow(table))
             return CommandResult.Fail($"{table.LabelCap} cannot make {recipe.ProducedThingDef?.label ?? recipe.label} yet: missing research or facilities");
         if (count < 1) return CommandResult.Fail($"count must be at least 1, not {count}");
-        var bill = new Bill_Production(recipe)
-        {
-            repeatMode = BillRepeatModeDefOf.RepeatCount,
-            repeatCount = count
-        };
+        // 用 MakeNewBill 取得正確的子類別（例如 Bill_ProductionWithUft），與遊戲內視窗新增帳單一致。
+        if (recipe.MakeNewBill() is not Bill_Production bill)
+            return CommandResult.Fail($"{recipe.label} is not a production bill and cannot be added with a count");
+        bill.repeatMode = BillRepeatModeDefOf.RepeatCount;
+        bill.repeatCount = count;
         giver.BillStack.AddBill(bill);
         return CommandResult.Ok($"Added bill [{giver.BillStack.Bills.Count}] {bill.LabelCap} x{count} on {table.LabelCap}.");
     }
@@ -2462,8 +2534,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (!cell.InBounds(map)) return CommandResult.Fail("cell is outside the map");
         DesignationDef def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
         if (def == null) return CommandResult.Fail($"unknown designation {designationDefName}");
+        if (def.targetType != Verse.TargetType.Cell) return CommandResult.Fail($"designation {designationDefName} applies to objects, not cells. Use the object id instead");
         if (map.designationManager.DesignationAt(cell, def) != null) return CommandResult.Ok();
-        if (def.defName == MineDefName && cell.GetFirstMineable(map) == null) return CommandResult.Fail("nothing to mine there");
+        // 與 Designator_Mine.CanDesignateCell 一致：迷霧格直接接受（挖進未探索的山體是正常玩法，也不透露裡面有什麼）。
+        if (def.defName == MineDefName && !cell.Fogged(map) && cell.GetFirstMineable(map) == null)
+            return CommandResult.Fail("nothing to mine there");
 
         map.designationManager.AddDesignation(new Designation(cell, def));
         return CommandResult.Ok();
@@ -2476,6 +2551,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         if (thing == null) return CommandResult.Fail("object not found on the map");
         DesignationDef def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
         if (def == null) return CommandResult.Fail($"unknown designation {designationDefName}");
+        if (def.targetType != Verse.TargetType.Thing) return CommandResult.Fail($"designation {designationDefName} applies to cells, not objects. Use the cell coordinates instead");
         if (map.designationManager.DesignationOn(thing, def) != null) return CommandResult.Ok();
 
         string blocked = WhyNotDesignatable(thing, def);
@@ -3012,7 +3088,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         }
         foreach (Tradeable row in buyAllocations.Keys.Concat(sellAllocations.Keys).Distinct())
         {
-            row.AdjustTo(row.CountToTransfer + Allocated(buyAllocations, row) - Allocated(sellAllocations, row));
+            int target = row.CountToTransfer + Allocated(buyAllocations, row) - Allocated(sellAllocations, row);
+            // AdjustTo 為 void，且會把數量夾在可交易範圍內；事後比對實際數量，與預期不符就整筆不做（此時尚未交割）。
+            row.AdjustTo(target);
+            if (row.CountToTransfer != target)
+                return CommandResult.Fail($"could only set {row.LabelCap} to {row.CountToTransfer} instead of {target}; the trade was not executed.");
         }
         return null;
     }
@@ -3824,6 +3904,9 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         StopAllTargeting();
         var before = new HashSet<Window>(Find.WindowStack.Windows);
         var watch = new MessageWatch();
+        // 先記下出發前的移動狀態：本來就在走的篷車不能因為「正在移動」就被當成這道命令生效。
+        bool wasMoving = caravan.pather.Moving;
+        PlanetTile destinationBefore = caravan.pather.Destination;
         CommandResult runFail = RunCaravanOrder(order, label);
         if (runFail != null) return runFail;
 
@@ -3831,8 +3914,22 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         bool targeting = Find.Targeter.IsTargeting || Find.WorldTargeter.IsTargeting;
         StopAllTargeting();
         CommandResult windowFailure = CloseUnsupportedWindows(before, label);
-        if (targeting) return CommandResult.Fail($"\"{label}\" asks for a further target, which is not supported yet; it was cancelled");
-        if (windowFailure != null) return windowFailure;
+        // 命令已經執行：若篷車已出發／離開世界地圖，後續的目標或視窗只是多餘的附帶步驟，不能回報成單純失敗。
+        bool orderTookEffect = caravan.Destroyed || !caravan.Spawned
+            || (caravan.pather.Moving && (!wasMoving || caravan.pather.Destination != destinationBefore));
+        if (targeting)
+        {
+            string noTarget = $"\"{label}\" asks for a further target, which is not supported yet; it was cancelled";
+            return orderTookEffect
+                ? CommandResult.Ok(WithGameMessages($"\"{label}\" partly done: the order already took effect, but the extra step was cancelled ({noTarget})", watch))
+                : CommandResult.Fail(noTarget);
+        }
+        if (windowFailure != null)
+        {
+            return orderTookEffect
+                ? CommandResult.Ok(WithGameMessages($"\"{label}\" partly done: the order already took effect, but a follow-up window was closed ({windowFailure.Message})", watch))
+                : windowFailure;
+        }
         return FinalizeCaravanSend(caravan, to, startedOnTile, before, watch, label);
     }
 
@@ -4231,7 +4328,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     private static Thing FindThing(int id)
     {
-        return Map.listerThings.AllThings.FirstOrDefault(t => t.thingIDNumber == id && t.Spawned);
+        // 迷霧中的東西玩家看不到，不能被指名操作。
+        return Map.listerThings.AllThings.FirstOrDefault(t => t.thingIDNumber == id && t.Spawned && !t.Fogged());
     }
 
     public ScreenshotInfo TakeScreenshot(string filename = null)

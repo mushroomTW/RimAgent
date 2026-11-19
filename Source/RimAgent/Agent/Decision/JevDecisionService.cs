@@ -72,8 +72,9 @@ public sealed class JevDecisionService : IDecisionService
         }
         catch (RimLLMException ex)
         {
-            // 設定面的錯誤（供應商未啟用、缺金鑰、供應商 id 不存在）重試也沒用，標記出來讓呼叫端整段放棄。
-            bool configurationError = ex.Error == LLMError.InvalidKey || ex.Error == LLMError.Unknown;
+            // 設定面的錯誤（缺金鑰／金鑰無效）重試也沒用，標記出來讓呼叫端整段放棄；
+            // Unknown 無法判斷成因，視為暫時性錯誤，不因一次未知失敗就放棄整句指令的決策。
+            bool configurationError = ex.Error == LLMError.InvalidKey;
             throw new DecisionUnavailableException(
                 "decision call failed (" + ex.Error + "): " + ex.Message, ex)
             {

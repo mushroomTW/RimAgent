@@ -47,7 +47,8 @@ public static class SaveFileScanner
         }
         catch (Exception ex) when (ex is IOException || ex is XmlException || ex is UnauthorizedAccessException)
         {
-            scan = new Scan(string.Empty, 0);
+            // 可能只是存檔寫到一半：不快取失敗，下次列出時重讀。
+            return new Scan(string.Empty, 0);
         }
         lock (Gate) Cache[path] = new KeyValuePair<long, Scan>(writtenUtcTicks, scan);
         return scan;

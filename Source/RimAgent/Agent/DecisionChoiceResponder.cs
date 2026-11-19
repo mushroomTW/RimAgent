@@ -71,7 +71,7 @@ public sealed class DecisionChoiceResponder
             var options = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (ChoiceOptionInfo option in choice.Options.Where(o => !o.Disabled))
             {
-                options[option.Number.ToString(CultureInfo.InvariantCulture)] = option.Text ?? string.Empty;
+                options[option.Number.ToString(CultureInfo.InvariantCulture)] = Escape(option.Text);
             }
             questions.Add(DecisionQuestion.Choice(choice.Id, criteria.Trim() + "\n\n" + Describe(choice), options));
         }
@@ -86,8 +86,9 @@ public sealed class DecisionChoiceResponder
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            DecisionDiagnostics.Warn(nameof(DecisionChoiceResponder), ex);
             return Array.Empty<ChoiceDecision>();
         }
 

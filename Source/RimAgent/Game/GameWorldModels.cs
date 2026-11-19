@@ -807,6 +807,11 @@ public sealed class ThingQuery
     public string LabelContains { get; set; } = string.Empty;
     public CellRectSpec? Area { get; set; }
     public int Limit { get; set; } = 50;
+    /// <summary>
+    /// 也納入迷霧中的物件；預設 false（玩家看不到的東西不透露）。
+    /// 只給原版允許對迷霧下指派的用途（挖礦：Designator_Mine 接受迷霧格）。
+    /// </summary>
+    public bool IncludeFogged { get; set; }
 }
 
 /// <summary>地圖座標矩形（含邊界）。以 FromCorners 建立時會自動正規化角落順序。</summary>

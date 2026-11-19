@@ -69,7 +69,9 @@ public sealed class UndoFrame : IExposable
     public bool? OldUseWorkPriorities { get; set; }
     public bool? NewUseWorkPriorities { get; set; }
 
-    public bool IsEmpty => Priorities.Count == 0 && Assignments.Count == 0;
+    /// <summary>沒有任何實際改動；手動優先級只在前後值不同時才算改動（每次設定都會記錄，未必有變）。</summary>
+    public bool IsEmpty => Priorities.Count == 0 && Assignments.Count == 0
+        && OldUseWorkPriorities == NewUseWorkPriorities;
 
     public void ExposeData()
     {
@@ -123,6 +125,12 @@ public sealed class WorkUndoStack
     {
         lock (_gate)
         {
+            // 前一框尚未收（例如上一句指令異常結束）：先收進堆疊，不丟掉已記的舊值。
+            if (_open != null && !_open.IsEmpty)
+            {
+                _frames.Add(_open);
+                while (_frames.Count > MaxFrames) _frames.RemoveAt(0);
+            }
             _open = new UndoFrame();
         }
     }

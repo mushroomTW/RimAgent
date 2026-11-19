@@ -89,9 +89,23 @@ public sealed class WebSearchTools
         }
         finally
         {
-            if (client != null) await client.DisposeAsync().ConfigureAwait(false);
+            // 釋放失敗不能蓋掉 try 內已決定的回傳值（也不能讓第二個釋放被跳過）。
+            await TryDisposeAsync(client).ConfigureAwait(false);
             // McpClient 只釋放連線階段，transport 自建的 HttpClient 要另外釋放。
-            await transport.DisposeAsync().ConfigureAwait(false);
+            await TryDisposeAsync(transport).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task TryDisposeAsync(IAsyncDisposable resource)
+    {
+        if (resource == null) return;
+        try
+        {
+            await resource.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // 搜尋結果已經有了，釋放階段的失敗只是清理失敗。
         }
     }
 }

@@ -270,6 +270,24 @@ public partial class ObserveToolsTests
     }
 
     [Test]
+    public void SetResearchEmptyProjectIsAnErrorNotStop()
+    {
+        Assert.That(_tools.SetResearch(""), Does.StartWith("Error:"));
+        Assert.That(_tools.SetResearch(null), Does.StartWith("Error:"));
+    }
+
+    [TestCase("CON")]
+    [TestCase("nul.png")]
+    [TestCase("com1")]
+    [TestCase("LPT9")]
+    [TestCase("..")]
+    [TestCase(".")]
+    public void ResolveScreenshotNameRejectsReservedNames(string input)
+    {
+        Assert.That(ObserveTools.ResolveScreenshotName(input), Does.Match(@"^RimAgent_\d{8}_\d{6}$"));
+    }
+
+    [Test]
     public void ResolveScreenshotNameSanitizesAndFallsBackToTimestamp()
     {
         Assert.That(ObserveTools.ResolveScreenshotName(null), Does.Match(@"^RimAgent_\d{8}_\d{6}$"));

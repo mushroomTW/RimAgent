@@ -149,7 +149,8 @@ public sealed class CombatTools
         if (threat != null) return threat.Label;
         AnimalInfo animal = _world.GetAnimals().FirstOrDefault(a => a.Id == targetId);
         if (animal != null) return animal.Name;
-        ThingInfo thing = _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = 200 }).FirstOrDefault(t => t.Id == targetId);
+        // IGameWorld 沒有依 id 查物件的入口，也沒有 id 篩選：不設上限（Take(int.MaxValue)），免得最近 N 隻之外的有效目標被誤拒。
+        ThingInfo thing = _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = int.MaxValue }).FirstOrDefault(t => t.Id == targetId);
         return thing?.Label;
     }
 

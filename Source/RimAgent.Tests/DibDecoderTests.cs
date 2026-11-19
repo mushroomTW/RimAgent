@@ -31,6 +31,14 @@ public class DibDecoderTests
     }
 
     [Test]
+    public void IntMinValueHeightIsRejected()
+    {
+        byte[] dib = Dib(1, int.MinValue, 24, 0);
+
+        Assert.That(DibDecoder.TryDecode(dib, out _, out _, out _), Is.False);
+    }
+
+    [Test]
     public void BottomUp24BitHandlesRowPaddingAndChannelOrder()
     {
         // 2x2、每列 6 位元組補到 8。記憶體第一列是畫面最下方。

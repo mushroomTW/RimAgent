@@ -351,7 +351,8 @@ public sealed class WorldTools
         Match m = Regex.Match(text, @"^(\d+)\s*[\)\.:\-]?\s*(.*)$", RegexOptions.None, TimeSpan.FromSeconds(1));
         if (m.Success)
         {
-            int number = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+            if (!int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
+                return Result<FloatMenuOptionInfo>.Fail(ToolText.Error($"\"{m.Groups[1].Value}\" is too large to be an option number; use a number from get_world_tile."));
             string label = m.Groups[2].Value.Trim();
             FloatMenuOptionInfo byNumber = options.FirstOrDefault(o => o.Number == number);
             if (byNumber == null)

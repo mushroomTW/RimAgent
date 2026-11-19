@@ -77,7 +77,7 @@ public sealed class BuildTools
         DesignationKind dk = ParseKind(kind);
         if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
 
-        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, filter);
+        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, filter, out int omitted);
         if (!targets.Success) return targets.Error;
 
         if (_gate != null && !_gate.AllowCommands())
@@ -87,14 +87,14 @@ public sealed class BuildTools
                 ? "the player's selection"
                 : $"rectangle ({x1},{z1})-({x2},{z2})";
             string preview = $"would mark {eligible} object(s) for {dk.Verb} " +
-                $"among {targets.Value.Count} matching object(s) in {where}.";
+                $"among {targets.Value.Count} matching object(s) in {where}." + OmittedNote(omitted);
             return ToolText.Blocked(_gate, preview);
         }
 
-        return ExecuteDesignateArea(dk, targets.Value);
+        return ExecuteDesignateArea(dk, targets.Value, omitted);
     }
 
-    private string ExecuteDesignateArea(DesignationKind dk, List<ThingInfo> targets)
+    private string ExecuteDesignateArea(DesignationKind dk, List<ThingInfo> targets, int omitted)
     {
         int marked = 0, skipped = 0, notApplicable = 0;
         var failures = new List<string>();
@@ -102,7 +102,7 @@ public sealed class BuildTools
         {
             ApplyDesignationTarget(dk, t, ref marked, ref skipped, ref notApplicable, failures);
         }
-        return FormatDesignateSummary(dk, targets.Count, marked, skipped, notApplicable, failures);
+        return FormatDesignateSummary(dk, targets.Count, marked, skipped, notApplicable, failures, omitted);
     }
 
     private void ApplyDesignationTarget(DesignationKind dk, ThingInfo t, ref int marked, ref int skipped, ref int notApplicable, List<string> failures)
@@ -125,18 +125,28 @@ public sealed class BuildTools
         else failures.Add($"{t.Label} at {ToolText.Cell(t.X, t.Z)}: {r.Message}");
     }
 
-    private static string FormatDesignateSummary(DesignationKind dk, int totalTargets, int marked, int skipped, int notApplicable, List<string> failures)
+    /// <summary>搜尋被 Limit 截斷時提醒模型還有物件沒處理；沒有截斷時回傳空字串。</summary>
+    private static string OmittedNote(int omitted)
+    {
+        return omitted > 0 ? $" {omitted} more matching object(s) were not included (search limit): repeat the call or narrow the rectangle." : string.Empty;
+    }
+
+    private static string FormatDesignateSummary(DesignationKind dk, int totalTargets, int marked, int skipped, int notApplicable, List<string> failures, int omitted)
     {
         if (marked == 0 && skipped == 0 && failures.Count == 0)
         {
             return ToolText.Error($"nothing eligible for {dk.Verb} among {totalTargets} matching object(s)" +
-                                  (notApplicable > 0 ? $" ({notApplicable} not applicable, e.g. not ripe or not player-owned)." : "."));
+                                  (notApplicable > 0 ? $" ({notApplicable} not applicable, e.g. not ripe or not player-owned)." : ".") + OmittedNote(omitted));
+        }
+        if (marked == 0 && skipped == 0)
+        {
+            return ToolText.Error($"could not mark anything for {dk.Verb}. Failures: " + string.Join("; ", failures.Take(5)));
         }
 
         string summary = $"Marked {marked} for {dk.Verb}";
         if (skipped > 0) summary += $", {skipped} already marked";
         if (notApplicable > 0) summary += $", {notApplicable} not applicable";
-        summary += ".";
+        summary += "." + OmittedNote(omitted);
         return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
     }
 
@@ -153,13 +163,13 @@ public sealed class BuildTools
         DesignationKind dk = ParseKind(kind);
         if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
 
-        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, string.Empty);
+        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, string.Empty, out int omitted);
         if (!targets.Success) return targets.Error;
 
         List<ThingInfo> markedTargets = [.. targets.Value.Where(t => t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase))];
         if (_gate != null && !_gate.AllowCommands())
         {
-            string cancelPreview = $"would remove {markedTargets.Count} {dk.Verb} mark(s).";
+            string cancelPreview = $"would remove {markedTargets.Count} {dk.Verb} mark(s)." + OmittedNote(omitted);
             return ToolText.Blocked(_gate, cancelPreview);
         }
 
@@ -174,8 +184,9 @@ public sealed class BuildTools
             else failures.Add($"{t.Label} at {ToolText.Cell(t.X, t.Z)}: {r.Message}");
         }
 
-        if (removed == 0 && failures.Count == 0) return $"No {dk.Verb} marks found there.";
-        string summary = $"Removed {removed} {dk.Verb} mark(s).";
+        if (removed == 0 && failures.Count == 0) return $"No {dk.Verb} marks found there." + OmittedNote(omitted);
+        if (removed == 0) return ToolText.Error("could not remove any marks. Failures: " + string.Join("; ", failures.Take(5)));
+        string summary = $"Removed {removed} {dk.Verb} mark(s)." + OmittedNote(omitted);
         return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
     }
 
@@ -935,8 +946,9 @@ public sealed class BuildTools
     }
 
     /// <summary>依「選取」或「矩形＋過濾」收集候選物件。</summary>
-    private Result<List<ThingInfo>> CollectTargets(ThingKind thingKind, bool useSelection, int x1, int z1, int x2, int z2, string filter)
+    private Result<List<ThingInfo>> CollectTargets(ThingKind thingKind, bool useSelection, int x1, int z1, int x2, int z2, string filter, out int omitted)
     {
+        omitted = 0;
         string needle = (filter ?? string.Empty).Trim();
         if (useSelection)
         {
@@ -955,8 +967,15 @@ public sealed class BuildTools
         Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
         if (!rect.Success) return Result<List<ThingInfo>>.Fail(rect.Error);
 
-        var query = new ThingQuery { Kind = thingKind, LabelContains = needle, Area = rect.Value, Limit = 2000 };
-        List<ThingInfo> found = [.. _world.FindThings(query)];
+        // 挖礦照原版可框進迷霧中的岩體（Designator_Mine 接受迷霧格）；其他種類只看得到的東西。
+        var query = new ThingQuery
+        {
+            Kind = thingKind, LabelContains = needle, Area = rect.Value, Limit = 2000,
+            IncludeFogged = thingKind == ThingKind.Mineable
+        };
+        ThingSearchResult search = _world.FindThings(query);
+        List<ThingInfo> found = [.. search];
+        omitted = Math.Max(0, search.TotalMatches - found.Count);
         if (found.Count == 0)
         {
             return Result<List<ThingInfo>>.Fail(ToolText.Error(

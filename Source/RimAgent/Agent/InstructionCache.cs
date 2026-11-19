@@ -26,8 +26,24 @@ internal sealed class InstructionCache<TValue>
     {
         lock (_gate)
         {
-            if (_entries.Count >= MaxEntries) return;
-            _entries[key ?? string.Empty] = value;
+            key ??= string.Empty;
+            // 已滿時仍允許更新既有鍵，只拒絕新增。
+            if (_entries.Count >= MaxEntries && !_entries.ContainsKey(key)) return;
+            _entries[key] = value;
+        }
+    }
+
+    /// <summary>
+    /// 在同一把鎖內讀取舊值並寫入新值（原子的讀‧改‧寫）；快取已滿且為新鍵時不寫入。
+    /// </summary>
+    public void AddOrUpdate(string key, Func<bool, TValue, TValue> update)
+    {
+        lock (_gate)
+        {
+            key ??= string.Empty;
+            bool exists = _entries.TryGetValue(key, out TValue previous);
+            if (!exists && _entries.Count >= MaxEntries) return;
+            _entries[key] = update(exists, previous);
         }
     }
 

@@ -160,7 +160,7 @@ public sealed class CaravanTools
     private static Result<List<AnimalInfo>> ResolveSpeciesBatch(string part, Match m, List<AnimalInfo> colony, List<AnimalInfo> chosen)
     {
         string species = m.Groups[1].Value.Trim();
-        int count = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+        if (!int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int count)) count = 0;
         if (species.Length == 0 || count < 1 || count > 1000)
             return Result<List<AnimalInfo>>.Fail(ToolText.Error($"cannot understand \"{part}\" in animals. Use \"species x count\", e.g. \"muffalo x3\"."));
         List<AnimalInfo> pool = [.. colony.Where(a => !chosen.Contains(a))];

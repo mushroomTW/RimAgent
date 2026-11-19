@@ -27,8 +27,9 @@ public sealed class DecisionRiskChecker : IRiskChecker
     private readonly Func<string> _criteriaProvider;
     private readonly InstructionCache<RiskVerdict> _verdictCache = new();
     private IDecisionService _service;
-    private string _parsedCriteria;
-    private DecisionPlan _parsedPlan;
+    // 判準與解析結果放同一個不可變物件整個換掉，避免並行時讀到新判準配舊計畫。
+    private sealed record ParsedPlan(string Criteria, DecisionPlan Plan);
+    private volatile ParsedPlan _parsed;
     private bool _decisionFailed;
 
     /// <param name="decisionService">直接注入的決策服務（測試用）；null 則由 <paramref name="serviceFactory"/> 建立。</param>
@@ -94,8 +95,9 @@ public sealed class DecisionRiskChecker : IRiskChecker
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            DecisionDiagnostics.Warn(nameof(DecisionRiskChecker), ex);
             _decisionFailed = true;
             return await FallbackAsync(question, cacheKey, true, cancellationToken).ConfigureAwait(false);
         }
@@ -118,6 +120,9 @@ public sealed class DecisionRiskChecker : IRiskChecker
         {
             kind = kindAnswer.Value.Trim();
         }
+
+        // 高影響類別（不可逆改動、外部副作用、資料外洩）不論風險機率一律要確認。
+        if (IsHighImpactKind(kind)) risky = true;
 
         string reason;
         if (!string.IsNullOrEmpty(kind))
@@ -146,6 +151,14 @@ public sealed class DecisionRiskChecker : IRiskChecker
         return verdict;
     }
 
+    /// <summary>需無條件確認的動作類別 id（與 DecisionRisk.md 的 kind 選項一致）。</summary>
+    internal static bool IsHighImpactKind(string kind)
+    {
+        return string.Equals(kind, "irreversible_colony_change", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(kind, "external_side_effect", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(kind, "data_exfiltration", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>延遲建立決策服務：玩家可能在遊戲進行中才去框架設定好決策模型。</summary>
     private IDecisionService ResolveService()
     {
@@ -156,12 +169,13 @@ public sealed class DecisionRiskChecker : IRiskChecker
     /// <summary>判準檔的內容很少變，解析結果留著重用；內容變了才重解析。</summary>
     private DecisionPlan ResolvePlan(string criteria)
     {
-        if (_parsedPlan == null || !string.Equals(_parsedCriteria, criteria, StringComparison.Ordinal))
+        ParsedPlan current = _parsed;
+        if (current == null || !string.Equals(current.Criteria, criteria, StringComparison.Ordinal))
         {
-            _parsedCriteria = criteria;
-            _parsedPlan = ParsePlan(criteria);
+            current = new ParsedPlan(criteria, ParsePlan(criteria));
+            _parsed = current;
         }
-        return _parsedPlan;
+        return current.Plan;
     }
 
     private async Task<RiskVerdict> FallbackAsync(
@@ -235,11 +249,11 @@ public sealed class DecisionRiskChecker : IRiskChecker
             string key = section.Trim().ToLowerInvariant();
             if (key == "risk")
             {
-                ParseNoulSection(slines, ref riskInstructions, ref riskWhenTrue, ref riskWhenFalse);
+                DecisionCriteriaParser.ParseNoulSection(slines, ref riskInstructions, ref riskWhenTrue, ref riskWhenFalse);
             }
             else if (key == "authorized")
             {
-                ParseNoulSection(slines, ref authInstructions, ref authWhenTrue, ref authWhenFalse);
+                DecisionCriteriaParser.ParseNoulSection(slines, ref authInstructions, ref authWhenTrue, ref authWhenFalse);
             }
             else if (key == "kind")
             {
@@ -268,31 +282,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
         var qKind = DecisionQuestion.Choice("kind", kindInstructions, kindOptions);
 
         return DecisionPlan.Of(qRisk, qAuth, qKind);
-    }
-
-    private static void ParseNoulSection(List<string> lines, ref string instructions, ref string whenTrue, ref string whenFalse)
-    {
-        var instLines = new List<string>();
-        foreach (string line in lines)
-        {
-            string trimmed = line.Trim();
-            if (trimmed.StartsWith("true:", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("true：", StringComparison.OrdinalIgnoreCase))
-            {
-                whenTrue = trimmed.Substring(5).Trim();
-            }
-            else if (trimmed.StartsWith("false:", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("false：", StringComparison.OrdinalIgnoreCase))
-            {
-                whenFalse = trimmed.Substring(6).Trim();
-            }
-            else if (!string.IsNullOrEmpty(trimmed))
-            {
-                instLines.Add(trimmed);
-            }
-        }
-        if (instLines.Count > 0)
-        {
-            instructions = string.Join("\n", instLines);
-        }
     }
 
     private static void ParseChoiceSection(List<string> lines, ref string instructions, Dictionary<string, string> options)

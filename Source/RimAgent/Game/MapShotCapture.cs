@@ -50,8 +50,17 @@ internal sealed class MapShotCapture : MonoBehaviour
     public static void Begin(Map map, MapShotLayout layout, string path)
     {
         EnsurePatched();
-        var shot = new GameObject("RimAgentMapShot").AddComponent<MapShotCapture>();
-        shot.Init(map, layout, path);
+        var go = new GameObject("RimAgentMapShot");
+        try
+        {
+            go.AddComponent<MapShotCapture>().Init(map, layout, path);
+        }
+        catch
+        {
+            // 初始化中途失敗時，攝影機不能留著一路渲染到螢幕。
+            Destroy(go);
+            throw;
+        }
     }
 
     private void Init(Map map, MapShotLayout layout, string path)
@@ -62,12 +71,14 @@ internal sealed class MapShotCapture : MonoBehaviour
         _bounds = new CellRect(layout.Rect.MinX, layout.Rect.MinZ, layout.CellsWide, layout.CellsHigh);
         _startFrame = Time.frameCount;
 
+        // 先備好渲染目標，攝影機一加上去就不會畫到螢幕。
+        _target = RenderTexture.GetTemporary(layout.MapWidthPx, layout.MapHeightPx, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default, 1);
         _camera = gameObject.AddComponent<Camera>();
+        _camera.targetTexture = _target;
         _camera.CopyFrom(Find.Camera);
+        _camera.targetTexture = _target;
         _camera.cullingMask &= ~LayerMask.GetMask("UI");
         _camera.Fit(_bounds, CameraHeight);
-        _target = RenderTexture.GetTemporary(layout.MapWidthPx, layout.MapHeightPx, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default, 1);
-        _camera.targetTexture = _target;
 
         Register(this);
         Subscribe(this);

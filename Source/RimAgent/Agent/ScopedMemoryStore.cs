@@ -99,7 +99,11 @@ public sealed class ScopedMemoryStore : AgentMemoryStore
 
     private void PersistGlobal()
     {
-        _persistGlobal?.Invoke();
+        // 回寫動作內含「取快照＋寫檔」；整段持鎖，避免舊快照晚於新快照寫入而覆蓋掉新內容。
+        lock (GlobalMemoryFile.Gate)
+        {
+            _persistGlobal?.Invoke();
+        }
     }
 }
 #pragma warning restore MAAI001

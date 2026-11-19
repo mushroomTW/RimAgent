@@ -57,6 +57,13 @@ public class LatexMathTests
     }
 
     [Test]
+    public void CurrencyRangesAreNotInlineMath()
+    {
+        Assert.That(LatexMath.ConvertMath("價格 $5-$10 之間"), Is.EqualTo("價格 $5-$10 之間"));
+        Assert.That(LatexMath.ConvertMath("$100-$200"), Is.EqualTo("$100-$200"));
+    }
+
+    [Test]
     public void NullOrEmptyPassesThrough()
     {
         Assert.That(LatexMath.ConvertMath(null), Is.Null);

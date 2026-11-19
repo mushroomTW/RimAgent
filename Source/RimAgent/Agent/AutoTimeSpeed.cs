@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace RimAgent.Agent;
@@ -39,6 +40,7 @@ public sealed class AutoTimeSpeed
     private DateTime _backoffUntil = DateTime.MinValue;
     private DateTime _nextAskAt = DateTime.MinValue;
     private volatile string _desired = Fast;
+    private static readonly TimeSpan AskTimeout = TimeSpan.FromSeconds(30);
     private volatile bool _asking;
 
     public AutoTimeSpeed(Func<IDecisionService> serviceFactory = null)
@@ -120,7 +122,9 @@ public sealed class AutoTimeSpeed
                     ["fast"] = "Fast: an ordinary quiet day.",
                     ["superfast"] = "Superfast: routine work or sleeping, nothing to watch."
                 }));
-            DecisionResult result = await service.EvaluateAsync(state, plan).ConfigureAwait(false);
+            // 逾時保護：決策服務卡住時也要放掉 _asking，否則之後永遠不會再詢問。
+            using var timeout = new CancellationTokenSource(AskTimeout);
+            DecisionResult result = await service.EvaluateAsync(state, plan, timeout.Token).ConfigureAwait(false);
             _desired = Parse(result);
         }
         catch (Exception)

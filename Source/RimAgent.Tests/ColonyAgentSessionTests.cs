@@ -998,11 +998,23 @@ public class ColonyAgentSessionTests
     }
 
     [Test]
-    public void DefaultSessionLeavesRunInstructionsUnset()
+    public async Task ComposedInstructionsAreNotPrefixedWithFallbackPreamble()
+    {
+        _client.Reply("ok");
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, instructions: () => "CUSTOM PROMPT");
+
+        await session.SendAsync("hi");
+
+        Assert.That(_client.ReceivedOptions[0].Instructions, Is.EqualTo("CUSTOM PROMPT"));
+    }
+
+    [Test]
+    public void DefaultSessionSendsFallbackPreambleAsRunInstructions()
     {
         ColonyAgentSession session = NewSession();
 
-        Assert.That(session.BuildRunOptions().Instructions, Is.Null);
+        // agent 層不放 Instructions（AF 會把兩層串接），保底前情改由 run 層送出。
+        Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo(AgentPromptComposer.FallbackPreamble));
     }
 
     [Test]

@@ -38,8 +38,9 @@ public sealed class DecisionGoalAuditor
     private readonly Func<IDecisionService> _serviceFactory;
     private readonly Func<string> _criteriaProvider;
     private IDecisionService _service;
-    private string _parsedCriteria;
-    private DecisionPlan _parsedPlan;
+    // 判準與解析結果放同一個不可變物件整個換掉，避免並行時讀到新判準配舊計畫。
+    private sealed record ParsedPlan(string Criteria, DecisionPlan Plan);
+    private volatile ParsedPlan _parsed;
 
     public DecisionGoalAuditor(
         IDecisionService decisionService = null,
@@ -80,8 +81,9 @@ public sealed class DecisionGoalAuditor
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            DecisionDiagnostics.Warn(nameof(DecisionGoalAuditor), ex);
             return null;
         }
 
@@ -168,12 +170,13 @@ public sealed class DecisionGoalAuditor
 
     private DecisionPlan ResolvePlan(string criteria)
     {
-        if (_parsedPlan == null || !string.Equals(_parsedCriteria, criteria, StringComparison.Ordinal))
+        ParsedPlan current = _parsed;
+        if (current == null || !string.Equals(current.Criteria, criteria, StringComparison.Ordinal))
         {
-            _parsedCriteria = criteria;
-            _parsedPlan = ParsePlan(criteria);
+            current = new ParsedPlan(criteria, ParsePlan(criteria));
+            _parsed = current;
         }
-        return _parsedPlan;
+        return current.Plan;
     }
 
     public static DecisionPlan ParsePlan(string markdown)
@@ -202,15 +205,15 @@ public sealed class DecisionGoalAuditor
             string key = section.Trim().ToLowerInvariant();
             if (key == "all_done")
             {
-                ParseNoulSection(slines, ref allDoneInstructions, ref allDoneWhenTrue, ref allDoneWhenFalse);
+                DecisionCriteriaParser.ParseNoulSection(slines, ref allDoneInstructions, ref allDoneWhenTrue, ref allDoneWhenFalse);
             }
             else if (key == "remaining")
             {
-                ParseNoulSection(slines, ref remainingInstructions, ref remainingWhenTrue, ref remainingWhenFalse);
+                DecisionCriteriaParser.ParseNoulSection(slines, ref remainingInstructions, ref remainingWhenTrue, ref remainingWhenFalse);
             }
             else if (key == "needs_user")
             {
-                ParseNoulSection(slines, ref needsUserInstructions, ref needsUserWhenTrue, ref needsUserWhenFalse);
+                DecisionCriteriaParser.ParseNoulSection(slines, ref needsUserInstructions, ref needsUserWhenTrue, ref needsUserWhenFalse);
             }
         }
 
@@ -235,30 +238,5 @@ public sealed class DecisionGoalAuditor
         var qNeedsUser = DecisionQuestion.Noul("needs_user", needsUserInstructions, needsUserWhenTrue, needsUserWhenFalse);
 
         return DecisionPlan.Of(qAllDone, qRemaining, qNeedsUser);
-    }
-
-    private static void ParseNoulSection(List<string> lines, ref string instructions, ref string whenTrue, ref string whenFalse)
-    {
-        var instLines = new List<string>();
-        foreach (string line in lines)
-        {
-            string trimmed = line.Trim();
-            if (trimmed.StartsWith("true:", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("true：", StringComparison.OrdinalIgnoreCase))
-            {
-                whenTrue = trimmed.Substring(5).Trim();
-            }
-            else if (trimmed.StartsWith("false:", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("false：", StringComparison.OrdinalIgnoreCase))
-            {
-                whenFalse = trimmed.Substring(6).Trim();
-            }
-            else if (!string.IsNullOrEmpty(trimmed))
-            {
-                instLines.Add(trimmed);
-            }
-        }
-        if (instLines.Count > 0)
-        {
-            instructions = string.Join("\n", instLines);
-        }
     }
 }

@@ -104,14 +104,16 @@ public sealed class SaveTools
             $"would reload {target.Name} ({FormatTime(target.Tick, context.Tick)}), attempt {attempt}/{SaveLedger.MaxLoadsPerSave}; everything after it is lost.");
         if (blocked != null) return blocked;
 
+        // 先排程讀檔：LoadGame 只是排成長事件（真正換掉遊戲在之後），失敗時檢查點與紀錄都不能動。
+        CommandResult result = _world.LoadGame(target.Name);
+        if (!result.Success) return ToolText.Error(result.Message);
+
         // 比它新的檢查點屬於要放棄的時間線：自己做的檔自己刪；autosave 留著，由紀錄擋住。
         foreach (SaveSlotInfo newer in saves.Where(s => s.Checkpoint && s.Tick > target.Tick))
         {
             _world.DeleteCheckpoint(newer.Name);
         }
         attempt = _ledger.RecordLoad(target, saves, context.ColonyId, trimmedLesson);
-        CommandResult result = _world.LoadGame(target.Name);
-        if (!result.Success) return ToolText.Error(result.Message);
         return $"Reloading {target.Name} (attempt {attempt}/{SaveLedger.MaxLoadsPerSave}). This run ends now; the lesson is handed to the reloaded game.";
     }
 

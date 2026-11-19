@@ -173,6 +173,7 @@ public sealed class ObserveTools
         [Description("Research name or defName, e.g. \"Electricity\"; \"none\" stops research.")] string project)
     {
         string want = (project ?? string.Empty).Trim();
+        if (want.Length == 0) return ToolText.Error("project is required; use \"none\" or \"stop\" to stop research.");
         ResearchInfo before = _world.GetResearch();
         string previous = before.Current == null ? "none" : $"{before.Current.Label} ({before.Current.DefName})";
 
@@ -244,8 +245,7 @@ public sealed class ObserveTools
     /// <summary>停下研發的關鍵字（大小寫不敏感）；世界層認得同樣的字。</summary>
     internal static bool IsStopWord(string input)
     {
-        return input.Length == 0
-            || string.Equals(input, "none", StringComparison.OrdinalIgnoreCase)
+        return string.Equals(input, "none", StringComparison.OrdinalIgnoreCase)
             || string.Equals(input, "stop", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -529,8 +529,25 @@ public sealed class ObserveTools
         }
 
         name = name.Trim();
-        return name.Replace("_", string.Empty).Length == 0
+        return name.Replace("_", string.Empty).Length == 0 || name is "." or ".." || IsReservedDeviceName(name)
             ? "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss")
             : name;
+    }
+
+    /// <summary>Windows 保留的裝置名稱（CON、PRN、AUX、NUL、COM1-9、LPT1-9），不分大小寫，有無副檔名都算。</summary>
+    private static bool IsReservedDeviceName(string name)
+    {
+        int dot = name.IndexOf('.');
+        string stem = (dot >= 0 ? name.Substring(0, dot) : name).TrimEnd();
+        if (stem.Equals("CON", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("PRN", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("AUX", StringComparison.OrdinalIgnoreCase)
+            || stem.Equals("NUL", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        return stem.Length == 4
+            && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase) || stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase))
+            && stem[3] is >= '1' and <= '9';
     }
 }

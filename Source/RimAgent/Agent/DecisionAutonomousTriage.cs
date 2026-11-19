@@ -82,8 +82,9 @@ public sealed class DecisionAutonomousTriage
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            DecisionDiagnostics.Warn(nameof(DecisionAutonomousTriage), ex);
             return null;
         }
         if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || answer?.Probability == null) return null;

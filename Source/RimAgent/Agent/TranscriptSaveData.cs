@@ -27,6 +27,8 @@ public sealed class TranscriptEntryData : IExposable
     public string arguments = string.Empty;
     public string result = string.Empty;
     public bool failed;
+    public bool cancelled;
+    public long durationMs;
     public bool budgetConsumed;
     public bool toolsStripped;
     public int errorKind;
@@ -49,6 +51,9 @@ public sealed class TranscriptEntryData : IExposable
         Scribe_Values.Look(ref arguments, "args", string.Empty);
         Scribe_Values.Look(ref result, "result", string.Empty);
         Scribe_Values.Look(ref failed, "failed", false);
+        // 舊存檔沒有這兩欄：以預設值讀入。
+        Scribe_Values.Look(ref cancelled, "cancelled", false);
+        Scribe_Values.Look(ref durationMs, "durationMs", 0L);
         Scribe_Values.Look(ref budgetConsumed, "budgetConsumed", false);
         Scribe_Values.Look(ref toolsStripped, "stripped", false);
         Scribe_Values.Look(ref errorKind, "error", 0);
@@ -73,6 +78,8 @@ public sealed class TranscriptEntryData : IExposable
             Arguments = arguments ?? string.Empty,
             Result = result ?? string.Empty,
             Failed = failed,
+            Cancelled = cancelled,
+            DurationMs = durationMs,
             BudgetConsumed = budgetConsumed,
             ToolsStripped = toolsStripped,
             ErrorKind = (AgentErrorKind)errorKind,
@@ -105,6 +112,8 @@ public sealed class TranscriptEntryData : IExposable
                 arguments = Truncate(e.Arguments),
                 result = Truncate(e.Result),
                 failed = e.Failed,
+                cancelled = e.Cancelled,
+                durationMs = e.DurationMs,
                 budgetConsumed = e.BudgetConsumed,
                 toolsStripped = e.ToolsStripped,
                 errorKind = (int)e.ErrorKind,

@@ -46,6 +46,36 @@ internal sealed partial class RimWorldGameWorld
     private static bool _agentMapTarget;
     /// <summary>重力飛船的選點要等發射儀式跑完才出現，不在工具呼叫當下，所以從開始儀式起就算在等。</summary>
     private static bool _agentExpectsTile;
+    /// <summary>等待選點的期限（遊戲刻）；儀式被取消或確認框被否決時不會有選點，過期後旗標自己失效。</summary>
+    private static int _agentExpectsTileDeadline;
+    private const int ExpectTileTicks = 3000;
+
+    private static void ExpectTile()
+    {
+        _agentExpectsTile = true;
+        _agentExpectsTileDeadline = Find.TickManager.TicksGame + ExpectTileTicks;
+    }
+
+    /// <summary>讀檔或開新遊戲時清掉所有代理人狀態，舊局的視窗與旗標不能帶進新局。須由 RimAgentGameComponent.LoadedGame 等時機呼叫。</summary>
+    internal static void ResetAgentUiState()
+    {
+        AgentWindows.Clear();
+        _agentWorldTarget = false;
+        _agentMapTarget = false;
+        _agentExpectsTile = false;
+        _agentExpectsTileDeadline = 0;
+    }
+
+    private static bool AnyRitualInProgress()
+    {
+        return Find.Maps.Any(m => m.lordManager.lords.Any(l => l.LordJob is LordJob_Ritual));
+    }
+
+    /// <summary>選項只能是 1 或 2；其他數字不能被當成主要動作。</summary>
+    private static CommandResult RequireTwoOptions(int option)
+    {
+        return option is 1 or 2 ? null : CommandResult.Fail($"option {option} does not exist; choose 1 or 2");
+    }
 
     private static bool IsAnswerableWindow(Window window)
     {
@@ -68,7 +98,7 @@ internal sealed partial class RimWorldGameWorld
             if (window is FloatMenu menu) menu.vanishIfMouseDistant = false;
             AgentWindows.Add(window);
         }
-        if (Find.TilePicker.Active) _agentExpectsTile = true;
+        if (Find.TilePicker.Active) ExpectTile();
     }
 
     /// <summary>原版的選目標要施放者保持選取，否則下一幀就自己取消；玩家按右鍵時殖民者本來就選著。</summary>
@@ -87,6 +117,12 @@ internal sealed partial class RimWorldGameWorld
         // 目標選完或被取消後旗標就失效，不能算到玩家之後自己開的選目標上。
         _agentWorldTarget &= Find.WorldTargeter.IsTargeting;
         _agentMapTarget &= Find.Targeter.IsTargeting;
+        if (_agentExpectsTile && !Find.TilePicker.Active)
+        {
+            // 儀式還在進行（例如重力飛船發射儀式），選點要等它跑完才會出現：期限往後順延，不能中途失效。
+            if (AnyRitualInProgress()) _agentExpectsTileDeadline = Find.TickManager.TicksGame + ExpectTileTicks;
+            else if (Find.TickManager.TicksGame > _agentExpectsTileDeadline) _agentExpectsTile = false;
+        }
         // 不能取消的選點（古樞紐搬家）只可能是任務流程，不是玩家自己開的。
         if (Find.TilePicker.Active && (_agentExpectsTile || TilePickerAllowEscape?.GetValue(Find.TilePicker) is false))
         {
@@ -270,11 +306,11 @@ internal sealed partial class RimWorldGameWorld
         if (!TryParseChoiceId(id, WindowChoicePrefix, out int windowId)) return null;
         return Find.WindowStack.Windows.FirstOrDefault(w => w.ID == windowId) switch
         {
-            FloatMenu menu => AnswerMenu(menu, option, watch),
-            Dialog_BeginLordJob lordJob => AnswerLordJob(lordJob, option, watch),
+            FloatMenu menu when AgentWindows.Contains(menu) => AnswerMenu(menu, option, watch),
+            Dialog_BeginLordJob lordJob when AgentWindows.Contains(lordJob) => AnswerLordJob(lordJob, option, watch),
             Dialog_ConfigureIdeo ideo => AnswerConfigureIdeo(ideo),
             Dialog_ChooseThingsForNewColony colony => AnswerNewColony(colony, option, input, watch),
-            Dialog_LoadTransporters load => AnswerLoad(load, option, input, watch),
+            Dialog_LoadTransporters load when AgentWindows.Contains(load) => AnswerLoad(load, option, input, watch),
             _ => CommandResult.Fail(ChoiceNotFound)
         };
     }
@@ -304,6 +340,7 @@ internal sealed partial class RimWorldGameWorld
     private static CommandResult AnswerTilePicker(int option, string input, MessageWatch watch)
     {
         if (!Find.TilePicker.Active) return CommandResult.Fail(ChoiceNotFound);
+        if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
             _agentExpectsTile = false;
@@ -325,6 +362,7 @@ internal sealed partial class RimWorldGameWorld
     {
         WorldTargeter targeter = Find.WorldTargeter;
         if (!targeter.IsTargeting) return CommandResult.Fail(ChoiceNotFound);
+        if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
             targeter.StopTargeting();
@@ -346,6 +384,7 @@ internal sealed partial class RimWorldGameWorld
     {
         Targeter targeter = Find.Targeter;
         if (!targeter.IsTargeting) return CommandResult.Fail(ChoiceNotFound);
+        if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
             targeter.StopTargeting();
@@ -355,20 +394,26 @@ internal sealed partial class RimWorldGameWorld
         {
             return CommandResult.Fail("give #thing id or x,z");
         }
+        object sourceBefore = targeter.targetingSource;
+        object actionBefore = TargeterActionField?.GetValue(targeter);
+        CommandResult applied;
         try
         {
-            CommandResult applied = ApplyTarget(targeter, "target", local, watch);
-            if (applied.Success)
-            {
-                string message = string.IsNullOrEmpty(applied.Message) ? "target " + input.Trim() : applied.Message;
-                return CommandResult.Ok(message);
-            }
-            return applied;
+            applied = ApplyTarget(targeter, "target", local, watch);
         }
-        finally
+        catch
         {
+            // 動作本身拋例外：狀態不明，收掉選目標，免得玩家下一次點擊落進殘留的選目標。
             targeter.StopTargeting();
+            throw;
         }
+        // 被拒絕時保持選目標，讓模型改給別的目標（同無法解析的輸入）。
+        if (!applied.Success) return applied;
+        // 動作若接著開了新一步的選目標（來源或動作換了），不能把它關掉。
+        bool chained = targeter.IsTargeting
+            && (!ReferenceEquals(targeter.targetingSource, sourceBefore) || !ReferenceEquals(TargeterActionField?.GetValue(targeter), actionBefore));
+        if (!chained) targeter.StopTargeting();
+        return CommandResult.Ok(string.IsNullOrEmpty(applied.Message) ? "target " + input.Trim() : applied.Message);
     }
 
     private static bool TryParseMapTarget(string input, out MapTarget target)
@@ -388,6 +433,7 @@ internal sealed partial class RimWorldGameWorld
     {
         WorldComponent_GravshipController controller = Find.GravshipController;
         if (controller == null || !controller.LandingAreaConfirmationInProgress) return CommandResult.Fail(ChoiceNotFound);
+        if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (LandingMarkerField?.GetValue(controller) is not GravshipLandingMarker marker)
             return CommandResult.Fail("this game version does not expose the landing marker");
         if (option == 1)
@@ -449,6 +495,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static CommandResult AnswerLordJob(Dialog_BeginLordJob dialog, int option, MessageWatch watch)
     {
+        if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
             dialog.Close(false);
@@ -459,7 +506,8 @@ internal sealed partial class RimWorldGameWorld
         if (Find.WindowStack.Windows.Any(w => w is Dialog_MessageBox)) return CommandResult.Fail("answer the open confirmation first");
         var before = new HashSet<Window>(Find.WindowStack.Windows);
         dialog.OnAcceptKeyPressed();
-        _agentExpectsTile = true;
+        // 確認框被否決或儀式沒有選點時，期限一到旗標就自己失效（見 PendingUiChoices）。
+        ExpectTile();
         if (Find.WindowStack.Windows.Any(w => w is Dialog_MessageBox && !before.Contains(w))) return CommandResult.Ok(WithGameMessages("it asks for confirmation first", watch));
         if (Find.WindowStack.Windows.Contains(dialog))
         {
@@ -481,6 +529,7 @@ internal sealed partial class RimWorldGameWorld
     private static CommandResult AnswerNewColony(Dialog_ChooseThingsForNewColony dialog, int option, string input, MessageWatch watch)
     {
         Type type = typeof(Dialog_ChooseThingsForNewColony);
+        if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
             (AccessTools.Field(type, "cancel")?.GetValue(dialog) as Action)?.Invoke();
@@ -500,12 +549,21 @@ internal sealed partial class RimWorldGameWorld
             if (!int.TryParse(part.Trim(), out int number) || number < 1 || number > candidates.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
             if (!picked.Contains(candidates[number - 1])) picked.Add(candidates[number - 1]);
         }
+        // AcceptanceReport 讀的是對話框自己的選取集合，所以先套用；被拒絕就還原，不留下半套選擇。
+        var previous = new List<Thing>(selected);
+        object previousItemCount = itemCount.GetValue(dialog);
         selected.Clear();
         selected.UnionWith(picked);
         List<Thing> items = NewColonyList(dialog, "items");
         itemCount.SetValue(dialog, picked.Count(items.Contains));
         var report = (AcceptanceReport)acceptance.GetValue(dialog);
-        if (!report.Accepted) return CommandResult.Fail(report.Reason.NullOrEmpty() ? "the selection is not allowed" : report.Reason.StripTags());
+        if (!report.Accepted)
+        {
+            selected.Clear();
+            selected.UnionWith(previous);
+            itemCount.SetValue(dialog, previousItemCount);
+            return CommandResult.Fail(report.Reason.NullOrEmpty() ? "the selection is not allowed" : report.Reason.StripTags());
+        }
         var colonists = picked.OfType<Pawn>().Where(p => p.IsColonist);
         bool onlySlaves = colonists.Any() && colonists.All(p => p.IsSlaveOfColony);
         // 同「接受」按鈕：後果確認框留給 choose_option。
@@ -515,6 +573,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static CommandResult AnswerLoad(Dialog_LoadTransporters dialog, int option, string input, MessageWatch watch)
     {
+        if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
             dialog.Close();
@@ -525,7 +584,6 @@ internal sealed partial class RimWorldGameWorld
         // 先全部驗過，再從零開始套用：上一次失敗留下的數量不能混進這次。
         CommandResult parseFail = ParseLoadCounts(input, transferables, out var counts);
         if (parseFail != null) return parseFail;
-        foreach (TransferableOneWay row in transferables) row.AdjustTo(0);
         foreach (TransferableOneWay row in transferables) row.AdjustTo(0);
         foreach ((TransferableOneWay row, int rowCount) in counts) row.AdjustTo(rowCount);
         // TryAccept 檢查失敗時丟訊息並回傳 false，視窗留著。

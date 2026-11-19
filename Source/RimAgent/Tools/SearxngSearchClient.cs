@@ -11,6 +11,7 @@ namespace RimAgent.Tools;
 internal sealed class SearxngSearchClient
 {
     private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private const int MaxBodyBytes = 2 * 1024 * 1024;
     private readonly Func<string> _endpoint;
     private readonly HttpClient _client;
 
@@ -36,8 +37,10 @@ internal sealed class SearxngSearchClient
             if (!response.IsSuccessStatusCode)
                 return ToolText.Error("SearXNG returned HTTP " + (int)response.StatusCode +
                     ". Check that the service is running and JSON output is enabled.");
-            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            return FormatResults(body);
+            string body = await ReadLimitedAsync(response.Content, cancellationToken).ConfigureAwait(false);
+            return body == null
+                ? ToolText.Error("SearXNG response is larger than " + MaxBodyBytes / (1024 * 1024) + " MB; ignored.")
+                : FormatResults(body);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -51,6 +54,25 @@ internal sealed class SearxngSearchClient
         {
             return ToolText.Error("SearXNG search failed: " + ex.Message);
         }
+    }
+
+    /// <summary>
+    /// 最多讀 <see cref="MaxBodyBytes"/> 位元組；超過回傳 null。HttpContent.ReadAsStringAsync 沒有大小上限，
+    /// 被攔截或設定錯誤的端點可以送無限大的回應。截斷的 JSON 無法解析，所以超過就整個放棄。
+    /// </summary>
+    private static async Task<string> ReadLimitedAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        if (content.Headers.ContentLength > MaxBodyBytes) return null;
+        using System.IO.Stream stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var buffer = new System.IO.MemoryStream();
+        var chunk = new byte[16 * 1024];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, 0, chunk.Length, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxBodyBytes) return null;
+            buffer.Write(chunk, 0, read);
+        }
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     internal static string FormatResults(string json)

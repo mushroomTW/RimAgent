@@ -81,10 +81,12 @@ public sealed class McpManager
         foreach (McpServerEntry entry in entries)
         {
             if (!entry.Enabled) continue;
+            IMcpServer used = null;
             try
             {
                 // 首次連線時探測那一趟已經拿到清單，直接用，不多跑一次 list。
                 Tuple<IMcpServer, IList<McpServerTool>> connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
+                used = connection.Item1;
                 IList<McpServerTool> tools = connection.Item2
                                               ?? await connection.Item1.ListToolsAsync(cancellationToken).ConfigureAwait(false);
                 sb.Append('[').Append(entry.Name).Append("] ").Append(tools.Count).Append(" tool(s):").AppendLine();
@@ -95,10 +97,16 @@ public sealed class McpManager
                     sb.AppendLine();
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 玩家按停止：連線沒壞，不丟掉 server。
+                throw;
+            }
             catch (Exception ex)
             {
                 sb.Append('[').Append(entry.Name).Append("] failed: ").Append(ex.Message).AppendLine();
-                Drop(entry.Name);
+                // 連線階段就失敗時 EnsureConnectedAsync 已自行釋放它建的實例；登記中的可能是別人剛連好的，不能動。
+                if (used != null) Drop(entry.Name, used);
             }
         }
         string text = sb.ToString().Trim();
@@ -114,14 +122,25 @@ public sealed class McpManager
         McpServerEntry entry = entries.Find(e => string.Equals(e.Name, server ?? string.Empty, StringComparison.OrdinalIgnoreCase));
         if (entry == null) return Tools.ToolText.Error("unknown MCP server \"" + server + "\".");
         if (!entry.Enabled) return Tools.ToolText.Error("MCP server \"" + entry.Name + "\" is disabled.");
+        IMcpServer connected = null;
         try
         {
-            IMcpServer connected = (await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false)).Item1;
-            return await connected.CallAsync(tool, argsJson, cancellationToken).ConfigureAwait(false);
+            connected = (await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false)).Item1;
+            // 長時間呼叫的起點與終點都更新時間，避免跑到一半被當成閒置掃掉。
+            Touch(entry.Name, connected);
+            string result = await connected.CallAsync(tool, argsJson, cancellationToken).ConfigureAwait(false);
+            Touch(entry.Name, connected);
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // 玩家按停止：連線沒壞，不丟掉 server。
+            throw;
         }
         catch (Exception ex)
         {
-            Drop(entry.Name);
+            // 連線階段就失敗時 EnsureConnectedAsync 已自行釋放它建的實例；登記中的可能是別人剛連好的，不能動。
+            if (connected != null) Drop(entry.Name, connected);
             return Tools.ToolText.Error("MCP server \"" + entry.Name + "\" failed: " + ex.Message);
         }
     }
@@ -146,7 +165,7 @@ public sealed class McpManager
         }
         catch (Exception)
         {
-            Drop(entry.Name);
+            // 暖機失敗：EnsureConnectedAsync 已釋放自己建的實例；不動可能由別的呼叫者剛登記的連線。
         }
     }
 
@@ -252,13 +271,36 @@ public sealed class McpManager
         }
     }
 
-    private void Drop(string name)
+    /// <summary>更新指定 server 的最後使用時間；該實例已被換掉或丟掉就不動。</summary>
+    private void Touch(string name, IMcpServer server)
+    {
+        lock (_gate)
+        {
+            if (_clients.TryGetValue(name, out IMcpServer current) && ReferenceEquals(current, server)) _lastUsed[name] = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>
+    /// 丟掉 server；帶 <paramref name="failed"/> 時只丟掉那個失敗的實例，
+    /// 若登記的已是別的呼叫者重連的新實例就不動它（失敗的舊實例由其建立者自行釋放）。
+    /// </summary>
+    private void Drop(string name, IMcpServer failed = null)
     {
         IMcpServer server = null;
         lock (_gate)
         {
-            if (_clients.TryGetValue(name, out server)) _clients.Remove(name);
-            _lastUsed.Remove(name);
+            if (_clients.TryGetValue(name, out server))
+            {
+                if (failed != null && !ReferenceEquals(server, failed))
+                {
+                    server = null;
+                }
+                else
+                {
+                    _clients.Remove(name);
+                    _lastUsed.Remove(name);
+                }
+            }
         }
         if (server != null)
         {

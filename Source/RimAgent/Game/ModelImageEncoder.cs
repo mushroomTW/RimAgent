@@ -15,7 +15,7 @@ internal static class ModelImageEncoder
 
     private const int JpegQuality = 80;
 
-    /// <summary>解碼 PNG／JPEG 位元組後縮圖；資料不完整（例如截圖仍在寫入）時回傳 null。</summary>
+    /// <summary>解碼 PNG／JPEG 位元組後縮圖；資料為空或不完整（例如截圖仍在寫入）時回傳空陣列。</summary>
     public static byte[] FromEncoded(byte[] data, int maxEdge = MaxEdge)
     {
         if (data == null || data.Length == 0) return [];

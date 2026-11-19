@@ -114,6 +114,20 @@ public class ProductionToolsTests
     }
 
     [Test]
+    public void DeleteWithStaleExpectedLabelIsRejected()
+    {
+        _tools.AddBill("501", "component", 5);
+        _tools.AddBill("501", "short bow", 2);
+        _tools.DeleteBill("501", 1, "component");
+
+        // 編號 1 現在是 short bow：舊清單的「component」不能誤刪它。
+        string text = _tools.DeleteBill("501", 1, "component");
+
+        Assert.That(text, Does.StartWith("Error:").And.Contain("short bow"));
+        Assert.That(_world.TableBills[501].Count, Is.EqualTo(1));
+    }
+
+    [Test]
     public void UnknownBillNumberIsRejected()
     {
         Assert.That(_tools.DeleteBill("502", 7), Does.StartWith("Error:").And.Contain("does not exist"));

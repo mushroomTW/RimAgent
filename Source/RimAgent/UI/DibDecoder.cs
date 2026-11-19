@@ -23,6 +23,8 @@ internal static class DibDecoder
         if (dib == null || dib.Length < InfoHeaderSize) return false;
         if (!ValidateDibHeader(dib, out int rawWidth, out int rawHeight, out int bitCount, out int compression, out int headerSize)) return false;
 
+        // Math.Abs(int.MinValue) 會溢位成負數；這種標頭一定是壞資料。
+        if (rawHeight == int.MinValue) return false;
         bool bottomUp = rawHeight > 0;
         int rows = Math.Abs(rawHeight);
         if ((long)rawWidth * rows > MaxPixels) return false;

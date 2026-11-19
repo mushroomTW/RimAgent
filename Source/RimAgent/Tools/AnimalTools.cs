@@ -60,7 +60,7 @@ public sealed class AnimalTools
     public string TameAnimal(
         [Description("Wild animal's species (e.g. \"muffalo\") or id; when several match, the error lists their ids.")] string animal)
     {
-        Result<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
+        Result<AnimalInfo> target = ResolveAmong(animal, _world.GetAnimals(), wild: true);
         if (!target.Success) return target.Error;
         if (!target.Value.Wild) return ToolText.Error($"{target.Value.Name} is already tame.");
 
@@ -79,7 +79,7 @@ public sealed class AnimalTools
         [Description("Training name, e.g. \"obedience\".")] string training,
         [Description("true to train it, false to stop.")] bool enable)
     {
-        Result<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
+        Result<AnimalInfo> target = ResolveAmong(animal, _world.GetAnimals(), wild: false);
         if (!target.Success) return target.Error;
         if (target.Value.Wild) return ToolText.Error($"{target.Value.Name} is wild; tame it first.");
 
@@ -100,7 +100,7 @@ public sealed class AnimalTools
         [Description("Colony animal name or id.")] string animal,
         [Description("Area name, or \"unrestricted\".")] string area)
     {
-        Result<AnimalInfo> target = ResolveAnimal(animal, _world.GetAnimals());
+        Result<AnimalInfo> target = ResolveAmong(animal, _world.GetAnimals(), wild: false);
         if (!target.Success) return target.Error;
         if (target.Value.Wild) return ToolText.Error($"{target.Value.Name} is wild; tame it first.");
 
@@ -119,6 +119,18 @@ public sealed class AnimalTools
         CommandResult result = _world.SetAnimalArea(target.Value.Id, label);
         if (!result.Success) return ToolText.Error(result.Message);
         return result.Message;
+    }
+
+    /// <summary>
+    /// 只在野生（或只在殖民地）動物裡解析，同種的馴養與野生個體才不會互相造成歧義。
+    /// 範圍內找不到、但全體裡找得到時，回傳那隻讓呼叫端回報「已馴服／是野生的」。
+    /// </summary>
+    private static Result<AnimalInfo> ResolveAmong(string input, IReadOnlyList<AnimalInfo> animals, bool wild)
+    {
+        Result<AnimalInfo> scoped = ResolveAnimal(input, [.. animals.Where(a => a.Wild == wild)]);
+        if (scoped.Success) return scoped;
+        Result<AnimalInfo> any = ResolveAnimal(input, animals);
+        return any.Success ? any : scoped;
     }
 
     /// <summary>動物解析：id 精確命中；名字／物種可模糊比對，歧義即報錯並列候選。</summary>

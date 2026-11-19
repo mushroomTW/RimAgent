@@ -119,9 +119,23 @@ internal sealed class ModelSlotChatClient : DelegatingChatClient
         ChatOptions options = null,
         CancellationToken cancellationToken = default)
     {
+        return base.GetResponseAsync(messages, Slotted(options), cancellationToken);
+    }
+
+    public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        IEnumerable<ChatMessage> messages,
+        ChatOptions options = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 串流路徑同樣要套槽值，否則走串流的呼叫端會悄悄略過指定的模型與思考強度。
+        return base.GetStreamingResponseAsync(messages, Slotted(options), cancellationToken);
+    }
+
+    private ChatOptions Slotted(ChatOptions options)
+    {
         // Clone：呼叫端的 options 可能被重用（分類器每次新建，但 AF 摘要策略不保證）。
         ChatOptions slotted = options?.Clone() ?? new ChatOptions();
         ModelSlots.Apply(slotted, _model?.Invoke(), _reasoning?.Invoke() ?? ReasoningLevel.Auto);
-        return base.GetResponseAsync(messages, slotted, cancellationToken);
+        return slotted;
     }
 }

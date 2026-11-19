@@ -110,7 +110,7 @@ public sealed class SdkMcpServer : IMcpServer
         var options = new McpClientOptions
         {
             ClientInfo = new Implementation { Name = "RimAgent", Version = "1.0" },
-            InitializationTimeout = TimeSpan.FromSeconds(_entry.TimeoutSeconds)
+            InitializationTimeout = TimeSpan.FromMilliseconds(_timeoutMs)
         };
         // transport 的生命週期交給建好的 client；建連失敗時沒有可清的東西，直接往上丟。
         McpClient client = await McpClient.CreateAsync(transport, options, cancellationToken: cancellationToken).ConfigureAwait(false);

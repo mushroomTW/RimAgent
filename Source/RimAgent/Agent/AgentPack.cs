@@ -111,7 +111,7 @@ public static class AgentPackLoader
             {
                 string skillPath = Path.Combine(dir, "SKILL.md");
                 if (!File.Exists(skillPath)) continue;
-                string text = (File.ReadAllText(skillPath) ?? string.Empty).Trim();
+                string text = TryReadText(skillPath);
                 if (text.Length == 0) continue;
                 skills.Add(ParseSkill(Path.GetFileName(dir) ?? dir, text));
             }
@@ -128,7 +128,39 @@ public static class AgentPackLoader
     {
         string path = Path.Combine(rootDir, fileName);
         if (!File.Exists(path)) return string.Empty;
-        return (File.ReadAllText(path) ?? string.Empty).Trim();
+        return TryReadText(path);
+    }
+
+    /// <summary>
+    /// 讀單一檔案；被鎖或無權限只放棄這個檔（回空字串）並警告檔名，不連累擴充包裡其他檔案。
+    /// </summary>
+    private static string TryReadText(string path)
+    {
+        try
+        {
+            return (File.ReadAllText(path) ?? string.Empty).Trim();
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            try
+            {
+                Verse.Log.Warning("RimAgent: could not read pack file " + path + " (" + ex.Message + "); skipping it.");
+            }
+            catch (Exception)
+            {
+                // 日誌不可用（例如在遊戲外執行）不該讓載入失敗。
+            }
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// 找 frontmatter 結尾的 "---"：必須在行首（避免描述文字裡的 "---" 被誤認），回傳該 "---" 的索引；找不到回 -1。
+    /// </summary>
+    private static int FindFrontmatterEnd(string text)
+    {
+        int newline = text.IndexOf("\n---", 3, StringComparison.Ordinal);
+        return newline < 0 ? -1 : newline + 1;
     }
 
     private static void LoadAutonomous(AgentPack pack, string promptsDir)
@@ -235,7 +267,7 @@ public static class AgentPackLoader
         {
             string path = Path.Combine(dir, "AGENT.md");
             if (!File.Exists(path)) continue;
-            string text = (File.ReadAllText(path) ?? string.Empty).Trim();
+            string text = TryReadText(path);
             if (text.Length == 0) continue;
             AgentSubagent subagent = ParseSubagent(Path.GetFileName(dir) ?? dir, text);
             if (subagent.Name.Length == 0 || subagent.Body.Length == 0 || !seen.Add(subagent.Name)) continue;
@@ -254,9 +286,9 @@ public static class AgentPackLoader
         var subagent = new AgentSubagent { Name = folderName };
         string body = text;
         var categories = new List<ToolCategory>();
-        if (text.StartsWith("---"))
+        if (text.StartsWith("---", StringComparison.Ordinal))
         {
-            int end = text.IndexOf("---", 3, StringComparison.Ordinal);
+            int end = FindFrontmatterEnd(text);
             if (end > 3)
             {
                 body = text.Substring(end + 3).Trim();
@@ -325,9 +357,9 @@ public static class AgentPackLoader
         string name = folderName;
         string description = string.Empty;
         string body = text;
-        if (text.StartsWith("---"))
+        if (text.StartsWith("---", StringComparison.Ordinal))
         {
-            int end = text.IndexOf("---", 3, StringComparison.Ordinal);
+            int end = FindFrontmatterEnd(text);
             if (end > 3)
             {
                 string front = text.Substring(3, end - 3);
