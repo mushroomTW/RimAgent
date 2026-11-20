@@ -10,6 +10,8 @@
          遷移時移除該行並補上標註；新檔案不要加。測試專案會刻意傳入 null 驗證防呆，因此不開。 -->
     <Nullable>enable</Nullable>
     <Nullable Condition="$(MSBuildProjectName.Contains('Tests'))">disable</Nullable>
+    <!-- MSB3277：套件要求的組件版本比遊戲本體或框架出貨的新，執行期會載到不同版本。升級相依時必須當下修正，不能留到執行期。 -->
+    <MSBuildWarningsAsErrors>$(MSBuildWarningsAsErrors);MSB3277</MSBuildWarningsAsErrors>
     <!-- 預設為安裝在 RimWorld/Mods 下的工作樹；其他位置請指定 RimWorldDir。 -->
     <RimWorldDir Condition="'$(RimWorldDir)' == '' and '$(RIMWORLD_DIR)' != ''">$(RIMWORLD_DIR)</RimWorldDir>
     <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\</RimWorldDir>
