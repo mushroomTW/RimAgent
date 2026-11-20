@@ -70,21 +70,8 @@ public partial class RimAgentGameComponent : GameComponent
     private List<AutonomousWatch> _schedulerWatch = [];
     private readonly RimWorldGameWorld _autoWorld = new();
     private string _lastAutoError;
-    private CancellationTokenSource _autoCts;
-    /// <summary>新局／讀檔時遞增；舊的自主任務藉此確認自己已不屬於目前這份遊戲。</summary>
-    private int _autoGeneration;
-    /// <summary>
-    /// 自主任務從起跑到 RecordRun 記完為止。session 的 busy 旗標在背景執行緒就放開，
-    /// 早於冷卻記錄；只看 busy 的話，中間落下的訊號檢查會拿舊冷卻再起一輪。
-    /// </summary>
-    private volatile bool _autoRunning;
-    // 自主排程須由玩家在目前這次自主模式中送出對話後才啟動。
-    /// <summary>
-    /// 自主任務因金鑰、額度（402）、供應商離線等設定問題失敗後，暫停到這個 tick 為止。
-    /// 這類錯誤幾秒內不會自己好，照常重觸發只會連續失敗；不存檔，讀檔即恢復。
-    /// </summary>
-    private int _autoHoldUntilTick;
-    private const int ConfigurationErrorHoldTicks = 60000;
+    /// <summary>自主任務的執行生命週期（同時只跑一輪、讀檔作廢、結束後回寫排程器）。</summary>
+    private readonly AutonomousRunner _runner;
     /// <summary>見過的抉擇 id：只在出現新抉擇時起一輪，模型沒處理掉的不會每幾秒重觸發、白燒 API。</summary>
     private readonly HashSet<string> _seenChoices = [];
     private DateTime _nextChoiceCheckAt;
@@ -149,9 +136,13 @@ public partial class RimAgentGameComponent : GameComponent
     // RimAgent.Game 命名空間會遮蔽 Verse.Game，這裡要寫全名。
     public RimAgentGameComponent(Verse.Game game)
     {
+        _runner = new AutonomousRunner(_scheduler, CurrentTick, WarnOnce);
         // 遊戲建立元件時一定帶 Game；離線單元測試傳 null 建構，不登記、不打補丁。
         if (game != null) ReplaceLive(this);
     }
+
+    /// <summary>目前的遊戲 tick；任務期間玩家退回主選單時沒有遊戲可讀，回傳 null。</summary>
+    private static int? CurrentTick() => Current.Game != null ? Find.TickManager.TicksGame : null;
 
     /// <summary>目前活著的元件；新局／讀檔會建立新的元件，舊的得由這裡找到並收掉。</summary>
     private static RimAgentGameComponent _live;
@@ -370,9 +361,7 @@ public partial class RimAgentGameComponent : GameComponent
         _goalGeneration++;
         _goalRunning = false;
         // 舊的自主任務還握著上一個存檔的 session；先取消，再用 generation 擋住它的收尾與排程器寫入。
-        _autoCts?.Cancel();
-        _autoGeneration++;
-        _autoRunning = false;
+        _runner.Invalidate();
         _goalPaused = false;
         _goalTurns = 0;
         _goalBlockedTurns = 0;
@@ -401,9 +390,7 @@ public partial class RimAgentGameComponent : GameComponent
         _goalRunning = false;
         _goalNextRunAt = DateTime.MinValue;
         // 讀檔後舊自主任務的 session 指向舊遊戲；取消並讓它的收尾失效，避免操作到新存檔。
-        _autoCts?.Cancel();
-        _autoGeneration++;
-        _autoRunning = false;
+        _runner.Invalidate();
         if (_loadedScheduler != null)
         {
             // 順序要緊：CopyTo 會整片覆蓋 _watch，所以另外 Scribe 的重試表必須套在它之後，
@@ -426,9 +413,7 @@ public partial class RimAgentGameComponent : GameComponent
         _goalCts?.Cancel();
         _goalGeneration++;
         _goalRunning = false;
-        _autoCts?.Cancel();
-        _autoGeneration++;
-        _autoRunning = false;
+        _runner.Invalidate();
     }
 
     /// <summary>關掉 MCP server 並丟掉擴充包快取（開新局／讀檔時重抓）。</summary>
@@ -472,20 +457,19 @@ public partial class RimAgentGameComponent : GameComponent
         }
         if (!settings.autonomousCare) return;
         if (Find.CurrentMap == null) return;
-        if (tick < _autoHoldUntilTick) return;
+        if (tick < _runner.HoldUntilTick) return;
 
         try
         {
             ColonyAgentSession session = Session;
             // 玩家還在忙、持續目標正在跑或審計，或有預覽等確認就不搶。
-            if (_autoRunning || _goalRunning || session.IsBusy || session.HasPendingConfirmation) return;
+            if (_runner.IsRunning || _goalRunning || session.IsBusy || session.HasPendingConfirmation) return;
             AutonomousConfig config = ToConfig(settings);
             AutonomousSignals signals = GatherSignals();
             AutonomousTrigger trigger = _scheduler.Evaluate(tick, signals, config);
             ReportGiveUps(session);
             if (trigger == AutonomousTrigger.None) return;
             string detail = FormatRetryDetail(trigger, _scheduler.AttemptOf(trigger), signals);
-            _autoRunning = true;
             _ = RunAutonomousGuardedAsync(session, trigger, tick, config, signals, detail);
             _lastAutoError = null;
         }

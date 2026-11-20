@@ -20,7 +20,7 @@ public partial class RimAgentGameComponent
     private void TryStartRecoveryRun()
     {
         if (_pendingReload == null && _pendingDeaths.Count == 0) return;
-        if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
+        if (_runner.IsRunning || _goalRunning || Find.CurrentMap == null) return;
         RimAgentSettings settings = RimAgentMod.Settings;
         try
         {
@@ -37,8 +37,7 @@ public partial class RimAgentGameComponent
                     Text = "Reloaded " + reload.SaveName + " (attempt " + reload.Attempt + "/" + SaveLedger.MaxLoadsPerSave + "): " + reload.Lesson
                 });
                 if (!care) return;
-                _autoRunning = true;
-                _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.Reloaded, Find.TickManager.TicksGame, ToConfig(settings), null,
+                _ =RunAutonomousGuardedAsync(session, AutonomousTrigger.Reloaded, Find.TickManager.TicksGame, ToConfig(settings), null,
                     DescribeReloads(SaveLedger.Shared.HistoryOf(ColonyId)));
                 return;
             }
@@ -49,8 +48,7 @@ public partial class RimAgentGameComponent
             }
             string died = "Died: " + string.Join(", ", _pendingDeaths) + ".";
             _pendingDeaths.Clear();
-            _autoRunning = true;
-            _ = RunAutonomousGuardedAsync(session, AutonomousTrigger.ColonistDied, Find.TickManager.TicksGame, ToConfig(settings), null, died);
+            _ =RunAutonomousGuardedAsync(session, AutonomousTrigger.ColonistDied, Find.TickManager.TicksGame, ToConfig(settings), null, died);
         }
         catch (Exception ex)
         {
@@ -84,7 +82,7 @@ public partial class RimAgentGameComponent
     /// <summary>每個遊戲日存一份檢查點，只在安全時存：檢查點不能一開始就身陷危險。</summary>
     private void TryCheckpoint(int tick)
     {
-        if (tick - _lastCheckpointTick < CheckpointIntervalTicks || _pendingDeaths.Count > 0 || _autoRunning) return;
+        if (tick - _lastCheckpointTick < CheckpointIntervalTicks || _pendingDeaths.Count > 0 || _runner.IsRunning) return;
         var tools = new SaveTools(_autoWorld);
         SaveContext context = _autoWorld.GetSaveContext();
         if (tools.SaveRefusal(context) != null) return;

@@ -91,7 +91,7 @@ internal static class SystemOneCheck
                 failures.Add($"test dialog not pending exactly once ({choices.Count})");
                 return;
             }
-            int generation = Field<int>(comp, "_autoGeneration");
+            int generation = Field<AutonomousRunner>(comp, "_runner").Generation;
 
             var ctx = new ChoiceCheckContext
             {
@@ -154,7 +154,6 @@ internal static class SystemOneCheck
         ctx.Settings.mode = AgentMode.Autonomous;
         int noticesBefore = Notices(ctx.Session, "System One answered");
         object config = AccessTools.Method(Comp, "ToConfig").Invoke(Comp, [ctx.Settings]);
-        AccessTools.Field(Comp, "_autoRunning").SetValue(ctx.GameComponent, true);
         await (Task)AccessTools.Method(Comp, "RunChoiceGuardedAsync").Invoke(ctx.GameComponent, [ctx.Session, ctx.Choices, Find.TickManager.TicksGame, config]);
 
         if (ctx.State.Pressed != Accept) ctx.Failures.Add("dialog not answered with Accept, pressed " + (ctx.State.Pressed ?? "nothing"));
@@ -164,7 +163,7 @@ internal static class SystemOneCheck
         if (Notices(ctx.Session, "System One answered") != noticesBefore + 1) ctx.Failures.Add("no transcript notice for the answer");
         string reports = ctx.Session.DecisionReports.TakeAll();
         if (reports == null || !reports.Contains(Accept)) ctx.Failures.Add("main model report missing: " + (reports ?? "null"));
-        if (Field<bool>(ctx.GameComponent, "_autoRunning")) ctx.Failures.Add("_autoRunning still set");
+        if (Field<AutonomousRunner>(ctx.GameComponent, "_runner").IsRunning) ctx.Failures.Add("autonomous run still marked running");
         if (ctx.Session.IsBusy) ctx.Failures.Add("main model was started although every choice was answered");
     }
 
@@ -180,7 +179,7 @@ internal static class SystemOneCheck
         {
             var signals = new AutonomousSignals { ColonistCount = 3, BedlessCount = 1 };
             int tick = Find.TickManager.TicksGame;
-            int generation = Field<int>(comp, "_autoGeneration");
+            int generation = Field<AutonomousRunner>(comp, "_runner").Generation;
             int before = Notices(session, "System One judged");
 
             bool skip = await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.BedShortage, signals, tick, generation, CancellationToken.None);

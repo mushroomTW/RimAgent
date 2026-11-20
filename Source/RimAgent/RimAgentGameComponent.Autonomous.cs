@@ -24,7 +24,7 @@ public partial class RimAgentGameComponent
         RimAgentSettings settings = RimAgentMod.Settings;
         if (settings == null || !settings.autoTimeSpeed || DateTime.UtcNow < _nextSpeedCheckAt) return;
         _nextSpeedCheckAt = DateTime.UtcNow.AddSeconds(SpeedCheckSeconds);
-        if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
+        if (_runner.IsRunning || _goalRunning || Find.CurrentMap == null) return;
         try
         {
             ColonyAgentSession session = Session;
@@ -51,8 +51,8 @@ public partial class RimAgentGameComponent
         RimAgentSettings settings = RimAgentMod.Settings;
         if (settings == null || !settings.autonomousCare || DateTime.UtcNow < _nextChoiceCheckAt) return;
         _nextChoiceCheckAt = DateTime.UtcNow.AddSeconds(ChoiceCheckSeconds);
-        if (_autoRunning || _goalRunning || Find.CurrentMap == null) return;
-        if (Find.TickManager.TicksGame < _autoHoldUntilTick) return;
+        if (_runner.IsRunning || _goalRunning || Find.CurrentMap == null) return;
+        if (Find.TickManager.TicksGame < _runner.HoldUntilTick) return;
         try
         {
             ColonyAgentSession session = Session;
@@ -65,7 +65,6 @@ public partial class RimAgentGameComponent
             bool dialogLeft = choices.Any(c => c.Id.StartsWith(ChoiceTools.DialogIdPrefix, StringComparison.OrdinalIgnoreCase));
             if (!fresh && (!dialogLeft || DateTime.UtcNow < _nextDialogRetryAt)) return;
             _nextDialogRetryAt = DateTime.UtcNow.AddSeconds(DialogRetrySeconds);
-            _autoRunning = true;
             // 傳快照：代答後要拿「原本有哪些抉擇」比對剩下的，不能被即時清單改掉。
             _ = RunChoiceGuardedAsync(session, [.. choices], Find.TickManager.TicksGame, ToConfig(settings));
         }
@@ -153,7 +152,7 @@ public partial class RimAgentGameComponent
     /// <summary>UI 的停止鍵：取消進行中的自主任務（玩家指令另有自己的 token）。收尾憑 token 壓住重試，見 RunAutonomousAsync。</summary>
     public void StopAutonomousRun()
     {
-        _autoCts?.Cancel();
+        _runner.Stop();
     }
 
     /// <summary>關閉主動照顧時停止任務；重新開啟後仍可處理尚未解決的抉擇。</summary>
@@ -170,47 +169,37 @@ public partial class RimAgentGameComponent
     /// <param name="config">自主任務設定。</param>
     /// <param name="signals">自主任務信號；可為 null。</param>
     /// <param name="detail">接在任務文案後面的這一次的具體情況（誰死了、讀檔教訓）；沒有就是 null。</param>
-    private async Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, string detail = null)
+    private Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, string detail = null)
     {
-        // 收尾只准清掉自己那一代；讀檔後新的一輪可能已經開始，舊的 finally 不能把它的旗標關掉。
-        int generation = _autoGeneration;
-        CancellationToken token = BeginAutoCts().Token;
-        try
+        return _runner.RunGuardedAsync(async (generation, token) =>
         {
             if (signals.HasValue && await TriageSkipsAsync(session, trigger, signals.Value, tick, generation, token)) return;
-            if (generation != _autoGeneration) return;
-            await RunAutonomousAsync(session, trigger, tick, config, signals, generation, detail);
-        }
-        finally
-        {
-            if (generation == _autoGeneration) _autoRunning = false;
-        }
+            if (!_runner.IsCurrent(generation)) return;
+            await RunAutonomousAsync(session, trigger, tick, config, signals, generation, detail, token);
+        });
     }
 
     /// <summary>
     /// 抉擇先交給 System One 代答；它答不了（要額外輸入、信心不足、自動模式風險檢查不放行）
     /// 或沒設定決策模型的，照舊起一輪主 LLM 的抉擇任務。代答後才冒出的新對話框留給下一次檢查。
     /// </summary>
-    private async Task RunChoiceGuardedAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int tick, AutonomousConfig config)
+    private Task RunChoiceGuardedAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int tick, AutonomousConfig config)
     {
-        int generation = _autoGeneration;
-        CancellationToken token = BeginAutoCts().Token;
-        try
+        return _runner.RunGuardedAsync(async (generation, token) =>
         {
-            HashSet<string> answered = await AnswerChoicesWithSystemOneAsync(session, choices, generation, token);
-            if (generation != _autoGeneration) return;
-            bool leftover = _autoWorld.GetPendingChoices().Any(c => choices.Any(o => o.Id == c.Id) && !answered.Contains(c.Id));
-            if (answered.Count > 0 && !leftover) return;
-            await RunAutonomousAsync(session, AutonomousTrigger.Choice, tick, config, null, generation, null);
-        }
-        catch (Exception ex)
-        {
-            WarnOnce("RimAgent choice run failed: " + ex.Message);
-        }
-        finally
-        {
-            if (generation == _autoGeneration) _autoRunning = false;
-        }
+            try
+            {
+                HashSet<string> answered = await AnswerChoicesWithSystemOneAsync(session, choices, generation, token);
+                if (!_runner.IsCurrent(generation)) return;
+                bool leftover = _autoWorld.GetPendingChoices().Any(c => choices.Any(o => o.Id == c.Id) && !answered.Contains(c.Id));
+                if (answered.Count > 0 && !leftover) return;
+                await RunAutonomousAsync(session, AutonomousTrigger.Choice, tick, config, null, generation, null, token);
+            }
+            catch (Exception ex)
+            {
+                WarnOnce("RimAgent choice run failed: " + ex.Message);
+            }
+        });
     }
 
     /// <summary>
@@ -231,7 +220,7 @@ public partial class RimAgentGameComponent
 
         string colonyState = DecisionAutonomousTriage.DescribeSignals(GatherSignals());
         IReadOnlyList<ChoiceDecision> decisions = await ChoiceResponder.DecideAsync(choices, colonyState, cancellationToken);
-        if (generation != _autoGeneration) return answered;
+        if (!_runner.IsCurrent(generation)) return answered;
         string authorization = autoMode ? AutonomousPrompts.Build(_pack?.Autonomous, AutonomousTrigger.Choice) : null;
         foreach (ChoiceDecision decision in decisions)
         {
@@ -257,7 +246,7 @@ public partial class RimAgentGameComponent
                 Arguments = System.Text.Json.JsonSerializer.Serialize(new { choiceId = choice.Id, option = decision.Option.Number }),
                 Preview = preview
             }, cancellationToken);
-            if (generation != _autoGeneration) return false;
+            if (!_runner.IsCurrent(generation)) return false;
             if (verdict == null || verdict.ShouldReject) return true;
         }
         CommandResult result = _autoWorld.ChooseOption(choice.Id, decision.Option.Number);
@@ -287,8 +276,8 @@ public partial class RimAgentGameComponent
             hoursAgo = Math.Max(0, tick - last.Tick) / 2500f;
         }
         TriageVerdict verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo, cancellationToken);
-        if (generation != _autoGeneration || verdict == null || !verdict.Skip) return false;
-        _scheduler.Defer(trigger, Current.Game != null ? Find.TickManager.TicksGame : tick);
+        if (!_runner.IsCurrent(generation) || verdict == null || !verdict.Skip) return false;
+        _scheduler.Defer(trigger, CurrentTick() ?? tick);
         string notice = $"System One judged that {DescribeGiveUp(trigger)} needs no action yet " +
                         $"(need {ToolText.Pct((float)verdict.Probability)}); it will check again in an hour.";
         if (_triageNoticed.Add(trigger)) session.Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Notice, Text = notice });
@@ -318,58 +307,26 @@ public partial class RimAgentGameComponent
     }
 
     /// <summary>
-    /// 每一輪自主任務（含 System One 篩選與代答）進場時換一個新的 CTS，
-    /// 避免讀檔後尚未建立（null）或沿用上一輪已取消的 token。
+    /// 組好主 LLM 的自主任務指令並交給執行器送出。沿用 guard 進場時取得的這一輪 token：
+    /// 篩選或代答期間按下停止，主 LLM 這一輪也跟著取消。
     /// </summary>
-    private CancellationTokenSource BeginAutoCts()
+    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation, string detail, CancellationToken token)
     {
-        // 不 Dispose 舊的：還在收尾的上一輪可能仍要讀它的 Token；交給 GC 即可（沒有計時器或等待把手）。
-        _autoCts = new CancellationTokenSource();
-        return _autoCts;
-    }
-
-    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation, string detail)
-    {
-        // 起跑前遊戲已被換掉（例如排程器在同一幀觸發後玩家立刻讀檔）：不碰任何狀態。
-        if (generation != _autoGeneration) return;
-        // 沿用 guard 進場時建立的這一輪 CTS：篩選或代答期間按下停止，主 LLM 這一輪也跟著取消。
-        CancellationTokenSource cts = _autoCts;
-        // 送出前先算好這句會拿到的編號：busy 旗標保證成功送出的那句取的是下一個號；
-        // 送完才讀 CurrentInstructionId 的話，玩家在旗標釋放的瞬間送指令會讓我們數到別句。
-        int instructionId = session.Transcript.CurrentInstructionId + 1;
-        try
+        if (!_runner.IsCurrent(generation)) return;
+        string instruction = BuildAutonomousInstruction(trigger);
+        if (string.IsNullOrWhiteSpace(instruction)) return;
+        if (!string.IsNullOrEmpty(detail)) instruction += "\n\n" + detail;
+        (bool completed, string reply) = await _runner.RunTaskAsync(new AutonomousRunRequest
         {
-            string instruction = BuildAutonomousInstruction(trigger);
-            if (string.IsNullOrWhiteSpace(instruction)) return;
-            if (!string.IsNullOrEmpty(detail)) instruction += "\n\n" + detail;
-            // 不加 ConfigureAwait(false)：收尾的 RecordRun 要回主線程，
-            // 免得與主線程的 Evaluate 同時改排程器狀態（起跑空窗另由 _autoRunning 擋住）。
-            string reply = await session.SendAsync(
-                instruction,
-                autonomous: true,
-                maxToolSteps: session.Mode == AgentMode.Autonomous ? null : AutonomousRunMaxSteps,
-                reasoningOverride: ReasoningLevel.Low,
-                autonomousInfo: RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(trigger, tick, signals) : null,
-                cancellationToken: cts.Token);
-            HandleAutonomousReply(trigger, reply, generation);
-        }
-        catch (AgentBusyException)
-        {
-            // 玩家在同一幀搶先送了指令（session 被占用）：這次沒跑，不算一次自主任務、不吃冷卻。
-            // 其他 InvalidOperationException 落到下面的通用 catch，照一般失敗記錄並套用冷卻。
-            return;
-        }
-        catch (OperationCanceledException)
-        {
-            // 玩家主動停止自主任務（點擊停止或 /stop）：收尾統一壓住重試。
-        }
-        catch (Exception ex)
-        {
-            Log.Warning("RimAgent autonomous run failed: " + ex.Message);
-        }
-        // 讀檔／新局已把這個任務作廢：不要用舊遊戲的結果改新遊戲的排程器或冷卻。
-        if (generation != _autoGeneration) return;
-        RecordAutonomousRun(session, trigger, tick, cts, config, instructionId);
+            Session = session,
+            Trigger = trigger,
+            Tick = tick,
+            Config = config,
+            Instruction = instruction,
+            MaxToolSteps = session.Mode == AgentMode.Autonomous ? null : AutonomousRunMaxSteps,
+            RunInfo = RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(trigger, tick, signals) : null
+        }, generation, token);
+        if (completed) HandleAutonomousReply(trigger, reply, generation);
     }
 
     /// <summary>組裝自主任務指令；缺章節時警告並退回 Interval。</summary>
@@ -393,34 +350,11 @@ public partial class RimAgentGameComponent
     /// <summary>收到自主任務回覆後，更新三分之一代答的最後回覆紀錄。</summary>
     private void HandleAutonomousReply(AutonomousTrigger trigger, string reply, int generation)
     {
-        if (DecisionAutonomousTriage.IsTriaged(trigger) && generation == _autoGeneration && Current.Game != null)
+        if (DecisionAutonomousTriage.IsTriaged(trigger) && _runner.IsCurrent(generation) && Current.Game != null)
         {
             _lastAutoReplies[trigger] = (reply ?? string.Empty, Find.TickManager.TicksGame);
             _triageNoticed.Remove(trigger);
         }
-    }
-
-    /// <summary>自主任務結束後的紀錄：冷卻、巡視退避、工具配額計數，以及設定錯誤後的保持。</summary>
-    private void RecordAutonomousRun(ColonyAgentSession session, AutonomousTrigger trigger, int tick, CancellationTokenSource cts, AutonomousConfig config, int instructionId)
-    {
-        // 冷卻、定期巡視與重試退避都從任務結束起算：一輪在高速下常跑掉十幾個遊戲小時，
-        // 從起跑算的話一結束就全部到期，上一輪的效果還沒反映到訊號上就接著再跑。
-        // 已回到主線程（上面的 await 沒加 ConfigureAwait(false)），讀得到結束當下的 tick；
-        // 任務期間玩家退回主選單時沒有遊戲可讀，這個排程器也跟著舊遊戲作廢，沿用起跑 tick 即可。
-        int finishTick = Current.Game != null ? Find.TickManager.TicksGame : tick;
-        // 玩家按了停止就壓住該條件的重試（解除前不再跑）：憑 token 判斷，
-        // SendAsync 吃掉取消沒擲 OCE 時同樣生效；沒消耗工具配額就不吃冷卻（其他條件不受影響）。
-        bool stopped = cts.IsCancellationRequested;
-        if (stopped) _scheduler.Dismiss(trigger, finishTick);
-        // 只數這一句的工具紀錄：transcript 會裁掉最舊的紀錄，前後相減會失準。
-        int used = session.Transcript.Snapshot().Count(e =>
-            e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId && e.BudgetConsumed);
-        if (used > 0 || !stopped)
-        {
-            _scheduler.RecordRun(finishTick, used, config);
-        }
-        _scheduler.RecordRunFinished(trigger, finishTick);
-        HoldAfterConfigurationError(session, instructionId, tick);
     }
 
     /// <summary>執行紀錄用的起跑脈絡；在主線程起跑前組好，嘗試次數才是這一次的。</summary>
@@ -457,18 +391,5 @@ public partial class RimAgentGameComponent
             _ => $"condition: {trigger}."
         };
         return $"This is retry #{attempt} for {diagnostic}";
-    }
-
-    private void HoldAfterConfigurationError(ColonyAgentSession session, int instructionId, int tick)
-    {
-        if (session.Transcript.ErrorKindOf(instructionId) != AgentErrorKind.Configuration) return;
-        _autoHoldUntilTick = tick + ConfigurationErrorHoldTicks;
-        WarnOnce("RimAgent autonomous tasks paused for one in-game day after a provider configuration error.");
-        session.Transcript.Add(new TranscriptEntry
-        {
-            Kind = TranscriptKind.Notice,
-            Text = "Autonomous tasks are paused for one in-game day: the model provider reported a key, balance or availability problem. " +
-                   "Fix it in the RimLLM Framework settings; player instructions still work."
-        });
     }
 }

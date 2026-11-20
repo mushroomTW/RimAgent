@@ -201,7 +201,7 @@ public sealed class RetryExperimentComponent : GameComponent
     }
 
     private static bool AutoRunning(RimAgentGameComponent agent) =>
-        agent != null && Traverse.Create(agent).Field("_autoRunning").GetValue<bool>();
+        agent != null && Traverse.Create(agent).Field("_runner").GetValue<AutonomousRunner>()?.IsRunning == true;
 
     private static IReadOnlyList<AutonomousWatch> CaptureWatch(RimAgentGameComponent agent)
     {

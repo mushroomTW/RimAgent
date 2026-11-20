@@ -135,7 +135,7 @@ public partial class RimAgentGameComponent
 
     private void TryStartGoal()
     {
-        if (_goals.Count == 0 || _goalPaused || _goalRunning || _autoRunning || Find.CurrentMap == null
+        if (_goals.Count == 0 || _goalPaused || _goalRunning || _runner.IsRunning || Find.CurrentMap == null
             || DateTime.UtcNow < _goalNextRunAt)
         {
             return;
