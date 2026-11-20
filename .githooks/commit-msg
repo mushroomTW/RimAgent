@@ -1,0 +1,24 @@
+#!/bin/sh
+# 檢查 commit 訊息第一行是否符合 `類型(範圍): 描述` 格式。
+# 啟用方式（每個 clone 執行一次）：git config core.hooksPath .githooks
+
+subject=$(sed -n '1p' "$1" | tr -d '\r')
+
+# Git 自動產生的訊息不檢查。
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
+esac
+
+types='feat|fix|refactor|perf|style|docs|test|build|chore|assets|ci|revert'
+if printf '%s\n' "$subject" | grep -qE "^($types)(\([^()]+\))?!?: .{4,}"; then
+  exit 0
+fi
+
+cat >&2 <<EOF
+commit 訊息格式不符：$subject
+
+第一行需為「類型(範圍): 描述」，範圍可省略，破壞性變更在冒號前加 !。
+可用類型：$(printf '%s' "$types" | tr '|' ' ')
+範例：fix(對話視窗): 修正回覆尾端被裁切
+EOF
+exit 1

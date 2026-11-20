@@ -16,6 +16,7 @@ docs/
 /AGENTS.md
 CLAUDE.md
 CONTEXT.md
+/Documentation/decisions.md
 
 # Local-only workflow files (kept on disk, never committed)
 SteamDescriptions/
