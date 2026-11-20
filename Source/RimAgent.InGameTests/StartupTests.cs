@@ -22,9 +22,10 @@ namespace RimAgent.InGameTests;
 /// 工具登錄與擴充包在真實 mod 資料夾與真實 DefDatabase 上能否建立。headless 測試跑在假世界，這些都看不到。
 /// </summary>
 [TestFixture(TestType.MainMenu)]
+// DevTools 只註冊有一個公開建構式的類別：不能宣告私有建構式，測試方法因此是實例方法。
+#pragma warning disable CA1822 // 測試方法不存取實例資料，但必須是實例方法
 internal sealed class StartupTests
 {
-    private StartupTests() { }
     private const string FrameworkPackageId = "GreenMushroom.RimLLMFramework";
     private const string RimAgentModNotLoaded = "RimAgentMod is not loaded";
 
@@ -33,7 +34,7 @@ internal sealed class StartupTests
     /// （RimWorld 啟動會掃這兩層，缺閉包時只在 log 留 AggregateException，功能到用時才壞）。
     /// </summary>
     [Test]
-    public static void ShippedAssembliesResolveAllTypesAndFields()
+    public void ShippedAssembliesResolveAllTypesAndFields()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -96,7 +97,7 @@ internal sealed class StartupTests
     /// 第二份 MEAI 會讓 IChatClient 等型別轉換全部失敗（RimAgent.csproj 的出貨白名單就是為此而設）。
     /// </summary>
     [Test]
-    public static void NoSecondCopyOfSharedAssemblies()
+    public void NoSecondCopyOfSharedAssemblies()
     {
         var failures = new List<string>();
         ModContentPack agent = TestHelpers.RimAgentContent;
@@ -126,7 +127,7 @@ internal sealed class StartupTests
     /// 名稱唯一且符合供應商的工具名規則。
     /// </summary>
     [Test]
-    public static void ToolRegistryBuildsAgainstRealWorld()
+    public void ToolRegistryBuildsAgainstRealWorld()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -150,7 +151,7 @@ internal sealed class StartupTests
 
     /// <summary>從遊戲實際載入的 mod 資料夾讀擴充包：Skills/ 與 Agents/ 下每個資料夾都成為一個技能／子代理。</summary>
     [Test]
-    public static void AgentPackLoadsFromModFolder()
+    public void AgentPackLoadsFromModFolder()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -180,7 +181,7 @@ internal sealed class StartupTests
     /// 在 RimAgent 出貨的每種語言都有 Keyed 條目（不在就退回英文、英文也沒有就顯示鍵名）。
     /// </summary>
     [Test]
-    public static void EveryTranslationKeyExistsInShippedLanguages()
+    public void EveryTranslationKeyExistsInShippedLanguages()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -231,7 +232,7 @@ internal sealed class StartupTests
 
     /// <summary>Agent 主按鈕的 def 已載入，worker 類別解析到 RimAgent 的型別。</summary>
     [Test]
-    public static void MainButtonDefIsLoaded()
+    public void MainButtonDefIsLoaded()
     {
         MainButtonDef def = DefDatabase<MainButtonDef>.GetNamedSilentFail("RimAgent");
         Expect.IsNotNull(def, "MainButtonDef RimAgent not found");
@@ -244,7 +245,7 @@ internal sealed class StartupTests
     /// ——模型拿到的 defName 必須打得回去。
     /// </summary>
     [Test]
-    public static void DefCatalogsResolveByDefName()
+    public void DefCatalogsResolveByDefName()
     {
         var failures = new List<string>();
         var world = new RimWorldGameWorld();
@@ -434,3 +435,4 @@ internal sealed class StartupTests
         }
     }
 }
+#pragma warning restore CA1822

@@ -13,11 +13,12 @@ namespace RimAgent.InGameTests;
 
 /// <summary>驗證隨附 SDK 的初始化擁有者、補丁唯一性與主執行緒工作派送。</summary>
 [TestFixture(TestType.MainMenu)]
+// DevTools 只註冊有一個公開建構式的類別：不能宣告私有建構式，測試方法因此是實例方法。
+#pragma warning disable CA1822 // 測試方法不存取實例資料，但必須是實例方法
 internal sealed class SmashToolsTests
 {
-    private SmashToolsTests() { }
     [Test]
-    public static void SetupBelongsToRimAgentAndPatchesOnce()
+    public void SetupBelongsToRimAgentAndPatchesOnce()
     {
         var setup = LoadedModManager.GetMod<ProjectSetup>();
         Expect.IsNotNull(setup);
@@ -41,7 +42,7 @@ internal sealed class SmashToolsTests
     }
 
     [Test]
-    public static IEnumerator BackgroundDispatchReturnsToGameThread()
+    public IEnumerator BackgroundDispatchReturnsToGameThread()
     {
         // 必須先在遊戲執行緒建立 UnityThread，才能從背景工作派送。
         Expect.IsTrue(UnityThread.IsInMainThread);
@@ -56,3 +57,4 @@ internal sealed class SmashToolsTests
         Expect.IsTrue(ranOnGameThread);
     }
 }
+#pragma warning restore CA1822
