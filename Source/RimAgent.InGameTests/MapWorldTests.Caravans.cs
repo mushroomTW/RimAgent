@@ -460,7 +460,10 @@ internal sealed partial class MapWorldTests
     {
         if (!colonist.IsFormingCaravan() || !animal.IsFormingCaravan()) failures.Add("the colonist and the animal are not forming a caravan");
         colonist.TryGetFormingCaravanLord(out Lord lord);
-        if (lord?.LordJob is not LordJob_FormAndSendCaravan job) failures.Add("the colonist's lord is not a LordJob_FormAndSendCaravan");
+        if (lord?.LordJob is not LordJob_FormAndSendCaravan job)
+        {
+            failures.Add("the colonist's lord is not a LordJob_FormAndSendCaravan");
+        }
         else
         {
             int silverQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == ThingDefOf.Silver).Sum(t => t.CountToTransfer);
@@ -476,7 +479,10 @@ internal sealed partial class MapWorldTests
     private void CheckListedFormingCaravan(Lord lord, Pawn colonist, Pawn animal, List<string> failures)
     {
         FormingCaravanInfo listed = _world.GetFormingCaravans().FirstOrDefault(f => lord != null && f.Id == lord.loadID);
-        if (listed == null) failures.Add("GetFormingCaravans does not list the new caravan");
+        if (listed == null)
+        {
+            failures.Add("GetFormingCaravans does not list the new caravan");
+        }
         else
         {
             if (!listed.Members.Any(m => m.Id == colonist.thingIDNumber) || !listed.Members.Any(m => m.Id == animal.thingIDNumber))

@@ -478,7 +478,10 @@ public class SubagentTests
         for (var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); dir != null; dir = dir.Parent)
         {
             if (File.Exists(Path.Combine(dir.FullName, "About", "About.xml"))
-                && Directory.Exists(Path.Combine(dir.FullName, "AgentPack"))) return dir.FullName;
+                && Directory.Exists(Path.Combine(dir.FullName, "AgentPack")))
+            {
+                return dir.FullName;
+            }
         }
         Assert.Ignore("找不到 mod 根目錄（測試輸出不在 mod 資料夾內）");
         return null;

@@ -119,8 +119,14 @@ internal sealed partial class RimWorldGameWorld
             {
                 var cell = new IntVec3(x, 0, z);
                 string why = null;
-                if (!cell.InBounds(map)) why = "outside the map";
-                else if (map.zoneManager.ZoneAt(cell) is Zone existing) why = $"already in zone \"{existing.label}\"";
+                if (!cell.InBounds(map))
+                {
+                    why = "outside the map";
+                }
+                else if (map.zoneManager.ZoneAt(cell) is Zone existing)
+                {
+                    why = $"already in zone \"{existing.label}\"";
+                }
                 else
                 {
                     AcceptanceReport report = designator.CanDesignateCell(cell);

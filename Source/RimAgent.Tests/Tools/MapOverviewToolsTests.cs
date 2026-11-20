@@ -23,22 +23,32 @@ public class MapOverviewToolsTests
         void Set(int x, int z, SurveyCell c) => cells[z * w + x] = c;
 
         for (int x = 20; x < 30; x++)
+        {
             for (int z = 20; z < 30; z++)
             {
                 Set(x, z, SurveyCell.Rock);
                 roof[z * w + x] = true;
             }
+        }
         resource[22 * w + 22] = 1;
         resource[22 * w + 23] = 1;
         resource[27 * w + 27] = 1;
 
         for (int x = 0; x < 3; x++)
+        {
             for (int z = 0; z < h; z++)
+            {
                 Set(x, z, z < 15 ? SurveyCell.ShallowWater : SurveyCell.DeepWater);
+            }
+        }
 
         for (int x = 12; x < 17; x++)
+        {
             for (int z = 12; z < 17; z++)
+            {
                 Set(x, z, SurveyCell.RichSoil);
+            }
+        }
 
         for (int x = 0; x < w; x++) Set(x, 0, SurveyCell.Unknown);
 

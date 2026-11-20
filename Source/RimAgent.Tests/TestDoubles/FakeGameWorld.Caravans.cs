@@ -44,11 +44,17 @@ internal sealed partial class FakeGameWorld
                 members.Add(new CaravanMemberInfo { Id = id, Name = colonist.Name, Kind = CaravanMemberInfo.ColonistKind, Downed = colonist.Downed });
             }
             else if (animal != null && !animal.Wild)
+            {
                 members.Add(new CaravanMemberInfo { Id = id, Name = animal.Name, Kind = CaravanMemberInfo.AnimalKind, Downed = animal.Downed });
+            }
             else if (prisoner != null)
+            {
                 members.Add(new CaravanMemberInfo { Id = id, Name = prisoner.Name, Kind = CaravanMemberInfo.PrisonerKind, Downed = prisoner.Downed });
+            }
             else
+            {
                 return new CaravanPlanInfo { Error = $"no pawn with id {id} is on this map" };
+            }
         }
 
         var cargo = new List<CaravanPlanCargo>();
@@ -56,7 +62,9 @@ internal sealed partial class FakeGameWorld
         {
             CaravanCargoInfo have = CaravanCargo.FirstOrDefault(c => string.Equals(c.DefName, line.DefName, StringComparison.OrdinalIgnoreCase));
             if (have == null || have.Count < line.Count)
+            {
                 return new CaravanPlanInfo { Error = $"the colony can only supply {have?.Count ?? 0} {line.DefName} for the caravan (asked for {line.Count})" };
+            }
             cargo.Add(new CaravanPlanCargo { DefName = have.DefName, Label = have.Label, Count = line.Count, MassEach = have.MassEach });
         }
 
@@ -193,8 +201,14 @@ internal sealed partial class FakeGameWorld
         CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
         if (caravan == null) return CommandResult.Fail("caravan not found");
         if (!caravan.Moving) return CommandResult.Fail($"{caravan.Name} has no destination");
-        if (action == CaravanMovementAction.Pause) caravan.Paused = true;
-        else if (action == CaravanMovementAction.Resume) caravan.Paused = false;
+        if (action == CaravanMovementAction.Pause)
+        {
+            caravan.Paused = true;
+        }
+        else if (action == CaravanMovementAction.Resume)
+        {
+            caravan.Paused = false;
+        }
         else
         {
             caravan.Moving = false;

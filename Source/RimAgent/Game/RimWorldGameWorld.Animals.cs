@@ -74,9 +74,11 @@ internal sealed partial class RimWorldGameWorld
         {
             AcceptanceReport canTrain = pawn.training.CanAssignToTrain(training);
             if (!canTrain.Accepted)
+            {
                 return CommandResult.Fail(string.IsNullOrEmpty(canTrain.Reason)
                     ? $"{pawn.LabelShort} cannot learn {training.label}"
                     : $"{pawn.LabelShort} cannot learn {training.label}: {canTrain.Reason}");
+            }
         }
         pawn.training.SetWantedRecursive(training, enable);
         return CommandResult.Ok(enable

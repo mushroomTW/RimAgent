@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -122,17 +123,17 @@ public sealed class DecisionGoalAuditor
     {
         if (needsUser)
         {
-            return FormattableString.Invariant($"Decision audit indicated player input is required (needs_user: {pNeedsUser:0%}).");
+            return string.Create(CultureInfo.InvariantCulture, $"Decision audit indicated player input is required (needs_user: {pNeedsUser:0%}).");
         }
         if (remaining)
         {
-            return FormattableString.Invariant($"Decision audit found unfinished follow-up steps mentioned by the assistant (remaining: {pRemaining:0%}).");
+            return string.Create(CultureInfo.InvariantCulture, $"Decision audit found unfinished follow-up steps mentioned by the assistant (remaining: {pRemaining:0%}).");
         }
         if (!allDone)
         {
-            return FormattableString.Invariant($"Decision audit found goal requirements not yet verified or complete (all_done: {pAllDone:0%}).");
+            return string.Create(CultureInfo.InvariantCulture, $"Decision audit found goal requirements not yet verified or complete (all_done: {pAllDone:0%}).");
         }
-        return FormattableString.Invariant($"Decision audit verified that all requirements are complete (all_done: {pAllDone:0%}).");
+        return string.Create(CultureInfo.InvariantCulture, $"Decision audit verified that all requirements are complete (all_done: {pAllDone:0%}).");
     }
 
     public static string Describe(string objective, string reply, string toolEvidence = null)

@@ -77,7 +77,7 @@ public sealed class BuildTools
         DesignationKind dk = ParseKind(kind);
         if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
 
-        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, filter, out int omitted);
+        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, (x1, z1, x2, z2), filter, out int omitted);
         if (!targets.Success) return targets.Error;
 
         if (_gate != null && !_gate.AllowCommands())
@@ -163,7 +163,7 @@ public sealed class BuildTools
         DesignationKind dk = ParseKind(kind);
         if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
 
-        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, x1, z1, x2, z2, string.Empty, out int omitted);
+        Result<List<ThingInfo>> targets = CollectTargets(dk.ThingKind, useSelection, (x1, z1, x2, z2), string.Empty, out int omitted);
         if (!targets.Success) return targets.Error;
 
         List<ThingInfo> markedTargets = [.. targets.Value.Where(t => t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase))];
@@ -378,16 +378,20 @@ public sealed class BuildTools
         var failures = new Dictionary<string, int>(StringComparer.Ordinal);
         int refused = CheckLayoutPieces(plan, materials, Info, Label, failures);
         if (refused > 0)
+        {
             return ToolText.Error($"placed nothing: {refused} of {plan.Pieces.Count} parts of the {what} layout cannot go in {plan.Rect}. "
                 + FormatLayoutFailures(failures) + " Clear the blockers or choose another spot, then place the layout again.");
+        }
 
         int placed = 0;
         var lateFailures = new Dictionary<string, int>(StringComparer.Ordinal);
         var fellBack = new Dictionary<string, int>(StringComparer.Ordinal);
         PlaceLayoutPieces(plan, materials, Info, Label, ref placed, lateFailures, fellBack);
         if (lateFailures.Count > 0)
+        {
             return ToolText.Error($"only {placed} of {plan.Pieces.Count} blueprints of the {what} layout were placed in {plan.Rect}; "
                 + "these were refused after the check: " + FormatLayoutFailures(lateFailures));
+        }
         string summary = $"Placed all {placed} blueprints of the {what} layout, covering {plan.Rect}.";
         if (fellBack.Count > 0) summary += " Kept the layout's own material or floor (the requested one was refused): " + FormatLayoutFailures(fellBack);
         return summary;
@@ -591,9 +595,19 @@ public sealed class BuildTools
             h = swap;
         }
         int shiftX = 0, shiftZ = 0;
-        if (rotation == 1) shiftZ = -1;
-        else if (rotation == 2) { shiftX = -1; shiftZ = -1; }
-        else if (rotation == 3) shiftX = -1;
+        if (rotation == 1)
+        {
+            shiftZ = -1;
+        }
+        else if (rotation == 2)
+        {
+            shiftX = -1;
+            shiftZ = -1;
+        }
+        else if (rotation == 3)
+        {
+            shiftX = -1;
+        }
         int cx = x + (w % 2 == 0 ? shiftX : 0);
         int cz = z + (h % 2 == 0 ? shiftZ : 0);
         int minX = cx - (w - 1) / 2, minZ = cz - (h - 1) / 2;
@@ -724,7 +738,10 @@ public sealed class BuildTools
     {
         bool all = string.Equals(detail, "all", StringComparison.OrdinalIgnoreCase);
         var shown = new List<IGrouping<string, DefStatEntry>>();
-        if (all) shown.AddRange(groups);
+        if (all)
+        {
+            shown.AddRange(groups);
+        }
         else if (detail.Length > 0)
         {
             shown.AddRange(groups.Where(g => string.Equals(g.Key, detail, StringComparison.OrdinalIgnoreCase) ||
@@ -946,7 +963,7 @@ public sealed class BuildTools
     }
 
     /// <summary>依「選取」或「矩形＋過濾」收集候選物件。</summary>
-    private Result<List<ThingInfo>> CollectTargets(ThingKind thingKind, bool useSelection, int x1, int z1, int x2, int z2, string filter, out int omitted)
+    private Result<List<ThingInfo>> CollectTargets(ThingKind thingKind, bool useSelection, (int x1, int z1, int x2, int z2) coords, string filter, out int omitted)
     {
         omitted = 0;
         string needle = (filter ?? string.Empty).Trim();
@@ -964,7 +981,7 @@ public sealed class BuildTools
             return Result<List<ThingInfo>>.Ok(selected);
         }
 
-        Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+        Result<CellRectSpec> rect = TargetResolver.ResolveRect(coords.x1, coords.z1, coords.x2, coords.z2, _world.GetMapBounds());
         if (!rect.Success) return Result<List<ThingInfo>>.Fail(rect.Error);
 
         // 挖礦照原版可框進迷霧中的岩體（Designator_Mine 接受迷霧格）；其他種類只看得到的東西。

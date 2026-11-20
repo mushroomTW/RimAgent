@@ -81,36 +81,41 @@ public sealed class McpManager
         foreach (McpServerEntry entry in entries)
         {
             if (!entry.Enabled) continue;
-            IMcpServer used = null;
-            try
-            {
-                // 首次連線時探測那一趟已經拿到清單，直接用，不多跑一次 list。
-                Tuple<IMcpServer, IList<McpServerTool>> connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
-                used = connection.Item1;
-                IList<McpServerTool> tools = connection.Item2
-                                              ?? await connection.Item1.ListToolsAsync(cancellationToken).ConfigureAwait(false);
-                sb.Append('[').Append(entry.Name).Append("] ").Append(tools.Count).Append(" tool(s):").AppendLine();
-                foreach (McpServerTool tool in tools)
-                {
-                    sb.Append("  - ").Append(tool.Name);
-                    if (tool.Description.Length > 0) sb.Append(": ").Append(tool.Description);
-                    sb.AppendLine();
-                }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // 玩家按停止：連線沒壞，不丟掉 server。
-                throw;
-            }
-            catch (Exception ex)
-            {
-                sb.Append('[').Append(entry.Name).Append("] failed: ").Append(ex.Message).AppendLine();
-                // 連線階段就失敗時 EnsureConnectedAsync 已自行釋放它建的實例；登記中的可能是別人剛連好的，不能動。
-                if (used != null) Drop(entry.Name, used);
-            }
+            await AppendServerToolsAsync(sb, entry, cancellationToken).ConfigureAwait(false);
         }
         string text = sb.ToString().Trim();
         return text.Length == 0 ? "No MCP servers enabled." : text;
+    }
+
+    private async Task AppendServerToolsAsync(StringBuilder sb, McpServerEntry entry, CancellationToken cancellationToken)
+    {
+        IMcpServer used = null;
+        try
+        {
+            // 首次連線時探測那一趟已經拿到清單，直接用，不多跑一次 list。
+            Tuple<IMcpServer, IList<McpServerTool>> connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
+            used = connection.Item1;
+            IList<McpServerTool> tools = connection.Item2
+                                          ?? await connection.Item1.ListToolsAsync(cancellationToken).ConfigureAwait(false);
+            sb.Append('[').Append(entry.Name).Append("] ").Append(tools.Count).Append(" tool(s):").AppendLine();
+            foreach (McpServerTool tool in tools)
+            {
+                sb.Append("  - ").Append(tool.Name);
+                if (tool.Description.Length > 0) sb.Append(": ").Append(tool.Description);
+                sb.AppendLine();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // 玩家按停止：連線沒壞，不丟掉 server。
+            throw;
+        }
+        catch (Exception ex)
+        {
+            sb.Append('[').Append(entry.Name).Append("] failed: ").Append(ex.Message).AppendLine();
+            // 連線階段就失敗時 EnsureConnectedAsync 已自行釋放它建的實例；登記中的可能是別人剛連好的，不能動。
+            if (used != null) Drop(entry.Name, used);
+        }
     }
 
     /// <summary>呼叫指定 server 的工具；server 未啟用或未知時回報原因。</summary>

@@ -268,7 +268,10 @@ public sealed class CaravanTools
           .Append(p.DaysUntilRot >= 600f ? "nothing perishable" : "it rots in " + ToolText.Num(p.DaysUntilRot) + " days")
           .Append("; foraging: ").AppendLine(p.ForagedPerDay > 0f ? ToolText.Num(p.ForagedPerDay) + " " + p.ForagedFoodLabel + " per day" : "none");
         sb.Append("Visibility: ").AppendLine(ToolText.Pct(p.Visibility));
-        if (p.DestinationTile < 0) sb.AppendLine("Destination: none chosen (give tile or worldObjectId; the game needs one to send a caravan)");
+        if (p.DestinationTile < 0)
+        {
+            sb.AppendLine("Destination: none chosen (give tile or worldObjectId; the game needs one to send a caravan)");
+        }
         else
         {
             sb.Append("Destination: ").Append(string.IsNullOrEmpty(p.DestinationLabel) ? "tile " + p.DestinationTile : p.DestinationLabel);

@@ -144,23 +144,25 @@ internal sealed partial class RimWorldGameWorld
         if (landing != null) yield return landing;
         foreach (Window window in Find.WindowStack.Windows)
         {
-            PendingChoiceInfo choice = window switch
-            {
-                FloatMenu menu when AgentWindows.Contains(menu) => MenuChoice(menu),
-                Dialog_BeginLordJob lordJob when AgentWindows.Contains(lordJob) => LordJobChoice(lordJob),
-                Dialog_ConfigureIdeo ideo => new PendingChoiceInfo
-                {
-                    Id = WindowChoicePrefix + ideo.ID,
-                    Title = "Ideoligion of the new colony",
-                    Options = Buttons("Keep the current ideoligion").ToList()
-                },
-                Dialog_ChooseThingsForNewColony colony => NewColonyChoice(colony),
-                Dialog_LoadTransporters load when AgentWindows.Contains(load) => LoadChoice(load),
-                _ => null
-            };
+            PendingChoiceInfo choice = ResolveWindowChoice(window);
             if (choice != null) yield return choice;
         }
     }
+
+    private static PendingChoiceInfo ResolveWindowChoice(Window window) => window switch
+    {
+        FloatMenu menu when AgentWindows.Contains(menu) => MenuChoice(menu),
+        Dialog_BeginLordJob lordJob when AgentWindows.Contains(lordJob) => LordJobChoice(lordJob),
+        Dialog_ConfigureIdeo ideo => new PendingChoiceInfo
+        {
+            Id = WindowChoicePrefix + ideo.ID,
+            Title = "Ideoligion of the new colony",
+            Options = Buttons("Keep the current ideoligion").ToList()
+        },
+        Dialog_ChooseThingsForNewColony colony => NewColonyChoice(colony),
+        Dialog_LoadTransporters load when AgentWindows.Contains(load) => LoadChoice(load),
+        _ => null
+    };
 
     private static string DescribeActiveTarget()
     {
@@ -349,7 +351,10 @@ internal sealed partial class RimWorldGameWorld
         }
         if (TilePickerValidator?.GetValue(Find.TilePicker) is not Func<PlanetTile, bool> validator
             || TilePickerChosen?.GetValue(Find.TilePicker) is not Action<PlanetTile> chosen
-            || TilePickerStop == null) return CommandResult.Fail("this game version does not expose the tile picker");
+            || TilePickerStop == null)
+        {
+            return CommandResult.Fail("this game version does not expose the tile picker");
+        }
         if (!TryParseTile(input, out PlanetTile tile)) return CommandResult.Fail("give " + TileInputHint);
         if (!validator(tile)) return Refused($"tile {input} was refused", watch);
         _agentExpectsTile = false;

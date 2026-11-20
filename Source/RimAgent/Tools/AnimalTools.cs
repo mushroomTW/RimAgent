@@ -32,7 +32,10 @@ public sealed class AnimalTools
         List<AnimalInfo> wild = [.. animals.Where(a => a.Wild)];
 
         var sb = new StringBuilder();
-        if (tame.Count == 0) sb.Append("The colony has no animals.");
+        if (tame.Count == 0)
+        {
+            sb.Append("The colony has no animals.");
+        }
         else
         {
             sb.Append(tame.Count == 1 ? "1 colony animal:" : tame.Count + " colony animals:").AppendLine();
@@ -105,7 +108,10 @@ public sealed class AnimalTools
         if (target.Value.Wild) return ToolText.Error($"{target.Value.Name} is wild; tame it first.");
 
         string label = (area ?? string.Empty).Trim();
-        if (string.Equals(label, UnrestrictedKeyword, StringComparison.OrdinalIgnoreCase)) label = string.Empty;
+        if (string.Equals(label, UnrestrictedKeyword, StringComparison.OrdinalIgnoreCase))
+        {
+            label = string.Empty;
+        }
         else
         {
             Result<DefInfo> def = DefResolver.Resolve(label, _world.AnimalAreas, "animal area");

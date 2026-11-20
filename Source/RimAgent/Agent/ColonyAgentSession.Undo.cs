@@ -89,7 +89,10 @@ public sealed partial class ColonyAgentSession
                 }
             }
             CommandResult r = _world.SetTimeAssignment(a.PawnId, a.Hour, a.OldAssignmentDefName);
-            if (r.Success) restored++;
+            if (r.Success)
+            {
+                restored++;
+            }
             else
             {
                 blockedAssignments.Add(key);
@@ -124,7 +127,10 @@ public sealed partial class ColonyAgentSession
                 }
             }
             CommandResult r = _world.SetWorkPriority(p.PawnId, p.WorkTypeDefName, p.OldPriority);
-            if (r.Success) restored++;
+            if (r.Success)
+            {
+                restored++;
+            }
             else
             {
                 blockedPriorities.Add(key);

@@ -100,7 +100,7 @@ internal sealed partial class MapWorldTests
     {
         foreach (TravelEstimateInfo e in estimates)
         {
-            PlanetTile to = new PlanetTile(e.Tile, origin.Layer);
+            PlanetTile to = new(e.Tile, origin.Layer);
             bool reachable = Find.WorldReachability.CanReach(origin, to);
             if (e.Reachable != reachable) failures.Add($"tile {e.Tile}: reachable {e.Reachable}, vanilla {reachable}");
             if (e.Reachable && to != origin && e.Ticks <= 0) failures.Add($"tile {e.Tile}: reachable but no travel time");

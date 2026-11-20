@@ -120,13 +120,19 @@ public partial class Window_Agent
             GUI.color = ToolTextColor;
             Text.Font = GameFont.Tiny;
             string compact;
-            if (!status.AutoCompactEnabled) compact = "RimAgent.ContextPanel.CompactOff".Translate();
+            if (!status.AutoCompactEnabled)
+            {
+                compact = "RimAgent.ContextPanel.CompactOff".Translate();
+            }
             else if (window is > 0)
             {
                 long budget = window.Value * status.Threshold / 100;
                 compact = "RimAgent.ContextPanel.CompactAt".Translate(status.Threshold, FormatTokens(budget), FormatTokens(Math.Max(0, budget - used)));
             }
-            else compact = "RimAgent.ContextPanel.CompactUnknown".Translate(status.Threshold);
+            else
+            {
+                compact = "RimAgent.ContextPanel.CompactUnknown".Translate(status.Threshold);
+            }
             float compactHeight = Text.CalcHeight(compact, width);
             Widgets.Label(new Rect(Pad, y, width, compactHeight), compact);
             y += compactHeight + 4f;

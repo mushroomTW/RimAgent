@@ -109,9 +109,13 @@ public partial class Window_Agent
     private static void HandleGoalEdit(ColonyAgentSession session, RimAgentGameComponent component, IReadOnlyList<string> goals, int index, string text)
     {
         if (index < 1 || index > goals.Count || text.Length == 0)
+        {
             Notice(session, "RimAgent.Goal.EditUsage".Translate());
+        }
         else if (text.Length > RimAgentGameComponent.MaxGoalChars)
+        {
             Notice(session, "RimAgent.Goal.TooLong".Translate(RimAgentGameComponent.MaxGoalChars));
+        }
         else if (component.EditGoalAt(index - 1, text))
         {
             if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
@@ -144,7 +148,10 @@ public partial class Window_Agent
             if (index == 1 && session.HasPendingGoalConfirmation) session.DiscardPendingConfirmation();
             Notice(session, "RimAgent.Goal.Removed".Translate(index, removed));
         }
-        else Notice(session, "RimAgent.Goal.NoSuch".Translate(index));
+        else
+        {
+            Notice(session, "RimAgent.Goal.NoSuch".Translate(index));
+        }
     }
 
     private static string GetGoalStateTranslationKey(RimAgentGameComponent component)

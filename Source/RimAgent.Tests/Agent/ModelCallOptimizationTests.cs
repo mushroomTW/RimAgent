@@ -109,7 +109,7 @@ public class ModelCallOptimizationTests
         _client.CallTool("list_colonists", new { })
                .CallTool("list_colonists", new { }).Do(() => _world.Colonists[0].Name = "Changed by player")
                .Reply("there they are.");
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
 
         await session.SendAsync("who is here? who is here?");
 
@@ -130,7 +130,7 @@ public class ModelCallOptimizationTests
                .CallTool("get_colonist_wellbeing", new { colonist = "Nobody" })
                .CallTool("get_colonist_wellbeing", new { colonist = "Nobody" })
                .Reply("unknown.");
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
 
         await session.SendAsync("how is Nobody? how is Nobody?");
 
@@ -213,7 +213,7 @@ public class ModelCallOptimizationTests
     {
         _client.CallTools(("list_colonists", new { }), ("get_colony_overview", new { }))
                .Reply("overview done.");
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
 
         string reply = await session.SendAsync("status report");
 

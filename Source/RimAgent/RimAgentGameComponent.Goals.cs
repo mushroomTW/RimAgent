@@ -134,7 +134,10 @@ public partial class RimAgentGameComponent
     private void TryStartGoal()
     {
         if (_goals.Count == 0 || _goalPaused || _goalRunning || _autoRunning || Find.CurrentMap == null
-            || DateTime.UtcNow < _goalNextRunAt) return;
+            || DateTime.UtcNow < _goalNextRunAt)
+        {
+            return;
+        }
         try
         {
             ColonyAgentSession session = Session;

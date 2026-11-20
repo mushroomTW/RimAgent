@@ -52,7 +52,10 @@ internal static class TranscriptScreenshot
             string fullPath = Path.GetFullPath(path);
             string folder = Path.GetFullPath(screenshotFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (!string.Equals(Path.GetDirectoryName(fullPath), folder, StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(Path.GetExtension(fullPath), ".png", StringComparison.OrdinalIgnoreCase)) return null;
+                || !string.Equals(Path.GetExtension(fullPath), ".png", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
             return fullPath;
         }
         catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)

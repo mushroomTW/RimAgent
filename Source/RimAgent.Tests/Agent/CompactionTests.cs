@@ -36,7 +36,7 @@ public class CompactionTests
     [Test]
     public void AutoCompactDefaultsToEnabledAtDefaultPercent()
     {
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         Assert.That(session.AutoCompactEnabled, Is.True);
         Assert.That(session.AutoCompactThreshold, Is.EqualTo(RimAgentSettings.DefaultAutoCompactThreshold));
     }
@@ -44,7 +44,7 @@ public class CompactionTests
     [Test]
     public void SyncAutoCompactUpdatesBothAndStatusReflectsHistory()
     {
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8,
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8,
             contextWindowLookup: _ => 10000) { PreferredModel = "Test:model" };
         session.SyncAutoCompact(false, 20);
 
@@ -70,7 +70,7 @@ public class CompactionTests
     public async Task ContextStatusCountsHistory()
     {
         _client.Reply("ok");
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         await session.SendAsync("hello");
 
         ColonyAgentSession.ContextStatus status = session.GetContextStatus();
@@ -83,7 +83,7 @@ public class CompactionTests
     public async Task ContextStatusUsesProviderInputTokensAndClearsWithSession()
     {
         _client.ReplyWithUsage("ok", 12345).Reply("usage omitted");
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8,
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8,
             contextWindowLookup: _ => 20000) { PreferredModel = "Test:model" };
 
         await session.SendAsync("hello");
@@ -108,7 +108,7 @@ public class CompactionTests
                .CallTool("set_work_priorities", new { assignments = "Ali:doctor=3" }).Reply("done 3")
                .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done 4")
                .Reply("hello back");
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8,
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8,
             contextWindowLookup: _ => 4010) { PreferredModel = "Test:model" };
         session.AutoCompactEnabled = enabled;
         await session.SendAsync("set doctor 1");
@@ -145,7 +145,7 @@ public class CompactionTests
         {
             _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
         }
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         // 每句 4 則；30 句 120 則還不裁。
         for (int i = 0; i < 30; i++) await session.SendAsync("set doctor " + i);
         Assert.That(session.History.Count, Is.EqualTo(120));
@@ -163,7 +163,7 @@ public class CompactionTests
     public async Task StoredHistoryIsKeptWhenAutoCompactIsOff()
     {
         for (int i = 0; i < 12; i++) _client.Reply("ok " + i);
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         session.SyncAutoCompact(false, 5);
 
         for (int i = 0; i < 12; i++) await session.SendAsync("instruction " + i);
@@ -178,7 +178,7 @@ public class CompactionTests
         {
             _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
         }
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         session.AutoCompactThreshold = 75;
         for (int i = 0; i < 4; i++) await session.SendAsync("set doctor " + i);
 
@@ -193,12 +193,12 @@ public class CompactionTests
     public async Task SerializeForSaveKeepsRestoredHistoryBeforeFirstInstruction()
     {
         _client.Reply("ok");
-        ColonyAgentSession original = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession original = new(_client, _world, () => _permissions, 8);
         await original.SendAsync("remember the granary");
         string saved = original.SerializeForSave();
         Assert.That(saved, Does.Contain("remember the granary"));
 
-        ColonyAgentSession loaded = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession loaded = new(_client, _world, () => _permissions, 8);
         loaded.RestoreSerializedSession(saved);
 
         Assert.That(loaded.SerializeForSave(), Is.EqualTo(saved), "讀檔後還沒送指令就存檔，舊歷史不能丟");
@@ -208,7 +208,7 @@ public class CompactionTests
     public async Task SerializeForSaveWhileBusyReturnsLastCompletedHistory()
     {
         var client = new ReplyThenGateChatClient("first done");
-        ColonyAgentSession session = new ColonyAgentSession(client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(client, _world, () => _permissions, 8);
         await session.SendAsync("first instruction");
 
         Task<string> running = session.SendAsync("second instruction");
@@ -242,7 +242,7 @@ public class CompactionTests
     [Test]
     public async Task CompactWithEmptyHistoryReturnsNullAndNotices()
     {
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
 
         string result = await session.CompactAsync();
 
@@ -258,7 +258,7 @@ public class CompactionTests
     {
         for (int i = 0; i < 6; i++) _client.Reply("ok " + i);
         _client.Reply("Summary of the colony so far.");
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i);
         int before = session.History.Count;
         Assert.That(before, Is.GreaterThan(8), "歷史要夠長，摘要才有東西可折");
@@ -283,7 +283,7 @@ public class CompactionTests
         // AF 策略吞掉摘要例外並原樣回傳，Compact 以「一則沒少」認出並誠實回報。
         for (int i = 0; i < 6; i++) _client.Reply("ok " + i);
         _client.Throw(new InvalidOperationException("summarizer down"));
-        ColonyAgentSession session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i);
         int before = session.History.Count;
         Assert.That(before, Is.GreaterThan(8));
@@ -304,7 +304,7 @@ public class CompactionTests
     public async Task CompactWhileBusyThrows()
     {
         var gate = new GateChatClient();
-        ColonyAgentSession session = new ColonyAgentSession(gate, _world, () => _permissions, 8);
+        ColonyAgentSession session = new(gate, _world, () => _permissions, 8);
         Task<string> running = session.SendAsync("hello");
         Assert.That(session.IsBusy, Is.True);
 

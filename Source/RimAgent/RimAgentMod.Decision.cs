@@ -206,8 +206,8 @@ public partial class RimAgentMod
         // 類別清單
         Rect catHeader = listing.GetRect(28f);
         const float ActionButtonWidth = 90f;
-        Rect resetRect = new Rect(catHeader.xMax - ActionButtonWidth, catHeader.y, ActionButtonWidth, 26f);
-        Rect addRect = new Rect(resetRect.x - ActionButtonWidth - 6f, catHeader.y, ActionButtonWidth, 26f);
+        Rect resetRect = new(catHeader.xMax - ActionButtonWidth, catHeader.y, ActionButtonWidth, 26f);
+        Rect addRect = new(resetRect.x - ActionButtonWidth - 6f, catHeader.y, ActionButtonWidth, 26f);
         Widgets.Label(new Rect(catHeader.x, catHeader.y + 3f, addRect.x - catHeader.x - 8f, 24f), "RimAgent.Settings.DecisionCategoriesHeader".Translate());
 
         if (Widgets.ButtonText(addRect, "RimAgent.Settings.DecisionCategoryAdd".Translate()))
@@ -254,8 +254,8 @@ public partial class RimAgentMod
             DecisionRouteCategory cat = Settings.decisionCategories[i];
             Rect row = listing.GetRect(24f);
             const float DeleteBtnWidth = 50f;
-            Rect delRect = new Rect(row.xMax - DeleteBtnWidth, row.y, DeleteBtnWidth, 22f);
-            Rect titleRect = new Rect(row.x, row.y + 2f, row.width - DeleteBtnWidth - 6f, 20f);
+            Rect delRect = new(row.xMax - DeleteBtnWidth, row.y, DeleteBtnWidth, 22f);
+            Rect titleRect = new(row.x, row.y + 2f, row.width - DeleteBtnWidth - 6f, 20f);
 
             Text.Font = GameFont.Tiny;
             string displayName = string.IsNullOrEmpty(cat.Name) ? cat.Id : cat.Name;

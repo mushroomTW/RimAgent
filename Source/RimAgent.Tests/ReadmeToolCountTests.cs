@@ -25,7 +25,10 @@ public class ReadmeToolCountTests
         for (var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); dir != null; dir = dir.Parent)
         {
             if (File.Exists(Path.Combine(dir.FullName, "About", "About.xml"))
-                && File.Exists(Path.Combine(dir.FullName, "README.md"))) return dir.FullName;
+                && File.Exists(Path.Combine(dir.FullName, "README.md")))
+            {
+                return dir.FullName;
+            }
         }
         throw new FileNotFoundException("找不到 mod 根目錄");
     }

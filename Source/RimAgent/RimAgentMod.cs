@@ -80,7 +80,7 @@ public partial class RimAgentMod : Mod
 
     public override void DoSettingsWindowContents(Rect inRect)
     {
-        Rect viewRect = new Rect(0f, 0f, inRect.width - 24f, _settingsHeight);
+        Rect viewRect = new(0f, 0f, inRect.width - 24f, _settingsHeight);
         Widgets.BeginScrollView(inRect, ref _settingsScrollPosition, viewRect);
 
         var listing = new Listing_Standard();
@@ -192,8 +192,8 @@ public partial class RimAgentMod : Mod
             string logFolder = Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent");
             string logPath = Path.Combine(logFolder, "RimAgent-runs.jsonl");
             Rect logRow = listing.GetRect(28f);
-            Rect openRect = new Rect(logRow.xMax - OpenFolderButtonWidth, logRow.y, OpenFolderButtonWidth, 26f);
-            Rect pathRect = new Rect(logRow.x, logRow.y + 3f, openRect.x - logRow.x - 8f, 24f);
+            Rect openRect = new(logRow.xMax - OpenFolderButtonWidth, logRow.y, OpenFolderButtonWidth, 26f);
+            Rect pathRect = new(logRow.x, logRow.y + 3f, openRect.x - logRow.x - 8f, 24f);
             // 路徑很長，單行截斷，完整路徑放在提示。
             Text.WordWrap = false;
             Widgets.Label(pathRect, "RimAgent.Settings.RunLogPath".Translate(logPath).ToString().Truncate(pathRect.width));

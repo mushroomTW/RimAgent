@@ -14,7 +14,7 @@ internal static class DecisionDiagnostics
     private static readonly ConcurrentDictionary<string, byte> Seen = new(StringComparer.Ordinal);
 
     /// <summary>實際輸出；預設寫入遊戲日誌。測試可替換為收集器。</summary>
-    internal static Action<string> Sink = message => Verse.Log.Warning(message);
+    internal static Action<string> Sink { get; set; } = message => Verse.Log.Warning(message);
 
     /// <summary>記錄一次決策失敗；同一元件＋同一訊息只輸出第一次。</summary>
     internal static void Warn(string component, Exception ex)

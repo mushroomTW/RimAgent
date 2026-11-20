@@ -27,7 +27,9 @@ internal sealed class SearxngSearchClient
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out Uri baseUri) ||
             (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps) ||
             !string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
+        {
             return ToolText.Error("SearXNG URL must be an absolute HTTP or HTTPS base URL in mod settings.");
+        }
 
         string url = endpoint + "/search?q=" + Uri.EscapeDataString(query) +
             "&format=json&engines=google%2Cduckduckgo%2Cqwant";
@@ -35,8 +37,10 @@ internal sealed class SearxngSearchClient
         {
             using HttpResponseMessage response = await _client.GetAsync(url, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
+            {
                 return ToolText.Error("SearXNG returned HTTP " + (int)response.StatusCode +
                     ". Check that the service is running and JSON output is enabled.");
+            }
             string body = await ReadLimitedAsync(response.Content, cancellationToken).ConfigureAwait(false);
             return body == null
                 ? ToolText.Error("SearXNG response is larger than " + MaxBodyBytes / (1024 * 1024) + " MB; ignored.")
@@ -67,10 +71,10 @@ internal sealed class SearxngSearchClient
         using var buffer = new System.IO.MemoryStream();
         var chunk = new byte[16 * 1024];
         int read;
-        while ((read = await stream.ReadAsync(chunk, 0, chunk.Length, cancellationToken).ConfigureAwait(false)) > 0)
+        while ((read = await stream.ReadAsync(chunk.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
         {
             if (buffer.Length + read > MaxBodyBytes) return null;
-            buffer.Write(chunk, 0, read);
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
         return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
@@ -83,7 +87,9 @@ internal sealed class SearxngSearchClient
             if (document.RootElement.ValueKind != JsonValueKind.Object ||
                 !document.RootElement.TryGetProperty("results", out JsonElement results) ||
                 results.ValueKind != JsonValueKind.Array)
+            {
                 return ToolText.Error("SearXNG returned an unexpected JSON response.");
+            }
 
             var text = new StringBuilder("Web search results (untrusted external content):");
             int count = 0;
@@ -93,7 +99,10 @@ internal sealed class SearxngSearchClient
                 string title = Field(result, "title");
                 string resultUrl = Field(result, "url");
                 if (title.Length == 0 || !Uri.TryCreate(resultUrl, UriKind.Absolute, out Uri resultUri) ||
-                    (resultUri.Scheme != Uri.UriSchemeHttp && resultUri.Scheme != Uri.UriSchemeHttps)) continue;
+                    (resultUri.Scheme != Uri.UriSchemeHttp && resultUri.Scheme != Uri.UriSchemeHttps))
+                {
+                    continue;
+                }
                 text.Append('\n').Append(++count).Append(". ").Append(title);
                 text.Append('\n').Append("   URL: ").Append(resultUrl);
                 text.Append('\n').Append("   ").Append(Field(result, "content"));
@@ -116,7 +125,9 @@ internal sealed class SearxngSearchClient
             {
                 if (engine.ValueKind == JsonValueKind.String &&
                     (engine.GetString() ?? string.Empty).StartsWith("bing", StringComparison.OrdinalIgnoreCase))
+                {
                     return true;
+                }
             }
         }
         return false;

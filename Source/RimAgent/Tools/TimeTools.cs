@@ -120,22 +120,30 @@ public sealed class TimeTools
         if (string.Equals(needle, "暫停", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "暂停", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "pause", StringComparison.OrdinalIgnoreCase))
+        {
             return "Paused";
+        }
         if (string.Equals(needle, "正常", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "普通", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "1x", StringComparison.OrdinalIgnoreCase))
+        {
             return "Normal";
+        }
         if (string.Equals(needle, "加速", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "快速", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "快", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "2x", StringComparison.OrdinalIgnoreCase))
+        {
             return "Fast";
+        }
         if (string.Equals(needle, "超加速", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "超快", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "超級加速", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "超级加速", StringComparison.OrdinalIgnoreCase)
             || string.Equals(needle, "3x", StringComparison.OrdinalIgnoreCase))
+        {
             return "Superfast";
+        }
         return needle;
     }
 

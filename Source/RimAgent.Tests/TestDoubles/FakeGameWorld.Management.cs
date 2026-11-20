@@ -27,7 +27,9 @@ internal sealed partial class FakeGameWorld
         var pending = health.PendingSurgeries.ToList();
         if (pending.Any(b => string.Equals(b.Label, recipe.Label, StringComparison.OrdinalIgnoreCase)
             && string.Equals(b.Part ?? string.Empty, part, StringComparison.OrdinalIgnoreCase)))
+        {
             return CommandResult.Fail($"{recipe.Label} is already scheduled on {pawn.Name}");
+        }
         pending.Add(new SurgeryBillInfo { Label = recipe.Label, Part = part });
         health.PendingSurgeries = pending;
         return CommandResult.Ok($"Scheduled {recipe.Label} on {pawn.Name}" + (part.Length > 0 ? $" ({part})" : string.Empty) + ".");

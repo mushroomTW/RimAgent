@@ -304,13 +304,19 @@ internal sealed partial class RimWorldGameWorld
     private static void AddCaravanWarnings(CaravanPlanInfo plan, List<TransferableOneWay> transferables, PlanetTile origin, List<Pawn> pawns, List<string> warnings)
     {
         if (plan.FoodDays < 5f)
+        {
             warnings.Add(plan.FoodDays < 0.1f
                 ? "DaysWorthOfFoodWarningDialog_NoFood".Translate().Resolve()
                 : "DaysWorthOfFoodWarningDialog".Translate(plan.FoodDays.ToString("0.#")).Resolve());
+        }
         else if (MostCaravanFoodWillRotSoon(transferables, origin))
+        {
             warnings.Add("CaravanFoodWillRotSoonWarningDialog".Translate().Resolve());
+        }
         if (!pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.skills.GetSkill(SkillDefOf.Social).TotallyDisabled))
+        {
             warnings.Add("CaravanIncapableOfSocial".Translate().Resolve());
+        }
     }
 
     /// <summary>視窗的 MostFoodWillRotSoon：帶的食物營養有七成五以上不到五天就壞。</summary>
@@ -554,13 +560,17 @@ internal sealed partial class RimWorldGameWorld
         {
             PlanetTile destination = CaravanUtility.BestGotoDestNear(to, caravan);
             if (!destination.Valid)
+            {
                 orders.Add(new CaravanOrder { Label = name + " (no reachable tile nearby)", Disabled = true });
+            }
             else
+            {
                 orders.Add(new CaravanOrder
                 {
                     Label = destination == to ? name : name + " (stops at the nearest reachable tile " + destination.tileId + ")",
                     Run = () => caravan.pather.StartPath(destination, null, repathImmediately: true)
                 });
+            }
         }
         try
         {
@@ -605,7 +615,9 @@ internal sealed partial class RimWorldGameWorld
         List<CaravanOrder> orders = BuildCaravanOrders(caravan, to);
         CaravanOrder order = optionNumber >= 1 && optionNumber <= orders.Count ? orders[optionNumber - 1] : null;
         if (order == null || !string.Equals(order.Label, label, StringComparison.OrdinalIgnoreCase))
+        {
             return CommandResult.Fail($"{caravan.LabelCap}'s orders for tile {tile} changed; call get_world_tile again");
+        }
         if (order.Disabled) return CommandResult.Fail($"\"{label}\" is disabled");
 
         bool startedOnTile = to == caravan.Tile;
@@ -625,6 +637,16 @@ internal sealed partial class RimWorldGameWorld
         // 命令已經執行：若篷車已出發／離開世界地圖，後續的目標或視窗只是多餘的附帶步驟，不能回報成單純失敗。
         bool orderTookEffect = caravan.Destroyed || !caravan.Spawned
             || (caravan.pather.Moving && (!wasMoving || caravan.pather.Destination != destinationBefore));
+        CommandResult disruption = HandleFollowUpDisruptions(targeting, windowFailure, orderTookEffect, label, watch);
+        if (disruption != null)
+        {
+            return disruption;
+        }
+        return FinalizeCaravanSend(caravan, to, startedOnTile, before, watch, label);
+    }
+
+    private static CommandResult HandleFollowUpDisruptions(bool targeting, CommandResult windowFailure, bool orderTookEffect, string label, MessageWatch watch)
+    {
         if (targeting)
         {
             string noTarget = $"\"{label}\" asks for a further target, which is not supported yet; it was cancelled";
@@ -638,7 +660,7 @@ internal sealed partial class RimWorldGameWorld
                 ? CommandResult.Ok(WithGameMessages($"\"{label}\" partly done: the order already took effect, but a follow-up window was closed ({windowFailure.Message})", watch))
                 : windowFailure;
         }
-        return FinalizeCaravanSend(caravan, to, startedOnTile, before, watch, label);
+        return null;
     }
 
     private static CommandResult FinalizeCaravanSend(Caravan caravan, PlanetTile to, bool startedOnTile, HashSet<Window> before, MessageWatch watch, string label)

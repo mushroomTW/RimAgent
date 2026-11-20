@@ -62,20 +62,35 @@ internal sealed partial class RimWorldGameWorld
         string cannot = $"{mode.label} is not available for {pawn.LabelShort}";
         if (!pawn.guest.Recruitable && mode.hideIfNotRecruitable) return $"{cannot}: not recruitable";
         if (pawn.IsWildMan() && !mode.allowOnWildMan) return $"{cannot}: wild men cannot use it";
+        if (CheckBiotechPrisonerMode(pawn, mode, cannot) is { } biotechReason) return biotechReason;
+        if (!mode.allowInClassicIdeoMode && Find.IdeoManager.classicMode) return $"{cannot}: not allowed in classic ideology mode";
+        if (ModsConfig.AnomalyActive && CheckAnomalyPrisonerMode(pawn, mode, cannot) is { } anomalyReason) return anomalyReason;
+        return null;
+    }
+
+    private static string CheckBiotechPrisonerMode(Pawn pawn, PrisonerInteractionModeDef mode, string cannot)
+    {
         if (mode.hideIfNoBloodfeeders && pawn.MapHeld != null
             && !(ModsConfig.BiotechActive && pawn.MapHeld.mapPawns.FreeColonistsAndPrisonersSpawned.Any(p => p.IsBloodfeeder())))
-            return $"{cannot}: the colony has no bloodfeeder";
-        if (mode.hideOnHemogenicPawns && ModsConfig.BiotechActive && pawn.genes != null && pawn.genes.HasActiveGene(GeneDefOf.Hemogenic))
-            return $"{cannot}: hemogenic pawns cannot use it";
-        if (!mode.allowInClassicIdeoMode && Find.IdeoManager.classicMode) return $"{cannot}: not allowed in classic ideology mode";
-        if (ModsConfig.AnomalyActive)
         {
-            if (mode.hideIfNotStudiableAsPrisoner
-                && !(pawn.TryGetComp<CompStudiable>(out CompStudiable studiable) && studiable.EverStudiable()
-                     && pawn.kindDef.studiableAsPrisoner && !pawn.everLostEgo))
-                return $"{cannot}: not studiable as a prisoner";
-            if (mode.hideIfGrayFleshNotAppeared && !Find.Anomaly.hasSeenGrayFlesh) return $"{cannot}: gray flesh has not appeared yet";
+            return $"{cannot}: the colony has no bloodfeeder";
         }
+        if (mode.hideOnHemogenicPawns && ModsConfig.BiotechActive && pawn.genes != null && pawn.genes.HasActiveGene(GeneDefOf.Hemogenic))
+        {
+            return $"{cannot}: hemogenic pawns cannot use it";
+        }
+        return null;
+    }
+
+    private static string CheckAnomalyPrisonerMode(Pawn pawn, PrisonerInteractionModeDef mode, string cannot)
+    {
+        if (mode.hideIfNotStudiableAsPrisoner
+            && !(pawn.TryGetComp<CompStudiable>(out CompStudiable studiable) && studiable.EverStudiable()
+                 && pawn.kindDef.studiableAsPrisoner && !pawn.everLostEgo))
+        {
+            return $"{cannot}: not studiable as a prisoner";
+        }
+        if (mode.hideIfGrayFleshNotAppeared && !Find.Anomaly.hasSeenGrayFlesh) return $"{cannot}: gray flesh has not appeared yet";
         return null;
     }
 

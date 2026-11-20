@@ -186,8 +186,14 @@ internal sealed partial class RimWorldGameWorld
         List<DiaOption> options = CurrentNode(dialog)?.options;
         DiaOption chosen = options != null && option >= 1 && option <= options.Count ? options[option - 1] : null;
         string error = null;
-        if (chosen == null) error = $"option {option} does not exist";
-        else if (chosen.hyperlink.def != null) error = $"option {option} only opens an info card";
+        if (chosen == null)
+        {
+            error = $"option {option} does not exist";
+        }
+        else if (chosen.hyperlink.def != null)
+        {
+            error = $"option {option} only opens an info card";
+        }
         else if (chosen.disabled)
         {
             error = $"option {option} is disabled" + (string.IsNullOrEmpty(chosen.disabledReason) ? string.Empty : ": " + chosen.disabledReason);

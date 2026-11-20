@@ -39,9 +39,14 @@ public sealed class WorldTools
         IReadOnlyList<CaravanInfo> caravans = _world.GetCaravans();
         IReadOnlyList<FormingCaravanInfo> forming = _world.GetFormingCaravans();
         if (caravans.Count == 0 && forming.Count == 0)
+        {
             return "You have no caravans on the world map. A caravan is formed with form_caravan.";
+        }
         var sb = new StringBuilder();
-        if (caravans.Count == 0) sb.AppendLine("No caravans on the world map yet.");
+        if (caravans.Count == 0)
+        {
+            sb.AppendLine("No caravans on the world map yet.");
+        }
         else
         {
             sb.Append(caravans.Count).Append(caravans.Count == 1 ? " caravan:" : " caravans:").AppendLine();
@@ -178,7 +183,10 @@ public sealed class WorldTools
 
     private static void AppendWorldObjects(StringBuilder sb, WorldTileInfo info)
     {
-        if (info.Objects.Count == 0) sb.AppendLine("No world objects on this tile.");
+        if (info.Objects.Count == 0)
+        {
+            sb.AppendLine("No world objects on this tile.");
+        }
         else
         {
             sb.AppendLine("World objects here:");
@@ -327,7 +335,10 @@ public sealed class WorldTools
         if (worldObjectId < 0) return Result<int>.Ok(tile >= 0 ? tile : -1);
         int objectTile;
         CaravanInfo own = caravans.FirstOrDefault(c => c.Id == worldObjectId);
-        if (own != null) objectTile = own.Tile;
+        if (own != null)
+        {
+            objectTile = own.Tile;
+        }
         else
         {
             WorldObjectInfo obj = world.GetWorldSurvey(originCaravanId).Objects.FirstOrDefault(o => o.Id == worldObjectId);
@@ -461,7 +472,10 @@ public sealed class WorldTools
             if (c.EtaTicks > 0) text += ", arrival in " + Duration(c.EtaTicks);
             parts.Add(text);
         }
-        else parts.Add("stopped, no destination");
+        else
+        {
+            parts.Add("stopped, no destination");
+        }
         if (c.Resting) parts.Add("resting for the night");
         if (c.Immobilized) parts.Add("immobilized: overloaded");
         if (c.AllOwnersDowned) parts.Add("all members are downed");

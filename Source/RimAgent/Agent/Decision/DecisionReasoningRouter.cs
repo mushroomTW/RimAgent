@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -95,24 +96,30 @@ public sealed class DecisionReasoningRouter
         }
 
         if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || string.IsNullOrWhiteSpace(answer?.Value))
+        {
             return FallbackRoute(fallbackReasoning, "Decision model returned no category answer.");
+        }
 
         double confidence = answer.Confidence ?? answer.Probability ?? 0d;
         if (confidence < minConfidence)
+        {
             return FallbackRoute(fallbackReasoning,
-                FormattableString.Invariant($"Decision confidence {confidence:F2} is below threshold {minConfidence:F2}."));
+                string.Create(CultureInfo.InvariantCulture, $"Decision confidence {confidence:F2} is below threshold {minConfidence:F2}."));
+        }
 
         string selectedId = answer.Value.Trim();
         DecisionRouteCategory matched = FindMatchedCategory(activeCategories, selectedId);
         if (matched == null)
+        {
             return FallbackRoute(fallbackReasoning, $"Selected category '{selectedId}' not found in categories.");
+        }
 
         return new DecisionRoute
         {
             CategoryId = matched.Id,
             Reasoning = ResolveReasoningLevel(matched, fallbackReasoning),
             Confidence = confidence,
-            Reason = FormattableString.Invariant($"Routed to category '{matched.Id}' with confidence {confidence:F2}.")
+            Reason = string.Create(CultureInfo.InvariantCulture, $"Routed to category '{matched.Id}' with confidence {confidence:F2}.")
         };
     }
 

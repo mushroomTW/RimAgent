@@ -347,7 +347,7 @@ public partial class Window_Agent
                 richText = false,
                 wordWrap = true
             };
-            Color plain = new Color(0.90f, 0.93f, 0.96f);
+            Color plain = new(0.90f, 0.93f, 0.96f);
             // GUIStyleState 是參考型別，收進陣列迴圈賦值仍會寫回樣式本體。
             foreach (GUIStyleState state in new[] { style.normal, style.hover, style.onNormal, style.onHover })
             {

@@ -326,9 +326,11 @@ public class RimAgentSettings : ModSettings
         string modeName = mode.ToString();
         Scribe_Values.Look(ref modeName, "mode", nameof(AgentMode.Confirm));
         if (Scribe.mode == LoadSaveMode.LoadingVars)
+        {
             mode = Enum.TryParse(modeName, out AgentMode parsed) && Enum.IsDefined<AgentMode>(parsed)
                 ? parsed
                 : AgentMode.Confirm;
+        }
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref reasoningRouting, "reasoningRouting", false);
         Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);

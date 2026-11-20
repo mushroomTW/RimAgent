@@ -118,11 +118,17 @@ public static class GoalProgress
         foreach (TranscriptEntry entry in entries)
         {
             if (entry.InstructionId != instructionId || entry.Kind != TranscriptKind.Tool || entry.Failed
-                || (entry.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) continue;
+                || (entry.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
             // 記憶與網頁搜尋不觀察也不改變殖民地，不算完成證據，也不推翻先前的查詢。
             // 委派本身只是子代理的轉述；子代理實際跑的工具各有紀錄，以那些為準。
             if (entry.ToolCategory == ToolCategory.Memory || entry.ToolCategory == ToolCategory.Web
-                || entry.ToolCategory == ToolCategory.Agents) continue;
+                || entry.ToolCategory == ToolCategory.Agents)
+            {
+                continue;
+            }
             verified = entry.ToolRisk == ToolRisk.Query;
         }
         return verified;
@@ -140,7 +146,10 @@ public static class GoalProgress
         {
             if (entry == null || entry.InstructionId != instructionId || entry.Kind != TranscriptKind.Tool) continue;
             if (entry.ToolCategory == ToolCategory.Memory || entry.ToolCategory == ToolCategory.Web
-                || entry.ToolCategory == ToolCategory.Agents) continue;
+                || entry.ToolCategory == ToolCategory.Agents)
+            {
+                continue;
+            }
             relevant.Add(entry);
         }
         if (relevant.Count == 0) return string.Empty;
@@ -167,8 +176,11 @@ public static class GoalProgress
         bool waitingConfirmation, bool hasToolEvidence, string previousBlockerKey = null,
         int previousIdleTurns = 0, bool usedTool = false)
     {
-        if (waitingConfirmation) return new GoalTurnDecision(previousTurns, previousBlocks, false, false,
-            blockerKey: previousBlockerKey, idleTurns: previousIdleTurns);
+        if (waitingConfirmation)
+        {
+            return new GoalTurnDecision(previousTurns, previousBlocks, false, false,
+                blockerKey: previousBlockerKey, idleTurns: previousIdleTurns);
+        }
         int turns = previousTurns + 1;
         GoalTurnStatus status = ParseStatus(reply);
         if (reply != null && status == GoalTurnStatus.Complete && hasToolEvidence

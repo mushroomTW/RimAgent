@@ -549,7 +549,10 @@ public sealed class BenchmarkComponent : GameComponent
             CellRect rect = GenAdj.OccupiedRect(cell, Rot4.North, def.size).ExpandedBy(1);
             if (!rect.InBounds(map)) continue;
             if (!rect.Cells.All(c => c.Standable(map) && c.GetEdifice(map) == null && c.GetFirstItem(map) == null
-                && c.GetFirstPawn(map) == null && map.zoneManager.ZoneAt(c) == null)) continue;
+                && c.GetFirstPawn(map) == null && map.zoneManager.ZoneAt(c) == null))
+            {
+                continue;
+            }
             var building = (Building)ThingMaker.MakeThing(def, def.MadeFromStuff ? GenStuff.DefaultStuffFor(def) : null);
             building.SetFaction(Faction.OfPlayer);
             return (Building)GenSpawn.Spawn(building, cell, map, Rot4.North);

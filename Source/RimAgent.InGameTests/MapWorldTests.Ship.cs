@@ -119,7 +119,10 @@ internal sealed partial class MapWorldTests
     {
         string reportLabel = "CommandShipLaunchReport".Translate();
         GizmoInfo report = _world.GetGizmos(beam.thingIDNumber)?.FirstOrDefault(g => g.Label == reportLabel);
-        if (report == null) failures.Add("the beam has no launch report button");
+        if (report == null)
+        {
+            failures.Add("the beam has no launch report button");
+        }
         else
         {
             CommandResult pressed = _world.UseGizmo(beam.thingIDNumber, report.Number, report.Label, null);

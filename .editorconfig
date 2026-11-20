@@ -20,9 +20,13 @@ trim_trailing_whitespace = false
 
 [*.cs]
 csharp_new_line_before_open_brace = all
-csharp_prefer_braces = true:suggestion
-csharp_style_var_for_built_in_types = false:suggestion
-csharp_style_var_when_type_is_apparent = true:suggestion
+# 慣例允許單行守衛子句不加大括號，多行才提示加大括號
+csharp_prefer_braces = when_multiline:suggestion
+# var 與明確型別都可接受，不提示
+dotnet_diagnostic.IDE0007.severity = none
+dotnet_diagnostic.IDE0008.severity = none
+# 集合初始化（IDE0028）不提示
+dotnet_diagnostic.IDE0028.severity = none
 dotnet_sort_system_directives_first = true
 
 # C# 現代語法偏好

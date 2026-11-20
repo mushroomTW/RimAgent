@@ -194,7 +194,7 @@ internal sealed class StartupTests
         if (keys.Count == 0) failures.Add("no translation key literal found in RimAgent.dll");
 
         string languagesDir = Path.Combine(content.RootDir, "Languages");
-        HashSet<string> shipped = new HashSet<string>(
+        HashSet<string> shipped = new(
             Directory.Exists(languagesDir) ? Directory.GetDirectories(languagesDir).Select(Path.GetFileName) : [],
             StringComparer.OrdinalIgnoreCase);
         // Core 的語言資料夾帶在地名（如 "ChineseTraditional (繁體中文)"），mod 用去掉括號的舊名；遊戲兩者都認。

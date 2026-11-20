@@ -45,7 +45,7 @@ public class MemoryScopeTests
     [Test]
     public async Task GlobalFilesGoToTheGlobalScopeAndSurviveANewSave()
     {
-        AgentMemoryStore save = new AgentMemoryStore();
+        AgentMemoryStore save = new();
         ScopedMemoryStore memory = NewMemory(save);
 
         await Invoke(memory, "file_memory_write", ("fileName", "global_preferences.md"), ("content", "Never sell components."), ("description", "Player rules"));
@@ -67,7 +67,7 @@ public class MemoryScopeTests
     public async Task IndexMergesBothScopesAndCarriesDescriptions()
     {
         AgentMemoryStore global = NewGlobalStore();
-        ScopedMemoryStore memory = new ScopedMemoryStore(new AgentMemoryStore(), global);
+        ScopedMemoryStore memory = new(new AgentMemoryStore(), global);
 
         await Invoke(memory, "file_memory_write", ("fileName", "global_preferences.md"), ("content", "Never sell components."), ("description", "Player rules"));
         await Invoke(memory, "file_memory_write", ("fileName", "base.md"), ("content", "Storage is near the river."), ("description", "Base layout"));
@@ -254,7 +254,7 @@ public class MemoryScopeTests
         AgentMemoryStore global = NewGlobalStore();
         global.WriteAsync("global_preferences.md", "Never sell components.").GetAwaiter().GetResult();
         global.WriteAsync("global_preferences_description.md", "Player rules").GetAwaiter().GetResult();
-        ScopedMemoryStore memory = new ScopedMemoryStore(new AgentMemoryStore(), global);
+        ScopedMemoryStore memory = new(new AgentMemoryStore(), global);
         var client = new ScriptedChatClient().Reply("done");
 
         var session = new ColonyAgentSession(client, new FakeGameWorld(),
