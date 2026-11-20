@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 
@@ -35,7 +37,7 @@ public sealed class AgentActivity
 /// </summary>
 public sealed class AgentActivityTracker
 {
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly List<AgentActivity> _live = [];
 
     public AgentActivity Current

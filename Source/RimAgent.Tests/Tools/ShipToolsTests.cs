@@ -32,7 +32,7 @@ public class ShipToolsTests
         return part;
     }
 
-    private ShipPartInfo Core(int minX = 10, int minZ = 10) => Add("Ship_ComputerCore", "computer core", minX, minZ, minX + 1, minZ + 1);
+    private void Core(int minX = 10, int minZ = 10) => Add("Ship_ComputerCore", "computer core", minX, minZ, minX + 1, minZ + 1);
 
     [Test]
     public void NoPartsListsWhatIsRequired()

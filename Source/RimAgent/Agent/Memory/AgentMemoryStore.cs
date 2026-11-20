@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,7 +29,7 @@ public class AgentMemoryStore : AgentFileStore
 
     private readonly Dictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
     // 工具在執行緒池上寫入，存檔在主執行緒讀取。
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly int _droppedOnLoad;
 
     public AgentMemoryStore(List<AgentMemoryEntry> entries = null)

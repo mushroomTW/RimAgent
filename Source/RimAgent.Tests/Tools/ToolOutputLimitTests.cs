@@ -43,18 +43,21 @@ public class ToolOutputLimitTests
         {
             string limited = ToolOutputLimit.Apply(text, max);
 
-            for (int i = 0; i < limited.Length; i++)
+            int i = 0;
+            while (i < limited.Length)
             {
                 if (char.IsHighSurrogate(limited[i]))
                 {
                     Assert.That(i + 1 < limited.Length && char.IsLowSurrogate(limited[i + 1]), Is.True,
                         $"max={max} 位置 {i} 留下了沒有配對的高位字元");
-                    i++;
+                    // 跳過整個代理字組
+                    i += 2;
                 }
                 else
                 {
                     Assert.That(char.IsLowSurrogate(limited[i]), Is.False,
                         $"max={max} 位置 {i} 留下了沒有配對的低位字元");
+                    i++;
                 }
             }
         }

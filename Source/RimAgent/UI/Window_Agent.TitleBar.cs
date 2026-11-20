@@ -1,4 +1,7 @@
+#nullable disable
+
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
@@ -154,7 +157,7 @@ public partial class Window_Agent
             ? "RimAgent.Context.CompactOn".Translate(status.Messages, status.Threshold)
             : "RimAgent.Context.CompactOff".Translate(status.Messages);
         string window = status.ContextWindow.HasValue
-            ? "RimAgent.Context.WindowKnown".Translate(status.ContextWindow.Value.ToString("N0"))
+            ? "RimAgent.Context.WindowKnown".Translate(status.ContextWindow.Value.ToString("N0", CultureInfo.InvariantCulture))
             : "RimAgent.Context.WindowUnknown".Translate();
         TooltipHandler.TipRegion(gaugeRect, "RimAgent.Context.Tooltip".Translate(window, compact));
     }

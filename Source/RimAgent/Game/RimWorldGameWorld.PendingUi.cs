@@ -1,5 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -329,7 +332,7 @@ internal sealed partial class RimWorldGameWorld
             layer = Find.WorldGrid.PlanetLayers.Values.FirstOrDefault(l => string.Equals(l.Def.defName, name, StringComparison.OrdinalIgnoreCase));
             text = text.Substring(colon + 1);
         }
-        if (layer == null || !int.TryParse(text.Trim(), out int id)) return false;
+        if (layer == null || !int.TryParse(text.Trim(), CultureInfo.InvariantCulture, out int id)) return false;
         tile = new PlanetTile(id, layer);
         return TileInWorld(tile);
     }
@@ -427,8 +430,8 @@ internal sealed partial class RimWorldGameWorld
         string text = input?.Trim().TrimStart('#') ?? string.Empty;
         string[] parts = text.Split(',');
         Result<MapTarget> parsed;
-        if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out int x) && int.TryParse(parts[1].Trim(), out int z)) parsed = TargetResolver.ResolveMapTarget(-1, x, z);
-        else if (parts.Length == 1 && int.TryParse(text, out int id)) parsed = TargetResolver.ResolveMapTarget(id, -1, -1);
+        if (parts.Length == 2 && int.TryParse(parts[0].Trim(), CultureInfo.InvariantCulture, out int x) && int.TryParse(parts[1].Trim(), CultureInfo.InvariantCulture, out int z)) parsed = TargetResolver.ResolveMapTarget(-1, x, z);
+        else if (parts.Length == 1 && int.TryParse(text, CultureInfo.InvariantCulture, out int id)) parsed = TargetResolver.ResolveMapTarget(id, -1, -1);
         else return false;
         target = parsed.Success ? parsed.Value : null;
         return target != null;
@@ -451,7 +454,7 @@ internal sealed partial class RimWorldGameWorld
             return CommandResult.Ok("landing");
         }
         string[] parts = (input ?? string.Empty).Split(',');
-        if (parts.Length != 2 || !int.TryParse(parts[0].Trim(), out int x) || !int.TryParse(parts[1].Trim(), out int z))
+        if (parts.Length != 2 || !int.TryParse(parts[0].Trim(), CultureInfo.InvariantCulture, out int x) || !int.TryParse(parts[1].Trim(), CultureInfo.InvariantCulture, out int z))
             return CommandResult.Fail("give the cell as x,z");
         var cell = new IntVec3(x, 0, z);
         Designator_MoveGravship designator = controller.MoveDesignator();
@@ -550,7 +553,7 @@ internal sealed partial class RimWorldGameWorld
         var picked = new List<Thing>();
         foreach (string part in (input ?? string.Empty).Split(_commaSplit, StringSplitOptions.RemoveEmptyEntries))
         {
-            if (!int.TryParse(part.Trim(), out int number) || number < 1 || number > candidates.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
+            if (!int.TryParse(part.Trim(), CultureInfo.InvariantCulture, out int number) || number < 1 || number > candidates.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
             if (!picked.Contains(candidates[number - 1])) picked.Add(candidates[number - 1]);
         }
         // AcceptanceReport 讀的是對話框自己的選取集合，所以先套用；被拒絕就還原，不留下半套選擇。
@@ -602,10 +605,10 @@ internal sealed partial class RimWorldGameWorld
         foreach (string part in (input ?? string.Empty).Split(_commaSplit, StringSplitOptions.RemoveEmptyEntries))
         {
             string[] pair = part.Split('=');
-            if (!int.TryParse(pair[0].Trim(), out int number) || number < 1 || number > transferables.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
+            if (!int.TryParse(pair[0].Trim(), CultureInfo.InvariantCulture, out int number) || number < 1 || number > transferables.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
             TransferableOneWay transferable = transferables[number - 1];
             int count = transferable.MaxCount;
-            if (pair.Length > 1 && !int.TryParse(pair[1].Trim(), out count)) return CommandResult.Fail($"\"{part.Trim()}\" has no valid count");
+            if (pair.Length > 1 && !int.TryParse(pair[1].Trim(), CultureInfo.InvariantCulture, out count)) return CommandResult.Fail($"\"{part.Trim()}\" has no valid count");
             AcceptanceReport report = transferable.CanAdjustTo(count);
             if (!report.Accepted) return CommandResult.Fail($"{transferable.LabelCap}: " + (report.Reason.NullOrEmpty() ? "that count is not allowed" : report.Reason.StripTags()));
             counts.Add((transferable, count));

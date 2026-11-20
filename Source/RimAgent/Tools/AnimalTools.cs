@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -53,7 +55,7 @@ public sealed class AnimalTools
         {
             sb.AppendLine();
             sb.Append("Wild on the map: ").Append(string.Join(", ",
-                wild.GroupBy(a => a.Species).Select(g => g.Count() + " " + g.Key).ToArray())).Append('.');
+                wild.GroupBy(a => a.Species, StringComparer.Ordinal).Select(g => g.Count() + " " + g.Key).ToArray())).Append('.');
         }
         return sb.ToString().Trim();
     }

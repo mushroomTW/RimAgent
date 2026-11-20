@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -154,7 +156,7 @@ internal sealed partial class RimWorldGameWorld
                 .Select(m => m.text.StripTags().Flatten().Trim())
                 .Where(t => t.Length > 0)
                 .Select(t => t.Length <= MaxGameMessageChars ? t : t[..MaxGameMessageChars] + "…")
-                .Distinct().Take(MaxGameMessages)];
+                .Distinct(StringComparer.Ordinal).Take(MaxGameMessages)];
         }
     }
 

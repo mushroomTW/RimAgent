@@ -1,6 +1,9 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -136,7 +139,7 @@ public sealed class WorkTools
             error = "invalid assignment '" + part + "'. Use colonist:work=priority.";
             return false;
         }
-        if (!int.TryParse(part.Substring(equals + 1).Trim(), out int priority) || priority < 0 || priority > 4)
+        if (!int.TryParse(part.Substring(equals + 1).Trim(), CultureInfo.InvariantCulture, out int priority) || priority < 0 || priority > 4)
         {
             error = "priority in '" + part + "' is out of range. Use 0 (disabled) or 1 (highest) to 4 (lowest).";
             return false;
@@ -149,7 +152,7 @@ public sealed class WorkTools
             return false;
         }
         // 讀不到目前的優先級就記不了原值，/undo 與失敗回滾會寫回錯的數字，寧可不改。
-        if (pawn.Value.UnreadableParts.Contains(ColonistInfo.WorkPrioritiesPart))
+        if (pawn.Value.UnreadableParts.Contains(ColonistInfo.WorkPrioritiesPart, StringComparer.Ordinal))
         {
             error = $"{pawn.Value.Name}'s current work priorities could not be read because another mod threw an error; not changing them.";
             return false;
@@ -179,7 +182,7 @@ public sealed class WorkTools
             Priority = priority,
             // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
             Previous = current != null ? current.Priority : 3,
-            PreviousLabel = current != null ? current.Priority.ToString() : "?"
+            PreviousLabel = current != null ? current.Priority.ToString(CultureInfo.InvariantCulture) : "?"
         };
         return true;
     }

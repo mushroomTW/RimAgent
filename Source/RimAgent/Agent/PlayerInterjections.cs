@@ -1,3 +1,5 @@
+#nullable disable
+
 using System.Collections.Generic;
 
 namespace RimAgent.Agent;
@@ -8,7 +10,7 @@ namespace RimAgent.Agent;
 /// </summary>
 public sealed class PlayerInterjections
 {
-    private readonly object _lock = new();
+    private readonly System.Threading.Lock _lock = new();
     private readonly List<string> _pending = [];
     private bool _open;
     private int _delivered;

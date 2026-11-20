@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -110,7 +112,7 @@ internal sealed class ScriptTools
     {
         try
         {
-            object result = await call.Function.InvokeAsync(new AIFunctionArguments(call.Arguments), cancellationToken);
+            object result = await call.Function.InvokeAsync(new AIFunctionArguments(call.Arguments, StringComparer.Ordinal), cancellationToken);
             return result?.ToString() ?? string.Empty;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -187,7 +189,8 @@ internal sealed class ScriptTools
             return false;
         }
 
-        Dictionary<string, object> baseArgs = [];
+        // 與 AIFunctionArguments 使用相同的比較子，呼叫時直接沿用這個字典，不必再複製一份。
+        Dictionary<string, object> baseArgs = new(StringComparer.Ordinal);
         if (step.TryGetProperty("args", out JsonElement args))
         {
             if (args.ValueKind != JsonValueKind.Object)
@@ -215,7 +218,7 @@ internal sealed class ScriptTools
                 error = $"step {index}: every \"for_each\" item must be an object of arguments.";
                 return false;
             }
-            var merged = new Dictionary<string, object>(baseArgs);
+            var merged = new Dictionary<string, object>(baseArgs, StringComparer.Ordinal);
             Merge(merged, item);
             calls.Add(new Call { Function = function, Arguments = merged });
             if (calls.Count > MaxCalls) return true;

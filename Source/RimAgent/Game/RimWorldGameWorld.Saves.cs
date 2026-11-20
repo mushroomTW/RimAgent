@@ -1,5 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -110,7 +113,7 @@ internal sealed partial class RimWorldGameWorld
         if (!name.StartsWith(Tools.SaveTools.CheckpointPrefix, StringComparison.OrdinalIgnoreCase)) return false;
         string rest = name.Substring(Tools.SaveTools.CheckpointPrefix.Length);
         int dash = rest.LastIndexOf('-');
-        if (dash <= 0 || !int.TryParse(rest[(dash + 1)..], out tick)) return false;
+        if (dash <= 0 || !int.TryParse(rest[(dash + 1)..], CultureInfo.InvariantCulture, out tick)) return false;
         colonyId = rest[..dash];
         return true;
     }

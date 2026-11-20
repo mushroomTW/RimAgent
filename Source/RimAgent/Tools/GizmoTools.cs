@@ -1,6 +1,9 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -55,7 +58,7 @@ public sealed class GizmoTools
         IReadOnlyList<GizmoInfo> gizmos = _world.GetGizmos(thingId);
         if (gizmos == null) return NotFound(thingId);
         string needle = gizmo?.Trim() ?? string.Empty;
-        if (!int.TryParse(needle, out int _) && gizmos.Count(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase)) > 1)
+        if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && gizmos.Count(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase)) > 1)
             return ToolText.Error($"[{thingId}] has multiple buttons named \"{needle}\". Use a button number from list_gizmos.");
         GizmoInfo picked = ResolveGizmo(gizmos, gizmo);
         if (picked == null)
@@ -109,7 +112,7 @@ public sealed class GizmoTools
     {
         string needle = input?.Trim() ?? string.Empty;
         if (needle.Length == 0) return null;
-        if (int.TryParse(needle, out int number)) return gizmos.FirstOrDefault(g => g.Number == number);
+        if (int.TryParse(needle, CultureInfo.InvariantCulture, out int number)) return gizmos.FirstOrDefault(g => g.Number == number);
         GizmoInfo exact = gizmos.FirstOrDefault(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return exact;
         List<GizmoInfo> partial = [.. gizmos.Where(g => g.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];

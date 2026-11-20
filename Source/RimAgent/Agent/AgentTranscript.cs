@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -80,7 +82,7 @@ public sealed class AgentTranscript
     /// <summary>裁切後保留的則數。</summary>
     public const int TrimTo = 500;
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly List<TranscriptEntry> _entries = [];
     private int _instructionIds;
     private int _version;

@@ -1,5 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace RimAgent.UI;
@@ -141,7 +144,7 @@ public static class SlashCommands
     {
         index = 0;
         if (text.StartsWith("show ", StringComparison.OrdinalIgnoreCase))
-            return int.TryParse(text.Substring(5).Trim(), out index);
+            return int.TryParse(text.Substring(5).Trim(), CultureInfo.InvariantCulture, out index);
         return false;
     }
 
@@ -152,7 +155,7 @@ public static class SlashCommands
         if (!text.StartsWith("edit ", StringComparison.OrdinalIgnoreCase)) return false;
         string trimmed = text.Substring(5).Trim();
         int separator = trimmed.IndexOf(' ');
-        if (!int.TryParse(separator < 0 ? trimmed : trimmed.Substring(0, separator), out index)) return false;
+        if (!int.TryParse(separator < 0 ? trimmed : trimmed.Substring(0, separator), CultureInfo.InvariantCulture, out index)) return false;
         rest = separator < 0 ? string.Empty : trimmed.Substring(separator + 1).Trim();
         return true;
     }
@@ -162,7 +165,7 @@ public static class SlashCommands
         index = 0;
         if (text.StartsWith("remove ", StringComparison.OrdinalIgnoreCase))
         {
-            if (!int.TryParse(text.Substring(7).Trim(), out index))
+            if (!int.TryParse(text.Substring(7).Trim(), CultureInfo.InvariantCulture, out index))
             {
                 index = 0;
             }

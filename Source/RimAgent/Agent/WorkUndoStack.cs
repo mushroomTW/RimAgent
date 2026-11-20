@@ -1,3 +1,5 @@
+#nullable disable
+
 using System.Collections.Generic;
 using System.Linq;
 using Verse;
@@ -106,7 +108,7 @@ public sealed class WorkUndoStack
 {
     public const int MaxFrames = 20;
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly List<UndoFrame> _frames = [];
     private UndoFrame _open;
 

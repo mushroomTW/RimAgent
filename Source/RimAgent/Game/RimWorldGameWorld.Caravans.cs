@@ -1,5 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimWorld;
@@ -307,7 +310,7 @@ internal sealed partial class RimWorldGameWorld
         {
             warnings.Add(plan.FoodDays < 0.1f
                 ? "DaysWorthOfFoodWarningDialog_NoFood".Translate().Resolve()
-                : "DaysWorthOfFoodWarningDialog".Translate(plan.FoodDays.ToString("0.#")).Resolve());
+                : "DaysWorthOfFoodWarningDialog".Translate(plan.FoodDays.ToString("0.#", CultureInfo.InvariantCulture)).Resolve());
         }
         else if (MostCaravanFoodWillRotSoon(transferables, origin))
         {

@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -17,7 +19,7 @@ public sealed class McpManager
 
     private readonly string _configPath;
     private readonly Func<McpServerEntry, IMcpServer> _factory;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private List<McpServerEntry> _entries;
     private bool _loaded;
     private bool _shutdown;

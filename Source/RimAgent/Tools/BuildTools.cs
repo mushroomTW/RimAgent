@@ -1,4 +1,6 @@
-﻿using System;
+﻿#nullable disable
+
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -648,7 +650,7 @@ public sealed class BuildTools
         [Description("Optional: a stat group to show in full, named as listed under \"More stat groups\", or \"all\". Empty shows the main groups.")] string detail = "")
     {
         string wanted = (kind ?? string.Empty).Trim().ToLowerInvariant();
-        if (wanted.Length > 0 && !DefLookupKind.All.Contains(wanted))
+        if (wanted.Length > 0 && !DefLookupKind.All.Contains(wanted, StringComparer.Ordinal))
         {
             return ToolText.Error($"unknown kind \"{kind}\"; use {string.Join(", ", DefLookupKind.All)} or leave it empty.");
         }
@@ -719,7 +721,7 @@ public sealed class BuildTools
     {
         if (stats.Count == 0) return;
         // 以顯示名稱分組：原版的 Basics、BasicsImportant、BasicsNonPawn 等類別同名，分開列會重複出現好幾行。
-        List<IGrouping<string, DefStatEntry>> groups = [.. stats.GroupBy(s => s.CategoryLabel)];
+        List<IGrouping<string, DefStatEntry>> groups = [.. stats.GroupBy(s => s.CategoryLabel, StringComparer.Ordinal)];
         var shown = SelectShownGroups(groups, detail, sb);
 
         if (shown.Count > 0)

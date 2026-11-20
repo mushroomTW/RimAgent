@@ -1,5 +1,8 @@
-﻿using System;
+﻿#nullable disable
+
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using RimAgent.Agent;
 using RimAgent.UI;
@@ -184,7 +187,7 @@ public partial class RimAgentMod
 
         // 最小信心門檻
         listing.Label(
-            "RimAgent.Settings.DecisionMinConfidence".Translate(Settings.decisionRoutingMinConfidence.ToString("P0")),
+            "RimAgent.Settings.DecisionMinConfidence".Translate(Settings.decisionRoutingMinConfidence.ToString("P0", CultureInfo.CurrentCulture)),
             -1f,
             "RimAgent.Settings.DecisionMinConfidenceTip".Translate());
         Settings.decisionRoutingMinConfidence = listing.Slider(Settings.decisionRoutingMinConfidence, 0f, 1f);
@@ -206,7 +209,7 @@ public partial class RimAgentMod
                 {
                     string id = NextCustomCategoryId(Settings.decisionCategories);
                     int nextNum = 1;
-                    if (id.Length > CustomIdPrefix.Length && int.TryParse(id[CustomIdPrefix.Length..], out nextNum))
+                    if (id.Length > CustomIdPrefix.Length && int.TryParse(id[CustomIdPrefix.Length..], CultureInfo.InvariantCulture, out nextNum))
                     {
                         Settings.decisionCategories.Add(new DecisionRouteCategory(
                             id,

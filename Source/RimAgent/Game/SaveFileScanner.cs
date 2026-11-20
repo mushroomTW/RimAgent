@@ -1,5 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Xml;
 
@@ -17,7 +20,7 @@ public static class SaveFileScanner
     private const string TicksNode = "ticksGame";
     private const string TickManagerNode = "tickManager";
 
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static readonly Dictionary<string, KeyValuePair<long, Scan>> Cache = new(StringComparer.OrdinalIgnoreCase);
 
     public readonly struct Scan
@@ -95,7 +98,7 @@ public static class SaveFileScanner
         string parent = parents.Count > 0 ? parents[parents.Count - 1] : null;
         if (tick == null && name == TicksNode && parent == TickManagerNode)
         {
-            tick = int.TryParse(reader.ReadElementContentAsString().Trim(), out int value) ? value : 0;
+            tick = int.TryParse(reader.ReadElementContentAsString().Trim(), CultureInfo.InvariantCulture, out int value) ? value : 0;
             return !reader.EOF;
         }
         if (!reader.IsEmptyElement) parents.Add(name);

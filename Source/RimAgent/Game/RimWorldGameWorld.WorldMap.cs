@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -101,7 +103,7 @@ internal sealed partial class RimWorldGameWorld
         {
             info.ExpiresInTicks = site.WorldObjectTimeoutTicksLeft;
             if (site.sitePartsKnown)
-                info.Detail = string.Join(", ", site.parts.Select(p => p.def.label).Distinct().ToArray());
+                info.Detail = string.Join(", ", site.parts.Select(p => p.def.label).Distinct(StringComparer.Ordinal).ToArray());
         }
         return info;
     }

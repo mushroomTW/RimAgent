@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -82,7 +84,9 @@ public partial class Window_Agent
         if (!_screenshotRead.IsCompleted) return;
         string path = _readingScreenshot;
         // 讀檔失敗（IO、權限）時 Task 為 faulted，當作讀不到。
+        #pragma warning disable VSTHRD002 // 上一行已確認 Task 完成，此處不會阻塞
         byte[] bytes = _screenshotRead.Status == TaskStatus.RanToCompletion ? _screenshotRead.Result : null;
+        #pragma warning restore VSTHRD002
         _screenshotRead = null;
         _readingScreenshot = null;
 

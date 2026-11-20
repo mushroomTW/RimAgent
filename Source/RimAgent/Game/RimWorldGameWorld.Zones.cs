@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -112,7 +114,7 @@ internal sealed partial class RimWorldGameWorld
     private static List<IntVec3> CollectZoneCells(Map map, CellRectSpec rect, Designator_ZoneAdd designator, bool growing, out Dictionary<string, int> skipped)
     {
         var cells = new List<IntVec3>();
-        var reasons = new Dictionary<string, int>();
+        var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
         for (int x = rect.MinX; x <= rect.MaxX; x++)
         {
             for (int z = rect.MinZ; z <= rect.MaxZ; z++)

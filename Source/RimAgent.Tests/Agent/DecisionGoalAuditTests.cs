@@ -208,7 +208,7 @@ false: The agent is not waiting for player guidance or input.
     [Test]
     public async Task AuditAsyncRethrowsWhenCancellationTokenCancelled()
     {
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
         var fake = new FakeDecisionService();
         var auditor = new DecisionGoalAuditor(fake, criteriaProvider: () => SampleGoalCriteria);

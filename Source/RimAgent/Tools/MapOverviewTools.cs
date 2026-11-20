@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Game;
@@ -156,7 +157,7 @@ public sealed class MapOverviewTools
         {
             CellRectSpec e = room.Extents;
             sb.Append("- ").Append(RoleOf(room)).Append(" #").Append(room.Id).Append(": ").Append(e)
-              .Append(", ").Append(CellCount(room.CellCount)).Append(", ").Append(room.TemperatureC.ToString("0")).Append("°C").AppendLine();
+              .Append(", ").Append(CellCount(room.CellCount)).Append(", ").Append(room.TemperatureC.ToString("0", CultureInfo.InvariantCulture)).Append("°C").AppendLine();
         }
         if (rooms.Count > MaxRooms) sb.Append("- ...and ").Append(rooms.Count - MaxRooms).Append(" more.").AppendLine();
         sb.AppendLine();
@@ -289,6 +290,6 @@ public sealed class MapOverviewTools
     {
         if (total <= 0) return "0%";
         double p = 100.0 * part / total;
-        return p > 0 && p < 1 ? "<1%" : Math.Round(p).ToString("0") + "%";
+        return p > 0 && p < 1 ? "<1%" : Math.Round(p).ToString("0", CultureInfo.InvariantCulture) + "%";
     }
 }

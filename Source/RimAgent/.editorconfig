@@ -1,0 +1,6 @@
+# 只覆寫 RimAgent 主程式與框架不同的規則，其餘沿用儲存庫根目錄的 .editorconfig（此檔不設 root）。
+
+[*.cs]
+# MA0004（ConfigureAwait(false)）：RimAgent 的 await 之後常要回主執行緒存取遊戲狀態，
+# 預設加上 ConfigureAwait(false) 反而會在背景執行緒碰遊戲物件，因此不要求。
+dotnet_diagnostic.MA0004.severity = none

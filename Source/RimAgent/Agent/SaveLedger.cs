@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,7 +28,7 @@ public sealed class SaveLedger
 
     public static SaveLedger Shared { get; } = new();
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly Dictionary<string, int> _loads = new(StringComparer.Ordinal);
     /// <summary>讀回較早的存檔時，比它新的存檔屬於被放棄的那條時間線，不能再讀。</summary>
     private readonly HashSet<string> _abandoned = new(StringComparer.Ordinal);

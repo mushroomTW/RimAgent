@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -274,7 +276,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
                 Percent = n.CurLevelPercentage
             }).ToList() ?? (IReadOnlyList<NeedInfo>)[], []),
             Thoughts = ReadOrDefault(pawn, unreadable, "thoughts", () => pawn.needs?.mood?.thoughts?.memories?.Memories
-                .Select(t => t.LabelCap).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(12).ToList()
+                .Select(t => t.LabelCap).Where(t => !string.IsNullOrEmpty(t)).Distinct(StringComparer.Ordinal).Take(12).ToList()
                 ?? (IReadOnlyList<string>)[], []),
             Skills = ReadOrDefault(pawn, unreadable, "skills", () => pawn.skills?.skills.Select(s => new SkillInfo
             {
@@ -319,7 +321,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         // ThingID 只是 defName + 編號，不會再跑進出錯的模組程式。
         string who = pawn?.ThingID ?? "a pawn";
         Log.WarningOnce($"RimAgent: could not read {part} of {who}, most likely because of another mod; skipped it. {ex}",
-            ("RimAgent:" + part + ":" + who).GetHashCode());
+StringComparer.Ordinal.GetHashCode(("RimAgent:" + part + ":" + who)));
     }
 
     private static string SafeReport(Pawn pawn)
@@ -382,7 +384,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             Harvestable = (thing as Plant)?.HarvestableNow ?? false,
             Wild = thing is Pawn pawn && IsWildAnimal(pawn),
             Forbidden = thing.IsForbidden(Faction.OfPlayer),
-            Designations = designations.Distinct().ToList()
+            Designations = designations.Distinct(StringComparer.Ordinal).ToList()
         };
     }
 

@@ -224,9 +224,9 @@ public class MemoryScopeTests
         Directory.CreateDirectory(_folder);
         string path = Path.Combine(_folder, "save.xml");
         var component = new RimAgentGameComponent(null);
-        typeof(RimAgentGameComponent).GetField("_loadedTranscript", BindingFlags.Instance | BindingFlags.NonPublic)!
+        typeof(RimAgentGameComponent).GetField("_loadedTranscript", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(component, new List<TranscriptEntryData> { new() { text = "saved conversation" } });
-        typeof(RimAgentGameComponent).GetField("_pendingGlobalMigration", BindingFlags.Instance | BindingFlags.NonPublic)!
+        typeof(RimAgentGameComponent).GetField("_pendingGlobalMigration", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(component, new List<AgentMemoryEntry> { new() { name = "global_pending.md", content = "recover me" } });
 
         Scribe.saver.InitSaving(path, "Game");

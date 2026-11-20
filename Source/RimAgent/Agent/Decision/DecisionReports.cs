@@ -1,3 +1,5 @@
+#nullable disable
+
 using System.Collections.Generic;
 using System.Text;
 
@@ -13,7 +15,7 @@ public sealed class DecisionReports
     /// <summary>最多留幾則；太久沒有指令時只留最新的。</summary>
     public const int MaxPending = 20;
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly List<string> _pending = [];
 
     public void Add(string report)

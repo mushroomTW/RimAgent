@@ -88,7 +88,7 @@ public static class DefResolver
         List<string> words = [.. Words.Matches(needle).Cast<Match>()
             .Select(m => m.Value.ToLowerInvariant())
             .Where(w => w.Length >= MinWordLength)
-            .Distinct()];
+            .Distinct(StringComparer.Ordinal)];
         if (words.Count == 0) return string.Empty;
 
         List<DefInfo> closest = [.. compacted

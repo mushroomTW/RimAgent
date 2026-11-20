@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 
@@ -12,7 +14,7 @@ internal sealed class InstructionCache<TValue>
 
     private readonly Dictionary<string, TValue> _entries =
         new(StringComparer.Ordinal);
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
 
     public bool TryGet(string key, out TValue value)
     {

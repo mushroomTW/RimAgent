@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 
 namespace RimAgent.Game;
@@ -51,8 +52,8 @@ public sealed class MapShotLayout
     /// <summary>依範圍算出版面；範圍需已裁進地圖內。</summary>
     public static MapShotLayout For(CellRectSpec rect)
     {
-        int left = DigitFont.TextWidth(Math.Max(rect.MaxZ, 0).ToString()) + 2 * DigitFont.Padding;
-        int right = DigitFont.TextWidth(Math.Max(rect.MaxX, 0).ToString()) + DigitFont.Padding;
+        int left = DigitFont.TextWidth(Math.Max(rect.MaxZ, 0).ToString(CultureInfo.InvariantCulture)) + 2 * DigitFont.Padding;
+        int right = DigitFont.TextWidth(Math.Max(rect.MaxX, 0).ToString(CultureInfo.InvariantCulture)) + DigitFont.Padding;
         int bottom = DigitFont.GlyphHeight + 2 * DigitFont.Padding;
         int top = DigitFont.Padding;
 
@@ -130,7 +131,7 @@ public static class MapShotOverlay
             int px = layout.LeftMargin + (cx - rect.MinX) * ppc;
             for (int y = 0; y < mapH; y++) Blend(image, width, px, layout.BottomMargin + y, LineColor, LineAlpha);
             for (int t = 1; t <= TickLength; t++) Blend(image, width, px, layout.BottomMargin - t, LineColor, 255);
-            string label = cx.ToString();
+            string label = cx.ToString(CultureInfo.InvariantCulture);
             int labelX = Math.Min(px + 1, width - DigitFont.TextWidth(label) - 1);
             DigitFont.Draw(image, width, height, label, labelX, layout.BottomMargin - DigitFont.Padding - DigitFont.GlyphHeight, LabelColor);
         }
@@ -150,7 +151,7 @@ public static class MapShotOverlay
             int py = layout.BottomMargin + (cz - rect.MinZ) * ppc;
             for (int x = 0; x < mapW; x++) Blend(image, width, layout.LeftMargin + x, py, LineColor, LineAlpha);
             for (int t = 1; t <= TickLength; t++) Blend(image, width, layout.LeftMargin - t, py, LineColor, 255);
-            string label = cz.ToString();
+            string label = cz.ToString(CultureInfo.InvariantCulture);
             int labelY = Math.Min(py + 1, height - DigitFont.GlyphHeight - 1);
             DigitFont.Draw(image, width, height, label, layout.LeftMargin - DigitFont.Padding - DigitFont.TextWidth(label), labelY, LabelColor);
         }

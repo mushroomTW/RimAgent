@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,7 +34,7 @@ public sealed class ConfirmationGate
     }
 
     private readonly Func<AgentMode> _mode;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly List<string> _blocked = [];
     private readonly List<PendingApproval> _pending = [];
     // 玩家按下「不再問」的工具；只活在這場遊戲的記憶體裡，不進存檔。

@@ -104,7 +104,7 @@ public class InterjectionTests
     public async Task StoppedRunDropsQueuedInterjections()
     {
         ColonyAgentSession session = null;
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         var client = new ScriptedChatClient()
             .Reply("unused").Do(() =>
             {
@@ -124,7 +124,7 @@ public class InterjectionTests
     public async Task SubagentToolsDoNotConsumeTheInterjection()
     {
         ColonyAgentSession session = null;
-        var subagent = new AgentSubagent { Name = "scout", Description = "looks around", Categories = _observeCategory, ReadOnly = true, Body = "Look." };
+        _ = new AgentSubagent { Name = "scout", Description = "looks around", Categories = _observeCategory, ReadOnly = true, Body = "Look." };
         var client = new ScriptedChatClient()
             .CallTool("delegate_task", new { agent = "scout", tasks = _taskLook })
             // 子代理的第一步：先模擬玩家插話，再叫工具。

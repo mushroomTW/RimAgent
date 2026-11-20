@@ -25,11 +25,9 @@ public class SaveToolsTests
         _tools = new SaveTools(_world, ledger: _ledger);
     }
 
-    private SaveSlotInfo AddSave(string name, int tick, bool checkpoint = false, string colonyId = "colony1")
+    private void AddSave(string name, int tick, bool checkpoint = false, string colonyId = "colony1")
     {
-        var save = new SaveSlotInfo { Name = name, Tick = tick, Checkpoint = checkpoint, ColonyId = colonyId, WrittenUtcTicks = tick };
-        _world.SaveFiles.Add(save);
-        return save;
+        _world.SaveFiles.Add(new SaveSlotInfo { Name = name, Tick = tick, Checkpoint = checkpoint, ColonyId = colonyId, WrittenUtcTicks = tick });
     }
 
     [Test]

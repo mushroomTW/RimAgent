@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -148,7 +150,7 @@ public sealed class RunLogWriter
     private const long TrimToBytes = MaxFileBytes / 10 * 9;
     private static readonly UTF8Encoding Utf8 = new(false);
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     /// <summary>檔案目前的筆數；-1 代表還沒數過（第一次寫入時讀檔數一次）。</summary>
     private int _lineCount = -1;
 

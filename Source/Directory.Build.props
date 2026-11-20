@@ -4,6 +4,12 @@
     <LangVersion>14.0</LangVersion>
     <!-- 讓 .editorconfig 中標為 warning 的程式碼風格規則在建置時也會檢查，不只在 IDE 顯示。 -->
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- 開啟 .NET 內建分析器的建議規則組；與 RimWorld 慣例衝突的規則在 .editorconfig 關閉。 -->
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- 可為 null 的參考型別：新檔案一律受檢查。既有檔案開頭的 #nullable disable 代表尚未遷移，
+         遷移時移除該行並補上標註；新檔案不要加。測試專案會刻意傳入 null 驗證防呆，因此不開。 -->
+    <Nullable>enable</Nullable>
+    <Nullable Condition="$(MSBuildProjectName.Contains('Tests'))">disable</Nullable>
     <!-- 預設為安裝在 RimWorld/Mods 下的工作樹；其他位置請指定 RimWorldDir。 -->
     <RimWorldDir Condition="'$(RimWorldDir)' == '' and '$(RIMWORLD_DIR)' != ''">$(RIMWORLD_DIR)</RimWorldDir>
     <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\</RimWorldDir>
@@ -20,4 +26,9 @@
     <SmashToolsDir Condition="'$(SmashToolsDir)' == ''">$(MSBuildThisFileDirectory)Libs\SmashTools\</SmashToolsDir>
     <SmashToolsDir>$([MSBuild]::EnsureTrailingSlash('$(SmashToolsDir)'))</SmashToolsDir>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Meziantou.Analyzer" Version="3.0.341" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.36.0.15337" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.12.1" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
 </Project>

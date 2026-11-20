@@ -1,5 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -115,7 +118,7 @@ internal sealed partial class RimWorldGameWorld
     {
         number = 0;
         return id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-               && int.TryParse(id[prefix.Length..], out number);
+               && int.TryParse(id[prefix.Length..], CultureInfo.InvariantCulture, out number);
     }
 
     private static DiaNode CurrentNode(Dialog_NodeTree dialog)

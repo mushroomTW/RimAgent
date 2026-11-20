@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -106,7 +108,7 @@ internal sealed partial class RimWorldGameWorld
             }
         }
         // 同資訊卡：類別順序 → 類別內優先度（大的在前）→ 名稱。
-        return [.. stats.OrderBy(s => s.Order).ThenByDescending(s => s.Priority).ThenBy(s => s.Entry.Label).Select(s => s.Entry)];
+        return [.. stats.OrderBy(s => s.Order).ThenByDescending(s => s.Priority).ThenBy(s => s.Entry.Label, StringComparer.CurrentCulture).Select(s => s.Entry)];
     }
 
     /// <summary>逐筆取出；某些組件假設有實體 Thing 而在列舉中途拋例外，保留已取得的部分。</summary>
@@ -188,7 +190,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static string RecipeFact(RecipeDef recipe, ThingDef product)
     {
-        List<string> benches = [.. recipe.AllRecipeUsers.Select(Name).Distinct()];
+        List<string> benches = [.. recipe.AllRecipeUsers.Select(Name).Distinct(StringComparer.Ordinal)];
         var parts = new List<string> { benches.Count > 0 ? "at " + string.Join(", ", benches.Take(4)) : "no workbench lists it" };
         if (!recipe.ingredients.NullOrEmpty()) parts.Add("ingredients " + string.Join(", ", recipe.ingredients.Select(i => i.SummaryFor(recipe))));
         if (!recipe.skillRequirements.NullOrEmpty()) parts.Add("needs " + string.Join(", ", recipe.skillRequirements.Select(s => s.Summary)));
@@ -260,7 +262,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>逗號列出前幾個名稱，超過時附上總數；沒有任何項目回傳 null。</summary>
     private static string NameList<T>(IEnumerable<T> items, Func<T, string> name)
     {
-        List<string> names = [.. items.Select(name).Distinct()];
+        List<string> names = [.. items.Select(name).Distinct(StringComparer.Ordinal)];
         if (names.Count == 0) return null;
         string head = string.Join(", ", names.Take(MaxListedNames));
         return names.Count > MaxListedNames ? $"{head} and {names.Count - MaxListedNames} more" : head;

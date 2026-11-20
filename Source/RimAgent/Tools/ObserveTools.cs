@@ -1,6 +1,9 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -99,7 +102,7 @@ public sealed class ObserveTools
         }
 
         foreach (IGrouping<string, ResourceInfo> group in snapshot.Items
-                     .GroupBy(r => string.IsNullOrEmpty(r.Category) ? "Other" : r.Category)
+                     .GroupBy(r => string.IsNullOrEmpty(r.Category) ? "Other" : r.Category, StringComparer.Ordinal)
                      .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
         {
             sb.Append(group.Key).Append(": ")
@@ -254,7 +257,7 @@ public sealed class ObserveTools
     {
         string needle = (input ?? string.Empty).Trim();
         if (needle.Length == 0) return Result<MapInfo>.Fail("Error: map name is empty.");
-        if (int.TryParse(needle, out int id))
+        if (int.TryParse(needle, CultureInfo.InvariantCulture, out int id))
         {
             MapInfo byId = maps.FirstOrDefault(m => m.Id == id);
             if (byId != null) return Result<MapInfo>.Ok(byId);
@@ -406,7 +409,7 @@ public sealed class ObserveTools
         if (cropNote != null) sb.Append(cropNote).AppendLine();
         sb.Append("Area ").Append(area).Append(": ").Append(cells.Count).Append(" cells");
         sb.Append(" | terrain: ").Append(string.Join(", ", cells
-            .GroupBy(c => c.Terrain)
+            .GroupBy(c => c.Terrain, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .Select(g => $"{g.Key} {g.Count()}")));
         sb.Append(" | fertile (>=").Append(ToolText.Pct(FertileThreshold)).Append("): ").Append(cells.Count(c => c.Fertility >= FertileThreshold));
@@ -509,7 +512,7 @@ public sealed class ObserveTools
         string name = (input ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(name))
         {
-            return "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            return "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
         }
 
         int lastSep = name.LastIndexOfAny(['/', '\\']);
@@ -530,7 +533,7 @@ public sealed class ObserveTools
 
         name = name.Trim();
         return name.Replace("_", string.Empty).Length == 0 || name is "." or ".." || IsReservedDeviceName(name)
-            ? "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss")
+            ? "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture)
             : name;
     }
 

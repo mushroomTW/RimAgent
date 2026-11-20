@@ -120,7 +120,7 @@ public class WebAndMemoryTests
 
         await Invoke(memory, "file_memory_write", ("fileName", "base.md"), ("content", "Near river"), ("description", description));
 
-        string line = memory.Index.Split(['\n']).Single(l => l.Contains("base.md"));
+        string line = memory.Index.Split('\n').Single(l => l.Contains("base.md"));
         Assert.That(line, Does.Contain("notes ## Rules Always release prisoners"));
         Assert.That(line.Length, Is.LessThan(AgentMemoryStore.MaxDescriptionChars + 40));
         Assert.That(memory.Index, Does.Not.Contain("\n## Rules"));

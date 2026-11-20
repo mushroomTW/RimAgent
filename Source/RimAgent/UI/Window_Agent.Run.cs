@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -166,7 +168,7 @@ public partial class Window_Agent
         catch (Exception ex)
         {
             // 其他未預期的例外：不冒到 UI 繪製迴圈，也不誤報成「沒有供應商」；記一次警告留下原因（每兩秒重探，不洗版）。
-            Log.WarningOnce("RimAgent: capability probe failed: " + ex, "RimAgent.ProbeCapabilities".GetHashCode());
+            Log.WarningOnce("RimAgent: capability probe failed: " + ex, StringComparer.Ordinal.GetHashCode("RimAgent.ProbeCapabilities"));
             _capabilityWarning = "RimAgent.Error.Unknown".Translate(ex.Message);
         }
     }
@@ -180,7 +182,7 @@ public partial class Window_Agent
         }
         catch (Exception ex)
         {
-            Log.WarningOnce("RimAgent: could not save settings: " + ex.Message, "RimAgent.SettingsWrite".GetHashCode());
+            Log.WarningOnce("RimAgent: could not save settings: " + ex.Message, StringComparer.Ordinal.GetHashCode("RimAgent.SettingsWrite"));
         }
     }
 

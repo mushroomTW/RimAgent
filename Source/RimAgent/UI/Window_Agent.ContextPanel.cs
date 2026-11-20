@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using RimAgent.Agent;
 using UnityEngine;
@@ -23,7 +24,7 @@ public partial class Window_Agent
         /// <summary>估算每隔多久重算一次（組系統提示不便宜，不每幀做）。</summary>
         private const float RefreshSeconds = 1f;
 
-        private static readonly Dictionary<string, Color> PartColors = new()
+        private static readonly Dictionary<string, Color> PartColors = new(StringComparer.Ordinal)
         {
             ["SystemPrompt"] = new Color(0.90f, 0.55f, 0.20f),
             ["Tools"] = new Color(0.15f, 0.70f, 0.55f),
@@ -237,7 +238,7 @@ public partial class Window_Agent
             Text.Anchor = TextAnchor.MiddleRight;
             GUI.color = ToolTextColor;
             Widgets.Label(new Rect(row.xMax - 122f, row.y, 66f, row.height), FormatTokens(tokens));
-            string percent = window is > 0 ? (100.0 * tokens / window.Value).ToString("0.0") + "%" : "—";
+            string percent = window is > 0 ? (100.0 * tokens / window.Value).ToString("0.0", CultureInfo.InvariantCulture) + "%" : "—";
             Widgets.Label(new Rect(row.xMax - 56f, row.y, 56f, row.height), percent);
             Text.Anchor = TextAnchor.UpperLeft;
             GUI.color = Color.white;
@@ -252,7 +253,7 @@ public partial class Window_Agent
 
         private static string FormatTokens(long tokens)
         {
-            return tokens >= 1000 ? (tokens / 1000.0).ToString("0.0") + "k" : tokens.ToString();
+            return tokens >= 1000 ? (tokens / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "k" : tokens.ToString(CultureInfo.InvariantCulture);
         }
     }
 }

@@ -1,5 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using RimAgent.Game;
 
@@ -90,7 +93,7 @@ public static class TargetResolver
             return Result<T>.Fail(emptyErrorMessage ?? $"Error: {kindLabel} is empty. Give a name or id.");
         }
 
-        if (int.TryParse(StripIdDecoration(needle), out int id))
+        if (int.TryParse(StripIdDecoration(needle), CultureInfo.InvariantCulture, out int id))
         {
             T byId = candidates.FirstOrDefault(c => getId(c) == id);
             return byId != null

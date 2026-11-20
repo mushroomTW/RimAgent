@@ -86,52 +86,52 @@ public class CommandGateTests
 
     private static FakeGameWorld NewWorld()
     {
-        var _world = new FakeGameWorld();
-        _world.RemovableBlueprints.Add("wall (5,5)-(5,5)");
-        _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
-        _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
-        _world.Things.Add(FakeGameWorld.MakeThing(300, "MineableSteel", "compacted steel", ThingKind.Mineable, 10, 10));
-        _world.Things.Add(FakeGameWorld.MakeThing(301, "MineableSteel", "compacted steel", ThingKind.Mineable, 11, 10));
-        _world.Things[1].Designations = ["Mine"];
-        _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _world.Traders.Add(new TraderInfo
+        var world = new FakeGameWorld();
+        world.RemovableBlueprints.Add("wall (5,5)-(5,5)");
+        world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
+        world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
+        world.Things.Add(FakeGameWorld.MakeThing(300, "MineableSteel", "compacted steel", ThingKind.Mineable, 10, 10));
+        world.Things.Add(FakeGameWorld.MakeThing(301, "MineableSteel", "compacted steel", ThingKind.Mineable, 11, 10));
+        world.Things[1].Designations = ["Mine"];
+        world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
+        world.Traders.Add(new TraderInfo
         {
             Kind = TraderInfo.OrbitalKind, Id = "PassingShip_1", Name = "Starweaver", Faction = "Outlanders", Silver = 1200,
             Goods = [new TradeGoodsInfo { DefName = "ComponentSpacer", Label = "spacer component", Count = 8, MarketValue = 55 }]
         });
-        _world.Resources = new ResourceSnapshot { Items = [new ResourceInfo { DefName = "Silver", Label = "silver", Count = 500 }] };
-        _world.Prisoners.Add(new PrisonerInfo { Id = 600, Name = "Zed", FullName = "Zed Kane", InteractionMode = "MaintainOnly", InteractionModeLabel = "maintain only" });
-        _world.Animals.Add(new AnimalInfo { Id = 700, Name = "boomalope", Species = "boomalope", SpeciesDefName = "Boomalope", Wild = true });
-        _world.Animals.Add(new AnimalInfo { Id = 701, Name = "Rex", Species = "husky", SpeciesDefName = "Husky", Wild = false });
-        _world.Zones.Add(new ZoneInfo { Id = 50, Label = "Stockpile 1", Kind = "Stockpile", CellCount = 9 });
-        _world.WorkTables.Add(new WorkTableInfo { Id = 800, Label = "machining table", X = 3, Z = 3, BillCount = 1 });
-        _world.TableBills[800] = [new() { Index = 1, Label = "Make component", Repeat = "2x" }];
-        _world.Research = new ResearchInfo { Available = [new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 }] };
-        _world.Maps.Add(new MapInfo { Id = 2, Label = "Outpost", Tile = 999, ColonistCount = 0 });
+        world.Resources = new ResourceSnapshot { Items = [new ResourceInfo { DefName = "Silver", Label = "silver", Count = 500 }] };
+        world.Prisoners.Add(new PrisonerInfo { Id = 600, Name = "Zed", FullName = "Zed Kane", InteractionMode = "MaintainOnly", InteractionModeLabel = "maintain only" });
+        world.Animals.Add(new AnimalInfo { Id = 700, Name = "boomalope", Species = "boomalope", SpeciesDefName = "Boomalope", Wild = true });
+        world.Animals.Add(new AnimalInfo { Id = 701, Name = "Rex", Species = "husky", SpeciesDefName = "Husky", Wild = false });
+        world.Zones.Add(new ZoneInfo { Id = 50, Label = "Stockpile 1", Kind = "Stockpile", CellCount = 9 });
+        world.WorkTables.Add(new WorkTableInfo { Id = 800, Label = "machining table", X = 3, Z = 3, BillCount = 1 });
+        world.TableBills[800] = [new() { Index = 1, Label = "Make component", Repeat = "2x" }];
+        world.Research = new ResearchInfo { Available = [new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 }] };
+        world.Maps.Add(new MapInfo { Id = 2, Label = "Outpost", Tile = 999, ColonistCount = 0 });
         // 讀檔次數記在行程共用的紀錄裡：每個世界的存檔用不同寫入時間，算成不同的存檔。
-        _world.SaveFiles.Add(new SaveSlotInfo { Name = "Autosave-1", ColonyId = "colony1", Tick = 1000, WrittenUtcTicks = DateTime.UtcNow.Ticks });
-        _world.Things.Add(FakeGameWorld.MakeThing(302, "Gun_Revolver", "revolver", ThingKind.Item, 12, 12));
-        _world.Things[2].Forbidden = true;
-        _world.Gizmos[300] = [new() { Number = 1, Label = "Launch ship" }];
-        _world.PendingChoices.Add(new PendingChoiceInfo
+        world.SaveFiles.Add(new SaveSlotInfo { Name = "Autosave-1", ColonyId = "colony1", Tick = 1000, WrittenUtcTicks = DateTime.UtcNow.Ticks });
+        world.Things.Add(FakeGameWorld.MakeThing(302, "Gun_Revolver", "revolver", ThingKind.Item, 12, 12));
+        world.Things[2].Forbidden = true;
+        world.Gizmos[300] = [new() { Number = 1, Label = "Launch ship" }];
+        world.PendingChoices.Add(new PendingChoiceInfo
         {
             Id = "letter-12",
             Title = "Wanderer joins",
             Options = [new ChoiceOptionInfo { Number = 1, Text = "Accept" }]
         });
-        _world.FloatMenuOptions.Add(new FloatMenuOptionInfo { Number = 1, Label = "Equip revolver" });
-        _world.Quests.Add(new QuestInfo { Id = 40, Name = "Hospitality request", State = QuestInfo.AvailableState });
-        _world.Caravans.Add(new CaravanInfo
+        world.FloatMenuOptions.Add(new FloatMenuOptionInfo { Number = 1, Label = "Equip revolver" });
+        world.Quests.Add(new QuestInfo { Id = 40, Name = "Hospitality request", State = QuestInfo.AvailableState });
+        world.Caravans.Add(new CaravanInfo
         {
             Id = 12, Name = "Trailblazers", Tile = 4500, Moving = true, DestinationTile = 4700, CanSettle = true, CanCamp = true,
             Members = [new CaravanMemberInfo { Id = 101, Name = "Ali" }]
         });
-        _world.CaravanOrders.Add(new FloatMenuOptionInfo { Number = 1, Label = "Travel to tile 4600" });
-        _world.Forming.Add(new FormingCaravanInfo
+        world.CaravanOrders.Add(new FloatMenuOptionInfo { Number = 1, Label = "Travel to tile 4600" });
+        world.Forming.Add(new FormingCaravanInfo
         {
             Id = 77, Status = "gathering items", Members = [new CaravanMemberInfo { Id = 102, Name = "Bob" }]
         });
-        return _world;
+        return world;
     }
 
     [Test]

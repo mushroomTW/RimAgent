@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -24,7 +25,7 @@ public partial class RimAgentMod
         Widgets.DrawBoxSolid(badge, Gold);
         Text.Anchor = TextAnchor.MiddleCenter;
         GUI.color = new Color(0.12f, 0.12f, 0.12f);
-        Widgets.Label(new Rect(badge.x, badge.y + 1f, badge.width, badge.height), number.ToString());
+        Widgets.Label(new Rect(badge.x, badge.y + 1f, badge.width, badge.height), number.ToString(CultureInfo.InvariantCulture));
         Text.Font = GameFont.Medium;
         Text.Anchor = TextAnchor.MiddleLeft;
         GUI.color = Gold;

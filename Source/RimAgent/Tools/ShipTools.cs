@@ -1,6 +1,9 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Game;
@@ -35,7 +38,7 @@ public sealed class ShipTools
 
         List<List<ShipPartInfo>> groups = GroupByContact(parts);
         var sb = new StringBuilder();
-        sb.Append($"{parts.Count} ship part(s): {CountIn(parts, ShipPartState.Built)} built, {CountIn(parts, ShipPartState.Frame)} under construction, {CountIn(parts, ShipPartState.Blueprint)} blueprint(s). ")
+        sb.Append(CultureInfo.InvariantCulture, $"{parts.Count} ship part(s): {CountIn(parts, ShipPartState.Built)} built, {CountIn(parts, ShipPartState.Frame)} under construction, {CountIn(parts, ShipPartState.Blueprint)} blueprint(s). ")
             .AppendLine("Launch counts only finished parts.");
         AppendGroups(sb, groups);
 
@@ -95,7 +98,7 @@ public sealed class ShipTools
     {
         for (int i = 0; i < groups.Count; i++)
         {
-            sb.Append($"Group {i + 1}: ");
+            sb.Append(CultureInfo.InvariantCulture, $"Group {i + 1}: ");
             sb.AppendLine(string.Join("; ", groups[i].Select(p => $"{p.Label} #{p.Id} {p.Rect}{StateSuffix(p.State)}")));
         }
     }

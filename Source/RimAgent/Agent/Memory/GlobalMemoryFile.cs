@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,7 +40,7 @@ public static class GlobalMemoryFile
     }
 
     /// <summary>全域記憶寫入鎖；呼叫端需要讓「取快照＋寫檔」不可分割時也用這把（可重入）。</summary>
-    internal static readonly object Gate = new();
+    internal static readonly System.Threading.Lock Gate = new();
 
     /// <summary>寫回全域記憶；先寫暫存檔再原子換檔，任何時間點中斷都至少留著完整的舊檔或新檔。</summary>
     public static void Save(string path, IReadOnlyList<AgentMemoryEntry> entries)

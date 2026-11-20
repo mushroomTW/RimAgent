@@ -103,6 +103,97 @@ dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 # S101（型別應為 PascalCase）：RimLLM 是品牌名稱，改成 RimLlm* 會破壞公開 API 與下游 Mod 相容性
 dotnet_diagnostic.S101.severity = none
 
+# Meziantou.Analyzer：只關掉純風格或與既有慣例衝突的規則，其餘維持預設
+# MA0006（== 改 string.Equals）：對 string 而言 == 本來就是序數比較，改寫只增加雜訊
+dotnet_diagnostic.MA0006.severity = none
+# MA0048（檔名須等於型別名）：與 partial 拆檔（Type.Part.cs）及小型別共檔的慣例衝突
+dotnet_diagnostic.MA0048.severity = none
+# MA0016（參數改用集合抽象型別）：改寫會變動框架公開 API，破壞下游 Mod
+dotnet_diagnostic.MA0016.severity = none
+# MA0051（方法過長）：只作參考
+dotnet_diagnostic.MA0051.severity = suggestion
+# MA0023（Regex 改用 ExplicitCapture）：微幅效能，且可能影響依編號取群組的程式碼，只作參考
+dotnet_diagnostic.MA0023.severity = suggestion
+# MA0008（加 StructLayout）、MA0046（事件委派須為 (sender, e)）、MA0096／MA0097（IComparable 配套成員）：
+# 對本專案的值型別、既有公開事件與私有排序型別沒有實益
+dotnet_diagnostic.MA0008.severity = none
+dotnet_diagnostic.MA0046.severity = none
+dotnet_diagnostic.MA0096.severity = none
+dotnet_diagnostic.MA0097.severity = none
+
+# 兩套分析器重複的規則只保留一條，避免同一處報兩次
+# 鎖改用 System.Threading.Lock：保留 MA0158，關閉 S9422
+dotnet_diagnostic.S9422.severity = none
+# 區域變數遮蔽欄位：保留 MA0084，關閉 S1117
+dotnet_diagnostic.S1117.severity = none
+# 例外的參數名稱：保留 S3928；MA0015 會誤報 ThrowIfNull(解構出的區域變數)
+dotnet_diagnostic.MA0015.severity = none
+# async 委派變成 async void：保留 MA0147，關閉 VSTHRD101
+dotnet_diagnostic.VSTHRD101.severity = none
+# 未觀察的 Task 結果：保留 MA0134，關閉 VSTHRD110
+dotnet_diagnostic.VSTHRD110.severity = none
+
+# Microsoft.VisualStudio.Threading.Analyzers：只留通用的同步阻塞與 async void 規則
+# （VSTHRD002 同步等待、VSTHRD100 async void 方法、VSTHRD103 async 方法內呼叫同步版本、VSTHRD114 回傳 null Task）
+# VSTHRD003 假設使用 Visual Studio 的 JoinableTaskFactory，本專案沒有
+dotnet_diagnostic.VSTHRD003.severity = none
+# VSTHRD200（Async 字尾）：純命名風格，且既有公開 API 不能改名
+dotnet_diagnostic.VSTHRD200.severity = none
+
+# .NET 內建分析器（AnalysisMode = Recommended）：關閉與 RimWorld 慣例或既有公開 API 衝突的規則
+# CA1707（名稱不可含底線）：RimWorld 慣例的 Dialog_／Window_／MainButtonWorker_ 前綴，與 RimLLM_Framework 命名空間
+dotnet_diagnostic.CA1707.severity = none
+# CA1051（不可公開執行個體欄位）：RimWorld 的 Def 與 Scribe 存檔需要公開欄位
+dotnet_diagnostic.CA1051.severity = none
+# CA1805（不要明確初始化為預設值）：設定欄位明確寫出預設值，方便對照 Scribe_Values.Look 的預設
+dotnet_diagnostic.CA1805.severity = none
+# CA1001（擁有可處置欄位的型別須可處置）：GameComponent、Window 由 RimWorld 管理生命週期，
+# ColonyAgentSession 則刻意不實作 IDisposable（理由見該型別註解），可處置欄位都在各自的收尾流程釋放
+dotnet_diagnostic.CA1001.severity = none
+# CA1716（識別碼與關鍵字衝突）：Mod 命名空間屬於已發佈的公開 API
+dotnet_diagnostic.CA1716.severity = none
+# CA1000（泛型型別的靜態成員）：Result<T>.Ok／Fail 是慣用的工廠寫法
+dotnet_diagnostic.CA1000.severity = none
+# CA1711（型別名稱字尾）：WorkUndoStack 確實是堆疊語意
+dotnet_diagnostic.CA1711.severity = none
+
+# RS0041（公開 API 使用未標註可為 null 的型別）：逐檔遷移 Nullable 期間，#nullable disable 的檔案必然觸發，
+# 先降為 suggestion 當作待遷移清單；所有檔案移除 #nullable disable 後改回 warning
+dotnet_diagnostic.RS0041.severity = suggestion
+
 [**/*Tests*/**.cs]
 # 測試程式碼允許行內陣列常數，不強制抽為靜態唯讀欄位，確保測試的局部可讀性
 dotnet_diagnostic.CA1861.severity = none
+# xUnit 建議測試不加 ConfigureAwait(false)
+dotnet_diagnostic.MA0004.severity = none
+# 測試資料固定且不受玩家語系影響，不強制指定比較子與文化資訊
+dotnet_diagnostic.MA0002.severity = none
+dotnet_diagnostic.MA0011.severity = none
+dotnet_diagnostic.MA0074.severity = none
+dotnet_diagnostic.CA1305.severity = none
+dotnet_diagnostic.CA1310.severity = none
+# 測試可直接丟出 Exception 模擬任意失敗
+dotnet_diagnostic.CA2201.severity = none
+# 測試與實驗程式碼的格式化只跑少數幾次，快取 CompositeFormat 沒有實益
+dotnet_diagnostic.CA1863.severity = none
+# 測試的 Regex 樣式固定且不處理外部輸入
+dotnet_diagnostic.MA0009.severity = none
+# 測試方法以「準備、執行、驗證」順序呈現，長度與巢狀區塊有助閱讀
+dotnet_diagnostic.MA0051.severity = none
+dotnet_diagnostic.S1199.severity = none
+# 斷言中以 First()／Last() 表達意圖，比索引更易讀
+dotnet_diagnostic.S6608.severity = none
+# 測試替身的成員常只供序列化或反射讀取，靜態分析看不到這些用途
+dotnet_diagnostic.S1144.severity = none
+dotnet_diagnostic.S4487.severity = none
+# 清理用的空 catch 與只為耗盡串流的空迴圈是測試常見寫法
+dotnet_diagnostic.S108.severity = none
+# 同步走訪 IAsyncEnumerator 時 MoveNextAsync().AsTask() 只取用一次，屬誤報
+dotnet_diagnostic.S5034.severity = none
+# 測試需要 Cancel() 同步執行取消回呼，結果才有確定性，不改用 CancelAsync()
+dotnet_diagnostic.S6966.severity = none
+dotnet_diagnostic.VSTHRD103.severity = none
+# 同步測試方法以 GetAwaiter().GetResult() 等待結果，測試執行緒沒有同步內容，不會死結
+dotnet_diagnostic.VSTHRD002.severity = none
+# 測試會刻意以任意參數名稱建立例外，驗證錯誤分類
+dotnet_diagnostic.S3928.severity = none

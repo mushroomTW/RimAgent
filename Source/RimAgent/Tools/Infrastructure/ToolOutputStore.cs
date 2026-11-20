@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,7 +26,7 @@ internal sealed class ToolOutputStore
     // 子代理與主 Agent 共用同一批工具實例；用呼叫流程上的 AsyncLocal 分流，平行任務不會互相寫入。
     private static readonly AsyncLocal<ToolOutputStore> Scoped = new();
 
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly Dictionary<string, string> _outputs = [];
     private readonly List<string> _order = [];
     private int _next;

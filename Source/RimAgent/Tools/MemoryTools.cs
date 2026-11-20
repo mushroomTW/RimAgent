@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -49,14 +51,14 @@ internal static class MemoryTools
     /// <summary>取出 provider 的工具；命令類包上閘門預覽，查詢類原樣回傳，未知工具不提供（沒有風險分級就不放行）。</summary>
     public static List<AIFunction> Create(AgentMemoryStore store, ConfirmationGate gate)
     {
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001, VSTHRD002 // VSTHRD002：同步等待的前提見下方註解
         var provider = new FileMemoryProvider(store ?? throw new ArgumentNullException(nameof(store)));
         // InvokingContext 必須有 agent；這個 agent 只用來取工具，不會送出任何請求。
         var dummyClient = new ChatClientAgent(new NoOpChatClient());
         var context = new AIContextProvider.InvokingContext(dummyClient, null, new AIContext());
         // 同步等待：前提是 provider 只回傳工具清單、不 await 需要回到主執行緒的工作；升級 SDK 時要重新確認。
         AIContext provided = provider.InvokingAsync(context).AsTask().GetAwaiter().GetResult();
-#pragma warning restore MAAI001
+#pragma warning restore MAAI001, VSTHRD002
         return [.. provided.Tools.OfType<AIFunction>()
             .Where(tool => Risks.ContainsKey(tool.Name))
             .Select(tool => tool.Name == "file_memory_replace_lines" ? new SlimSchemaFunction(tool, ReplaceLinesDescription, ReplaceLinesSchema) : tool)

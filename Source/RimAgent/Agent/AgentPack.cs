@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -256,7 +258,7 @@ public static class AgentPackLoader
     }
 
     /// <summary>Agents/*/AGENT.md，依資料夾名排序；同名子代理只留第一個（名稱是設定頁與委派的鍵）。</summary>
-    private static IReadOnlyList<AgentSubagent> LoadSubagents(string agentsDir)
+    private static List<AgentSubagent> LoadSubagents(string agentsDir)
     {
         if (!Directory.Exists(agentsDir)) return [];
         var subagents = new List<AgentSubagent>();

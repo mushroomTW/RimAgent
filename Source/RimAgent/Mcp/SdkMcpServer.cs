@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -45,9 +47,9 @@ public sealed class SdkMcpServer : IMcpServer
             }
             return result;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("MCP server \"" + Name + "\" timed out.");
+            throw new TimeoutException("MCP server \"" + Name + "\" timed out.", ex);
         }
     }
 
@@ -62,9 +64,9 @@ public sealed class SdkMcpServer : IMcpServer
             CallToolResult result = await client.CallToolAsync(tool, args, cancellationToken: timeout.Token).ConfigureAwait(false);
             return FormatResult(tool, result);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("MCP server \"" + Name + "\" timed out.");
+            throw new TimeoutException("MCP server \"" + Name + "\" timed out.", ex);
         }
     }
 

@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -215,7 +217,7 @@ public sealed class DecisionReasoningRouter
         if (msg.Role == ChatRole.User)
         {
             if (text.Length > UserTextHeadChars) text = text[..UserTextHeadChars] + "…";
-            sb.AppendLine($"user: {Escape(text)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"user: {Escape(text)}");
         }
         else if (msg.Role == ChatRole.Assistant)
         {
@@ -223,7 +225,7 @@ public sealed class DecisionReasoningRouter
             {
                 text = text.Substring(0, ReplyHeadChars).TrimEnd() + "\n[...]\n" + text.Substring(text.Length - ReplyTailChars).TrimStart();
             }
-            sb.AppendLine($"assistant: {Escape(text)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"assistant: {Escape(text)}");
         }
     }
 

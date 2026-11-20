@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -186,7 +188,7 @@ internal sealed partial class RimWorldGameWorld
         if (want.Length == 0)
         {
             return CommandResult.Fail($"{recipe.label} needs a body part. Ask the player which one: " +
-                                      string.Join(", ", options.Select(p => p.LabelCap).Distinct().ToArray()));
+                                      string.Join(", ", options.Select(p => p.LabelCap).Distinct(StringComparer.Ordinal).ToArray()));
         }
         part = options.FirstOrDefault(p => MatchesBodyPart(p, want));
         if (part == null) return CommandResult.Fail($"{pawn.LabelShort} has no body part matching \"{want}\" for {recipe.label}");

@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -54,8 +56,10 @@ public sealed partial class ColonyAgentSession
     /// </remarks>
     private string SerializeSession(AgentSession session)
     {
+        #pragma warning disable VSTHRD002 // 呼叫端是同步的，只能同步等待；前提見上方 remarks
         JsonElement document = _agent.SerializeSessionAsync(session, null, CancellationToken.None)
             .AsTask().GetAwaiter().GetResult();
+        #pragma warning restore VSTHRD002
         return document.GetRawText();
     }
 

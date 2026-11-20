@@ -1,6 +1,9 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -61,7 +64,7 @@ public sealed class FloatMenuTools
         FloatMenuInfo menu = _world.GetFloatMenuOptions(pawn.Value.Id, target.Value);
         if (!string.IsNullOrEmpty(menu.Error)) return ToolText.Error(menu.Error);
         string needle = option?.Trim() ?? string.Empty;
-        if (!int.TryParse(needle, out int _) && menu.Options.Count(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase)) > 1)
+        if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && menu.Options.Count(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase)) > 1)
             return ToolText.Error($"{menu.PawnName}'s menu has multiple options named \"{needle}\". Use an option number from list_right_click_menu.");
         FloatMenuOptionInfo picked = Resolve(menu.Options, needle);
         if (picked == null)
@@ -95,7 +98,7 @@ public sealed class FloatMenuTools
     private static FloatMenuOptionInfo Resolve(IReadOnlyList<FloatMenuOptionInfo> options, string needle)
     {
         if (needle.Length == 0) return null;
-        if (int.TryParse(needle, out int number)) return options.FirstOrDefault(o => o.Number == number);
+        if (int.TryParse(needle, CultureInfo.InvariantCulture, out int number)) return options.FirstOrDefault(o => o.Number == number);
         FloatMenuOptionInfo exact = options.FirstOrDefault(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return exact;
         List<FloatMenuOptionInfo> partial = [.. options.Where(o => o.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];
