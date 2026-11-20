@@ -157,9 +157,9 @@ dotnet_diagnostic.CA1000.severity = none
 # CA1711（型別名稱字尾）：WorkUndoStack 確實是堆疊語意
 dotnet_diagnostic.CA1711.severity = none
 
-# RS0041（公開 API 使用未標註可為 null 的型別）：逐檔遷移 Nullable 期間，#nullable disable 的檔案必然觸發，
-# 先降為 suggestion 當作待遷移清單；所有檔案移除 #nullable disable 後改回 warning
-dotnet_diagnostic.RS0041.severity = suggestion
+# RS0041（公開 API 使用未標註可為 null 的型別）：所有檔案已遷移為可為 null 標註，維持 warning，
+# 避免之後新增的程式碼沿用未標註的公開型別
+dotnet_diagnostic.RS0041.severity = warning
 
 [**/*Tests*/**.cs]
 # 測試程式碼允許行內陣列常數，不強制抽為靜態唯讀欄位，確保測試的局部可讀性
