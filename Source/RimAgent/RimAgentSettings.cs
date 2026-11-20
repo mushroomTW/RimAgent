@@ -165,15 +165,12 @@ public class RimAgentSettings : ModSettings
 
     public static bool PresetAllows(PermissionPreset preset, ToolCategory category)
     {
-        switch (preset)
+        return preset switch
         {
-            case PermissionPreset.LookOnly:
-                return category == ToolCategory.Observe || category == ToolCategory.Memory || category == ToolCategory.Web;
-            case PermissionPreset.Recommended:
-                return category != ToolCategory.Mcp;
-            default:
-                return true;
-        }
+            PermissionPreset.LookOnly => category == ToolCategory.Observe || category == ToolCategory.Memory || category == ToolCategory.Web,
+            PermissionPreset.Recommended => category != ToolCategory.Mcp,
+            _ => true,
+        };
     }
 
     public void ApplyPreset(PermissionPreset preset)

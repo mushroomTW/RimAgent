@@ -147,7 +147,7 @@ public sealed class AgentToolRegistry
         /// <summary>每個包可用的工具（含已展開的）；未公告的仍可直接執行。</summary>
         public readonly Dictionary<string, List<AITool>> PackTools = new(StringComparer.Ordinal);
         /// <summary>至少有一個可用工具的包，依 <see cref="ToolPacks.All"/> 的順序。</summary>
-        public IReadOnlyList<ToolPacks.Pack> Packs = Array.Empty<ToolPacks.Pack>();
+        public IReadOnlyList<ToolPacks.Pack> Packs = [];
     }
 
     internal MainAgentTools SelectForMainAgent(ToolPermissions permissions, ICollection<string> loadedPacks)
@@ -198,7 +198,7 @@ public sealed class AgentToolRegistry
     {
         ArgumentNullException.ThrowIfNull(permissions);
         var scoped = new ToolPermissions();
-        foreach (ToolCategory category in categories ?? Array.Empty<ToolCategory>())
+        foreach (ToolCategory category in categories ?? [])
         {
             scoped.Set(category, permissions.Allows(category));
         }

@@ -264,13 +264,13 @@ public class AgentPackTests
     [Test]
     public void FormatExpansionsSplitsActiveAndInactiveAndSkipsCore()
     {
-        string line = AgentPromptComposer.FormatExpansions(new[]
-        {
+        string line = AgentPromptComposer.FormatExpansions(
+        [
             ("Core", true, true),
             ("Royalty", false, true),
             ("Anomaly", false, false),
             ("Biotech", false, true)
-        });
+        ]);
 
         Assert.That(line, Is.EqualTo("Game expansions active: Royalty, Biotech. Not active: Anomaly; their content does not exist in this game."));
     }
@@ -278,9 +278,9 @@ public class AgentPackTests
     [Test]
     public void FormatExpansionsWithNoneActiveSaysBaseGameAndSkipsEmptyInactive()
     {
-        Assert.That(AgentPromptComposer.FormatExpansions(new[] { ("Core", true, true), ("Biotech", false, false) }),
+        Assert.That(AgentPromptComposer.FormatExpansions([("Core", true, true), ("Biotech", false, false)]),
             Does.StartWith("Game expansions active: none (base game only)."));
-        Assert.That(AgentPromptComposer.FormatExpansions(new[] { ("Biotech", false, true) }), Is.EqualTo("Game expansions active: Biotech."));
+        Assert.That(AgentPromptComposer.FormatExpansions([("Biotech", false, true)]), Is.EqualTo("Game expansions active: Biotech."));
     }
 
     [Test]

@@ -116,7 +116,7 @@ internal sealed partial class RimWorldGameWorld
     private static CaravanDraft ValidateCaravanCargo(CaravanRequest request, List<TransferableOneWay> items, CaravanDraft draft, out List<CaravanPlanCargo> cargoLines)
     {
         cargoLines = new List<CaravanPlanCargo>();
-        foreach (TradeLine line in request.Cargo ?? Array.Empty<TradeLine>())
+        foreach (TradeLine line in request.Cargo ?? [])
         {
             if (!TryAllocateCargoLine(line, items, out var cargoLine, out var rejectReason)) return RejectCaravan(draft, rejectReason);
             cargoLines.Add(cargoLine);
@@ -154,7 +154,7 @@ internal sealed partial class RimWorldGameWorld
     private static bool ValidateCaravanPawns(CaravanRequest request, List<Pawn> sendable, Map map, CaravanDraft draft, out CaravanDraft rejectReason)
     {
         rejectReason = null;
-        foreach (int id in (request.PawnIds ?? Array.Empty<int>()).Distinct())
+        foreach (int id in (request.PawnIds ?? []).Distinct())
         {
             Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
             if (pawn == null) { rejectReason = RejectCaravan(draft, $"no pawn with id {id} is on this map"); return false; }

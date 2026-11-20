@@ -52,7 +52,7 @@ public partial class ObserveToolsTests
     [Test]
     public void UnreadablePartsAreFlaggedInsteadOfLookingEmpty()
     {
-        _world.Colonists[1].UnreadableParts = new[] { "skills", "needs" };
+        _world.Colonists[1].UnreadableParts = ["skills", "needs"];
 
         Assert.That(_tools.ListColonists(), Does.Contain("could not read skills, needs"));
         Assert.That(_tools.GetColonistWellbeing("Bob"), Does.Contain("could not read skills, needs"));
@@ -65,11 +65,11 @@ public partial class ObserveToolsTests
         _world.Resources = new ResourceSnapshot
         {
             TotalHumanEdibleNutrition = 42.5f,
-            Items = new[]
-            {
+            Items =
+            [
                 new ResourceInfo { DefName = "Steel", Label = "steel", Count = 300, Category = "Resources" },
                 new ResourceInfo { DefName = "MealSimple", Label = "simple meal", Count = 12, Category = "Food" }
-            }
+            ]
         };
         string text = _tools.GetResources();
         Assert.That(text, Does.Contain("42.5").And.Contain("Resources: steel (Steel) x300").And.Contain("Food: simple meal (MealSimple) x12"));
@@ -78,7 +78,7 @@ public partial class ObserveToolsTests
     [Test]
     public void EmptyResourcesExplainThatOnlyStoredItemsAreCounted()
     {
-        _world.Resources = new ResourceSnapshot { TotalHumanEdibleNutrition = 0f, Items = Array.Empty<ResourceInfo>() };
+        _world.Resources = new ResourceSnapshot { TotalHumanEdibleNutrition = 0f, Items = [] };
 
         string text = _tools.GetResources();
 
@@ -100,7 +100,7 @@ public partial class ObserveToolsTests
         _world.Research = new ResearchInfo
         {
             Current = new ResearchProjectInfo { DefName = "Electricity", Label = "electricity", ProgressPercent = 0.45f, Cost = 1600 },
-            Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } }
+            Available = [new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 }]
         };
         string text = _tools.GetResearchStatus();
         Assert.That(text, Does.Contain("electricity (Electricity) 45% of 1600").And.Contain("batteries (Batteries, cost 400)"));
@@ -112,7 +112,7 @@ public partial class ObserveToolsTests
         _world.Research = new ResearchInfo
         {
             Current = new ResearchProjectInfo { DefName = "Electricity", Label = "electricity", Cost = 1600 },
-            Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } }
+            Available = [new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 }]
         };
 
         string text = _tools.SetResearch("batteries");
@@ -126,7 +126,7 @@ public partial class ObserveToolsTests
     {
         _world.Research = new ResearchInfo
         {
-            Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } }
+            Available = [new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 }]
         };
         Assert.That(_tools.SetResearch("warp drive"), Does.StartWith("Error:"));
         Assert.That(_world.Research.Current, Is.Null);
@@ -137,7 +137,7 @@ public partial class ObserveToolsTests
     {
         _world.Research = new ResearchInfo
         {
-            Available = new[] { new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 } }
+            Available = [new ResearchProjectInfo { DefName = "Batteries", Label = "batteries", Cost = 400 }]
         };
         _world.FinishedResearch.Add("Electricity");
 
@@ -153,7 +153,7 @@ public partial class ObserveToolsTests
         _world.Research = new ResearchInfo
         {
             Current = new ResearchProjectInfo { DefName = "Electricity", Label = "electricity", Cost = 1600 },
-            Available = Array.Empty<ResearchProjectInfo>()
+            Available = []
         };
 
         string text = _tools.SetResearch("none");
@@ -336,7 +336,7 @@ public partial class ObserveToolsTests
             X = 5, Z = 5, TerrainDefName = "Gravel", Terrain = "gravel", Fertility = 0.7f, Roof = "overhead mountain", Walkable = false,
             Zone = new ZoneInfo { Id = 50, Label = "Stockpile 1", Kind = "Stockpile", CellCount = 9 },
             Room = new RoomInfo { Id = 12, Role = "bedroom", CellCount = 20, Outdoors = false, TemperatureC = 18.5f, Extents = new CellRectSpec(4, 4, 8, 7) },
-            Things = new[] { _world.Things[0] }
+            Things = [_world.Things[0]]
         };
 
         string text = _tools.InspectArea(5, 5, 5, 5);

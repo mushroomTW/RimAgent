@@ -45,7 +45,7 @@ public static class GlobalMemoryFile
     {
         if (string.IsNullOrEmpty(path)) return;
         var document = new MemoryDocumentDto();
-        foreach (AgentMemoryEntry entry in entries ?? Array.Empty<AgentMemoryEntry>())
+        foreach (AgentMemoryEntry entry in entries ?? [])
         {
             if (entry == null || string.IsNullOrEmpty(entry.name) || entry.content == null) continue;
             document.Files.Add(new MemoryFileDto { Name = entry.name, Content = entry.content });

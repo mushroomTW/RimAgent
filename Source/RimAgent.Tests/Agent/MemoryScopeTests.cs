@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using Verse;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
 using RimAgent.Agent;
 using RimAgent.Tools;
+using Verse;
 
 namespace RimAgent.Tests;
 

@@ -348,7 +348,7 @@ public sealed class AutonomousScheduler : IExposable
     /// <summary>取走「重試用完而放棄」的條件，讓呼叫端告知玩家；讀完即清空。</summary>
     public IReadOnlyList<AutonomousTrigger> TakeGiveUps()
     {
-        if (_giveUps.Count == 0) return Array.Empty<AutonomousTrigger>();
+        if (_giveUps.Count == 0) return [];
         var copy = _giveUps.ToArray();
         _giveUps.Clear();
         return copy;

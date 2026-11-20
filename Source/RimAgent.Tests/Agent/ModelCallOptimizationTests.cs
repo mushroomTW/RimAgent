@@ -254,7 +254,7 @@ public class ModelCallOptimizationTests
     public void RegistryOffersReadSkillOnlyWhenSkillsProvided()
     {
         var withSkills = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null,
-            skills: () => new[] { new AgentSkill { Name = "s", Description = "d", Body = "b" } });
+            skills: () => [new AgentSkill { Name = "s", Description = "d", Body = "b" }]);
         var withoutSkills = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
 
         Assert.That(withSkills.Descriptors.Any(d => d.Name == "read_skill"), Is.True);
@@ -289,7 +289,7 @@ public class ModelCallOptimizationTests
     public void EmptySkillListStillOffersReadSkill()
     {
         var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null,
-            skills: () => Array.Empty<AgentSkill>());
+            skills: () => []);
 
         Assert.That(registry.Descriptors.Any(d => d.Name == "read_skill"), Is.True,
             "正式環境永遠帶技能提供者，工具數恆為 60（含零技能時）");
@@ -302,7 +302,7 @@ public class ModelCallOptimizationTests
         _world.Traders.Add(new TraderInfo
         {
             Kind = TraderInfo.OrbitalKind, Id = "PassingShip_1", Name = "Starweaver", Faction = "Outlanders", Silver = 1200,
-            Goods = new[] { new TradeGoodsInfo { DefName = "ComponentSpacer", Label = "spacer component", Count = 8, MarketValue = 55 } }
+            Goods = [new TradeGoodsInfo { DefName = "ComponentSpacer", Label = "spacer component", Count = 8, MarketValue = 55 }]
         });
         var agentClient = new ScriptedChatClient();
         var classifierClient = new ScriptedChatClient();

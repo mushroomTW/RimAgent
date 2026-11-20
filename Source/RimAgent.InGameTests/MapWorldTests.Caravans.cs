@@ -319,8 +319,8 @@ internal sealed partial class MapWorldTests
 
             var request = new CaravanRequest
             {
-                PawnIds = new[] { colonist.thingIDNumber, animal.thingIDNumber },
-                Cargo = new[] { new TradeLine { DefName = silver.def.defName, Count = 100 }, new TradeLine { DefName = food.def.defName, Count = 30 } },
+                PawnIds = [colonist.thingIDNumber, animal.thingIDNumber],
+                Cargo = [new TradeLine { DefName = silver.def.defName, Count = 100 }, new TradeLine { DefName = food.def.defName, Count = 30 }],
                 DestinationTile = destination.tileId
             };
             CaravanPlanInfo plan = _world.PlanCaravan(request);
@@ -392,7 +392,7 @@ internal sealed partial class MapWorldTests
         CaravanPlanInfo tooMuch = _world.PlanCaravan(new CaravanRequest
         {
             PawnIds = request.PawnIds,
-            Cargo = new[] { new TradeLine { DefName = silver.def.defName, Count = 999999 } },
+            Cargo = [new TradeLine { DefName = silver.def.defName, Count = 999999 }],
             DestinationTile = destination.tileId
         });
         if (string.IsNullOrEmpty(tooMuch.Error)) failures.Add("asking for more silver than the colony has was not an error");
@@ -415,8 +415,8 @@ internal sealed partial class MapWorldTests
     {
         CaravanPlanInfo heavy = _world.PlanCaravan(new CaravanRequest
         {
-            PawnIds = new[] { colonist.thingIDNumber },
-            Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } },
+            PawnIds = [colonist.thingIDNumber],
+            Cargo = [new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable }],
             DestinationTile = destination.tileId
         });
         string tooBig = "TooBigCaravanMassUsage".Translate().Resolve();
@@ -425,8 +425,8 @@ internal sealed partial class MapWorldTests
         if (string.IsNullOrEmpty(heavy.Error) && heavy.MassUsage > heavy.MassCapacity)
         {
             int lordsBefore = map.lordManager.lords.Count;
-            CommandResult refused = _world.FormCaravan(new CaravanRequest { PawnIds = new[] { colonist.thingIDNumber },
-                Cargo = new[] { new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable } }, DestinationTile = destination.tileId });
+            CommandResult refused = _world.FormCaravan(new CaravanRequest { PawnIds = [colonist.thingIDNumber],
+                Cargo = [new TradeLine { DefName = ThingDefOf.Steel.defName, Count = steelAvailable }], DestinationTile = destination.tileId });
             if (refused.Success || map.lordManager.lords.Count != lordsBefore || colonist.IsFormingCaravan())
                 failures.Add("an overloaded caravan was formed");
         }

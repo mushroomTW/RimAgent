@@ -33,7 +33,7 @@ internal sealed partial class FakeGameWorld
     {
         if (PlanOverride != null) return PlanOverride;
         var members = new List<CaravanMemberInfo>();
-        foreach (int id in (request.PawnIds ?? Array.Empty<int>()).Distinct())
+        foreach (int id in (request.PawnIds ?? []).Distinct())
         {
             ColonistInfo colonist = Colonists.FirstOrDefault(c => c.Id == id);
             AnimalInfo animal = Animals.FirstOrDefault(a => a.Id == id);
@@ -58,7 +58,7 @@ internal sealed partial class FakeGameWorld
         }
 
         var cargo = new List<CaravanPlanCargo>();
-        foreach (TradeLine line in request.Cargo ?? Array.Empty<TradeLine>())
+        foreach (TradeLine line in request.Cargo ?? [])
         {
             CaravanCargoInfo have = CaravanCargo.FirstOrDefault(c => string.Equals(c.DefName, line.DefName, StringComparison.OrdinalIgnoreCase));
             if (have == null || have.Count < line.Count)
@@ -131,8 +131,8 @@ internal sealed partial class FakeGameWorld
     private static string Describe(CaravanRequest request)
     {
         if (request == null) return "null";
-        return $"{string.Join("+", (request.PawnIds ?? Array.Empty<int>()).ToArray())}|" +
-               $"{string.Join("+", (request.Cargo ?? Array.Empty<TradeLine>()).Select(l => l.DefName + ":" + l.Count).ToArray())}|{request.DestinationTile}";
+        return $"{string.Join("+", (request.PawnIds ?? []).ToArray())}|" +
+               $"{string.Join("+", (request.Cargo ?? []).Select(l => l.DefName + ":" + l.Count).ToArray())}|{request.DestinationTile}";
     }
 
     public IReadOnlyList<FormingCaravanInfo> GetFormingCaravans() => Forming;

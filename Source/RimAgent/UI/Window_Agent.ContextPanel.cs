@@ -38,7 +38,7 @@ public partial class Window_Agent
         private static readonly Color FreeColor = new(0.20f, 0.23f, 0.27f);
 
         private readonly ColonyAgentSession _session;
-        private IReadOnlyList<ColonyAgentSession.ContextPart> _parts = Array.Empty<ColonyAgentSession.ContextPart>();
+        private IReadOnlyList<ColonyAgentSession.ContextPart> _parts = [];
         private float _nextRefresh;
         private static int _closedFrame = -1;
 

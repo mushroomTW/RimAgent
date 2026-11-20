@@ -32,9 +32,9 @@ public partial class AutoModeTests
         _world.Traders.Add(new TraderInfo
         {
             Kind = TraderInfo.OrbitalKind, Id = "PassingShip_1", Name = "Starweaver", Faction = "Outlanders", Silver = 1200,
-            Goods = new[] { new TradeGoodsInfo { DefName = "ComponentSpacer", Label = "spacer component", Count = 8, MarketValue = 55 } }
+            Goods = [new TradeGoodsInfo { DefName = "ComponentSpacer", Label = "spacer component", Count = 8, MarketValue = 55 }]
         });
-        _world.Resources = new ResourceSnapshot { Items = new[] { new ResourceInfo { DefName = "Silver", Label = "silver", Count = 500 } } };
+        _world.Resources = new ResourceSnapshot { Items = [new ResourceInfo { DefName = "Silver", Label = "silver", Count = 500 }] };
         _agentClient = new ScriptedChatClient();
         _classifierClient = new ScriptedChatClient();
         _permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work, ToolCategory.Trade);

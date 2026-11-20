@@ -23,7 +23,7 @@ public sealed class SkillTools
     [Description("Reads the full text of one available skill by name. The system prompt lists only skill names and descriptions; call this when a skill looks relevant to the current instruction.")]
     public string ReadSkill([Description("Skill name exactly as listed in the skills index.")] string skill)
     {
-        IReadOnlyList<AgentSkill> skills = _skills() ?? Array.Empty<AgentSkill>();
+        IReadOnlyList<AgentSkill> skills = _skills() ?? [];
         string wanted = (skill ?? string.Empty).Trim();
         AgentSkill match = skills.FirstOrDefault(s =>
             s != null && string.Equals((s.Name ?? string.Empty).Trim(), wanted, StringComparison.OrdinalIgnoreCase));

@@ -124,8 +124,8 @@ internal sealed partial class FakeGameWorld
         if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
         if (!string.Equals(zone.Kind, "Stockpile", StringComparison.OrdinalIgnoreCase))
             return CommandResult.Fail($"{zone.Label} is a growing zone and has no storage filter");
-        var allows = (allowDefNames ?? Array.Empty<string>()).ToList();
-        var disallows = (disallowDefNames ?? Array.Empty<string>()).ToList();
+        var allows = (allowDefNames ?? []).ToList();
+        var disallows = (disallowDefNames ?? []).ToList();
         if (allows.Count == 0 && disallows.Count == 0) return CommandResult.Fail("nothing to allow or disallow");
         foreach (string defName in allows.Concat(disallows))
         {

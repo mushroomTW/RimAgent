@@ -32,24 +32,24 @@ public sealed class BuildingInfo
     public int Height { get; set; } = 1;
     /// <summary>地板類（TerrainDef）；沒有建築專屬的欄位。</summary>
     public bool IsTerrain { get; set; }
-    public IReadOnlyList<BuildingCost> Costs { get; set; } = Array.Empty<BuildingCost>();
+    public IReadOnlyList<BuildingCost> Costs { get; set; } = [];
     /// <summary>需要材料（stuff）時的用量；0 表示不用選材料。</summary>
     public int StuffCount { get; set; }
-    public IReadOnlyList<string> StuffCategories { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> StuffCategories { get; set; } = [];
     /// <summary>地形承載需求的 defName（Light、Medium、Heavy…）；空字串表示沒有要求。</summary>
     public string TerrainAffordance { get; set; } = string.Empty;
     /// <summary>承載需求隨選用的材料而變。</summary>
     public bool AffordanceFromStuff { get; set; }
-    public IReadOnlyList<BuildingResearch> Research { get; set; } = Array.Empty<BuildingResearch>();
+    public IReadOnlyList<BuildingResearch> Research { get; set; } = [];
     public int ConstructionSkill { get; set; }
     public int ArtisticSkill { get; set; }
     /// <summary>放置檢查（PlaceWorker）的類別名稱。</summary>
-    public IReadOnlyList<string> PlaceWorkers { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> PlaceWorkers { get; set; } = [];
     public bool ShipPart { get; set; }
     /// <summary>電力：正數耗電、負數發電（瓦）；0 表示沒有電力元件或不耗電。</summary>
     public float PowerWatts { get; set; }
     /// <summary>互動格相對中心的偏移（朝北時；隨旋轉轉動），例如工作台站的位置。</summary>
-    public IReadOnlyList<(int X, int Z)> InteractionOffsets { get; set; } = Array.Empty<(int X, int Z)>();
+    public IReadOnlyList<(int X, int Z)> InteractionOffsets { get; set; } = [];
 }
 
 public enum ShipPartState
@@ -132,7 +132,7 @@ public sealed class LayoutPiece
 public sealed class LayoutPlan
 {
     public CellRectSpec Rect { get; set; }
-    public IReadOnlyList<LayoutPiece> Pieces { get; set; } = Array.Empty<LayoutPiece>();
+    public IReadOnlyList<LayoutPiece> Pieces { get; set; } = [];
 }
 
 /// <summary>lookup_def 可查的 Def 種類。</summary>

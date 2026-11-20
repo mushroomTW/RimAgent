@@ -122,7 +122,7 @@ public sealed class WorldTools
         WorldTileInfo info = _world.GetWorldTile(tileId, originId);
         if (!string.IsNullOrEmpty(info.Error)) return ToolText.Error(info.Error);
         WorldSurveyInfo survey = _world.GetWorldSurvey(originId);
-        TravelEstimateInfo estimate = TravelByTile(originId, new[] { tileId }).Values.FirstOrDefault();
+        TravelEstimateInfo estimate = TravelByTile(originId, [tileId]).Values.FirstOrDefault();
 
         var sb = new StringBuilder();
         AppendTileInfo(sb, info);
@@ -395,15 +395,15 @@ public sealed class WorldTools
 
     private static bool MatchesKind(WorldObjectInfo o, string filter)
     {
-        switch (filter)
+        return filter switch
         {
-            case "player": return o.Kind == WorldObjectInfo.PlayerSettlementKind || o.Kind == WorldObjectInfo.CampKind;
-            case "faction": return o.Kind == WorldObjectInfo.FactionSettlementKind;
-            case "site": return o.Kind == WorldObjectInfo.SiteKind;
-            case "quest": return o.Quests.Count > 0;
-            case "other": return o.Kind == WorldObjectInfo.CaravanKind || o.Kind == WorldObjectInfo.OtherKind;
-            default: return true;
-        }
+            "player" => o.Kind == WorldObjectInfo.PlayerSettlementKind || o.Kind == WorldObjectInfo.CampKind,
+            "faction" => o.Kind == WorldObjectInfo.FactionSettlementKind,
+            "site" => o.Kind == WorldObjectInfo.SiteKind,
+            "quest" => o.Quests.Count > 0,
+            "other" => o.Kind == WorldObjectInfo.CaravanKind || o.Kind == WorldObjectInfo.OtherKind,
+            _ => true,
+        };
     }
 
     private static bool MatchesSearch(WorldObjectInfo o, string needle)

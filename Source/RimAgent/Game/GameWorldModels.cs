@@ -23,7 +23,7 @@ public sealed class ColonyOverview
     /// <summary>心情已低於輕微崩潰門檻的殖民者人數。</summary>
     public int ColonistsNearMentalBreak { get; set; }
     /// <summary>看得到的派系與對玩家的好感。</summary>
-    public IReadOnlyList<string> Factions { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Factions { get; set; } = [];
 }
 
 public sealed class SkillInfo
@@ -68,14 +68,14 @@ public sealed class ColonistInfo
     /// <summary>醫療等級（MedicalCareCategory 名稱，如 Best）。</summary>
     public string MedicalCare { get; set; } = string.Empty;
     public string Equipment { get; set; } = string.Empty;
-    public IReadOnlyList<NeedInfo> Needs { get; set; } = Array.Empty<NeedInfo>();
-    public IReadOnlyList<string> Thoughts { get; set; } = Array.Empty<string>();
-    public IReadOnlyList<SkillInfo> Skills { get; set; } = Array.Empty<SkillInfo>();
-    public IReadOnlyList<WorkPriorityInfo> WorkPriorities { get; set; } = Array.Empty<WorkPriorityInfo>();
+    public IReadOnlyList<NeedInfo> Needs { get; set; } = [];
+    public IReadOnlyList<string> Thoughts { get; set; } = [];
+    public IReadOnlyList<SkillInfo> Skills { get; set; } = [];
+    public IReadOnlyList<WorkPriorityInfo> WorkPriorities { get; set; } = [];
     /// <summary>24 個小時各自的 TimeAssignment defName（索引即小時）。</summary>
-    public IReadOnlyList<string> Timetable { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Timetable { get; set; } = [];
     /// <summary>因其他模組丟例外而讀不到的段落（如 <see cref="WorkPrioritiesPart"/>）；這些欄位是空的，不代表「沒有」。</summary>
-    public IReadOnlyList<string> UnreadableParts { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> UnreadableParts { get; set; } = [];
 
     public const string WorkPrioritiesPart = "work priorities";
 }
@@ -97,7 +97,7 @@ public sealed class ResourceInfo
 
 public sealed class ResourceSnapshot
 {
-    public IReadOnlyList<ResourceInfo> Items { get; set; } = Array.Empty<ResourceInfo>();
+    public IReadOnlyList<ResourceInfo> Items { get; set; } = [];
     public float TotalHumanEdibleNutrition { get; set; }
 }
 
@@ -129,19 +129,19 @@ public sealed class QuestInfo
     /// <summary>還剩幾 tick 過期（只對 available）；沒有期限為 null。</summary>
     public int? ExpiresInTicks { get; set; }
     /// <summary>進行中任務的完成期限，遊戲給的原文（例如「剩 3 天」）；沒有則為空。</summary>
-    public IReadOnlyList<string> Deadlines { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Deadlines { get; set; } = [];
     /// <summary>已接受者的名字（只對 active，且該任務有接受者）。</summary>
     public string AccepterName { get; set; } = string.Empty;
     /// <summary>遊戲目前是否允許接受（只對 available）。</summary>
     public bool CanAccept { get; set; } = true;
     /// <summary>接受條件不滿足的原因，遊戲給的原文；CanAccept 為 false 時至少有一筆。</summary>
-    public IReadOnlyList<string> UnmetRequirements { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> UnmetRequirements { get; set; } = [];
     /// <summary>獎勵選項；只有一組也算一個選項。沒有獎勵選擇的任務為空。</summary>
-    public IReadOnlyList<QuestRewardInfo> RewardOptions { get; set; } = Array.Empty<QuestRewardInfo>();
+    public IReadOnlyList<QuestRewardInfo> RewardOptions { get; set; } = [];
     /// <summary>接受時要指名接受者（沒有獎勵選項的任務看這個；有選項的任務以各選項的 RequiresAccepter 為準）。</summary>
     public bool RequiresAccepter { get; set; }
     /// <summary>目前能當接受者的殖民者（只在任務需要接受者時列出）。</summary>
-    public IReadOnlyList<QuestAccepterInfo> Accepters { get; set; } = Array.Empty<QuestAccepterInfo>();
+    public IReadOnlyList<QuestAccepterInfo> Accepters { get; set; } = [];
 }
 
 /// <summary>任務的一組獎勵選項（接受時選其一）。</summary>
@@ -149,7 +149,7 @@ public sealed class QuestRewardInfo
 {
     /// <summary>1 起的序號。</summary>
     public int Number { get; set; }
-    public IReadOnlyList<string> Rewards { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Rewards { get; set; } = [];
     /// <summary>選了這一組之後，接受時是否要指名接受者。</summary>
     public bool RequiresAccepter { get; set; }
 }
@@ -189,17 +189,17 @@ public sealed class TimeSpeedInfo
     /// <summary>目前速度 defName（Paused／Normal／Fast／Superfast）。</summary>
     public string Current { get; set; } = "Normal";
     /// <summary>可切換的速度目錄。</summary>
-    public IReadOnlyList<DefInfo> Available { get; set; } = Array.Empty<DefInfo>();
+    public IReadOnlyList<DefInfo> Available { get; set; } = [];
 }
 
 /// <summary>玩家可按鍵切到的四檔速度目錄；Ultrafast 只留給開發模式。正式與假世界共用同一份。</summary>
 public static class TimeSpeedDirectory
 {
-    public static readonly IReadOnlyList<DefInfo> Default = new[]
-    {
+    public static readonly IReadOnlyList<DefInfo> Default =
+    [
         new DefInfo("Paused", "Paused"), new DefInfo("Normal", "Normal"),
         new DefInfo("Fast", "Fast"), new DefInfo("Superfast", "Superfast")
-    };
+    ];
 }
 
 public sealed class ResearchProjectInfo
@@ -214,7 +214,7 @@ public sealed class ResearchInfo
 {
     /// <summary>null 代表目前沒有進行中的專案。</summary>
     public ResearchProjectInfo Current { get; set; }
-    public IReadOnlyList<ResearchProjectInfo> Available { get; set; } = Array.Empty<ResearchProjectInfo>();
+    public IReadOnlyList<ResearchProjectInfo> Available { get; set; } = [];
 }
 
 /// <summary>命令型操作的結果。失敗時 Message 說明原因，供工具轉述給模型。</summary>

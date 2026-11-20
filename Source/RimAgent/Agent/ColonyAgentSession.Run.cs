@@ -22,7 +22,7 @@ public sealed partial class ColonyAgentSession
         get
         {
             AgentSession session = _session;
-            if (session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return Array.Empty<ChatMessage>();
+            if (session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return [];
             return provider.GetMessages(session);
         }
     }

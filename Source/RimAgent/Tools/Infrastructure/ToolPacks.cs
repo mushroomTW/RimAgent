@@ -25,8 +25,8 @@ internal static class ToolPacks
     }
 
     /// <summary>包的順序即系統提示索引的順序。</summary>
-    public static readonly IReadOnlyList<Pack> All = new[]
-    {
+    public static readonly IReadOnlyList<Pack> All =
+    [
         new Pack("combat", "draft colonists, move them, attack and force jobs"),
         new Pack("medical", "injuries, diseases and health conditions (get_health), medical care levels and surgery"),
         new Pack("zone", "stockpiles and growing zones, storage filters"),
@@ -36,7 +36,7 @@ internal static class ToolPacks
         new Pack("prisoner", "prisoners: interaction mode and release"),
         new Pack("memory_edit", "write, edit and delete memory files (reading is always available)"),
         new Pack("mcp", "list and call tools on configured MCP servers")
-    };
+    ];
 
     private static readonly Dictionary<ToolCategory, string> ByCategory = new()
     {

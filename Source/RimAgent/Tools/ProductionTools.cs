@@ -128,7 +128,7 @@ public sealed class ProductionTools
             input,
             tables,
             t => t.Id,
-            t => new[] { t.Label },
+            t => [t.Label],
             t => $"[{t.Id}] {t.Label}",
             "work table",
             "Error: work table is empty. Give an id from list_bills.");

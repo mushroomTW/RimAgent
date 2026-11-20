@@ -144,12 +144,12 @@ public sealed class AutoTimeSpeed
         if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || answer == null) return Fast;
         double confidence = answer.Confidence ?? answer.Probability ?? 0d;
         if (confidence < MinConfidence) return Fast;
-        switch ((answer.Value ?? string.Empty).Trim().ToLowerInvariant())
+        return (answer.Value ?? string.Empty).Trim().ToLowerInvariant() switch
         {
-            case "normal": return Normal;
-            case "superfast": return Superfast;
-            default: return Fast;
-        }
+            "normal" => Normal,
+            "superfast" => Superfast,
+            _ => Fast,
+        };
     }
 
     private static bool Same(string a, string b)

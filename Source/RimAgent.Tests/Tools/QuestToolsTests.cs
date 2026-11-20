@@ -16,7 +16,7 @@ public class QuestToolsTests
     private static readonly string[] _goodwillOutlanders = ["Goodwill +10 with Outlanders"];
     private static readonly string[] _requiresCount = ["Requires a colonist with the title Count"];
     private static readonly string[] _endsIn3Days = ["Ends in 3 days"];
-    private static readonly QuestRewardInfo _rewardFavorPlus4 = new() { Number = 1, Rewards = new[] { "Favor +4" }, RequiresAccepter = true };
+    private static readonly QuestRewardInfo _rewardFavorPlus4 = new() { Number = 1, Rewards = ["Favor +4"], RequiresAccepter = true };
     private static readonly QuestRewardInfo[] _rewardOptionsFavorPlus4 = [_rewardFavorPlus4];
     private static readonly QuestAccepterInfo _accepterAli = new() { Id = 101, Name = "Ali", FullName = "Alice Smith" };
     private static readonly QuestAccepterInfo _accepterBob = new() { Id = 102, Name = "Bob", FullName = "Bob Jones", Warning = "Bob is conceited." };
@@ -31,11 +31,11 @@ public class QuestToolsTests
             Name = "Hospitality request",
             Description = "A group asks to stay for a while.",
             ExpiresInTicks = 150000,
-            RewardOptions = new[]
-            {
+            RewardOptions =
+            [
                 new QuestRewardInfo { Number = 1, Rewards = _silverX300 },
                 new QuestRewardInfo { Number = 2, Rewards = _goodwillOutlanders }
-            }
+            ]
         });
         _world.Quests.Add(new QuestInfo
         {
@@ -138,7 +138,7 @@ public class QuestToolsTests
     [Test]
     public void AcceptWithSingleRewardChoiceNeedsNoNumber()
     {
-        _world.Quests[0].RewardOptions = new[] { new QuestRewardInfo { Number = 1, Rewards = new[] { "Silver x300" } } };
+        _world.Quests[0].RewardOptions = [new QuestRewardInfo { Number = 1, Rewards = ["Silver x300"] }];
 
         Assert.That(_tools.AcceptQuest(7), Does.StartWith("Accepted quest").And.Contain("for reward 1"));
         Assert.That(_world.Calls, Is.EqualTo(["AcceptQuest(7,1,0)"]));
@@ -156,7 +156,7 @@ public class QuestToolsTests
     [Test]
     public void AcceptRefusesWithoutAGameReasonStillExplains()
     {
-        _world.Quests[1].UnmetRequirements = Array.Empty<string>();
+        _world.Quests[1].UnmetRequirements = [];
 
         Assert.That(_tools.AcceptQuest(9), Does.StartWith("Error:").And.Contain("does not allow accepting"));
     }
@@ -221,7 +221,7 @@ public class QuestToolsTests
     [Test]
     public void AcceptWithNoEligibleColonistIsRefused()
     {
-        _world.Quests[3].Accepters = Array.Empty<QuestAccepterInfo>();
+        _world.Quests[3].Accepters = [];
 
         Assert.That(_tools.AcceptQuest(12), Does.StartWith("Error:").And.Contain("no colonist can accept"));
         Assert.That(_world.Calls, Is.Empty);

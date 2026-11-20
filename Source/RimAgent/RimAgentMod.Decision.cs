@@ -143,26 +143,14 @@ public partial class RimAgentMod
             DecisionModelTester.Start();
         }
         TooltipHandler.TipRegion(buttonRect, "RimAgent.Settings.DecisionTestTip".Translate());
-
-        string result;
-        switch (DecisionModelTester.Outcome)
+        string result = DecisionModelTester.Outcome switch
         {
-            case DecisionModelTester.TestOutcome.Ok:
-                result = "RimAgent.Settings.DecisionTestOk".Translate(DecisionModelTester.Detail);
-                break;
-            case DecisionModelTester.TestOutcome.Unavailable:
-                result = "RimAgent.Settings.DecisionTestUnavailable".Translate();
-                break;
-            case DecisionModelTester.TestOutcome.NoAnswer:
-                result = "RimAgent.Settings.DecisionTestNoAnswer".Translate();
-                break;
-            case DecisionModelTester.TestOutcome.Failed:
-                result = "RimAgent.Settings.DecisionTestFailed".Translate(DecisionModelTester.Detail);
-                break;
-            default:
-                result = string.Empty;
-                break;
-        }
+            DecisionModelTester.TestOutcome.Ok => (string)"RimAgent.Settings.DecisionTestOk".Translate(DecisionModelTester.Detail),
+            DecisionModelTester.TestOutcome.Unavailable => (string)"RimAgent.Settings.DecisionTestUnavailable".Translate(),
+            DecisionModelTester.TestOutcome.NoAnswer => (string)"RimAgent.Settings.DecisionTestNoAnswer".Translate(),
+            DecisionModelTester.TestOutcome.Failed => (string)"RimAgent.Settings.DecisionTestFailed".Translate(DecisionModelTester.Detail),
+            _ => string.Empty,
+        };
         var resultRect = new Rect(buttonRect.xMax + 8f, row.y + 3f, row.xMax - buttonRect.xMax - 8f, 24f);
         Text.WordWrap = false;
         Widgets.Label(resultRect, result.Truncate(resultRect.width));

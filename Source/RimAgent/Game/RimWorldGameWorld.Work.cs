@@ -29,7 +29,7 @@ internal sealed partial class RimWorldGameWorld
     public IReadOnlyList<BillInfo> GetBills(int tableId)
     {
         IBillGiver giver = FindBillGiver(tableId);
-        if (giver == null) return Array.Empty<BillInfo>();
+        if (giver == null) return [];
         var bills = new List<BillInfo>();
         for (int i = 0; i < giver.BillStack.Bills.Count; i++)
         {
@@ -54,7 +54,7 @@ internal sealed partial class RimWorldGameWorld
     /// </summary>
     public IReadOnlyList<DefInfo> GetTableRecipes(int tableId)
     {
-        if (FindBillGiver(tableId) is not Thing table) return Array.Empty<DefInfo>();
+        if (FindBillGiver(tableId) is not Thing table) return [];
         // 屠宰、火化、熔煉等配方沒有單一產物，改用配方名稱，否則這類工作單無法新增。
         return table.def.AllRecipes
             .Where(r => r.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass))

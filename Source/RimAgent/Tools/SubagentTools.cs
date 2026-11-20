@@ -59,7 +59,7 @@ public sealed class SubagentTools
         _registry = registry;
         ArgumentNullException.ThrowIfNull(transcript);
         _transcript = transcript;
-        _subagents = subagents ?? (() => Array.Empty<AgentSubagent>());
+        _subagents = subagents ?? (() => []);
         _permissions = permissions ?? throw new ArgumentNullException(nameof(permissions));
         _model = model;
         _reasoning = reasoning;
@@ -76,7 +76,7 @@ public sealed class SubagentTools
     public AIFunction Function { get; }
 
     /// <summary>目前載入的子代理；沒有就不必把委派工具交給模型。</summary>
-    public IReadOnlyList<AgentSubagent> Subagents => _subagents() ?? Array.Empty<AgentSubagent>();
+    public IReadOnlyList<AgentSubagent> Subagents => _subagents() ?? [];
 
     /// <summary>在目前權限下至少拿得到一個工具的子代理；拿不到工具的不必列給模型，免得白白委派一次。</summary>
     public IReadOnlyList<AgentSubagent> Available(ToolPermissions permissions)

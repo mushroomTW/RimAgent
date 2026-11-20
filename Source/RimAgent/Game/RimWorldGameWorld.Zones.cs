@@ -199,8 +199,8 @@ internal sealed partial class RimWorldGameWorld
         Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
         if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
         if (zone is not Zone_Stockpile stockpile) return CommandResult.Fail($"{zone.label} is not a stockpile and has no storage filter");
-        List<string> allows = [.. (allowDefNames ?? Array.Empty<string>())];
-        List<string> disallows = [.. (disallowDefNames ?? Array.Empty<string>())];
+        List<string> allows = [.. (allowDefNames ?? [])];
+        List<string> disallows = [.. (disallowDefNames ?? [])];
         if (allows.Count == 0 && disallows.Count == 0) return CommandResult.Fail("nothing to allow or disallow");
         var applied = new List<ThingDef>();
         var removed = new List<ThingDef>();

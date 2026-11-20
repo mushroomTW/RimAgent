@@ -21,8 +21,8 @@ internal sealed partial class FakeGameWorld
         ColonistInfo negotiator = Colonists.FirstOrDefault(c => c.Id == request.NegotiatorPawnId);
         if (negotiator == null) return CommandResult.Fail("negotiator not found");
         if (negotiator.Downed) return CommandResult.Fail($"{negotiator.Name} is downed and cannot negotiate.");
-        var buys = request.Buys ?? Array.Empty<TradeLine>();
-        var sells = request.Sells ?? Array.Empty<TradeLine>();
+        var buys = request.Buys ?? [];
+        var sells = request.Sells ?? [];
         if (buys.Count == 0 && sells.Count == 0) return CommandResult.Fail("nothing to buy or sell.");
 
         foreach (TradeLine line in buys.Concat(sells))

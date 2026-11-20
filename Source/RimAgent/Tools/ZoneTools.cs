@@ -155,7 +155,7 @@ public sealed class ZoneTools
             input,
             zones,
             z => z.Id,
-            z => new[] { z.Label },
+            z => [z.Label],
             z => $"[{z.Id}] {z.Label}",
             "zone");
     }

@@ -31,9 +31,9 @@ public sealed class TradeRequest
     /// <summary>交涉者 pawnId（工具層已解析；未指名時填社交技能最高者）。</summary>
     public int NegotiatorPawnId { get; set; }
     /// <summary>向商人買入的品項。</summary>
-    public IReadOnlyList<TradeLine> Buys { get; set; } = Array.Empty<TradeLine>();
+    public IReadOnlyList<TradeLine> Buys { get; set; } = [];
     /// <summary>賣給商人的品項。</summary>
-    public IReadOnlyList<TradeLine> Sells { get; set; } = Array.Empty<TradeLine>();
+    public IReadOnlyList<TradeLine> Sells { get; set; } = [];
 }
 
 /// <summary>
@@ -56,7 +56,7 @@ public sealed class TraderInfo
     public string Faction { get; set; } = string.Empty;
     /// <summary>商人持有的銀兩（買入時殖民地能拿到的上限參考）。</summary>
     public int Silver { get; set; }
-    public IReadOnlyList<TradeGoodsInfo> Goods { get; set; } = Array.Empty<TradeGoodsInfo>();
+    public IReadOnlyList<TradeGoodsInfo> Goods { get; set; } = [];
 }
 
 /// <summary>
@@ -65,9 +65,9 @@ public sealed class TraderInfo
 /// </summary>
 public sealed class CaravanRequest
 {
-    public IReadOnlyList<int> PawnIds { get; set; } = Array.Empty<int>();
+    public IReadOnlyList<int> PawnIds { get; set; } = [];
     /// <summary>從殖民地倉儲與家園區帶走的物品。</summary>
-    public IReadOnlyList<TradeLine> Cargo { get; set; } = Array.Empty<TradeLine>();
+    public IReadOnlyList<TradeLine> Cargo { get; set; } = [];
     /// <summary>目的地格（地表層的格子編號）；-1 代表沒選。原版組隊要求選好路線才送得出去，規劃可以不選。</summary>
     public int DestinationTile { get; set; } = -1;
 }
@@ -99,8 +99,8 @@ public sealed class CaravanPlanInfo
 {
     /// <summary>請求本身有問題（成員或貨物對不到）；有值時其他欄位無意義。</summary>
     public string Error { get; set; } = string.Empty;
-    public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = Array.Empty<CaravanMemberInfo>();
-    public IReadOnlyList<CaravanPlanCargo> Cargo { get; set; } = Array.Empty<CaravanPlanCargo>();
+    public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = [];
+    public IReadOnlyList<CaravanPlanCargo> Cargo { get; set; } = [];
     /// <summary>貨物與成員隨身物品的總重（不含成員自己的體重，與原版視窗一致）。</summary>
     public float MassUsage { get; set; }
     public float MassCapacity { get; set; }
@@ -123,9 +123,9 @@ public sealed class CaravanPlanInfo
     public int EtaTicks { get; set; }
     public bool DestinationReachable { get; set; }
     /// <summary>組隊視窗按「送出」會拒絕的原因（遊戲自己的訊息）；空表示送得出去。</summary>
-    public IReadOnlyList<string> Blockers { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Blockers { get; set; } = [];
     /// <summary>組隊視窗會彈出「確定嗎」確認框的警告；不擋，但值得看。</summary>
-    public IReadOnlyList<string> Warnings { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Warnings { get; set; } = [];
 }
 
 /// <summary>一支正在集結、還沒離開地圖的商隊（LordJob_FormAndSendCaravan）。</summary>
@@ -135,9 +135,9 @@ public sealed class FormingCaravanInfo
     public int Id { get; set; }
     /// <summary>遊戲顯示的階段（集結動物、搬運物品、等待、離開…）。</summary>
     public string Status { get; set; } = string.Empty;
-    public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = Array.Empty<CaravanMemberInfo>();
+    public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = [];
     /// <summary>要帶走的貨物，每項「名稱 x數量」。</summary>
-    public IReadOnlyList<string> Cargo { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Cargo { get; set; } = [];
     public int ExitX { get; set; }
     public int ExitZ { get; set; }
 }
@@ -171,7 +171,7 @@ public sealed class CaravanInfo
     public int Tile { get; set; }
     /// <summary>所在格的生態與地形白話描述。</summary>
     public string Terrain { get; set; } = string.Empty;
-    public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = Array.Empty<CaravanMemberInfo>();
+    public IReadOnlyList<CaravanMemberInfo> Members { get; set; } = [];
     /// <summary>有目的地在走（含暫停中）。</summary>
     public bool Moving { get; set; }
     public bool Paused { get; set; }
@@ -200,7 +200,7 @@ public sealed class CaravanInfo
     public bool CanCamp { get; set; }
     public string CampBlockedReason { get; set; } = string.Empty;
     /// <summary>同一格上的其他世界物件，格式「標籤 [id]」。</summary>
-    public IReadOnlyList<string> ObjectsHere { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> ObjectsHere { get; set; } = [];
 }
 
 /// <summary>任務與世界物件的關聯（任務的目標清單裡有該物件）。</summary>
@@ -241,7 +241,7 @@ public sealed class WorldObjectInfo
     public float DistanceTiles { get; set; }
     /// <summary>還剩幾 tick 消失（任務地點的期限）；沒有期限為 -1。</summary>
     public int ExpiresInTicks { get; set; } = -1;
-    public IReadOnlyList<WorldObjectQuestLink> Quests { get; set; } = Array.Empty<WorldObjectQuestLink>();
+    public IReadOnlyList<WorldObjectQuestLink> Quests { get; set; } = [];
 }
 
 /// <summary>世界物件清單與量距離的起點。</summary>
@@ -252,7 +252,7 @@ public sealed class WorldSurveyInfo
     public string OriginLabel { get; set; } = string.Empty;
     /// <summary>起點是商隊（行程時間用該商隊的速度）；false 則是當前地圖，時間以預設速度估算。</summary>
     public bool OriginIsCaravan { get; set; }
-    public IReadOnlyList<WorldObjectInfo> Objects { get; set; } = Array.Empty<WorldObjectInfo>();
+    public IReadOnlyList<WorldObjectInfo> Objects { get; set; } = [];
 }
 
 /// <summary>從起點走到某一格的行程估算（遊戲的 CaravanArrivalTimeEstimator，含夜間休息與道路）。</summary>
@@ -287,11 +287,11 @@ public sealed class WorldTileInfo
     /// <summary>世界地貌名稱（山脈、海灣…）；沒有為空。</summary>
     public string Feature { get; set; } = string.Empty;
     public string Landmark { get; set; } = string.Empty;
-    public IReadOnlyList<string> Mutators { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Mutators { get; set; } = [];
     /// <summary>這格目前能不能建立新殖民地（含玩家殖民地數量上限）。</summary>
     public bool CanSettle { get; set; }
     public string SettleBlockedReason { get; set; } = string.Empty;
-    public IReadOnlyList<WorldObjectInfo> Objects { get; set; } = Array.Empty<WorldObjectInfo>();
+    public IReadOnlyList<WorldObjectInfo> Objects { get; set; } = [];
 }
 
 /// <summary>某支商隊對某一格能下的命令，照原版右鍵選單（FloatMenuMakerWorld.ChoicesAtFor）產生。</summary>
@@ -301,7 +301,7 @@ public sealed class CaravanOptionsInfo
     public string Error { get; set; } = string.Empty;
     public string CaravanName { get; set; } = string.Empty;
     /// <summary>1 起的序號與標籤；停用的選項原因寫在標籤裡。第 1 項固定是單純前往（沒有抵達動作）。</summary>
-    public IReadOnlyList<FloatMenuOptionInfo> Options { get; set; } = Array.Empty<FloatMenuOptionInfo>();
+    public IReadOnlyList<FloatMenuOptionInfo> Options { get; set; } = [];
 }
 
 /// <summary>商隊的行進控制。</summary>

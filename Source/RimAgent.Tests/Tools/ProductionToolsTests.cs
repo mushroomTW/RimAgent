@@ -73,8 +73,8 @@ public class ProductionToolsTests
     public void RecipeIsResolvedAmongTheTablesOwnRecipes()
     {
         // 模組包常讓不同工作台各有一個產出同物品的配方；只看這張台能做的，不因別台的同名配方歧義。
-        _world.TableRecipes[501] = new[] { new DefInfo("MakeComponent", "component") };
-        _world.TableRecipes[502] = new[] { new DefInfo("ModX_MakeComponent", "component") };
+        _world.TableRecipes[501] = [new DefInfo("MakeComponent", "component")];
+        _world.TableRecipes[502] = [new DefInfo("ModX_MakeComponent", "component")];
 
         string text = _tools.AddBill("502", "component", 2);
 
@@ -85,7 +85,7 @@ public class ProductionToolsTests
     [Test]
     public void RecipeTheTableCannotMakeIsRejectedWithItsName()
     {
-        _world.TableRecipes[502] = new[] { new DefInfo("ButcherCreature", "butcher creature") };
+        _world.TableRecipes[502] = [new DefInfo("ButcherCreature", "butcher creature")];
 
         Assert.That(_tools.AddBill("502", "component", 1), Does.StartWith("Error:").And.Contain("Butcher table"));
     }

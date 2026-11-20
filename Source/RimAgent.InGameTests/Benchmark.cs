@@ -505,7 +505,7 @@ public sealed class BenchmarkComponent : GameComponent
 
     private static bool IsAttackingEnemy(Pawn pawn)
     {
-        IEnumerable<Verse.AI.Job> jobs = new[] { pawn.CurJob }.Concat(pawn.jobs?.jobQueue?.Select(q => q.job) ?? Enumerable.Empty<Verse.AI.Job>());
+        IEnumerable<Verse.AI.Job> jobs = new[] { pawn.CurJob }.Concat(pawn.jobs?.jobQueue?.Select(q => q.job) ?? []);
         return jobs.Any(j => j?.targetA.Thing is Pawn target && _enemies.Contains(target));
     }
 

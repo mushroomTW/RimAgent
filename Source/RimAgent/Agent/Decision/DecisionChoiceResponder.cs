@@ -58,12 +58,12 @@ public sealed class DecisionChoiceResponder
         CancellationToken cancellationToken = default)
     {
         List<PendingChoiceInfo> answerable = choices?.Where(CanAnswer).ToList() ?? [];
-        if (answerable.Count == 0) return Array.Empty<ChoiceDecision>();
+        if (answerable.Count == 0) return [];
 
         IDecisionService service = _decisionService ?? ResolveService();
-        if (service == null) return Array.Empty<ChoiceDecision>();
+        if (service == null) return [];
         string criteria = _criteriaProvider?.Invoke();
-        if (string.IsNullOrWhiteSpace(criteria)) return Array.Empty<ChoiceDecision>();
+        if (string.IsNullOrWhiteSpace(criteria)) return [];
 
         var questions = new List<DecisionQuestion>();
         foreach (PendingChoiceInfo choice in answerable)
@@ -89,7 +89,7 @@ public sealed class DecisionChoiceResponder
         catch (Exception ex)
         {
             DecisionDiagnostics.Warn(nameof(DecisionChoiceResponder), ex);
-            return Array.Empty<ChoiceDecision>();
+            return [];
         }
 
         var decisions = new List<ChoiceDecision>();

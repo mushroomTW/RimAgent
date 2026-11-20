@@ -1,0 +1,7 @@
+# 儲存庫內一律存 LF，簽出到工作目錄時轉成 CRLF，與 .editorconfig 的 end_of_line = crlf 一致。
+# 規則跟著儲存庫走，不依賴各人的 core.autocrlf 設定。
+* text=auto eol=crlf
+
+# 明確標示二進位檔，避免被誤判為文字而轉換行尾
+*.dll binary
+*.png binary

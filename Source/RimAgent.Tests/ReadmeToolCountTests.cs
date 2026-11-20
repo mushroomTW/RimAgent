@@ -14,7 +14,7 @@ public class ReadmeToolCountTests
     {
         // 正式環境一定帶技能提供者（無技能時 read_skill 回「未安裝」），文件數量以此為準。
         int count = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null,
-            skills: () => new[] { new AgentSkill { Name = "dummy", Description = "dummy", Body = "dummy" } }).Descriptors.Count;
+            skills: () => [new AgentSkill { Name = "dummy", Description = "dummy", Body = "dummy" }]).Descriptors.Count;
         string readme = File.ReadAllText(Path.Combine(FindRepositoryRoot(), fileName));
 
         Assert.That(readme, Does.Contain(count + " " + unit), fileName + " 的工具數應為 " + count);

@@ -115,6 +115,6 @@ public sealed class SurgeryBillInfo
 public sealed class ColonistHealthInfo
 {
     public int PawnId { get; set; }
-    public IReadOnlyList<HealthConditionInfo> Conditions { get; set; } = Array.Empty<HealthConditionInfo>();
-    public IReadOnlyList<SurgeryBillInfo> PendingSurgeries { get; set; } = Array.Empty<SurgeryBillInfo>();
+    public IReadOnlyList<HealthConditionInfo> Conditions { get; set; } = [];
+    public IReadOnlyList<SurgeryBillInfo> PendingSurgeries { get; set; } = [];
 }

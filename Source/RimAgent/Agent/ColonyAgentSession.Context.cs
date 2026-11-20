@@ -83,7 +83,7 @@ public sealed partial class ColonyAgentSession
         if (selected.Packs.Count > 0) tools.Add(_toolPackLoader);
         IReadOnlyList<AgentSubagent> subagents = permissions.Allows(ToolCategory.Agents)
             ? _subagents.Available(permissions)
-            : Array.Empty<AgentSubagent>();
+            : [];
         if (subagents.Count > 0) tools.Add(_subagents.Function);
 
         string core = null;

@@ -19,17 +19,13 @@ public partial class Window_Agent
     private static string ActivityText(AgentActivity activity)
     {
         if (activity == null) return "RimAgent.Working".Translate().ToString();
-        switch (activity.Kind)
+        return activity.Kind switch
         {
-            case AgentActivityKind.Tool:
-                return "RimAgent.Activity.Tool".Translate(activity.ToolName).ToString();
-            case AgentActivityKind.Checking:
-                return "RimAgent.Activity.Checking".Translate(activity.ToolName).ToString();
-            case AgentActivityKind.Compacting:
-                return "RimAgent.Activity.Compacting".Translate().ToString();
-            default:
-                return "RimAgent.Activity.Thinking".Translate().ToString();
-        }
+            AgentActivityKind.Tool => "RimAgent.Activity.Tool".Translate(activity.ToolName).ToString(),
+            AgentActivityKind.Checking => "RimAgent.Activity.Checking".Translate(activity.ToolName).ToString(),
+            AgentActivityKind.Compacting => "RimAgent.Activity.Compacting".Translate().ToString(),
+            _ => "RimAgent.Activity.Thinking".Translate().ToString(),
+        };
     }
 
     private static int WorkingPhase()
@@ -41,12 +37,12 @@ public partial class Window_Agent
     /// <summary>執行中動畫：. → .. → ... 循環，每 0.5 秒換一格。</summary>
     private static string WorkingDots(int phase)
     {
-        switch (phase)
+        return phase switch
         {
-            case 1: return "..";
-            case 2: return "...";
-            default: return ".";
-        }
+            1 => "..",
+            2 => "...",
+            _ => ".",
+        };
     }
 
     private void RebuildLines(IReadOnlyList<TranscriptEntry> entries, float width)
@@ -380,14 +376,14 @@ public partial class Window_Agent
 
     private static string RiskLabel(string risk)
     {
-        switch (risk)
+        return risk switch
         {
-            case "low": return "RimAgent.Risk.Low".Translate();
-            case "high": return "RimAgent.Risk.High".Translate();
-            case "unrequested": return "RimAgent.Risk.Unrequested".Translate();
-            case "unavailable": return "RimAgent.Risk.Unavailable".Translate();
-            default: return EscapeRichText(risk);
-        }
+            "low" => (string)"RimAgent.Risk.Low".Translate(),
+            "high" => (string)"RimAgent.Risk.High".Translate(),
+            "unrequested" => (string)"RimAgent.Risk.Unrequested".Translate(),
+            "unavailable" => (string)"RimAgent.Risk.Unavailable".Translate(),
+            _ => EscapeRichText(risk),
+        };
     }
 
     private static string EscapeRichText(string value)
@@ -397,14 +393,14 @@ public partial class Window_Agent
 
     private static string DescribeError(TranscriptEntry entry)
     {
-        switch (entry.ErrorKind)
+        return entry.ErrorKind switch
         {
-            case AgentErrorKind.Cancelled: return "RimAgent.Error.Cancelled".Translate();
-            case AgentErrorKind.Configuration: return "RimAgent.Error.Configuration".Translate(entry.Text);
-            case AgentErrorKind.Transient: return "RimAgent.Error.Transient".Translate(entry.Text);
-            case AgentErrorKind.ContextTooLong: return "RimAgent.Error.ContextTooLong".Translate();
-            default: return "RimAgent.Error.Unknown".Translate(entry.Text);
-        }
+            AgentErrorKind.Cancelled => (string)"RimAgent.Error.Cancelled".Translate(),
+            AgentErrorKind.Configuration => (string)"RimAgent.Error.Configuration".Translate(entry.Text),
+            AgentErrorKind.Transient => (string)"RimAgent.Error.Transient".Translate(entry.Text),
+            AgentErrorKind.ContextTooLong => (string)"RimAgent.Error.ContextTooLong".Translate(),
+            _ => (string)"RimAgent.Error.Unknown".Translate(entry.Text),
+        };
     }
 
     private static bool? _markdownAvailable;

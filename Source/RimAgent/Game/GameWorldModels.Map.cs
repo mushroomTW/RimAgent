@@ -43,7 +43,7 @@ public sealed class ThingInfo
     /// <summary>殖民者是否被禁止碰它（禁用的物品不會被搬運或使用）。</summary>
     public bool Forbidden { get; set; }
     /// <summary>目前掛在這個物件（或其所在格）上的標記 defName。</summary>
-    public IReadOnlyList<string> Designations { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Designations { get; set; } = [];
 }
 
 /// <summary>
@@ -170,7 +170,7 @@ public sealed class CellInfo
     public ZoneInfo Zone { get; set; }
     /// <summary>null 代表格子被牆或岩石填滿，不屬於任何房間。</summary>
     public RoomInfo Room { get; set; }
-    public IReadOnlyList<ThingInfo> Things { get; set; } = Array.Empty<ThingInfo>();
+    public IReadOnlyList<ThingInfo> Things { get; set; } = [];
 }
 
 /// <summary>
@@ -203,20 +203,20 @@ public sealed class MapSurvey
     public int Width { get; set; }
     public int Height { get; set; }
     public string Biome { get; set; } = string.Empty;
-    public SurveyCell[] Cells { get; set; } = Array.Empty<SurveyCell>();
+    public SurveyCell[] Cells { get; set; } = [];
     /// <summary>每格的礦脈：0 為無，n 代表 <see cref="ResourceLabels"/>[n - 1]。</summary>
-    public short[] Resource { get; set; } = Array.Empty<short>();
-    public IReadOnlyList<string> ResourceLabels { get; set; } = Array.Empty<string>();
+    public short[] Resource { get; set; } = [];
+    public IReadOnlyList<string> ResourceLabels { get; set; } = [];
     /// <summary>每格是否在厚岩頂（山體）下；迷霧格一律 false。</summary>
-    public bool[] ThickRoof { get; set; } = Array.Empty<bool>();
+    public bool[] ThickRoof { get; set; } = [];
     /// <summary>室內房間（不含室外與碰到地圖邊緣的）。</summary>
-    public IReadOnlyList<RoomInfo> Rooms { get; set; } = Array.Empty<RoomInfo>();
-    public IReadOnlyList<ZoneInfo> Zones { get; set; } = Array.Empty<ZoneInfo>();
+    public IReadOnlyList<RoomInfo> Rooms { get; set; } = [];
+    public IReadOnlyList<ZoneInfo> Zones { get; set; } = [];
     /// <summary>家園區的範圍；沒有家園區時為 null。</summary>
     public CellRectSpec? HomeArea { get; set; }
     public int HomeAreaCells { get; set; }
     /// <summary>已出生在地圖上的自由殖民者位置。</summary>
-    public IReadOnlyList<(int X, int Z)> Colonists { get; set; } = Array.Empty<(int X, int Z)>();
+    public IReadOnlyList<(int X, int Z)> Colonists { get; set; } = [];
     /// <summary>不在迷霧中、未倒地的敵對 pawn 位置。</summary>
-    public IReadOnlyList<(int X, int Z)> Hostiles { get; set; } = Array.Empty<(int X, int Z)>();
+    public IReadOnlyList<(int X, int Z)> Hostiles { get; set; } = [];
 }

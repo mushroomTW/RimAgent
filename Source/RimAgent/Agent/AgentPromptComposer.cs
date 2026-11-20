@@ -46,7 +46,7 @@ public static class AgentPromptComposer
     /// </summary>
     public static string FormatExpansions(IReadOnlyList<(string Name, bool IsCore, bool IsActive)> expansions)
     {
-        var dlcs = (expansions ?? Array.Empty<(string Name, bool IsCore, bool IsActive)>()).Where(e => !e.IsCore).ToList();
+        var dlcs = (expansions ?? []).Where(e => !e.IsCore).ToList();
         List<string> active = [.. dlcs.Where(e => e.IsActive).Select(e => e.Name)];
         List<string> inactive = [.. dlcs.Where(e => !e.IsActive).Select(e => e.Name)];
         string line = "Game expansions active: " +

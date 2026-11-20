@@ -58,12 +58,12 @@ internal sealed partial class RimWorldGameWorld
     /// </summary>
     private static IEnumerable<Thing> CandidateThings(Map map, ThingKind kind)
     {
-        switch (kind)
+        return kind switch
         {
-            case ThingKind.Pawn: return map.mapPawns.AllPawnsSpawned;
-            case ThingKind.Plant: return map.listerThings.ThingsInGroup(ThingRequestGroup.Plant);
-            default: return map.listerThings.AllThings;
-        }
+            ThingKind.Pawn => map.mapPawns.AllPawnsSpawned,
+            ThingKind.Plant => map.listerThings.ThingsInGroup(ThingRequestGroup.Plant),
+            _ => map.listerThings.AllThings,
+        };
     }
 
     private static bool MatchesLabel(Thing t, string needle)

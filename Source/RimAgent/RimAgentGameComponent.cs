@@ -58,7 +58,7 @@ public partial class RimAgentGameComponent : GameComponent
     private ScopedMemoryStore _scopedMemory;
     private AgentPack _pack;
     /// <summary>目前載入的技能；輸入列用 $ 補全技能名稱。擴充包還沒載入時為空。</summary>
-    public IReadOnlyList<AgentSkill> Skills => (_pack ??= AgentPackLoader.Load(PackRoot))?.Skills ?? System.Array.Empty<AgentSkill>();
+    public IReadOnlyList<AgentSkill> Skills => (_pack ??= AgentPackLoader.Load(PackRoot))?.Skills ?? [];
     /// <summary>DLC 啟用狀況；模組清單要重開遊戲才會變，建立會話時在主線程算一次。</summary>
     private string _expansions;
     private McpManager _mcp;

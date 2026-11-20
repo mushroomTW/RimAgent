@@ -74,7 +74,7 @@ public class BuildToolsTests
     [Test]
     public void MineFilteredByNameSkipsAlreadyMarked()
     {
-        _world.Things[0].Designations = new[] { "Mine" };
+        _world.Things[0].Designations = ["Mine"];
         string text = _tools.DesignateArea("mine", false, 0, 0, 10, 10, "steel");
         Assert.That(text, Is.EqualTo("Marked 1 for mining, 1 already marked."));
         Assert.That(_world.Calls, Is.EqualTo(["AddDesignationOnCell(6,5,Mine)"]));
@@ -130,8 +130,8 @@ public class BuildToolsTests
     [Test]
     public void CancelRemovesOnlyExistingMarks()
     {
-        _world.Things[0].Designations = new[] { "Mine" };
-        _world.Things[4].Designations = new[] { "HarvestPlant" };
+        _world.Things[0].Designations = ["Mine"];
+        _world.Things[4].Designations = ["HarvestPlant"];
         string text = _tools.CancelDesignation("mine", false, 0, 0, 10, 10);
         Assert.That(text, Is.EqualTo("Removed 1 mining mark(s)."));
         Assert.That(_world.Things[0].Designations, Is.Empty);
@@ -178,7 +178,7 @@ public class BuildToolsTests
     {
         string text = _tools.PlaceBlueprint("wall", "fill", 4, 3, 2, 2, 0, "");
         Assert.That(text, Does.StartWith("Placed 6 wall blueprint(s) from (4,3) to (2,2) (fill)."));
-        Assert.That(_world.Blueprints.Select(b => (b.X, b.Z)), Is.EquivalentTo(new[] { (2, 2), (3, 2), (4, 2), (2, 3), (3, 3), (4, 3) }));
+        Assert.That(_world.Blueprints.Select(b => (b.X, b.Z)), Is.EquivalentTo([(2, 2), (3, 2), (4, 2), (2, 3), (3, 3), (4, 3)]));
     }
 
     [Test]
@@ -356,24 +356,24 @@ public class BuildToolsTests
     [Test]
     public void AmbiguousStuffIsAnError()
     {
-        _world.Stuffs = new[] { new DefInfo("WoodLog", "wood"), new DefInfo("WoodPlanks", "wooden planks") };
+        _world.Stuffs = [new DefInfo("WoodLog", "wood"), new DefInfo("WoodPlanks", "wooden planks")];
         Assert.That(_tools.PlaceBlueprint("wall", "single", 3, 3, 3, 3, 0, "woo"), Does.StartWith("Error:").And.Contain("WoodLog").And.Contain("WoodPlanks"));
     }
 
     private void AddShipParts()
     {
-        _world.Buildables = _world.Buildables.Concat(new[] { new DefInfo("Ship_Reactor", "ship reactor"), new DefInfo("Ship_SensorCluster", "ship sensor cluster") }).ToList();
+        _world.Buildables = _world.Buildables.Concat([new DefInfo("Ship_Reactor", "ship reactor"), new DefInfo("Ship_SensorCluster", "ship sensor cluster")]).ToList();
         _world.BuildingInfos["Ship_Reactor"] = new BuildingInfo
         {
             DefName = "Ship_Reactor",
             Label = "ship reactor",
             Width = 6,
             Height = 7,
-            Costs = new[] { new BuildingCost { Label = "steel", Count = 350 }, new BuildingCost { Label = "plasteel", Count = 280 } },
+            Costs = [new BuildingCost { Label = "steel", Count = 350 }, new BuildingCost { Label = "plasteel", Count = 280 }],
             TerrainAffordance = "Heavy",
-            Research = new[] { new BuildingResearch { Label = "ship reactor", Done = false } },
+            Research = [new BuildingResearch { Label = "ship reactor", Done = false }],
             ConstructionSkill = 8,
-            PlaceWorkers = new[] { "PlaceWorker_NotUnderRoof" },
+            PlaceWorkers = ["PlaceWorker_NotUnderRoof"],
             ShipPart = true,
             PowerWatts = -1000f
         };
@@ -490,14 +490,14 @@ public class BuildToolsTests
             Label = "bed",
             Width = 1,
             Height = 2,
-            Costs = new[] { new BuildingCost { Label = "cloth", Count = 5 } },
+            Costs = [new BuildingCost { Label = "cloth", Count = 5 }],
             StuffCount = 40,
-            StuffCategories = new[] { "metallic", "woody" },
+            StuffCategories = ["metallic", "woody"],
             AffordanceFromStuff = true,
             TerrainAffordance = "Light",
-            PlaceWorkers = new[] { "PlaceWorker_Heater", "Placeworker_AttachedToWall" },
+            PlaceWorkers = ["PlaceWorker_Heater", "Placeworker_AttachedToWall"],
             PowerWatts = 120f,
-            InteractionOffsets = new[] { (0, -1) }
+            InteractionOffsets = [(0, -1)]
         };
 
         string text = LookupBuilding("Bed");

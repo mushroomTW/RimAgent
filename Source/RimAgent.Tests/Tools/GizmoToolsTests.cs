@@ -134,7 +134,7 @@ public class GizmoToolsTests
         {
             Id = "dialog-9",
             Text = "Starting the reactor will attract raids for 15 days.",
-            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Confirm" }, new ChoiceOptionInfo { Number = 2, Text = "Go back" } }
+            Options = [new ChoiceOptionInfo { Number = 1, Text = "Confirm" }, new ChoiceOptionInfo { Number = 2, Text = "Go back" }]
         };
 
         string text = _tools.UseGizmo(40, "2");

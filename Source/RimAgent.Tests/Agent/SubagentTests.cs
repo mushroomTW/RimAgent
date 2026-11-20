@@ -23,7 +23,7 @@ public class SubagentTests
     {
         Name = "scout",
         Description = "look around",
-        Categories = new[] { ToolCategory.Observe, ToolCategory.Work },
+        Categories = [ToolCategory.Observe, ToolCategory.Work],
         ReadOnly = true,
         Body = "SCOUT BODY"
     };
@@ -32,7 +32,7 @@ public class SubagentTests
     {
         Name = "steward",
         Description = "assign work",
-        Categories = new[] { ToolCategory.Observe, ToolCategory.Work },
+        Categories = [ToolCategory.Observe, ToolCategory.Work],
         ReadOnly = false,
         Reasoning = ReasoningLevel.High,
         Body = "STEWARD BODY"
@@ -131,9 +131,9 @@ public class SubagentTests
         var client = new ScriptedChatClient().Reply("ok");
         var withAgents = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents);
 
-        RimLLMChatOptions offered = NewSession(client, withAgents, AgentMode.Confirm, new[] { Scout }).BuildRunOptions();
-        RimLLMChatOptions noPermission = NewSession(client, ToolPermissions.For(ToolCategory.Observe), AgentMode.Confirm, new[] { Scout }).BuildRunOptions();
-        RimLLMChatOptions noSubagents = NewSession(client, withAgents, AgentMode.Confirm, Array.Empty<AgentSubagent>()).BuildRunOptions();
+        RimLLMChatOptions offered = NewSession(client, withAgents, AgentMode.Confirm, [Scout]).BuildRunOptions();
+        RimLLMChatOptions noPermission = NewSession(client, ToolPermissions.For(ToolCategory.Observe), AgentMode.Confirm, [Scout]).BuildRunOptions();
+        RimLLMChatOptions noSubagents = NewSession(client, withAgents, AgentMode.Confirm, []).BuildRunOptions();
 
         Assert.That(offered.Tools.Select(t => t.Name), Does.Contain(SubagentTools.ToolName));
         Assert.That(offered.Instructions, Does.Contain("- scout (read-only; several tasks run in parallel): look around"));
@@ -149,8 +149,8 @@ public class SubagentTests
         var permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Build);
 
         List<AgentToolDescriptor> byName = [.. registry.Descriptors];
-        IList<AITool> readOnly = registry.SelectForSubagent(permissions, new[] { ToolCategory.Observe, ToolCategory.Work }, true);
-        IList<AITool> full = registry.SelectForSubagent(permissions, new[] { ToolCategory.Observe }, false);
+        IList<AITool> readOnly = registry.SelectForSubagent(permissions, [ToolCategory.Observe, ToolCategory.Work], true);
+        IList<AITool> full = registry.SelectForSubagent(permissions, [ToolCategory.Observe], false);
 
         Assert.That(readOnly, Is.Not.Empty);
         foreach (AITool tool in readOnly)
@@ -180,7 +180,7 @@ public class SubagentTests
             .CallTool(ToolOutputTools.ToolName, new { id = "out_1", offset = 0, find = "" })
             .Reply("Main agent cannot read the subagent output.");
         ColonyAgentSession session = NewSession(client,
-            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, new[] { Scout });
+            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, [Scout]);
 
         await session.SendAsync("survey the steel");
 
@@ -199,7 +199,7 @@ public class SubagentTests
             .ReplyWithToolsStripped("There are ten colonists.")
             .Reply("Could not inspect the colony.");
         ColonyAgentSession session = NewSession(client,
-            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, new[] { Scout });
+            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, [Scout]);
 
         await session.SendAsync("survey the colony");
 
@@ -222,7 +222,7 @@ public class SubagentTests
             SubagentReasoning = () => ReasoningLevel.Low
         };
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
-            AgentMode.Confirm, new[] { Scout }, routing);
+            AgentMode.Confirm, [Scout], routing);
         session.PreferredModel = "p:main";
 
         string reply = await session.SendAsync("who is in the colony?");
@@ -259,7 +259,7 @@ public class SubagentTests
         client.Reply("<tool_call> <function=list_colonists> </function> </tool_call>")
               .Reply("The scout ran out of steps.");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
-            AgentMode.Confirm, new[] { Scout });
+            AgentMode.Confirm, [Scout]);
 
         await session.SendAsync("survey the colony");
 
@@ -276,7 +276,7 @@ public class SubagentTests
             .Reply("checked")
             .Reply("done");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
-            AgentMode.Confirm, new[] { Steward }, new ModelRouting { SubagentReasoning = () => ReasoningLevel.Off });
+            AgentMode.Confirm, [Steward], new ModelRouting { SubagentReasoning = () => ReasoningLevel.Off });
 
         await session.SendAsync("go");
 
@@ -292,7 +292,7 @@ public class SubagentTests
             .Reply("Held for confirmation.")
             .Reply("Waiting for you to confirm.");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work, ToolCategory.Agents),
-            AgentMode.Confirm, new[] { Steward });
+            AgentMode.Confirm, [Steward]);
 
         await session.SendAsync("make Ali a doctor");
 
@@ -307,7 +307,7 @@ public class SubagentTests
     {
         var client = new ParallelProbeClient(expectedChildren: 2);
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
-            AgentMode.Confirm, new[] { Scout });
+            AgentMode.Confirm, [Scout]);
 
         await session.SendAsync("look twice");
 
@@ -321,7 +321,7 @@ public class SubagentTests
     {
         var client = new ParallelProbeClient(expectedChildren: 2, agent: "steward");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
-            AgentMode.Confirm, new[] { Steward });
+            AgentMode.Confirm, [Steward]);
 
         await session.SendAsync("look twice");
 
@@ -338,7 +338,7 @@ public class SubagentTests
             .CallTool(SubagentTools.ToolName, new { agent = "scout", tasks = new[] { "1", "2", "3", "4", "5" } })
             .Reply("gave up");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
-            AgentMode.Confirm, new[] { Scout });
+            AgentMode.Confirm, [Scout]);
 
         await session.SendAsync("go");
 
@@ -374,7 +374,7 @@ public class SubagentTests
         for (int i = 0; i < 6; i++) client.Reply("ok " + i);
         client.Reply("Summary of the colony so far.");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe), AgentMode.Confirm,
-            Array.Empty<AgentSubagent>(), new ModelRouting { CompactModel = () => "p:summary", CompactReasoning = () => ReasoningLevel.Low });
+            [], new ModelRouting { CompactModel = () => "p:summary", CompactReasoning = () => ReasoningLevel.Low });
         session.PreferredModel = "p:main";
         for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i);
 
@@ -419,9 +419,9 @@ public class SubagentTests
     [Test]
     public void SubagentWithoutAllowedToolsIsNotOffered()
     {
-        var builder = new AgentSubagent { Name = "builder", Categories = new[] { ToolCategory.Build }, Body = "B" };
+        var builder = new AgentSubagent { Name = "builder", Categories = [ToolCategory.Build], Body = "B" };
         ColonyAgentSession session = NewSession(new ScriptedChatClient().Reply("ok"),
-            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, new[] { builder, Scout });
+            ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, [builder, Scout]);
 
         RimLLMChatOptions options = session.BuildRunOptions();
 
@@ -436,7 +436,7 @@ public class SubagentTests
             .CallTool(SubagentTools.ToolName, new { agent = "scout", tasks = new[] { "a", "b" } })
             .Reply("done");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
-            AgentMode.Autonomous, new[] { Scout });
+            AgentMode.Autonomous, [Scout]);
 
         await session.SendAsync("patrol", autonomous: true, maxToolSteps: 0);
 

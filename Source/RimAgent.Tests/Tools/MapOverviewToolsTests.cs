@@ -59,7 +59,7 @@ public class MapOverviewToolsTests
             Biome = "Temperate forest",
             Cells = cells,
             Resource = resource,
-            ResourceLabels = new[] { "compacted steel" },
+            ResourceLabels = ["compacted steel"],
             ThickRoof = roof,
             Rooms = new List<RoomInfo>
             {

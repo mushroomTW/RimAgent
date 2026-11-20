@@ -96,22 +96,22 @@ public partial class RimAgentGameComponent
     /// <summary>放棄通知裡的人話名稱；與自主任務提示詞同一套說法。</summary>
     private static string DescribeGiveUp(AutonomousTrigger trigger)
     {
-        switch (trigger)
+        return trigger switch
         {
-            case AutonomousTrigger.Fire: return "the fire";
-            case AutonomousTrigger.EmergencyMedical: return "the downed or bleeding colonist";
-            case AutonomousTrigger.MentalBreak: return "the colonist near a mental break";
-            case AutonomousTrigger.FoodShortage: return "the food shortage";
-            case AutonomousTrigger.Cold: return "the dangerous temperatures";
-            case AutonomousTrigger.BedShortage: return "the colonists without beds";
-            case AutonomousTrigger.OutdoorsBed: return "the beds outdoors";
-            case AutonomousTrigger.PowerOutage: return "the power outage";
-            case AutonomousTrigger.Research: return "the missing research project";
-            case AutonomousTrigger.LowMood: return "the low moods";
-            case AutonomousTrigger.Raid: return "the ongoing raid";
-            case AutonomousTrigger.RaidEnded: return "the raid cleanup";
-            default: return trigger.ToString();
-        }
+            AutonomousTrigger.Fire => "the fire",
+            AutonomousTrigger.EmergencyMedical => "the downed or bleeding colonist",
+            AutonomousTrigger.MentalBreak => "the colonist near a mental break",
+            AutonomousTrigger.FoodShortage => "the food shortage",
+            AutonomousTrigger.Cold => "the dangerous temperatures",
+            AutonomousTrigger.BedShortage => "the colonists without beds",
+            AutonomousTrigger.OutdoorsBed => "the beds outdoors",
+            AutonomousTrigger.PowerOutage => "the power outage",
+            AutonomousTrigger.Research => "the missing research project",
+            AutonomousTrigger.LowMood => "the low moods",
+            AutonomousTrigger.Raid => "the ongoing raid",
+            AutonomousTrigger.RaidEnded => "the raid cleanup",
+            _ => trigger.ToString(),
+        };
     }
 
     private static AutonomousConfig ToConfig(RimAgentSettings settings)

@@ -158,7 +158,7 @@ public class AgentFixesTests
                 new List<AgentMemoryEntry> { new() { name = "global_a.md", content = "v" + i } }));
 
             Assert.That(File.Exists(path), Is.True);
-            Assert.That(Directory.GetFiles(dir).Select(Path.GetFileName), Is.EquivalentTo(new[] { "global.json" }));
+            Assert.That(Directory.GetFiles(dir).Select(Path.GetFileName), Is.EquivalentTo(["global.json"]));
         }
         finally
         {

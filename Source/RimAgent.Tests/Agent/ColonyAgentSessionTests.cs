@@ -47,7 +47,7 @@ public class ColonyAgentSessionTests
         _world.PendingChoices.Add(new PendingChoiceInfo
         {
             Id = "letter-12", Title = "Wanderer joins",
-            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Accept" } }
+            Options = [new ChoiceOptionInfo { Number = 1, Text = "Accept" }]
         });
         _client.CallTool("choose_option", new { choiceId = "letter-12", option = 1 }).Reply("done");
         var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => mode)
@@ -540,7 +540,7 @@ public class ColonyAgentSessionTests
         stack.EndFrame("test");
 
         Assert.That(snapshot, Has.Count.EqualTo(1));
-        Assert.That(snapshot[0].Priorities.Select(p => p.NewPriority), Is.EqualTo(new[] { 1 }));
+        Assert.That(snapshot[0].Priorities.Select(p => p.NewPriority), Is.EqualTo([1]));
         var restored = new WorkUndoStack();
         restored.Restore(snapshot);
         Assert.That(restored.Pop().Priorities[0].OldPriority, Is.EqualTo(3));

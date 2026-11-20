@@ -27,21 +27,21 @@ internal static class LayoutCheck
     }
 
     private static readonly Spec[] Specs =
-    {
+    [
         new()
         {
             Layout = "RimAgent_StarterCabin13",
-            Rooms = new[]
-            {
+            Rooms =
+            [
                 ("freezer", 2, 11), ("entry", 6, 10), ("prison", 10, 11), ("hall", 6, 5),
                 ("bedroom1", 1, 2), ("bedroom2", 4, 2), ("bedroom3", 7, 2), ("bedroom4", 11, 2)
-            },
+            ],
             Extra = CheckStarterCabin13Extra,
         },
         new()
         {
             Layout = "RimAgent_TrapCorridorStarter13",
-            Rooms = new[] { ("hall", 6, 9), ("prison", 2, 3), ("research", 10, 3) },
+            Rooms = [("hall", 6, 9), ("prison", 2, 3), ("research", 10, 3)],
             Extra = (map, L, failures) =>
             {
                 // 走廊朝南開口：和房型外面是同一塊室外
@@ -61,10 +61,10 @@ internal static class LayoutCheck
         new()
         {
             Layout = "RimAgent_Freezer13",
-            Rooms = new[] { ("freezer", 6, 9), ("butcher", 10, 2) },
+            Rooms = [("freezer", 6, 9), ("butcher", 10, 2)],
             Extra = CheckFreezer13Extra,
         },
-    };
+    ];
 
     /// <summary>逐一檢查房型；每個蓋好的房型中心放進 <paramref name="builtCenters"/> 供截圖。</summary>
     public static List<string> Run(RimWorldGameWorld world, out string skipReason, List<(string Layout, IntVec3 Center)> builtCenters)
@@ -149,9 +149,9 @@ internal static class LayoutCheck
 
     /// <summary>截圖比對用的轉換房型。</summary>
     private static readonly string[] Showcase =
-    {
+    [
         "RimAgent_CP_13_13_BeginHouse1", "RimAgent_CP_8Room_YingYangGao", "RimAgent_CP_BigResearchRoom"
-    };
+    ];
 
     private static void PlaceAllRotations(RimWorldGameWorld world, BuildTools tools, string layout, IntVec3 center, Action<string> fail)
     {

@@ -175,7 +175,7 @@ internal sealed partial class MapWorldTests : IMapGeneration, IWorldGeneration
         catch (Exception)
         {
             // 例外已由 EveryQueryRunsCleanOnRealMap 的查詢清單記錄。
-            return Array.Empty<T>();
+            return [];
         }
     }
 

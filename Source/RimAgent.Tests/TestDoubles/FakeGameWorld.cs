@@ -57,79 +57,79 @@ internal sealed partial class FakeGameWorld : IGameWorld
     public HashSet<(int X, int Z)> LightOnlyCells { get; } = [];
     public List<(string Def, int X, int Z, int Rotation, string Stuff)> Blueprints { get; } = [];
 
-    public IReadOnlyList<DefInfo> WorkTypes { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> WorkTypes { get; set; } =
+    [
         new DefInfo("Firefighter", "firefight"), new DefInfo("Patient", "patient"), new DefInfo("Doctor", "doctor"),
         new DefInfo("Cooking", "cook"), new DefInfo("Hunting", "hunt"), new DefInfo("Construction", "construct"),
         new DefInfo("Growing", "grow"), new DefInfo("Mining", "mine"), new DefInfo("PlantCutting", "plant cut"),
         new DefInfo("Hauling", "haul"), new DefInfo("Cleaning", "clean"), new DefInfo("Research", "research")
-    };
+    ];
 
-    public IReadOnlyList<DefInfo> Buildables { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> Buildables { get; set; } =
+    [
         new DefInfo("Wall", "wall"), new DefInfo("Door", "door"), new DefInfo("Bed", "bed"),
         new DefInfo("SolarGenerator", "solar generator"), new DefInfo("WindTurbine", "wind turbine"), new DefInfo("Sandbags", "sandbags")
-    };
+    ];
 
-    public IReadOnlyList<DefInfo> Stuffs { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> Stuffs { get; set; } =
+    [
         new DefInfo("WoodLog", "wood"), new DefInfo("Steel", "steel"), new DefInfo("BlocksGranite", "granite blocks")
-    };
+    ];
 
-    public IReadOnlyList<DefInfo> TimeAssignments { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> TimeAssignments { get; set; } =
+    [
         new DefInfo("Anything", "anything"), new DefInfo("Work", "work"), new DefInfo("Joy", "recreation"),
         new DefInfo("Sleep", "sleep"), new DefInfo("Meditate", "meditate")
-    };
+    ];
 
-    public IReadOnlyList<DefInfo> TradeGoods { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> TradeGoods { get; set; } =
+    [
         new DefInfo("Steel", "steel"), new DefInfo("Silver", "silver"),
         new DefInfo("ComponentSpacer", "spacer component"), new DefInfo("MedicineUltratech", "ultratech medicine"),
         new DefInfo("HerbalMedicine", "herbal medicine"), new DefInfo("Corn", "corn")
-    };
+    ];
 
     /// <summary>假結算的單件價格（正式端用遊戲公式）。買入賣出同價；缺省為 1。</summary>
     public Dictionary<string, float> Prices { get; } = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-    public IReadOnlyList<DefInfo> MedicalCareLevels { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> MedicalCareLevels { get; set; } =
+    [
         new DefInfo("NoCare", "no care"), new DefInfo("NoMeds", "doctor care only, no medicine"),
         new DefInfo("HerbalOrWorse", "herbal medicine or worse"), new DefInfo("NormalOrWorse", "industrial medicine or worse"),
         new DefInfo("Best", "best")
-    };
+    ];
 
-    public IReadOnlyList<DefInfo> SurgeryRecipes { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> SurgeryRecipes { get; set; } =
+    [
         new DefInfo("RemoveBodyPart", "remove body part"),
         new DefInfo("InstallArtificialBodyPart", "install artificial body part"),
         new DefInfo("AdministerAnesthetic", "administer anesthetic")
-    };
+    ];
 
     /// <summary>研究還沒完成的手術 defName（正式端用遊戲研究狀態判斷）。</summary>
     public HashSet<string> LockedSurgeries { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     public List<PrisonerInfo> Prisoners { get; } = [];
 
-    public IReadOnlyList<DefInfo> PrisonerInteractionModes { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> PrisonerInteractionModes { get; set; } =
+    [
         new DefInfo("MaintainOnly", "maintain only"), new DefInfo("AttemptRecruit", "recruit"),
         new DefInfo("ReduceResistance", "reduce resistance"), new DefInfo("Release", "release"),
         new DefInfo("Execution", "execution")
-    };
+    ];
 
     public List<AnimalInfo> Animals { get; } = [];
 
-    public IReadOnlyList<DefInfo> AnimalTraining { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> AnimalTraining { get; set; } =
+    [
         new DefInfo("Obedience", "obedience"), new DefInfo("Release", "release"),
         new DefInfo("Rescue", "rescue"), new DefInfo("Haul", "haul")
-    };
+    ];
 
-    public IReadOnlyList<DefInfo> AnimalAreas { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> AnimalAreas { get; set; } =
+    [
         new DefInfo("Barn", "Barn"), new DefInfo("Pasture", "Pasture")
-    };
+    ];
 
     /// <summary>已標記馴養的動物 id（正式端讀 designation）。</summary>
     public HashSet<int> TameMarked { get; } = [];
@@ -168,17 +168,17 @@ internal sealed partial class FakeGameWorld : IGameWorld
     /// <summary>已完成的研究 defName（正式端用遊戲研究狀態判斷）。</summary>
     public HashSet<string> FinishedResearch { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     public IReadOnlyList<DefInfo> FinishedResearchProjects => FinishedResearch.Select(d => new DefInfo(d, d)).ToList();
-    public IReadOnlyList<DefInfo> StorageFilterables { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> StorageFilterables { get; set; } =
+    [
         new DefInfo("Steel", "steel"), new DefInfo("WoodLog", "wood"), new DefInfo("Corn", "corn"),
         new DefInfo("Rice", "rice"), new DefInfo("MedicineUltratech", "ultratech medicine"),
         new DefInfo("ComponentSpacer", "spacer component")
-    };
+    ];
 
-    public IReadOnlyList<DefInfo> GrowablePlants { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> GrowablePlants { get; set; } =
+    [
         new DefInfo("Plant_Rice", "水稻"), new DefInfo("Plant_Potato", "土豆"), new DefInfo("Plant_Corn", "玉米")
-    };
+    ];
 
     /// <summary>各儲藏區明確禁收的 defName（正式端讀 ThingFilter）。</summary>
     public Dictionary<int, HashSet<string>> ZoneDisallowed { get; } = [];
@@ -189,18 +189,18 @@ internal sealed partial class FakeGameWorld : IGameWorld
     public Dictionary<int, List<BillInfo>> TableBills { get; } = [];
 
     /// <summary>沒在 <see cref="TableRecipes"/> 指定的工作台都能做的預設配方。</summary>
-    public IReadOnlyList<DefInfo> BillRecipes { get; set; } = new[]
-    {
+    public IReadOnlyList<DefInfo> BillRecipes { get; set; } =
+    [
         new DefInfo("MakeComponent", "component"), new DefInfo("MakeShortBow", "short bow"),
         new DefInfo("ButcherCreature", "butcher creature")
-    };
+    ];
 
     /// <summary>個別工作台自己的配方（正式端讀 def.AllRecipes）。</summary>
     public Dictionary<int, IReadOnlyList<DefInfo>> TableRecipes { get; } = [];
 
     public IReadOnlyList<DefInfo> GetTableRecipes(int tableId)
     {
-        if (WorkTables.All(t => t.Id != tableId)) return Array.Empty<DefInfo>();
+        if (WorkTables.All(t => t.Id != tableId)) return [];
         return TableRecipes.TryGetValue(tableId, out IReadOnlyList<DefInfo> recipes) ? recipes : BillRecipes;
     }
 
@@ -220,12 +220,12 @@ internal sealed partial class FakeGameWorld : IGameWorld
             MoodPercent = 0.6f,
             MinorBreakThreshold = 0.35f,
             CurrentActivity = "Idle",
-            Skills = new[]
-            {
+            Skills =
+            [
                 new SkillInfo { DefName = "Shooting", Label = "shooting", Level = 8, Passion = 2 },
                 new SkillInfo { DefName = "Medicine", Label = "medical", Level = 5, Passion = 1 },
                 new SkillInfo { DefName = "Plants", Label = "plants", Level = 0, Disabled = true }
-            },
+            ],
             WorkPriorities = workTypes.Select(w => new WorkPriorityInfo { WorkTypeDefName = w, Label = w.ToLowerInvariant(), Priority = 3 }).ToList(),
             Timetable = Enumerable.Repeat("Anything", 24).ToList(),
             MedicalCare = "NoMeds"

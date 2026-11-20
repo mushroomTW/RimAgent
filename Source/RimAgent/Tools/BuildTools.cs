@@ -682,7 +682,7 @@ public sealed class BuildTools
     private List<DefInfo> CollectLookupCandidates(string wanted, Dictionary<DefInfo, string> kindOf)
     {
         var candidates = new List<DefInfo>();
-        foreach (string k in wanted.Length > 0 ? new[] { wanted } : DefLookupKind.All)
+        foreach (string k in wanted.Length > 0 ? [wanted] : DefLookupKind.All)
         {
             foreach (DefInfo d in _world.GetLookupCatalog(k))
             {

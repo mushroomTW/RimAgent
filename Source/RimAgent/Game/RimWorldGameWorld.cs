@@ -272,10 +272,10 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             {
                 Label = n.LabelCap,
                 Percent = n.CurLevelPercentage
-            }).ToList() ?? (IReadOnlyList<NeedInfo>)[], Array.Empty<NeedInfo>()),
+            }).ToList() ?? (IReadOnlyList<NeedInfo>)[], []),
             Thoughts = ReadOrDefault(pawn, unreadable, "thoughts", () => pawn.needs?.mood?.thoughts?.memories?.Memories
                 .Select(t => t.LabelCap).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(12).ToList()
-                ?? (IReadOnlyList<string>)[], Array.Empty<string>()),
+                ?? (IReadOnlyList<string>)[], []),
             Skills = ReadOrDefault(pawn, unreadable, "skills", () => pawn.skills?.skills.Select(s => new SkillInfo
             {
                 DefName = s.def.defName,
@@ -283,11 +283,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
                 Level = s.Level,
                 Passion = (int)s.passion,
                 Disabled = s.TotallyDisabled
-            }).ToList() ?? (IReadOnlyList<SkillInfo>)[], Array.Empty<SkillInfo>()),
+            }).ToList() ?? (IReadOnlyList<SkillInfo>)[], []),
             WorkPriorities = pawn.workSettings == null
                 ? (IReadOnlyList<WorkPriorityInfo>)[]
                 : ReadOrDefault<IReadOnlyList<WorkPriorityInfo>>(pawn, unreadable, ColonistInfo.WorkPrioritiesPart, () => DefDatabase<WorkTypeDef>.AllDefsListForReading.Where(w => w.visible).Select(w => ToWorkPriority(pawn, w)).ToList(),
-                    Array.Empty<WorkPriorityInfo>()),
+                    []),
             Timetable = pawn.timetable == null
                 ? (IReadOnlyList<string>)[]
                 : Enumerable.Range(0, 24).Select(h => pawn.timetable.GetAssignment(h)?.defName ?? string.Empty).ToList(),

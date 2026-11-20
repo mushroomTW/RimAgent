@@ -28,16 +28,16 @@ public class HealthToolsTests
         _world.Health.Add(new ColonistHealthInfo
         {
             PawnId = 101,
-            Conditions = new[]
-            {
+            Conditions =
+            [
                 new HealthConditionInfo { Label = "gunshot wound", Part = "left leg", Severity = 12, Kind = HealthConditionInfo.InjuryKind, Bleeding = true, NeedsTending = true },
                 new HealthConditionInfo { Label = "flu", Part = string.Empty, Severity = 0.45f, Kind = HealthConditionInfo.ConditionKind, Tended = true },
                 new HealthConditionInfo { Label = "missing right index finger", Part = "right index finger", Kind = HealthConditionInfo.MissingKind }
-            },
-            PendingSurgeries = new[]
-            {
+            ],
+            PendingSurgeries =
+            [
                 new SurgeryBillInfo { Label = "install bionic arm", Part = "left arm" }
-            }
+            ]
         });
         _world.Health.Add(new ColonistHealthInfo { PawnId = 102 });
     }

@@ -14,7 +14,7 @@ public sealed class PendingChoiceInfo
     public string Text { get; set; } = string.Empty;
     /// <summary>信件還剩幾 tick 過期；不會過期為 null。</summary>
     public int? ExpiresInTicks { get; set; }
-    public IReadOnlyList<ChoiceOptionInfo> Options { get; set; } = Array.Empty<ChoiceOptionInfo>();
+    public IReadOnlyList<ChoiceOptionInfo> Options { get; set; } = [];
     /// <summary>回答時要附的輸入格式（世界格子、地圖目標、選取項目）；不用輸入是空字串。</summary>
     public string InputHint { get; set; } = string.Empty;
 }
@@ -86,7 +86,7 @@ public sealed class FloatMenuInfo
     public string TargetLabel { get; set; } = string.Empty;
     /// <summary>殖民者目前是否徵召：徵召與否會換一批選項。</summary>
     public bool Drafted { get; set; }
-    public IReadOnlyList<FloatMenuOptionInfo> Options { get; set; } = Array.Empty<FloatMenuOptionInfo>();
+    public IReadOnlyList<FloatMenuOptionInfo> Options { get; set; } = [];
 }
 
 public sealed class ChoiceOptionInfo

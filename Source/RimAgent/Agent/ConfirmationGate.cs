@@ -77,17 +77,14 @@ public sealed class ConfirmationGate
     {
         InvocationState invocation = _invocation.Value;
         if (invocation?.Forced.HasValue == true) return invocation.Forced.Value;
-        switch (_mode())
+        return _mode() switch
         {
-            case AgentMode.Confirm:
-                return invocation?.Risk == ToolRisk.Query || IsApprovedForSession(invocation?.ToolName);
-            case AgentMode.Execute:
-                return invocation != null && (invocation.Risk != ToolRisk.Confirm
-                    || (_autonomousRun && !_confirmAutonomousMajor)
-                    || IsApprovedForSession(invocation.ToolName));
-            default:
-                return true;
-        }
+            AgentMode.Confirm => invocation?.Risk == ToolRisk.Query || IsApprovedForSession(invocation?.ToolName),
+            AgentMode.Execute => invocation != null && (invocation.Risk != ToolRisk.Confirm
+                                || (_autonomousRun && !_confirmAutonomousMajor)
+                                || IsApprovedForSession(invocation.ToolName)),
+            _ => true,
+        };
     }
 
     public void NoteBlocked(string preview)
@@ -266,7 +263,7 @@ public sealed class ConfirmationGate
     {
         lock (_gate)
         {
-            if (_blocked.Count == 0) return Array.Empty<string>();
+            if (_blocked.Count == 0) return [];
             var taken = _blocked.ToArray();
             _blocked.Clear();
             return taken;

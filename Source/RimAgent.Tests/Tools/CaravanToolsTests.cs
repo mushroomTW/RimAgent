@@ -87,14 +87,14 @@ public class CaravanToolsTests
     {
         _world.PlanOverride = new CaravanPlanInfo
         {
-            Members = new[] { new CaravanMemberInfo { Id = 101, Name = "Ali" } },
+            Members = [new CaravanMemberInfo { Id = 101, Name = "Ali" }],
             MassUsage = 90f,
             MassCapacity = 40f,
             DaysUntilRot = 600f,
             DestinationTile = 4600,
             DestinationReachable = false,
-            Blockers = new[] { "Too big caravan mass usage." },
-            Warnings = new[] { "The caravan has no food." }
+            Blockers = ["Too big caravan mass usage."],
+            Warnings = ["The caravan has no food."]
         };
 
         string text = _tools.PlanCaravan("Ali", tile: 4600);
@@ -126,7 +126,7 @@ public class CaravanToolsTests
     [Test]
     public void WorldObjectIdResolvesToItsTile()
     {
-        _world.Survey = new WorldSurveyInfo { Objects = new[] { new WorldObjectInfo { Id = 302, Label = "bandit camp", Tile = 4650 } } };
+        _world.Survey = new WorldSurveyInfo { Objects = [new WorldObjectInfo { Id = 302, Label = "bandit camp", Tile = 4650 }] };
 
         _tools.PlanCaravan("Ali", worldObjectId: 302);
 
@@ -238,8 +238,8 @@ public class CaravanToolsTests
     {
         _world.PlanOverride = new CaravanPlanInfo
         {
-            Members = new[] { new CaravanMemberInfo { Id = 101, Name = "Ali", Downed = true } },
-            Blockers = new[] { "Too big caravan mass usage.", "A caravan needs at least one colonist who is not downed." }
+            Members = [new CaravanMemberInfo { Id = 101, Name = "Ali", Downed = true }],
+            Blockers = ["Too big caravan mass usage.", "A caravan needs at least one colonist who is not downed."]
         };
 
         string text = _tools.FormCaravan("Ali", tile: 4600);
@@ -337,7 +337,7 @@ public class CaravanToolsTests
     {
         StartForming();
         int id = _world.Forming.Single().Id;
-        _world.Forming.Add(new FormingCaravanInfo { Id = 99, Members = new[] { new CaravanMemberInfo { Id = 555, Name = "Cara" } } });
+        _world.Forming.Add(new FormingCaravanInfo { Id = 99, Members = [new CaravanMemberInfo { Id = 555, Name = "Cara" }] });
 
         Assert.That(_tools.CancelFormingCaravan(""), Does.StartWith("Error:").And.Contain("several"));
         Assert.That(_tools.CancelFormingCaravan("Cara"), Does.StartWith("Stopped"));
@@ -349,7 +349,7 @@ public class CaravanToolsTests
     public void CancelByMemberIdAndUnknownNames()
     {
         StartForming();
-        _world.Forming.Add(new FormingCaravanInfo { Id = 99, Members = new[] { new CaravanMemberInfo { Id = 555, Name = "Cara" } } });
+        _world.Forming.Add(new FormingCaravanInfo { Id = 99, Members = [new CaravanMemberInfo { Id = 555, Name = "Cara" }] });
 
         Assert.That(_tools.CancelFormingCaravan("Zoe"), Does.StartWith("Error:").And.Contain("no forming caravan matches"));
         Assert.That(_tools.CancelFormingCaravan("555"), Does.StartWith("Stopped"));

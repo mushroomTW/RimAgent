@@ -226,8 +226,8 @@ internal sealed partial class RimWorldGameWorld
 
     private static CommandResult ValidateTradeLines(TradeRequest request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells)
     {
-        buys = request?.Buys ?? Array.Empty<TradeLine>();
-        sells = request?.Sells ?? Array.Empty<TradeLine>();
+        buys = request?.Buys ?? [];
+        sells = request?.Sells ?? [];
         if (request == null) return CommandResult.Fail("no trade requested");
         if (string.IsNullOrEmpty(request.TraderId)) return CommandResult.Fail("no trader specified");
         if (buys.Count == 0 && sells.Count == 0) return CommandResult.Fail("nothing to buy or sell");

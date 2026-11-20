@@ -60,7 +60,7 @@ public sealed partial class ColonyAgentSession
         List<string> loaded = LoadedPacks();
         List<ToolPacks.Pack> candidates = [.. _registry.SelectForMainAgent(_permissions(), loaded).Packs
             .Where(p => !loaded.Contains(p.Id))];
-        if (candidates.Count == 0) return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        if (candidates.Count == 0) return Task.FromResult<IReadOnlyList<string>>([]);
         return _packSelector.SelectAsync(DecisionReasoningRouter.Describe(text, History), candidates, cancellationToken);
     }
 
@@ -82,7 +82,7 @@ public sealed partial class ColonyAgentSession
         _invoking?.AdditionalTools = [.. selected.PackTools.Values.SelectMany(t => t)];
         IReadOnlyList<AgentSubagent> subagents = permissions.Allows(ToolCategory.Agents)
             ? _subagents.Available(permissions)
-            : Array.Empty<AgentSubagent>();
+            : [];
         if (subagents.Count > 0) tools.Add(_subagents.Function);
         var options = new RimLLMChatOptions
         {

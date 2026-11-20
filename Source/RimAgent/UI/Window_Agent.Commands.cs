@@ -156,19 +156,14 @@ public partial class Window_Agent
 
     private static string GetGoalStateTranslationKey(RimAgentGameComponent component)
     {
-        switch (component.CurrentGoalPauseReason)
+        return component.CurrentGoalPauseReason switch
         {
-            case GoalPauseReason.Blocked:
-                return "RimAgent.Goal.StateBlocked";
-            case GoalPauseReason.TurnLimit:
-                return "RimAgent.Goal.StateTurnLimit";
-            case GoalPauseReason.NoProgress:
-                return "RimAgent.Goal.StateNoProgress";
-            case GoalPauseReason.Error:
-                return "RimAgent.Goal.StateError";
-            default:
-                return component.GoalPaused ? "RimAgent.Goal.StatePaused" : "RimAgent.Goal.StateActive";
-        }
+            GoalPauseReason.Blocked => "RimAgent.Goal.StateBlocked",
+            GoalPauseReason.TurnLimit => "RimAgent.Goal.StateTurnLimit",
+            GoalPauseReason.NoProgress => "RimAgent.Goal.StateNoProgress",
+            GoalPauseReason.Error => "RimAgent.Goal.StateError",
+            _ => component.GoalPaused ? "RimAgent.Goal.StatePaused" : "RimAgent.Goal.StateActive",
+        };
     }
 
     private static string GoalListText(RimAgentGameComponent component)

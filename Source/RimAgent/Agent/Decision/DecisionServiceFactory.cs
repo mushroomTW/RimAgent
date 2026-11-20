@@ -106,7 +106,7 @@ public static class DecisionServiceFactory
         catch (Exception)
         {
             // 模型清單只是設定頁的下拉選項；取不到就讓玩家手打。
-            return Array.Empty<string>();
+            return [];
         }
     }
 }

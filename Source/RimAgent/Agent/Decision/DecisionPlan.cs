@@ -31,7 +31,7 @@ public sealed class DecisionQuestion
     public IReadOnlyDictionary<string, string> Options { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>等級（Score）：由低到高。</summary>
-    public IReadOnlyList<string> Levels { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Levels { get; init; } = [];
 
     /// <summary>是非題：肯定時的說明。</summary>
     public string WhenTrue => Option("true");
@@ -80,7 +80,7 @@ public sealed class DecisionQuestion
             Id = id ?? string.Empty,
             Type = DecisionQuestionType.Score,
             Instructions = instructions ?? string.Empty,
-            Levels = levels ?? Array.Empty<string>()
+            Levels = levels ?? []
         };
     }
 }
@@ -88,13 +88,13 @@ public sealed class DecisionQuestion
 /// <summary>一次決策請求要問的題目集合；同一個 state 平行評估，題目之間互不影響。</summary>
 public sealed class DecisionPlan
 {
-    public IReadOnlyList<DecisionQuestion> Questions { get; init; } = Array.Empty<DecisionQuestion>();
+    public IReadOnlyList<DecisionQuestion> Questions { get; init; } = [];
 
     /// <summary>沒有題目時不必送出請求。</summary>
     public bool IsEmpty => Questions == null || Questions.Count == 0;
 
     public static DecisionPlan Of(params DecisionQuestion[] questions)
     {
-        return new DecisionPlan { Questions = questions ?? Array.Empty<DecisionQuestion>() };
+        return new DecisionPlan { Questions = questions ?? [] };
     }
 }

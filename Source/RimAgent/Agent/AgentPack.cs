@@ -23,7 +23,7 @@ public sealed class AgentSubagent
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     /// <summary>子代理可用的工具類別；仍要與玩家權限取交集，且 <see cref="ToolCategory.Agents"/> 永遠不給（只委派一層）。</summary>
-    public IReadOnlyList<ToolCategory> Categories { get; set; } = new[] { ToolCategory.Observe };
+    public IReadOnlyList<ToolCategory> Categories { get; set; } = [ToolCategory.Observe];
     /// <summary>只拿查詢工具；唯讀子代理的多個任務可並行執行。</summary>
     public bool ReadOnly { get; set; }
     /// <summary>思考強度；null 則用設定頁的子代理預設。</summary>
@@ -53,8 +53,8 @@ public sealed class AgentPack
     public string DecisionTriageCriteria { get; set; } = string.Empty;
     /// <summary>自主任務文案（Autonomous.en.md，英文）。缺檔時該輪自主任務跳過。</summary>
     public AutonomousPack Autonomous { get; set; } = new AutonomousPack();
-    public IReadOnlyList<AgentSkill> Skills { get; set; } = Array.Empty<AgentSkill>();
-    public IReadOnlyList<AgentSubagent> Subagents { get; set; } = Array.Empty<AgentSubagent>();
+    public IReadOnlyList<AgentSkill> Skills { get; set; } = [];
+    public IReadOnlyList<AgentSubagent> Subagents { get; set; } = [];
 }
 
 /// <summary>一個語言的自主任務文案：共用通則＋觸發原因→指令文字。</summary>
@@ -244,21 +244,21 @@ public static class AgentPackLoader
     /// <summary>只讀子代理（設定頁用，不必讀整個擴充包）；缺檔、壞檔一樣視為空。</summary>
     public static IReadOnlyList<AgentSubagent> LoadSubagentsOnly(string rootDir)
     {
-        if (string.IsNullOrEmpty(rootDir)) return Array.Empty<AgentSubagent>();
+        if (string.IsNullOrEmpty(rootDir)) return [];
         try
         {
             return LoadSubagents(Path.Combine(rootDir, "Agents"));
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            return Array.Empty<AgentSubagent>();
+            return [];
         }
     }
 
     /// <summary>Agents/*/AGENT.md，依資料夾名排序；同名子代理只留第一個（名稱是設定頁與委派的鍵）。</summary>
     private static IReadOnlyList<AgentSubagent> LoadSubagents(string agentsDir)
     {
-        if (!Directory.Exists(agentsDir)) return Array.Empty<AgentSubagent>();
+        if (!Directory.Exists(agentsDir)) return [];
         var subagents = new List<AgentSubagent>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         string[] dirs = Directory.GetDirectories(agentsDir);

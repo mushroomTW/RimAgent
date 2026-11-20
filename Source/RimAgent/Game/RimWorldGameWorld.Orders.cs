@@ -69,16 +69,16 @@ internal sealed partial class RimWorldGameWorld
         if (target == null) return CommandResult.Fail("target not found on the map");
         if (!pawn.CanReach(target, PathEndMode.ClosestTouch, Danger.Deadly)) return CommandResult.Fail($"{pawn.LabelShort} cannot reach {target.LabelShort}");
 
-        switch (job)
+        return job switch
         {
-            case "rescue": return OrderRescue(pawn, target as Pawn);
-            case "capture": return OrderCapture(pawn, target as Pawn);
-            case "tend": return OrderTend(pawn, target as Pawn);
-            case "strip": return OrderStrip(pawn, target);
-            case "equip": return OrderEquip(pawn, target);
-            case "enter_casket": return OrderEnterCasket(pawn, target);
-            default: return CommandResult.Fail($"unknown job \"{job}\"");
-        }
+            "rescue" => OrderRescue(pawn, target as Pawn),
+            "capture" => OrderCapture(pawn, target as Pawn),
+            "tend" => OrderTend(pawn, target as Pawn),
+            "strip" => OrderStrip(pawn, target),
+            "equip" => OrderEquip(pawn, target),
+            "enter_casket" => OrderEnterCasket(pawn, target),
+            _ => CommandResult.Fail($"unknown job \"{job}\""),
+        };
     }
 
     // 以下檢查照遊戲的右鍵選單（FloatMenuOptionProvider_*），只拒絕會惹惱派系或需要玩家另外確認的情況。

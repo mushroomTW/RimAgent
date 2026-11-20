@@ -50,7 +50,7 @@ public class WorkToolsTests
     public void UnreadablePrioritiesAreNotChangedSoUndoStaysCorrect()
     {
         // 其他模組讓優先級讀不到時記不了原值；照改的話 /undo 會寫回預設的 3。
-        _world.Colonists[0].UnreadableParts = new[] { Game.ColonistInfo.WorkPrioritiesPart };
+        _world.Colonists[0].UnreadableParts = [Game.ColonistInfo.WorkPrioritiesPart];
 
         Assert.That(_tools.SetWorkPriorities("Ali:doctor=1"), Does.StartWith("Error:").And.Contain("could not be read"));
         Assert.That(_world.Calls, Is.Empty);

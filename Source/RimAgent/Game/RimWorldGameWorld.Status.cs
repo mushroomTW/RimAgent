@@ -286,7 +286,7 @@ internal sealed partial class RimWorldGameWorld
 
     public IReadOnlyList<AlertInfo> GetAlerts()
     {
-        if (ActiveAlertsField?.GetValue(Find.Alerts) is not IEnumerable<Alert> alerts) return Array.Empty<AlertInfo>();
+        if (ActiveAlertsField?.GetValue(Find.Alerts) is not IEnumerable<Alert> alerts) return [];
         return alerts.Where(a => a != null && a.Active).Select(a => new AlertInfo
         {
             Label = a.Label.ToString(),

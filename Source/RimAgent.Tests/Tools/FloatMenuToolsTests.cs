@@ -103,7 +103,7 @@ public class FloatMenuToolsTests
         {
             Id = "dialog-3",
             Text = "Using this will give Alice a psylink.",
-            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Confirm" }, new ChoiceOptionInfo { Number = 2, Text = "Cancel" } }
+            Options = [new ChoiceOptionInfo { Number = 1, Text = "Confirm" }, new ChoiceOptionInfo { Number = 2, Text = "Cancel" }]
         };
 
         string text = _tools.UseRightClickOption("Ali", "1", targetId: 305);

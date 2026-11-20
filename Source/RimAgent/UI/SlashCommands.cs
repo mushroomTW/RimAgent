@@ -43,7 +43,7 @@ public static class SlashCommands
     public static readonly SlashCommand Compact = new("compact", false, "RimAgent.Slash.Compact");
     public static readonly SlashCommand Stop = new("stop", false, "RimAgent.Slash.Stop");
 
-    public static readonly IReadOnlyList<SlashCommand> All = new[] { Goal, Undo, Clear, Compact, Stop };
+    public static readonly IReadOnlyList<SlashCommand> All = [Goal, Undo, Clear, Compact, Stop];
 
     /// <summary>還在打指令名稱（以 / 開頭且尚無空白）：此時顯示彈出選單。</summary>
     public static bool IsTypingName(string input)

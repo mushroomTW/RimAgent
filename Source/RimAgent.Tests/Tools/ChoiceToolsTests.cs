@@ -21,12 +21,12 @@ public class ChoiceToolsTests
             Title = "Wanderer joins",
             Text = "A wanderer named Kim wants to join.",
             ExpiresInTicks = 5000,
-            Options = new[]
-            {
+            Options =
+            [
                 new ChoiceOptionInfo { Number = 1, Text = "Accept" },
                 new ChoiceOptionInfo { Number = 2, Text = "Reject" },
                 new ChoiceOptionInfo { Number = 4, Text = "Postpone", Disabled = true, DisabledReason = "about to expire" }
-            }
+            ]
         });
         _tools = new ChoiceTools(_world);
     }
@@ -66,7 +66,7 @@ public class ChoiceToolsTests
             Id = "dialog-7",
             Title = "Kim",
             Text = "Kim is being chased.",
-            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "OK" } }
+            Options = [new ChoiceOptionInfo { Number = 1, Text = "OK" }]
         };
 
         string text = _tools.ChooseOption("letter-12", 1);
@@ -113,7 +113,7 @@ public class ChoiceToolsTests
             Id = "dialog-tile",
             Title = "Choose a tile",
             InputHint = "a tile id",
-            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Use the tile" } }
+            Options = [new ChoiceOptionInfo { Number = 1, Text = "Use the tile" }]
         });
 
         Assert.That(_tools.ListPendingChoices(), Does.Contain("Input: a tile id").And.Contain("Options: 1) Use the tile"));

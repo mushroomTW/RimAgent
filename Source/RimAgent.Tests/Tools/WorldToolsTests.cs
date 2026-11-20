@@ -38,11 +38,11 @@ public class WorldToolsTests
             Name = name,
             Tile = tile,
             Terrain = "Temperate forest, Flat",
-            Members = new[]
-            {
+            Members =
+            [
                 new CaravanMemberInfo { Id = 101, Name = "Ali", Kind = CaravanMemberInfo.ColonistKind, HealthPercent = 1f },
                 new CaravanMemberInfo { Id = 700, Name = "Rex", Kind = CaravanMemberInfo.AnimalKind, HealthPercent = 0.5f, Downed = true }
-            },
+            ],
             FoodDays = 12.34f,
             MassUsage = 80f,
             MassCapacity = 200f,
@@ -64,15 +64,15 @@ public class WorldToolsTests
             OriginTile = 4500,
             OriginLabel = "Trailblazers",
             OriginIsCaravan = true,
-            Objects = new[]
-            {
+            Objects =
+            [
                 MakeObject(301, WorldObjectInfo.FactionSettlementKind, "Far Fort", 9000, 40f, "Outlander Union", hostile: true),
                 MakeObject(302, WorldObjectInfo.SiteKind, "bandit camp", 4600, 5f),
                 MakeObject(303, WorldObjectInfo.PlayerSettlementKind, "New Arrivals", 4400, 2f, "New Arrivals"),
                 MakeObject(304, WorldObjectInfo.OtherKind, "abandoned settlement", 4700, 9f)
-            }
+            ]
         };
-        _world.Survey.Objects[1].Quests = new[] { new WorldObjectQuestLink { QuestId = 40, QuestName = "Bandit trouble", Active = false } };
+        _world.Survey.Objects[1].Quests = [new WorldObjectQuestLink { QuestId = 40, QuestName = "Bandit trouble", Active = false }];
         _world.Survey.Objects[1].Detail = "bandit camp";
         _world.Survey.Objects[1].ExpiresInTicks = 90000;
     }
@@ -123,7 +123,7 @@ public class WorldToolsTests
     public void ListCaravansWithOnlyAFormingOneStillShowsIt()
     {
         _world.Caravans.Clear();
-        _world.Forming.Add(new FormingCaravanInfo { Id = 70, Status = "Waiting", Members = new[] { new CaravanMemberInfo { Id = 102, Name = "Bob" } } });
+        _world.Forming.Add(new FormingCaravanInfo { Id = 70, Status = "Waiting", Members = [new CaravanMemberInfo { Id = 102, Name = "Bob" }] });
 
         string text = _tools.ListCaravans();
 
@@ -162,7 +162,7 @@ public class WorldToolsTests
         c.SettleBlockedReason = "There is already a settlement here";
         c.CanCamp = false;
         c.CampBlockedReason = "A camp cannot be made here";
-        c.ObjectsHere = new[] { "Foo Camp [88]" };
+        c.ObjectsHere = ["Foo Camp [88]"];
 
         string text = _tools.ListCaravans();
 
@@ -271,7 +271,7 @@ public class WorldToolsTests
             Feature = "Misty Range",
             CanSettle = false,
             SettleBlockedReason = "A faction base is adjacent",
-            Objects = new[] { _world.Survey.Objects[1] }
+            Objects = [_world.Survey.Objects[1]]
         };
         _world.TravelEstimates[4600] = new TravelEstimateInfo { Tile = 4600, Reachable = true, Ticks = 90000, DistanceTiles = 5f };
 
@@ -400,7 +400,7 @@ public class WorldToolsTests
             Id = "dialog-7",
             Title = "Attack friendly faction?",
             Text = "Attacking will hurt relations.",
-            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Confirm" }, new ChoiceOptionInfo { Number = 2, Text = "Cancel" } }
+            Options = [new ChoiceOptionInfo { Number = 1, Text = "Confirm" }, new ChoiceOptionInfo { Number = 2, Text = "Cancel" }]
         };
         string text = _tools.SendCaravan("", "3", tile: 4600);
 
@@ -463,7 +463,7 @@ public class WorldToolsTests
             Id = "dialog-9",
             Title = "Settle here?",
             Text = "This is close to a faction base.",
-            Options = new[] { new ChoiceOptionInfo { Number = 1, Text = "Confirm" } }
+            Options = [new ChoiceOptionInfo { Number = 1, Text = "Confirm" }]
         };
 
         string text = _tools.SettleCaravan("", "settle");
@@ -535,7 +535,7 @@ public class WorldToolsTests
         Assert.That(WorldTools.ResolveCaravan("77", caravans, true).Error, Does.Contain("no caravan has id 77"));
         Assert.That(WorldTools.ResolveCaravan("", caravans, false).Value, Is.Null);
         Assert.That(WorldTools.ResolveCaravan("", caravans, true).Success, Is.False);
-        Assert.That(WorldTools.ResolveCaravan("", new[] { caravans[2] }, true).Value.Id, Is.EqualTo(3));
+        Assert.That(WorldTools.ResolveCaravan("", [caravans[2]], true).Value.Id, Is.EqualTo(3));
     }
 
     [TestCase(0, "no time")]

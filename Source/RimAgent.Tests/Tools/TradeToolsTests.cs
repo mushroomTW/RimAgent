@@ -32,11 +32,11 @@ public class TradeToolsTests
             Name = name,
             Faction = "Outlanders",
             Silver = 1200,
-            Goods = new[]
-            {
+            Goods =
+            [
                 new TradeGoodsInfo { DefName = "ComponentSpacer", Label = "spacer component", Count = 8, MarketValue = 55 },
                 new TradeGoodsInfo { DefName = "MedicineUltratech", Label = "ultratech medicine", Count = 12, MarketValue = 38 }
-            }
+            ]
         };
     }
 
@@ -49,11 +49,11 @@ public class TradeToolsTests
             Name = name,
             Faction = "Tribe",
             Silver = 350,
-            Goods = new[]
-            {
+            Goods =
+            [
                 new TradeGoodsInfo { DefName = "Steel", Label = "steel", Count = 100, MarketValue = 2 },
                 new TradeGoodsInfo { DefName = "HerbalMedicine", Label = "herbal medicine", Count = 20, MarketValue = 8 }
-            }
+            ]
         };
     }
 
@@ -63,11 +63,11 @@ public class TradeToolsTests
         _world.Colonists.Add(FakeGameWorld.MakeColonist(102, "Bob", "", "Jones"));
         _world.Resources = new ResourceSnapshot
         {
-            Items = new[]
-            {
+            Items =
+            [
                 new ResourceInfo { DefName = "Silver", Label = "silver", Count = 5000, Category = "Resources" },
                 new ResourceInfo { DefName = "Steel", Label = "steel", Count = 300, Category = "Resources" }
-            }
+            ]
         };
         _world.Prices["ComponentSpacer"] = 55;
         _world.Prices["MedicineUltratech"] = 38;
@@ -245,7 +245,7 @@ public class TradeToolsTests
     public void BuyNameIsResolvedAmongTheTradersGoods()
     {
         // 全遊戲目錄裡 "component" 有多個候選（模組包更多）；商人只賣其中一種時直接對到它。
-        _world.TradeGoods = _world.TradeGoods.Concat(new[] { new DefInfo("ComponentIndustrial", "component") }).ToArray();
+        _world.TradeGoods = _world.TradeGoods.Concat([new DefInfo("ComponentIndustrial", "component")]).ToArray();
         SeedColonyStock();
         TraderInfo ship = MakeOrbitalShip();
         _world.Traders.Add(ship);

@@ -38,9 +38,9 @@ internal sealed class DecisionToolPackSelector
         IReadOnlyList<ToolPacks.Pack> candidates,
         CancellationToken cancellationToken = default)
     {
-        if (candidates == null || candidates.Count == 0 || string.IsNullOrWhiteSpace(state)) return Array.Empty<string>();
+        if (candidates == null || candidates.Count == 0 || string.IsNullOrWhiteSpace(state)) return [];
         IDecisionService service = _decisionService ?? ResolveService();
-        if (service == null) return Array.Empty<string>();
+        if (service == null) return [];
 
         DecisionQuestion[] questions = [.. candidates.Select(p => DecisionQuestion.Noul(
             p.Id,
@@ -60,7 +60,7 @@ internal sealed class DecisionToolPackSelector
         catch (Exception ex)
         {
             DecisionDiagnostics.Warn(nameof(DecisionToolPackSelector), ex);
-            return Array.Empty<string>();
+            return [];
         }
 
         return candidates.Where(pack => result != null && result.TryGet(pack.Id, out var answer)

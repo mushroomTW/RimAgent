@@ -155,25 +155,25 @@ public partial class Window_Agent
 
     private static string ModeLabel(AgentMode mode)
     {
-        switch (mode)
+        return mode switch
         {
-            case AgentMode.Confirm: return "RimAgent.Settings.Mode.Confirm".Translate();
-            case AgentMode.Execute: return "RimAgent.Settings.Mode.Execute".Translate();
-            case AgentMode.Auto: return "RimAgent.Settings.Mode.Auto".Translate();
-            default: return "RimAgent.Settings.Mode.Autonomous".Translate();
-        }
+            AgentMode.Confirm => (string)"RimAgent.Settings.Mode.Confirm".Translate(),
+            AgentMode.Execute => (string)"RimAgent.Settings.Mode.Execute".Translate(),
+            AgentMode.Auto => (string)"RimAgent.Settings.Mode.Auto".Translate(),
+            _ => (string)"RimAgent.Settings.Mode.Autonomous".Translate(),
+        };
     }
 
     /// <summary>模式說明（含自動／完整權限的風險提醒）；設定頁不再列模式，改在下拉選單與按鈕的提示顯示。</summary>
     private static string ModeDescription(AgentMode mode)
     {
-        switch (mode)
+        return mode switch
         {
-            case AgentMode.Confirm: return "RimAgent.Settings.Mode.ConfirmDesc".Translate();
-            case AgentMode.Execute: return "RimAgent.Settings.Mode.ExecuteDesc".Translate();
-            case AgentMode.Auto: return "RimAgent.Settings.Mode.AutoDesc".Translate();
-            default: return "RimAgent.Settings.Mode.AutonomousDesc".Translate();
-        }
+            AgentMode.Confirm => (string)"RimAgent.Settings.Mode.ConfirmDesc".Translate(),
+            AgentMode.Execute => (string)"RimAgent.Settings.Mode.ExecuteDesc".Translate(),
+            AgentMode.Auto => (string)"RimAgent.Settings.Mode.AutoDesc".Translate(),
+            _ => (string)"RimAgent.Settings.Mode.AutonomousDesc".Translate(),
+        };
     }
 
     private static string ReasoningLabel(ReasoningLevel level)

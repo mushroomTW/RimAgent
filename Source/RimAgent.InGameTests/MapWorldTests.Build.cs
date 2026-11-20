@@ -15,9 +15,9 @@ internal sealed partial class MapWorldTests
 
     /// <summary>BuildingInfoMatchesVanillaDefs 中反覆使用的原版建築規格預期關鍵字，避免每次測試都重新建立陣列。</summary>
     private static readonly string[] _reactorExpectedText =
-    {
+    [
         "Size: 6x7", "makes it 7x6", "Heavy support", "must not be under a roof", "Ship part"
-    };
+    ];
 
     [Test]
     public void MineDesignationAddsAndRemoves()

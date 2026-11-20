@@ -1,4 +1,7 @@
-# RimAgent 程式碼風格設定（與 RimLLM Framework 一致）
+# RimAgent 與 RimLLM Framework 共用的程式碼風格設定。
+# 兩個儲存庫的此檔案內容須保持一致，修改時請同步。
+# 規則嚴重性一律以 dotnet_diagnostic.<ID>.severity 指定，
+# 因為選項尾端的「:severity」寫法只有 IDE 會讀，建置（EnforceCodeStyleInBuild）不會採用。
 root = true
 
 [*]
@@ -7,6 +10,8 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
+# 工作目錄一律 CRLF，與 .gitattributes 的 eol=crlf 一致；儲存庫內仍存 LF
+end_of_line = crlf
 
 [*.{xml,csproj,slnx,props,targets}]
 indent_size = 2
@@ -19,27 +24,72 @@ indent_size = 2
 trim_trailing_whitespace = false
 
 [*.cs]
+#### 格式 ####
 csharp_new_line_before_open_brace = all
+dotnet_sort_system_directives_first = true
+
+#### 大括號 ####
 # 慣例允許單行守衛子句不加大括號，多行才提示加大括號
-csharp_prefer_braces = when_multiline:suggestion
+csharp_prefer_braces = when_multiline
+dotnet_diagnostic.IDE0011.severity = suggestion
+
+#### var ####
 # var 與明確型別都可接受，不提示
 dotnet_diagnostic.IDE0007.severity = none
 dotnet_diagnostic.IDE0008.severity = none
+
+#### 現代 C# 語法偏好（.NET 10／C# 14） ####
+# 檔案範圍命名空間
+csharp_style_namespace_declarations = file_scoped
+dotnet_diagnostic.IDE0161.severity = warning
+
+# 型別明顯時使用目標型別 new()
+csharp_style_implicit_object_creation_when_type_is_apparent = true
+dotnet_diagnostic.IDE0090.severity = warning
+
+# 集合運算式：陣列、空集合與 Create 類寫法改用 [...] 明顯更簡潔，建置時強制
+dotnet_style_prefer_collection_expression = when_types_loosely_match
+dotnet_diagnostic.IDE0300.severity = warning
+dotnet_diagnostic.IDE0301.severity = warning
+dotnet_diagnostic.IDE0302.severity = warning
+dotnet_diagnostic.IDE0303.severity = warning
+# IDE0305 會把 x.Where(...).ToList() 改成 [.. x.Where(...)]，長串 LINQ 可讀性較差，只在 IDE 提示
+dotnet_diagnostic.IDE0305.severity = suggestion
 # 集合初始化（IDE0028）不提示
 dotnet_diagnostic.IDE0028.severity = none
-dotnet_sort_system_directives_first = true
 
-# C# 現代語法偏好
-csharp_style_namespace_declarations = file_scoped:warning
-csharp_style_implicit_object_creation_when_type_is_apparent = true:warning
-csharp_style_prefer_collection_expression = when_types_loosely_match:warning
-csharp_style_pattern_matching_over_is_with_cast_check = true:warning
-csharp_style_pattern_matching_over_as_with_null_check = true:warning
-csharp_style_prefer_not_pattern = true:warning
-csharp_prefer_simple_using_statement = true:warning
-dotnet_style_coalesce_expression = true:warning
-dotnet_style_null_propagation = true:warning
+# 簡化 using 陳述式
+csharp_prefer_simple_using_statement = true
+dotnet_diagnostic.IDE0063.severity = warning
 
+# 模式比對
+csharp_style_pattern_matching_over_as_with_null_check = true
+csharp_style_pattern_matching_over_is_with_cast_check = true
+csharp_style_prefer_not_pattern = true
+csharp_style_prefer_extended_property_pattern = true
+dotnet_diagnostic.IDE0019.severity = warning
+dotnet_diagnostic.IDE0020.severity = warning
+dotnet_diagnostic.IDE0083.severity = warning
+dotnet_diagnostic.IDE0170.severity = warning
+
+# switch 運算式
+csharp_style_prefer_switch_expression = true
+dotnet_diagnostic.IDE0066.severity = warning
+
+# null 合併與 null 條件運算子
+dotnet_style_coalesce_expression = true
+dotnet_style_null_propagation = true
+# ?? 與 ?. 會略過 UnityEngine.Object 覆寫的 == null，對已銷毀的 Unity 物件結果不同，因此不主動要求改寫
+dotnet_diagnostic.IDE0029.severity = none
+dotnet_diagnostic.IDE0030.severity = warning
+dotnet_diagnostic.IDE0031.severity = none
+dotnet_diagnostic.IDE0270.severity = none
+
+# 停用 primary constructor，避免改變公開型別與反射契約
+csharp_style_prefer_primary_constructors = false
+dotnet_diagnostic.IDE0290.severity = none
+
+#### 命名 ####
 # 私有欄位使用 _camelCase 前綴
 dotnet_naming_rule.private_fields_underscore.symbols = private_fields
 dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case
@@ -49,7 +99,10 @@ dotnet_naming_symbols.private_fields.applicable_accessibilities = private
 dotnet_naming_style.underscore_camel_case.required_prefix = _
 dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 
+#### 第三方分析器 ####
+# S101（型別應為 PascalCase）：RimLLM 是品牌名稱，改成 RimLlm* 會破壞公開 API 與下游 Mod 相容性
+dotnet_diagnostic.S101.severity = none
+
 [**/*Tests*/**.cs]
 # 測試程式碼允許行內陣列常數，不強制抽為靜態唯讀欄位，確保測試的局部可讀性
 dotnet_diagnostic.CA1861.severity = none
-
