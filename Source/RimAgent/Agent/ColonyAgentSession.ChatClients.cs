@@ -69,13 +69,13 @@ public sealed partial class ColonyAgentSession
 
         public RunOptionsCapture(IChatClient innerClient) : base(innerClient) { }
 
-        public override async Task<ChatResponse> GetResponseAsync(
+        public override Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
             ChatOptions options = null,
             CancellationToken cancellationToken = default)
         {
             Volatile.Write(ref _current, options);
-            return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            return base.GetResponseAsync(messages, options, cancellationToken);
         }
 
         public void AddTools(IEnumerable<AITool> tools)

@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,7 +33,7 @@ public partial class RimAgentGameComponent
                 _globalMemory = GlobalMemoryFile.Load(GlobalMemoryPath, out string warning);
                 if (warning != null) Log.Warning("RimAgent " + warning);
                 if (_globalMemory.DroppedOnLoad > 0)
-                    Log.Warning("RimAgent discarded " + _globalMemory.DroppedOnLoad + " global memory file(s) that exceed the current limits.");
+                    Log.Warning("RimAgent discarded " + _globalMemory.DroppedOnLoad.ToString(CultureInfo.InvariantCulture) + " global memory file(s) that exceed the current limits.");
             }
             return _globalMemory;
         }

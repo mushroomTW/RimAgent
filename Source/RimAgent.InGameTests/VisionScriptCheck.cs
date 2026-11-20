@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -81,8 +82,8 @@ public sealed class VisionScriptCheckComponent : GameComponent
         int created = map.zoneManager.AllZones.Count - zonesBefore;
         Log.Message(Prefix + "zone result: " + text);
         if (text.StartsWith("Error:", StringComparison.Ordinal)) failures.Add("zone: " + text);
-        if (!text.Contains("Skipped 6 cells (already in zone")) failures.Add("zone: expected 6 skipped cells, got: " + text);
-        if (created != 2) failures.Add($"zone: expected 2 separate zones, created {created}");
+        if (!text.Contains("Skipped 6 cells (already in zone", StringComparison.Ordinal)) failures.Add("zone: expected 6 skipped cells, got: " + text);
+        if (created != 2) failures.Add(string.Create(CultureInfo.InvariantCulture, $"zone: expected 2 separate zones, created {created}"));
         foreach (Zone zone in map.zoneManager.AllZones.Where(zn => !IsContiguous(zn))) failures.Add($"zone: {zone.label} is not contiguous");
     }
 
@@ -90,7 +91,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
     {
         IntVec3 start = map.mapPawns.FreeColonistsSpawned.FirstOrDefault()?.Position ?? map.Center;
         var designator = new Designator_ZoneAddStockpile_Resources();
-        foreach (IntVec3 corner in GenRadial.RadialCellsAround(start, 30f, true))
+        foreach (IntVec3 corner in GenRadial.RadialCellsAround(start, 30f, useCenter: true))
         {
             var rect = new CellRect(corner.x, corner.z, width, height);
             if (!rect.InBounds(map)) continue;
@@ -139,9 +140,9 @@ public sealed class VisionScriptCheckComponent : GameComponent
             return;
         }
         (int width, int height) = Decode(jpeg);
-        Log.Message(Prefix + $"screenshot {Screen.width}x{Screen.height} -> jpeg {width}x{height}, {jpeg.Length} bytes");
+        Log.Message(Prefix + string.Create(CultureInfo.InvariantCulture, $"screenshot {Screen.width}x{Screen.height} -> jpeg {width}x{height}, {jpeg.Length} bytes"));
         if (jpeg[0] != 0xFF || jpeg[1] != 0xD8) failures.Add("screenshot: result is not a JPEG");
-        if (Math.Max(width, height) > ModelImageEncoder.MaxEdge) failures.Add($"screenshot: {width}x{height} exceeds {ModelImageEncoder.MaxEdge}");
+        if (Math.Max(width, height) > ModelImageEncoder.MaxEdge) failures.Add(string.Create(CultureInfo.InvariantCulture, $"screenshot: {width}x{height} exceeds {ModelImageEncoder.MaxEdge}"));
 
         string outside = Path.Combine(TestHelpers.RimAgentContent.RootDir, "About", "Preview.png");
         if (world.ReadScreenshotFile(outside) != null) failures.Add("screenshot: read a PNG outside the screenshot folder");
@@ -177,15 +178,15 @@ public sealed class VisionScriptCheckComponent : GameComponent
         else
         {
             Color32 center = DecodePixel(fromDib, width / 2, height / 2, out int w, out int h);
-            if (w != width || h != height) failures.Add($"dib: size {w}x{h}, expected {width}x{height}");
-            if (center.r < 180 || center.g > 60 || center.b > 60) failures.Add($"dib: color {center}, expected red");
+            if (w != width || h != height) failures.Add(string.Create(CultureInfo.InvariantCulture, $"dib: size {w}x{h}, expected {width}x{height}"));
+            if (center.r < 180 || center.g > 60 || center.b > 60) failures.Add(string.Create(CultureInfo.InvariantCulture, $"dib: color {center}, expected red"));
         }
 
-        var big = new Texture2D(2000, 1000, TextureFormat.RGBA32, false);
+        var big = new Texture2D(2000, 1000, TextureFormat.RGBA32, mipChain: false);
         try
         {
             (int w, int h) = Decode(ModelImageEncoder.FromTexture(big));
-            if (w != 1280 || h != 640) failures.Add($"downscale: 2000x1000 -> {w}x{h}, expected 1280x640");
+            if (w != 1280 || h != 640) failures.Add(string.Create(CultureInfo.InvariantCulture, $"downscale: 2000x1000 -> {w}x{h}, expected 1280x640"));
         }
         finally
         {
@@ -196,7 +197,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
     /// <summary>run_script 在遊戲內逐步呼叫真正的工具；查詢類工具不改變狀態。</summary>
     private static async Task CheckRunScript(RimWorldGameWorld world, List<string> failures)
     {
-        var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Autonomous));
+        var registry = new AgentToolRegistry(world, new AgentTranscript(), undo: null, new ConfirmationGate(() => AgentMode.Autonomous));
         var script = new ScriptTools(() => registry.Select(ToolPermissions.All), registry.Outputs);
         string text = await script.RunScript(
             "[{\"tool\":\"get_colony_overview\"},{\"tool\":\"find_things\",\"args\":{\"kind\":\"item\"}," +
@@ -208,7 +209,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
     private static void CheckOversizedInspectArea(RimWorldGameWorld world, List<string> failures)
     {
         string text = new ObserveTools(world).InspectArea(0, 0, 50, 50);
-        if (!text.StartsWith("Note:", StringComparison.Ordinal) || !text.Contains("Area (0,0)-(49,49)"))
+        if (!text.StartsWith("Note:", StringComparison.Ordinal) || !text.Contains("Area (0,0)-(49,49)", StringComparison.Ordinal))
         {
             failures.Add("inspect_area crop: " + text[..Math.Min(200, text.Length)]);
         }

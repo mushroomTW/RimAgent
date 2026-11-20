@@ -21,7 +21,7 @@ internal sealed partial class RimWorldGameWorld
     private static IReadOnlyList<LayoutInfo> _layouts;
 
     public IReadOnlyList<LayoutInfo> Layouts => _layouts ??=
-        DefDatabase<PrefabDef>.AllDefsListForReading
+        [.. DefDatabase<PrefabDef>.AllDefsListForReading
             .Where(d => d.defName.StartsWith(LayoutPrefix, StringComparison.Ordinal))
             .Select(d => new LayoutInfo
             {
@@ -30,8 +30,7 @@ internal sealed partial class RimWorldGameWorld
                 Description = d.description ?? string.Empty,
                 Width = d.size.x,
                 Height = d.size.z
-            })
-            .ToList();
+            })];
 
     public LayoutPlan GetLayoutPlan(string layoutDefName, int x, int z, int rotation)
     {

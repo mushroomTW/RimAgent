@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -66,6 +66,7 @@ public sealed class SaveTools
 
     [AgentTool("save_game", ToolCategory.Save, ToolRisk.Safe)]
     [Description("Saves a checkpoint of the current game that load_save can return to, for example before a risky attack or caravan. Refused while hostiles are on the map, a colonist is downed or bleeding, or a fire burns: a checkpoint must not start in danger. Only the newest 5 checkpoints are kept.")]
+    #pragma warning disable VSTHRD202 // 保留 async：工具由 AIFunction 反射呼叫，例外要放進 Task 才會轉成工具錯誤。
     public async Task<string> SaveGame()
     {
         SaveContext context = _world.GetSaveContext();
@@ -78,6 +79,7 @@ public sealed class SaveTools
 
         return await CreateCheckpointAsync(context);
     }
+    #pragma warning restore VSTHRD202
 
     [AgentTool("load_save", ToolCategory.Save, ToolRisk.Confirm)]
     [Description("Reloads one of this colony's saves from list_saves to undo a disaster such as a colonist's death. Everything after that save is lost, including this conversation and memory written since: only the lesson is carried over, so state what went wrong and what to do differently. Saves newer than the loaded one are discarded. Each save can be reloaded 3 times; once one is used up, it and every older save are locked and the loss stands.")]
@@ -103,7 +105,7 @@ public sealed class SaveTools
 
         int attempt = _ledger.LoadsOf(target) + 1;
         string blocked = ToolText.Blocked(_gate,
-            $"would reload {target.Name} ({FormatTime(target.Tick, context.Tick)}), attempt {attempt}/{SaveLedger.MaxLoadsPerSave}; everything after it is lost.");
+            string.Create(CultureInfo.InvariantCulture, $"would reload {target.Name} ({FormatTime(target.Tick, context.Tick)}), attempt {attempt}/{SaveLedger.MaxLoadsPerSave}; everything after it is lost."));
         if (blocked != null) return blocked;
 
         // 先排程讀檔：LoadGame 只是排成長事件（真正換掉遊戲在之後），失敗時檢查點與紀錄都不能動。
@@ -116,7 +118,7 @@ public sealed class SaveTools
             _world.DeleteCheckpoint(newer.Name);
         }
         attempt = _ledger.RecordLoad(target, saves, context.ColonyId, trimmedLesson);
-        return $"Reloading {target.Name} (attempt {attempt}/{SaveLedger.MaxLoadsPerSave}). This run ends now; the lesson is handed to the reloaded game.";
+        return string.Create(CultureInfo.InvariantCulture, $"Reloading {target.Name} (attempt {attempt}/{SaveLedger.MaxLoadsPerSave}). This run ends now; the lesson is handed to the reloaded game.");
     }
 
     /// <summary>存一份檢查點並刪掉超出份數的舊檢查點；每日自動存檔與 save_game 共用。呼叫端已確認可以存。</summary>
@@ -127,9 +129,7 @@ public sealed class SaveTools
         if (!result.Success) return ToolText.Error(result.Message);
 
         // 新檔下一幀才寫入，清單裡還沒有它：舊檢查點只留 MaxCheckpoints - 1 份。
-        List<SaveSlotInfo> checkpoints = (await ColonySavesAsync(context))
-            .Where(s => s.Checkpoint && !string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        List<SaveSlotInfo> checkpoints = [.. (await ColonySavesAsync(context)).Where(s => s.Checkpoint && !string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))];
         foreach (SaveSlotInfo old in checkpoints.Skip(MaxCheckpoints - 1))
         {
             _world.DeleteCheckpoint(old.Name);
@@ -161,11 +161,8 @@ public sealed class SaveTools
     private async Task<List<SaveSlotInfo>> ColonySavesAsync(SaveContext context)
     {
         IReadOnlyList<SaveSlotInfo> all = await _world.GetSaveFilesAsync();
-        return all
-            .Where(s => s.ColonyId.Length > 0 && string.Equals(s.ColonyId, context.ColonyId, StringComparison.Ordinal))
-            .Where(s => !_ledger.IsAbandoned(s))
-            .OrderByDescending(s => s.Tick)
-            .ToList();
+        return [.. all
+            .Where(s => s.ColonyId.Length > 0 && string.Equals(s.ColonyId, context.ColonyId, StringComparison.Ordinal) && !_ledger.IsAbandoned(s)).OrderByDescending(s => s.Tick)];
     }
 
     private static string FormatTime(int tick, int now)

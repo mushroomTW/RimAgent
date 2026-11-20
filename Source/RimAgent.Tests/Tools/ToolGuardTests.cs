@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -26,7 +27,7 @@ public class ToolGuardTests
         _world = new FakeGameWorld();
         _world.Colonists.Add(FakeGameWorld.MakeColonist(101, "Alice", "Ali", "Smith"));
         _transcript = new AgentTranscript();
-        _registry = new AgentToolRegistry(_world, _transcript, null, new ConfirmationGate(() => AgentMode.Autonomous));
+        _registry = new AgentToolRegistry(_world, _transcript, undo: null, new ConfirmationGate(() => AgentMode.Autonomous));
     }
 
     private AIFunction Tool(string name)
@@ -82,7 +83,7 @@ public class ToolGuardTests
     [Test]
     public async Task MoreThanFiveErrorsAreCapped()
     {
-        for (int i = 1; i <= 7; i++) _world.PendingGameErrors.Add("error " + i);
+        for (int i = 1; i <= 7; i++) _world.PendingGameErrors.Add("error " + i.ToString(CultureInfo.InvariantCulture));
 
         string text = (await Tool("get_colony_overview").InvokeAsync([]))?.ToString();
 

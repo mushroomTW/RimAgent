@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,7 +16,7 @@ internal sealed partial class FakeGameWorld
 
     public List<int> MedicalEmergencies { get; set; } = [];
 
-    public IReadOnlyList<int> GetColonistsInMedicalEmergency() => MedicalEmergencies.ToList();
+    public IReadOnlyList<int> GetColonistsInMedicalEmergency() => [.. MedicalEmergencies];
 
     public int FireCount { get; set; }
 
@@ -25,7 +26,7 @@ internal sealed partial class FakeGameWorld
     {
         ColonistQueryCount++;
         // 真實世界每次查詢都回新快照；開啟後讓復原流程的「重新讀取」行為也能被測試。
-        return SnapshotColonists ? Colonists.Select(CloneColonist).ToList() : Colonists;
+        return SnapshotColonists ? [.. Colonists.Select(CloneColonist)] : Colonists;
     }
 
     /// <summary>測試用：讓 GetColonists 回傳複本，模擬真實 IGameWorld 的新鮮快照。</summary>
@@ -111,7 +112,7 @@ internal sealed partial class FakeGameWorld
             if (Research.Current != null) projects.Add(new DefInfo(Research.Current.DefName, Research.Current.Label));
             foreach (ResearchProjectInfo p in Research.Available)
             {
-                if (projects.Any(d => string.Equals(d.DefName, p.DefName, StringComparison.OrdinalIgnoreCase))) continue;
+                if (projects.Exists(d => string.Equals(d.DefName, p.DefName, StringComparison.OrdinalIgnoreCase))) continue;
                 projects.Add(new DefInfo(p.DefName, p.Label));
             }
             return projects;
@@ -144,24 +145,24 @@ internal sealed partial class FakeGameWorld
 
     public IReadOnlyList<MapInfo> GetMaps()
     {
-        return Maps.Select(m => new MapInfo
+        return [.. Maps.Select(m => new MapInfo
         {
             Id = m.Id,
             Label = m.Label,
             Tile = m.Tile,
             ColonistCount = m.ColonistCount,
             IsCurrent = m.Id == CurrentMapId
-        }).ToList();
+        })];
     }
 
     public CommandResult SetCurrentMap(int mapId)
     {
-        Calls.Add($"SetCurrentMap({mapId})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SetCurrentMap({mapId})"));
         MapInfo map = Maps.FirstOrDefault(m => m.Id == mapId);
-        if (map == null) return CommandResult.Fail($"no map has id {mapId}");
+        if (map == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no map has id {mapId}"));
         if (mapId == CurrentMapId) return CommandResult.Ok($"{map.Label} is already the current map.");
         CurrentMapId = mapId;
-        return CommandResult.Ok($"Switched to {map.Label} [{mapId}]. Later tools now operate on this map.");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Switched to {map.Label} [{mapId}]. Later tools now operate on this map."));
     }
 
     public IReadOnlyList<ThingInfo> GetSelection() => Selection;
@@ -182,7 +183,7 @@ internal sealed partial class FakeGameWorld
             X = x, Z = z, TerrainDefName = "Soil", Terrain = "soil", Fertility = 1f,
             Walkable = !UnwalkableCells.Contains((x, z)), Room = Outdoors,
             Support = LightOnlyCells.Contains((x, z)) ? GroundSupport.Light : GroundSupport.Heavy,
-            Things = Things.Where(t => t.X == x && t.Z == z).ToList()
+            Things = [.. Things.Where(t => t.X == x && t.Z == z)]
         };
     }
 
@@ -214,7 +215,7 @@ internal sealed partial class FakeGameWorld
     public Task<CommandResult> WaitTicksAsync(int ticks, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        Calls.Add($"WaitTicks({ticks})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"WaitTicks({ticks})"));
         if (Paused) return Task.FromResult(CommandResult.Fail("the game is paused"));
         int target = TicksGame + ticks;
         if (EventAtTick.HasValue && EventAtTick.Value > TicksGame && EventAtTick.Value <= target)

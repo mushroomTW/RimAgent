@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -28,7 +29,7 @@ public sealed partial class ColonyAgentSession
         UndoFrame frame = Undo.Pop();
         if (frame == null) return null;
 
-        List<ColonistInfo> colonists = _world.GetColonists().ToList();
+        List<ColonistInfo> colonists = [.. _world.GetColonists()];
         Dictionary<int, string> names = colonists.ToDictionary(c => c.Id, c => c.Name);
         var failures = new List<string>();
         var blockedPriorities = new HashSet<(int, string)>();
@@ -52,7 +53,7 @@ public sealed partial class ColonyAgentSession
             }
         }
 
-        string summary = $"Undid \"{frame.Label}\": restored {restored} work setting(s).";
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Undid \"{frame.Label}\": restored {restored} work setting(s).");
         if (restoredManualPriorities) summary += " Manual work priorities restored.";
         if (failures.Count > 0) summary += " Failures: " + string.Join("; ", failures);
         Transcript.Add(new TranscriptEntry
@@ -66,7 +67,7 @@ public sealed partial class ColonyAgentSession
 
     private static string NameOf(Dictionary<int, string> names, int pawnId)
     {
-        return names.TryGetValue(pawnId, out string name) ? name : ("[" + pawnId + "]");
+        return names.TryGetValue(pawnId, out string name) ? name : ("[" + pawnId.ToString(CultureInfo.InvariantCulture) + "]");
     }
 
     private void RestoreAssignments(UndoFrame frame, Dictionary<int, string> names,
@@ -86,7 +87,7 @@ public sealed partial class ColonyAgentSession
                 if (!unchanged)
                 {
                     blockedAssignments.Add(key);
-                    failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten.");
+                    failures.Add(string.Create(CultureInfo.InvariantCulture, $"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten."));
                     continue;
                 }
             }
@@ -98,7 +99,7 @@ public sealed partial class ColonyAgentSession
             else
             {
                 blockedAssignments.Add(key);
-                failures.Add($"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}");
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}"));
             }
         }
     }

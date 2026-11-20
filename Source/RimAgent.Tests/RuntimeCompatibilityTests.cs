@@ -72,6 +72,6 @@ public class RuntimeCompatibilityTests
         }
 
         Assert.That(prepared, Is.GreaterThan(100), "應該有掃到方法");
-        Assert.That(failures, Is.Empty, string.Join("\n", failures));
+        Assert.That(failures, Is.Empty, string.Join('\n', failures));
     }
 }

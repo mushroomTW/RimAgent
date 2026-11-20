@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using RimAgent.Agent;
 using RimAgent.Game;
@@ -100,13 +101,13 @@ public sealed class CombatTools
         string targetLabel = ResolveTargetLabel(targetId);
         if (targetLabel == null)
         {
-            return ToolText.Error($"no target with id {targetId} on the map. Use list_threats or find_things to get a valid id.");
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no target with id {targetId} on the map. Use list_threats or find_things to get a valid id."));
         }
 
         Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
         if (!pawns.Success) return pawns.Error;
 
-        string attackBlocked = ToolText.Blocked(_gate, $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed).");
+        string attackBlocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed)."));
         if (attackBlocked != null) return attackBlocked;
 
         var attacking = new List<ColonistInfo>();
@@ -120,8 +121,8 @@ public sealed class CombatTools
             else failures.Add($"{c.Name}: {r.Message}");
         }
 
-        if (attacking.Count == 0) return ToolText.Error($"nobody could attack {targetLabel} [{targetId}]. " + string.Join("; ", failures));
-        string summary = $"Ordered {ToolText.Names(attacking)} to attack {targetLabel} [{targetId}].";
+        if (attacking.Count == 0) return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"nobody could attack {targetLabel} [{targetId}]. ") + string.Join("; ", failures));
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Ordered {ToolText.Names(attacking)} to attack {targetLabel} [{targetId}].");
         return failures.Count == 0 ? summary : summary + " Skipped: " + string.Join("; ", failures);
     }
 
@@ -137,12 +138,12 @@ public sealed class CombatTools
         Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
         if (!pawn.Success) return pawn.Error;
 
-        string blocked = ToolText.Blocked(_gate, $"would order {pawn.Value.Name} to {kind} [{targetId}].");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would order {pawn.Value.Name} to {kind} [{targetId}]."));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.OrderJob(pawn.Value.Id, kind, targetId);
-        if (!r.Success) return ToolText.Error($"{pawn.Value.Name} cannot {kind} [{targetId}]: {r.Message}");
-        return $"Ordered {pawn.Value.Name} to {kind} [{targetId}]: {r.Message}.";
+        if (!r.Success) return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"{pawn.Value.Name} cannot {kind} [{targetId}]: {r.Message}"));
+        return string.Create(CultureInfo.InvariantCulture, $"Ordered {pawn.Value.Name} to {kind} [{targetId}]: {r.Message}.");
     }
 
     private string ResolveTargetLabel(int targetId)
@@ -166,7 +167,7 @@ public sealed class CombatTools
         }
         if (!c.Drafted)
         {
-            CommandResult draft = _world.SetDrafted(c.Id, true);
+            CommandResult draft = _world.SetDrafted(c.Id, drafted: true);
             if (!draft.Success)
             {
                 failures.Add($"{c.Name}: {draft.Message}");

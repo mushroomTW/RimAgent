@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,7 +75,7 @@ public sealed class TimeTools
     {
         if (hours < 1 || hours > MaxWaitHours) return ToolText.Error($"hours must be 1-{MaxWaitHours}.");
 
-        string blocked = ToolText.Blocked(_gate, $"would let {hours} in-game hour(s) pass.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would let {hours} in-game hour(s) pass."));
         if (blocked != null) return blocked;
 
         // 分段等：每段之間看一次敵人、倒地流血與火災，任一變多就先回來，不讓模型悶著頭等完整段時間。
@@ -97,29 +98,8 @@ public sealed class TimeTools
                 break;
             }
             waited += chunk;
-            if (_world.GetHostileCount() > hostilesBefore)
-            {
-                stopReason = "new hostiles appeared";
-                break;
-            }
-            IReadOnlyList<int> emergencies = _world.GetColonistsInMedicalEmergency();
-            if (emergencies.Any(id => !knownEmergencies.Contains(id)))
-            {
-                stopReason = "a colonist went down or started bleeding badly";
-                break;
-            }
-            knownEmergencies.IntersectWith(emergencies);
-            if (_world.GetFireCount() > firesBefore)
-            {
-                stopReason = "a fire started";
-                break;
-            }
-            // 插話要等工具結束才會附在結果送給模型：長等待不先回來，玩家要等好幾個遊戲小時才有反應。
-            if (PlayerMessageWaiting)
-            {
-                stopReason = "the player sent a message";
-                break;
-            }
+            stopReason = InterruptionReason(hostilesBefore, knownEmergencies, firesBefore);
+            if (stopReason != null) break;
         }
         // 等待期間遊戲（或其他模組）記下的錯誤不是這次呼叫造成的，丟掉，免得包裝層把它們附在結果後面誤導模型。
         _world.TakeNewGameErrors();
@@ -129,9 +109,23 @@ public sealed class TimeTools
             return ToolText.Error($"cannot wait: {stopReason}. Unpause with set_time_speed first, or tell the player.");
         }
         string head = stopReason == null
-            ? $"Waited {hours} in-game hour(s)."
-            : $"Stopped waiting after about {ToolText.Num(waited / (float)TicksPerHour)} of {hours} in-game hour(s): {stopReason}.";
+            ? string.Create(CultureInfo.InvariantCulture, $"Waited {hours} in-game hour(s).")
+            : string.Create(CultureInfo.InvariantCulture, $"Stopped waiting after about {ToolText.Num(waited / (float)TicksPerHour)} of {hours} in-game hour(s): {stopReason}.");
         return head + "\n" + ObserveTools.FormatOverview(_world);
+    }
+
+    /// <summary>
+    /// 等待中該提早回來的原因；沒有則為 null。已知的急診名單跟著縮小，恢復後再次倒下的人也算新的。
+    /// </summary>
+    private string InterruptionReason(int hostilesBefore, HashSet<int> knownEmergencies, int firesBefore)
+    {
+        if (_world.GetHostileCount() > hostilesBefore) return "new hostiles appeared";
+        IReadOnlyList<int> emergencies = _world.GetColonistsInMedicalEmergency();
+        if (emergencies.Any(id => !knownEmergencies.Contains(id))) return "a colonist went down or started bleeding badly";
+        knownEmergencies.IntersectWith(emergencies);
+        if (_world.GetFireCount() > firesBefore) return "a fire started";
+        // 插話要等工具結束才會附在結果送給模型：長等待不先回來，玩家要等好幾個遊戲小時才有反應。
+        return PlayerMessageWaiting ? "the player sent a message" : null;
     }
 
     /// <summary>中文別名（大小寫不敏感）；英文循 DefResolver 的既有規則。</summary>

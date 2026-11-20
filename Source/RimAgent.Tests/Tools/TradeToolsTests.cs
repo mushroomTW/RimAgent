@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -123,7 +124,7 @@ public class TradeToolsTests
         var session = new ColonyAgentSession(client, world, () => permissions, 8);
 
         await session.SendAsync("one");
-        permissions.Set(ToolCategory.Trade, true);
+        permissions.Set(ToolCategory.Trade, value: true);
         await session.SendAsync("two");
 
         // 交易工具收在包裡：看包索引是否出現。
@@ -136,7 +137,7 @@ public class TradeToolsTests
     {
         _world.Traders.Add(MakeOrbitalShip());
         var client = new ScriptedChatClient();
-        client.CallTool("list_traders", null).Reply("Two ships in orbit.");
+        client.CallTool("list_traders", arguments: null).Reply("Two ships in orbit.");
         var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade), 8);
 
         await session.SendAsync("軌道上有誰在賣東西？");
@@ -171,7 +172,7 @@ public class TradeToolsTests
     public void LongStockListIsTruncatedWithACount()
     {
         var goods = Enumerable.Range(1, TradeTools.MaxGoodsListed + 5)
-            .Select(i => new TradeGoodsInfo { DefName = "Good" + i, Label = "good " + i, Count = i })
+            .Select(i => new TradeGoodsInfo { DefName = "Good" + i.ToString(CultureInfo.InvariantCulture), Label = "good " + i.ToString(CultureInfo.InvariantCulture), Count = i })
             .ToList();
         _world.Traders.Add(new TraderInfo { Kind = TraderInfo.OrbitalKind, Name = "Bulk freighter", Goods = goods });
 
@@ -212,7 +213,7 @@ public class TradeToolsTests
     {
         _world.Traders.Add(MakeVisitorCaravan());
         var client = new ScriptedChatClient();
-        client.CallTool("list_traders", null).Reply("A tribe is visiting.");
+        client.CallTool("list_traders", arguments: null).Reply("A tribe is visiting.");
         var session = new ColonyAgentSession(client, _world, () => ToolPermissions.For(ToolCategory.Observe, ToolCategory.Trade), 8);
 
         await session.SendAsync("來訪商隊在賣什麼？");
@@ -245,7 +246,7 @@ public class TradeToolsTests
     public void BuyNameIsResolvedAmongTheTradersGoods()
     {
         // 全遊戲目錄裡 "component" 有多個候選（模組包更多）；商人只賣其中一種時直接對到它。
-        _world.TradeGoods = _world.TradeGoods.Concat([new DefInfo("ComponentIndustrial", "component")]).ToArray();
+        _world.TradeGoods = [.. _world.TradeGoods, new DefInfo("ComponentIndustrial", "component")];
         SeedColonyStock();
         TraderInfo ship = MakeOrbitalShip();
         _world.Traders.Add(ship);

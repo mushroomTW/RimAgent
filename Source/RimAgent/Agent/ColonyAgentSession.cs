@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -116,22 +116,8 @@ public sealed partial class ColonyAgentSession
         _world = world;
         _memory = memory ?? new AgentMemoryStore();
         _instructions = instructions;
-        // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
-        var fallbackClassifier = new RiskClassifier(
-            new ModelSlotChatClient(classifierClient ?? innerClient, null, routing?.ClassifierReasoning),
-            classifierModel, classifierPrompt);
-
-        IRiskChecker classifier = fallbackClassifier;
-        // 判準檔在才可能有決策模型路徑；決策模型本身在每次判定時才決定要不要用
-        // （玩家可能進遊戲後才去框架設定好，那時下一個命令就該走決策模型）。
-        if (!string.IsNullOrWhiteSpace(decisionRiskCriteria?.Invoke()))
-        {
-            classifier = new DecisionRiskChecker(
-                decisionService,
-                fallbackClassifier,
-                decisionRiskCriteria,
-                () => DecisionServiceFactory.Create());
-        }
+        IRiskChecker classifier = CreateRiskChecker(
+            classifierClient ?? innerClient, classifierModel, classifierPrompt, routing, decisionRiskCriteria, decisionService);
 
         _router = router ?? new DecisionReasoningRouter(
             decisionService,
@@ -158,35 +144,88 @@ public sealed partial class ColonyAgentSession
             new ThinkingActivityClient(_tokenUsage, Activity, Transcript),
             () => ImageInputEnabled,
             path => LoadScreenshotForModelAsync(world, path));
+        _compaction = CreateCompaction();
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
-        // 只折疊送出請求裡較舊的工具輸出，保留最近的對話、使用者意圖與工具呼叫。
-        // 掛在工具迴圈內側（ChatClientBuilder 層）：迴圈每一步送出前都會折疊，長指令中途也不會撐爆視窗；
-        // 掛在 ChatClientAgentOptions 只在指令邊界執行，工具迴圈內不會觸發（見 AF Agent_Step18 說明）。
-        // 這一層只改送出的內容，不動 session 內存的歷史；存量上限另由 TrimStoredHistory 管。
-        // 觸發條件讀即時設定（ShouldAutoCompact），設定頁調整下一句生效，不必重建會話。
-        _compaction = new CompactionProvider(new ToolResultCompactionStrategy(
-            ShouldAutoCompact,
-            AutoFoldPreservedGroups));
         IChatClient compacting = new ChatClientBuilder(_images).UseAIContextProviders(_compaction).Build();
 #pragma warning restore MAAI001
         _runOptions = new RunOptionsCapture(new MessageIsolatingChatClient(compacting));
         var invokingClient = _runOptions.AsMainThreadFunctionInvokingClient(maxSteps);
         _invoking = invokingClient as FunctionInvokingChatClient;
-        // 經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話。不碰遊戲世界，不扣自主模式的工具額度。
-        _toolPackLoader = new LoggingAIFunction(
-            AIFunctionFactory.Create(typeof(ToolPackTools).GetMethod(nameof(ToolPackTools.LoadToolpack)),
-                new ToolPackTools(LoadToolPack), ToolPackTools.ToolName, null, null),
-            Transcript, world, ToolCategory.Observe, ToolRisk.Query, ConfirmGate, null, _registry.Outputs, _interjections,
-            consumesBudget: false, activity: Activity);
-        // 每步呼叫登錄表裡的原工具（含未公告的工具包），照常受權限、模式、閘門與紀錄管控。
-        _scriptRunner = AIFunctionFactory.Create(typeof(ScriptTools).GetMethod(nameof(ScriptTools.RunScript)),
-            new ScriptTools(() => _registry.Select(_permissions()), _registry.Outputs, _interjections), ScriptTools.ToolName, null, null);
+        _toolPackLoader = CreateToolPackLoader(world);
+        _scriptRunner = CreateScriptRunner();
         _summarizer = new ModelSlotChatClient(innerClient, routing?.CompactModel, routing?.CompactReasoning);
         _maxSteps = NormalizeSteps(maxSteps);
-        // 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
-        // 提示詞只走 run 層 Instructions（見 ComposeRunInstructions）：AF 1.28 的 ChatClientAgent 會把
-        // agent 層與 run 層 Instructions 以換行串接而非覆寫，agent 層再放保底前情會讓它每句重複一次。
-        _agent = new ChatClientAgent(invokingClient, new ChatClientAgentOptions
+        _agent = CreateAgent(invokingClient);
+    }
+
+    /// <summary>風險分類器；有判準檔時外包一層決策模型，決策模型不可用時退回分類器。</summary>
+    private static IRiskChecker CreateRiskChecker(
+        IChatClient classifierClient,
+        Func<string> classifierModel,
+        Func<string> classifierPrompt,
+        ModelRouting routing,
+        Func<string> decisionRiskCriteria,
+        IDecisionService decisionService)
+    {
+        // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
+        var fallbackClassifier = new RiskClassifier(
+            new ModelSlotChatClient(classifierClient, model: null, routing?.ClassifierReasoning),
+            classifierModel, classifierPrompt);
+
+        // 判準檔在才可能有決策模型路徑；決策模型本身在每次判定時才決定要不要用
+        // （玩家可能進遊戲後才去框架設定好，那時下一個命令就該走決策模型）。
+        if (string.IsNullOrWhiteSpace(decisionRiskCriteria?.Invoke())) return fallbackClassifier;
+        return new DecisionRiskChecker(
+            decisionService,
+            fallbackClassifier,
+            decisionRiskCriteria,
+            () => DecisionServiceFactory.Create());
+    }
+
+#pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
+    /// <summary>
+    /// 只折疊送出請求裡較舊的工具輸出，保留最近的對話、使用者意圖與工具呼叫。
+    /// 掛在工具迴圈內側（ChatClientBuilder 層）：迴圈每一步送出前都會折疊，長指令中途也不會撐爆視窗；
+    /// 掛在 ChatClientAgentOptions 只在指令邊界執行，工具迴圈內不會觸發（見 AF Agent_Step18 說明）。
+    /// 這一層只改送出的內容，不動 session 內存的歷史；存量上限另由 TrimStoredHistory 管。
+    /// 觸發條件讀即時設定（ShouldAutoCompact），設定頁調整下一句生效，不必重建會話。
+    /// </summary>
+    private CompactionProvider CreateCompaction()
+    {
+        return new CompactionProvider(new ToolResultCompactionStrategy(
+            ShouldAutoCompact,
+            AutoFoldPreservedGroups));
+    }
+#pragma warning restore MAAI001
+
+    /// <summary>
+    /// 載入工具包的工具。經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話。
+    /// 不碰遊戲世界，不扣自主模式的工具額度。
+    /// </summary>
+    private LoggingAIFunction CreateToolPackLoader(IGameWorld world)
+    {
+        return new LoggingAIFunction(
+            AIFunctionFactory.Create(typeof(ToolPackTools).GetMethod(nameof(ToolPackTools.LoadToolpack)),
+                new ToolPackTools(LoadToolPack), ToolPackTools.ToolName, description: null, serializerOptions: null),
+            Transcript, world, ToolCategory.Observe, ToolRisk.Query, ConfirmGate, classifier: null, _registry.Outputs, _interjections,
+            consumesBudget: false, activity: Activity);
+    }
+
+    /// <summary>腳本工具：每步呼叫登錄表裡的原工具（含未公告的工具包），照常受權限、模式、閘門與紀錄管控。</summary>
+    private AIFunction CreateScriptRunner()
+    {
+        return AIFunctionFactory.Create(typeof(ScriptTools).GetMethod(nameof(ScriptTools.RunScript)),
+            new ScriptTools(() => _registry.Select(_permissions()), _registry.Outputs, _interjections), ScriptTools.ToolName, description: null, serializerOptions: null);
+    }
+
+    /// <summary>
+    /// 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
+    /// 提示詞只走 run 層 Instructions（見 ComposeRunInstructions）：AF 1.28 的 ChatClientAgent 會把
+    /// agent 層與 run 層 Instructions 以換行串接而非覆寫，agent 層再放保底前情會讓它每句重複一次。
+    /// </summary>
+    private static ChatClientAgent CreateAgent(IChatClient invokingClient)
+    {
+        return new ChatClientAgent(invokingClient, new ChatClientAgentOptions
         {
             Name = "ColonyAgent",
             UseProvidedChatClientAsIs = true

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -98,7 +99,7 @@ public sealed class ReloadCheckComponent : GameComponent
     private static async Task<bool> HandleStartPhase()
     {
         RimAgentSettings settings = RimAgentMod.Settings;
-        settings.SetAllow(ToolCategory.Save, true);
+        settings.SetAllow(ToolCategory.Save, value: true);
         settings.autonomousCare = true;
         ClearDanger();
         var world = new RimWorldGameWorld(Current.Game);
@@ -108,7 +109,7 @@ public sealed class ReloadCheckComponent : GameComponent
         string saved = await new SaveTools(world).SaveGame();
         Check(saved.StartsWith("Saved checkpoint", StringComparison.Ordinal), "save_game: " + saved);
         // 同原版：autosave 排成長事件。
-        LongEventHandler.QueueLongEvent(() => Find.Autosaver.DoAutosave(), "Autosaving", false, null);
+        LongEventHandler.QueueLongEvent(() => Find.Autosaver.DoAutosave(), "Autosaving", doAsynchronously: false, exceptionHandler: null);
         _phase = Phase.Saved;
         return true;
     }
@@ -122,9 +123,9 @@ public sealed class ReloadCheckComponent : GameComponent
         SaveSlotInfo autosave = files.FirstOrDefault(f => !f.Checkpoint && f.ColonyId == id);
         if (checkpoint == null || autosave == null) return false; // 長事件還沒寫完
         Check(checkpoint.ColonyId == id, "checkpoint colony id");
-        Check(autosave.Tick > 0, "autosave tick read: " + autosave.Tick);
+        Check(autosave.Tick > 0, "autosave tick read: " + autosave.Tick.ToString(CultureInfo.InvariantCulture));
         string list = await new SaveTools(world).ListSaves();
-        Check(list.Contains(_checkpoint) && list.Contains(autosave.Name), "list_saves: " + list);
+        Check(list.Contains(_checkpoint, StringComparison.Ordinal) && list.Contains(autosave.Name, StringComparison.Ordinal), "list_saves: " + list);
         _phase = Phase.Listed;
         return true;
     }
@@ -140,7 +141,7 @@ public sealed class ReloadCheckComponent : GameComponent
         Pawn victim = Find.CurrentMap.mapPawns.FreeColonistsSpawned[0];
         _victimId = victim.thingIDNumber;
         _victimName = victim.LabelShort;
-        victim.Kill(null);
+        victim.Kill(dinfo: null);
         _phase = Phase.Killed;
         return true;
     }
@@ -149,7 +150,7 @@ public sealed class ReloadCheckComponent : GameComponent
     {
         // 死亡在下一次訊號檢查（500 tick）才點到；自主任務沒有供應商會失敗，但指令留在紀錄裡。
         bool started = agent.Session.Transcript.Snapshot()
-            .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("Died: " + _victimName));
+            .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("Died: " + _victimName, StringComparison.Ordinal));
         if (!started && Find.TickManager.Paused) Find.TickManager.CurTimeSpeed = TimeSpeed.Superfast;
         if (!started) return false;
         agent.StopAutonomousRun();
@@ -165,15 +166,15 @@ public sealed class ReloadCheckComponent : GameComponent
         Pawn victim = Find.CurrentMap.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.thingIDNumber == _victimId);
         Check(victim != null && !victim.Dead, "victim alive after reload");
         bool notice = agent.Session.Transcript.Snapshot()
-            .Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Reloaded " + _checkpoint) && e.Text.Contains("test lesson"));
+            .Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Reloaded " + _checkpoint, StringComparison.Ordinal) && e.Text.Contains("test lesson", StringComparison.Ordinal));
         bool reloadRun = agent.Session.Transcript.Snapshot()
-            .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("test lesson"));
+            .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("test lesson", StringComparison.Ordinal));
         if ((!notice || !reloadRun) && Time.realtimeSinceStartup < 600f) return false;
         Check(notice, "reload notice in transcript");
         Check(reloadRun, "reloaded task carries the lesson");
-        Check(_oldWorld.GetNotReadyReason()?.Contains("reloaded") == true, "old session blocked: " + _oldWorld.GetNotReadyReason());
+        Check(_oldWorld.GetNotReadyReason()?.Contains("reloaded", StringComparison.Ordinal) == true, "old session blocked: " + _oldWorld.GetNotReadyReason());
         string list = await new SaveTools(new RimWorldGameWorld(Current.Game)).ListSaves();
-        Check(list.Contains("reloads used 1/3"), "attempt counted: " + list);
+        Check(list.Contains("reloads used 1/3", StringComparison.Ordinal), "attempt counted: " + list);
         Finish();
         return true;
     }
@@ -201,6 +202,6 @@ public sealed class ReloadCheckComponent : GameComponent
     private static void Finish()
     {
         _phase = Phase.Done;
-        Log.Warning(Prefix + (Failures.Count == 0 ? "PASS" : "FAIL (" + Failures.Count + "): " + string.Join(" | ", Failures)));
+        Log.Warning(Prefix + (Failures.Count == 0 ? "PASS" : "FAIL (" + Failures.Count.ToString(CultureInfo.InvariantCulture) + "): " + string.Join(" | ", Failures)));
     }
 }

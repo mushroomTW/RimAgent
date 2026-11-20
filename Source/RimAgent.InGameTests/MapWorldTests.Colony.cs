@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using HarmonyLib;
@@ -35,13 +36,13 @@ internal sealed partial class MapWorldTests
         {
             // 先關掉手動優先級，讓命令一定走「開啟」那條路；清掉其他殖民者的工作順序髒標記，看命令有沒有通知到他們。
             Current.Game.playSettings.useWorkPriorities = false;
-            foreach (Pawn other in others) Traverse.Create(other.workSettings).Field("workGiversDirty").SetValue(false);
+            foreach (Pawn other in others) Traverse.Create(other.workSettings).Field("workGiversDirty").SetValue(value: false);
 
             CommandResult result = _world.SetWorkPriority(pawn.thingIDNumber, workType.defName, target);
             if (!result.Success) failures.Add(CommandFailed + result.Error);
-            if (!Current.Game.playSettings.useWorkPriorities) failures.Add("manual priorities were not turned on for priority " + target);
+            if (!Current.Game.playSettings.useWorkPriorities) failures.Add("manual priorities were not turned on for priority " + target.ToString(CultureInfo.InvariantCulture));
             if (pawn.workSettings.GetPriority(workType) != target)
-                failures.Add($"{pawn.LabelShort} {workType.defName}: vanilla priority {pawn.workSettings.GetPriority(workType)}, expected {target}");
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"{pawn.LabelShort} {workType.defName}: vanilla priority {pawn.workSettings.GetPriority(workType)}, expected {target}"));
             foreach (Pawn other in others.Where(o => !Traverse.Create(o.workSettings).Field("workGiversDirty").GetValue<bool>()))
                 failures.Add($"{other.LabelShort}: work order cache not refreshed after manual priorities turned on");
         }
@@ -104,11 +105,11 @@ internal sealed partial class MapWorldTests
         }
         var cell = new IntVec3(found.Value.minX, 0, found.Value.minZ);
         var failures = new List<string>();
-        CheckBed(map, cell, ThingDefOf.Bed, null, Math.Max(0, before - 1), before, "unclaimed single bed", failures);
+        CheckBed(map, cell, ThingDefOf.Bed, configure: null, Math.Max(0, before - 1), before, "unclaimed single bed", failures);
         CheckBed(map, cell, ThingDefOf.Bed, b => b.Medical = true, before, before, "medical bed", failures);
         CheckBed(map, cell, ThingDefOf.Bed, b => b.ForPrisoners = true, before, before, "prisoner bed", failures);
         ThingDef doubleBed = DefDatabase<ThingDef>.GetNamedSilentFail("DoubleBed");
-        if (doubleBed != null) CheckBed(map, cell, doubleBed, null, Math.Max(0, before - 2), before, "unclaimed double bed", failures);
+        if (doubleBed != null) CheckBed(map, cell, doubleBed, configure: null, Math.Max(0, before - 2), before, "unclaimed double bed", failures);
         TestHelpers.AssertNone(failures, "bedless signal");
     }
 
@@ -124,7 +125,7 @@ internal sealed partial class MapWorldTests
             GenSpawn.Spawn(bed, cell, map, Rot4.North);
             configure?.Invoke(bed);
             int after = RimWorldGameWorld.GetAutonomousSignals().BedlessCount;
-            if (after != expected) failures.Add($"{label}: bedless {before} -> {after}, expected {expected}");
+            if (after != expected) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{label}: bedless {before} -> {after}, expected {expected}"));
         }
         finally
         {

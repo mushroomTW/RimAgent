@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using RimAgent.Game;
@@ -9,6 +10,7 @@ using Verse.AI.Group;
 
 namespace RimAgent.InGameTests;
 
+[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)]
 internal sealed partial class MapWorldTests
 {
     private static readonly string[] _multiCellFurniture = ["DoubleBed", "Table2x2c", "Table2x4c"];
@@ -62,7 +64,7 @@ internal sealed partial class MapWorldTests
         var failures = new List<string>();
 
         // 越界的矩形整筆不做，也不留下空區域。
-        CommandResult outside = _world.AddZone("stockpile", new CellRectSpec(-2, -2, 0, 0), null);
+        CommandResult outside = _world.AddZone("stockpile", new CellRectSpec(-2, -2, 0, 0), plantDefName: null);
         if (outside.Success) failures.Add("out-of-bounds rect was accepted");
         if (map.zoneManager.AllZones.Count != zonesBefore) failures.Add("out-of-bounds rect left a zone behind");
 
@@ -78,12 +80,12 @@ internal sealed partial class MapWorldTests
         Zone zone = null;
         try
         {
-            CommandResult added = _world.AddZone("stockpile", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), null);
+            CommandResult added = _world.AddZone("stockpile", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
             if (!added.Success) failures.Add("add failed: " + added.Error);
             zone = map.zoneManager.ZoneAt(rect.CenterCell);
             if (zone is not Zone_Stockpile) failures.Add($"vanilla zone at {rect.CenterCell} is {zone?.GetType().Name ?? "null"}");
             else if (rect.Cells.Any(c => map.zoneManager.ZoneAt(c) != zone) || zone.CellCount != rect.Area)
-                failures.Add($"zone covers {zone.CellCount} cells, expected exactly {rect}");
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"zone covers {zone.CellCount} cells, expected exactly {rect}"));
 
             if (zone != null)
             {
@@ -112,7 +114,7 @@ internal sealed partial class MapWorldTests
         Map map = Find.CurrentMap;
         ThingDef wall = ThingDefOf.Wall;
         ThingDef stuff = GenStuff.DefaultStuffFor(wall);
-        CellRect? found = FindFreeRect(map, 1, c => GenConstruct.CanPlaceBlueprintAt(wall, c, Rot4.North, map, false, null, null, stuff).Accepted);
+        CellRect? found = FindFreeRect(map, 1, c => GenConstruct.CanPlaceBlueprintAt(wall, c, Rot4.North, map, godMode: false, thingToIgnore: null, thing: null, stuff).Accepted);
         if (found == null)
         {
             TestHelpers.Skip(nameof(WallBlueprintIsPlacedWithDefaultStuff), "no cell accepts a wall blueprint");
@@ -123,7 +125,7 @@ internal sealed partial class MapWorldTests
         var failures = new List<string>();
         try
         {
-            CommandResult result = _world.TryPlaceBlueprint(wall.defName, cell.x, cell.z, 0, null);
+            CommandResult result = _world.TryPlaceBlueprint(wall.defName, cell.x, cell.z, 0, stuffDefName: null);
             if (!result.Success) failures.Add(CommandFailed + result.Error);
             Blueprint_Build blueprint = cell.GetThingList(map).OfType<Blueprint_Build>().FirstOrDefault(b => b.def.entityDefToBuild == wall);
             if (blueprint == null) failures.Add($"no vanilla wall blueprint at {cell}");
@@ -163,7 +165,7 @@ internal sealed partial class MapWorldTests
         }
         ThingDef stuff = def.MadeFromStuff ? GenStuff.DefaultStuffFor(def) : null;
         // 空地 6x6：中心放得下任何朝向的雙人床／桌子，四周還有餘格可比對「旁邊不受影響」。
-        CellRect? found = FindFreeRect(map, 6, c => !c.Fogged(map) && c.Standable(map) && c.GetThingList(map).All(t => t is Plant && !t.def.plant.IsTree));
+        CellRect? found = FindFreeRect(map, 6, c => !c.Fogged(map) && c.Standable(map) && c.GetThingList(map).TrueForAll(t => t is Plant && !t.def.plant.IsTree));
         if (found == null)
         {
             TestHelpers.Skip(name, "no empty visible 6x6 area");
@@ -171,7 +173,7 @@ internal sealed partial class MapWorldTests
         }
         CellRect free = found.Value;
         IntVec3 center = free.CenterCell;
-        if (!GenConstruct.CanPlaceBlueprintAt(def, center, Rot4.North, map, false, null, null, stuff).Accepted)
+        if (!GenConstruct.CanPlaceBlueprintAt(def, center, Rot4.North, map, godMode: false, thingToIgnore: null, thing: null, stuff).Accepted)
         {
             TestHelpers.Skip(name, $"{def.defName} cannot be placed at the free area's center");
             return;
@@ -203,20 +205,20 @@ internal sealed partial class MapWorldTests
         Blueprint_Build placed = free.Cells.SelectMany(c => c.GetThingList(map)).OfType<Blueprint_Build>().Distinct().FirstOrDefault();
         if (placed == null)
         {
-            failures.Add($"rot {rot}: no blueprint was placed: {text}");
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"rot {rot}: no blueprint was placed: {text}"));
             return;
         }
         CellRect vanilla = placed.OccupiedRect();
-        string wantRect = $"({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})";
-        if (!text.Contains("covers " + wantRect)) failures.Add($"rot {rot}: reply should say 'covers {wantRect}': {text}");
-        if (!text.Contains($"Size {vanilla.Width}x{vanilla.Height}, rotation {rot}")) failures.Add($"rot {rot}: reply should say 'Size {vanilla.Width}x{vanilla.Height}, rotation {rot}': {text}");
+        string wantRect = string.Create(CultureInfo.InvariantCulture, $"({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})");
+        if (!text.Contains("covers " + wantRect, StringComparison.Ordinal)) failures.Add(string.Create(CultureInfo.InvariantCulture, $"rot {rot}: reply should say 'covers {wantRect}': {text}"));
+        if (!text.Contains(string.Create(CultureInfo.InvariantCulture, $"Size {vanilla.Width}x{vanilla.Height}, rotation {rot}"), StringComparison.Ordinal)) failures.Add(string.Create(CultureInfo.InvariantCulture, $"rot {rot}: reply should say 'Size {vanilla.Width}x{vanilla.Height}, rotation {rot}': {text}"));
 
         // 往佔格左下角放一道牆：原版回「空間已被占用」，附上擋住的藍圖 id 與範圍。
         // 不能放同一件：CanReplace 讓同種藍圖直接取代舊的，那是原版的「改朝向」行為。
-        CommandResult overlap = _world.TryPlaceBlueprint(ThingDefOf.Wall.defName, vanilla.minX, vanilla.minZ, 0, null);
-        if (overlap.Success) failures.Add($"rot {rot}: an overlapping blueprint was accepted");
-        else if (!overlap.Message.Contains("#" + placed.thingIDNumber) || !overlap.Message.Contains(wantRect))
-            failures.Add($"rot {rot}: refusal should name #{placed.thingIDNumber} {wantRect}: {overlap.Message}");
+        CommandResult overlap = _world.TryPlaceBlueprint(ThingDefOf.Wall.defName, vanilla.minX, vanilla.minZ, 0, stuffDefName: null);
+        if (overlap.Success) failures.Add(string.Create(CultureInfo.InvariantCulture, $"rot {rot}: an overlapping blueprint was accepted"));
+        else if (!overlap.Message.Contains("#" + placed.thingIDNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal) || !overlap.Message.Contains(wantRect, StringComparison.Ordinal))
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"rot {rot}: refusal should name #{placed.thingIDNumber} {wantRect}: {overlap.Message}"));
 
         placed.Destroy();
     }
@@ -247,7 +249,7 @@ internal sealed partial class MapWorldTests
 
         string text = new RimAgent.Tools.BuildTools(_world).LookupDef("Ship_Reactor");
         failures.AddRange(_reactorExpectedText
-            .Where(want => !text.Contains(want))
+            .Where(want => !text.Contains(want, StringComparison.Ordinal))
             .Select(want => $"tool text lacks '{want}': {text}"));
 
         CheckMiscBuildingInfo(failures);
@@ -258,16 +260,16 @@ internal sealed partial class MapWorldTests
     /// <summary>檢查 Ship_Reactor 的建築規格是否與原版 Def 一致。</summary>
     private static void CheckReactorInfo(BuildingInfo info, ThingDef reactor, List<string> failures)
     {
-        if (info.Width != reactor.size.x || info.Height != reactor.size.z || info.Width != 6 || info.Height != 7) failures.Add($"size {info.Width}x{info.Height}, def {reactor.size}");
+        if (info.Width != reactor.size.x || info.Height != reactor.size.z || info.Width != 6 || info.Height != 7) failures.Add(string.Create(CultureInfo.InvariantCulture, $"size {info.Width}x{info.Height}, def {reactor.size}"));
         if (info.TerrainAffordance != reactor.terrainAffordanceNeeded.defName || info.TerrainAffordance != "Heavy") failures.Add("affordance " + info.TerrainAffordance);
         if (!info.ShipPart || !reactor.building.shipPart) failures.Add("ship part flag");
-        if (!info.PlaceWorkers.Contains("PlaceWorker_NotUnderRoof")) failures.Add("place workers: " + string.Join(",", info.PlaceWorkers));
-        if (info.ConstructionSkill != reactor.constructionSkillPrerequisite) failures.Add("construction skill " + info.ConstructionSkill);
+        if (!info.PlaceWorkers.Contains("PlaceWorker_NotUnderRoof")) failures.Add("place workers: " + string.Join(',', info.PlaceWorkers));
+        if (info.ConstructionSkill != reactor.constructionSkillPrerequisite) failures.Add("construction skill " + info.ConstructionSkill.ToString(CultureInfo.InvariantCulture));
         // 主選單那輪沒有遊戲，研究進度讀不到，一律視為未完成。
         bool playing = Current.ProgramState == ProgramState.Playing;
         if (info.Research.Count != reactor.researchPrerequisites.Count || info.Research.Zip(reactor.researchPrerequisites, (i, r) => i.Done != (playing && r.IsFinished)).Any(x => x)) failures.Add("research prerequisites");
         if (info.Costs.Sum(c => c.Count) != reactor.costList.Sum(c => c.count) || info.Costs.Count != reactor.costList.Count) failures.Add("costs");
-        if (Math.Abs(info.PowerWatts - reactor.GetCompProperties<CompProperties_Power>().PowerConsumption) > 0.01f) failures.Add("power " + info.PowerWatts);
+        if (Math.Abs(info.PowerWatts - reactor.GetCompProperties<CompProperties_Power>().PowerConsumption) > 0.01f) failures.Add("power " + info.PowerWatts.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>檢查互動格、材料成本、地板旗標與不存在的建築定義。</summary>
@@ -300,7 +302,7 @@ internal sealed partial class MapWorldTests
                 CellRect vanilla = GenAdj.OccupiedRect(origin, new Rot4(rot), d.size);
                 RimAgent.Game.CellRectSpec mine = RimAgent.Tools.BuildTools.OccupiedRect(origin.x, origin.z, rot, di);
                 if (mine.MinX != vanilla.minX || mine.MinZ != vanilla.minZ || mine.MaxX != vanilla.maxX || mine.MaxZ != vanilla.maxZ)
-                    failures.Add($"{d.defName} {d.size} rot {rot}: ours {mine}, vanilla ({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})");
+                    failures.Add(string.Create(CultureInfo.InvariantCulture, $"{d.defName} {d.size} rot {rot}: ours {mine}, vanilla ({vanilla.minX},{vanilla.minZ})-({vanilla.maxX},{vanilla.maxZ})"));
             }
         }
     }

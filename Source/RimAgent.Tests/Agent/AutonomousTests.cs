@@ -502,7 +502,7 @@ public class AutonomousPromptsTests
     [Test]
     public void MissingTaskReturnsNullSoTheRunIsSkipped()
     {
-        Assert.That(AutonomousPrompts.Build(null, AutonomousTrigger.Raid), Is.Null);
+        Assert.That(AutonomousPrompts.Build(pack: null, AutonomousTrigger.Raid), Is.Null);
         Assert.That(AutonomousPrompts.Build(new AutonomousPack(), AutonomousTrigger.Raid), Is.Null);
     }
 
@@ -511,7 +511,7 @@ public class AutonomousPromptsTests
     {
         Assert.That(AutonomousPrompts.HasTask(Pack(), AutonomousTrigger.Raid), Is.True);
         Assert.That(AutonomousPrompts.HasTask(Pack(), AutonomousTrigger.Fire), Is.False, "退回 Interval 的情況呼叫端要能察覺");
-        Assert.That(AutonomousPrompts.HasTask(null, AutonomousTrigger.Raid), Is.False);
+        Assert.That(AutonomousPrompts.HasTask(pack: null, AutonomousTrigger.Raid), Is.False);
     }
 
     [Test]

@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -173,19 +174,19 @@ internal sealed class ScriptTools
             || !step.TryGetProperty("tool", out JsonElement toolElement)
             || toolElement.ValueKind != JsonValueKind.String)
         {
-            error = $"step {index} needs a \"tool\" name.";
+            error = string.Create(CultureInfo.InvariantCulture, $"step {index} needs a \"tool\" name.");
             return false;
         }
 
         string name = toolElement.GetString();
         if (string.Equals(name, ToolName, StringComparison.Ordinal))
         {
-            error = $"step {index}: {ToolName} cannot call itself.";
+            error = string.Create(CultureInfo.InvariantCulture, $"step {index}: {ToolName} cannot call itself.");
             return false;
         }
         if (!tools.TryGetValue(name ?? string.Empty, out AIFunction function))
         {
-            error = $"step {index}: tool \"{name}\" is not available. Use the exact name of a tool you can call.";
+            error = string.Create(CultureInfo.InvariantCulture, $"step {index}: tool \"{name}\" is not available. Use the exact name of a tool you can call.");
             return false;
         }
 
@@ -195,7 +196,7 @@ internal sealed class ScriptTools
         {
             if (args.ValueKind != JsonValueKind.Object)
             {
-                error = $"step {index}: \"args\" must be an object.";
+                error = string.Create(CultureInfo.InvariantCulture, $"step {index}: \"args\" must be an object.");
                 return false;
             }
             Merge(baseArgs, args);
@@ -208,14 +209,14 @@ internal sealed class ScriptTools
         }
         if (forEach.ValueKind != JsonValueKind.Array || forEach.GetArrayLength() == 0)
         {
-            error = $"step {index}: \"for_each\" must be a non-empty array of objects.";
+            error = string.Create(CultureInfo.InvariantCulture, $"step {index}: \"for_each\" must be a non-empty array of objects.");
             return false;
         }
         foreach (JsonElement item in forEach.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object)
             {
-                error = $"step {index}: every \"for_each\" item must be an object of arguments.";
+                error = string.Create(CultureInfo.InvariantCulture, $"step {index}: every \"for_each\" item must be an object of arguments.");
                 return false;
             }
             var merged = new Dictionary<string, object>(baseArgs, StringComparer.Ordinal);

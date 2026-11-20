@@ -57,7 +57,7 @@ public sealed class MedicalTools
         if (!pawns.Success) return pawns.Error;
 
         Dictionary<int, ColonistHealthInfo> health = _world.GetHealth().ToDictionary(h => h.PawnId);
-        if (pawns.Value.All(c => !HasProblems(c, health)))
+        if (pawns.Value.TrueForAll(c => !HasProblems(c, health)))
         {
             return pawns.Value.Count == 1
                 ? $"{pawns.Value[0].Name} is healthy, nothing needs attention."

@@ -98,7 +98,7 @@ public static class TargetResolver
             T byId = candidates.FirstOrDefault(c => getId(c) == id);
             return byId != null
                 ? Result<T>.Ok(byId)
-                : Result<T>.Fail($"Error: no {kindLabel} has id {id}. {FormatListAll(candidates, describe, kindLabel)}");
+                : Result<T>.Fail(string.Create(CultureInfo.InvariantCulture, $"Error: no {kindLabel} has id {id}. {FormatListAll(candidates, describe, kindLabel)}"));
         }
 
         List<T> exact = [.. candidates.Where(c => getNames(c).Any(n => string.Equals(n, needle, StringComparison.OrdinalIgnoreCase)))];
@@ -158,7 +158,7 @@ public static class TargetResolver
         if (!bounds.Contains(rect.MinX, rect.MinZ) || !bounds.Contains(rect.MaxX, rect.MaxZ))
         {
             return Result<CellRectSpec>.Fail(
-                $"Error: rectangle {rect} is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}.");
+                string.Create(CultureInfo.InvariantCulture, $"Error: rectangle {rect} is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}."));
         }
         return Result<CellRectSpec>.Ok(rect);
     }
@@ -170,7 +170,7 @@ public static class TargetResolver
         if (rect.MaxX < 0 || rect.MaxZ < 0 || rect.MinX >= bounds.Width || rect.MinZ >= bounds.Height)
         {
             return Result<CellRectSpec>.Fail(
-                $"Error: rectangle {rect} is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}.");
+                string.Create(CultureInfo.InvariantCulture, $"Error: rectangle {rect} is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}."));
         }
         return Result<CellRectSpec>.Ok(new CellRectSpec(
             Math.Max(0, rect.MinX), Math.Max(0, rect.MinZ), Math.Min(bounds.Width - 1, rect.MaxX), Math.Min(bounds.Height - 1, rect.MaxZ)));
@@ -180,7 +180,7 @@ public static class TargetResolver
     public static string CheckCell(int x, int z, MapBounds bounds)
     {
         if (bounds.Contains(x, z)) return null;
-        return $"Error: cell ({x},{z}) is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}.";
+        return string.Create(CultureInfo.InvariantCulture, $"Error: cell ({x},{z}) is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}.");
     }
 
     public static bool IsSelectionKeyword(string area)
@@ -197,6 +197,6 @@ public static class TargetResolver
 
     private static string Describe(ColonistInfo c)
     {
-        return $"[{c.Id}] {c.FullName}";
+        return string.Create(CultureInfo.InvariantCulture, $"[{c.Id}] {c.FullName}");
     }
 }

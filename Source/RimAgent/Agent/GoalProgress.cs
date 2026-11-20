@@ -50,15 +50,11 @@ public readonly struct GoalTurnDecision
 }
 
 /// <summary>每輪重述完整目標，並以明確結尾標記回報進度，避免壓縮後遺失目標。</summary>
-public static class GoalProgress
+public static partial class GoalProgress
 {
     public const int MaxTurns = 60;
     public const int MaxConsecutiveBlocks = 3;
     public const int MaxIdleTurns = 3;
-    private static readonly Regex StatusMarker = new(
-        @"(?:\A|\r?\n)[ \t]*\[\[GOAL:(COMPLETE|BLOCKED|CONTINUE)(?::([a-z0-9_-]{1,64}))?\]\][ \t]*\z",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
-        TimeSpan.FromSeconds(1));
 
     public static string BuildPrompt(string objective, string confirmationReport = null,
         bool needsVerification = false, string auditNote = null)
@@ -100,7 +96,7 @@ public static class GoalProgress
         if (string.IsNullOrEmpty(reply)) return GoalTurnStatus.Continue;
         Match match = StatusMarker.Match(reply.TrimEnd(' ', '\t', '\r', '\n'));
         if (!match.Success) return GoalTurnStatus.Continue;
-        string value = match.Groups[1].Value.ToUpperInvariant();
+        string value = match.Groups["status"].Value.ToUpperInvariant();
         if (value == "COMPLETE") return GoalTurnStatus.Complete;
         return value == "BLOCKED" ? GoalTurnStatus.Blocked : GoalTurnStatus.Continue;
     }
@@ -161,7 +157,7 @@ public static class GoalProgress
         for (int i = start; i < relevant.Count; i++)
         {
             TranscriptEntry entry = relevant[i];
-            string result = (entry.Result ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
+            string result = (entry.Result ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
             if (result.Length > AuditEvidenceResultChars)
             {
                 result = result[..AuditEvidenceResultChars] + "…";
@@ -180,7 +176,7 @@ public static class GoalProgress
     {
         if (waitingConfirmation)
         {
-            return new GoalTurnDecision(previousTurns, previousBlocks, false, false,
+            return new GoalTurnDecision(previousTurns, previousBlocks, complete: false, pause: false,
                 blockerKey: previousBlockerKey, idleTurns: previousIdleTurns);
         }
         int turns = previousTurns + 1;
@@ -188,7 +184,7 @@ public static class GoalProgress
         if (reply != null && status == GoalTurnStatus.Complete && hasToolEvidence
             && !string.IsNullOrWhiteSpace(VisibleReply(reply)))
         {
-            return new GoalTurnDecision(turns, 0, true, false);
+            return new GoalTurnDecision(turns, 0, complete: true, pause: false);
         }
         string blockerKey = DetermineBlockerKey(reply, status);
         int blocks = DetermineBlocks(previousBlocks, previousBlockerKey, blockerKey);
@@ -196,7 +192,7 @@ public static class GoalProgress
         bool turnLimit = turns >= MaxTurns;
         int idleTurns = reply != null && !usedTool ? previousIdleTurns + 1 : 0;
         bool noProgress = idleTurns >= MaxIdleTurns;
-        return new GoalTurnDecision(turns, blocks, false, blocked || turnLimit || noProgress,
+        return new GoalTurnDecision(turns, blocks, complete: false, blocked || turnLimit || noProgress,
             blocked, blockerKey, idleTurns, noProgress);
     }
     #pragma warning restore S107
@@ -217,13 +213,16 @@ public static class GoalProgress
     private static string GetBlockerKey(string reply)
     {
         Match match = StatusMarker.Match(reply.TrimEnd(' ', '\t', '\r', '\n'));
-        if (match.Groups[2].Success) return match.Groups[2].Value.ToLowerInvariant();
+        if (match.Groups["blocker"].Success) return match.Groups["blocker"].Value.ToLowerInvariant();
         // 沒寫代號時用固定鍵：連續幾輪都沒寫代號的 BLOCKED 才會累計，不因每次說法不同而一直歸零。
         return "unspecified";
     }
 
     private static string EscapeXml(string value)
     {
-        return (value ?? string.Empty).Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        return (value ?? string.Empty).Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal).Replace(">", "&gt;", StringComparison.Ordinal);
     }
+
+    [GeneratedRegex(@"(?:\A|\r?\n)[ \t]*\[\[GOAL:(?<status>COMPLETE|BLOCKED|CONTINUE)(?::(?<blocker>[a-z0-9_-]{1,64}))?\]\][ \t]*\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex StatusMarker { get; }
 }

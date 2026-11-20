@@ -19,7 +19,7 @@ internal static class ModelImageEncoder
     public static byte[] FromEncoded(byte[] data, int maxEdge = MaxEdge)
     {
         if (data == null || data.Length == 0) return [];
-        var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        var source = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
         try
         {
             return source.LoadImage(data) ? FromTexture(source, maxEdge) : [];
@@ -42,7 +42,7 @@ internal static class ModelImageEncoder
 
         RenderTexture target = RenderTexture.GetTemporary(targetWidth, targetHeight, 0);
         RenderTexture previous = RenderTexture.active;
-        var scaled = new Texture2D(targetWidth, targetHeight, TextureFormat.RGB24, false);
+        var scaled = new Texture2D(targetWidth, targetHeight, TextureFormat.RGB24, mipChain: false);
         try
         {
             Graphics.Blit(source, target);

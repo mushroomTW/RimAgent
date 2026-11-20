@@ -19,8 +19,8 @@ internal static class LatexMath
 
     /// <summary>轉換時不得碰的區域：``` 或 ~~~ 圍籬（含串流中尚未閉合的尾巴）、行內碼。</summary>
     private static readonly Regex CodeRegion = new(
-        @"(?:^|(?<=\n))(`{3,}|~{3,})[\s\S]*?(?:\n\1[ \t]*(?=\r?\n|\z)|\z)|`+[^`\n]*`+",
-        RegexOptions.Compiled,
+        @"(?:^|(?<=\n))(?<fence>`{3,}|~{3,})[\s\S]*?(?:\n\k<fence>[ \t]*(?=\r?\n|\z)|\z)|`+[^`\n]*`+",
+        RegexOptions.Compiled | RegexOptions.ExplicitCapture,
         RegexTimeout);
 
     /// <summary>$$...$$ 顯示數學，可跨行。</summary>
@@ -113,8 +113,8 @@ internal static class LatexMath
     private static readonly MatchEvaluator SqrtReplace = m => "√(" + m.Groups["x"].Value + ")";
     private static readonly MatchEvaluator SqrtSingleReplace = m => "√" + m.Groups["x"].Value;
     private static readonly MatchEvaluator PlainGroupReplace = m => m.Groups["x"].Value;
-    private static readonly MatchEvaluator SupReplace = m => ConvertScript(m.Groups["x"].Value, true);
-    private static readonly MatchEvaluator SubReplace = m => ConvertScript(m.Groups["x"].Value, false);
+    private static readonly MatchEvaluator SupReplace = m => ConvertScript(m.Groups["x"].Value, superscript: true);
+    private static readonly MatchEvaluator SubReplace = m => ConvertScript(m.Groups["x"].Value, superscript: false);
     private static readonly MatchEvaluator CommandReplace = m =>
     {
         string name = m.Groups["name"].Value;
@@ -158,7 +158,7 @@ internal static class LatexMath
     public static string ConvertMath(string markdown)
     {
         if (string.IsNullOrEmpty(markdown)) return markdown;
-        if (markdown.IndexOf('$') < 0) return markdown;
+        if (markdown.IndexOf('$', StringComparison.Ordinal) < 0) return markdown;
 
         var sb = new StringBuilder(markdown.Length);
         int last = 0;
@@ -174,23 +174,23 @@ internal static class LatexMath
 
     private static string ConvertMathInText(string text)
     {
-        if (text.IndexOf('$') < 0) return text;
+        if (text.IndexOf('$', StringComparison.Ordinal) < 0) return text;
         text = DisplayMath.Replace(text, m =>
         {
             string body = m.Groups["body"].Value;
-            return string.IsNullOrWhiteSpace(body) ? m.Value : ConvertSegment(body, true);
+            return string.IsNullOrWhiteSpace(body) ? m.Value : ConvertSegment(body, display: true);
         });
-        text = InlineMath.Replace(text, m => ConvertSegment(m.Groups["body"].Value, false));
+        text = InlineMath.Replace(text, m => ConvertSegment(m.Groups["body"].Value, display: false));
         return text;
     }
 
     private static string ConvertSegment(string body, bool display)
     {
         // \\ 是數學換行：顯示數學保留換行，行內數學壓成空白。
-        string s = body.Replace("\\\\", display ? "\n" : " ");
+        string s = body.Replace("\\\\", display ? "\n" : " ", StringComparison.Ordinal);
         foreach (MathRule rule in SegmentRules) s = rule.Pattern.Replace(s, rule.Replace);
         // 剩下的 { } 只是 LaTeX 分組，直接拿掉；~ 是數學空白。
-        s = s.Replace("{", string.Empty).Replace("}", string.Empty).Replace("~", " ");
+        s = s.Replace("{", string.Empty, StringComparison.Ordinal).Replace("}", string.Empty, StringComparison.Ordinal).Replace('~', ' ');
         return s;
     }
 
@@ -206,7 +206,7 @@ internal static class LatexMath
             var sb = new StringBuilder(inner.Length);
             foreach (char c in inner)
             {
-                int i = ScriptSrc.IndexOf(c);
+                int i = ScriptSrc.IndexOf(c, StringComparison.Ordinal);
                 if (i < 0) return (superscript ? "^" : "_") + inner;
                 sb.Append(dst[i]);
             }

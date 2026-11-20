@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -213,6 +213,7 @@ public partial class RimAgentGameComponent
     }
 
     /// <summary>判斷是否要送審計，並等待結果。只有「完成」且無待確認命令時才稽核。</summary>
+    #pragma warning disable VSTHRD202 // 保留 async：整理工具證據的例外要放進 Task，與稽核失敗走同一條處理路徑。
     private async Task<GoalAuditResult> EvaluateGoalAuditAsync(
         ColonyAgentSession session, IReadOnlyList<TranscriptEntry> entries, int instructionId,
         string objective, string reply, GoalTurnDecision decision, CancellationTokenSource cts)
@@ -226,6 +227,7 @@ public partial class RimAgentGameComponent
         // 稽核回來後要繼續在主線程處理目標狀態；切到執行緒池會讓後續的存檔／UI 更新離開主線程。
         return await auditor.AuditAsync(objective, reply, toolEvidence, cts.Token);
     }
+    #pragma warning restore VSTHRD202
 
     /// <summary>處理目標執行失敗：記錄封鎖輪數，超過閾值則暫停目標。</summary>
     private void HandleGoalRunError(Exception ex, string objective, int generation, CancellationTokenSource cts, ColonyAgentSession session)
@@ -346,65 +348,83 @@ public partial class RimAgentGameComponent
         switch (verdict)
         {
             case GoalAuditVerdict.Blocked:
-                _goalPaused = true;
-                _goalPauseReason = GoalPauseReason.Blocked;
-                _goalBlockedTurns = 1;
-                _goalBlockerKey = "audit-needs-user";
-                _goalNeedsVerification = false;
-                _goalAuditNote = null;
-                session.Transcript.Add(new TranscriptEntry
-                {
-                    Kind = TranscriptKind.Notice,
-                    Text = FormatNotice("RimAgent.Goal.AuditBlocked", "Goal paused by decision audit (player input required): {0}", objective)
-                });
+                ApplyAuditBlocked(session, objective);
                 break;
 
             case GoalAuditVerdict.Complete:
-                _lastCompletedGoal = objective;
-                _goals.RemoveAt(0);
-                _goalTurns = 0;
-                _goalBlockedTurns = 0;
-                _goalIdleTurns = 0;
-                _goalBlockerKey = null;
-                _goalNeedsVerification = false;
-                _goalAuditNote = null;
-                _goalLastProgress = null;
-                _goalPauseReason = GoalPauseReason.None;
-                session.Transcript.Add(new TranscriptEntry
-                {
-                    Kind = TranscriptKind.Notice,
-                    Text = FormatNotice("RimAgent.Goal.AuditCompleted", "Goal completed and verified by decision audit: {0}", objective)
-                });
+                ApplyAuditCompleted(session, objective);
                 break;
 
             default:
-                // 稽核否決完成不等於把原本的暫停條件吃掉：回合上限、連續阻礙、連續沒有
-                // 有效工具行動都要照原樣暫停，否則目標可能一直空轉。
-                _goalBlockedTurns = decision.BlockedTurns;
-                _goalBlockerKey = decision.BlockerKey;
-                _goalNeedsVerification = true;
-                _goalAuditNote = audit.Reason;
-                if (decision.Pause)
-                {
-                    _goalPaused = true;
-                    DetermineGoalPauseDetails(decision, reply, objective, out _goalPauseReason, out string pauseNotice);
-                    session.Transcript.Add(new TranscriptEntry
-                    {
-                        Kind = TranscriptKind.Notice,
-                        Text = pauseNotice
-                    });
-                }
-                else
-                {
-                    _goalPaused = false;
-                    _goalPauseReason = GoalPauseReason.None;
-                    session.Transcript.Add(new TranscriptEntry
-                    {
-                        Kind = TranscriptKind.Notice,
-                        Text = FormatNotice("RimAgent.Goal.AuditContinuing", "Decision audit determined the goal is not yet finished; continuing: {0}", objective)
-                    });
-                }
+                ApplyAuditContinue(session, objective, reply, decision, audit);
                 break;
+        }
+    }
+
+    /// <summary>稽核判定需要玩家介入：暫停目標。</summary>
+    private void ApplyAuditBlocked(ColonyAgentSession session, string objective)
+    {
+        _goalPaused = true;
+        _goalPauseReason = GoalPauseReason.Blocked;
+        _goalBlockedTurns = 1;
+        _goalBlockerKey = "audit-needs-user";
+        _goalNeedsVerification = false;
+        _goalAuditNote = null;
+        session.Transcript.Add(new TranscriptEntry
+        {
+            Kind = TranscriptKind.Notice,
+            Text = FormatNotice("RimAgent.Goal.AuditBlocked", "Goal paused by decision audit (player input required): {0}", objective)
+        });
+    }
+
+    /// <summary>稽核確認完成：移除目標並清空進度狀態。</summary>
+    private void ApplyAuditCompleted(ColonyAgentSession session, string objective)
+    {
+        _lastCompletedGoal = objective;
+        _goals.RemoveAt(0);
+        _goalTurns = 0;
+        _goalBlockedTurns = 0;
+        _goalIdleTurns = 0;
+        _goalBlockerKey = null;
+        _goalNeedsVerification = false;
+        _goalAuditNote = null;
+        _goalLastProgress = null;
+        _goalPauseReason = GoalPauseReason.None;
+        session.Transcript.Add(new TranscriptEntry
+        {
+            Kind = TranscriptKind.Notice,
+            Text = FormatNotice("RimAgent.Goal.AuditCompleted", "Goal completed and verified by decision audit: {0}", objective)
+        });
+    }
+
+    /// <summary>稽核否決完成：保留原本的暫停條件（回合上限、連續阻礙、連續沒有有效工具行動），否則繼續目標。</summary>
+    private void ApplyAuditContinue(ColonyAgentSession session, string objective, string reply, GoalTurnDecision decision, GoalAuditResult audit)
+    {
+        // 稽核否決完成不等於把原本的暫停條件吃掉：回合上限、連續阻礙、連續沒有
+        // 有效工具行動都要照原樣暫停，否則目標可能一直空轉。
+        _goalBlockedTurns = decision.BlockedTurns;
+        _goalBlockerKey = decision.BlockerKey;
+        _goalNeedsVerification = true;
+        _goalAuditNote = audit.Reason;
+        if (decision.Pause)
+        {
+            _goalPaused = true;
+            DetermineGoalPauseDetails(decision, reply, objective, out _goalPauseReason, out string pauseNotice);
+            session.Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = pauseNotice
+            });
+        }
+        else
+        {
+            _goalPaused = false;
+            _goalPauseReason = GoalPauseReason.None;
+            session.Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = FormatNotice("RimAgent.Goal.AuditContinuing", "Decision audit determined the goal is not yet finished; continuing: {0}", objective)
+            });
         }
     }
 

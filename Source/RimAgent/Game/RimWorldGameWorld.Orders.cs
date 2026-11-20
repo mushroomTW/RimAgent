@@ -1,6 +1,7 @@
 #nullable disable
 
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -103,7 +104,7 @@ internal sealed partial class RimWorldGameWorld
         if (bed == null) return CommandResult.Fail(patient.RaceProps.Animal ? "no free animal bed" : "no free bed for them; build or free a bed first");
         Job rescue = JobMaker.MakeJob(JobDefOf.Rescue, patient, bed);
         rescue.count = 1;
-        return TakeOrderedJob(pawn, rescue, $"carrying {patient.LabelShort} to {bed.LabelShort} at ({bed.Position.x}, {bed.Position.z})");
+        return TakeOrderedJob(pawn, rescue, string.Create(CultureInfo.InvariantCulture, $"carrying {patient.LabelShort} to {bed.LabelShort} at ({bed.Position.x}, {bed.Position.z})"));
     }
 
     private static CommandResult OrderCapture(Pawn pawn, Pawn prisoner)
@@ -117,12 +118,12 @@ internal sealed partial class RimWorldGameWorld
         }
         if (!HealthAIUtility.CanRescueNow(pawn, prisoner, forced: true)) return CommandResult.Fail($"{pawn.LabelShort} cannot capture {prisoner.LabelShort} right now");
 
-        Building_Bed bed = RestUtility.FindBedFor(prisoner, pawn, false, false, GuestStatus.Prisoner)
-                           ?? RestUtility.FindBedFor(prisoner, pawn, false, true, GuestStatus.Prisoner);
+        Building_Bed bed = RestUtility.FindBedFor(prisoner, pawn, checkSocialProperness: false, ignoreOtherReservations: false, GuestStatus.Prisoner)
+                           ?? RestUtility.FindBedFor(prisoner, pawn, checkSocialProperness: false, ignoreOtherReservations: true, GuestStatus.Prisoner);
         if (bed == null) return CommandResult.Fail("no free prisoner bed; set a bed for prisoners first");
         Job capture = JobMaker.MakeJob(JobDefOf.Capture, prisoner, bed);
         capture.count = 1;
-        string note = $"taking {prisoner.LabelShort} to {bed.LabelShort} at ({bed.Position.x}, {bed.Position.z})";
+        string note = string.Create(CultureInfo.InvariantCulture, $"taking {prisoner.LabelShort} to {bed.LabelShort} at ({bed.Position.x}, {bed.Position.z})");
         if (!prisoner.guest.Recruitable) note += "; they are unrecruitable";
         return TakeOrderedJob(pawn, capture, note);
     }
@@ -213,13 +214,13 @@ internal sealed partial class RimWorldGameWorld
             return CommandResult.Fail($"entering would separate {pawn.LabelShort} from their psychic bond partner; that needs the player's confirmation in-game");
         }
         return TakeOrderedJob(pawn, JobMaker.MakeJob(JobDefOf.EnterCryptosleepCasket, casket),
-            $"entering {casket.LabelShort} at ({casket.Position.x}, {casket.Position.z})");
+            string.Create(CultureInfo.InvariantCulture, $"entering {casket.LabelShort} at ({casket.Position.x}, {casket.Position.z})"));
     }
 
     private static CommandResult TakeOrderedJobUnforbiddingTarget(Pawn pawn, Job job, Thing target, string note)
     {
         bool wasForbidden = target.IsForbidden(Faction.OfPlayer);
-        target.SetForbidden(false, warnOnFail: false);
+        target.SetForbidden(value: false, warnOnFail: false);
         bool accepted = false;
         try
         {
@@ -229,7 +230,7 @@ internal sealed partial class RimWorldGameWorld
         }
         finally
         {
-            if (!accepted && wasForbidden) target.SetForbidden(true, warnOnFail: false);
+            if (!accepted && wasForbidden) target.SetForbidden(value: true, warnOnFail: false);
         }
     }
 

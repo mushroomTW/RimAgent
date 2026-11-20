@@ -28,7 +28,7 @@ internal static class DecisionCriteriaParser
         }
         if (instLines.Count > 0)
         {
-            instructions = string.Join("\n", instLines);
+            instructions = string.Join('\n', instLines);
         }
     }
 }

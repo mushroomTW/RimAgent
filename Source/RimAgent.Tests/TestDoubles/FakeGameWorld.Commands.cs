@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using RimAgent.Game;
@@ -10,7 +11,7 @@ internal sealed partial class FakeGameWorld
 {
     public CommandResult SetDrafted(int pawnId, bool drafted)
     {
-        Calls.Add($"SetDrafted({pawnId},{drafted})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SetDrafted({pawnId},{drafted})"));
         ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == pawnId);
         if (pawn == null) return CommandResult.Fail("pawn not found");
         pawn.Drafted = drafted;
@@ -19,9 +20,9 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult OrderMoveTo(int pawnId, int x, int z)
     {
-        Calls.Add($"OrderMoveTo({pawnId},{x},{z})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"OrderMoveTo({pawnId},{x},{z})"));
         if (UnwalkableCells.Contains((x, z))) return CommandResult.Fail("cell is not walkable");
-        return Colonists.Any(c => c.Id == pawnId) ? CommandResult.Ok() : CommandResult.Fail("pawn not found");
+        return Colonists.Exists(c => c.Id == pawnId) ? CommandResult.Ok() : CommandResult.Fail("pawn not found");
     }
 
     public Dictionary<int, string> InspectTexts { get; } = new Dictionary<int, string>();
@@ -30,7 +31,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult ChooseOption(string choiceId, int option, string input = null)
     {
-        Calls.Add(input == null ? $"ChooseOption({choiceId},{option})" : $"ChooseOption({choiceId},{option},{input})");
+        Calls.Add(input == null ? string.Create(CultureInfo.InvariantCulture, $"ChooseOption({choiceId},{option})") : string.Create(CultureInfo.InvariantCulture, $"ChooseOption({choiceId},{option},{input})"));
         PendingChoiceInfo choice = PendingChoices.FirstOrDefault(c => c.Id == choiceId);
         ChoiceOptionInfo picked = choice?.Options.FirstOrDefault(o => o.Number == option);
         if (picked == null) return CommandResult.Fail("choice not found");
@@ -47,7 +48,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult AcceptQuest(int questId, int rewardNumber, int accepterPawnId)
     {
-        Calls.Add($"AcceptQuest({questId},{rewardNumber},{accepterPawnId})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"AcceptQuest({questId},{rewardNumber},{accepterPawnId})"));
         QuestInfo quest = Quests.FirstOrDefault(q => q.Id == questId);
         if (quest == null) return CommandResult.Fail("quest not found");
         quest.State = QuestInfo.ActiveState;
@@ -58,7 +59,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult SetQuestDismissed(int questId, bool dismissed)
     {
-        Calls.Add($"SetQuestDismissed({questId},{dismissed})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SetQuestDismissed({questId},{dismissed})"));
         QuestInfo quest = Quests.FirstOrDefault(q => q.Id == questId);
         if (quest == null) return CommandResult.Fail("quest not found");
         quest.Dismissed = dismissed;
@@ -68,12 +69,12 @@ internal sealed partial class FakeGameWorld
     public IReadOnlyList<GizmoInfo> GetGizmos(int thingId)
     {
         if (Gizmos.TryGetValue(thingId, out List<GizmoInfo> gizmos)) return gizmos;
-        return Things.Any(t => t.Id == thingId) ? new List<GizmoInfo>() : null;
+        return Things.Exists(t => t.Id == thingId) ? new List<GizmoInfo>() : null;
     }
 
     public CommandResult UseGizmo(int thingId, int gizmoNumber, string label, MapTarget target)
     {
-        Calls.Add($"UseGizmo({thingId},{gizmoNumber},{label}" + (target == null ? ")" : $",{target})"));
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"UseGizmo({thingId},{gizmoNumber},{label}") + (target == null ? ")" : $",{target})"));
         GizmoInfo gizmo = GetGizmos(thingId)?.FirstOrDefault(g => g.Number == gizmoNumber);
         if (gizmo != null && !string.Equals(gizmo.Label, label, StringComparison.OrdinalIgnoreCase))
             return CommandResult.Fail("button list changed");
@@ -107,7 +108,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult UseFloatMenuOption(int colonistId, MapTarget target, int optionNumber, string label)
     {
-        Calls.Add($"UseFloatMenuOption({colonistId},{target},{optionNumber},{label})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"UseFloatMenuOption({colonistId},{target},{optionNumber},{label})"));
         FloatMenuOptionInfo option = FloatMenuOptions.FirstOrDefault(o => o.Number == optionNumber);
         if (option == null || !string.Equals(option.Label, label, StringComparison.OrdinalIgnoreCase)) return CommandResult.Fail("menu changed");
         if (option.Disabled) return CommandResult.Fail("disabled");
@@ -121,19 +122,17 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult OrderJob(int pawnId, string job, int targetId)
     {
-        Calls.Add($"OrderJob({pawnId},{job},{targetId})");
-        if (Colonists.All(c => c.Id != pawnId)) return CommandResult.Fail("pawn not found");
-        bool targetExists = Threats.Any(t => t.Id == targetId) || Things.Any(t => t.Id == targetId) || Colonists.Any(c => c.Id == targetId);
-        return targetExists ? CommandResult.Ok($"{job} [{targetId}]") : CommandResult.Fail("target not found on the map");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"OrderJob({pawnId},{job},{targetId})"));
+        if (Colonists.TrueForAll(c => c.Id != pawnId)) return CommandResult.Fail("pawn not found");
+        bool targetExists = Threats.Exists(t => t.Id == targetId) || Things.Exists(t => t.Id == targetId) || Colonists.Exists(c => c.Id == targetId);
+        return targetExists ? CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"{job} [{targetId}]")) : CommandResult.Fail("target not found on the map");
     }
 
     public CommandResult SetForbidden(CellRectSpec? area, string labelContains, bool forbidden)
     {
         Calls.Add($"SetForbidden({area?.ToString() ?? "map"},{labelContains},{forbidden})");
         List<ThingInfo> changed = [.. Things
-            .Where(t => (t.Kind == ThingKind.Item) && t.Forbidden != forbidden)
-            .Where(t => !area.HasValue || area.Value.Contains(t.X, t.Z))
-            .Where(t => string.IsNullOrEmpty(labelContains) || t.Label.Contains(labelContains, StringComparison.OrdinalIgnoreCase))];
+            .Where(t => (t.Kind == ThingKind.Item) && t.Forbidden != forbidden && (!area.HasValue || area.Value.Contains(t.X, t.Z)) && (string.IsNullOrEmpty(labelContains) || t.Label.Contains(labelContains, StringComparison.OrdinalIgnoreCase)))];
         if (changed.Count == 0) return CommandResult.Fail("no visible item or corpse there");
         foreach (ThingInfo t in changed) t.Forbidden = forbidden;
         return CommandResult.Ok($"{changed.Count} item(s): {string.Join(", ", changed.Select(t => t.Label))}");
@@ -141,14 +140,14 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult OrderAttack(int pawnId, int targetId)
     {
-        Calls.Add($"OrderAttack({pawnId},{targetId})");
-        bool targetExists = Threats.Any(t => t.Id == targetId) || Things.Any(t => t.Id == targetId);
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"OrderAttack({pawnId},{targetId})"));
+        bool targetExists = Threats.Exists(t => t.Id == targetId) || Things.Exists(t => t.Id == targetId);
         return targetExists ? CommandResult.Ok() : CommandResult.Fail("target not found");
     }
 
     public CommandResult SetMedicalCare(int pawnId, string careDefName)
     {
-        Calls.Add($"SetMedicalCare({pawnId},{careDefName})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SetMedicalCare({pawnId},{careDefName})"));
         ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == pawnId);
         if (pawn == null) return CommandResult.Fail("pawn not found");
         if (!MedicalCareLevels.Any(d => string.Equals(d.DefName, careDefName, StringComparison.OrdinalIgnoreCase)))

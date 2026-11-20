@@ -21,11 +21,10 @@ internal sealed partial class RimWorldGameWorld
         return new ResearchInfo
         {
             Current = current == null ? null : ToResearch(current),
-            Available = DefDatabase<ResearchProjectDef>.AllDefsListForReading
+            Available = [.. DefDatabase<ResearchProjectDef>.AllDefsListForReading
                 .Where(r => !r.IsFinished && r.CanStartNow)
                 .OrderBy(r => r.CostApparent)
-                .Select(ToResearch)
-                .ToList()
+                .Select(ToResearch)]
         };
     }
 
@@ -35,17 +34,15 @@ internal sealed partial class RimWorldGameWorld
     /// </summary>
     [SuppressMessage("Major Code Smell", "S2365:Properties should not copy collections", Justification = "Implements IGameWorld property contract which reflects dynamic game state")]
     public IReadOnlyList<DefInfo> ResearchProjects =>
-        DefDatabase<ResearchProjectDef>.AllDefsListForReading
+        [.. DefDatabase<ResearchProjectDef>.AllDefsListForReading
             .Where(r => !r.IsFinished)
-            .Select(r => new DefInfo(r.defName, r.label))
-            .ToList();
+            .Select(r => new DefInfo(r.defName, r.label))];
 
     [SuppressMessage("Major Code Smell", "S2365:Properties should not copy collections", Justification = "Implements IGameWorld property contract which reflects dynamic game state")]
     public IReadOnlyList<DefInfo> FinishedResearchProjects =>
-        DefDatabase<ResearchProjectDef>.AllDefsListForReading
+        [.. DefDatabase<ResearchProjectDef>.AllDefsListForReading
             .Where(r => r.IsFinished)
-            .Select(r => new DefInfo(r.defName, r.label))
-            .ToList();
+            .Select(r => new DefInfo(r.defName, r.label))];
 
     public CommandResult SetResearch(string researchDefName)
     {

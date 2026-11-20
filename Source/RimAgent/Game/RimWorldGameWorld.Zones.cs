@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -15,7 +16,7 @@ internal sealed partial class RimWorldGameWorld
 {
     public IReadOnlyList<ZoneInfo> GetZones()
     {
-        return Map.zoneManager.AllZones.Select(ToZoneWithExtents).ToList();
+        return [.. Map.zoneManager.AllZones.Select(ToZoneWithExtents)];
     }
 
     private static ZoneInfo ToZone(Zone zone)
@@ -45,18 +46,16 @@ internal sealed partial class RimWorldGameWorld
     }
 
     public IReadOnlyList<DefInfo> StorageFilterables =>
-        _storageFilterables ?? (_storageFilterables = DefDatabase<ThingDef>.AllDefsListForReading
+        _storageFilterables ?? (_storageFilterables = [.. DefDatabase<ThingDef>.AllDefsListForReading
             .Where(d => d.category == ThingCategory.Item)
-            .Select(d => new DefInfo(d.defName, d.label))
-            .ToList());
+            .Select(d => new DefInfo(d.defName, d.label))]);
 
     public IReadOnlyList<DefInfo> GrowablePlants =>
-        _growablePlants ?? (_growablePlants = DefDatabase<ThingDef>.AllDefsListForReading
+        _growablePlants ?? (_growablePlants = [.. DefDatabase<ThingDef>.AllDefsListForReading
             // 種植區只收 Ground 標籤（PlantUtility.CanSowOnGrower）；裝飾花卉、僅水耕的作物不算。
             .Where(d => d.category == ThingCategory.Plant && d.plant != null && d.plant.Sowable
                         && d.plant.sowTags.Contains("Ground"))
-            .Select(d => new DefInfo(d.defName, d.label))
-            .ToList());
+            .Select(d => new DefInfo(d.defName, d.label))]);
 
     public CommandResult AddZone(string kind, CellRectSpec rect, string plantDefName)
     {
@@ -76,7 +75,7 @@ internal sealed partial class RimWorldGameWorld
         List<IntVec3> cells = CollectZoneCells(map, rect, designator, growing, out Dictionary<string, int> skipped);
         string skippedText = skipped.Count == 0
             ? string.Empty
-            : " Skipped " + string.Join("; ", skipped.Select(p => $"{p.Value} cell{(p.Value == 1 ? "" : "s")} ({p.Key})").ToArray()) + ".";
+            : " Skipped " + string.Join("; ", skipped.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Value} cell{(p.Value == 1 ? "" : "s")} ({p.Key})")).ToArray()) + ".";
         if (cells.Count == 0) return CommandResult.Fail($"no cell in {rect} can hold a {kind.ToLowerInvariant()} zone.{skippedText}");
 
         // 與原版拖曳相同：不相連的格子各自成區，避免單一區域被切成不連通的幾塊。
@@ -86,7 +85,7 @@ internal sealed partial class RimWorldGameWorld
             Zone zone = CreateZoneInstance(map, stockpile, plant);
             map.zoneManager.RegisterZone(zone);
             foreach (IntVec3 cell in group) zone.AddCell(cell);
-            added.Add($"{zone.label} [{zone.ID}] covering {group.Count} cells");
+            added.Add(string.Create(CultureInfo.InvariantCulture, $"{zone.label} [{zone.ID}] covering {group.Count} cells"));
         }
         return CommandResult.Ok("Added " + string.Join(", ", added.ToArray()) + "." + skippedText);
     }
@@ -189,17 +188,17 @@ internal sealed partial class RimWorldGameWorld
     public CommandResult DeleteZone(int zoneId)
     {
         Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
-        if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
+        if (zone == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no zone has id {zoneId}"));
         string label = zone.label;
         // 原生刪除路徑：Zone.Delete() 清格子並經 Deregister() 走 ZoneManager.DeregisterZone。
         zone.Delete();
-        return CommandResult.Ok($"Deleted zone [{zoneId}] {label}. Stored items stay on the ground.");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Deleted zone [{zoneId}] {label}. Stored items stay on the ground."));
     }
 
     public CommandResult SetZoneFilter(int zoneId, IReadOnlyList<string> allowDefNames, IReadOnlyList<string> disallowDefNames)
     {
         Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
-        if (zone == null) return CommandResult.Fail($"no zone has id {zoneId}");
+        if (zone == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no zone has id {zoneId}"));
         if (zone is not Zone_Stockpile stockpile) return CommandResult.Fail($"{zone.label} is not a stockpile and has no storage filter");
         List<string> allows = [.. (allowDefNames ?? [])];
         List<string> disallows = [.. (disallowDefNames ?? [])];
@@ -218,18 +217,18 @@ internal sealed partial class RimWorldGameWorld
         foreach (string defName in allows)
         {
             ThingDef def = DefDatabase<ThingDef>.GetNamed(defName);
-            stockpile.settings.filter.SetAllow(def, true);
+            stockpile.settings.filter.SetAllow(def, allow: true);
             applied.Add(def);
         }
         foreach (string defName in disallows)
         {
             ThingDef def = DefDatabase<ThingDef>.GetNamed(defName);
-            stockpile.settings.filter.SetAllow(def, false);
+            stockpile.settings.filter.SetAllow(def, allow: false);
             removed.Add(def);
         }
         var parts = new List<string>();
         if (applied.Count > 0) parts.Add("allows " + string.Join(", ", applied.Select(d => d.label).ToArray()));
         if (removed.Count > 0) parts.Add("disallows " + string.Join(", ", removed.Select(d => d.label).ToArray()));
-        return CommandResult.Ok($"Zone [{zoneId}] {zone.label} now {string.Join("; ", parts.ToArray())}.");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Zone [{zoneId}] {zone.label} now {string.Join("; ", parts.ToArray())}."));
     }
 }

@@ -53,7 +53,7 @@ public sealed partial class ColonyAgentSession
             }
         }
 
-        return BuildRunOptions(effectiveReasoning, PreferredModel);
+        return CreateRunOptions(effectiveReasoning, PreferredModel);
     }
 
     /// <summary>System One 挑選這句用得到、目前可用但還沒載入的工具包。</summary>
@@ -66,12 +66,12 @@ public sealed partial class ColonyAgentSession
         return _packSelector.SelectAsync(DecisionReasoningRouter.Describe(text, History), candidates, cancellationToken);
     }
 
-    internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride = null)
+    internal RimLLMChatOptions CreateRunOptions(ReasoningLevel? reasoningOverride = null)
     {
-        return BuildRunOptions(reasoningOverride, PreferredModel);
+        return CreateRunOptions(reasoningOverride, PreferredModel);
     }
 
-    internal RimLLMChatOptions BuildRunOptions(ReasoningLevel? reasoningOverride, string modelToUse)
+    internal RimLLMChatOptions CreateRunOptions(ReasoningLevel? reasoningOverride, string modelToUse)
     {
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, LoadedPacks());
@@ -107,7 +107,7 @@ public sealed partial class ColonyAgentSession
     private string LoadToolPack(string pack)
     {
         ToolPermissions permissions = _permissions();
-        AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, null);
+        AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, loadedPacks: null);
         IReadOnlyList<ToolPacks.Pack> available = selected.Packs;
         string wanted = (pack ?? string.Empty).Trim();
         ToolPacks.Pack match = available.FirstOrDefault(p => string.Equals(p.Id, wanted, StringComparison.OrdinalIgnoreCase));
@@ -193,10 +193,6 @@ public sealed partial class ColonyAgentSession
     /// <summary>各家模型把工具呼叫寫成純文字時的開頭標記（Hermes／Qwen、Mistral、Llama）。</summary>
     private static readonly string[] ToolCallMarkers = ["<tool_call", "<function=", "[TOOL_CALLS]", "<|tool_call", "<|python_tag|>"];
 
-    /// <summary>裸 JSON 形式的工具呼叫：{"name": "...", "arguments"／"parameters": ...}。</summary>
-    private static readonly Regex JsonToolCall = new(
-        "\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"(arguments|parameters)\"\\s*:", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-
     /// <summary>
     /// 步數用完的最後一輪沒有工具定義，有些模型會把想呼叫的工具寫成純文字。
     /// 那段不是給玩家的回覆：從最早出現的工具呼叫標記起截掉，保留前面的正文（可能是空字串）。
@@ -249,4 +245,8 @@ public sealed partial class ColonyAgentSession
         }
         return AgentErrorKind.Unknown;
     }
+
+    /// <summary>裸 JSON 形式的工具呼叫：{"name": "...", "arguments"／"parameters": ...}。</summary>
+    [GeneratedRegex("\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"(arguments|parameters)\"\\s*:", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex JsonToolCall { get; }
 }

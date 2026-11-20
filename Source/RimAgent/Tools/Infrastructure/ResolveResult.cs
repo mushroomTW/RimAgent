@@ -18,11 +18,11 @@ public class Result<T>
 
     public static Result<T> Ok(T value)
     {
-        return new Result<T>(true, value, string.Empty);
+        return new Result<T>(success: true, value, string.Empty);
     }
 
     public static Result<T> Fail(string error)
     {
-        return new Result<T>(false, default, error);
+        return new Result<T>(success: false, default, error);
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -72,6 +72,22 @@ public sealed class MapOverviewTools
         sb.Append(". Explored ").Append(Percent(revealed, total)).Append(" of the map; the rest is unexplored fog.").AppendLine();
         sb.Append("Directions: x runs west to east, z south to north; \"north-west\" etc. means the third of the map the area's centre lies in.").AppendLine();
 
+        AppendGround(sb, counts, revealed, thickRoof);
+
+        sb.AppendLine();
+        AppendBase(sb, survey);
+        AppendRooms(sb, survey);
+        AppendZones(sb, survey);
+
+        AppendTerrainClusters(sb, survey);
+
+        sb.Append("Look closer with take_screenshot and a rectangle; use inspect_area and find_things for exact cells and ids.");
+        return sb.ToString();
+    }
+
+    /// <summary>已探索地面的地形組成與厚岩頂比例。</summary>
+    private static void AppendGround(StringBuilder sb, int[] counts, int revealed, int thickRoof)
+    {
         if (revealed > 0)
         {
             var parts = new List<string>();
@@ -83,30 +99,26 @@ public sealed class MapOverviewTools
             AddShare(parts, "deep water", counts[(int)SurveyCell.DeepWater], revealed);
             AddShare(parts, "built floor", counts[(int)SurveyCell.BuiltFloor], revealed);
             AddShare(parts, "buildings", counts[(int)SurveyCell.Structure], revealed);
-            sb.Append("Explored ground: ").Append(string.Join(", ", parts)).Append('.');
+            sb.Append("Explored ground: ").AppendJoin(", ", parts).Append('.');
             if (thickRoof > 0) sb.Append(" Thick mountain roof covers ").Append(Percent(thickRoof, revealed)).Append(" of it.");
             sb.AppendLine();
         }
+    }
 
-        sb.AppendLine();
-        AppendBase(sb, survey);
-        AppendRooms(sb, survey);
-        AppendZones(sb, survey);
-
+    /// <summary>礦脈、水域、肥沃土地與大塊岩體的分布。</summary>
+    private static void AppendTerrainClusters(StringBuilder sb, MapSurvey survey)
+    {
         List<Cluster> ores = FindClusters(survey, i => survey.Resource[i]);
         AppendClusters(sb, survey, "Ore veins", ores, MaxOreVeins, c => survey.ResourceLabels[c.Key - 1]);
 
-        List<Cluster> water = FindClusters(survey, i => IsWater(survey.Cells[i]) ? 1 : 0).Where(c => c.Cells >= MinWaterCells).ToList();
+        List<Cluster> water = [.. FindClusters(survey, i => IsWater(survey.Cells[i]) ? 1 : 0).Where(c => c.Cells >= MinWaterCells)];
         AppendClusters(sb, survey, $"Water bodies ({MinWaterCells}+ cells)", water, MaxTerrainPatches, c => "water");
 
-        List<Cluster> rich = FindClusters(survey, i => survey.Cells[i] == SurveyCell.RichSoil ? 1 : 0).Where(c => c.Cells >= MinRichSoilCells).ToList();
+        List<Cluster> rich = [.. FindClusters(survey, i => survey.Cells[i] == SurveyCell.RichSoil ? 1 : 0).Where(c => c.Cells >= MinRichSoilCells)];
         AppendClusters(sb, survey, $"Rich soil patches ({MinRichSoilCells}+ cells)", rich, MaxTerrainPatches, c => "rich soil");
 
-        List<Cluster> rock = FindClusters(survey, i => survey.Cells[i] == SurveyCell.Rock ? 1 : 0).Where(c => c.Cells >= MinRockMassCells).ToList();
+        List<Cluster> rock = [.. FindClusters(survey, i => survey.Cells[i] == SurveyCell.Rock ? 1 : 0).Where(c => c.Cells >= MinRockMassCells)];
         AppendClusters(sb, survey, $"Large rock masses ({MinRockMassCells}+ explored cells)", rock, MaxTerrainPatches, c => "rock");
-
-        sb.Append("Look closer with take_screenshot and a rectangle; use inspect_area and find_things for exact cells and ids.");
-        return sb.ToString();
     }
 
     private static void AppendBase(StringBuilder sb, MapSurvey survey)
@@ -142,7 +154,7 @@ public sealed class MapOverviewTools
 
     private static void AppendRooms(StringBuilder sb, MapSurvey survey)
     {
-        List<RoomInfo> rooms = survey.Rooms.Where(r => r.CellCount >= MinRoomCells).ToList();
+        List<RoomInfo> rooms = [.. survey.Rooms.Where(r => r.CellCount >= MinRoomCells)];
         int tiny = survey.Rooms.Count - rooms.Count;
         sb.Append("Indoor rooms (").Append(rooms.Count);
         if (tiny > 0) sb.Append("; ").Append(tiny).Append(" enclosed spaces under ").Append(MinRoomCells).Append(" cells left out");
@@ -279,7 +291,7 @@ public sealed class MapOverviewTools
         return ew.Length == 0 ? ns : ns + "-" + ew;
     }
 
-    private static string CellCount(int n) => n == 1 ? "1 cell" : n + " cells";
+    private static string CellCount(int n) => n == 1 ? "1 cell" : n.ToString(CultureInfo.InvariantCulture) + " cells";
 
     private static void AddShare(List<string> parts, string label, int count, int total)
     {
@@ -290,6 +302,6 @@ public sealed class MapOverviewTools
     {
         if (total <= 0) return "0%";
         double p = 100.0 * part / total;
-        return p > 0 && p < 1 ? "<1%" : Math.Round(p).ToString("0", CultureInfo.InvariantCulture) + "%";
+        return p > 0 && p < 1 ? "<1%" : Math.Round(p, MidpointRounding.ToEven).ToString("0", CultureInfo.InvariantCulture) + "%";
     }
 }

@@ -31,12 +31,12 @@ public partial class Window_Agent
         if (fill.a > 0f)
         {
             GUI.color = fill;
-            DrawNineSlice(rect, GetRoundedTex(RoundedFillTex, r, false), r);
+            DrawNineSlice(rect, GetRoundedTex(RoundedFillTex, r, ring: false), r);
         }
         if (border.a > 0f)
         {
             GUI.color = border;
-            DrawNineSlice(rect, GetRoundedTex(RoundedRingTex, r, true), r);
+            DrawNineSlice(rect, GetRoundedTex(RoundedRingTex, r, ring: true), r);
         }
         GUI.color = oldColor;
     }
@@ -47,7 +47,7 @@ public partial class Window_Agent
         if (cache.TryGetValue(r, out Texture2D cached)) return cached;
         int size = r * 2 + 2;
         float half = size / 2f;
-        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false)
         {
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Bilinear

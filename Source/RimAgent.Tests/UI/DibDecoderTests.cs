@@ -27,7 +27,7 @@ public class DibDecoderTests
             data.AddRange(row);
             data.AddRange(new byte[stride - row.Length]);
         }
-        return data.ToArray();
+        return [.. data];
     }
 
     [Test]

@@ -249,7 +249,7 @@ public partial class Window_Agent
     {
         if (string.IsNullOrWhiteSpace(model)) return "RimAgent.Model.Default".Translate();
         string trimmed = model.Trim();
-        int colon = trimmed.IndexOf(':');
+        int colon = trimmed.IndexOf(':', StringComparison.Ordinal);
         return colon > 0 && colon < trimmed.Length - 1 ? trimmed.Substring(colon + 1) : trimmed;
     }
 

@@ -27,7 +27,7 @@ public class CombatToolsTests
     [Test]
     public void DraftAllSkipsDowned()
     {
-        string text = _tools.Draft("all", true);
+        string text = _tools.Draft("all", drafted: true);
         Assert.That(text, Does.StartWith("Drafted 2: Ali, Bob.").And.Contain("Cid is downed"));
         Assert.That(_world.Colonists[0].Drafted, Is.True);
         Assert.That(_world.Colonists[2].Drafted, Is.False);
@@ -37,7 +37,7 @@ public class CombatToolsTests
     public void UndraftReportsVerb()
     {
         _world.Colonists[1].Drafted = true;
-        Assert.That(_tools.Draft("Bob", false), Is.EqualTo("Undrafted 1: Bob."));
+        Assert.That(_tools.Draft("Bob", drafted: false), Is.EqualTo("Undrafted 1: Bob."));
         Assert.That(_world.Colonists[1].Drafted, Is.False);
     }
 
@@ -91,11 +91,11 @@ public class CombatToolsTests
     {
         var gated = new CombatTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
-        string text = gated.Draft("all", true);
+        string text = gated.Draft("all", drafted: true);
 
         Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("draft"));
         Assert.That(_world.Calls, Is.Empty);
-        Assert.That(_world.Colonists.All(c => !c.Drafted), Is.True);
+        Assert.That(_world.Colonists.TrueForAll(c => !c.Drafted), Is.True);
     }
 
     [Test]

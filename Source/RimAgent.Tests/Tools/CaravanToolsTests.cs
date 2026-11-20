@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -328,7 +329,7 @@ public class CaravanToolsTests
         string text = _tools.CancelFormingCaravan();
 
         Assert.That(text, Does.StartWith("Stopped forming"));
-        Assert.That(_world.Calls.Single(), Is.EqualTo($"CancelFormingCaravan({id})"));
+        Assert.That(_world.Calls.Single(), Is.EqualTo(string.Create(CultureInfo.InvariantCulture, $"CancelFormingCaravan({id})")));
         Assert.That(_world.Forming, Is.Empty);
     }
 

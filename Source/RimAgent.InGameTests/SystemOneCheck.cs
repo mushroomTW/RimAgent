@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -50,7 +51,7 @@ internal static class SystemOneCheck
 
     private static int Notices(ColonyAgentSession session, string text)
     {
-        return session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Notice && e.Text.Contains(text));
+        return session.Transcript.Snapshot().Count(e => e.Kind == TranscriptKind.Notice && e.Text.Contains(text, StringComparison.Ordinal));
     }
 
     public static async Task<List<string>> RunAsync()
@@ -85,7 +86,7 @@ internal static class SystemOneCheck
         AccessTools.Field(Comp, "_choiceResponder").SetValue(comp, new DecisionChoiceResponder(stub, () => "Pick what helps the colony."));
         try
         {
-            List<PendingChoiceInfo> choices = [.. new RimWorldGameWorld(Current.Game).GetPendingChoices().Where(c => c.Title == "System One check" || c.Text.Contains("wanderer asks"))];
+            List<PendingChoiceInfo> choices = [.. new RimWorldGameWorld(Current.Game).GetPendingChoices().Where(c => c.Title == "System One check" || c.Text.Contains("wanderer asks", StringComparison.Ordinal))];
             if (choices.Count != 1)
             {
                 failures.Add($"test dialog not pending exactly once ({choices.Count})");
@@ -110,8 +111,8 @@ internal static class SystemOneCheck
         }
         finally
         {
-            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(false);
-            AccessTools.Field(Comp, "_choiceResponder").SetValue(comp, null);
+            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(doCloseSound: false);
+            AccessTools.Field(Comp, "_choiceResponder").SetValue(comp, value: null);
         }
     }
 
@@ -139,7 +140,7 @@ internal static class SystemOneCheck
     {
         ctx.Settings.mode = AgentMode.Confirm;
         HashSet<string> none = await Call<HashSet<string>>(ctx.GameComponent,"AnswerChoicesWithSystemOneAsync", ctx.Session, ctx.Choices, ctx.Generation, CancellationToken.None);
-        if (none.Count != 0 || ctx.Stub.Calls != 0 || ctx.State.Pressed != null) ctx.Failures.Add($"confirm mode answered: {none.Count}, calls {ctx.Stub.Calls}, pressed {ctx.State.Pressed}");
+        if (none.Count != 0 || ctx.Stub.Calls != 0 || ctx.State.Pressed != null) ctx.Failures.Add(string.Create(CultureInfo.InvariantCulture, $"confirm mode answered: {none.Count}, calls {ctx.Stub.Calls}, pressed {ctx.State.Pressed}"));
     }
 
     private static async Task CheckExecuteModeAsync(ChoiceCheckContext ctx)
@@ -159,10 +160,10 @@ internal static class SystemOneCheck
         if (ctx.State.Pressed != Accept) ctx.Failures.Add("dialog not answered with Accept, pressed " + (ctx.State.Pressed ?? "nothing"));
         if (!ctx.State.OnMainThread) ctx.Failures.Add("dialog button ran off the main thread");
         if (Find.WindowStack.Windows.Contains(dialog)) ctx.Failures.Add("dialog still open");
-        if (ctx.Stub.Calls != 1) ctx.Failures.Add("decision model calls " + ctx.Stub.Calls);
+        if (ctx.Stub.Calls != 1) ctx.Failures.Add("decision model calls " + ctx.Stub.Calls.ToString(CultureInfo.InvariantCulture));
         if (Notices(ctx.Session, "System One answered") != noticesBefore + 1) ctx.Failures.Add("no transcript notice for the answer");
         string reports = ctx.Session.DecisionReports.TakeAll();
-        if (reports == null || !reports.Contains(Accept)) ctx.Failures.Add("main model report missing: " + (reports ?? "null"));
+        if (reports == null || !reports.Contains(Accept, StringComparison.Ordinal)) ctx.Failures.Add("main model report missing: " + (reports ?? "null"));
         if (Field<AutonomousRunner>(ctx.GameComponent, "_runner").IsRunning) ctx.Failures.Add("autonomous run still marked running");
         if (ctx.Session.IsBusy) ctx.Failures.Add("main model was started although every choice was answered");
     }
@@ -193,11 +194,11 @@ internal static class SystemOneCheck
             int calls = stub.Calls;
             if (await Call<bool>(comp, TriageSkipsAsync, session, AutonomousTrigger.Fire, signals, tick, generation, CancellationToken.None)) failures.Add("fire was skipped");
             if (stub.Calls != calls) failures.Add("fire was sent to the decision model");
-            if (stub.Calls != 3) failures.Add("triage decision calls " + stub.Calls);
+            if (stub.Calls != 3) failures.Add("triage decision calls " + stub.Calls.ToString(CultureInfo.InvariantCulture));
         }
         finally
         {
-            AccessTools.Field(Comp, "_triage").SetValue(comp, null);
+            AccessTools.Field(Comp, "_triage").SetValue(comp, value: null);
         }
     }
 }

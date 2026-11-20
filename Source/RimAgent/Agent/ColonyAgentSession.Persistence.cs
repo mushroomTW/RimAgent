@@ -57,7 +57,7 @@ public sealed partial class ColonyAgentSession
     private string SerializeSession(AgentSession session)
     {
         #pragma warning disable VSTHRD002 // 呼叫端是同步的，只能同步等待；前提見上方 remarks
-        JsonElement document = _agent.SerializeSessionAsync(session, null, CancellationToken.None)
+        JsonElement document = _agent.SerializeSessionAsync(session, jsonSerializerOptions: null, CancellationToken.None)
             .AsTask().GetAwaiter().GetResult();
         #pragma warning restore VSTHRD002
         return document.GetRawText();
@@ -129,7 +129,7 @@ public sealed partial class ColonyAgentSession
             try
             {
                 using JsonDocument document = JsonDocument.Parse(serialized);
-                return await _agent.DeserializeSessionAsync(document.RootElement, null, cancellationToken);
+                return await _agent.DeserializeSessionAsync(document.RootElement, jsonSerializerOptions: null, cancellationToken);
             }
             catch (Exception ex)
             {

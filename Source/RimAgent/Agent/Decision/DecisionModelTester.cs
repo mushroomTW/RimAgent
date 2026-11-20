@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Threading.Tasks;
 
 namespace RimAgent.Agent;
@@ -61,7 +62,7 @@ public static class DecisionModelTester
                 _outcome = TestOutcome.NoAnswer;
                 return;
             }
-            _detail = (answer.Value ?? "?") + " · " + timer.ElapsedMilliseconds + " ms";
+            _detail = (answer.Value ?? "?") + " · " + timer.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms";
             _outcome = TestOutcome.Ok;
         }
         catch (Exception ex)

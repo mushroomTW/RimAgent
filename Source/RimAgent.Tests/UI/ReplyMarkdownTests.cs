@@ -41,6 +41,6 @@ public class ReplyMarkdownTests
     [Test]
     public void NullBecomesEmpty()
     {
-        Assert.That(ReplyMarkdown.EscapeAngleBrackets(null), Is.EqualTo(string.Empty));
+        Assert.That(ReplyMarkdown.EscapeAngleBrackets(reply: null), Is.EqualTo(string.Empty));
     }
 }

@@ -264,7 +264,7 @@ What is the most significant effect of this action?
         var fallbackClassifier = new RiskClassifier(fallbackClient, systemPrompt: () => "fallback prompt");
 
         // 玩家還沒在框架設定決策模型：服務工廠回 null。
-        var checker = new DecisionRiskChecker(null, fallbackClassifier, () => SampleCriteria, () => null);
+        var checker = new DecisionRiskChecker(decisionService: null, fallbackClassifier, () => SampleCriteria, () => null);
 
         RiskVerdict verdict = await checker.ClassifyAsync(new RiskQuestion
         {
@@ -305,10 +305,10 @@ What is the most significant effect of this action?
     public async Task CancellationPropagatesInsteadOfFallingBack()
     {
         var fakeService = new FakeDecisionService().Reply(0.1, 0.9);
-        var checker = new DecisionRiskChecker(fakeService, null, () => SampleCriteria);
+        var checker = new DecisionRiskChecker(fakeService, fallback: null, () => SampleCriteria);
 
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
 
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             checker.ClassifyAsync(new RiskQuestion(), cts.Token));
@@ -320,7 +320,7 @@ What is the most significant effect of this action?
     {
         var fakeService = new FakeDecisionService()
             .Reply(0.2, 0.9, "reversible_colony_change");
-        var checker = new DecisionRiskChecker(fakeService, null, () => SampleCriteria);
+        var checker = new DecisionRiskChecker(fakeService, fallback: null, () => SampleCriteria);
 
         var q = new RiskQuestion
         {

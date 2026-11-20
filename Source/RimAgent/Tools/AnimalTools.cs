@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -40,7 +41,7 @@ public sealed class AnimalTools
         }
         else
         {
-            sb.Append(tame.Count == 1 ? "1 colony animal:" : tame.Count + " colony animals:").AppendLine();
+            sb.Append(tame.Count == 1 ? "1 colony animal:" : tame.Count.ToString(CultureInfo.InvariantCulture) + " colony animals:").AppendLine();
             foreach (AnimalInfo a in tame)
             {
                 sb.Append('[').Append(a.Id).Append("] ").Append(a.Name);
@@ -54,8 +55,7 @@ public sealed class AnimalTools
         if (wild.Count > 0)
         {
             sb.AppendLine();
-            sb.Append("Wild on the map: ").Append(string.Join(", ",
-                wild.GroupBy(a => a.Species, StringComparer.Ordinal).Select(g => g.Count() + " " + g.Key).ToArray())).Append('.');
+            sb.Append("Wild on the map: ").AppendJoin(", ", wild.GroupBy(a => a.Species, StringComparer.Ordinal).Select(g => g.Count().ToString(CultureInfo.InvariantCulture) + " " + g.Key).ToArray()).Append('.');
         }
         return sb.ToString().Trim();
     }
@@ -69,7 +69,7 @@ public sealed class AnimalTools
         if (!target.Success) return target.Error;
         if (!target.Value.Wild) return ToolText.Error($"{target.Value.Name} is already tame.");
 
-        string blocked = ToolText.Blocked(_gate, $"would mark {target.Value.Name} [{target.Value.Id}] for taming.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would mark {target.Value.Name} [{target.Value.Id}] for taming."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.TameAnimal(target.Value.Id);
@@ -149,7 +149,7 @@ public sealed class AnimalTools
             animals,
             a => a.Id,
             Names,
-            a => $"[{a.Id}] {a.Name}",
+            a => string.Create(CultureInfo.InvariantCulture, $"[{a.Id}] {a.Name}"),
             "animal");
     }
 

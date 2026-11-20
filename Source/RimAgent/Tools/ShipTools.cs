@@ -47,7 +47,7 @@ public sealed class ShipTools
         problems.AddRange(required
             .Select(r => (r.Label, Missing: r.Count - groups[0].Count(p => p.DefName == r.DefName)))
             .Where(m => m.Missing > 0)
-            .Select(m => $"Missing from group 1: {m.Missing} {m.Label}."));
+            .Select(m => string.Create(CultureInfo.InvariantCulture, $"Missing from group 1: {m.Missing} {m.Label}.")));
         problems.AddRange(parts.Select(p => DescribeBlockedEntry(p, parts)).Where(text => text != null));
 
         if (problems.Count == 0) return sb.Append("Layout OK: every required part is connected and casket entry cells are free.").ToString();
@@ -69,16 +69,15 @@ public sealed class ShipTools
             remaining.RemoveAt(0);
             for (int i = 0; i < group.Count; i++)
             {
-                List<ShipPartInfo> touching = remaining.Where(p => Touches(p.Rect, group[i].Rect)).ToList();
+                List<ShipPartInfo> touching = [.. remaining.Where(p => Touches(p.Rect, group[i].Rect))];
                 group.AddRange(touching);
                 remaining.RemoveAll(touching.Contains);
             }
             groups.Add(group);
         }
-        return groups
-            .OrderByDescending(g => g.Any(p => p.DefName == ComputerCoreDefName))
-            .ThenByDescending(g => g.Count)
-            .ToList();
+        return [.. groups
+            .OrderByDescending(g => g.Exists(p => p.DefName == ComputerCoreDefName))
+            .ThenByDescending(g => g.Count)];
     }
 
     /// <summary>兩矩形之間隔幾格；負數表示該軸的範圍重疊。</summary>
@@ -99,7 +98,7 @@ public sealed class ShipTools
         for (int i = 0; i < groups.Count; i++)
         {
             sb.Append(CultureInfo.InvariantCulture, $"Group {i + 1}: ");
-            sb.AppendLine(string.Join("; ", groups[i].Select(p => $"{p.Label} #{p.Id} {p.Rect}{StateSuffix(p.State)}")));
+            sb.AppendJoin("; ", groups[i].Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Label} #{p.Id} {p.Rect}{StateSuffix(p.State)}"))).AppendLine();
         }
     }
 
@@ -121,13 +120,13 @@ public sealed class ShipTools
             .OrderBy(t => Math.Max(t.Gap.X, 0) + Math.Max(t.Gap.Z, 0))
             .First();
         (ShipPartInfo part, ShipPartInfo target, (int gapX, int gapZ)) = closest;
-        string start = $"Group {number} is not connected: {part.Label} {part.Rect} and {target.Label} {target.Rect}";
+        string start = string.Create(CultureInfo.InvariantCulture, $"Group {number} is not connected: {part.Label} {part.Rect} and {target.Label} {target.Rect}");
         string shift = DescribeShift(part.Rect, target.Rect, gapX, gapZ);
         string how = part.State == ShipPartState.Built ? "deconstruct and rebuild" : "remove_blueprint, then place it again";
         if (gapX == 0 && gapZ == 0) return $"{start} touch only at a corner, which does not connect. Moving the former {shift} would connect them ({how}).";
         string distance = gapX >= 0 && gapZ >= 0
-            ? $"are diagonal, {gapX} cell(s) apart along x and {gapZ} along z"
-            : $"have {Math.Max(gapX, gapZ)} empty cell(s) between them";
+            ? string.Create(CultureInfo.InvariantCulture, $"are diagonal, {gapX} cell(s) apart along x and {gapZ} along z")
+            : string.Create(CultureInfo.InvariantCulture, $"have {Math.Max(gapX, gapZ)} empty cell(s) between them");
         // 樑是 2x6，一格寬的縫塞不進去。
         string bridge = Math.Max(gapX, gapZ) >= 2 ? ", or bridge the gap with a ship beam (2x6)" : string.Empty;
         return $"{start} {distance}. Moving the former {shift} would connect them ({how}){bridge}.";
@@ -139,8 +138,8 @@ public sealed class ShipTools
         int moveX = gapX >= 0 && gapZ >= 0 ? gapX + 1 : Math.Max(gapX, 0);
         int moveZ = Math.Max(gapZ, 0);
         var steps = new List<string>();
-        if (moveX > 0) steps.Add($"{moveX} {(part.MaxX < target.MinX ? "east" : "west")}");
-        if (moveZ > 0) steps.Add($"{moveZ} {(part.MaxZ < target.MinZ ? "north" : "south")}");
+        if (moveX > 0) steps.Add(string.Create(CultureInfo.InvariantCulture, $"{moveX} {(part.MaxX < target.MinX ? "east" : "west")}"));
+        if (moveZ > 0) steps.Add(string.Create(CultureInfo.InvariantCulture, $"{moveZ} {(part.MaxZ < target.MinZ ? "north" : "south")}"));
         return string.Join(" and ", steps);
     }
 
@@ -150,6 +149,6 @@ public sealed class ShipTools
         // 藍圖與框架不擋路，世界那邊看不出來，完工後才會擋住，所以要比對其他零件。休眠艙可穿過，不算阻擋。
         ShipPartInfo cover = parts.FirstOrDefault(p => p != part && p.DefName != "Ship_CryptosleepCasket" && p.Rect.Contains(cell.X, cell.Z));
         string blocker = cover != null ? $"{cover.Label} {cover.Rect}" : part.InteractionBlockedBy;
-        return blocker == null ? null : $"{part.Label} #{part.Id}: colonists enter from {ToolText.Cell(cell.X, cell.Z)}, which is blocked by {blocker}. Without entry the casket cannot be boarded.";
+        return blocker == null ? null : string.Create(CultureInfo.InvariantCulture, $"{part.Label} #{part.Id}: colonists enter from {ToolText.Cell(cell.X, cell.Z)}, which is blocked by {blocker}. Without entry the casket cannot be boarded.");
     }
 }

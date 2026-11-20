@@ -83,11 +83,11 @@ public partial class RimAgentGameComponent
         IReadOnlyList<AutonomousTrigger> giveUps = _scheduler.TakeGiveUps();
         for (int i = 0; i < giveUps.Count; i++)
         {
-            WarnOnce("RimAgent autonomous task gave up after " + AutonomousScheduler.MaxAttempts + " attempts: " + giveUps[i]);
+            WarnOnce("RimAgent autonomous task gave up after " + AutonomousScheduler.MaxAttempts.ToString(CultureInfo.InvariantCulture) + " attempts: " + giveUps[i]);
             session.Transcript.Add(new TranscriptEntry
             {
                 Kind = TranscriptKind.Notice,
-                Text = "Autonomous task stopped retrying after " + AutonomousScheduler.MaxAttempts +
+                Text = "Autonomous task stopped retrying after " + AutonomousScheduler.MaxAttempts.ToString(CultureInfo.InvariantCulture) +
                        " attempts: " + DescribeGiveUp(giveUps[i]) +
                        ". It will pick this up again once the situation clears."
             });
@@ -175,7 +175,7 @@ public partial class RimAgentGameComponent
         {
             if (signals.HasValue && await TriageSkipsAsync(session, trigger, signals.Value, tick, generation, token)) return;
             if (!_runner.IsCurrent(generation)) return;
-            await RunAutonomousAsync(session, trigger, tick, config, signals, generation, detail, token);
+            await RunAutonomousAsync(new AutonomousRunContext(session, trigger, tick, config, signals, detail), generation, token);
         });
     }
 
@@ -193,7 +193,7 @@ public partial class RimAgentGameComponent
                 if (!_runner.IsCurrent(generation)) return;
                 bool leftover = _autoWorld.GetPendingChoices().Any(c => choices.Any(o => o.Id == c.Id) && !answered.Contains(c.Id));
                 if (answered.Count > 0 && !leftover) return;
-                await RunAutonomousAsync(session, AutonomousTrigger.Choice, tick, config, null, generation, null, token);
+                await RunAutonomousAsync(new AutonomousRunContext(session, AutonomousTrigger.Choice, tick, config, Signals: null, Detail: null), generation, token);
             }
             catch (Exception ex)
             {
@@ -236,7 +236,7 @@ public partial class RimAgentGameComponent
         PendingChoiceInfo choice = decision.Choice;
         // 前一個代答可能已讓這個抉擇消失（同一串對話框）：只答還在的。
         if (!_autoWorld.GetPendingChoices().Any(c => string.Equals(c.Id, choice.Id, StringComparison.OrdinalIgnoreCase))) return true;
-        string preview = $"would answer \"{choice.Title}\" with option {decision.Option.Number}: {decision.Option.Text}.";
+        string preview = string.Create(CultureInfo.InvariantCulture, $"would answer \"{choice.Title}\" with option {decision.Option.Number}: {decision.Option.Text}.");
         if (autoMode)
         {
             RiskVerdict verdict = await session.ClassifyRiskAsync(new RiskQuestion
@@ -310,24 +310,33 @@ public partial class RimAgentGameComponent
     /// 組好主 LLM 的自主任務指令並交給執行器送出。沿用 guard 進場時取得的這一輪 token：
     /// 篩選或代答期間按下停止，主 LLM 這一輪也跟著取消。
     /// </summary>
-    private async Task RunAutonomousAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, int generation, string detail, CancellationToken token)
+    private async Task RunAutonomousAsync(AutonomousRunContext run, int generation, CancellationToken token)
     {
         if (!_runner.IsCurrent(generation)) return;
-        string instruction = BuildAutonomousInstruction(trigger);
+        string instruction = BuildAutonomousInstruction(run.Trigger);
         if (string.IsNullOrWhiteSpace(instruction)) return;
-        if (!string.IsNullOrEmpty(detail)) instruction += "\n\n" + detail;
+        if (!string.IsNullOrEmpty(run.Detail)) instruction += "\n\n" + run.Detail;
         (bool completed, string reply) = await _runner.RunTaskAsync(new AutonomousRunRequest
         {
-            Session = session,
-            Trigger = trigger,
-            Tick = tick,
-            Config = config,
+            Session = run.Session,
+            Trigger = run.Trigger,
+            Tick = run.Tick,
+            Config = run.Config,
             Instruction = instruction,
-            MaxToolSteps = session.Mode == AgentMode.Autonomous ? null : AutonomousRunMaxSteps,
-            RunInfo = RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(trigger, tick, signals) : null
+            MaxToolSteps = run.Session.Mode == AgentMode.Autonomous ? null : AutonomousRunMaxSteps,
+            RunInfo = RimAgentMod.Settings?.recordRuns == true ? BuildRunInfo(run.Trigger, run.Tick, run.Signals) : null
         }, generation, token);
-        if (completed) HandleAutonomousReply(trigger, reply, generation);
+        if (completed) HandleAutonomousReply(run.Trigger, reply, generation);
     }
+
+    /// <summary>一次自主任務的觸發情境；Detail 是接在任務文案後面的這一次的具體情況，沒有就是 null。</summary>
+    private readonly record struct AutonomousRunContext(
+        ColonyAgentSession Session,
+        AutonomousTrigger Trigger,
+        int Tick,
+        AutonomousConfig Config,
+        AutonomousSignals? Signals,
+        string Detail);
 
     /// <summary>組裝自主任務指令；缺章節時警告並退回 Interval。</summary>
     private string BuildAutonomousInstruction(AutonomousTrigger trigger)
@@ -380,16 +389,16 @@ public partial class RimAgentGameComponent
         string diagnostic = trigger switch
         {
             AutonomousTrigger.Fire =>
-                $"active fires. There are still {signals.FireCount} fire(s) burning after previous orders. Check if assigned colonists are drafting/extinguishing, or assign more colonists.",
+                string.Create(CultureInfo.InvariantCulture, $"active fires. There are still {signals.FireCount} fire(s) burning after previous orders. Check if assigned colonists are drafting/extinguishing, or assign more colonists."),
             AutonomousTrigger.Cold =>
-                $"hypothermia risks. {signals.ColdColonistCount} colonist(s) remain dangerously cold. Check indoor heaters, fuel/power, or warm clothing.",
+                string.Create(CultureInfo.InvariantCulture, $"hypothermia risks. {signals.ColdColonistCount} colonist(s) remain dangerously cold. Check indoor heaters, fuel/power, or warm clothing."),
             AutonomousTrigger.EmergencyMedical =>
-                $"medical emergencies. {signals.DownedOrBleedingCount} colonist(s) remain downed or bleeding. Ensure doctors are prioritized and medicine is accessible.",
+                string.Create(CultureInfo.InvariantCulture, $"medical emergencies. {signals.DownedOrBleedingCount} colonist(s) remain downed or bleeding. Ensure doctors are prioritized and medicine is accessible."),
             AutonomousTrigger.FoodShortage =>
                 // 會送進模型提示，數字固定用不隨地區變動的格式。
                 string.Create(CultureInfo.InvariantCulture, $"food shortage. Current food per colonist is {(signals.FoodNutrition / Math.Max(1, signals.ColonistCount)):F1} nutrition."),
             _ => $"condition: {trigger}."
         };
-        return $"This is retry #{attempt} for {diagnostic}";
+        return string.Create(CultureInfo.InvariantCulture, $"This is retry #{attempt} for {diagnostic}");
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using RimAgent.Game;
@@ -69,15 +70,15 @@ internal sealed partial class MapWorldTests : IMapGeneration, IWorldGeneration
         {
             if (!vanilla.TryGetValue(info.Id, out Pawn pawn))
             {
-                failures.Add($"id {info.Id} ({info.Name}) is not a free colonist on the map");
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"id {info.Id} ({info.Name}) is not a free colonist on the map"));
                 continue;
             }
             if (info.X != pawn.Position.x || info.Z != pawn.Position.z)
-                failures.Add($"{pawn.LabelShort}: at ({info.X},{info.Z}), vanilla {pawn.Position}");
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"{pawn.LabelShort}: at ({info.X},{info.Z}), vanilla {pawn.Position}"));
             if (string.IsNullOrEmpty(info.Name)) failures.Add($"{pawn.LabelShort}: empty name");
         }
         foreach (Pawn pawn in vanilla.Values.Where(p => colonists.All(c => c.Id != p.thingIDNumber)))
-            failures.Add($"{pawn.LabelShort} ({pawn.thingIDNumber}) is missing from GetColonists");
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"{pawn.LabelShort} ({pawn.thingIDNumber}) is missing from GetColonists"));
         TestHelpers.AssertNone(failures, "colonist list differs from vanilla");
     }
 
@@ -184,7 +185,7 @@ internal sealed partial class MapWorldTests : IMapGeneration, IWorldGeneration
     {
         Pawn anchor = map.mapPawns.FreeColonistsSpawned.FirstOrDefault();
         IntVec3 origin = anchor?.Position ?? map.Center;
-        foreach (IntVec3 corner in GenRadial.RadialCellsAround(origin, 30f, true))
+        foreach (IntVec3 corner in GenRadial.RadialCellsAround(origin, 30f, useCenter: true))
         {
             var rect = new CellRect(corner.x, corner.z, size, size);
             if (rect.InBounds(map) && rect.Cells.All(c => ok(c))) return rect;

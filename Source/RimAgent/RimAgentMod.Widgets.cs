@@ -83,7 +83,7 @@ public partial class RimAgentMod
             Widgets.DrawHighlight(card);
             TooltipHandler.TipRegion(card, tip);
         }
-        Widgets.CheckboxDraw(card.x + 12f, card.y + (card.height - 24f) / 2f, value, false);
+        Widgets.CheckboxDraw(card.x + 12f, card.y + (card.height - 24f) / 2f, value, disabled: false);
         float textX = card.x + 48f;
         float textWidth = card.xMax - textX - 10f;
         GUI.color = value ? Green : Color.white;

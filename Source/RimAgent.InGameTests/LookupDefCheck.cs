@@ -43,12 +43,12 @@ internal static class LookupDefCheck
                 failures.Add($"{name}: {text}");
                 continue;
             }
-            foreach (string want in wants.Where(want => !text.Contains(want)))
+            foreach (string want in wants.Where(want => !text.Contains(want, StringComparison.Ordinal)))
             {
                 failures.Add($"{name} lacks '{want}'");
             }
         }
-        if (!tools.LookupDef("Gun_AssaultRifle", EmptyKind, "all").Contains("Stats:")) failures.Add("detail=all has no stats");
+        if (!tools.LookupDef("Gun_AssaultRifle", EmptyKind, "all").Contains("Stats:", StringComparison.Ordinal)) failures.Add("detail=all has no stats");
         foreach (string error in world.TakeNewGameErrors()) failures.Add("game error: " + error);
         return failures;
     }

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using RimAgent.Game;
@@ -17,7 +18,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)
     {
-        Calls.Add($"SetWorkPriority({pawnId},{workTypeDefName},{priority})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SetWorkPriority({pawnId},{workTypeDefName},{priority})"));
         ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == pawnId);
         WorkPriorityInfo work = pawn?.WorkPriorities.FirstOrDefault(w => w.WorkTypeDefName == workTypeDefName);
         if (work == null) return CommandResult.Fail("pawn or work type not found");
@@ -27,7 +28,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName)
     {
-        Calls.Add($"SetTimeAssignment({pawnId},{hour},{assignmentDefName})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SetTimeAssignment({pawnId},{hour},{assignmentDefName})"));
         ColonistInfo pawn = Colonists.FirstOrDefault(c => c.Id == pawnId);
         if (pawn == null) return CommandResult.Fail("pawn not found");
         var table = pawn.Timetable.ToList();

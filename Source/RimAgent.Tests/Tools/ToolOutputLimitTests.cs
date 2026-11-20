@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -124,11 +125,11 @@ public class ToolOutputLimitTests
     public void StoreKeepsOnlyTheMostRecentOutputs()
     {
         var store = new ToolOutputStore();
-        for (int i = 0; i < ToolOutputStore.Capacity + 1; i++) store.Save("output " + i);
+        for (int i = 0; i < ToolOutputStore.Capacity + 1; i++) store.Save("output " + i.ToString(CultureInfo.InvariantCulture));
 
         Assert.That(store.TryGet("out_1", out _), Is.False, "最舊的被淘汰");
-        Assert.That(store.TryGet("out_" + (ToolOutputStore.Capacity + 1), out string last), Is.True);
-        Assert.That(last, Is.EqualTo("output " + ToolOutputStore.Capacity));
+        Assert.That(store.TryGet("out_" + (ToolOutputStore.Capacity + 1).ToString(CultureInfo.InvariantCulture), out string last), Is.True);
+        Assert.That(last, Is.EqualTo("output " + ToolOutputStore.Capacity.ToString(CultureInfo.InvariantCulture)));
     }
 
     [Test]
@@ -176,7 +177,7 @@ public class ToolOutputLimitTests
         string beyond = tools.ReadToolOutput(id, 1000000, string.Empty);
 
         Assert.That(first, Does.Contain("56789"));
-        Assert.That(first, Does.Contain("offset " + (5 + ToolOutputTools.SliceChars)));
+        Assert.That(first, Does.Contain("offset " + (5 + ToolOutputTools.SliceChars).ToString(CultureInfo.InvariantCulture)));
         Assert.That(beyond, Does.Contain("end of output"));
     }
 
@@ -225,7 +226,7 @@ public class ToolOutputLimitTests
         TranscriptEntry[] reads = [.. session.Transcript.Snapshot().Where(e => e.ToolName == "read_tool_output")];
         Assert.That(reads, Has.Length.EqualTo(1), "清除對話也清掉行動紀錄，只剩清除後那次");
         Assert.That(reads[0].Failed, Is.True, "清除對話後代號失效");
-        ChatMessage firstRead = client.ReceivedMessages[2].Last();
+        ChatMessage firstRead = client.ReceivedMessages[2][^1];
         Assert.That(firstRead.Contents.OfType<FunctionResultContent>().Single().Result?.ToString(), Does.Contain("(25,1)"));
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using RimAgent.Game;
@@ -30,7 +31,7 @@ internal sealed partial class MapWorldTests
         CellRect? found = FindShipArea(map, parts);
         if (found == null)
         {
-            TestHelpers.Skip(nameof(ShipPartsExposeStartupLaunchAndReport), $"no clear unroofed {parts.Sum(p => p.size.x)}x{parts.Max(p => p.size.z)} area near the colonists");
+            TestHelpers.Skip(nameof(ShipPartsExposeStartupLaunchAndReport), string.Create(CultureInfo.InvariantCulture, $"no clear unroofed {parts.Sum(p => p.size.x)}x{parts.Max(p => p.size.z)} area near the colonists"));
             return;
         }
         var windowsBefore = new HashSet<Window>(Find.WindowStack.Windows);
@@ -52,7 +53,7 @@ internal sealed partial class MapWorldTests
         }
         finally
         {
-            foreach (Window window in Find.WindowStack.Windows.Where(w => !windowsBefore.Contains(w)).ToList()) window.Close(false);
+            foreach (Window window in Find.WindowStack.Windows.Where(w => !windowsBefore.Contains(w)).ToList()) window.Close(doCloseSound: false);
             foreach (Building part in spawned.Where(b => !b.Destroyed)) part.Destroy();
         }
         foreach (string error in _world.TakeNewGameErrors()) failures.Add(GameLogged + error);
@@ -65,7 +66,7 @@ internal sealed partial class MapWorldTests
         int width = parts.Sum(p => p.size.x);
         int height = parts.Max(p => p.size.z);
         Predicate<IntVec3> clear = c => !c.Fogged(map) && c.Standable(map) && !map.roofGrid.Roofed(c)
-            && c.GetEdifice(map) == null && c.GetThingList(map).All(t => t is Plant);
+            && c.GetEdifice(map) == null && c.GetThingList(map).TrueForAll(t => t is Plant);
         // 離地圖邊緣留一格：原版 ShipUtility.ShipBuildingsAttachedTo 會讀零件外圍的格子，不檢查是否在圖內。
         for (int cx = 1; cx + width < map.Size.x - 1; cx += 4)
         {
@@ -125,10 +126,10 @@ internal sealed partial class MapWorldTests
         }
         else
         {
-            CommandResult pressed = _world.UseGizmo(beam.thingIDNumber, report.Number, report.Label, null);
+            CommandResult pressed = _world.UseGizmo(beam.thingIDNumber, report.Number, report.Label, target: null);
             if (!pressed.Success) failures.Add("pressing the launch report failed: " + pressed.Error);
             string cannot = "ShipReportCannotLaunch".Translate();
-            if (!_world.GetPendingChoices().Any(c => c.Text.Contains(cannot)))
+            if (!_world.GetPendingChoices().Any(c => c.Text.Contains(cannot, StringComparison.Ordinal)))
                 failures.Add("the launch report dialog is not listed among pending choices");
         }
     }

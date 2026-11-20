@@ -16,7 +16,7 @@ namespace RimAgent.Tools;
 /// 組商隊（照原版組隊視窗）：規劃、送出（成員到集合點收齊貨物再一起離開地圖）、中止集結。
 /// 商隊離開之後的世界地圖操作在 <see cref="WorldTools"/>。
 /// </summary>
-public sealed class CaravanTools
+public sealed partial class CaravanTools
 {
     private readonly IGameWorld _world;
     private readonly ConfirmationGate _gate;
@@ -65,7 +65,7 @@ public sealed class CaravanTools
                                   ". Adjust the members or cargo and check with plan_caravan.");
         }
 
-        string preview = $"would start forming a caravan with {Members(plan)} carrying {Cargo(plan)} to tile {plan.DestinationTile} " +
+        string preview = string.Create(CultureInfo.InvariantCulture, $"would start forming a caravan with {Members(plan)} carrying {Cargo(plan)} to tile {plan.DestinationTile} ") +
                          $"({ToolText.Num(plan.DistanceTiles)} tiles, {WorldTools.Duration(plan.EtaTicks)}); mass {ToolText.Num(plan.MassUsage)}/{ToolText.Num(plan.MassCapacity)} kg, " +
                          $"{FoodText(plan.FoodDays)} of food. The members gather at a meeting point and leave the map together; it takes game time." +
                          (plan.Warnings.Count > 0 ? " Warnings: " + string.Join("; ", plan.Warnings.ToArray()) + "." : string.Empty);
@@ -89,7 +89,7 @@ public sealed class CaravanTools
         if (!picked.Success) return picked.Error;
         FormingCaravanInfo f = picked.Value;
 
-        string blocked = ToolText.Blocked(_gate, $"would stop forming the caravan [{f.Id}] with {string.Join(", ", f.Members.Select(m => m.Name).ToArray())}; they drop the cargo and resume normal work.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would stop forming the caravan [{f.Id}] with {string.Join(", ", f.Members.Select(m => m.Name).ToArray())}; they drop the cargo and resume normal work."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.CancelFormingCaravan(f.Id);
@@ -143,7 +143,7 @@ public sealed class CaravanTools
         foreach (string raw in input.Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             string part = raw.Trim();
-            Match m = Regex.Match(part, @"^(.*?)\s*[x×*]\s*(\d+)$", RegexOptions.None, TimeSpan.FromSeconds(1));
+            Match m = AnimalCountPattern.Match(part);
             if (!m.Success)
             {
                 Result<AnimalInfo> one = AnimalTools.ResolveAnimal(part, colony);
@@ -161,8 +161,8 @@ public sealed class CaravanTools
 
     private static Result<List<AnimalInfo>> ResolveSpeciesBatch(string part, Match m, List<AnimalInfo> colony, List<AnimalInfo> chosen)
     {
-        string species = m.Groups[1].Value.Trim();
-        if (!int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int count)) count = 0;
+        string species = m.Groups["name"].Value.Trim();
+        if (!int.TryParse(m.Groups["count"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int count)) count = 0;
         if (species.Length == 0 || count < 1 || count > 1000)
             return Result<List<AnimalInfo>>.Fail(ToolText.Error($"cannot understand \"{part}\" in animals. Use \"species x count\", e.g. \"muffalo x3\"."));
         List<AnimalInfo> pool = [.. colony.Where(a => !chosen.Contains(a))];
@@ -172,8 +172,8 @@ public sealed class CaravanTools
         if (matches.Count < count)
         {
             return Result<List<AnimalInfo>>.Fail(ToolText.Error(
-                $"only {matches.Count} colony animal(s) match \"{species}\" (asked for {count}). Colony animals: " +
-                (colony.Count == 0 ? "none" : string.Join(", ", colony.Select(a => $"[{a.Id}] {a.Name}").ToArray())) + "."));
+                string.Create(CultureInfo.InvariantCulture, $"only {matches.Count} colony animal(s) match \"{species}\" (asked for {count}). Colony animals: ") +
+                (colony.Count == 0 ? "none" : string.Join(", ", colony.Select(a => string.Create(CultureInfo.InvariantCulture, $"[{a.Id}] {a.Name}")).ToArray())) + "."));
         }
         return Result<List<AnimalInfo>>.Ok([.. matches.OrderBy(a => a.Downed).ThenBy(a => a.Id).Take(count)]);
     }
@@ -251,7 +251,7 @@ public sealed class CaravanTools
 
     private static string FormingList(IReadOnlyList<FormingCaravanInfo> forming)
     {
-        return "Forming: " + string.Join("; ", forming.Select(f => "[" + f.Id + "] " + string.Join(", ", f.Members.Select(m => m.Name).ToArray())).ToArray()) + ".";
+        return "Forming: " + string.Join("; ", forming.Select(f => "[" + f.Id.ToString(CultureInfo.InvariantCulture) + "] " + string.Join(", ", f.Members.Select(m => m.Name).ToArray())).ToArray()) + ".";
     }
 
     // ---- 格式 ----
@@ -261,7 +261,7 @@ public sealed class CaravanTools
         var sb = new StringBuilder();
         sb.AppendLine("Caravan plan (nothing has been started):");
         sb.Append("Members (").Append(p.Members.Count).Append("): ").AppendLine(Members(p));
-        sb.Append("Cargo: ").AppendLine(p.Cargo.Count == 0 ? "none" : string.Join(", ", p.Cargo.Select(c => c.Label + " x" + c.Count + " (" + ToolText.Num(c.MassEach * c.Count) + " kg)").ToArray()));
+        sb.Append("Cargo: ").AppendLine(p.Cargo.Count == 0 ? "none" : string.Join(", ", p.Cargo.Select(c => c.Label + " x" + c.Count.ToString(CultureInfo.InvariantCulture) + " (" + ToolText.Num(c.MassEach * c.Count) + " kg)").ToArray()));
         sb.Append("Mass: ").Append(ToolText.Num(p.MassUsage)).Append(" / ").Append(ToolText.Num(p.MassCapacity)).Append(" kg");
         if (p.MassCapacity > 0f) sb.Append(" (").Append(ToolText.Pct(p.MassUsage / p.MassCapacity)).Append(')');
         sb.AppendLine(p.MassUsage > p.MassCapacity ? " - OVERLOADED" : string.Empty);
@@ -276,13 +276,13 @@ public sealed class CaravanTools
         }
         else
         {
-            sb.Append("Destination: ").Append(string.IsNullOrEmpty(p.DestinationLabel) ? "tile " + p.DestinationTile : p.DestinationLabel);
+            sb.Append("Destination: ").Append(string.IsNullOrEmpty(p.DestinationLabel) ? "tile " + p.DestinationTile.ToString(CultureInfo.InvariantCulture) : p.DestinationLabel);
             sb.AppendLine(p.DestinationReachable
                 ? " | " + ToolText.Num(p.DistanceTiles) + " tiles, " + WorldTools.Duration(p.EtaTicks) + " at this speed"
                 : " | not reachable");
         }
-        if (p.Warnings.Count > 0) sb.Append("Warnings: ").AppendLine(string.Join("; ", p.Warnings.ToArray()));
-        if (p.Blockers.Count > 0) sb.Append("The game would refuse to send it: ").AppendLine(string.Join("; ", p.Blockers.ToArray()));
+        if (p.Warnings.Count > 0) sb.Append("Warnings: ").AppendJoin("; ", p.Warnings.ToArray()).AppendLine();
+        if (p.Blockers.Count > 0) sb.Append("The game would refuse to send it: ").AppendJoin("; ", p.Blockers.ToArray()).AppendLine();
         sb.Append("Can be sent now: ").Append(p.Blockers.Count == 0 ? "yes (form_caravan)" : "no");
         return sb.ToString();
     }
@@ -295,11 +295,14 @@ public sealed class CaravanTools
 
     private static string Cargo(CaravanPlanInfo p)
     {
-        return p.Cargo.Count == 0 ? "no cargo" : string.Join(", ", p.Cargo.Select(c => c.Label + " x" + c.Count).ToArray());
+        return p.Cargo.Count == 0 ? "no cargo" : string.Join(", ", p.Cargo.Select(c => c.Label + " x" + c.Count.ToString(CultureInfo.InvariantCulture)).ToArray());
     }
 
     private static string FoodText(float days)
     {
         return days >= 600f ? "600+ days" : ToolText.Num(days) + " days";
     }
+
+    [GeneratedRegex(@"^(?<name>.*?)\s*[x×*]\s*(?<count>\d+)$", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex AnimalCountPattern { get; }
 }

@@ -17,7 +17,7 @@ namespace RimAgent.Tests;
 public partial class AutoModeTests
 {
     [GeneratedRegex("(?<!\\\\)<player_instruction>")]
-    private static partial Regex PlayerInstructionRegex();
+    private static partial Regex PlayerInstructionRegex { get; }
     private FakeGameWorld _world;
     private ScriptedChatClient _agentClient;
     private ScriptedChatClient _classifierClient;
@@ -42,7 +42,7 @@ public partial class AutoModeTests
 
     private ColonyAgentSession NewSession(IDecisionService decisionService = null, string decisionCriteria = null)
     {
-        return new ColonyAgentSession(_agentClient, _world, () => _permissions, 8, () => AgentMode.Auto, null, null, _classifierClient, classifierPrompt: () => "test classifier prompt", decisionRiskCriteria: decisionCriteria != null ? () => decisionCriteria : null, decisionService: decisionService);
+        return new ColonyAgentSession(_agentClient, _world, () => _permissions, 8, () => AgentMode.Auto, instructions: null, mcp: null, _classifierClient, classifierPrompt: () => "test classifier prompt", decisionRiskCriteria: decisionCriteria != null ? () => decisionCriteria : null, decisionService: decisionService);
     }
 
     [Test]
@@ -90,7 +90,7 @@ public partial class AutoModeTests
     [Test]
     public async Task McpExecutionInAutoModeHighRiskIsRejected()
     {
-        _permissions.Set(ToolCategory.Mcp, true);
+        _permissions.Set(ToolCategory.Mcp, value: true);
         _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
                     .Reply("Waiting for confirmation.");
         _classifierClient.Reply("{\"risk\": \"high\", \"authorized\": true, \"reason\": \"external mcp action\"}");
@@ -107,7 +107,7 @@ public partial class AutoModeTests
     [Test]
     public async Task McpExecutionInAutoModeLowRiskRunsDirectlyWithoutConfirmation()
     {
-        _permissions.Set(ToolCategory.Mcp, true);
+        _permissions.Set(ToolCategory.Mcp, value: true);
         _agentClient.CallTool("mcp_call_tool", new { server = "fetch", tool = "fetch", args = "{}" })
                     .Reply("Done.");
         _classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"safe query mcp tool\"}");
@@ -242,7 +242,7 @@ public partial class AutoModeTests
     [Test]
     public async Task UnrequestedPlantCuttingIsRejectedWithoutConfirmation()
     {
-        _permissions.Set(ToolCategory.Build, true);
+        _permissions.Set(ToolCategory.Build, value: true);
         _world.Things.Add(FakeGameWorld.MakeThing(501, "Plant_Grass", "grass", ThingKind.Plant, 30, 10));
         _agentClient.CallTool("designate_area", new
         {
@@ -273,7 +273,7 @@ public partial class AutoModeTests
 
         Assert.That(question, Does.Contain("<player_instruction>\ncheck on Bob\n</player_instruction>"));
         Assert.That(question, Does.Contain("\\</tool_arguments>").And.Contain("\\<player_instruction>"));
-        Assert.That(PlayerInstructionRegex().Count(question),
+        Assert.That(PlayerInstructionRegex.Count(question),
             Is.EqualTo(1), "只能有一段真正的玩家指令");
     }
 
@@ -283,7 +283,7 @@ public partial class AutoModeTests
         var client = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
         var classifier = new RiskClassifier(client, systemPrompt: () => "test classifier prompt");
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
         await Assert.ThrowsAsync<OperationCanceledException>(() => classifier.ClassifyAsync(new RiskQuestion(), cts.Token));
     }
 

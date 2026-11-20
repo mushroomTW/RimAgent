@@ -51,7 +51,7 @@ internal sealed partial class FakeGameWorld
         {
             Width = 10,
             Height = 10,
-            Cells = Enumerable.Repeat(SurveyCell.Soil, 100).ToArray(),
+            Cells = [.. Enumerable.Repeat(SurveyCell.Soil, 100)],
             Resource = new short[100],
             ThickRoof = new bool[100]
         };

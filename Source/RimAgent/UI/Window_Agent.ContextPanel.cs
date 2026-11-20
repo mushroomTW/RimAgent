@@ -69,7 +69,7 @@ public partial class Window_Agent
             ContextPanel existing = Find.WindowStack.WindowOfType<ContextPanel>();
             if (existing != null)
             {
-                existing.Close(false);
+                existing.Close(doCloseSound: false);
                 return;
             }
             float x = Mathf.Clamp(anchorTopRight.x - PanelWidth, 0f, Mathf.Max(0f, Verse.UI.screenWidth - PanelWidth));
@@ -156,7 +156,7 @@ public partial class Window_Agent
         {
             if (RimAgentGameComponent.Instance?.Session != _session)
             {
-                Close(false);
+                Close(doCloseSound: false);
                 return false;
             }
             if (Time.realtimeSinceStartup >= _nextRefresh)
@@ -218,7 +218,7 @@ public partial class Window_Agent
             Text.Font = GameFont.Small;
             foreach (ColonyAgentSession.ContextPart part in parts)
             {
-                y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), (long)Math.Round(part.Tokens * scale), window);
+                y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), (long)Math.Round(part.Tokens * scale, MidpointRounding.ToEven), window);
             }
             if (window is > 0)
             {
@@ -248,7 +248,7 @@ public partial class Window_Agent
         private static string PartLabel(ColonyAgentSession.ContextPart part)
         {
             string name = ("RimAgent.ContextPanel.Part." + part.Key).Translate();
-            return part.Count > 0 ? name + " (" + part.Count + ")" : name;
+            return part.Count > 0 ? name + " (" + part.Count.ToString(CultureInfo.CurrentCulture) + ")" : name;
         }
 
         private static string FormatTokens(long tokens)

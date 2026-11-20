@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -54,7 +55,7 @@ public class WorldToolsTests
 
     private static WorldObjectInfo MakeObject(int id, string kind, string label, int tile, float distance, string faction = "", bool hostile = false)
     {
-        return new WorldObjectInfo { Id = id, Kind = kind, Label = label, DefName = "Def" + id, Tile = tile, DistanceTiles = distance, Faction = faction, Hostile = hostile };
+        return new WorldObjectInfo { Id = id, Kind = kind, Label = label, DefName = "Def" + id.ToString(CultureInfo.InvariantCulture), Tile = tile, DistanceTiles = distance, Faction = faction, Hostile = hostile };
     }
 
     private void SeedWorldObjects()
@@ -528,14 +529,14 @@ public class WorldToolsTests
     {
         var caravans = new List<CaravanInfo> { MakeCaravan(1, "Trade run", 1), MakeCaravan(2, "Trade run north", 2), MakeCaravan(3, "Scouts", 3) };
 
-        Assert.That(WorldTools.ResolveCaravan("trade run", caravans, true).Value.Id, Is.EqualTo(1));
-        Assert.That(WorldTools.ResolveCaravan("scout", caravans, true).Value.Id, Is.EqualTo(3));
-        Assert.That(WorldTools.ResolveCaravan("2", caravans, true).Value.Id, Is.EqualTo(2));
-        Assert.That(WorldTools.ResolveCaravan("trade", caravans, true).Error, Does.Contain("several").And.Contain("[1] Trade run").And.Contain("[2]"));
-        Assert.That(WorldTools.ResolveCaravan("77", caravans, true).Error, Does.Contain("no caravan has id 77"));
-        Assert.That(WorldTools.ResolveCaravan("", caravans, false).Value, Is.Null);
-        Assert.That(WorldTools.ResolveCaravan("", caravans, true).Success, Is.False);
-        Assert.That(WorldTools.ResolveCaravan("", [caravans[2]], true).Value.Id, Is.EqualTo(3));
+        Assert.That(WorldTools.ResolveCaravan("trade run", caravans, required: true).Value.Id, Is.EqualTo(1));
+        Assert.That(WorldTools.ResolveCaravan("scout", caravans, required: true).Value.Id, Is.EqualTo(3));
+        Assert.That(WorldTools.ResolveCaravan("2", caravans, required: true).Value.Id, Is.EqualTo(2));
+        Assert.That(WorldTools.ResolveCaravan("trade", caravans, required: true).Error, Does.Contain("several").And.Contain("[1] Trade run").And.Contain("[2]"));
+        Assert.That(WorldTools.ResolveCaravan("77", caravans, required: true).Error, Does.Contain("no caravan has id 77"));
+        Assert.That(WorldTools.ResolveCaravan("", caravans, required: false).Value, Is.Null);
+        Assert.That(WorldTools.ResolveCaravan("", caravans, required: true).Success, Is.False);
+        Assert.That(WorldTools.ResolveCaravan("", [caravans[2]], required: true).Value.Id, Is.EqualTo(3));
     }
 
     [TestCase(0, "no time")]
@@ -552,7 +553,7 @@ public class WorldToolsTests
     [Test]
     public async Task ToolsRunThroughTheRegistryAndAreLogged()
     {
-        var registry = new AgentToolRegistry(_world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Autonomous));
+        var registry = new AgentToolRegistry(_world, new AgentTranscript(), undo: null, new ConfirmationGate(() => AgentMode.Autonomous));
         AIFunction list = registry.All.OfType<AIFunction>().Single(t => t.Name == "list_caravans");
 
         string text = (await list.InvokeAsync([]))?.ToString();

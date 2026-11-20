@@ -167,7 +167,7 @@ internal sealed partial class FakeGameWorld : IGameWorld
 
     /// <summary>已完成的研究 defName（正式端用遊戲研究狀態判斷）。</summary>
     public HashSet<string> FinishedResearch { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    public IReadOnlyList<DefInfo> FinishedResearchProjects => FinishedResearch.Select(d => new DefInfo(d, d)).ToList();
+    public IReadOnlyList<DefInfo> FinishedResearchProjects => [.. FinishedResearch.Select(d => new DefInfo(d, d))];
     public IReadOnlyList<DefInfo> StorageFilterables { get; set; } =
     [
         new DefInfo("Steel", "steel"), new DefInfo("WoodLog", "wood"), new DefInfo("Corn", "corn"),
@@ -200,7 +200,7 @@ internal sealed partial class FakeGameWorld : IGameWorld
 
     public IReadOnlyList<DefInfo> GetTableRecipes(int tableId)
     {
-        if (WorkTables.All(t => t.Id != tableId)) return [];
+        if (WorkTables.TrueForAll(t => t.Id != tableId)) return [];
         return TableRecipes.TryGetValue(tableId, out IReadOnlyList<DefInfo> recipes) ? recipes : BillRecipes;
     }
 
@@ -226,8 +226,8 @@ internal sealed partial class FakeGameWorld : IGameWorld
                 new SkillInfo { DefName = "Medicine", Label = "medical", Level = 5, Passion = 1 },
                 new SkillInfo { DefName = "Plants", Label = "plants", Level = 0, Disabled = true }
             ],
-            WorkPriorities = workTypes.Select(w => new WorkPriorityInfo { WorkTypeDefName = w, Label = w.ToLowerInvariant(), Priority = 3 }).ToList(),
-            Timetable = Enumerable.Repeat("Anything", 24).ToList(),
+            WorkPriorities = [.. workTypes.Select(w => new WorkPriorityInfo { WorkTypeDefName = w, Label = w.ToLowerInvariant(), Priority = 3 })],
+            Timetable = [.. Enumerable.Repeat("Anything", 24)],
             MedicalCare = "NoMeds"
         };
     }

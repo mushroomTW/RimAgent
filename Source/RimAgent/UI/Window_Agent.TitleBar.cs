@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System.Collections.Generic;
 using System.Globalization;
@@ -53,7 +53,7 @@ public partial class Window_Agent
         const float outer = half - 1f;
         const float inner = outer - 5f;
         float limit = percent / 100f;
-        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false)
         {
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Bilinear
@@ -97,24 +97,7 @@ public partial class Window_Agent
         GUI.color = Color.white;
         Text.Anchor = TextAnchor.UpperLeft;
 
-        // 只顯示供應商實際回報的最近一次主模型輸入 token；
-        // 訊息數與折疊門檻放在提示中，避免把訊息數誤標成 token 或視窗容量。
-        ColonyAgentSession.ContextStatus status = session.GetContextStatus();
-        var gaugeRect = new Rect(titleRect.xMax - 73f, titleRect.y + 7f, 17f, 17f);
-        DrawContextGauge(gaugeRect, status);
-        if (Mouse.IsOver(gaugeRect)) DrawRoundedBox(gaugeRect.ExpandedBy(2f), new Color(1f, 1f, 1f, 0.10f), Color.clear, 4f);
-        // 面板開著時點圓盤：按下就被「點外面關閉」關掉，放開時按鈕才觸發，不擋會立刻又開回來。
-        if (Event.current.type == EventType.MouseDown && Mouse.IsOver(gaugeRect.ExpandedBy(2f)))
-            _gaugeClosedPanel = ContextPanel.ClosedThisFrame;
-        if (Widgets.ButtonInvisible(gaugeRect.ExpandedBy(2f)) && !_gaugeClosedPanel)
-        {
-            ContextPanel.ToggleContextPanel(session, new Vector2(windowRect.x + gaugeRect.xMax + 2f, windowRect.y + gaugeRect.yMax + 6f));
-        }
-        // 提示字串只在滑鼠停在上面時才組。
-        if (Mouse.IsOver(gaugeRect)) DrawContextGaugeTooltip(gaugeRect, status);
-        GUI.color = Color.white;
-        Text.Anchor = TextAnchor.UpperLeft;
-        Text.Font = GameFont.Small;
+        DrawContextGaugeButton(titleRect, session);
 
         var closeRect = new Rect(titleRect.xMax - 26f, titleRect.y + 4f, 20f, 20f);
         if (Mouse.IsOver(closeRect))
@@ -133,6 +116,35 @@ public partial class Window_Agent
             return;
         }
 
+        DrawCollapseButton(closeRect, session);
+    }
+
+    /// <summary>上下文用量圓盤：點擊開關上下文面板，滑鼠停留時顯示提示。</summary>
+    private void DrawContextGaugeButton(Rect titleRect, ColonyAgentSession session)
+    {
+        // 只顯示供應商實際回報的最近一次主模型輸入 token；
+        // 訊息數與折疊門檻放在提示中，避免把訊息數誤標成 token 或視窗容量。
+        ColonyAgentSession.ContextStatus status = session.GetContextStatus();
+        var gaugeRect = new Rect(titleRect.xMax - 73f, titleRect.y + 7f, 17f, 17f);
+        DrawContextGauge(gaugeRect, status);
+        if (Mouse.IsOver(gaugeRect)) DrawRoundedBox(gaugeRect.ExpandedBy(2f), new Color(1f, 1f, 1f, 0.10f), Color.clear, 4f);
+        // 面板開著時點圓盤：按下就被「點外面關閉」關掉，放開時按鈕才觸發，不擋會立刻又開回來。
+        if (Event.current.type == EventType.MouseDown && Mouse.IsOver(gaugeRect.ExpandedBy(2f)))
+            _gaugeClosedPanel = ContextPanel.ClosedThisFrame;
+        if (Widgets.ButtonInvisible(gaugeRect.ExpandedBy(2f)) && !_gaugeClosedPanel)
+        {
+            ContextPanel.ToggleContextPanel(session, new Vector2(windowRect.x + gaugeRect.xMax + 2f, windowRect.y + gaugeRect.yMax + 6f));
+        }
+        // 提示字串只在滑鼠停在上面時才組。
+        if (Mouse.IsOver(gaugeRect)) DrawContextGaugeTooltip(gaugeRect, status);
+        GUI.color = Color.white;
+        Text.Anchor = TextAnchor.UpperLeft;
+        Text.Font = GameFont.Small;
+    }
+
+    /// <summary>標題列的收合按鈕，位在關閉按鈕左邊。</summary>
+    private void DrawCollapseButton(Rect closeRect, ColonyAgentSession session)
+    {
         var collapseRect = new Rect(closeRect.x - 24f, closeRect.y, 20f, 20f);
         if (Mouse.IsOver(collapseRect))
         {

@@ -76,13 +76,13 @@ internal static class ToolText
         if (t.Kind == ThingKind.Plant && t.Harvestable) sb.Append(" harvestable");
         if (t.Kind == ThingKind.Building) sb.Append(t.PlayerOwned ? " player-owned" : " not player-owned");
         if (t.Forbidden) sb.Append(" forbidden");
-        if (t.Designations.Count > 0) sb.Append(" [marked: ").Append(string.Join(", ", t.Designations)).Append(']');
+        if (t.Designations.Count > 0) sb.Append(" [marked: ").AppendJoin(", ", t.Designations).Append(']');
         return sb.ToString();
     }
 
     public static string Colonist(ColonistInfo c)
     {
-        return "[" + c.Id + "] " + c.Name;
+        return "[" + c.Id.ToString(CultureInfo.InvariantCulture) + "] " + c.Name;
     }
 
     public static string Names(IEnumerable<ColonistInfo> colonists)
@@ -96,6 +96,6 @@ internal static class ToolText
         string passion = string.Empty;
         if (s.Passion >= 2) passion = "**";
         else if (s.Passion == 1) passion = "*";
-        return s.Label + " " + s.Level + passion;
+        return s.Label + " " + s.Level.ToString(CultureInfo.InvariantCulture) + passion;
     }
 }

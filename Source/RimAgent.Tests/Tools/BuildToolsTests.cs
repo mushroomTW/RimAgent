@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
@@ -38,7 +39,7 @@ public class BuildToolsTests
         _world.Things[_world.Things.Count - 2].Forbidden = true;
         _world.Things[_world.Things.Count - 1].Forbidden = true;
 
-        string text = _tools.SetForbidden(false, -1, -1, -1, -1, "");
+        string text = _tools.SetForbidden(forbidden: false, -1, -1, -1, -1, "");
 
         Assert.That(text, Is.EqualTo("Allowed 2 item(s): revolver, steel."));
         Assert.That(_world.Calls, Is.EqualTo(["SetForbidden(map,,False)"]));
@@ -49,7 +50,7 @@ public class BuildToolsTests
     [TestCase(-2, -2, -2, -2)]
     public void SetForbiddenRejectsInvalidWholeMapCoordinates(int x1, int z1, int x2, int z2)
     {
-        Assert.That(_tools.SetForbidden(true, x1, z1, x2, z2, ""),
+        Assert.That(_tools.SetForbidden(forbidden: true, x1, z1, x2, z2, ""),
             Does.StartWith("Error:").And.Contain("-1 for all four corners"));
         Assert.That(_world.Calls, Is.Empty);
     }
@@ -59,7 +60,7 @@ public class BuildToolsTests
     {
         _world.Things.Add(FakeGameWorld.MakeThing(20, "Steel", "steel", ThingKind.Item, 5, 5));
 
-        string text = _tools.SetForbidden(true, 10, 10, 0, 0, " steel ");
+        string text = _tools.SetForbidden(forbidden: true, 10, 10, 0, 0, " steel ");
 
         Assert.That(text, Is.EqualTo("Forbade 1 item(s): steel."));
         Assert.That(_world.Calls, Is.EqualTo(["SetForbidden((0,0)-(10,10),steel,True)"]));
@@ -68,14 +69,14 @@ public class BuildToolsTests
     [Test]
     public void SetForbiddenReportsNothingToChange()
     {
-        Assert.That(_tools.SetForbidden(false, -1, -1, -1, -1, ""), Does.StartWith("Error:"));
+        Assert.That(_tools.SetForbidden(forbidden: false, -1, -1, -1, -1, ""), Does.StartWith("Error:"));
     }
 
     [Test]
     public void MineFilteredByNameSkipsAlreadyMarked()
     {
         _world.Things[0].Designations = ["Mine"];
-        string text = _tools.DesignateArea("mine", false, 0, 0, 10, 10, "steel");
+        string text = _tools.DesignateArea("mine", useSelection: false, 0, 0, 10, 10, "steel");
         Assert.That(text, Is.EqualTo("Marked 1 for mining, 1 already marked."));
         Assert.That(_world.Calls, Is.EqualTo(["AddDesignationOnCell(6,5,Mine)"]));
         Assert.That(_world.Things[1].Designations, Does.Contain("Mine"));
@@ -85,7 +86,7 @@ public class BuildToolsTests
     [Test]
     public void HarvestOnlyMarksRipePlants()
     {
-        string text = _tools.DesignateArea("harvest", false, 0, 0, 10, 10, "");
+        string text = _tools.DesignateArea("harvest", useSelection: false, 0, 0, 10, 10, "");
         Assert.That(text, Does.Contain("Marked 1 for harvesting").And.Contain("1 not applicable"));
         Assert.That(_world.Calls, Is.EqualTo(["AddDesignationOnThing(5,HarvestPlant)"]));
     }
@@ -93,7 +94,7 @@ public class BuildToolsTests
     [Test]
     public void DeconstructOnlyPlayerBuildings()
     {
-        string text = _tools.DesignateArea("deconstruct", false, 0, 0, 10, 10, "");
+        string text = _tools.DesignateArea("deconstruct", useSelection: false, 0, 0, 10, 10, "");
         Assert.That(text, Does.Contain("Marked 1 for deconstruction"));
         Assert.That(_world.Calls, Is.EqualTo(["AddDesignationOnThing(7,Deconstruct)"]));
     }
@@ -103,7 +104,7 @@ public class BuildToolsTests
     {
         _world.Selection.Add(_world.Things[3]);
         _world.Selection.Add(_world.Things[4]);
-        string text = _tools.DesignateArea("mine", true, 0, 0, 0, 0, "");
+        string text = _tools.DesignateArea("mine", useSelection: true, 0, 0, 0, 0, "");
         Assert.That(text, Is.EqualTo("Marked 1 for mining."));
         Assert.That(_world.Calls, Is.EqualTo(["AddDesignationOnCell(50,50,Mine)"]));
     }
@@ -111,20 +112,20 @@ public class BuildToolsTests
     [Test]
     public void EmptySelectionIsAnError()
     {
-        Assert.That(_tools.DesignateArea("mine", true, 0, 0, 0, 0, ""), Does.StartWith("Error:").And.Contain("selection"));
+        Assert.That(_tools.DesignateArea("mine", useSelection: true, 0, 0, 0, 0, ""), Does.StartWith("Error:").And.Contain("selection"));
     }
 
     [Test]
     public void UnknownKindAndOutOfBoundsAreErrors()
     {
-        Assert.That(_tools.DesignateArea("paint", false, 0, 0, 10, 10, ""), Does.StartWith("Error:").And.Contain("cut_plants"));
-        Assert.That(_tools.DesignateArea("mine", false, 0, 0, 999, 10, ""), Does.StartWith("Error:").And.Contain("outside"));
+        Assert.That(_tools.DesignateArea("paint", useSelection: false, 0, 0, 10, 10, ""), Does.StartWith("Error:").And.Contain("cut_plants"));
+        Assert.That(_tools.DesignateArea("mine", useSelection: false, 0, 0, 999, 10, ""), Does.StartWith("Error:").And.Contain("outside"));
     }
 
     [Test]
     public void NothingMatchingIsAnErrorThatSuggestsFindThings()
     {
-        Assert.That(_tools.DesignateArea("mine", false, 20, 20, 30, 30, "gold"), Does.StartWith("Error:").And.Contain("find_things"));
+        Assert.That(_tools.DesignateArea("mine", useSelection: false, 20, 20, 30, 30, "gold"), Does.StartWith("Error:").And.Contain("find_things"));
     }
 
     [Test]
@@ -132,11 +133,11 @@ public class BuildToolsTests
     {
         _world.Things[0].Designations = ["Mine"];
         _world.Things[4].Designations = ["HarvestPlant"];
-        string text = _tools.CancelDesignation("mine", false, 0, 0, 10, 10);
+        string text = _tools.CancelDesignation("mine", useSelection: false, 0, 0, 10, 10);
         Assert.That(text, Is.EqualTo("Removed 1 mining mark(s)."));
         Assert.That(_world.Things[0].Designations, Is.Empty);
         Assert.That(_world.Things[4].Designations, Does.Contain("HarvestPlant"));
-        Assert.That(_tools.CancelDesignation("mine", false, 0, 0, 10, 10), Does.Contain("No mining marks"));
+        Assert.That(_tools.CancelDesignation("mine", useSelection: false, 0, 0, 10, 10), Does.Contain("No mining marks"));
     }
 
     [Test]
@@ -154,7 +155,7 @@ public class BuildToolsTests
         string text = _tools.PlaceBlueprint("wall", "line", 10, 20, 14, 20, 0, "wood");
         Assert.That(text, Does.StartWith("Placed 5 wall (WoodLog) blueprint(s) from (10,20) to (14,20) (line)."));
         Assert.That(_world.Blueprints.Select(b => b.X), Is.EqualTo([10, 11, 12, 13, 14]));
-        Assert.That(_world.Blueprints.All(b => b.Def == "Wall" && b.Stuff == "WoodLog"), Is.True);
+        Assert.That(_world.Blueprints.TrueForAll(b => b.Def == "Wall" && b.Stuff == "WoodLog"), Is.True);
     }
 
     [Test]
@@ -186,8 +187,8 @@ public class BuildToolsTests
     {
         string text = _tools.PlaceBlueprint("wall", "outline", 10, 10, 13, 12, 0, "");
         Assert.That(text, Does.StartWith("Placed 10 wall blueprint(s) from (10,10) to (13,12) (outline)."));
-        Assert.That(_world.Blueprints.Any(b => b.X == 11 && b.Z == 11), Is.False, "內部不放");
-        Assert.That(_world.Blueprints.Any(b => b.X == 12 && b.Z == 11), Is.False);
+        Assert.That(_world.Blueprints.Exists(b => b.X == 11 && b.Z == 11), Is.False, "內部不放");
+        Assert.That(_world.Blueprints.Exists(b => b.X == 12 && b.Z == 11), Is.False);
     }
 
     /// <summary>一個 3x3 小房型：四角是牆、北牆中間是門、中央鋪地板。</summary>
@@ -326,12 +327,12 @@ public class BuildToolsTests
     [Test]
     public void BlueprintDescriptionOmitsLayoutWhenTurnedOff()
     {
-        string Description(bool enabled) => new AgentToolRegistry(_world, new AgentTranscript(), null, null, layoutsEnabled: () => enabled)
+        string Description(bool enabled) => new AgentToolRegistry(_world, new AgentTranscript(), undo: null, gate: null, layoutsEnabled: () => enabled)
             .All.OfType<AIFunction>().Single(f => f.Name == "place_blueprint").Description;
 
-        Assert.That(Description(true), Does.Contain("layout"));
-        Assert.That(Description(true), Does.Contain("use a layout by default"), "開啟房型時蓋房間預設用房型");
-        Assert.That(Description(false), Does.Not.Contain("layout").And.Contain("outline"));
+        Assert.That(Description(enabled: true), Does.Contain("layout"));
+        Assert.That(Description(enabled: true), Does.Contain("use a layout by default"), "開啟房型時蓋房間預設用房型");
+        Assert.That(Description(enabled: false), Does.Not.Contain("layout").And.Contain("outline"));
     }
 
     [Test]
@@ -362,7 +363,7 @@ public class BuildToolsTests
 
     private void AddShipParts()
     {
-        _world.Buildables = _world.Buildables.Concat([new DefInfo("Ship_Reactor", "ship reactor"), new DefInfo("Ship_SensorCluster", "ship sensor cluster")]).ToList();
+        _world.Buildables = [.. _world.Buildables, new DefInfo("Ship_Reactor", "ship reactor"), new DefInfo("Ship_SensorCluster", "ship sensor cluster")];
         _world.BuildingInfos["Ship_Reactor"] = new BuildingInfo
         {
             DefName = "Ship_Reactor",
@@ -541,7 +542,7 @@ public class BuildToolsTests
             new() { Category = "Basics", CategoryLabel = "Basics", Label = "Market value", Value = "33" },
             new() { Category = "BasicsNonPawn", CategoryLabel = "Basics", Label = "Mass", Value = "0.6 kg" }
         };
-        for (int i = 0; i < 40; i++) stats.Add(new DefStatEntry { Category = "StuffStatFactors", CategoryLabel = "Stuff stat factors", Label = "Factor " + i, Value = "x1" });
+        for (int i = 0; i < 40; i++) stats.Add(new DefStatEntry { Category = "StuffStatFactors", CategoryLabel = "Stuff stat factors", Label = "Factor " + i.ToString(CultureInfo.InvariantCulture), Value = "x1" });
         _world.AddLookup(new DefLookupInfo
         {
             Kind = DefLookupKind.Thing,
@@ -608,11 +609,11 @@ public class BuildToolsTests
     {
         var gated = new BuildTools(_world, new ConfirmationGate(() => AgentMode.Confirm));
 
-        string text = gated.DesignateArea("mine", false, 0, 0, 10, 10, "steel");
+        string text = gated.DesignateArea("mine", useSelection: false, 0, 0, 10, 10, "steel");
 
         Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("mining"));
         Assert.That(_world.Calls, Is.Empty);
-        Assert.That(_world.Things.All(t => t.Designations.Count == 0), Is.True);
+        Assert.That(_world.Things.TrueForAll(t => t.Designations.Count == 0), Is.True);
     }
 
     [Test]

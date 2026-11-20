@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -55,7 +56,7 @@ public sealed class RetryExperimentComponent : GameComponent
             return;
         }
         if (!_speedApplied) ApplySpeed(tick);
-        if (tick % SampleTicks == 0) Sample(tick, null);
+        if (tick % SampleTicks == 0) Sample(tick, note: null);
         if (tick - _startTick >= DurationTicks) Finish(tick);
     }
 
@@ -104,8 +105,8 @@ public sealed class RetryExperimentComponent : GameComponent
 
         // quicktest 地圖開局就有敵對目標，會先觸發襲擊、蓋過基地狀況；清掉讓情境從「沒床」乾淨開始。
         int cleared = ClearHostiles(Find.CurrentMap);
-        Log.Message(LogPrefix + "started at tick " + tick + "; cleared " + cleared + " hostiles; timeline " + _timelinePath + "; folder " + folder);
-        Sample(tick, "start, cleared " + cleared + " hostiles");
+        Log.Message(LogPrefix + "started at tick " + tick.ToString(CultureInfo.InvariantCulture) + "; cleared " + cleared.ToString(CultureInfo.InvariantCulture) + " hostiles; timeline " + _timelinePath + "; folder " + folder);
+        Sample(tick, "start, cleared " + cleared.ToString(CultureInfo.InvariantCulture) + " hostiles");
     }
 
     /// <summary>與排程器的敵人計數同一來源（攻擊目標快取），砲塔、機兵群建築也一併清掉。</summary>
@@ -133,19 +134,19 @@ public sealed class RetryExperimentComponent : GameComponent
         Sample(tick, "done");
         _done = true;
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
-        Log.Message(LogPrefix + "done at tick " + tick + " after " + (tick - _startTick) + " ticks");
+        Log.Message(LogPrefix + "done at tick " + tick.ToString(CultureInfo.InvariantCulture) + " after " + (tick - _startTick).ToString(CultureInfo.InvariantCulture) + " ticks");
     }
 
     private void Sample(int tick, string note)
     {
         try
         {
-            File.AppendAllText(_timelinePath, BuildLine(tick, note) + "\n", new UTF8Encoding(false));
+            File.AppendAllText(_timelinePath, BuildLine(tick, note) + "\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
         catch (Exception ex)
         {
             // 單次取樣失敗不中斷收集；同一種錯誤會每次都記，正好看得出是否持續。
-            Log.Warning(LogPrefix + "sample at tick " + tick + " failed: " + ex.GetType().Name + ": " + ex.Message);
+            Log.Warning(LogPrefix + "sample at tick " + tick.ToString(CultureInfo.InvariantCulture) + " failed: " + ex.GetType().Name + ": " + ex.Message);
         }
     }
 

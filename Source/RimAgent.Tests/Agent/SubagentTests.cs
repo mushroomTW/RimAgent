@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -99,7 +100,7 @@ public class SubagentTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            Directory.Delete(root, recursive: true);
         }
     }
 
@@ -131,9 +132,9 @@ public class SubagentTests
         var client = new ScriptedChatClient().Reply("ok");
         var withAgents = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents);
 
-        RimLLMChatOptions offered = NewSession(client, withAgents, AgentMode.Confirm, [Scout]).BuildRunOptions();
-        RimLLMChatOptions noPermission = NewSession(client, ToolPermissions.For(ToolCategory.Observe), AgentMode.Confirm, [Scout]).BuildRunOptions();
-        RimLLMChatOptions noSubagents = NewSession(client, withAgents, AgentMode.Confirm, []).BuildRunOptions();
+        RimLLMChatOptions offered = NewSession(client, withAgents, AgentMode.Confirm, [Scout]).CreateRunOptions();
+        RimLLMChatOptions noPermission = NewSession(client, ToolPermissions.For(ToolCategory.Observe), AgentMode.Confirm, [Scout]).CreateRunOptions();
+        RimLLMChatOptions noSubagents = NewSession(client, withAgents, AgentMode.Confirm, []).CreateRunOptions();
 
         Assert.That(offered.Tools.Select(t => t.Name), Does.Contain(SubagentTools.ToolName));
         Assert.That(offered.Instructions, Does.Contain("- scout (read-only; several tasks run in parallel): look around"));
@@ -149,8 +150,8 @@ public class SubagentTests
         var permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Build);
 
         List<AgentToolDescriptor> byName = [.. registry.Descriptors];
-        IList<AITool> readOnly = registry.SelectForSubagent(permissions, [ToolCategory.Observe, ToolCategory.Work], true);
-        IList<AITool> full = registry.SelectForSubagent(permissions, [ToolCategory.Observe], false);
+        IList<AITool> readOnly = registry.SelectForSubagent(permissions, [ToolCategory.Observe, ToolCategory.Work], readOnly: true);
+        IList<AITool> full = registry.SelectForSubagent(permissions, [ToolCategory.Observe], readOnly: false);
 
         Assert.That(readOnly, Is.Not.Empty);
         foreach (AITool tool in readOnly)
@@ -213,7 +214,7 @@ public class SubagentTests
     {
         var client = new ScriptedChatClient()
             .CallTool(SubagentTools.ToolName, new { agent = "scout", tasks = new[] { "Who lives here?" } })
-            .CallTool("list_colonists", null)
+            .CallTool("list_colonists", arguments: null)
             .Reply("Only Alice.")
             .Reply("Alice is alone.");
         var routing = new ModelRouting
@@ -247,7 +248,7 @@ public class SubagentTests
         Assert.That(listed.Agent, Is.EqualTo("scout"), "子代理的工具紀錄要標上名稱");
         Assert.That(delegated.Agent, Is.Empty);
         Assert.That(entries.ToList().IndexOf(delegated), Is.LessThan(entries.ToList().IndexOf(listed)), "委派紀錄排在子代理的工具之前");
-        Assert.That(session.History.Any(m => m.Text.Contains("Who lives here?") && m.Role == ChatRole.System), Is.False);
+        Assert.That(session.History.Any(m => m.Text.Contains("Who lives here?", StringComparison.Ordinal) && m.Role == ChatRole.System), Is.False);
     }
 
     [Test]
@@ -255,7 +256,7 @@ public class SubagentTests
     {
         var client = new ScriptedChatClient()
             .CallTool(SubagentTools.ToolName, new { agent = "scout", tasks = new[] { "Look everywhere." } });
-        for (int i = 0; i < SubagentTools.MaxSteps; i++) client.CallTool("list_colonists", null);
+        for (int i = 0; i < SubagentTools.MaxSteps; i++) client.CallTool("list_colonists", arguments: null);
         client.Reply("<tool_call> <function=list_colonists> </function> </tool_call>")
               .Reply("The scout ran out of steps.");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents),
@@ -371,17 +372,17 @@ public class SubagentTests
     public async Task CompactUsesItsModelSlot()
     {
         var client = new ScriptedChatClient();
-        for (int i = 0; i < 6; i++) client.Reply("ok " + i);
+        for (int i = 0; i < 6; i++) client.Reply("ok " + i.ToString(CultureInfo.InvariantCulture));
         client.Reply("Summary of the colony so far.");
         ColonyAgentSession session = NewSession(client, ToolPermissions.For(ToolCategory.Observe), AgentMode.Confirm,
             [], new ModelRouting { CompactModel = () => "p:summary", CompactReasoning = () => ReasoningLevel.Low });
         session.PreferredModel = "p:main";
-        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i.ToString(CultureInfo.InvariantCulture));
 
         string result = await session.CompactAsync();
 
         Assert.That(result, Does.Contain("Context compacted"));
-        ChatOptions summary = client.ReceivedOptions.Last();
+        ChatOptions summary = client.ReceivedOptions[^1];
         Assert.That(summary.ModelId, Is.EqualTo("p:summary"));
         Assert.That(summary.Reasoning?.Effort, Is.EqualTo(ReasoningEffort.Low));
     }
@@ -423,7 +424,7 @@ public class SubagentTests
         ColonyAgentSession session = NewSession(new ScriptedChatClient().Reply("ok"),
             ToolPermissions.For(ToolCategory.Observe, ToolCategory.Agents), AgentMode.Confirm, [builder, Scout]);
 
-        RimLLMChatOptions options = session.BuildRunOptions();
+        RimLLMChatOptions options = session.CreateRunOptions();
 
         Assert.That(options.Instructions, Does.Contain("- scout"));
         Assert.That(options.Instructions, Does.Not.Contain("- builder"), "拿不到任何工具的子代理不列給模型");
@@ -442,7 +443,7 @@ public class SubagentTests
 
         TranscriptEntry delegated = session.Transcript.Snapshot().Single(e => e.ToolName == SubagentTools.ToolName);
         Assert.That(delegated.Result, Does.Contain("budget exhausted"));
-        Assert.That(client.ReceivedMessages.Any(m => m.Count > 0 && m[0].Role == ChatRole.System
+        Assert.That(client.ReceivedMessages.Exists(m => m.Count > 0 && m[0].Role == ChatRole.System
             && m[0].Text.StartsWith("You are \"scout\"", StringComparison.Ordinal)), Is.False, "額度用完不起子代理的模型呼叫");
     }
 

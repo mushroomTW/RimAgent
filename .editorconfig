@@ -106,6 +106,8 @@ dotnet_diagnostic.S101.severity = none
 # Meziantou.Analyzer：只關掉純風格或與既有慣例衝突的規則，其餘維持預設
 # MA0006（== 改 string.Equals）：對 string 而言 == 本來就是序數比較，改寫只增加雜訊
 dotnet_diagnostic.MA0006.severity = none
+# MA0007（多行初始化最後一項加逗號）：純排版，不影響行為
+dotnet_diagnostic.MA0007.severity = none
 # MA0048（檔名須等於型別名）：與 partial 拆檔（Type.Part.cs）及小型別共檔的慣例衝突
 dotnet_diagnostic.MA0048.severity = none
 # MA0016（參數改用集合抽象型別）：改寫會變動框架公開 API，破壞下游 Mod
@@ -132,6 +134,8 @@ dotnet_diagnostic.MA0015.severity = none
 dotnet_diagnostic.VSTHRD101.severity = none
 # 未觀察的 Task 結果：保留 MA0134，關閉 VSTHRD110
 dotnet_diagnostic.VSTHRD110.severity = none
+# 泛型型別的靜態成員：MA0018 已棄用並由 CA1000 取代，跟著 CA1000 的決定關閉（見下方）
+dotnet_diagnostic.MA0018.severity = none
 
 # Microsoft.VisualStudio.Threading.Analyzers：只留通用的同步阻塞與 async void 規則
 # （VSTHRD002 同步等待、VSTHRD100 async void 方法、VSTHRD103 async 方法內呼叫同步版本、VSTHRD114 回傳 null Task）

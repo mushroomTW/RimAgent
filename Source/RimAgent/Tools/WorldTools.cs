@@ -16,7 +16,7 @@ namespace RimAgent.Tools;
 /// 世界地圖上的商隊：查看商隊與世界物件（定居點、據點、任務地點）、查一格的地形、派商隊前往並選抵達動作、
 /// 暫停與停下、就地建立殖民地或營地。離開地圖組隊仍是 form_caravan；抵達後進入地圖就是對商隊所在的格子下「進入」命令。
 /// </summary>
-public sealed class WorldTools
+public sealed partial class WorldTools
 {
     internal const int DefaultObjectLimit = 20;
     internal const int MaxObjectLimit = 100;
@@ -157,7 +157,7 @@ public sealed class WorldTools
         sb.Append("Tile ").Append(string.IsNullOrEmpty(info.TileLayer) ? string.Empty : info.TileLayer + ":").Append(info.Tile).Append(": ").Append(info.Biome).Append(", ").Append(info.Hilliness);
         if (!string.IsNullOrEmpty(info.Feature)) sb.Append(" | feature: ").Append(info.Feature);
         if (!string.IsNullOrEmpty(info.Landmark)) sb.Append(" | landmark: ").Append(info.Landmark);
-        if (info.Mutators.Count > 0) sb.Append(" | ").Append(string.Join(", ", info.Mutators.ToArray()));
+        if (info.Mutators.Count > 0) sb.Append(" | ").AppendJoin(", ", info.Mutators.ToArray());
         sb.AppendLine();
         sb.Append("Temperature ").Append(ToolText.Num(info.TemperatureC)).Append("C on average (").Append(ToolText.Num(info.MinTemperatureC))
           .Append("C to ").Append(ToolText.Num(info.MaxTemperatureC)).Append("C), rainfall ").Append(ToolText.Num(info.RainfallMm))
@@ -192,7 +192,7 @@ public sealed class WorldTools
         else
         {
             sb.AppendLine("World objects here:");
-            foreach (WorldObjectInfo o in info.Objects) sb.Append("- ").AppendLine(FormatObject(o, null));
+            foreach (WorldObjectInfo o in info.Objects) sb.Append("- ").AppendLine(FormatObject(o, travel: null));
         }
     }
 
@@ -219,12 +219,12 @@ public sealed class WorldTools
         FloatMenuOptionInfo order = chosen.Value;
         if (order.Disabled) return ToolText.Error($"\"{order.Label}\" is disabled (the game's reason is in the label).");
 
-        string blocked = ToolText.Blocked(_gate, $"would send {c.Name} [{c.Id}] to tile {target.Value}: \"{order.Label}\".");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would send {c.Name} [{c.Id}] to tile {target.Value}: \"{order.Label}\"."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SendCaravan(c.Id, target.Value, order.Number, order.Label);
         if (!result.Success) return ToolText.Error(result.Message);
-        string text = $"Ordered {c.Name}: \"{order.Label}\" on tile {target.Value}. {result.Message}";
+        string text = string.Create(CultureInfo.InvariantCulture, $"Ordered {c.Name}: \"{order.Label}\" on tile {target.Value}. {result.Message}");
         CaravanInfo now = _world.GetCaravans().FirstOrDefault(x => x.Id == c.Id);
         if (now != null && now.Moving && now.EtaTicks > 0) text += $"; arrival in {Duration(now.EtaTicks)}";
         return text + "." + GizmoTools.OpenDialogs(_world);
@@ -243,7 +243,7 @@ public sealed class WorldTools
         if (verb != CaravanMovementAction.Pause && verb != CaravanMovementAction.Resume && verb != CaravanMovementAction.Stop)
             return ToolText.Error($"unknown action \"{action}\". Use pause, resume or stop.");
 
-        string blocked = ToolText.Blocked(_gate, $"would {verb} {c.Name} [{c.Id}] on tile {c.Tile}.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would {verb} {c.Name} [{c.Id}] on tile {c.Tile}."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetCaravanMovement(c.Id, verb);
@@ -267,13 +267,13 @@ public sealed class WorldTools
         if (camp ? !c.CanCamp : !c.CanSettle)
         {
             string reason = camp ? c.CampBlockedReason : c.SettleBlockedReason;
-            return ToolText.Error($"{c.Name} cannot {(camp ? "set up camp" : "found a colony")} on tile {c.Tile}" + (string.IsNullOrEmpty(reason) ? "." : ": " + reason));
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"{c.Name} cannot {(camp ? "set up camp" : "found a colony")} on tile {c.Tile}") + (string.IsNullOrEmpty(reason) ? "." : ": " + reason));
         }
 
         string members = string.Join(", ", c.Members.Select(m => m.Name).ToArray());
         string blocked = ToolText.Blocked(_gate, camp
-            ? $"would set up camp with {c.Name} [{c.Id}] ({members}) on tile {c.Tile}."
-            : $"would found a new colony with {c.Name} [{c.Id}] ({members}) on tile {c.Tile}; the whole caravan moves in.");
+            ? string.Create(CultureInfo.InvariantCulture, $"would set up camp with {c.Name} [{c.Id}] ({members}) on tile {c.Tile}.")
+            : string.Create(CultureInfo.InvariantCulture, $"would found a new colony with {c.Name} [{c.Id}] ({members}) on tile {c.Tile}; the whole caravan moves in."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SettleCaravan(c.Id, verb);
@@ -294,21 +294,21 @@ public sealed class WorldTools
         {
             return required
                 ? Result<CaravanInfo>.Fail(ToolText.Error("you have no caravans on the world map. Form one with form_caravan."))
-                : Result<CaravanInfo>.Ok(null);
+                : Result<CaravanInfo>.Ok(value: null);
         }
         if (needle.Length == 0)
         {
             if (caravans.Count == 1) return Result<CaravanInfo>.Ok(caravans[0]);
             return required
                 ? Result<CaravanInfo>.Fail(ToolText.Error("name the caravan. Yours: " + Candidates(caravans)))
-                : Result<CaravanInfo>.Ok(null);
+                : Result<CaravanInfo>.Ok(value: null);
         }
         if (int.TryParse(needle, NumberStyles.Integer, CultureInfo.InvariantCulture, out int id))
         {
             CaravanInfo byId = caravans.FirstOrDefault(c => c.Id == id);
             return byId != null
                 ? Result<CaravanInfo>.Ok(byId)
-                : Result<CaravanInfo>.Fail(ToolText.Error($"no caravan has id {id}. Yours: {Candidates(caravans)}"));
+                : Result<CaravanInfo>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no caravan has id {id}. Yours: {Candidates(caravans)}")));
         }
         List<CaravanInfo> exact = [.. caravans.Where(c => string.Equals(c.Name, needle, StringComparison.OrdinalIgnoreCase))];
         List<CaravanInfo> hits = exact.Count > 0 ? exact : [.. caravans.Where(c => c.Name.Contains(needle, StringComparison.OrdinalIgnoreCase))];
@@ -320,7 +320,7 @@ public sealed class WorldTools
 
     private static string Candidates(IEnumerable<CaravanInfo> caravans)
     {
-        return string.Join(", ", caravans.Select(c => "[" + c.Id + "] " + c.Name).ToArray());
+        return string.Join(", ", caravans.Select(c => "[" + c.Id.ToString(CultureInfo.InvariantCulture) + "] " + c.Name).ToArray());
     }
 
     /// <summary>
@@ -345,11 +345,11 @@ public sealed class WorldTools
         {
             WorldObjectInfo obj = world.GetWorldSurvey(originCaravanId).Objects.FirstOrDefault(o => o.Id == worldObjectId);
             if (obj == null)
-                return Result<int>.Fail(ToolText.Error($"no world object has id {worldObjectId}. Use list_world_objects to get valid ids."));
+                return Result<int>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no world object has id {worldObjectId}. Use list_world_objects to get valid ids.")));
             objectTile = obj.Tile;
         }
         if (tile >= 0 && tile != objectTile)
-            return Result<int>.Fail(ToolText.Error($"world object {worldObjectId} is on tile {objectTile}, not tile {tile}. Give one of them."));
+            return Result<int>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"world object {worldObjectId} is on tile {objectTile}, not tile {tile}. Give one of them.")));
         return Result<int>.Ok(objectTile);
     }
 
@@ -361,17 +361,17 @@ public sealed class WorldTools
     {
         string text = (input ?? string.Empty).Trim();
         if (text.Length == 0) return Result<FloatMenuOptionInfo>.Fail(ToolText.Error("give the order: a number from get_world_tile."));
-        Match m = Regex.Match(text, @"^(\d+)\s*[\)\.:\-]?\s*(.*)$", RegexOptions.None, TimeSpan.FromSeconds(1));
+        Match m = NumberedOrderPattern.Match(text);
         if (m.Success)
         {
-            if (!int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
-                return Result<FloatMenuOptionInfo>.Fail(ToolText.Error($"\"{m.Groups[1].Value}\" is too large to be an option number; use a number from get_world_tile."));
-            string label = m.Groups[2].Value.Trim();
+            if (!int.TryParse(m.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
+                return Result<FloatMenuOptionInfo>.Fail(ToolText.Error($"\"{m.Groups["number"].Value}\" is too large to be an option number; use a number from get_world_tile."));
+            string label = m.Groups["label"].Value.Trim();
             FloatMenuOptionInfo byNumber = options.FirstOrDefault(o => o.Number == number);
             if (byNumber == null)
-                return Result<FloatMenuOptionInfo>.Fail(ToolText.Error($"there is no order {number}. Orders now: {OrderList(options)}"));
+                return Result<FloatMenuOptionInfo>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"there is no order {number}. Orders now: {OrderList(options)}")));
             if (label.Length > 0 && byNumber.Label.IndexOf(label, StringComparison.OrdinalIgnoreCase) < 0)
-                return Result<FloatMenuOptionInfo>.Fail(ToolText.Error($"order {number} is now \"{byNumber.Label}\", not \"{label}\": the menu changed. Orders now: {OrderList(options)}"));
+                return Result<FloatMenuOptionInfo>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"order {number} is now \"{byNumber.Label}\", not \"{label}\": the menu changed. Orders now: {OrderList(options)}")));
             return Result<FloatMenuOptionInfo>.Ok(byNumber);
         }
         List<FloatMenuOptionInfo> exact = [.. options.Where(o => string.Equals(o.Label, text, StringComparison.OrdinalIgnoreCase))];
@@ -384,13 +384,13 @@ public sealed class WorldTools
 
     private static string OrderList(IReadOnlyList<FloatMenuOptionInfo> options)
     {
-        return options.Count == 0 ? "none" : string.Join("; ", options.Select(o => o.Number + ") " + o.Label).ToArray());
+        return options.Count == 0 ? "none" : string.Join("; ", options.Select(o => o.Number.ToString(CultureInfo.InvariantCulture) + ") " + o.Label).ToArray());
     }
 
     private Dictionary<int, TravelEstimateInfo> TravelByTile(int originCaravanId, IEnumerable<int> tiles)
     {
         var result = new Dictionary<int, TravelEstimateInfo>();
-        foreach (TravelEstimateInfo e in _world.GetTravelEstimates(originCaravanId, tiles.Distinct().ToList()))
+        foreach (TravelEstimateInfo e in _world.GetTravelEstimates(originCaravanId, [.. tiles.Distinct()]))
             result[e.Tile] = e;
         return result;
     }
@@ -424,14 +424,14 @@ public sealed class WorldTools
 
     private static string DescribeOrigin(WorldSurveyInfo survey)
     {
-        return survey.OriginTile < 0 ? survey.OriginLabel : $"{survey.OriginLabel} (tile {survey.OriginTile})";
+        return survey.OriginTile < 0 ? survey.OriginLabel : string.Create(CultureInfo.InvariantCulture, $"{survey.OriginLabel} (tile {survey.OriginTile})");
     }
 
     /// <summary>tick 換成白話：不到一天用小時，否則用天（遊戲一天 60000 tick）。</summary>
     internal static string Duration(int ticks)
     {
         if (ticks <= 0) return "no time";
-        if (ticks < TicksPerDay) return "~" + Math.Max(1, (int)Math.Round(ticks / (double)TicksPerHour)).ToString(CultureInfo.InvariantCulture) + " h";
+        if (ticks < TicksPerDay) return "~" + Math.Max(1, (int)Math.Round(ticks / (double)TicksPerHour, MidpointRounding.ToEven)).ToString(CultureInfo.InvariantCulture) + " h";
         string days = ToolText.Num(ticks / (float)TicksPerDay);
         return "~" + days + (days == "1" ? " day" : " days");
     }
@@ -445,7 +445,7 @@ public sealed class WorldTools
 
     internal static string FormatOption(FloatMenuOptionInfo o)
     {
-        return o.Number + ") " + (string.IsNullOrEmpty(o.Label) ? "(unnamed)" : o.Label) + (o.Disabled ? " [disabled]" : string.Empty);
+        return o.Number.ToString(CultureInfo.InvariantCulture) + ") " + (string.IsNullOrEmpty(o.Label) ? "(unnamed)" : o.Label) + (o.Disabled ? " [disabled]" : string.Empty);
     }
 
     internal static string FormatObject(WorldObjectInfo o, TravelEstimateInfo travel)
@@ -495,16 +495,16 @@ public sealed class WorldTools
           .Append(" | mass ").Append(ToolText.Num(c.MassUsage)).Append('/').Append(ToolText.Num(c.MassCapacity)).Append(" kg")
           .Append(c.MassUsage > c.MassCapacity ? " (overloaded)" : string.Empty)
           .Append(" | ").Append(c.TicksPerMove).AppendLine(" ticks per tile");
-        sb.Append("  members: ").AppendLine(string.Join(", ", c.Members.Select(FormatMember).ToArray()));
+        sb.Append("  members: ").AppendJoin(", ", c.Members.Select(FormatMember).ToArray()).AppendLine();
         sb.Append("  found a colony here: ").Append(c.CanSettle ? "yes" : "no" + Reason(c.SettleBlockedReason))
           .Append(" | set up camp here: ").AppendLine(c.CanCamp ? "yes" : "no" + Reason(c.CampBlockedReason));
-        if (c.ObjectsHere.Count > 0) sb.Append("  here: ").AppendLine(string.Join(", ", c.ObjectsHere.ToArray()));
+        if (c.ObjectsHere.Count > 0) sb.Append("  here: ").AppendJoin(", ", c.ObjectsHere.ToArray()).AppendLine();
     }
 
     private static void AppendForming(StringBuilder sb, FormingCaravanInfo f)
     {
         sb.Append('[').Append(f.Id).Append("] ").Append(f.Status).Append(" | leaves the map at ").AppendLine(ToolText.Cell(f.ExitX, f.ExitZ));
-        sb.Append("  members: ").AppendLine(string.Join(", ", f.Members.Select(FormatMember).ToArray()));
+        sb.Append("  members: ").AppendJoin(", ", f.Members.Select(FormatMember).ToArray()).AppendLine();
         sb.Append("  cargo: ").AppendLine(f.Cargo.Count == 0 ? "none" : string.Join(", ", f.Cargo.ToArray()));
     }
 
@@ -521,4 +521,7 @@ public sealed class WorldTools
         if (m.InMentalState) sb.Append(", in a mental break");
         return sb.Append(')').ToString();
     }
+
+    [GeneratedRegex(@"^(?<number>\d+)\s*[\)\.:\-]?\s*(?<label>.*)$", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex NumberedOrderPattern { get; }
 }

@@ -24,7 +24,7 @@ internal sealed partial class FakeGameWorld
 
     public SaveContext GetSaveContext() => SaveContext;
 
-    public Task<IReadOnlyList<SaveSlotInfo>> GetSaveFilesAsync() => Task.FromResult<IReadOnlyList<SaveSlotInfo>>(SaveFiles.ToList());
+    public Task<IReadOnlyList<SaveSlotInfo>> GetSaveFilesAsync() => Task.FromResult<IReadOnlyList<SaveSlotInfo>>([.. SaveFiles]);
 
     public CommandResult SaveGame(string saveName)
     {

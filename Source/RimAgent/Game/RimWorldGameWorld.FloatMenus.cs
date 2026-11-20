@@ -30,7 +30,7 @@ internal sealed partial class RimWorldGameWorld
             info.Error = error;
             return info;
         }
-        info.Options = options.Select((o, i) => new FloatMenuOptionInfo { Number = i + 1, Label = o.Label.StripTags(), Disabled = o.Disabled }).ToList();
+        info.Options = [.. options.Select((o, i) => new FloatMenuOptionInfo { Number = i + 1, Label = o.Label.StripTags(), Disabled = o.Disabled })];
         return info;
     }
 
@@ -52,7 +52,7 @@ internal sealed partial class RimWorldGameWorld
         var watch = new MessageWatch();
         try
         {
-            option.Chosen(colonistOrdering: true, null);
+            option.Chosen(colonistOrdering: true, floatMenu: null);
         }
         catch (Exception ex)
         {
@@ -107,7 +107,7 @@ internal sealed partial class RimWorldGameWorld
             List<FloatMenuOption> options = FloatMenuMakerMap.GetOptions([pawn], clickPosition, out FloatMenuContext _) ?? [];
             // 原版只在多選時問這一份，有些東西（古樞紐核心）的選項只放在這裡，只選一人就看不到。
             var extras = clickPosition.ToIntVec3().GetThingList(pawn.Map).SelectMany(t => t.GetMultiSelectFloatMenuOptions([pawn]));
-            extras.Where(e => options.All(o => o.Label != e.Label)).ToList().ForEach(e => options.Add(e));
+            extras.Where(e => options.TrueForAll(o => o.Label != e.Label)).ToList().ForEach(e => options.Add(e));
             return [.. (options ?? [])
                 .OrderByDescending(o => o.Priority).ThenByDescending(o => o.orderInPriority)];
         }

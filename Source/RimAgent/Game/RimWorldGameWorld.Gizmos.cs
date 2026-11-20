@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -170,7 +171,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static string DescribeTarget(LocalTargetInfo target)
     {
-        return target.HasThing ? $"{target.Thing.LabelShort} [{target.Thing.thingIDNumber}]" : $"cell ({target.Cell.x},{target.Cell.z})";
+        return target.HasThing ? string.Create(CultureInfo.InvariantCulture, $"{target.Thing.LabelShort} [{target.Thing.thingIDNumber}]") : string.Create(CultureInfo.InvariantCulture, $"cell ({target.Cell.x},{target.Cell.z})");
     }
 
     /// <summary>把工具給的目標對到遊戲裡的物件或格子；回傳 false 時 error 為原因。</summary>
@@ -183,7 +184,7 @@ internal sealed partial class RimWorldGameWorld
             var cell = new IntVec3(target.X, 0, target.Z);
             if (!cell.InBounds(Map))
             {
-                error = $"cell ({target.X},{target.Z}) is outside the map";
+                error = string.Create(CultureInfo.InvariantCulture, $"cell ({target.X},{target.Z}) is outside the map");
                 return false;
             }
             resolved = new LocalTargetInfo(cell);
@@ -192,7 +193,7 @@ internal sealed partial class RimWorldGameWorld
         Thing thing = FindThing(target.ThingId);
         if (thing == null || thing.Fogged())
         {
-            error = $"target [{target.ThingId}] not found on the map";
+            error = string.Create(CultureInfo.InvariantCulture, $"target [{target.ThingId}] not found on the map");
             return false;
         }
         resolved = new LocalTargetInfo(thing);
@@ -215,7 +216,7 @@ internal sealed partial class RimWorldGameWorld
         StopAllTargeting();
         var before = new HashSet<Window>(Find.WindowStack.Windows);
         var watch = new MessageWatch();
-        command.ProcessInput(null);
+        command.ProcessInput(ev: null);
         CommandResult targeting = FinishTargeting(label, target == null ? (LocalTargetInfo?)null : localTarget, watch, out bool askedForTarget);
         CommandResult windowFailure = CloseUnsupportedWindows(before, label);
         if (targeting != null && !targeting.Success) return targeting;
@@ -349,7 +350,7 @@ internal sealed partial class RimWorldGameWorld
         if (verb == null) return string.Empty;
         float distance = (target.Cell - source.Caster.Position).LengthHorizontal;
         float min = verb.verbProps.EffectiveMinRange(target, source.Caster);
-        return $" (distance {distance:0.#}, range {min:0.#} to {verb.EffectiveRange:0.#}, line of sight may also be blocked)";
+        return string.Create(CultureInfo.InvariantCulture, $" (distance {distance:0.#}, range {min:0.#} to {verb.EffectiveRange:0.#}, line of sight may also be blocked)");
     }
 
     private static void StopAllTargeting()
@@ -383,7 +384,7 @@ internal sealed partial class RimWorldGameWorld
         AdoptOpenedWindows(beforeWindows);
         List<Window> opened = [.. Find.WindowStack.Windows.Where(w => !beforeWindows.Contains(w))];
         List<Window> unsupported = [.. opened.Where(w => !IsAnswerableWindow(w) && !RunsOnItsOwn(w))];
-        foreach (Window window in unsupported) window.Close(false);
+        foreach (Window window in unsupported) window.Close(doCloseSound: false);
         if (unsupported.Count > 0)
         {
             return CommandResult.Fail($"\"{label}\" opened a {(unsupported[0] is FloatMenu ? "menu" : "window")} to pick from, which is not supported yet; it was closed");

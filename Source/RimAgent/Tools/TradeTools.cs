@@ -13,7 +13,7 @@ using RimAgent.Game;
 namespace RimAgent.Tools;
 
 /// <summary>交易：商人庫存查詢、買入與賣出一次結清。組商隊在 <see cref="CaravanTools"/>。</summary>
-public sealed class TradeTools
+public sealed partial class TradeTools
 {
     /// <summary>單一商人最多列出的品項數，超過則截斷並註明（省 token）。</summary>
     internal const int MaxGoodsListed = 80;
@@ -76,7 +76,7 @@ public sealed class TradeTools
         // 買入只在這位商人的貨品裡找：模組包的全遊戲物品目錄太大，常撞名或對到商人沒賣的東西。
         // 銀兩留在候選裡，列了才會得到「銀兩自動結算」的說明。
         var offered = new HashSet<string>(deal.Goods.Select(g => g.DefName), StringComparer.OrdinalIgnoreCase) { SilverDefName };
-        Result<List<TradeLine>> resolvedBuys = ResolveLines(buyLines.Value, _world.TradeGoods.Where(d => offered.Contains(d.DefName)).ToList(),
+        Result<List<TradeLine>> resolvedBuys = ResolveLines(buyLines.Value, [.. _world.TradeGoods.Where(d => offered.Contains(d.DefName))],
             $" Only the goods {deal.Name} [{deal.Id}] sells were searched.");
         if (!resolvedBuys.Success) return resolvedBuys.Error;
         Result<List<TradeLine>> resolvedSells = ResolveLines(sellLines.Value, _world.TradeGoods, string.Empty);
@@ -130,7 +130,7 @@ public sealed class TradeTools
         if (string.IsNullOrWhiteSpace(text)) return Result<List<ParsedLine>>.Ok(lines);
         foreach (string raw in text.Split([',', ';', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries))
         {
-            Match m = Regex.Match(raw.Trim(), @"^(.*?)\s*[x×*]\s*(\d+)\s*$", RegexOptions.None, TimeSpan.FromSeconds(1));
+            Match m = ItemCountPattern.Match(raw.Trim());
             if (!m.Success)
             {
                 return Result<List<ParsedLine>>.Fail(ToolText.Error(
@@ -139,13 +139,13 @@ public sealed class TradeTools
             int count;
             try
             {
-                count = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                count = int.Parse(m.Groups["count"].Value, CultureInfo.InvariantCulture);
             }
             catch (Exception)
             {
-                return Result<List<ParsedLine>>.Fail(ToolText.Error($"count \"{m.Groups[2].Value}\" is not a number."));
+                return Result<List<ParsedLine>>.Fail(ToolText.Error($"count \"{m.Groups["count"].Value}\" is not a number."));
             }
-            string item = m.Groups[1].Value.Trim();
+            string item = m.Groups["name"].Value.Trim();
             if (item.Length == 0 || count < 1 || count > 100000)
             {
                 return Result<List<ParsedLine>>.Fail(ToolText.Error(
@@ -208,4 +208,7 @@ public sealed class TradeTools
         }
         return sb.ToString().Trim();
     }
+
+    [GeneratedRegex(@"^(?<name>.*?)\s*[x×*]\s*(?<count>\d+)\s*$", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ItemCountPattern { get; }
 }

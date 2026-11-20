@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using RimAgent.Game;
@@ -72,7 +73,7 @@ internal sealed partial class MapWorldTests
             {
                 caravan.pather.StopDead();
                 caravan.Tile = map.Tile;
-                CaravanEnterMapUtility.Enter(caravan, map, CaravanEnterMode.Edge, CaravanDropInventoryMode.DoNotDrop, false);
+                CaravanEnterMapUtility.Enter(caravan, map, CaravanEnterMode.Edge, CaravanDropInventoryMode.DoNotDrop, draftColonists: false);
             }
             foreach (Letter letter in Find.LetterStack.LettersListForReading.Where(l => !lettersBefore.Contains(l)).ToList())
                 Find.LetterStack.RemoveLetter(letter);
@@ -136,12 +137,12 @@ internal sealed partial class MapWorldTests
     /// <summary>比對商隊的基本欄位：格子、成員、移動中、目的地、載重與食物天數。</summary>
     private static void CheckCaravanBasics(CaravanInfo info, Caravan caravan, Pawn pawn, List<string> failures)
     {
-        if (info.Tile != caravan.Tile.tileId) failures.Add($"caravan tile {info.Tile}, vanilla {caravan.Tile.tileId}");
+        if (info.Tile != caravan.Tile.tileId) failures.Add(string.Create(CultureInfo.InvariantCulture, $"caravan tile {info.Tile}, vanilla {caravan.Tile.tileId}"));
         if (info.Members.Count != 1 || info.Members[0].Id != pawn.thingIDNumber || info.Members[0].Kind != CaravanMemberInfo.ColonistKind)
             failures.Add("caravan members do not match the one colonist that left");
         if (info.Moving) failures.Add("a fresh caravan reports it is moving");
-        if (info.DestinationTile != -1) failures.Add("a fresh caravan reports destination " + info.DestinationTile);
-        if (Math.Abs(info.MassCapacity - caravan.MassCapacity) > 0.01f) failures.Add($"mass capacity {info.MassCapacity}, vanilla {caravan.MassCapacity}");
+        if (info.DestinationTile != -1) failures.Add("a fresh caravan reports destination " + info.DestinationTile.ToString(CultureInfo.InvariantCulture));
+        if (Math.Abs(info.MassCapacity - caravan.MassCapacity) > 0.01f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"mass capacity {info.MassCapacity}, vanilla {caravan.MassCapacity}"));
         if (Math.Abs(info.FoodDays - DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(caravan)) > 0.01f) failures.Add("food days differ from vanilla");
     }
 
@@ -192,9 +193,9 @@ internal sealed partial class MapWorldTests
     private static void CheckFirstTravelOption(CaravanOptionsInfo options, PlanetTile next, List<string> failures)
     {
         FloatMenuOptionInfo travel = options.Options[0];
-        if (travel.Disabled || !travel.Label.StartsWith("Travel to tile " + next.tileId, StringComparison.Ordinal))
+        if (travel.Disabled || !travel.Label.StartsWith("Travel to tile " + next.tileId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
             failures.Add($"first order is \"{travel.Label}\" (disabled {travel.Disabled})");
-        if (options.Options.Any(o => o.Label.Contains("(Dev:"))) failures.Add("a developer-mode order was offered");
+        if (options.Options.Any(o => o.Label.Contains("(Dev:", StringComparison.Ordinal))) failures.Add("a developer-mode order was offered");
     }
 
     /// <summary>用過期標籤下單應被拒絕，且商隊不得開始移動。</summary>
@@ -209,9 +210,9 @@ internal sealed partial class MapWorldTests
     {
         CommandResult sent = _world.SendCaravan(caravan.ID, next.tileId, travel.Number, travel.Label);
         if (!sent.Success) failures.Add("send failed: " + sent.Error);
-        if (!caravan.pather.Moving || caravan.pather.Destination != next) failures.Add("the caravan's pather has no destination " + next.tileId);
+        if (!caravan.pather.Moving || caravan.pather.Destination != next) failures.Add("the caravan's pather has no destination " + next.tileId.ToString(CultureInfo.InvariantCulture));
         CaravanInfo moving = _world.GetCaravans().First(c => c.Id == caravan.ID);
-        if (!moving.Moving || moving.DestinationTile != next.tileId) failures.Add($"GetCaravans destination {moving.DestinationTile}, expected {next.tileId}");
+        if (!moving.Moving || moving.DestinationTile != next.tileId) failures.Add(string.Create(CultureInfo.InvariantCulture, $"GetCaravans destination {moving.DestinationTile}, expected {next.tileId}"));
         if (moving.EtaTicks <= 0) failures.Add("a travelling caravan has no arrival estimate");
     }
 
@@ -240,7 +241,7 @@ internal sealed partial class MapWorldTests
         FloatMenuOptionInfo enter = options.Options.FirstOrDefault(o => o.Label.StartsWith(enterLabel, StringComparison.Ordinal) && !o.Disabled);
         if (enter == null)
         {
-            failures.Add($"no enabled \"{enterLabel}\" order; orders: {string.Join("; ", options.Options.Select(o => o.Number + ") " + o.Label).ToArray())}");
+            failures.Add($"no enabled \"{enterLabel}\" order; orders: {string.Join("; ", options.Options.Select(o => o.Number.ToString(CultureInfo.InvariantCulture) + ") " + o.Label).ToArray())}");
             return;
         }
         CommandResult entered = _world.SendCaravan(caravan.ID, map.Tile.tileId, enter.Number, enter.Label);
@@ -250,7 +251,7 @@ internal sealed partial class MapWorldTests
         if (_world.GetCaravans().Any(c => c.Id == caravan.ID)) failures.Add("the entered caravan is still listed");
         RimAgent.Game.MapInfo mapInfo = _world.GetMaps().FirstOrDefault(m => m.Id == map.uniqueID);
         if (mapInfo == null) failures.Add("the home map is missing from GetMaps");
-        else if (mapInfo.ColonistCount != map.mapPawns.FreeColonistsSpawnedCount) failures.Add($"GetMaps counts {mapInfo.ColonistCount} colonists, vanilla {map.mapPawns.FreeColonistsSpawnedCount}");
+        else if (mapInfo.ColonistCount != map.mapPawns.FreeColonistsSpawnedCount) failures.Add(string.Create(CultureInfo.InvariantCulture, $"GetMaps counts {mapInfo.ColonistCount} colonists, vanilla {map.mapPawns.FreeColonistsSpawnedCount}"));
     }
 
     /// <summary>
@@ -286,7 +287,7 @@ internal sealed partial class MapWorldTests
         ThingDef foodDef = DefDatabase<ThingDef>.GetNamedSilentFail("Pemmican") ?? ThingDefOf.MealSimple;
 
         // 放貨物的格子：玩家看得到、站得住、沒東西、殖民者走得到；家園區暫時設成包含它們，結束時還原。
-        List<IntVec3> cells = [.. GenRadial.RadialCellsAround(colonist.Position, 20f, true)
+        List<IntVec3> cells = [.. GenRadial.RadialCellsAround(colonist.Position, 20f, useCenter: true)
             .Where(c => c.InBounds(map) && !c.Fogged(map) && c.Standable(map) && c.GetFirstItem(map) == null && c.GetEdifice(map) == null
                         && colonist.CanReach(c, PathEndMode.Touch, Danger.Deadly))
             .Take(8)];
@@ -468,7 +469,7 @@ internal sealed partial class MapWorldTests
         {
             int silverQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == ThingDefOf.Silver).Sum(t => t.CountToTransfer);
             int foodQueued = job.transferables.Where(t => t.HasAnyThing && t.ThingDef == foodDef).Sum(t => t.CountToTransfer);
-            if (silverQueued != 100 || foodQueued != 30) failures.Add($"the lord job queues silver {silverQueued}, food {foodQueued}; expected 100 and 30");
+            if (silverQueued != 100 || foodQueued != 30) failures.Add(string.Create(CultureInfo.InvariantCulture, $"the lord job queues silver {silverQueued}, food {foodQueued}; expected 100 and 30"));
             if (job.transferables.Any(t => t.AnyThing is Pawn)) failures.Add("pawns were left in the lord job's item list");
             if (!lord.ownedPawns.Contains(colonist) || !lord.ownedPawns.Contains(animal)) failures.Add("the lord does not own both members");
         }
@@ -567,16 +568,16 @@ internal sealed partial class MapWorldTests
         transferables.Add(foodRow);
 
         const IgnorePawnsInventoryMode mode = IgnorePawnsInventoryMode.IgnoreIfAssignedToUnload;
-        float usage = CollectionsMassCalculator.MassUsageTransferables(transferables, mode, false, false);
+        float usage = CollectionsMassCalculator.MassUsageTransferables(transferables, mode, includePawnsMass: false, ignoreSpawnedCorpsesGearAndInventory: false);
         float capacity = CollectionsMassCalculator.CapacityTransferables(transferables, new System.Text.StringBuilder());
         PlanetTile start = CaravanExitMapUtility.BestExitTileToGoTo(destination, map);
-        int ticksPerMove = CaravanTicksPerMoveUtility.GetTicksPerMove(pawns, usage, capacity, false, null);
-        float tilesPerDay = TilesPerDayCalculator.ApproxTilesPerDay(transferables, usage, capacity, map.Tile, start, false, null);
+        int ticksPerMove = CaravanTicksPerMoveUtility.GetTicksPerMove(pawns, usage, capacity, isShuttle: false, explanation: null);
+        float tilesPerDay = TilesPerDayCalculator.ApproxTilesPerDay(transferables, usage, capacity, map.Tile, start, isShuttle: false, explanation: null);
         float visibility = CaravanVisibilityCalculator.Visibility(transferables, new System.Text.StringBuilder());
         var foraged = ForagedFoodPerDayCalculator.ForagedFoodPerDay(transferables, map.Biome, Faction.OfPlayer, new System.Text.StringBuilder());
         float foodDays;
         int eta;
-        using (WorldPath path = map.Tile.Layer.Pather.FindPath(map.Tile, destination, null))
+        using (WorldPath path = map.Tile.Layer.Pather.FindPath(map.Tile, destination, caravan: null))
         {
             foodDays = DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(transferables, map.Tile, mode, Faction.OfPlayer, path, 0f, ticksPerMove);
             eta = CaravanArrivalTimeEstimator.EstimatedTicksToArrive(map.Tile, destination, path, 0f, ticksPerMove, Find.TickManager.TicksAbs);
@@ -585,11 +586,11 @@ internal sealed partial class MapWorldTests
         CheckPlanNumbers(plan, usage, capacity, ticksPerMove, tilesPerDay, foodDays, visibility, foraged.Item2, eta, failures);
         if (plan.DestinationTile != destination.tileId || !plan.DestinationReachable) failures.Add("the plan does not report the destination as reachable");
         if (plan.Members.Count != 2 || plan.Members.All(m => m.Kind != CaravanMemberInfo.AnimalKind)) failures.Add("the plan does not list the animal as an animal");
-        if (plan.Cargo.Sum(c => c.Count) != 130) failures.Add("the plan lists " + plan.Cargo.Sum(c => c.Count) + " cargo items, expected 130");
+        if (plan.Cargo.Sum(c => c.Count) != 130) failures.Add("the plan lists " + plan.Cargo.Sum(c => c.Count).ToString(CultureInfo.InvariantCulture) + " cargo items, expected 130");
         // 食物不夠五天時，原版會彈出警告框；兩邊要一致。
         bool warnsAboutFood = plan.Warnings.Contains("DaysWorthOfFoodWarningDialog".Translate(foodDays.ToString("0.#")).Resolve())
                               || plan.Warnings.Contains("DaysWorthOfFoodWarningDialog_NoFood".Translate().Resolve());
-        if ((foodDays < 5f) != warnsAboutFood) failures.Add($"food warning {warnsAboutFood} with {foodDays} days of food");
+        if ((foodDays < 5f) != warnsAboutFood) failures.Add(string.Create(CultureInfo.InvariantCulture, $"food warning {warnsAboutFood} with {foodDays} days of food"));
     }
 
 #pragma warning restore S107
@@ -597,14 +598,14 @@ internal sealed partial class MapWorldTests
 #pragma warning disable S107 // 私有輔助方法，參數皆為對照原版數值，無需重構
     private static void CheckPlanNumbers(CaravanPlanInfo plan, float usage, float capacity, int ticksPerMove, float tilesPerDay, float foodDays, float visibility, float foragedPerDay, int etaTicks, List<string> failures)
     {
-        if (Math.Abs(plan.MassUsage - usage) > 0.01f) failures.Add($"mass usage {plan.MassUsage}, vanilla {usage}");
-        if (Math.Abs(plan.MassCapacity - capacity) > 0.01f) failures.Add($"mass capacity {plan.MassCapacity}, vanilla {capacity}");
-        if (plan.TicksPerMove != ticksPerMove) failures.Add($"ticks per move {plan.TicksPerMove}, vanilla {ticksPerMove}");
-        if (Math.Abs(plan.TilesPerDay - tilesPerDay) > 0.01f) failures.Add($"tiles per day {plan.TilesPerDay}, vanilla {tilesPerDay}");
-        if (Math.Abs(plan.FoodDays - foodDays) > 0.05f) failures.Add($"days of food {plan.FoodDays}, vanilla {foodDays}");
-        if (Math.Abs(plan.Visibility - visibility) > 0.001f) failures.Add($"visibility {plan.Visibility}, vanilla {visibility}");
-        if (Math.Abs(plan.ForagedPerDay - foragedPerDay) > 0.001f) failures.Add($"foraged per day {plan.ForagedPerDay}, vanilla {foragedPerDay}");
-        if (Math.Abs(plan.EtaTicks - etaTicks) > 60) failures.Add($"arrival estimate {plan.EtaTicks} ticks, vanilla {etaTicks}");
+        if (Math.Abs(plan.MassUsage - usage) > 0.01f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"mass usage {plan.MassUsage}, vanilla {usage}"));
+        if (Math.Abs(plan.MassCapacity - capacity) > 0.01f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"mass capacity {plan.MassCapacity}, vanilla {capacity}"));
+        if (plan.TicksPerMove != ticksPerMove) failures.Add(string.Create(CultureInfo.InvariantCulture, $"ticks per move {plan.TicksPerMove}, vanilla {ticksPerMove}"));
+        if (Math.Abs(plan.TilesPerDay - tilesPerDay) > 0.01f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"tiles per day {plan.TilesPerDay}, vanilla {tilesPerDay}"));
+        if (Math.Abs(plan.FoodDays - foodDays) > 0.05f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"days of food {plan.FoodDays}, vanilla {foodDays}"));
+        if (Math.Abs(plan.Visibility - visibility) > 0.001f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"visibility {plan.Visibility}, vanilla {visibility}"));
+        if (Math.Abs(plan.ForagedPerDay - foragedPerDay) > 0.001f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"foraged per day {plan.ForagedPerDay}, vanilla {foragedPerDay}"));
+        if (Math.Abs(plan.EtaTicks - etaTicks) > 60) failures.Add(string.Create(CultureInfo.InvariantCulture, $"arrival estimate {plan.EtaTicks} ticks, vanilla {etaTicks}"));
     }
 #pragma warning restore S107
 }

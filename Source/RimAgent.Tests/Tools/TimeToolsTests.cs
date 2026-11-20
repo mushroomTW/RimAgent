@@ -208,7 +208,7 @@ public class TimeToolsTests
 
         System.Collections.Generic.List<TranscriptEntry> tools = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool)];
         Assert.That(tools.Select(t => t.ToolName), Is.EqualTo(["get_colony_overview", "wait_for_time", "get_colony_overview"]));
-        Assert.That(tools.All(t => !t.Failed), Is.True);
+        Assert.That(tools.TrueForAll(t => !t.Failed), Is.True);
         Assert.That(tools[0].Result, Does.Contain("14:00"));
         Assert.That(tools[2].Result, Does.Contain("15:00"), "等待後的查詢不吃等待前的快取");
     }

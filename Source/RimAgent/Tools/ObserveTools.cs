@@ -38,10 +38,10 @@ public sealed class ObserveTools
         string speed = TimeTools.SpeedLabel(world.GetTimeSpeed().Current, world.TimeSpeeds);
         PowerInfo power = world.GetPower();
         IReadOnlyList<AlertInfo> alerts = world.GetAlerts();
-        return $"Colony: {o.ColonyName} | Colonists: {o.ColonistCount} | Date: year {o.Year}, {o.Season} day {o.DayOfSeason}, {o.Hour:00}:00" +
+        return string.Create(CultureInfo.InvariantCulture, $"Colony: {o.ColonyName} | Colonists: {o.ColonistCount} | Date: year {o.Year}, {o.Season} day {o.DayOfSeason}, {o.Hour:00}:00") +
                $" | Time speed: {speed} | Weather: {o.Weather} | Outdoor temp: {ToolText.Num(o.OutdoorTemperatureC)}°C | Wealth: {ToolText.Num(o.Wealth)}" +
-               $" | Hostiles on map: {o.HostileCount} | Colonists near mental break: {o.ColonistsNearMentalBreak}\n" +
-               $"Power: {power.NetworkCount} network(s), net watts {ToolText.Num(power.NetWatts)}, stored battery energy {ToolText.Num(power.StoredEnergy)}\n" +
+               string.Create(CultureInfo.InvariantCulture, $" | Hostiles on map: {o.HostileCount} | Colonists near mental break: {o.ColonistsNearMentalBreak}\n") +
+               string.Create(CultureInfo.InvariantCulture, $"Power: {power.NetworkCount} network(s), net watts {ToolText.Num(power.NetWatts)}, stored battery energy {ToolText.Num(power.StoredEnergy)}\n") +
                (o.Factions.Count == 0 ? string.Empty : "Factions: " + string.Join("; ", o.Factions) + "\n") +
                "Alerts: " + (alerts.Count == 0 ? "none" : string.Join("; ", alerts.Select(a => "[" + a.Priority + "] " + a.Label)));
     }
@@ -68,7 +68,7 @@ public sealed class ObserveTools
               .Append(", drafted: ").Append(c.Drafted ? "yes" : "no");
             if (!string.IsNullOrEmpty(c.Equipment)) sb.Append(", equipped: ").Append(c.Equipment);
             sb.Append(ToolText.Unreadable(c)).AppendLine();
-            sb.Append("  skills: ").Append(string.Join(", ", c.Skills.Select(ToolText.Skill))).AppendLine();
+            sb.Append("  skills: ").AppendJoin(", ", c.Skills.Select(ToolText.Skill)).AppendLine();
         }
         return sb.ToString().Trim();
     }
@@ -106,8 +106,7 @@ public sealed class ObserveTools
                      .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
         {
             sb.Append(group.Key).Append(": ")
-              .Append(string.Join(", ", group.OrderByDescending(r => r.Count).Select(r => $"{r.Label} ({r.DefName}) x{r.Count}")))
-              .AppendLine();
+              .AppendJoin(", ", group.OrderByDescending(r => r.Count).Select(r => $"{r.Label} ({r.DefName}) x{r.Count}")).AppendLine();
         }
         return sb.ToString().Trim();
     }
@@ -118,7 +117,7 @@ public sealed class ObserveTools
     {
         IReadOnlyList<LetterInfo> letters = _world.GetRecentLetters();
         if (letters.Count == 0) return "No recent event letters.";
-        return string.Join("\n", letters.Select(l => l.Label));
+        return string.Join('\n', letters.Select(l => l.Label));
     }
 
     [AgentTool("list_threats", ToolCategory.Observe, ToolRisk.Query)]
@@ -164,7 +163,7 @@ public sealed class ObserveTools
         else
         {
             sb.Append("Available to start (").Append(r.Available.Count).Append("): ")
-              .Append(string.Join(", ", r.Available.Take(MaxResearchListed).Select(p => $"{p.Label} ({p.DefName}, cost {ToolText.Num(p.Cost)})")));
+              .AppendJoin(", ", r.Available.Take(MaxResearchListed).Select(p => $"{p.Label} ({p.DefName}, cost {ToolText.Num(p.Cost)})"));
             if (r.Available.Count > MaxResearchListed) sb.Append(", ...");
         }
         return sb.ToString().Trim();
@@ -237,7 +236,7 @@ public sealed class ObserveTools
         Result<MapInfo> match = ResolveMap(map, _world.GetMaps());
         if (!match.Success) return match.Error;
 
-        string blocked = ToolText.Blocked(_gate, $"would switch current map to [{match.Value.Id}] {match.Value.Label}.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would switch current map to [{match.Value.Id}] {match.Value.Label}."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetCurrentMap(match.Value.Id);
@@ -261,7 +260,7 @@ public sealed class ObserveTools
         {
             MapInfo byId = maps.FirstOrDefault(m => m.Id == id);
             if (byId != null) return Result<MapInfo>.Ok(byId);
-            return Result<MapInfo>.Fail($"Error: no map has id {id}.");
+            return Result<MapInfo>.Fail(string.Create(CultureInfo.InvariantCulture, $"Error: no map has id {id}."));
         }
         MapInfo exact = maps.FirstOrDefault(m => string.Equals(m.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return Result<MapInfo>.Ok(exact);
@@ -270,7 +269,7 @@ public sealed class ObserveTools
         if (contains.Count > 1)
         {
             return Result<MapInfo>.Fail($"Error: \"{needle}\" matches several maps: " +
-                string.Join(", ", contains.Select(m => $"[{m.Id}] {m.Label}")) + ". Use the map id.");
+                string.Join(", ", contains.Select(m => string.Create(CultureInfo.InvariantCulture, $"[{m.Id}] {m.Label}"))) + ". Use the map id.");
         }
         return Result<MapInfo>.Fail($"Error: no map matches \"{needle}\".");
     }
@@ -330,7 +329,7 @@ public sealed class ObserveTools
     /// <summary>模型給的 kind 字串（大小寫不敏感）對到 <see cref="ThingKind"/>。</summary>
     internal static bool TryParseKind(string kind, out ThingKind parsed)
     {
-        return Enum.TryParse((kind ?? string.Empty).Trim(), true, out parsed) && Enum.IsDefined<ThingKind>(parsed);
+        return Enum.TryParse((kind ?? string.Empty).Trim(), ignoreCase: true, out parsed) && Enum.IsDefined<ThingKind>(parsed);
     }
 
     /// <summary>inspect_area 一次最多看的格數（50x50）；再大就是在掃全圖，該改用 find_things。</summary>
@@ -355,7 +354,7 @@ public sealed class ObserveTools
             rect.MinZ,
             Math.Min(rect.MaxX, rect.MinX + MaxSide - 1),
             Math.Min(rect.MaxZ, rect.MinZ + MaxSide - 1));
-        note = $"Note: {rect} has {rect.CellCount} cells, over the {maxCells}-cell limit ({RectLimitHint}); showing {cropped} only. Request the rest separately.";
+        note = string.Create(CultureInfo.InvariantCulture, $"Note: {rect} has {rect.CellCount} cells, over the {maxCells}-cell limit ({RectLimitHint}); showing {cropped} only. Request the rest separately.");
         return cropped;
     }
 
@@ -377,17 +376,17 @@ public sealed class ObserveTools
           .Append(", ground holds ").Append(SupportText(c.Support));
         if (c.Fogged) sb.Append(", unexplored (fogged)");
         sb.AppendLine();
-        sb.Append("Zone: ").Append(c.Zone == null ? "none" : $"[{c.Zone.Id}] {c.Zone.Label} ({c.Zone.Kind}, {c.Zone.CellCount} cells)").AppendLine();
+        sb.Append("Zone: ").Append(c.Zone == null ? "none" : string.Create(CultureInfo.InvariantCulture, $"[{c.Zone.Id}] {c.Zone.Label} ({c.Zone.Kind}, {c.Zone.CellCount} cells)")).AppendLine();
         sb.Append("Room: ").Append(c.Room == null ? "none (cell is filled by a wall or rock)" : Room(c.Room)).AppendLine();
         sb.Append("Objects on cell: ");
         if (c.Things.Count == 0) sb.Append("none");
-        else sb.Append(string.Join("; ", c.Things.Select(ToolText.Thing)));
+        else sb.AppendJoin("; ", c.Things.Select(ToolText.Thing));
         return sb.ToString().Trim();
     }
 
     private static string Room(RoomInfo r)
     {
-        return $"#{r.Id} {r.Role}, {r.CellCount} cells, extents {r.Extents}, {ToolText.Num(r.TemperatureC)}°C, " +
+        return string.Create(CultureInfo.InvariantCulture, $"#{r.Id} {r.Role}, {r.CellCount} cells, extents {r.Extents}, {ToolText.Num(r.TemperatureC)}°C, ") +
                (r.Outdoors ? "outdoors" : "indoors");
     }
 
@@ -408,10 +407,10 @@ public sealed class ObserveTools
         var sb = new StringBuilder();
         if (cropNote != null) sb.Append(cropNote).AppendLine();
         sb.Append("Area ").Append(area).Append(": ").Append(cells.Count).Append(" cells");
-        sb.Append(" | terrain: ").Append(string.Join(", ", cells
+        sb.Append(" | terrain: ").AppendJoin(", ", cells
             .GroupBy(c => c.Terrain, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
-            .Select(g => $"{g.Key} {g.Count()}")));
+            .Select(g => $"{g.Key} {g.Count()}"));
         sb.Append(" | fertile (>=").Append(ToolText.Pct(FertileThreshold)).Append("): ").Append(cells.Count(c => c.Fertility >= FertileThreshold));
         int roofed = cells.Count(c => !string.IsNullOrEmpty(c.Roof));
         sb.Append(" | roofed: ").Append(roofed);
@@ -438,7 +437,7 @@ public sealed class ObserveTools
         else
         {
             sb.Append(obstacles.Count).Append(" — ")
-              .Append(string.Join("; ", obstacles.Take(MaxObstaclesListed).Select(ToolText.Thing)));
+              .AppendJoin("; ", obstacles.Take(MaxObstaclesListed).Select(ToolText.Thing));
             if (obstacles.Count > MaxObstaclesListed) sb.Append("; and ").Append(obstacles.Count - MaxObstaclesListed).Append(" more");
         }
         sb.AppendLine();
@@ -447,7 +446,7 @@ public sealed class ObserveTools
         List<IGrouping<int, CellInfo>> zones = [.. cells.Where(c => c.Zone != null).GroupBy(c => c.Zone.Id)];
         sb.Append(zones.Count == 0
             ? "none"
-            : string.Join("; ", zones.Select(g => $"[{g.Key}] {g.First().Zone.Label} ({g.First().Zone.Kind}, {g.Count()} cells inside)")));
+            : string.Join("; ", zones.Select(g => string.Create(CultureInfo.InvariantCulture, $"[{g.Key}] {g.First().Zone.Label} ({g.First().Zone.Kind}, {g.Count()} cells inside)"))));
         sb.AppendLine();
 
         sb.Append("Rooms: ");
@@ -498,13 +497,13 @@ public sealed class ObserveTools
         {
             return ToolText.Error(string.IsNullOrEmpty(info.Error) ? "failed to take screenshot." : info.Error);
         }
-        string saved = $"Screenshot saved: {info.FilePath} ({info.Width}x{info.Height})";
+        string saved = string.Create(CultureInfo.InvariantCulture, $"Screenshot saved: {info.FilePath} ({info.Width}x{info.Height})");
         MapShotLayout layout = info.Layout;
         if (layout == null) return saved;
 
         return saved + Environment.NewLine
-            + $"Map view of {layout.Rect}, north up, {layout.PixelsPerCell} px per cell. Yellow lines run along the west edge of cells whose x is a multiple of {layout.GridStep} "
-            + $"and the south edge of cells whose z is a multiple of {layout.GridStep}; the number beside each line is that x (bottom margin) or z (left margin).";
+            + string.Create(CultureInfo.InvariantCulture, $"Map view of {layout.Rect}, north up, {layout.PixelsPerCell} px per cell. Yellow lines run along the west edge of cells whose x is a multiple of {layout.GridStep} ")
+            + string.Create(CultureInfo.InvariantCulture, $"and the south edge of cells whose z is a multiple of {layout.GridStep}; the number beside each line is that x (bottom margin) or z (left margin).");
     }
 
     internal static string ResolveScreenshotName(string input)
@@ -532,7 +531,7 @@ public sealed class ObserveTools
         }
 
         name = name.Trim();
-        return name.Replace("_", string.Empty).Length == 0 || name is "." or ".." || IsReservedDeviceName(name)
+        return name.Replace("_", string.Empty, StringComparison.Ordinal).Length == 0 || name is "." or ".." || IsReservedDeviceName(name)
             ? "RimAgent_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture)
             : name;
     }
@@ -540,7 +539,7 @@ public sealed class ObserveTools
     /// <summary>Windows 保留的裝置名稱（CON、PRN、AUX、NUL、COM1-9、LPT1-9），不分大小寫，有無副檔名都算。</summary>
     private static bool IsReservedDeviceName(string name)
     {
-        int dot = name.IndexOf('.');
+        int dot = name.IndexOf('.', StringComparison.Ordinal);
         string stem = (dot >= 0 ? name.Substring(0, dot) : name).TrimEnd();
         if (stem.Equals("CON", StringComparison.OrdinalIgnoreCase)
             || stem.Equals("PRN", StringComparison.OrdinalIgnoreCase)

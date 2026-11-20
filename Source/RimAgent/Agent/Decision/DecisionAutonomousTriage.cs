@@ -112,7 +112,7 @@ public sealed class DecisionAutonomousTriage
             sb.Append(" hours_ago=\"").Append(hoursSinceLastRun.Value.ToString("0.#", CultureInfo.InvariantCulture)).Append('"');
         }
         sb.AppendLine(">");
-        sb.AppendLine(reply.Replace("<", "\\<"));
+        sb.AppendLine(reply.Replace("<", "\\<", StringComparison.Ordinal));
         sb.Append("</last_run>");
         return sb.ToString();
     }

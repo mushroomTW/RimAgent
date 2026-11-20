@@ -49,7 +49,7 @@ public class MapShotTests
         var rect = new CellRectSpec(5, 5, 24, 24);
         MapShotLayout layout = MapShotLayout.For(rect);
         int ppc = layout.PixelsPerCell;
-        byte[] map = Enumerable.Repeat((byte)0, layout.MapWidthPx * layout.MapHeightPx * 4).ToArray();
+        byte[] map = [.. Enumerable.Repeat((byte)0, layout.MapWidthPx * layout.MapHeightPx * 4)];
         for (int i = 0; i < map.Length; i += 4) map[i + 2] = 200; // 純藍地圖，alpha 0
 
         byte[] image = MapShotOverlay.Compose(map, layout);
@@ -85,7 +85,7 @@ public class MapShotTests
         string text = tools.TakeScreenshot("base", 0, 0, 999, 999);
 
         Assert.That(world.Calls, Does.Contain("RenderMapArea((0,0)-(99,99), base)"));
-        Assert.That(world.Calls.Any(c => c.StartsWith("TakeScreenshot")), Is.False);
+        Assert.That(world.Calls.Exists(c => c.StartsWith("TakeScreenshot")), Is.False);
         Assert.That(text, Does.StartWith("Screenshot saved: C:/RimWorld/Screenshots/base.png ("));
         Assert.That(text, Does.Contain("Map view of (0,0)-(99,99), north up"));
         Assert.That(TranscriptScreenshot.TryParseSavedPath(text), Is.EqualTo("C:/RimWorld/Screenshots/base.png"),
@@ -109,7 +109,7 @@ public class MapShotTests
         string text = new ObserveTools(world).TakeScreenshot("x", 200, 200, 300, 300);
 
         Assert.That(text, Does.StartWith("Error:"));
-        Assert.That(world.Calls.Any(c => c.StartsWith("RenderMapArea")), Is.False);
+        Assert.That(world.Calls.Exists(c => c.StartsWith("RenderMapArea")), Is.False);
     }
 
     [Test]
@@ -119,7 +119,7 @@ public class MapShotTests
         string text = new ObserveTools(world).TakeScreenshot("x", x1: 0, z1: 0);
 
         Assert.That(text, Does.StartWith("Error:").And.Contain("all four corners"));
-        Assert.That(world.Calls.Any(c => c.StartsWith("RenderMapArea") || c.StartsWith("TakeScreenshot")), Is.False);
+        Assert.That(world.Calls.Exists(c => c.StartsWith("RenderMapArea") || c.StartsWith("TakeScreenshot")), Is.False);
     }
 
     [Test]
@@ -142,6 +142,6 @@ public class MapShotTests
         string text = new ObserveTools(world, gate).TakeScreenshot("x", 0, 0, 10, 10);
 
         Assert.That(text, Does.StartWith(ToolText.ConfirmationPrefix + "would take screenshot"));
-        Assert.That(world.Calls.Any(c => c.StartsWith("RenderMapArea")), Is.False);
+        Assert.That(world.Calls.Exists(c => c.StartsWith("RenderMapArea")), Is.False);
     }
 }

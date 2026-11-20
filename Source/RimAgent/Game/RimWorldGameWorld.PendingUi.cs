@@ -77,7 +77,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>選項只能是 1 或 2；其他數字不能被當成主要動作。</summary>
     private static CommandResult RequireTwoOptions(int option)
     {
-        return option is 1 or 2 ? null : CommandResult.Fail($"option {option} does not exist; choose 1 or 2");
+        return option is 1 or 2 ? null : CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"option {option} does not exist; choose 1 or 2"));
     }
 
     private static bool IsAnswerableWindow(Window window)
@@ -112,7 +112,7 @@ internal sealed partial class RimWorldGameWorld
         Thing caster = TargeterCaster?.GetValue(targeter) as Thing ?? targeter.targetingSource?.Caster;
         if (caster is not { Spawned: true } || Find.Selector.IsSelected(caster)) return;
         Find.Selector.ClearSelection();
-        Find.Selector.Select(caster, false, false);
+        Find.Selector.Select(caster, playSound: false, forceDesignatorDeselect: false);
     }
 
     private static IEnumerable<PendingChoiceInfo> PendingUiChoices()
@@ -140,7 +140,7 @@ internal sealed partial class RimWorldGameWorld
                 Title = "Choose a target on the map",
                 Text = DescribeActiveTarget(),
                 InputHint = "#thing id or x,z, for example #1234 or 40,62",
-                Options = Buttons("Use the target given as input", CancelLabel).ToList()
+                Options = [.. Buttons("Use the target given as input", CancelLabel)]
             };
         }
         PendingChoiceInfo landing = LandingChoice();
@@ -158,9 +158,9 @@ internal sealed partial class RimWorldGameWorld
         Dialog_BeginLordJob lordJob when AgentWindows.Contains(lordJob) => LordJobChoice(lordJob),
         Dialog_ConfigureIdeo ideo => new PendingChoiceInfo
         {
-            Id = WindowChoicePrefix + ideo.ID,
+            Id = WindowChoicePrefix + ideo.ID.ToString(CultureInfo.InvariantCulture),
             Title = "Ideoligion of the new colony",
-            Options = Buttons("Keep the current ideoligion").ToList()
+            Options = [.. Buttons("Keep the current ideoligion")]
         },
         Dialog_ChooseThingsForNewColony colony => NewColonyChoice(colony),
         Dialog_LoadTransporters load when AgentWindows.Contains(load) => LoadChoice(load),
@@ -176,7 +176,7 @@ internal sealed partial class RimWorldGameWorld
     // CA1859：傳回 IEnumerable<T> 而非 IReadOnlyList<T>，減少介面約束。
     private static List<ChoiceOptionInfo> Buttons(params string[] labels)
     {
-        return labels.Select((label, i) => new ChoiceOptionInfo { Number = i + 1, Text = label }).ToList();
+        return [.. labels.Select((label, i) => new ChoiceOptionInfo { Number = i + 1, Text = label })];
     }
 
     private static PendingChoiceInfo TileChoice(string id, string title)
@@ -186,7 +186,7 @@ internal sealed partial class RimWorldGameWorld
             Id = id,
             Title = title,
             InputHint = TileInputHint,
-            Options = Buttons("Use the tile given as input", CancelLabel).ToList()
+            Options = [.. Buttons("Use the tile given as input", CancelLabel)]
         };
     }
 
@@ -195,9 +195,9 @@ internal sealed partial class RimWorldGameWorld
         if (FloatMenuOptions?.GetValue(menu) is not List<FloatMenuOption> options) return null;
         return new PendingChoiceInfo
         {
-            Id = WindowChoicePrefix + menu.ID,
+            Id = WindowChoicePrefix + menu.ID.ToString(CultureInfo.InvariantCulture),
             Title = "Menu",
-            Options = options.Select((o, i) => new ChoiceOptionInfo { Number = i + 1, Text = o.Label.StripTags(), Disabled = o.Disabled }).ToList()
+            Options = [.. options.Select((o, i) => new ChoiceOptionInfo { Number = i + 1, Text = o.Label.StripTags(), Disabled = o.Disabled })]
         };
     }
 
@@ -205,7 +205,7 @@ internal sealed partial class RimWorldGameWorld
     {
         return new PendingChoiceInfo
         {
-            Id = WindowChoicePrefix + dialog.ID,
+            Id = WindowChoicePrefix + dialog.ID.ToString(CultureInfo.InvariantCulture),
             Title = dialog.HeaderLabel.Resolve().StripTags(),
             Text = LimitChoiceText(dialog.DescriptionLabel.Resolve().StripTags()),
             Options =
@@ -237,17 +237,17 @@ internal sealed partial class RimWorldGameWorld
     {
         return new PendingChoiceInfo
         {
-            Id = WindowChoicePrefix + dialog.ID,
+            Id = WindowChoicePrefix + dialog.ID.ToString(CultureInfo.InvariantCulture),
             Title = "Choose what comes along to the new colony",
             Text = "At most about 5 people, 5 animals and 7 item stacks; a refused selection reports why.\n" + NumberedThings(NewColonyCandidates(dialog).Select(t => t.LabelCap)),
             InputHint = "the numbers to bring, for example 1,2,9",
-            Options = Buttons("Accept the selection given as input", CancelLabel).ToList()
+            Options = [.. Buttons("Accept the selection given as input", CancelLabel)]
         };
     }
 
     private static string NumberedThings(IEnumerable<string> labels)
     {
-        return string.Join("\n", labels.Select((label, i) => $"{i + 1}) {label.StripTags()}"));
+        return string.Join('\n', labels.Select((label, i) => string.Create(CultureInfo.InvariantCulture, $"{i + 1}) {label.StripTags()}")));
     }
 
     private static PendingChoiceInfo LoadChoice(Dialog_LoadTransporters dialog)
@@ -255,11 +255,11 @@ internal sealed partial class RimWorldGameWorld
         if (LoadTransferables?.GetValue(dialog) is not List<TransferableOneWay> transferables) return null;
         return new PendingChoiceInfo
         {
-            Id = WindowChoicePrefix + dialog.ID,
+            Id = WindowChoicePrefix + dialog.ID.ToString(CultureInfo.InvariantCulture),
             Title = "Choose what to load",
-            Text = NumberedThings(transferables.Select(t => $"{t.LabelCap} x{t.MaxCount}")),
+            Text = NumberedThings(transferables.Select(t => string.Create(CultureInfo.InvariantCulture, $"{t.LabelCap} x{t.MaxCount}"))),
             InputHint = "number=count pairs, for example 1=1,4=50; a number alone loads all of it",
-            Options = Buttons("Load the selection given as input", CancelLabel).ToList()
+            Options = [.. Buttons("Load the selection given as input", CancelLabel)]
         };
     }
 
@@ -273,8 +273,8 @@ internal sealed partial class RimWorldGameWorld
         {
             Id = LandingChoiceId,
             Title = "Gravship landing",
-            Text = (marker is { Spawned: true } ? $"The marker is at ({marker.Position.x},{marker.Position.z}). " : "The marker is not placed yet. ")
-                   + $"Landing map size {size.x}x{size.z}.",
+            Text = (marker is { Spawned: true } ? string.Create(CultureInfo.InvariantCulture, $"The marker is at ({marker.Position.x},{marker.Position.z}). ") : "The marker is not placed yet. ")
+                   + string.Create(CultureInfo.InvariantCulture, $"Landing map size {size.x}x{size.z}."),
             InputHint = "x,z for option 2",
             Options =
             [
@@ -325,7 +325,7 @@ internal sealed partial class RimWorldGameWorld
         tile = PlanetTile.Invalid;
         string text = input?.Trim() ?? string.Empty;
         PlanetLayer layer = Find.WorldGrid.Surface;
-        int colon = text.IndexOf(':');
+        int colon = text.IndexOf(':', StringComparison.Ordinal);
         if (colon >= 0)
         {
             string name = text.Substring(0, colon).Trim();
@@ -361,7 +361,7 @@ internal sealed partial class RimWorldGameWorld
         if (!TryParseTile(input, out PlanetTile tile)) return CommandResult.Fail("give " + TileInputHint);
         if (!validator(tile)) return Refused($"tile {input} was refused", watch);
         _agentExpectsTile = false;
-        TilePickerStop.Invoke(Find.TilePicker, null);
+        TilePickerStop.Invoke(Find.TilePicker, parameters: null);
         chosen(tile);
         return CommandResult.Ok(WithGameMessages("tile " + input.Trim(), watch));
     }
@@ -450,7 +450,7 @@ internal sealed partial class RimWorldGameWorld
             if (Find.DesignatorManager.SelectedDesignator is Designator_MoveGravship) Find.DesignatorManager.Deselect();
             // 同原版「確認著陸」按鈕。
             marker.BeginLanding(controller);
-            LandingMarkerField.SetValue(controller, null);
+            LandingMarkerField.SetValue(controller, value: null);
             return CommandResult.Ok("landing");
         }
         string[] parts = (input ?? string.Empty).Split(',');
@@ -461,7 +461,7 @@ internal sealed partial class RimWorldGameWorld
         AcceptanceReport report = designator.CanDesignateCell(cell);
         if (!report.Accepted) return CommandResult.Fail(report.Reason.NullOrEmpty() ? "the gravship cannot land there" : report.Reason.StripTags());
         designator.DesignateSingleCell(cell);
-        return CommandResult.Ok(WithGameMessages($"marker at ({x},{z})", watch));
+        return CommandResult.Ok(WithGameMessages(string.Create(CultureInfo.InvariantCulture, $"marker at ({x},{z})"), watch));
     }
 
     /// <summary>安裝與重新安裝：原版靠目前選取判斷要裝哪一個，所以先選取，再照點地圖的順序驗證與放置。</summary>
@@ -474,17 +474,17 @@ internal sealed partial class RimWorldGameWorld
         try
         {
             Find.Selector.ClearSelection();
-            Find.Selector.Select(thing, false, false);
+            Find.Selector.Select(thing, playSound: false, forceDesignatorDeselect: false);
             AcceptanceReport report = install.CanDesignateCell(target.Cell);
             if (!report.Accepted) return CommandResult.Fail(report.Reason.NullOrEmpty() ? "it cannot be placed there" : report.Reason.StripTags());
             InstallBlueprintUtility.CancelBlueprintsFor(thing);
             install.DesignateSingleCell(target.Cell);
-            return CommandResult.Ok($"a builder will place it at ({target.Cell.x},{target.Cell.z})");
+            return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"a builder will place it at ({target.Cell.x},{target.Cell.z})"));
         }
         finally
         {
             Find.Selector.ClearSelection();
-            foreach (object selected in playerSelection.Where(o => o is not Thing { Spawned: false })) Find.Selector.Select(selected, false, false);
+            foreach (object selected in playerSelection.Where(o => o is not Thing { Spawned: false })) Find.Selector.Select(selected, playSound: false, forceDesignatorDeselect: false);
         }
     }
 
@@ -492,12 +492,12 @@ internal sealed partial class RimWorldGameWorld
     {
         if (FloatMenuOptions?.GetValue(menu) is not List<FloatMenuOption> options) return CommandResult.Fail("this game version does not expose menus");
         FloatMenuOption picked = option >= 1 && option <= options.Count ? options[option - 1] : null;
-        if (picked == null) return CommandResult.Fail($"option {option} does not exist");
+        if (picked == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"option {option} does not exist"));
         if (picked.Disabled) return CommandResult.Fail($"\"{picked.Label.StripTags()}\" is disabled");
         string label = picked.Label.StripTags();
         // 同 FloatMenu 被點到：先跑選項，再關選單。
         picked.Chosen(menu.givesColonistOrders, menu);
-        Find.WindowStack.TryRemove(menu, false);
+        Find.WindowStack.TryRemove(menu, doCloseSound: false);
         return CommandResult.Ok(WithGameMessages(label, watch));
     }
 
@@ -506,7 +506,7 @@ internal sealed partial class RimWorldGameWorld
         if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
-            dialog.Close(false);
+            dialog.Close(doCloseSound: false);
             return CommandResult.Ok(CancelLabel);
         }
         // 同開始鈕：條件不符時原版鈕是灰的（Enter 鍵不檢查，所以要自己擋）；通過後仍可能丟訊息、視窗留著。
@@ -594,8 +594,8 @@ internal sealed partial class RimWorldGameWorld
         foreach (TransferableOneWay row in transferables) row.AdjustTo(0);
         foreach ((TransferableOneWay row, int rowCount) in counts) row.AdjustTo(rowCount);
         // TryAccept 檢查失敗時丟訊息並回傳 false，視窗留著。
-        if (!(bool)LoadTryAccept.Invoke(dialog, null)) return Refused("the loading was refused", watch);
-        dialog.Close(false);
+        if (!(bool)LoadTryAccept.Invoke(dialog, parameters: null)) return Refused("the loading was refused", watch);
+        dialog.Close(doCloseSound: false);
         return CommandResult.Ok(WithGameMessages("loading started", watch));
     }
 

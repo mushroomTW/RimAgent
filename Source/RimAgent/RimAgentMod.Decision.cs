@@ -63,55 +63,29 @@ public partial class RimAgentMod
     {
         DecisionAvailability availability = DecisionServiceFactory.GetAvailability();
 
-        // 供應商下拉
-        Rect provRow = listing.GetRect(28f);
-        const float labelWidth = 160f;
-        var provLabelRect = new Rect(provRow.x, provRow.y + 3f, labelWidth, 24f);
-        var provDropdownRect = new Rect(provLabelRect.xMax + 4f, provRow.y, provRow.xMax - provLabelRect.xMax - 4f, 26f);
+        DrawDecisionProviderRow(listing);
 
-        Text.WordWrap = false;
-        Widgets.Label(provLabelRect, "RimAgent.Settings.DecisionProvider".Translate().Truncate(labelWidth));
-        Text.WordWrap = true;
+        DrawDecisionModelRow(listing, availability);
+        return availability != null && availability.Enabled;
+    }
 
-        string currentProv = Settings.decisionProvider;
-        string shownProv = string.IsNullOrEmpty(currentProv)
-            ? DecisionDefaultKey.Translate().ToString()
-            : currentProv;
-
-        if (Widgets.ButtonText(provDropdownRect, shownProv.Truncate(provDropdownRect.width - 12f)))
-        {
-            // 供應商一律沿用框架啟用的那一個；這裡只讓玩家選擇「本模組不使用決策模型」。
-            // 關掉後整段隱藏，可在主頁的決策模型開關重新啟用。
-            var options = new List<FloatMenuOption>
-            {
+    /// <summary>決策供應商下拉：供應商一律沿用框架啟用的那一個。</summary>
+    private static void DrawDecisionProviderRow(Listing_Standard listing)
+    {
+        // 這裡只讓玩家選擇「本模組不使用決策模型」；關掉後整段隱藏，可在主頁的決策模型開關重新啟用。
+        DrawDecisionDropdownRow(listing, "RimAgent.Settings.DecisionProvider", Settings.decisionProvider, "RimAgent.Settings.DecisionProviderTip",
+            () =>
+            [
                 new(DecisionDefaultKey.Translate(), () => Settings.decisionProvider = string.Empty),
                 new("RimAgent.Settings.DecisionProviderNone".Translate(), () => Settings.decisionEnabled = false)
-            };
-            Find.WindowStack.Add(new FloatMenu(options));
-        }
-        if (Mouse.IsOver(provDropdownRect) || Mouse.IsOver(provLabelRect))
+            ]);
+    }
+
+    /// <summary>決策模型下拉：只列框架給出的模型（玩家在 RimLLM 決策分頁設定的那個），不另外向伺服器拉清單。</summary>
+    private static void DrawDecisionModelRow(Listing_Standard listing, DecisionAvailability availability)
+    {
+        DrawDecisionDropdownRow(listing, "RimAgent.Settings.DecisionModel", Settings.decisionModel, "RimAgent.Settings.DecisionModelTip", () =>
         {
-            TooltipHandler.TipRegion(new Rect(provRow.x, provRow.y, provRow.width, provRow.height), "RimAgent.Settings.DecisionProviderTip".Translate());
-        }
-        listing.Gap(6f);
-
-        // 模型下拉
-        Rect modelRow = listing.GetRect(28f);
-        var modelLabelRect = new Rect(modelRow.x, modelRow.y + 3f, labelWidth, 24f);
-        var modelDropdownRect = new Rect(modelLabelRect.xMax + 4f, modelRow.y, modelRow.xMax - modelLabelRect.xMax - 4f, 26f);
-
-        Text.WordWrap = false;
-        Widgets.Label(modelLabelRect, "RimAgent.Settings.DecisionModel".Translate().Truncate(labelWidth));
-        Text.WordWrap = true;
-
-        string currentModel = Settings.decisionModel;
-        string shownModel = string.IsNullOrEmpty(currentModel)
-            ? DecisionDefaultKey.Translate().ToString()
-            : currentModel;
-
-        if (Widgets.ButtonText(modelDropdownRect, shownModel.Truncate(modelDropdownRect.width - 12f)))
-        {
-            // 只列框架給出的模型（玩家在 RimLLM 決策分頁設定的那個），不另外向伺服器拉清單。
             var options = new List<FloatMenuOption>
             {
                 new(DecisionDefaultKey.Translate(), () => Settings.decisionModel = string.Empty)
@@ -121,14 +95,32 @@ public partial class RimAgentMod
             {
                 options.Add(new FloatMenuOption(frameworkModel, () => Settings.decisionModel = frameworkModel));
             }
-            Find.WindowStack.Add(new FloatMenu(options));
-        }
-        if (Mouse.IsOver(modelDropdownRect) || Mouse.IsOver(modelLabelRect))
+            return options;
+        });
+    }
+
+    /// <summary>「標籤＋下拉按鈕」一列；目前值為空時顯示「預設」，點開才建立選項。</summary>
+    private static void DrawDecisionDropdownRow(Listing_Standard listing, string labelKey, string current, string tipKey, Func<List<FloatMenuOption>> options)
+    {
+        const float labelWidth = 160f;
+        Rect row = listing.GetRect(28f);
+        var labelRect = new Rect(row.x, row.y + 3f, labelWidth, 24f);
+        var dropdownRect = new Rect(labelRect.xMax + 4f, row.y, row.xMax - labelRect.xMax - 4f, 26f);
+
+        Text.WordWrap = false;
+        Widgets.Label(labelRect, labelKey.Translate().Truncate(labelWidth));
+        Text.WordWrap = true;
+
+        string shown = string.IsNullOrEmpty(current) ? DecisionDefaultKey.Translate().ToString() : current;
+        if (Widgets.ButtonText(dropdownRect, shown.Truncate(dropdownRect.width - 12f)))
         {
-            TooltipHandler.TipRegion(new Rect(modelRow.x, modelRow.y, modelRow.width, modelRow.height), "RimAgent.Settings.DecisionModelTip".Translate());
+            Find.WindowStack.Add(new FloatMenu(options()));
+        }
+        if (Mouse.IsOver(dropdownRect) || Mouse.IsOver(labelRect))
+        {
+            TooltipHandler.TipRegion(row, tipKey.Translate());
         }
         listing.Gap(6f);
-        return availability != null && availability.Enabled;
     }
 
     /// <summary>測試按鈕與最近一次結果；送出的是設定頁目前選的供應商與模型。</summary>
@@ -171,8 +163,8 @@ public partial class RimAgentMod
             foreach (string id in categories.Where(c => c != null && !string.IsNullOrWhiteSpace(c.Id)).Select(c => c.Id.Trim())) used.Add(id);
         }
         int number = 1;
-        while (used.Contains(CustomIdPrefix + number)) number++;
-        return CustomIdPrefix + number;
+        while (used.Contains(CustomIdPrefix + number.ToString(CultureInfo.InvariantCulture))) number++;
+        return CustomIdPrefix + number.ToString(CultureInfo.InvariantCulture);
     }
 
     private static void DrawDecisionRoutingSettings(Listing_Standard listing)
@@ -203,33 +195,7 @@ public partial class RimAgentMod
 
         if (Widgets.ButtonText(addRect, "RimAgent.Settings.DecisionCategoryAdd".Translate()))
         {
-            var options = new List<FloatMenuOption>
-            {
-                new("RimAgent.Settings.DecisionCategoryAddCustom".Translate(), () =>
-                {
-                    string id = NextCustomCategoryId(Settings.decisionCategories);
-                    int nextNum = 1;
-                    if (id.Length > CustomIdPrefix.Length && int.TryParse(id[CustomIdPrefix.Length..], CultureInfo.InvariantCulture, out nextNum))
-                    {
-                        Settings.decisionCategories.Add(new DecisionRouteCategory(
-                            id,
-                            "RimAgent.Settings.DecisionCategoryCustomName".Translate(nextNum),
-                            "Custom category description"));
-                    }
-                })
-            };
-
-            foreach (DecisionRouteCategory builtIn in DecisionRouteCategory.CreateDefaultCategories()
-                .Where(b => !Settings.decisionCategories.Any(c => c != null && string.Equals(c.Id, b.Id, StringComparison.OrdinalIgnoreCase))))
-            {
-                DecisionRouteCategory captured = builtIn;
-                options.Add(new FloatMenuOption("RimAgent.Settings.DecisionCategoryRestore".Translate(captured.Name, captured.Id), () =>
-                {
-                    Settings.decisionCategories.Add(captured);
-                }));
-            }
-
-            Find.WindowStack.Add(new FloatMenu(options));
+            ShowAddCategoryMenu();
         }
 
         if (Widgets.ButtonText(resetRect, "RimAgent.Settings.DecisionCategoriesReset".Translate()))
@@ -239,6 +205,44 @@ public partial class RimAgentMod
 
         listing.Gap(4f);
 
+        DrawCategoryList(listing);
+    }
+
+    /// <summary>新增分類的選單：自訂分類，或還原已刪除的內建分類。</summary>
+    private static void ShowAddCategoryMenu()
+    {
+        var options = new List<FloatMenuOption>
+        {
+            new("RimAgent.Settings.DecisionCategoryAddCustom".Translate(), () =>
+            {
+                string id = NextCustomCategoryId(Settings.decisionCategories);
+                int nextNum = 1;
+                if (id.Length > CustomIdPrefix.Length && int.TryParse(id[CustomIdPrefix.Length..], CultureInfo.InvariantCulture, out nextNum))
+                {
+                    Settings.decisionCategories.Add(new DecisionRouteCategory(
+                        id,
+                        "RimAgent.Settings.DecisionCategoryCustomName".Translate(nextNum),
+                        "Custom category description"));
+                }
+            })
+        };
+
+        foreach (DecisionRouteCategory builtIn in DecisionRouteCategory.CreateDefaultCategories()
+            .Where(b => !Settings.decisionCategories.Any(c => c != null && string.Equals(c.Id, b.Id, StringComparison.OrdinalIgnoreCase))))
+        {
+            DecisionRouteCategory captured = builtIn;
+            options.Add(new FloatMenuOption("RimAgent.Settings.DecisionCategoryRestore".Translate(captured.Name, captured.Id), () =>
+            {
+                Settings.decisionCategories.Add(captured);
+            }));
+        }
+
+        Find.WindowStack.Add(new FloatMenu(options));
+    }
+
+    /// <summary>逐一列出分類與各自的思考強度；刪除留到迴圈結束後才執行。</summary>
+    private static void DrawCategoryList(Listing_Standard listing)
+    {
         DecisionRouteCategory toDelete = null;
         for (int i = 0; i < Settings.decisionCategories.Count; i++)
         {

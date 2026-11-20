@@ -171,7 +171,7 @@ public sealed class AgentTranscript
                     if (!entry.Interjection) break;
                 }
                 parts.Reverse();
-                return string.Join("\n", parts);
+                return string.Join('\n', parts);
             }
         }
     }
@@ -238,7 +238,7 @@ public sealed class AgentTranscript
         {
             version = _version;
             epoch = _epoch;
-            return _entries.ToArray();
+            return [.. _entries];
         }
     }
 
@@ -247,7 +247,7 @@ public sealed class AgentTranscript
     {
         lock (_gate)
         {
-            return _entries.ToArray();
+            return [.. _entries];
         }
     }
 

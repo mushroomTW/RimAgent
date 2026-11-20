@@ -78,22 +78,22 @@ public class AnimalToolsTests
     [Test]
     public void TrainingTurnsOnAndOff()
     {
-        Assert.That(_tools.TrainAnimal("Rex", "haul", true), Is.EqualTo("Rex will now be trained in haul."));
+        Assert.That(_tools.TrainAnimal("Rex", "haul", enable: true), Is.EqualTo("Rex will now be trained in haul."));
         Assert.That(_world.TrainingOn, Does.Contain("302:Haul"));
-        Assert.That(_tools.TrainAnimal("Rex", "haul", false), Is.EqualTo("Rex will no longer be trained in haul."));
+        Assert.That(_tools.TrainAnimal("Rex", "haul", enable: false), Is.EqualTo("Rex will no longer be trained in haul."));
         Assert.That(_world.TrainingOn, Is.Empty);
     }
 
     [Test]
     public void TrainingWildAnimalIsRefused()
     {
-        Assert.That(_tools.TrainAnimal("303", "obedience", true), Does.StartWith("Error:").And.Contain("tame it first"));
+        Assert.That(_tools.TrainAnimal("303", "obedience", enable: true), Does.StartWith("Error:").And.Contain("tame it first"));
     }
 
     [Test]
     public void UnknownTrainingListsNoFabrication()
     {
-        Assert.That(_tools.TrainAnimal("Rex", "quantum physics", true), Does.StartWith("Error:"));
+        Assert.That(_tools.TrainAnimal("Rex", "quantum physics", enable: true), Does.StartWith("Error:"));
     }
 
     [Test]

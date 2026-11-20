@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -319,8 +319,33 @@ public class RimAgentSettings : ModSettings
         // 新安裝沒有設定檔、不經過這裡，直接用欄位初始值（推薦方案）。
         for (int i = 0; i < CategoryKeys.Length; i++)
         {
-            Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], true);
+            Scribe_Values.Look(ref allowByCategory[i], CategoryKeys[i], defaultValue: true);
         }
+        ExposeModelSettings();
+        ExposeDecisionSettings();
+        Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", defaultValue: false);
+        Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
+        Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
+        Scribe_Values.Look(ref autonomousCare, "autonomousCare", defaultValue: false);
+        // 同上：舊版預設為關，Scribe 預設值維持 false，老玩家升級後不變。
+        Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", defaultValue: false);
+        Scribe_Values.Look(ref autoTimeSpeed, "autoTimeSpeed", defaultValue: false);
+        Scribe_Values.Look(ref layouts, "layouts", defaultValue: true);
+        Scribe_Values.Look(ref imageInput, "imageInput", defaultValue: false);
+        Scribe_Values.Look(ref autoCompact, "autoCompact", defaultValue: true);
+        Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
+        Scribe_Values.Look(ref recordRuns, "recordRuns", defaultValue: false);
+        Scribe_Values.Look(ref windowRectX, "windowRectX", -1f);
+        Scribe_Values.Look(ref windowRectY, "windowRectY", -1f);
+        Scribe_Values.Look(ref windowRectWidth, "windowRectWidth", 620f);
+        Scribe_Values.Look(ref windowRectHeight, "windowRectHeight", 460f);
+        // 壞存檔可能帶著範圍外的值：讀回後夾取，免得自動壓縮永不觸發或過度積極。
+        autoCompactThreshold = UnityEngine.Mathf.Clamp(autoCompactThreshold, MinAutoCompactThreshold, MaxAutoCompactThreshold);
+    }
+
+    /// <summary>模式、思考強度與各模型槽。</summary>
+    private void ExposeModelSettings()
+    {
         // 以名稱存取：已移除的詢問與 YOLO 模式不在列舉中，直接解析會報錯，改回確認。
         string modeName = mode.ToString();
         Scribe_Values.Look(ref modeName, "mode", nameof(AgentMode.Confirm));
@@ -331,7 +356,7 @@ public class RimAgentSettings : ModSettings
                 : AgentMode.Confirm;
         }
         Scribe_Values.Look(ref reasoning, "reasoning", ReasoningLevel.Auto);
-        Scribe_Values.Look(ref reasoningRouting, "reasoningRouting", false);
+        Scribe_Values.Look(ref reasoningRouting, "reasoningRouting", defaultValue: false);
         Scribe_Values.Look(ref agentModel, "agentModel", string.Empty);
         // 舊版的「自動分流」是模型選單裡的 "=auto" 哨兵；改為思考強度分流後，模型回到預設並開啟思考強度分流。
         if (Scribe.mode == LoadSaveMode.LoadingVars && string.Equals(agentModel, "=auto", StringComparison.Ordinal))
@@ -345,7 +370,12 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref compactReasoning, "compactReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref subagentModel, "subagentModel", FollowAgentModel);
         Scribe_Values.Look(ref subagentReasoning, "subagentReasoning", ReasoningLevel.Auto);
-        Scribe_Values.Look(ref decisionEnabled, "decisionEnabled", true);
+    }
+
+    /// <summary>決策模型與分流設定。</summary>
+    private void ExposeDecisionSettings()
+    {
+        Scribe_Values.Look(ref decisionEnabled, "decisionEnabled", defaultValue: true);
         Scribe_Values.Look(ref decisionProvider, "decisionProvider", string.Empty);
         Scribe_Values.Look(ref decisionModel, "decisionModel", string.Empty);
         Scribe_Collections.Look(ref decisionCategories, "decisionCategories", LookMode.Deep);
@@ -353,27 +383,9 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref decisionFallbackReasoning, "decisionFallbackReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref decisionRoutingMinConfidence, "decisionRoutingMinConfidence", 0.6f);
         decisionRoutingMinConfidence = UnityEngine.Mathf.Clamp01(decisionRoutingMinConfidence);
-        Scribe_Values.Look(ref decisionAnswerChoices, "decisionAnswerChoices", true);
-        Scribe_Values.Look(ref decisionTriageUpkeep, "decisionTriageUpkeep", true);
-        Scribe_Values.Look(ref decisionPreloadPacks, "decisionPreloadPacks", true);
-        Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", false);
-        Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
-        Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
-        Scribe_Values.Look(ref autonomousCare, "autonomousCare", false);
-        // 同上：舊版預設為關，Scribe 預設值維持 false，老玩家升級後不變。
-        Scribe_Values.Look(ref confirmAutonomousMajor, "confirmAutonomousMajor", false);
-        Scribe_Values.Look(ref autoTimeSpeed, "autoTimeSpeed", false);
-        Scribe_Values.Look(ref layouts, "layouts", true);
-        Scribe_Values.Look(ref imageInput, "imageInput", false);
-        Scribe_Values.Look(ref autoCompact, "autoCompact", true);
-        Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
-        Scribe_Values.Look(ref recordRuns, "recordRuns", false);
-        Scribe_Values.Look(ref windowRectX, "windowRectX", -1f);
-        Scribe_Values.Look(ref windowRectY, "windowRectY", -1f);
-        Scribe_Values.Look(ref windowRectWidth, "windowRectWidth", 620f);
-        Scribe_Values.Look(ref windowRectHeight, "windowRectHeight", 460f);
-        // 壞存檔可能帶著範圍外的值：讀回後夾取，免得自動壓縮永不觸發或過度積極。
-        autoCompactThreshold = UnityEngine.Mathf.Clamp(autoCompactThreshold, MinAutoCompactThreshold, MaxAutoCompactThreshold);
+        Scribe_Values.Look(ref decisionAnswerChoices, "decisionAnswerChoices", defaultValue: true);
+        Scribe_Values.Look(ref decisionTriageUpkeep, "decisionTriageUpkeep", defaultValue: true);
+        Scribe_Values.Look(ref decisionPreloadPacks, "decisionPreloadPacks", defaultValue: true);
     }
 
     public ToolPermissions ToPermissions()

@@ -16,7 +16,7 @@ internal static class TestHelpers
     {
         if (failures.Count > 0)
         {
-            Expect.IsTrue(false, $"{message} ({failures.Count}):\n{string.Join("\n", failures)}");
+            Expect.IsTrue(condition: false, $"{message} ({failures.Count}):\n{string.Join('\n', failures)}");
             return false;
         }
         return true;

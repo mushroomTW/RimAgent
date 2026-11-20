@@ -84,7 +84,7 @@ public class McpConfigTests
     {
         try
         {
-            Directory.Delete(_root, true);
+            Directory.Delete(_root, recursive: true);
         }
         catch (Exception)
         {
@@ -154,7 +154,7 @@ public class McpManagerTests
     {
         try
         {
-            Directory.Delete(_root, true);
+            Directory.Delete(_root, recursive: true);
         }
         catch (Exception)
         {
@@ -177,7 +177,7 @@ public class McpManagerTests
     public async Task ShutdownDisposesConnectionThatFinishesAfterShutdown()
     {
         string path = Path.Combine(_root, "servers.json");
-        File.WriteAllText(path, "{\"servers\":[{\"name\":\"slow\",\"command\":\"test\",\"enabled\":true}]}");
+        await File.WriteAllTextAsync(path, "{\"servers\":[{\"name\":\"slow\",\"command\":\"test\",\"enabled\":true}]}");
         var server = new DelayedMcpServer();
         var manager = new McpManager(path, _ => server);
         Task warmup = manager.WarmUpAsync();
@@ -248,19 +248,19 @@ public class McpManagerTests
     }
 
     [Test]
-    public void CallerCancellationDoesNotDropClient()
+    public async Task CallerCancellationDoesNotDropClient()
     {
         _fake.Returns("fetch", "ok");
         McpManager manager = ManagerFor("{\"servers\": [{\"name\": \"web\", \"command\": \"c\", \"enabled\": true}]}");
         _fake.CancelCall = true;
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
 
         Assert.That(async () => await manager.CallAsync("web", "fetch", "{}", cts.Token), Throws.InstanceOf<OperationCanceledException>());
 
         Assert.That(_fake.Disposed, Is.False);
         _fake.CancelCall = false;
-        Assert.That(manager.CallAsync("web", "fetch", "{}", CancellationToken.None).Result, Is.EqualTo("ok"));
+        Assert.That(await manager.CallAsync("web", "fetch", "{}", CancellationToken.None), Is.EqualTo("ok"));
         Assert.That(_created, Is.EqualTo(1));
     }
 
@@ -304,7 +304,7 @@ public class McpToolsTests
         }
         settings.ApplyPreset(RimAgentSettings.PermissionPreset.LookOnly);
         Assert.That(settings.GetAllow(ToolCategory.Build), Is.False);
-        settings.SetAllow(ToolCategory.Build, true);
+        settings.SetAllow(ToolCategory.Build, value: true);
         Assert.That(settings.MatchPreset(), Is.Null, "手動調過就是自訂");
     }
 
@@ -312,7 +312,7 @@ public class McpToolsTests
     public void ResetToDefaultsKeepsAgentWindowChoices()
     {
         var settings = new RimAgentSettings { agentModel = "openai:gpt-5", mode = RimAgent.Agent.AgentMode.Auto, autonomousCooldownMinutes = 30, decisionEnabled = false };
-        settings.SetAllow(ToolCategory.Mcp, true);
+        settings.SetAllow(ToolCategory.Mcp, value: true);
         settings.ResetToDefaults();
         Assert.That(settings.agentModel, Is.EqualTo("openai:gpt-5"));
         Assert.That(settings.mode, Is.EqualTo(RimAgent.Agent.AgentMode.Auto));
@@ -333,7 +333,7 @@ public class McpToolsTests
     [Test]
     public async Task ListWithoutConfigExplains()
     {
-        var tools = new McpTools(new McpManager(null));
+        var tools = new McpTools(new McpManager(configPath: null));
 
         string text = await tools.ListTools(CancellationToken.None);
 

@@ -149,7 +149,7 @@ public sealed class RunLogWriter
     public const int TrimToRuns = 450;
     public const int MaxFileBytes = 16 * 1024 * 1024;
     private const long TrimToBytes = MaxFileBytes / 10 * 9;
-    private static readonly UTF8Encoding Utf8 = new(false);
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly System.Threading.Lock _gate = new();
     /// <summary>檔案目前的筆數；-1 代表還沒數過（第一次寫入時讀檔數一次）。</summary>
@@ -236,7 +236,7 @@ public sealed class RunLogWriter
         try
         {
             File.WriteAllLines(temp, lines.GetRange(lines.Count - keep, keep), Utf8);
-            File.Replace(temp, FilePath, null);
+            File.Replace(temp, FilePath, destinationBackupFileName: null);
         }
         finally
         {

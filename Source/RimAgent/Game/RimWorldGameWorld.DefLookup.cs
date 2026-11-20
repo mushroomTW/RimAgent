@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -141,18 +142,18 @@ internal sealed partial class RimWorldGameWorld
     {
         List<RecipeDef> making = [.. DefDatabase<RecipeDef>.AllDefsListForReading.Where(r => r.products != null && r.products.Any(p => p.thingDef == def))];
         foreach (RecipeDef recipe in making.Take(MaxListedSources)) yield return RecipeFact(recipe, def);
-        if (making.Count > MaxListedSources) yield return $"{making.Count - MaxListedSources} more recipes also make it.";
+        if (making.Count > MaxListedSources) yield return string.Create(CultureInfo.InvariantCulture, $"{making.Count - MaxListedSources} more recipes also make it.");
     }
 
     private static IEnumerable<string> PlantFacts(List<ThingDef> things, ThingDef def)
     {
-        string plants = NameList(things.Where(d => d.plant?.harvestedThingDef == def), d => $"{Name(d)} (yield {d.plant.harvestYield:0.#})");
+        string plants = NameList(things.Where(d => d.plant?.harvestedThingDef == def), d => string.Create(CultureInfo.InvariantCulture, $"{Name(d)} (yield {d.plant.harvestYield:0.#})"));
         if (plants != null) yield return "Harvested from: " + plants + ".";
     }
 
     private static IEnumerable<string> MineableFacts(List<ThingDef> things, ThingDef def)
     {
-        string rocks = NameList(things.Where(d => d.building?.mineableThing == def), d => $"{Name(d)} (yield {d.building.mineableYield})");
+        string rocks = NameList(things.Where(d => d.building?.mineableThing == def), d => string.Create(CultureInfo.InvariantCulture, $"{Name(d)} (yield {d.building.mineableYield})"));
         if (rocks != null) yield return "Mined from: " + rocks + ".";
     }
 
@@ -197,33 +198,33 @@ internal sealed partial class RimWorldGameWorld
         List<ResearchProjectDef> research = [.. new[] { recipe.researchPrerequisite }.Concat(recipe.researchPrerequisites ?? []).Where(r => r != null).Distinct()];
         if (research.Count > 0) parts.Add("research " + string.Join(", ", research.Select(ResearchWithStatus)));
         int count = recipe.products.First(p => p.thingDef == product).count;
-        return $"Made by \"{recipe.label ?? recipe.defName}\" ({string.Join("; ", parts)}) -> {count}.";
+        return string.Create(CultureInfo.InvariantCulture, $"Made by \"{recipe.label ?? recipe.defName}\" ({string.Join("; ", parts)}) -> {count}.");
     }
 
     private static IEnumerable<string> ResearchFacts(ResearchProjectDef def)
     {
         string status = ResearchStatus(def);
         if (status != null) yield return status;
-        yield return $"Cost: {def.CostApparent:0}" + (def.knowledgeCategory != null ? $" ({def.knowledgeCategory.label} knowledge)" : string.Empty) + $"; tech level {def.techLevel.ToString().ToLowerInvariant()}.";
+        yield return string.Create(CultureInfo.InvariantCulture, $"Cost: {def.CostApparent:0}") + (def.knowledgeCategory != null ? $" ({def.knowledgeCategory.label} knowledge)" : string.Empty) + $"; tech level {def.techLevel.ToString().ToLowerInvariant()}.";
         List<ResearchProjectDef> prerequisites = [.. (def.prerequisites ?? []).Concat(def.hiddenPrerequisites ?? []).Distinct()];
         yield return prerequisites.Count == 0 ? "Prerequisites: none." : "Prerequisites: " + string.Join(", ", prerequisites.Select(ResearchWithStatus)) + ".";
         if (def.requiredResearchBuilding != null) yield return "Needs research bench: " + Name(def.requiredResearchBuilding) + ".";
         if (!def.requiredResearchFacilities.NullOrEmpty()) yield return "Needs bench facilities: " + string.Join(", ", def.requiredResearchFacilities.Select(Name)) + ".";
-        if (def.TechprintCount > 0) yield return $"Needs {def.TechprintCount} techprint(s)" + (Current.ProgramState == ProgramState.Playing ? $", {def.TechprintsApplied} applied." : ".");
+        if (def.TechprintCount > 0) yield return string.Create(CultureInfo.InvariantCulture, $"Needs {def.TechprintCount} techprint(s)") + (Current.ProgramState == ProgramState.Playing ? string.Create(CultureInfo.InvariantCulture, $", {def.TechprintsApplied} applied.") : ".");
         string unlocks = NameList(def.UnlockedDefs ?? [], d => d.label ?? d.defName);
         if (unlocks != null) yield return "Unlocks: " + unlocks + ".";
     }
 
     private static IEnumerable<string> HediffFacts(HediffDef def)
     {
-        if (def.lethalSeverity > 0f) yield return $"Lethal at severity {def.lethalSeverity:0.##}.";
+        if (def.lethalSeverity > 0f) yield return string.Create(CultureInfo.InvariantCulture, $"Lethal at severity {def.lethalSeverity:0.##}.");
         if (def.tendable) yield return "Can be tended by a doctor.";
         if (def.chronic) yield return "Chronic.";
         if (def.CompProps<HediffCompProperties_Immunizable>() != null) yield return "The body builds immunity against it; it is a race between immunity and severity.";
         if (def.stages != null && def.stages.Count > 1)
         {
             yield return "Stages: " + string.Join(", ", def.stages.Select(s =>
-                $"{(string.IsNullOrEmpty(s.label) ? "-" : s.label)} from {s.minSeverity:0.##}{(s.lifeThreatening ? " (life-threatening)" : string.Empty)}")) + ".";
+                string.Create(CultureInfo.InvariantCulture, $"{(string.IsNullOrEmpty(s.label) ? "-" : s.label)} from {s.minSeverity:0.##}{(s.lifeThreatening ? " (life-threatening)" : string.Empty)}"))) + ".";
         }
     }
 
@@ -233,7 +234,7 @@ internal sealed partial class RimWorldGameWorld
     {
         if (Current.ProgramState != ProgramState.Playing) return null;
         if (def.IsFinished) return "Status: finished.";
-        if (def.ProgressReal > 0f) return $"Status: in progress, {def.ProgressApparentString} / {def.CostApparent:0}.";
+        if (def.ProgressReal > 0f) return string.Create(CultureInfo.InvariantCulture, $"Status: in progress, {def.ProgressApparentString} / {def.CostApparent:0}.");
         return "Status: not started" + (def.CanStartNow ? ", can start now." : ".");
     }
 
@@ -265,6 +266,6 @@ internal sealed partial class RimWorldGameWorld
         List<string> names = [.. items.Select(name).Distinct(StringComparer.Ordinal)];
         if (names.Count == 0) return null;
         string head = string.Join(", ", names.Take(MaxListedNames));
-        return names.Count > MaxListedNames ? $"{head} and {names.Count - MaxListedNames} more" : head;
+        return names.Count > MaxListedNames ? string.Create(CultureInfo.InvariantCulture, $"{head} and {names.Count - MaxListedNames} more") : head;
     }
 }

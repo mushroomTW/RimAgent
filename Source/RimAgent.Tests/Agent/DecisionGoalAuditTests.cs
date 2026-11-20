@@ -209,7 +209,7 @@ false: The agent is not waiting for player guidance or input.
     public async Task AuditAsyncRethrowsWhenCancellationTokenCancelled()
     {
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
         var fake = new FakeDecisionService();
         var auditor = new DecisionGoalAuditor(fake, criteriaProvider: () => SampleGoalCriteria);
 
@@ -256,7 +256,7 @@ false: The agent is not waiting for player guidance or input.
     [Test]
     public void HandleAuditedGoalDecisionBlockedPausesGoalWithNotice()
     {
-        var component = new RimAgentGameComponent(null);
+        var component = new RimAgentGameComponent(game: null);
         component.AddGoal("Build 3 beds");
         var session = new ColonyAgentSession(new ScriptedChatClient(), new FakeGameWorld(), () => ToolPermissions.All, 4);
 
@@ -270,7 +270,7 @@ false: The agent is not waiting for player guidance or input.
             NeedsUserProbability = 0.9,
             Reason = "Decision audit indicated player input is required."
         };
-        var decision = new GoalTurnDecision(1, 0, false, false);
+        var decision = new GoalTurnDecision(1, 0, complete: false, pause: false);
 
         component.HandleAuditedGoalDecision(session, "Build 3 beds", "Which room?\n[[GOAL:COMPLETE]]", decision, audit, GoalAuditVerdict.Blocked);
 
@@ -279,13 +279,13 @@ false: The agent is not waiting for player guidance or input.
         Assert.That(component.GoalBlockerKey, Is.EqualTo("audit-needs-user"));
         Assert.That(component.GoalNeedsVerification, Is.False);
         var entries = session.Transcript.Snapshot();
-        Assert.That(entries, Has.Some.Matches<TranscriptEntry>(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Build 3 beds")));
+        Assert.That(entries, Has.Some.Matches<TranscriptEntry>(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Build 3 beds", StringComparison.Ordinal)));
     }
 
     [Test]
     public void HandleAuditedGoalDecisionCompleteFinishesGoalWithNotice()
     {
-        var component = new RimAgentGameComponent(null);
+        var component = new RimAgentGameComponent(game: null);
         component.AddGoal("Build 3 beds");
         var session = new ColonyAgentSession(new ScriptedChatClient(), new FakeGameWorld(), () => ToolPermissions.All, 4);
 
@@ -299,7 +299,7 @@ false: The agent is not waiting for player guidance or input.
             NeedsUserProbability = 0.05,
             Reason = "Decision audit verified that all requirements are complete."
         };
-        var decision = new GoalTurnDecision(2, 0, true, false);
+        var decision = new GoalTurnDecision(2, 0, complete: true, pause: false);
 
         component.HandleAuditedGoalDecision(session, "Build 3 beds", "Done.\n[[GOAL:COMPLETE]]", decision, audit, GoalAuditVerdict.Complete);
 
@@ -308,13 +308,13 @@ false: The agent is not waiting for player guidance or input.
         Assert.That(component.GoalTurns, Is.Zero);
         Assert.That(component.GoalPaused, Is.False);
         var entries = session.Transcript.Snapshot();
-        Assert.That(entries, Has.Some.Matches<TranscriptEntry>(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Build 3 beds")));
+        Assert.That(entries, Has.Some.Matches<TranscriptEntry>(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Build 3 beds", StringComparison.Ordinal)));
     }
 
     [Test]
     public void HandleAuditedGoalDecisionCannotUpgradeAnUnverifiedTurnToComplete()
     {
-        var component = new RimAgentGameComponent(null);
+        var component = new RimAgentGameComponent(game: null);
         component.AddGoal("Build 3 beds");
         var session = new ColonyAgentSession(new ScriptedChatClient(), new FakeGameWorld(), () => ToolPermissions.All, 4);
 
@@ -329,7 +329,7 @@ false: The agent is not waiting for player guidance or input.
             Reason = "Decision audit verified that all requirements are complete."
         };
         // AfterTurn 判定沒有完成證據，即使審計說完成也不能升級。
-        var decision = new GoalTurnDecision(1, 0, false, false);
+        var decision = new GoalTurnDecision(1, 0, complete: false, pause: false);
 
         component.HandleAuditedGoalDecision(session, "Build 3 beds", "Done.\n[[GOAL:COMPLETE]]", decision, audit, GoalAuditVerdict.Complete);
 
@@ -342,7 +342,7 @@ false: The agent is not waiting for player guidance or input.
     [Test]
     public void HandleAuditedGoalDecisionContinueKeepsGoalActiveAndRecordsAuditNote()
     {
-        var component = new RimAgentGameComponent(null);
+        var component = new RimAgentGameComponent(game: null);
         component.AddGoal("Build 3 beds");
         var session = new ColonyAgentSession(new ScriptedChatClient(), new FakeGameWorld(), () => ToolPermissions.All, 4);
 
@@ -356,7 +356,7 @@ false: The agent is not waiting for player guidance or input.
             NeedsUserProbability = 0.1,
             Reason = "Still missing wood for bed 3."
         };
-        var decision = new GoalTurnDecision(1, 0, false, false);
+        var decision = new GoalTurnDecision(1, 0, complete: false, pause: false);
 
         component.HandleAuditedGoalDecision(session, "Build 3 beds", "Placed blueprints.\n[[GOAL:COMPLETE]]", decision, audit, GoalAuditVerdict.Continue);
 
@@ -365,6 +365,6 @@ false: The agent is not waiting for player guidance or input.
         Assert.That(component.GoalNeedsVerification, Is.True);
         Assert.That(component.GoalAuditNote, Is.EqualTo("Still missing wood for bed 3."));
         var entries = session.Transcript.Snapshot();
-        Assert.That(entries, Has.Some.Matches<TranscriptEntry>(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Build 3 beds")));
+        Assert.That(entries, Has.Some.Matches<TranscriptEntry>(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Build 3 beds", StringComparison.Ordinal)));
     }
 }

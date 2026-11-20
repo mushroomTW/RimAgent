@@ -21,7 +21,7 @@ public partial class Window_Agent
     private void Collapse(ColonyAgentSession session)
     {
         RimAgentMod.Settings?.UpdateBounds(windowRect);
-        Find.WindowStack.WindowOfType<ContextPanel>()?.Close(false);
+        Find.WindowStack.WindowOfType<ContextPanel>()?.Close(doCloseSound: false);
         _collapsed = true;
         resizeable = false;
         _iconPressed = false;
@@ -113,7 +113,7 @@ public partial class Window_Agent
             if (_discTex != null) return _discTex;
             const int size = 128;
             const float radius = size / 2f;
-            _discTex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            _discTex = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false)
             {
                 wrapMode = TextureWrapMode.Clamp,
                 filterMode = FilterMode.Bilinear
@@ -213,7 +213,7 @@ public partial class Window_Agent
             _bubbleOnLeft ? inRect.x : inRect.x + AvatarSize + AvatarBubbleGap,
             inRect.y + (AvatarSize - AvatarBubbleHeight) / 2f,
             inRect.width - AvatarSize - AvatarBubbleGap, AvatarBubbleHeight);
-        if (Event.current.type == EventType.Repaint) GetBubbleStyle().Draw(bubble, false, false, false, false);
+        if (Event.current.type == EventType.Repaint) GetBubbleStyle().Draw(bubble, isHover: false, isActive: false, on: false, hasKeyboardFocus: false);
         Text.Anchor = TextAnchor.MiddleLeft;
         GUI.color = new Color(0.90f, 0.93f, 0.96f);
         Rect labelRect = bubble.ContractedBy(12f, 0f);

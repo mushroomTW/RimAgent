@@ -37,9 +37,9 @@ public sealed class GizmoTools
         IReadOnlyList<GizmoInfo> gizmos = _world.GetGizmos(thingId);
         if (gizmos == null) return NotFound(thingId);
         string inspect = _world.GetInspectText(thingId);
-        string status = string.IsNullOrEmpty(inspect) ? string.Empty : $"Status of [{thingId}]: {inspect}\n";
-        if (gizmos.Count == 0) return status + $"[{thingId}] has no command buttons.";
-        return status + $"Command buttons of [{thingId}]:\n" + string.Join("\n", gizmos.Select(Format));
+        string status = string.IsNullOrEmpty(inspect) ? string.Empty : string.Create(CultureInfo.InvariantCulture, $"Status of [{thingId}]: {inspect}\n");
+        if (gizmos.Count == 0) return status + string.Create(CultureInfo.InvariantCulture, $"[{thingId}] has no command buttons.");
+        return status + string.Create(CultureInfo.InvariantCulture, $"Command buttons of [{thingId}]:\n") + string.Join('\n', gizmos.Select(Format));
     }
 
     [AgentTool("use_gizmo", ToolCategory.Build, ToolRisk.Confirm)]
@@ -58,13 +58,13 @@ public sealed class GizmoTools
         IReadOnlyList<GizmoInfo> gizmos = _world.GetGizmos(thingId);
         if (gizmos == null) return NotFound(thingId);
         string needle = gizmo?.Trim() ?? string.Empty;
-        if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && gizmos.Count(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase)) > 1)
-            return ToolText.Error($"[{thingId}] has multiple buttons named \"{needle}\". Use a button number from list_gizmos.");
+        if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && gizmos.Where(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase)).Skip(1).Any())
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"[{thingId}] has multiple buttons named \"{needle}\". Use a button number from list_gizmos."));
         GizmoInfo picked = ResolveGizmo(gizmos, gizmo);
         if (picked == null)
         {
-            string buttons = gizmos.Count == 0 ? "none" : string.Join("; ", gizmos.Select(g => g.Number + ") " + g.Label));
-            return ToolText.Error($"[{thingId}] has no button \"{gizmo}\". Buttons: {buttons}");
+            string buttons = gizmos.Count == 0 ? "none" : string.Join("; ", gizmos.Select(g => g.Number.ToString(CultureInfo.InvariantCulture) + ") " + g.Label));
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"[{thingId}] has no button \"{gizmo}\". Buttons: {buttons}"));
         }
         if (picked.Disabled)
         {
@@ -73,12 +73,12 @@ public sealed class GizmoTools
         string validationError = ValidateGizmoTarget(picked, target);
         if (validationError != null) return ToolText.Error(validationError);
 
-        string blocked = ToolText.Blocked(_gate, $"would press \"{picked.Label}\" on [{thingId}]" + (target == null ? "." : $" aimed at {target}."));
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would press \"{picked.Label}\" on [{thingId}]") + (target == null ? "." : $" aimed at {target}."));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.UseGizmo(thingId, picked.Number, picked.Label, target);
         if (!r.Success) return ToolText.Error(r.Message);
-        string summary = $"Pressed \"{picked.Label}\" on [{thingId}]" + (string.IsNullOrEmpty(r.Message) ? "." : ": " + r.Message + ".");
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Pressed \"{picked.Label}\" on [{thingId}]") + (string.IsNullOrEmpty(r.Message) ? "." : ": " + r.Message + ".");
         return summary + OpenDialogs(_world);
     }
 
@@ -143,6 +143,6 @@ public sealed class GizmoTools
 
     private static string NotFound(int thingId)
     {
-        return ToolText.Error($"no visible thing with id {thingId}. Use find_things to get a valid id.");
+        return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no visible thing with id {thingId}. Use find_things to get a valid id."));
     }
 }

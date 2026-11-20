@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -31,7 +32,7 @@ internal sealed partial class RimWorldGameWorld
             label = "no map";
             return PlanetTile.Invalid;
         }
-        label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID);
+        label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID.ToString(CultureInfo.InvariantCulture));
         return map.Tile;
     }
 
@@ -51,8 +52,8 @@ internal sealed partial class RimWorldGameWorld
     {
         if (!TileInWorld(tile)) return "no tile";
         WorldObject obj = Find.WorldObjects.ObjectsAt(tile).FirstOrDefault(o => o is not Caravan);
-        string text = "tile " + tile.tileId + " (" + tile.Tile.PrimaryBiome.LabelCap + ")";
-        return obj == null ? text : obj.LabelCap + " [" + obj.ID + "], " + text;
+        string text = "tile " + tile.tileId.ToString(CultureInfo.InvariantCulture) + " (" + tile.Tile.PrimaryBiome.LabelCap + ")";
+        return obj == null ? text : obj.LabelCap + " [" + obj.ID.ToString(CultureInfo.InvariantCulture) + "], " + text;
     }
 
     public WorldSurveyInfo GetWorldSurvey(int originCaravanId)
@@ -113,8 +114,7 @@ internal sealed partial class RimWorldGameWorld
     {
         var links = new Dictionary<int, List<WorldObjectQuestLink>>();
         foreach (Quest quest in Find.QuestManager.QuestsListForReading
-            .Where(q => !q.hidden && !q.hiddenInUI)
-            .Where(q => q.State == QuestState.NotYetAccepted || q.State == QuestState.Ongoing))
+            .Where(q => !q.hidden && !q.hiddenInUI && (q.State == QuestState.NotYetAccepted || q.State == QuestState.Ongoing)))
         {
             try
             {
@@ -126,7 +126,7 @@ internal sealed partial class RimWorldGameWorld
             }
             catch (Exception ex)
             {
-                Log.Warning("RimAgent: could not read the world targets of quest " + quest.id + ": " + ex.Message);
+                Log.Warning("RimAgent: could not read the world targets of quest " + quest.id.ToString(CultureInfo.InvariantCulture) + ": " + ex.Message);
             }
         }
         return links;
@@ -158,7 +158,7 @@ internal sealed partial class RimWorldGameWorld
         PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan _, out string _);
         PlanetTile pt = ToPlanetTile(tile, origin);
         if (!TileInWorld(pt))
-            return new WorldTileInfo { Tile = tile, Error = $"tile {tile} does not exist on this layer of the world (valid ids are 0 to {pt.Layer.TilesCount - 1})" };
+            return new WorldTileInfo { Tile = tile, Error = string.Create(CultureInfo.InvariantCulture, $"tile {tile} does not exist on this layer of the world (valid ids are 0 to {pt.Layer.TilesCount - 1})") };
         RimWorld.Planet.Tile data = Find.WorldGrid[pt];
         var reason = new System.Text.StringBuilder();
         bool canSettle = TileFinder.IsValidTileForNewSettlement(pt, reason);
@@ -198,10 +198,10 @@ internal sealed partial class RimWorldGameWorld
             Coastal = data.IsCoastal,
             Feature = data.feature?.name ?? string.Empty,
             Landmark = landmarkText,
-            Mutators = data.Mutators.Select(m => m.label).ToList(),
+            Mutators = [.. data.Mutators.Select(m => m.label)],
             CanSettle = canSettle,
             SettleBlockedReason = canSettle ? string.Empty : PlainText(reason.ToString()),
-            Objects = Find.WorldObjects.ObjectsAt(pt).Select(o => ToWorldObjectInfo(o, origin, quests)).ToList()
+            Objects = [.. Find.WorldObjects.ObjectsAt(pt).Select(o => ToWorldObjectInfo(o, origin, quests))]
         };
     }
 }

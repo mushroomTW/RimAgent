@@ -31,6 +31,6 @@ internal sealed class ToolPackTools
     {
         return "Tool packs: some tools stay hidden until you load their pack with " + ToolName +
                ". Load one when the task needs it; it stays loaded for the rest of the conversation.\n" +
-               string.Join("\n", packs.Select(p => "- " + p.Id + ": " + p.Summary));
+               string.Join('\n', packs.Select(p => "- " + p.Id + ": " + p.Summary));
     }
 }

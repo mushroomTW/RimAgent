@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using RimAgent.Game;
@@ -26,7 +27,7 @@ internal sealed partial class MapWorldTests
         PlanetTile origin = map.Tile;
 
         WorldSurveyInfo survey = _world.GetWorldSurvey(-1);
-        if (survey.OriginTile != origin.tileId) failures.Add($"origin tile {survey.OriginTile}, vanilla {origin.tileId}");
+        if (survey.OriginTile != origin.tileId) failures.Add(string.Create(CultureInfo.InvariantCulture, $"origin tile {survey.OriginTile}, vanilla {origin.tileId}"));
         if (survey.OriginIsCaravan) failures.Add("a survey without a caravan claims its origin is a caravan");
         var expected = Find.WorldObjects.AllWorldObjects
             .Where(o => o.Spawned && o.Tile.Valid && o.Tile.Layer == origin.Layer && o is not RoutePlannerWaypoint && !(o is Caravan { IsPlayerControlled: true }))
@@ -35,7 +36,7 @@ internal sealed partial class MapWorldTests
         CheckMissingObjects(expected, survey, failures);
         CheckHomeSettlementInSurvey(survey, failures);
 
-        IReadOnlyList<TravelEstimateInfo> estimates = _world.GetTravelEstimates(-1, survey.Objects.Take(5).Select(o => o.Tile).ToList());
+        IReadOnlyList<TravelEstimateInfo> estimates = _world.GetTravelEstimates(-1, [.. survey.Objects.Take(5).Select(o => o.Tile)]);
         CheckTravelEstimates(estimates, origin, failures);
 
         WorldTileInfo tile = _world.GetWorldTile(origin.tileId, -1);
@@ -58,12 +59,12 @@ internal sealed partial class MapWorldTests
     {
         if (!expected.TryGetValue(info.Id, out WorldObject obj))
         {
-            failures.Add($"[{info.Id}] {info.Label} is not a vanilla world object of this layer");
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"[{info.Id}] {info.Label} is not a vanilla world object of this layer"));
             return;
         }
-        if (info.Tile != obj.Tile.tileId) failures.Add($"{obj.LabelCap}: tile {info.Tile}, vanilla {obj.Tile.tileId}");
+        if (info.Tile != obj.Tile.tileId) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{obj.LabelCap}: tile {info.Tile}, vanilla {obj.Tile.tileId}"));
         float distance = Find.WorldGrid.ApproxDistanceInTiles(origin, obj.Tile);
-        if (Math.Abs(info.DistanceTiles - distance) > 0.01f) failures.Add($"{obj.LabelCap}: distance {info.DistanceTiles}, vanilla {distance}");
+        if (Math.Abs(info.DistanceTiles - distance) > 0.01f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{obj.LabelCap}: distance {info.DistanceTiles}, vanilla {distance}"));
         bool hostile = obj.Faction != null && obj.Faction != Faction.OfPlayer && obj.Faction.HostileTo(Faction.OfPlayer);
         if (info.Hostile != hostile) failures.Add($"{obj.LabelCap}: hostile {info.Hostile}, vanilla {hostile}");
         CheckSettlement(obj, info, failures);
@@ -85,7 +86,7 @@ internal sealed partial class MapWorldTests
     private static void CheckMissingObjects(Dictionary<int, WorldObject> expected, WorldSurveyInfo survey, List<string> failures)
     {
         foreach (WorldObject obj in expected.Values.Where(o => survey.Objects.All(i => i.Id != o.ID)))
-            failures.Add($"{obj.LabelCap} [{obj.ID}] is missing from the survey");
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"{obj.LabelCap} [{obj.ID}] is missing from the survey"));
     }
 
     /// <summary>自家殖民地是否出現在調查清單中。</summary>
@@ -102,8 +103,8 @@ internal sealed partial class MapWorldTests
         {
             PlanetTile to = new(e.Tile, origin.Layer);
             bool reachable = Find.WorldReachability.CanReach(origin, to);
-            if (e.Reachable != reachable) failures.Add($"tile {e.Tile}: reachable {e.Reachable}, vanilla {reachable}");
-            if (e.Reachable && to != origin && e.Ticks <= 0) failures.Add($"tile {e.Tile}: reachable but no travel time");
+            if (e.Reachable != reachable) failures.Add(string.Create(CultureInfo.InvariantCulture, $"tile {e.Tile}: reachable {e.Reachable}, vanilla {reachable}"));
+            if (e.Reachable && to != origin && e.Ticks <= 0) failures.Add(string.Create(CultureInfo.InvariantCulture, $"tile {e.Tile}: reachable but no travel time"));
         }
     }
 
@@ -113,7 +114,7 @@ internal sealed partial class MapWorldTests
         if (!string.IsNullOrEmpty(tile.Error)) failures.Add("home tile: " + tile.Error);
         if (tile.Biome != vanillaTile.PrimaryBiome.LabelCap) failures.Add($"biome {tile.Biome}, vanilla {vanillaTile.PrimaryBiome.LabelCap}");
         if (tile.Hilliness != vanillaTile.hilliness.GetLabelCap()) failures.Add($"hilliness {tile.Hilliness}, vanilla {vanillaTile.hilliness.GetLabelCap()}");
-        if (Math.Abs(tile.TemperatureC - vanillaTile.temperature) > 0.01f) failures.Add($"temperature {tile.TemperatureC}, vanilla {vanillaTile.temperature}");
+        if (Math.Abs(tile.TemperatureC - vanillaTile.temperature) > 0.01f) failures.Add(string.Create(CultureInfo.InvariantCulture, $"temperature {tile.TemperatureC}, vanilla {vanillaTile.temperature}"));
         if (tile.CanSettle || string.IsNullOrEmpty(tile.SettleBlockedReason)) failures.Add("the home tile claims a colony could be founded there, or gives no reason");
         if (!tile.Objects.Any(o => o.Kind == WorldObjectInfo.PlayerSettlementKind)) failures.Add("the home settlement is not on its own tile");
         if (string.IsNullOrEmpty(_world.GetWorldTile(int.MaxValue, -1).Error)) failures.Add("a tile id outside the world was accepted");

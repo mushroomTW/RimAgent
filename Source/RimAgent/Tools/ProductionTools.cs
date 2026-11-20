@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -50,7 +51,7 @@ public sealed class ProductionTools
         if (tables.Count == 0) return "There are no work tables in the colony.";
 
         var sb = new StringBuilder();
-        sb.Append(tables.Count == 1 ? "1 work table:" : tables.Count + " work tables:").AppendLine();
+        sb.Append(tables.Count == 1 ? "1 work table:" : tables.Count.ToString(CultureInfo.InvariantCulture) + " work tables:").AppendLine();
         foreach (WorkTableInfo t in tables)
         {
             sb.Append('[').Append(t.Id).Append("] ").Append(t.Label);
@@ -81,10 +82,10 @@ public sealed class ProductionTools
         if (!target.Success) return target.Error;
 
         Result<DefInfo> def = DefResolver.Resolve(recipe, _world.GetTableRecipes(target.Value.Id), "bill recipe");
-        if (!def.Success) return def.Error + $" Only the recipes of {target.Value.Label} [{target.Value.Id}] were searched.";
-        if (count < 1) return ToolText.Error($"count must be at least 1, not {count}.");
+        if (!def.Success) return def.Error + string.Create(CultureInfo.InvariantCulture, $" Only the recipes of {target.Value.Label} [{target.Value.Id}] were searched.");
+        if (count < 1) return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"count must be at least 1, not {count}."));
 
-        string blocked = ToolText.Blocked(_gate, $"would add bill {def.Value.Label} x{count} on {target.Value.Label} [{target.Value.Id}].");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would add bill {def.Value.Label} x{count} on {target.Value.Label} [{target.Value.Id}]."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.AddBill(target.Value.Id, def.Value.DefName, count);
@@ -101,7 +102,7 @@ public sealed class ProductionTools
     {
         Result<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());
         if (!target.Success) return target.Error;
-        if (bill < 1) return ToolText.Error($"bill number must be at least 1, not {bill}.");
+        if (bill < 1) return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"bill number must be at least 1, not {bill}."));
 
         string expected = (expectedLabel ?? string.Empty).Trim();
         if (expected.Length > 0)
@@ -110,12 +111,12 @@ public sealed class ProductionTools
             BillInfo atNumber = current.FirstOrDefault(b => b.Index == bill);
             if (atNumber != null && !atNumber.Label.Contains(expected, StringComparison.OrdinalIgnoreCase))
             {
-                string now = string.Join(", ", current.Select(b => $"[{b.Index}] {b.Label}"));
-                return ToolText.Error($"bill [{bill}] is now \"{atNumber.Label}\", not \"{expected}\"; numbers shift after each delete. Current bills: {now}.");
+                string now = string.Join(", ", current.Select(b => string.Create(CultureInfo.InvariantCulture, $"[{b.Index}] {b.Label}")));
+                return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"bill [{bill}] is now \"{atNumber.Label}\", not \"{expected}\"; numbers shift after each delete. Current bills: {now}."));
             }
         }
 
-        string blocked = ToolText.Blocked(_gate, $"would delete bill [{bill}] from {target.Value.Label} [{target.Value.Id}].");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would delete bill [{bill}] from {target.Value.Label} [{target.Value.Id}]."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.DeleteBill(target.Value.Id, bill);
@@ -131,7 +132,7 @@ public sealed class ProductionTools
             tables,
             t => t.Id,
             t => [t.Label],
-            t => $"[{t.Id}] {t.Label}",
+            t => string.Create(CultureInfo.InvariantCulture, $"[{t.Id}] {t.Label}"),
             "work table",
             "Error: work table is empty. Give an id from list_bills.");
     }

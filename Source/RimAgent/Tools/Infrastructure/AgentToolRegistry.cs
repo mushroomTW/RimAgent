@@ -32,7 +32,7 @@ public sealed class ToolPermissions
     {
         var permissions = new ToolPermissions();
         if (enabled == null) return permissions;
-        foreach (ToolCategory category in enabled) permissions.Set(category, true);
+        foreach (ToolCategory category in enabled) permissions.Set(category, value: true);
         return permissions;
     }
 
@@ -70,12 +70,12 @@ public sealed class AgentToolRegistry
     private readonly PlayerInterjections _interjections;
     private readonly AgentActivityTracker _activity;
 
-    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, null, null)
+    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, undo: null, gate: null)
     {
     }
 
     public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo)
-        : this(world, transcript, undo, null)
+        : this(world, transcript, undo, gate: null)
     {
     }
 
@@ -111,7 +111,7 @@ public sealed class AgentToolRegistry
         Register(new ProductionTools(world, gate), transcript);
         Register(new TimeTools(world, gate, interjections, transcript), transcript);
         Register(new SaveTools(world, gate), transcript);
-        Register(new McpTools(mcp ?? new Mcp.McpManager(null), gate), transcript);
+        Register(new McpTools(mcp ?? new Mcp.McpManager(configPath: null), gate), transcript);
         Register(new WebSearchTools(useLocalSearch: useLocalSearch, searxngUrl: searxngUrl, gate: gate), transcript);
         foreach (AIFunction function in MemoryTools.Create(memory ?? new AgentMemoryStore(), gate))
             Add(function, ToolCategory.Memory, MemoryTools.RiskOf(function.Name), transcript);
@@ -129,11 +129,11 @@ public sealed class AgentToolRegistry
     private IReadOnlyList<AgentToolDescriptor> _descriptors;
 
     /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
-    public IReadOnlyList<AITool> All => _allTools ?? (_allTools = _tools.Select(t => t.Tool).ToList());
+    public IReadOnlyList<AITool> All => _allTools ?? (_allTools = [.. _tools.Select(t => t.Tool)]);
 
     /// <summary>全部工具的名稱、類別與風險，依登錄順序（供測試與診斷）。</summary>
     public IReadOnlyList<AgentToolDescriptor> Descriptors =>
-        _descriptors ?? (_descriptors = _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk)).ToList());
+        _descriptors ?? (_descriptors = [.. _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk))]);
 
     /// <summary>依權限挑選完整工具清單；模式只管怎麼執行，不影響清單。</summary>
     public IList<AITool> Select(ToolPermissions permissions)
@@ -169,7 +169,7 @@ public sealed class AgentToolRegistry
             }
             result.Advertised.Add(t.Tool);
         }
-        result.Packs = ToolPacks.All.Where(p => result.PackTools.ContainsKey(p.Id)).ToList();
+        result.Packs = [.. ToolPacks.All.Where(p => result.PackTools.ContainsKey(p.Id))];
         return result;
     }
 
@@ -266,7 +266,7 @@ public sealed class AgentToolRegistry
             // 說明交給 AIFunctionFactory 從 [Description] 讀取（description 傳 null）；
             // 建造工具在房型開關關掉時另給一段不提 layout 的說明。
             string description = (target as BuildTools)?.DescriptionOverride(attribute.Name);
-            AIFunction function = AIFunctionFactory.Create(method, target, attribute.Name, description, null);
+            AIFunction function = AIFunctionFactory.Create(method, target, attribute.Name, description, serializerOptions: null);
             Add(function, attribute.Category, attribute.Risk, transcript);
         }
     }

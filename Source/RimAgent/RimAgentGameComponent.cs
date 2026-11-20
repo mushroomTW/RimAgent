@@ -1,7 +1,8 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -175,7 +176,7 @@ public partial class RimAgentGameComponent : GameComponent
 
     private static void GoToMainMenuPrefix()
     {
-        Interlocked.Exchange(ref _live, null)?.Teardown();
+        Interlocked.Exchange(ref _live, value: null)?.Teardown();
     }
 
     /// <summary>
@@ -282,50 +283,12 @@ public partial class RimAgentGameComponent : GameComponent
     public override void ExposeData()
     {
         base.ExposeData();
-        List<TranscriptEntryData> data = Scribe.mode == LoadSaveMode.Saving && _session != null
-            ? TranscriptEntryData.FromTranscript(_session.Transcript) : _loadedTranscript;
-        Scribe_Collections.Look(ref data, "transcript", LookMode.Deep);
-        // Scribe_Collections 只在 LoadingVars 階段填 list（PostLoadInit 對 Deep 清單什麼都不做），要在這裡接住。
-        if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedTranscript = data;
-
-        List<UndoFrame> undoFrames = Scribe.mode == LoadSaveMode.Saving && _session != null
-            ? _session.Undo.Snapshot() : _loadedUndoFrames;
-        Scribe_Collections.Look(ref undoFrames, "undoFrames", LookMode.Deep);
-        if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedUndoFrames = undoFrames;
-
-        string agentSession = Scribe.mode == LoadSaveMode.Saving && _session != null
-            ? _session.SerializeForSave() : _loadedAgentSession;
-        Scribe_Values.Look(ref agentSession, "agentSession");
-        if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedAgentSession = agentSession;
+        ExposeSessionData();
 
         Scribe_Collections.Look(ref _goals, "goals", LookMode.Value);
         if (_goals == null) _goals = [];
-        List<AgentMemoryEntry> memories = Scribe.mode == LoadSaveMode.Saving
-            ? _saveMemory.Snapshot() : null;
-        memories?.AddRange(_pendingGlobalMigration);
-        Scribe_Collections.Look(ref memories, "agentMemories", LookMode.Deep);
-        if (Scribe.mode == LoadSaveMode.LoadingVars)
-        {
-            // 舊存檔可能把全域記憶存在存檔裡：先挑出來交還全域記憶，存檔才真的只留局內記憶。
-            List<AgentMemoryEntry> migrated = MemoryScopes.TakeGlobalEntries(memories);
-            _saveMemory = new AgentMemoryStore(memories);
-            int dropped = _saveMemory.DroppedOnLoad;
-            ResetMemory();
-            _pendingGlobalMigration = migrated;
-            if (migrated.Count > 0) dropped += MergeIntoGlobalMemory(migrated);
-            if (dropped > 0)
-                Log.Warning("RimAgent discarded " + dropped + " saved memory file(s) that exceed the current limits.");
-        }
-        Scribe_Values.Look(ref _goalPaused, "goalPaused", false);
-        Scribe_Values.Look(ref _goalTurns, "goalTurns", 0);
-        Scribe_Values.Look(ref _goalBlockedTurns, "goalBlockedTurns", 0);
-        Scribe_Values.Look(ref _goalIdleTurns, "goalIdleTurns", 0);
-        Scribe_Values.Look(ref _goalNeedsVerification, "goalNeedsVerification", false);
-        Scribe_Values.Look(ref _goalAuditNote, "goalAuditNote");
-        Scribe_Values.Look(ref _goalBlockerKey, "goalBlockerKey");
-        Scribe_Values.Look(ref _goalLastProgress, "goalLastProgress");
-        Scribe_Values.Look(ref _lastCompletedGoal, "lastCompletedGoal");
-        Scribe_Values.Look(ref _goalPauseReason, "goalPauseReason", GoalPauseReason.None);
+        ExposeMemories();
+        ExposeGoalState();
         string colonyId = Scribe.mode == LoadSaveMode.Saving ? ColonyId : _colonyId;
         Scribe_Values.Look(ref colonyId, SaveFileScanner.ColonyIdNode);
         if (Scribe.mode == LoadSaveMode.LoadingVars) _colonyId = colonyId;
@@ -343,6 +306,62 @@ public partial class RimAgentGameComponent : GameComponent
             // 存檔時順手關掉閒置的 MCP server，不阻塞。
             _mcp.SweepIdle();
         }
+    }
+
+    /// <summary>對話紀錄、復原堆疊與代理會話；存檔時取自目前會話，讀檔時先暫存，等會話建立後再套用。</summary>
+    private void ExposeSessionData()
+    {
+        List<TranscriptEntryData> data = Scribe.mode == LoadSaveMode.Saving && _session != null
+            ? TranscriptEntryData.FromTranscript(_session.Transcript) : _loadedTranscript;
+        Scribe_Collections.Look(ref data, "transcript", LookMode.Deep);
+        // Scribe_Collections 只在 LoadingVars 階段填 list（PostLoadInit 對 Deep 清單什麼都不做），要在這裡接住。
+        if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedTranscript = data;
+
+        List<UndoFrame> undoFrames = Scribe.mode == LoadSaveMode.Saving && _session != null
+            ? _session.Undo.Snapshot() : _loadedUndoFrames;
+        Scribe_Collections.Look(ref undoFrames, "undoFrames", LookMode.Deep);
+        if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedUndoFrames = undoFrames;
+
+        string agentSession = Scribe.mode == LoadSaveMode.Saving && _session != null
+            ? _session.SerializeForSave() : _loadedAgentSession;
+        Scribe_Values.Look(ref agentSession, "agentSession");
+        if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedAgentSession = agentSession;
+    }
+
+    /// <summary>局內記憶；讀到舊存檔裡的全域記憶時移回全域記憶檔。</summary>
+    private void ExposeMemories()
+    {
+        List<AgentMemoryEntry> memories = Scribe.mode == LoadSaveMode.Saving
+            ? _saveMemory.Snapshot() : null;
+        memories?.AddRange(_pendingGlobalMigration);
+        Scribe_Collections.Look(ref memories, "agentMemories", LookMode.Deep);
+        if (Scribe.mode == LoadSaveMode.LoadingVars)
+        {
+            // 舊存檔可能把全域記憶存在存檔裡：先挑出來交還全域記憶，存檔才真的只留局內記憶。
+            List<AgentMemoryEntry> migrated = MemoryScopes.TakeGlobalEntries(memories);
+            _saveMemory = new AgentMemoryStore(memories);
+            int dropped = _saveMemory.DroppedOnLoad;
+            ResetMemory();
+            _pendingGlobalMigration = migrated;
+            if (migrated.Count > 0) dropped += MergeIntoGlobalMemory(migrated);
+            if (dropped > 0)
+                Log.Warning("RimAgent discarded " + dropped.ToString(CultureInfo.InvariantCulture) + " saved memory file(s) that exceed the current limits.");
+        }
+    }
+
+    /// <summary>目標進度與暫停狀態。</summary>
+    private void ExposeGoalState()
+    {
+        Scribe_Values.Look(ref _goalPaused, "goalPaused", defaultValue: false);
+        Scribe_Values.Look(ref _goalTurns, "goalTurns", 0);
+        Scribe_Values.Look(ref _goalBlockedTurns, "goalBlockedTurns", 0);
+        Scribe_Values.Look(ref _goalIdleTurns, "goalIdleTurns", 0);
+        Scribe_Values.Look(ref _goalNeedsVerification, "goalNeedsVerification", defaultValue: false);
+        Scribe_Values.Look(ref _goalAuditNote, "goalAuditNote");
+        Scribe_Values.Look(ref _goalBlockerKey, "goalBlockerKey");
+        Scribe_Values.Look(ref _goalLastProgress, "goalLastProgress");
+        Scribe_Values.Look(ref _lastCompletedGoal, "lastCompletedGoal");
+        Scribe_Values.Look(ref _goalPauseReason, "goalPauseReason", GoalPauseReason.None);
     }
     #pragma warning restore S3776
 

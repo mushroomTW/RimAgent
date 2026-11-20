@@ -62,7 +62,7 @@ public class AgentMemoryStore : AgentFileStore
     {
         if (dropped.Count == 0 || !_files.TryGetValue(IndexFileName, out string index)) return;
 
-        _files[IndexFileName] = string.Join("\n", index.Split('\n')
+        _files[IndexFileName] = string.Join('\n', index.Split('\n')
             .Where(line => !dropped.Any(name => line.Contains("**" + name + "**", StringComparison.OrdinalIgnoreCase))));
     }
 
@@ -88,10 +88,9 @@ public class AgentMemoryStore : AgentFileStore
     {
         lock (_gate)
         {
-            return _files.Keys.Where(IsUserFile)
-                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .Select(name => new MemoryFileInfo(name, DescriptionOf(name)))
-                .ToList();
+            return [.. _files.Keys.Where(IsUserFile)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .Select(name => new MemoryFileInfo(name, DescriptionOf(name)))];
         }
     }
 
@@ -139,7 +138,7 @@ public class AgentMemoryStore : AgentFileStore
 
     private static string OneLine(string text)
     {
-        string line = string.Join(" ", (text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
+        string line = string.Join(' ', (text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
         return line.Length > MaxDescriptionChars ? line[..MaxDescriptionChars] + "..." : line;
     }
 

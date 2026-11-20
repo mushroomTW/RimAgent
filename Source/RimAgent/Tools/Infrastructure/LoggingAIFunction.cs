@@ -110,32 +110,8 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            object result;
-            if (_gate != null && RequiresExplicitConfirmation)
-            {
-                result = await InvokeExplicitConfirmationAsync(arguments, cancellationToken);
-            }
-            else if (_gate != null && _classifier != null && _gate.NeedsClassification(_risk))
-            {
-                result = await InvokeClassifiedAsync(arguments, entry, cancellationToken);
-            }
-            else
-            {
-                result = await base.InvokeCoreAsync(arguments, cancellationToken);
-            }
-            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), store: Outputs);
-            entry.Result = text;
-            entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
-            bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
-            // 失敗的呼叫記下來擋掉同句的原樣重送；成功命令後可重新嘗試。
-            if (_risk != ToolRisk.Query && entry.Failed && entry.RiskCheck != "unavailable") _gate?.StoreFailedCall(Name, callKey, text);
-            else if (_risk != ToolRisk.Query && !isPreview) _gate?.ClearFailedCalls();
-            if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
-            {
-                // 此閉包保留本次工具呼叫的引數，確認時不會再讓模型選工具或改參數。
-                _gate?.RegisterPendingApproval(Name, token => ExecuteApprovedAsync(arguments, entry, token));
-            }
-            return text;
+            object result = await InvokeThroughGateAsync(arguments, entry, cancellationToken);
+            return RecordResult(result, arguments, entry, callKey);
         }
         catch (Exception ex)
         {
@@ -151,6 +127,40 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             _gate?.EndInvocation();
             _transcript.Add(entry);
         }
+    }
+
+    /// <summary>依閘門與模式決定執行方式：MCP 先要明確確認、自動模式先分類，其餘直接執行。</summary>
+    private ValueTask<object> InvokeThroughGateAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
+    {
+        if (_gate != null && RequiresExplicitConfirmation)
+        {
+            return new ValueTask<object>(InvokeExplicitConfirmationAsync(arguments, cancellationToken));
+        }
+        if (_gate != null && _classifier != null && _gate.NeedsClassification(_risk))
+        {
+            return new ValueTask<object>(InvokeClassifiedAsync(arguments, entry, cancellationToken));
+        }
+        return base.InvokeCoreAsync(arguments, cancellationToken);
+    }
+
+    /// <summary>
+    /// 把工具結果寫進紀錄：失敗的呼叫記下來擋掉同句的原樣重送，成功命令後可重新嘗試；
+    /// 等待確認的預覽則登記核准後要執行的動作。
+    /// </summary>
+    private string RecordResult(object result, AIFunctionArguments arguments, TranscriptEntry entry, string callKey)
+    {
+        string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), store: Outputs);
+        entry.Result = text;
+        entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
+        bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
+        if (_risk != ToolRisk.Query && entry.Failed && entry.RiskCheck != "unavailable") _gate?.StoreFailedCall(Name, callKey, text);
+        else if (_risk != ToolRisk.Query && !isPreview) _gate?.ClearFailedCalls();
+        if (isPreview)
+        {
+            // 此閉包保留本次工具呼叫的引數，確認時不會再讓模型選工具或改參數。
+            _gate?.RegisterPendingApproval(Name, token => ExecuteApprovedAsync(arguments, entry, token));
+        }
+        return text;
     }
 
     private bool TryHandlePreInvocation(TranscriptEntry entry, string callKey, out string earlyResult)
@@ -199,7 +209,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         if (notReady != null)
         {
             string error = ToolText.Error($"the game cannot run tools right now ({notReady}). Tell the player and stop.");
-            _transcript.UpdateToolResult(entry, error, true);
+            _transcript.UpdateToolResult(entry, error, failed: true);
             return error;
         }
 
@@ -218,7 +228,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         }
         catch (Exception ex)
         {
-            _transcript.UpdateToolResult(entry, AppendGameErrors(ex.GetType().Name + ": " + ex.Message), true);
+            _transcript.UpdateToolResult(entry, AppendGameErrors(ex.GetType().Name + ": " + ex.Message), failed: true);
             throw;
         }
         finally
@@ -262,17 +272,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
                 "this tool is on the high-risk blacklist and never runs in Auto mode. " +
                 "Do not retry it unchanged.");
         }
-        object previewResult;
-        _gate.ForcePreview();
-        try
-        {
-            previewResult = await base.InvokeCoreAsync(arguments, cancellationToken);
-        }
-        finally
-        {
-            _gate.ClearForce();
-        }
-
+        object previewResult = await InvokePreviewAsync(arguments, cancellationToken);
         string preview = previewResult?.ToString() ?? string.Empty;
         // 沒走到閘門（參數錯、目標不存在）就沒有可判定的命令，原樣回給模型。
         if (!preview.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) return previewResult;
@@ -289,20 +289,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
                 Preview = ToolOutputLimit.Apply(preview.Substring(ToolText.ConfirmationPrefix.Length))
             }, cancellationToken);
         }
-        string riskCheck;
-        if (verdict.Failed)
-        {
-            riskCheck = "unavailable";
-        }
-        else if (verdict.Risky)
-        {
-            riskCheck = "high";
-        }
-        else
-        {
-            // 低風險但玩家沒要求：擋下的理由跟「危險」不同，紀錄要分得出來。
-            riskCheck = verdict.Authorized ? "low" : "unrequested";
-        }
+        string riskCheck = RiskCheckLabel(verdict);
         entry.RiskCheck = riskCheck;
         entry.RiskCheckSource = string.IsNullOrEmpty(verdict.Source) ? "llm" : verdict.Source;
 
@@ -322,6 +309,28 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         {
             _gate.ClearForce();
         }
+    }
+
+    /// <summary>強制以預覽模式執行工具：只產生確認文字，不碰世界。</summary>
+    private async Task<object> InvokePreviewAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        _gate.ForcePreview();
+        try
+        {
+            return await base.InvokeCoreAsync(arguments, cancellationToken);
+        }
+        finally
+        {
+            _gate.ClearForce();
+        }
+    }
+
+    /// <summary>紀錄用的風險標籤；低風險但玩家沒要求的擋下理由跟「危險」不同，要分得出來。</summary>
+    private static string RiskCheckLabel(RiskVerdict verdict)
+    {
+        if (verdict.Failed) return "unavailable";
+        if (verdict.Risky) return "high";
+        return verdict.Authorized ? "low" : "unrequested";
     }
 
     /// <summary>

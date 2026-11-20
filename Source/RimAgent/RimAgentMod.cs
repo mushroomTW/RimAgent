@@ -133,25 +133,7 @@ public partial class RimAgentMod : Mod
     {
         DrawModelRoles(listing);
 
-        // 主頁關掉決策模型時，這些細節都沒有作用，整段不顯示；
-        // 分流靠決策模型分類，沒有可用的決策模型時細項也不顯示。
-        if (Settings.decisionEnabled)
-        {
-            listing.Gap();
-            listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
-            listing.GapLine();
-        }
-        if (Settings.decisionEnabled && DrawDecisionSettings(listing))
-        {
-            listing.CheckboxLabeled("RimAgent.Settings.DecisionAnswerChoices".Translate(), ref Settings.decisionAnswerChoices,
-                "RimAgent.Settings.DecisionAnswerChoicesTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.DecisionTriageUpkeep".Translate(), ref Settings.decisionTriageUpkeep,
-                "RimAgent.Settings.DecisionTriageUpkeepTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.DecisionPreloadPacks".Translate(), ref Settings.decisionPreloadPacks,
-                "RimAgent.Settings.DecisionPreloadPacksTip".Translate());
-            listing.Gap(6f);
-            DrawDecisionRoutingSettings(listing);
-        }
+        DrawDecisionSection(listing);
 
         listing.Gap();
         listing.Label("RimAgent.Settings.CompactionHeader".Translate());
@@ -184,6 +166,36 @@ public partial class RimAgentMod : Mod
             Settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), Settings.searxngUrl ?? string.Empty);
         }
 
+        DrawRunLogSettings(listing);
+    }
+
+    /// <summary>決策模型與分流設定；主頁關掉決策模型時整段不顯示。</summary>
+    private static void DrawDecisionSection(Listing_Standard listing)
+    {
+        // 主頁關掉決策模型時，這些細節都沒有作用，整段不顯示；
+        // 分流靠決策模型分類，沒有可用的決策模型時細項也不顯示。
+        if (Settings.decisionEnabled)
+        {
+            listing.Gap();
+            listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
+            listing.GapLine();
+        }
+        if (Settings.decisionEnabled && DrawDecisionSettings(listing))
+        {
+            listing.CheckboxLabeled("RimAgent.Settings.DecisionAnswerChoices".Translate(), ref Settings.decisionAnswerChoices,
+                "RimAgent.Settings.DecisionAnswerChoicesTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.DecisionTriageUpkeep".Translate(), ref Settings.decisionTriageUpkeep,
+                "RimAgent.Settings.DecisionTriageUpkeepTip".Translate());
+            listing.CheckboxLabeled("RimAgent.Settings.DecisionPreloadPacks".Translate(), ref Settings.decisionPreloadPacks,
+                "RimAgent.Settings.DecisionPreloadPacksTip".Translate());
+            listing.Gap(6f);
+            DrawDecisionRoutingSettings(listing);
+        }
+    }
+
+    /// <summary>執行紀錄開關，開啟時顯示紀錄檔路徑與開啟資料夾按鈕。</summary>
+    private static void DrawRunLogSettings(Listing_Standard listing)
+    {
         listing.Gap();
         listing.Label("RimAgent.Settings.RunLogHeader".Translate());
         listing.GapLine();

@@ -79,7 +79,7 @@ public sealed class ScopedMemoryStore : AgentMemoryStore
         IReadOnlyList<FileStoreEntry> saveScope = await _saveScope.ListChildrenAsync(directory, cancellationToken).ConfigureAwait(false);
         IReadOnlyList<FileStoreEntry> globalScope = await _globalScope.ListChildrenAsync(directory, cancellationToken).ConfigureAwait(false);
         if (globalScope.Count == 0) return saveScope;
-        return saveScope.Concat(globalScope).ToList();
+        return [.. saveScope, .. globalScope];
     }
 
     public override Task<bool> FileExistsAsync(string path, CancellationToken cancellationToken = default)

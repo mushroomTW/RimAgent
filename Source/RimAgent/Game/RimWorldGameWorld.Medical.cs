@@ -15,7 +15,7 @@ internal sealed partial class RimWorldGameWorld
 {
     public IReadOnlyList<ColonistHealthInfo> GetHealth()
     {
-        return Map.mapPawns.FreeColonistsSpawned.Select(ToHealth).ToList();
+        return [.. Map.mapPawns.FreeColonistsSpawned.Select(ToHealth)];
     }
 
     private static ColonistHealthInfo ToHealth(Pawn pawn)
@@ -52,7 +52,7 @@ internal sealed partial class RimWorldGameWorld
         {
             HediffComp_TendDuration tend = (hediff as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>();
             tended = tend != null && tend.IsTended;
-            needsTending = !tended && hediff.TendableNow(false);
+            needsTending = !tended && hediff.TendableNow(ignoreTimer: false);
         }
         return new HealthConditionInfo
         {
@@ -83,7 +83,7 @@ internal sealed partial class RimWorldGameWorld
         }
         try
         {
-            needsTending = hediff.TendableNow(false);
+            needsTending = hediff.TendableNow(ignoreTimer: false);
         }
         catch (Exception)
         {
@@ -106,9 +106,7 @@ internal sealed partial class RimWorldGameWorld
     }
 
     public IReadOnlyList<DefInfo> MedicalCareLevels =>
-        _medicalCareLevels ?? (_medicalCareLevels = Enum.GetValues<MedicalCareCategory>()
-            .Select(c => new DefInfo(c.ToString(), MedicalCareUtility.GetLabel(c)))
-            .ToList());
+        _medicalCareLevels ?? (_medicalCareLevels = [.. Enum.GetValues<MedicalCareCategory>().Select(c => new DefInfo(c.ToString(), MedicalCareUtility.GetLabel(c)))]);
 
     public CommandResult SetMedicalCare(int pawnId, string careDefName)
     {
@@ -118,7 +116,7 @@ internal sealed partial class RimWorldGameWorld
         object parsed;
         try
         {
-            parsed = Enum.Parse<MedicalCareCategory>(careDefName, true);
+            parsed = Enum.Parse<MedicalCareCategory>(careDefName, ignoreCase: true);
         }
         catch (ArgumentException)
         {
@@ -130,10 +128,9 @@ internal sealed partial class RimWorldGameWorld
     }
 
     public IReadOnlyList<DefInfo> SurgeryRecipes =>
-        _surgeryRecipes ?? (_surgeryRecipes = DefDatabase<RecipeDef>.AllDefsListForReading
+        _surgeryRecipes ?? (_surgeryRecipes = [.. DefDatabase<RecipeDef>.AllDefsListForReading
             .Where(r => r.workerClass != null && typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass))
-            .Select(r => new DefInfo(r.defName, r.label))
-            .ToList());
+            .Select(r => new DefInfo(r.defName, r.label))]);
 
     public CommandResult ScheduleSurgery(SurgeryRequest request)
     {
@@ -151,7 +148,7 @@ internal sealed partial class RimWorldGameWorld
         if (pawn.BillStack.Bills.OfType<Bill_Medical>().Any(b => b.recipe == recipe && b.Part == part))
             return CommandResult.Fail($"{recipe.label} is already scheduled on {pawn.LabelShort}");
         // 與原版 HealthCardUtility.CreateSurgeryBill 一致（含知識進度與 Part 指派）；不送訊息，避免彈出「無人具備技能」對話框卡住流程，警告改寫進結果。
-        HealthCardUtility.CreateSurgeryBill(pawn, recipe, part, null, sendMessages: false);
+        HealthCardUtility.CreateSurgeryBill(pawn, recipe, part, uniqueIngredients: null, sendMessages: false);
         string detail = $"Scheduled {recipe.label} on {pawn.LabelShort}";
         if (part != null) detail += $" ({part.LabelCap})";
         detail += ".";

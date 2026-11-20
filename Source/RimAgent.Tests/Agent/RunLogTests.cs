@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,19 +23,19 @@ public class RunLogTests
             var writer = new RunLogWriter(folder);
             for (int i = 0; i < RunLogWriter.MaxRuns + 3; i++)
             {
-                writer.Append(new RunLogRecord { Instruction = "run-" + i });
+                writer.Append(new RunLogRecord { Instruction = "run-" + i.ToString(CultureInfo.InvariantCulture) });
             }
 
             // 第 501 筆觸發裁切：一次裁到 TrimToRuns 筆（含新的那筆），之後兩筆只附加。
             string[] lines = File.ReadAllLines(writer.FilePath);
             Assert.That(lines, Has.Length.EqualTo(RunLogWriter.TrimToRuns + 2));
-            Assert.That(lines[0], Does.Contain("\"run-" + (RunLogWriter.MaxRuns + 1 - RunLogWriter.TrimToRuns) + "\""));
-            Assert.That(lines.Last(), Does.Contain("run-502"));
+            Assert.That(lines[0], Does.Contain("\"run-" + (RunLogWriter.MaxRuns + 1 - RunLogWriter.TrimToRuns).ToString(CultureInfo.InvariantCulture) + "\""));
+            Assert.That(lines[^1], Does.Contain("run-502"));
             Assert.That(new FileInfo(writer.FilePath).Length, Is.LessThanOrEqualTo(RunLogWriter.MaxFileBytes));
         }
         finally
         {
-            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
         }
     }
 
@@ -56,9 +57,9 @@ public class RunLogTests
 
         Assert.That(captured, Is.Not.Null);
         Assert.That(captured.ModelSteps, Has.Count.EqualTo(2));
-        Assert.That(captured.ModelSteps.Last().InputTokens, Is.EqualTo(1234));
-        Assert.That(captured.TranscriptSteps.Any(e => e.Kind == "Tool" && e.Tool == "set_work_priorities"
-            && e.Result.Contains("priority")), Is.True);
+        Assert.That(captured.ModelSteps[^1].InputTokens, Is.EqualTo(1234));
+        Assert.That(captured.TranscriptSteps.Exists(e => e.Kind == "Tool" && e.Tool == "set_work_priorities"
+            && e.Result.Contains("priority", StringComparison.Ordinal)), Is.True);
     }
 
     [Test]
@@ -71,7 +72,7 @@ public class RunLogTests
         session.RunLogSink = records.Add;
         var info = new AutonomousRunInfo
         {
-            Trigger = AutonomousTrigger.BedShortage.ToString(),
+            Trigger = nameof(AutonomousTrigger.BedShortage),
             Attempt = 2,
             GameTick = 12345,
             Signals = new AutonomousSignals { ColonistCount = 3, BedlessCount = 2 }
@@ -98,18 +99,18 @@ public class RunLogTests
         var entries = new List<TranscriptEntry>();
         for (int i = 0; i < 50; i++)
         {
-            entries.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "t" + i, InstructionId = 7 });
+            entries.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "t" + i.ToString(CultureInfo.InvariantCulture), InstructionId = 7 });
             record.AddModelResponse(new Microsoft.Extensions.AI.ChatResponse(
-                new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.Assistant, "step " + i)));
+                new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.Assistant, "step " + i.ToString(CultureInfo.InvariantCulture))));
         }
         entries.Add(new TranscriptEntry { Kind = TranscriptKind.Assistant, Text = "final", InstructionId = 7 });
 
         record.CaptureTranscript(entries, 7);
 
-        Assert.That(record.TranscriptSteps.Last().Text, Is.EqualTo("final"), "結尾的回覆不能被截掉");
+        Assert.That(record.TranscriptSteps[^1].Text, Is.EqualTo("final"), "結尾的回覆不能被截掉");
         Assert.That(record.TranscriptSteps, Has.Count.EqualTo(40));
         Assert.That(record.OmittedTranscriptSteps, Is.EqualTo(11));
-        Assert.That(record.ModelSteps.Last().Text, Is.EqualTo("step 49"));
+        Assert.That(record.ModelSteps[^1].Text, Is.EqualTo("step 49"));
         Assert.That(record.OmittedModelSteps, Is.EqualTo(34));
     }
 
@@ -131,8 +132,8 @@ public class RunLogTests
         Assert.That(record.ToolCalls, Is.EqualTo(46));
         Assert.That(record.ToolFailures, Is.EqualTo(5));
         Assert.That(record.ToolCancellations, Is.EqualTo(1));
-        Assert.That(record.TranscriptSteps.Last().Cancelled, Is.True);
-        Assert.That(record.TranscriptSteps.First().DurationMs, Is.EqualTo(12));
+        Assert.That(record.TranscriptSteps[^1].Cancelled, Is.True);
+        Assert.That(record.TranscriptSteps[0].DurationMs, Is.EqualTo(12));
     }
 
     [Test]
@@ -153,7 +154,7 @@ public class RunLogTests
         }
         finally
         {
-            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
         }
     }
 
@@ -184,7 +185,7 @@ public class RunLogTests
         Assert.That(reply, Is.EqualTo("ok"));
         Assert.That(session.IsBusy, Is.False);
         Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice
-            && e.Text.Contains("Run log could not be written")), Is.True);
+            && e.Text.Contains("Run log could not be written", StringComparison.Ordinal)), Is.True);
     }
 
     [Test]
@@ -207,7 +208,7 @@ public class RunLogTests
         Assert.That(records, Has.Count.EqualTo(2));
         Assert.That(records[0].Outcome, Is.EqualTo("finished"));
         Assert.That(records[1].Outcome, Is.EqualTo("confirmed"));
-        Assert.That(records[1].TranscriptSteps.Any(e => e.Kind == "Tool"
+        Assert.That(records[1].TranscriptSteps.Exists(e => e.Kind == "Tool"
             && !e.Result.StartsWith(ToolText.ConfirmationPrefix)), Is.True);
     }
 

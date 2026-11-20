@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -166,7 +167,7 @@ public abstract class EndgameExperimentBase : GameComponent
                 ["result"] = e.Result,
                 ["failed"] = e.Failed
             }));
-            File.WriteAllLines(Path.ChangeExtension(_timelinePath, null) + "-transcript.jsonl", lines, new UTF8Encoding(false));
+            File.WriteAllLines(Path.ChangeExtension(_timelinePath, extension: null) + "-transcript.jsonl", lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
         catch (Exception ex)
         {
@@ -179,7 +180,7 @@ public abstract class EndgameExperimentBase : GameComponent
         try
         {
             line["realSeconds"] = Time.realtimeSinceStartup - StartRealtime;
-            File.AppendAllText(_timelinePath, JsonSerializer.Serialize(line) + "\n", new UTF8Encoding(false));
+            File.AppendAllText(_timelinePath, JsonSerializer.Serialize(line) + "\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
         catch (Exception ex)
         {
@@ -222,7 +223,7 @@ public sealed class RaidDefenseExperimentComponent : EndgameExperimentBase
         int cleared = ClearHostiles(map);
         _colonists = [.. map.mapPawns.FreeColonistsSpawned];
         if (!EnableAgent(!_baseline)) return false;
-        Note($"start: baseline={_baseline}, colonists={_colonists.Count}, cleared {cleared} hostiles");
+        Note(string.Create(CultureInfo.InvariantCulture, $"start: baseline={_baseline}, colonists={_colonists.Count}, cleared {cleared} hostiles"));
         return true;
     }
 
@@ -279,7 +280,7 @@ public sealed class RaidDefenseExperimentComponent : EndgameExperimentBase
         _raidTick = tick;
         // 死掉的 pawn 會離開 mapPawns，開打時就記下這批襲擊者。
         _raiders = [.. map.mapPawns.AllPawnsSpawned.Where(p => p.HostileTo(Faction.OfPlayer) && !p.IsPrisonerOfColony)];
-        Note($"raid fired={fired}, faction={enemy?.Name}, points={RaidPoints}");
+        Note(string.Create(CultureInfo.InvariantCulture, $"raid fired={fired}, faction={enemy?.Name}, points={RaidPoints}"));
     }
 
     private static int ActiveHostiles(Map map) =>
@@ -335,7 +336,7 @@ public sealed class ShipLayoutExperimentComponent : EndgameExperimentBase
         int stacks = SpawnMaterials(map, out IntVec3 near);
         if (!EnableAgent(autonomous: true)) return false;
         bool added = RimAgentGameComponent.Instance.AddGoal(string.Format(Goal, near.x, near.z));
-        Note($"start: researched {researched}, spawned {stacks} stacks, goal added={added}, cleared {cleared} hostiles");
+        Note(string.Create(CultureInfo.InvariantCulture, $"start: researched {researched}, spawned {stacks} stacks, goal added={added}, cleared {cleared} hostiles"));
         return added;
     }
 

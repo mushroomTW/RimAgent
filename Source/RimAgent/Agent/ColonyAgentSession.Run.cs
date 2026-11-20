@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -105,7 +106,7 @@ public sealed partial class ColonyAgentSession
         }
         finally
         {
-            _images.SetPlayerImages(null);
+            _images.SetPlayerImages(images: null);
         }
     }
 
@@ -161,7 +162,7 @@ public sealed partial class ColonyAgentSession
         Transcript.Add(new TranscriptEntry
         {
             Kind = TranscriptKind.Notice,
-            Text = dropped + " message(s) sent while RimAgent was working were not delivered because " + reason + ".",
+            Text = dropped.ToString(CultureInfo.InvariantCulture) + " message(s) sent while RimAgent was working were not delivered because " + reason + ".",
             InstructionId = Transcript.CurrentInstructionId
         });
     }
@@ -217,26 +218,7 @@ public sealed partial class ColonyAgentSession
             AgentResponse response = await RunWithRetryOnContextTooLongAsync(
                 text, instructionId, options.ReasoningOverride, cancellationToken).ConfigureAwait(false);
 
-            string reply = FinalAssistantText(response);
-            bool hitStepLimit = HitStepLimit(response.Messages, _invoking?.MaximumIterationsPerRequest ?? 0);
-            if (hitStepLimit) reply = StripToolCallMarkup(reply);
-            if (options.GoalRun) runOutcome = "goal_reported_" + GoalProgress.ParseStatus(reply).ToString().ToLowerInvariant();
-            Transcript.Add(new TranscriptEntry
-            {
-                Kind = TranscriptKind.Assistant,
-                Text = options.GoalRun ? GoalProgress.VisibleReply(reply) : reply,
-                InstructionId = instructionId,
-                ToolsStripped = IsToolsStripped(response)
-            });
-            if (hitStepLimit)
-            {
-                Transcript.Add(new TranscriptEntry
-                {
-                    Kind = TranscriptKind.Notice,
-                    Text = "The tool-step budget was reached before all planned actions completed. Ask a follow-up instruction to continue.",
-                    InstructionId = instructionId
-                });
-            }
+            string reply = RecordReply(response, instructionId, options.GoalRun, ref runOutcome);
             Undo.EndFrame(text);
             HandleBlockedConfirmations(text, options.GoalRun, options.DisplayText, instructionId);
             return reply;
@@ -250,9 +232,35 @@ public sealed partial class ColonyAgentSession
             TryWriteRunLog(runLog, instructionId, runOutcome);
             _activeRunLog = null;
             ConfirmGate.EndToolBudget();
-            ApplyRunStepLimit(null);
+            ApplyRunStepLimit(overrideSteps: null);
             PrepareSaveSnapshot();
         }
+    }
+
+    /// <summary>把模型的最終回覆寫進對話紀錄；用完工具步數時另加提示。目標回合同時記下回報的狀態。</summary>
+    private string RecordReply(AgentResponse response, int instructionId, bool goalRun, ref string runOutcome)
+    {
+        string reply = FinalAssistantText(response);
+        bool hitStepLimit = HitStepLimit(response.Messages, _invoking?.MaximumIterationsPerRequest ?? 0);
+        if (hitStepLimit) reply = StripToolCallMarkup(reply);
+        if (goalRun) runOutcome = "goal_reported_" + GoalProgress.ParseStatus(reply).ToString().ToLowerInvariant();
+        Transcript.Add(new TranscriptEntry
+        {
+            Kind = TranscriptKind.Assistant,
+            Text = goalRun ? GoalProgress.VisibleReply(reply) : reply,
+            InstructionId = instructionId,
+            ToolsStripped = IsToolsStripped(response)
+        });
+        if (hitStepLimit)
+        {
+            Transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = "The tool-step budget was reached before all planned actions completed. Ask a follow-up instruction to continue.",
+                InstructionId = instructionId
+            });
+        }
+        return reply;
     }
 
     /// <summary>當 echo 為 true 時，將使用者指令寫入對話記錄。</summary>

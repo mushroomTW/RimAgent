@@ -66,7 +66,7 @@ public class LatexMathTests
     [Test]
     public void NullOrEmptyPassesThrough()
     {
-        Assert.That(LatexMath.ConvertMath(null), Is.Null);
+        Assert.That(LatexMath.ConvertMath(markdown: null), Is.Null);
         Assert.That(LatexMath.ConvertMath(string.Empty), Is.EqualTo(string.Empty));
     }
 

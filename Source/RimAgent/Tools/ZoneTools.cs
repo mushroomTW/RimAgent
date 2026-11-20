@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -30,7 +31,7 @@ public sealed class ZoneTools
         if (zones.Count == 0) return "There are no zones on the map.";
 
         var sb = new StringBuilder();
-        sb.Append(zones.Count == 1 ? "1 zone:" : zones.Count + " zones:").AppendLine();
+        sb.Append(zones.Count == 1 ? "1 zone:" : zones.Count.ToString(CultureInfo.InvariantCulture) + " zones:").AppendLine();
         foreach (ZoneInfo z in zones)
         {
             sb.Append('[').Append(z.Id).Append("] ").Append(z.Label);
@@ -84,7 +85,7 @@ public sealed class ZoneTools
         Result<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
         if (!target.Success) return target.Error;
 
-        string blocked = ToolText.Blocked(_gate, $"would delete zone [{target.Value.Id}] {target.Value.Label} ({target.Value.CellCount} cells).");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would delete zone [{target.Value.Id}] {target.Value.Label} ({target.Value.CellCount} cells)."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.DeleteZone(target.Value.Id);
@@ -114,13 +115,13 @@ public sealed class ZoneTools
         var parts = new List<string>();
         if (allows.Value.Count > 0) parts.Add("allow " + string.Join(", ", allows.Value.Select(d => d.Label)));
         if (disallows.Value.Count > 0) parts.Add("disallow " + string.Join(", ", disallows.Value.Select(d => d.Label)));
-        string blocked = ToolText.Blocked(_gate, $"would change zone [{target.Value.Id}] {target.Value.Label}'s filter: {string.Join("; ", parts)}.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would change zone [{target.Value.Id}] {target.Value.Label}'s filter: {string.Join("; ", parts)}."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetZoneFilter(
             target.Value.Id,
-            allows.Value.Select(d => d.DefName).ToList(),
-            disallows.Value.Select(d => d.DefName).ToList());
+            [.. allows.Value.Select(d => d.DefName)],
+            [.. disallows.Value.Select(d => d.DefName)]);
         if (!result.Success) return ToolText.Error(result.Message);
         return result.Message;
     }
@@ -142,7 +143,7 @@ public sealed class ZoneTools
             if (name.Length == 0) continue;
             Result<DefInfo> def = DefResolver.Resolve(name, _world.StorageFilterables, "stored item");
             if (!def.Success) return Result<List<DefInfo>>.Fail(def.Error);
-            if (!defs.Any(d => string.Equals(d.DefName, def.Value.DefName, StringComparison.OrdinalIgnoreCase)))
+            if (!defs.Exists(d => string.Equals(d.DefName, def.Value.DefName, StringComparison.OrdinalIgnoreCase)))
             {
                 defs.Add(def.Value);
             }
@@ -158,7 +159,7 @@ public sealed class ZoneTools
             zones,
             z => z.Id,
             z => [z.Label],
-            z => $"[{z.Id}] {z.Label}",
+            z => string.Create(CultureInfo.InvariantCulture, $"[{z.Id}] {z.Label}"),
             "zone");
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using RimAgent.Game;
@@ -52,7 +53,7 @@ internal static class ShipLayoutCheck
             Building engineB = Spawn(ThingDefOf.Ship_Engine, ox + 9, oz);
             Building sensor = Spawn(ThingDefOf.Ship_SensorCluster, ox + 8, oz + 4);
             // 休眠艙藍圖貼著核心西側，朝北時站位正好落在核心上。
-            casketBlueprint = GenConstruct.PlaceBlueprintForBuild(ThingDefOf.Ship_CryptosleepCasket, CenterFor(ThingDefOf.Ship_CryptosleepCasket, ox + 2, oz), map, Rot4.North, Faction.OfPlayer, null);
+            casketBlueprint = GenConstruct.PlaceBlueprintForBuild(ThingDefOf.Ship_CryptosleepCasket, CenterFor(ThingDefOf.Ship_CryptosleepCasket, ox + 2, oz), map, Rot4.North, Faction.OfPlayer, stuff: null);
 
             VerifyShipLayoutResult(new ShipLayoutContext
             {
@@ -103,12 +104,12 @@ internal static class ShipLayoutCheck
         List<Building> vanilla = [.. ShipUtility.ShipBuildingsAttachedTo(ctx.Core)];
         foreach (Building part in ctx.Spawned)
         {
-            bool inGroup1 = group1.Contains("#" + part.thingIDNumber + " ");
+            bool inGroup1 = group1.Contains("#" + part.thingIDNumber.ToString(CultureInfo.InvariantCulture) + " ", StringComparison.Ordinal);
             if (inGroup1 != vanilla.Contains(part)) ctx.Failures.Add($"{part.def.defName}: tool says group 1={inGroup1}, vanilla attached={vanilla.Contains(part)}");
         }
         if (!vanilla.Contains(ctx.EngineA) || vanilla.Contains(ctx.EngineB) || vanilla.Contains(ctx.Sensor)) ctx.Failures.Add("test layout is not what it should be");
-        if (!group1.Contains("#" + ctx.CasketBlueprint.thingIDNumber + " ")) ctx.Failures.Add("casket blueprint not connected through its edge: " + group1);
-        if (!text.Contains("Group 2 is not connected")) ctx.Failures.Add("gap not reported: " + text);
+        if (!group1.Contains("#" + ctx.CasketBlueprint.thingIDNumber.ToString(CultureInfo.InvariantCulture) + " ", StringComparison.Ordinal)) ctx.Failures.Add("casket blueprint not connected through its edge: " + group1);
+        if (!text.Contains("Group 2 is not connected", StringComparison.Ordinal)) ctx.Failures.Add("gap not reported: " + text);
 
         IntVec3 entry = ThingUtility.InteractionCellWhenAt(ThingDefOf.Ship_CryptosleepCasket, ctx.CasketBlueprint.Position, ctx.CasketBlueprint.Rotation, ctx.Map);
         int casketId = ctx.CasketBlueprint.thingIDNumber;
@@ -116,7 +117,7 @@ internal static class ShipLayoutCheck
         if (casketInfo?.State != ShipPartState.Blueprint) ctx.Failures.Add("casket blueprint state: " + casketInfo?.State);
         if (casketInfo?.InteractionCell != (entry.x, entry.z)) ctx.Failures.Add($"casket entry: {casketInfo?.InteractionCell} vs {entry}");
         if (!ctx.Core.OccupiedRect().Contains(entry)) ctx.Failures.Add("test layout: casket entry should be on the core, is " + entry);
-        if (!text.Contains("colonists enter from")) ctx.Failures.Add("blocked entry not reported: " + text);
+        if (!text.Contains("colonists enter from", StringComparison.Ordinal)) ctx.Failures.Add("blocked entry not reported: " + text);
 
         IReadOnlyList<string> removed = ctx.World.RemoveBlueprints(new CellRectSpec(ctx.Ox + 2, ctx.Oz, ctx.Ox + 2, ctx.Oz));
         if (removed.Count != 1 || !ctx.CasketBlueprint.Destroyed) ctx.Failures.Add("remove_blueprint: " + string.Join("; ", removed));
@@ -131,7 +132,7 @@ internal static class ShipLayoutCheck
             for (int cz = 1; cz + Height < map.Size.z - 1; cz += 4)
             {
                 var candidate = new CellRect(cx, cz, Width, Height);
-                if (candidate.Cells.All(c => !c.Fogged(map) && c.Standable(map) && c.GetEdifice(map) == null && c.GetThingList(map).All(t => t is Plant))) return candidate;
+                if (candidate.Cells.All(c => !c.Fogged(map) && c.Standable(map) && c.GetEdifice(map) == null && c.GetThingList(map).TrueForAll(t => t is Plant))) return candidate;
             }
         }
         return null;

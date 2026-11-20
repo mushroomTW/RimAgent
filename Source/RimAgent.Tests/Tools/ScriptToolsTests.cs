@@ -31,7 +31,7 @@ public class ScriptToolsTests
 
     private ScriptTools Create(AgentMode mode = AgentMode.Autonomous)
     {
-        var registry = new AgentToolRegistry(_world, _transcript, null, new ConfirmationGate(() => mode));
+        var registry = new AgentToolRegistry(_world, _transcript, undo: null, new ConfirmationGate(() => mode));
         return new ScriptTools(() => registry.Select(ToolPermissions.All), registry.Outputs);
     }
 
@@ -90,7 +90,7 @@ public class ScriptToolsTests
     [Test]
     public async Task RefusesScriptsOverTheCallLimit()
     {
-        string items = string.Join(",", Enumerable.Range(0, ScriptTools.MaxCalls + 1).Select(_ => "{}"));
+        string items = string.Join(',', Enumerable.Range(0, ScriptTools.MaxCalls + 1).Select(_ => "{}"));
         string text = await Create().RunScript("[{\"tool\":\"list_zones\",\"for_each\":[" + items + "]}]");
 
         Assert.That(text, Does.StartWith("Error:").And.Contain("more than 30 calls"));
@@ -143,7 +143,7 @@ public class ScriptToolsTests
         var interjections = new PlayerInterjections();
         interjections.Open();
         interjections.TryAdd("wait, build a farm instead");
-        var registry = new AgentToolRegistry(_world, _transcript, null, new ConfirmationGate(() => AgentMode.Autonomous),
+        var registry = new AgentToolRegistry(_world, _transcript, undo: null, new ConfirmationGate(() => AgentMode.Autonomous),
             interjections: interjections);
         var tools = new ScriptTools(() => registry.Select(ToolPermissions.All), registry.Outputs, interjections);
 

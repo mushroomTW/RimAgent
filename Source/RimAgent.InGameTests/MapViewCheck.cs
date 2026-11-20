@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -61,7 +62,7 @@ public sealed class MapViewCheckComponent : GameComponent
             CheckSurvey(world, map, failures);
 
             string overview = new MapOverviewTools(world).GetMapOverview();
-            Log.Message(Prefix + "get_map_overview (" + overview.Length + " chars):\n" + overview);
+            Log.Message(Prefix + "get_map_overview (" + overview.Length.ToString(CultureInfo.InvariantCulture) + " chars):\n" + overview);
             if (overview.Length > 8000) failures.Add($"overview: {overview.Length} chars exceeds the 8000-char tool result cap");
 
             Log.Warning(Prefix + (failures.Count == 0 ? "PASS" : $"FAIL ({failures.Count}): " + string.Join(" | ", failures)));
@@ -93,16 +94,16 @@ public sealed class MapViewCheckComponent : GameComponent
         var texture = new Texture2D(2, 2);
         texture.LoadImage(png);
         MapShotLayout layout = MapShotLayout.For(rect);
-        Log.Message(Prefix + $"{name}: {rect} -> {texture.width}x{texture.height}, {layout.PixelsPerCell} px/cell, {png.Length} bytes, {shot.FilePath}");
+        Log.Message(Prefix + string.Create(CultureInfo.InvariantCulture, $"{name}: {rect} -> {texture.width}x{texture.height}, {layout.PixelsPerCell} px/cell, {png.Length} bytes, {shot.FilePath}"));
         if (texture.width != layout.ImageWidth || texture.height != layout.ImageHeight)
-            failures.Add($"{name}: image {texture.width}x{texture.height}, layout says {layout.ImageWidth}x{layout.ImageHeight}");
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"{name}: image {texture.width}x{texture.height}, layout says {layout.ImageWidth}x{layout.ImageHeight}"));
         if (texture.width != shot.Width || texture.height != shot.Height)
-            failures.Add($"{name}: image {texture.width}x{texture.height}, tool reported {shot.Width}x{shot.Height}");
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"{name}: image {texture.width}x{texture.height}, tool reported {shot.Width}x{shot.Height}"));
 
         // 地圖區域不能是單色（渲染失敗時整塊是清除色）。
         Color32[] pixels = texture.GetPixels32();
         int distinct = pixels.Where((_, i) => i % 97 == 0).Select(c => (c.r << 16) | (c.g << 8) | c.b).Distinct().Count();
-        if (distinct < 20) failures.Add($"{name}: only {distinct} distinct colours, the map was probably not drawn");
+        if (distinct < 20) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{name}: only {distinct} distinct colours, the map was probably not drawn"));
         UnityEngine.Object.Destroy(texture);
     }
 
@@ -110,14 +111,14 @@ public sealed class MapViewCheckComponent : GameComponent
     private static void CheckSurvey(RimWorldGameWorld world, Map map, List<string> failures)
     {
         MapSurvey survey = world.GetMapSurvey();
-        if (survey.Width != map.Size.x || survey.Height != map.Size.z) failures.Add($"survey: size {survey.Width}x{survey.Height}");
+        if (survey.Width != map.Size.x || survey.Height != map.Size.z) failures.Add(string.Create(CultureInfo.InvariantCulture, $"survey: size {survey.Width}x{survey.Height}"));
         var samples = new Dictionary<string, int>();
         foreach (IntVec3 c in map.AllCells)
         {
             CheckSurveyCell(map, survey, map.cellIndices.CellToIndex(c), c, samples, failures);
         }
         if (survey.Colonists.Count != map.mapPawns.FreeColonistsSpawned.Count) failures.Add($"survey: {survey.Colonists.Count} colonists");
-        Log.Message(Prefix + "survey samples " + string.Join(", ", samples.Select(kv => kv.Key + " x" + kv.Value)));
+        Log.Message(Prefix + "survey samples " + string.Join(", ", samples.Select(kv => kv.Key + " x" + kv.Value.ToString(CultureInfo.InvariantCulture))));
     }
 
     private static void CheckSurveyCell(Map map, MapSurvey survey, int i, IntVec3 c, Dictionary<string, int> samples, List<string> failures)

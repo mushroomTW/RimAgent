@@ -44,7 +44,7 @@ public sealed class FloatMenuTools
         if (!string.IsNullOrEmpty(menu.Error)) return ToolText.Error(menu.Error);
         string header = $"Right-click menu of {menu.PawnName} ({(menu.Drafted ? "drafted" : "not drafted")}) on {Target(menu, target.Value)}:";
         if (menu.Options.Count == 0) return header + " no options.";
-        return header + "\n" + string.Join("\n", menu.Options.Select(Format));
+        return header + "\n" + string.Join('\n', menu.Options.Select(Format));
     }
 
     [AgentTool("use_right_click_option", ToolCategory.Build, ToolRisk.Confirm)]
@@ -64,12 +64,12 @@ public sealed class FloatMenuTools
         FloatMenuInfo menu = _world.GetFloatMenuOptions(pawn.Value.Id, target.Value);
         if (!string.IsNullOrEmpty(menu.Error)) return ToolText.Error(menu.Error);
         string needle = option?.Trim() ?? string.Empty;
-        if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && menu.Options.Count(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase)) > 1)
+        if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && menu.Options.Where(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase)).Skip(1).Any())
             return ToolText.Error($"{menu.PawnName}'s menu has multiple options named \"{needle}\". Use an option number from list_right_click_menu.");
         FloatMenuOptionInfo picked = Resolve(menu.Options, needle);
         if (picked == null)
         {
-            string options = menu.Options.Count == 0 ? "none" : string.Join("; ", menu.Options.Select(o => o.Number + ") " + o.Label));
+            string options = menu.Options.Count == 0 ? "none" : string.Join("; ", menu.Options.Select(o => o.Number.ToString(CultureInfo.InvariantCulture) + ") " + o.Label));
             return ToolText.Error($"{menu.PawnName} has no option \"{option}\" on {Target(menu, target.Value)}. Options: {options}");
         }
         if (picked.Disabled)

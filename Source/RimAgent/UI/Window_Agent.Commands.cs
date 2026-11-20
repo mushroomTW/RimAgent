@@ -213,15 +213,15 @@ public partial class Window_Agent
         var discardRect = new Rect((canRemember ? alwaysRect.xMax : confirmRect.xMax) + 6f, rect.y, WideButtonWidth, rect.height);
         var noteRect = new Rect(discardRect.xMax + 8f, rect.y, Mathf.Max(0f, rect.xMax - discardRect.xMax - 8f), rect.height);
 
-        if (DrawUnifiedButton(confirmRect, "RimAgent.Confirm".Translate(), PauseColor, PauseColor, true))
+        if (DrawUnifiedButton(confirmRect, "RimAgent.Confirm".Translate(), PauseColor, PauseColor, enabled: true))
         {
-            Confirm(session, false);
+            Confirm(session, rememberForSession: false);
         }
-        if (canRemember && DrawUnifiedButton(alwaysRect, "RimAgent.ConfirmAlways".Translate(), PauseColor, PauseColor, true))
+        if (canRemember && DrawUnifiedButton(alwaysRect, "RimAgent.ConfirmAlways".Translate(), PauseColor, PauseColor, enabled: true))
         {
-            Confirm(session, true);
+            Confirm(session, rememberForSession: true);
         }
-        if (DrawUnifiedButton(discardRect, "RimAgent.ConfirmDiscard".Translate(), EmergencyColor, EmergencyColor, true))
+        if (DrawUnifiedButton(discardRect, "RimAgent.ConfirmDiscard".Translate(), EmergencyColor, EmergencyColor, enabled: true))
         {
             session.DiscardPendingConfirmation();
         }

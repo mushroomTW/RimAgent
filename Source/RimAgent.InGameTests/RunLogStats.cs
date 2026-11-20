@@ -17,10 +17,8 @@ namespace RimAgent.InGameTests;
 /// 每筆紀錄的 TranscriptSteps 只保留最後幾十步，各工具明細只涵蓋保留下來的步驟；
 /// 新版紀錄的 ToolCalls/ToolFailures/ToolCancellations 才是整句的完整計數。
 /// </summary>
-internal static class RunLogStats
+internal static partial class RunLogStats
 {
-    private static readonly Regex CancelPattern = new(@"^(TaskCanceledException|OperationCanceledException)\b", RegexOptions.None, TimeSpan.FromSeconds(1));
-    private static readonly Regex Digits = new(@"\d+", RegexOptions.None, TimeSpan.FromSeconds(1));
 
     /// <summary>把 jsonl 各行整理成統計報表；無法解析的行略過。</summary>
     /// <param name="lines">紀錄檔的每一行。</param>
@@ -67,10 +65,10 @@ internal static class RunLogStats
     {
         sb.Append(runs.Count).Append(" runs, ").Append(Head(Str(runs[0], "StartedUtc"), 16))
           .Append(" ~ ").Append(Head(Str(runs[^1], "StartedUtc"), 16)).AppendLine();
-        sb.Append("outcomes: ").AppendLine(string.Join(", ", runs
+        sb.Append("outcomes: ").AppendJoin(", ", runs
             .GroupBy(r => Str(r, "Outcome"), StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
-            .Select(g => g.Key + " " + g.Count())));
+            .Select(g => g.Key + " " + g.Count().ToString(CultureInfo.InvariantCulture))).AppendLine();
         int calls = 0, fails = 0, cancels = 0;
         foreach (JsonElement run in runs)
         {
@@ -136,7 +134,7 @@ internal static class RunLogStats
             }
             int count = group.Count();
             int finished = group.Count(r => Str(r, "Outcome") is "finished" or "goal_reported_complete");
-            long tokens = group.Sum(r => Array(r, "ModelSteps").Sum(m => Long(m, "InputTokens"))) / count;
+            long tokens = group.Sum(long (JsonElement r) => Array(r, "ModelSteps").Sum(long (JsonElement m) => Long(m, "InputTokens"))) / count;
             sb.AppendLine(CultureInfo.InvariantCulture, $"{Head(group.Key, 31),-32}{count,5}{calls,7}{Pct(fails, calls),8}{Pct(finished, count),10}{tokens,12}");
         }
     }
@@ -167,7 +165,7 @@ internal static class RunLogStats
     private static string RunModels(JsonElement run)
     {
         string models = string.Join(", ", Array(run, "ModelSteps").Select(m => Str(m, "Model")).Where(m => m.Length > 0)
-            .Distinct(StringComparer.Ordinal).OrderBy(m => m, StringComparer.Ordinal));
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
         return models.Length > 0 ? models : "(unknown)";
     }
 
@@ -224,4 +222,9 @@ internal static class RunLogStats
     {
         return e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.Array ? v.EnumerateArray() : Enumerable.Empty<JsonElement>();
     }
+
+    [GeneratedRegex(@"^(TaskCanceledException|OperationCanceledException)\b", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CancelPattern { get; }
+    [GeneratedRegex(@"\d+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex Digits { get; }
 }

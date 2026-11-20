@@ -467,7 +467,7 @@ public class DecisionRoutingTests
         var ready = new DecisionAvailability { Enabled = true, Model = "small-model" };
         Assert.That(DecisionServiceFactory.CanUseDecisionModel(disabled), Is.False);
         Assert.That(DecisionServiceFactory.CanUseDecisionModel(noModel), Is.False);
-        Assert.That(DecisionServiceFactory.CanUseDecisionModel(null), Is.False);
+        Assert.That(DecisionServiceFactory.CanUseDecisionModel(availability: null), Is.False);
         Assert.That(DecisionServiceFactory.CanUseDecisionModel(ready), Is.True);
     }
 
@@ -525,7 +525,7 @@ public class DecisionRoutingTests
         var cacheField = typeof(GenTypes).GetField("typeCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
         if (cacheField?.GetValue(null) is not System.Collections.IDictionary cache)
         {
-            typeof(GenTypes).GetMethod("ClearCache", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
+            typeof(GenTypes).GetMethod("ClearCache", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, parameters: null);
             cache = cacheField?.GetValue(null) as System.Collections.IDictionary;
         }
 

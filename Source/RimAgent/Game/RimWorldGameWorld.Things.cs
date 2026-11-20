@@ -78,10 +78,9 @@ internal sealed partial class RimWorldGameWorld
     public IReadOnlyList<ThingInfo> GetSelection()
     {
         Map map = Map;
-        return Find.Selector.SelectedObjects.OfType<Thing>()
+        return [.. Find.Selector.SelectedObjects.OfType<Thing>()
             .Where(t => t.Spawned && t.Map == map && KindOf(t) != null)
-            .Select(t => ToThing(t, map))
-            .ToList();
+            .Select(t => ToThing(t, map))];
     }
 
     public MapBounds GetMapBounds()
@@ -133,7 +132,7 @@ internal sealed partial class RimWorldGameWorld
             // 但它占著格子，規劃建造時得看得到，這裡當建築列出。
             Things = fogged
                 ? (IReadOnlyList<ThingInfo>)[]
-                : c.GetThingList(map).Where(t => KindOf(t) != null || t is Blueprint).Select(t => ToThing(t, map)).ToList()
+                : [.. c.GetThingList(map).Where(t => KindOf(t) != null || t is Blueprint).Select(t => ToThing(t, map))]
         };
     }
 

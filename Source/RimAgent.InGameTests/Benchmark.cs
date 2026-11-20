@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -21,7 +22,7 @@ namespace RimAgent.InGameTests;
 /// 最後一行 Log "[RimAgent.InGameTests] Benchmark DONE" 彙總。
 /// 也可在開發模式的除錯動作「RimAgent」分類手動起跑（全部、基本或高難度題），用目前的模型設定，跑完還原。
 /// </summary>
-public sealed class BenchmarkComponent : GameComponent
+public sealed partial class BenchmarkComponent : GameComponent
 {
     public const string MarkerFileName = "RimAgentBenchmark.xml";
     private const string LogPrefix = TestHelpers.LogPrefix + "Benchmark ";
@@ -76,7 +77,7 @@ public sealed class BenchmarkComponent : GameComponent
             Id = "stockpile",
             Instruction = "在殖民者附近建立一個大約 6x6 的儲存區。",
             Measure = map => new() { [CellsKey] = ZoneCells<Zone_Stockpile>(map, _ => true) },
-            Check = (before, after, _) => Delta(before, after, CellsKey) >= 20 ? null : $"stockpile cells +{Delta(before, after, CellsKey)}, need +20"
+            Check = (before, after, _) => Delta(before, after, CellsKey) >= 20 ? null : string.Create(CultureInfo.InvariantCulture, $"stockpile cells +{Delta(before, after, CellsKey)}, need +20")
         };
 
     private static BenchTask RiceFieldTask() =>
@@ -85,7 +86,7 @@ public sealed class BenchmarkComponent : GameComponent
             Id = "rice_field",
             Instruction = "在殖民者附近開一塊至少 30 格的水稻田。",
             Measure = map => new() { [CellsKey] = ZoneCells<Zone_Growing>(map, z => z.GetPlantDefToGrow()?.defName == "Plant_Rice") },
-            Check = (before, after, _) => Delta(before, after, CellsKey) >= 25 ? null : $"rice zone cells +{Delta(before, after, CellsKey)}, need +25"
+            Check = (before, after, _) => Delta(before, after, CellsKey) >= 25 ? null : string.Create(CultureInfo.InvariantCulture, $"rice zone cells +{Delta(before, after, CellsKey)}, need +25")
         };
 
     private static BenchTask ResearchBenchTask() =>
@@ -93,7 +94,7 @@ public sealed class BenchmarkComponent : GameComponent
         {
             Id = "research_bench",
             Instruction = "在殖民者附近放一張簡易研究台的藍圖。",
-            Measure = map => new() { [BenchesKey] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench")) },
+            Measure = map => new() { [BenchesKey] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench", StringComparison.Ordinal)) },
             Check = (before, after, _) => Delta(before, after, BenchesKey) >= 1 ? null : "no new research bench blueprint"
         };
 
@@ -110,7 +111,7 @@ public sealed class BenchmarkComponent : GameComponent
             Check = (before, after, _) =>
                 Delta(before, after, WallsKey) >= 16 && Delta(before, after, DoorsKey) >= 1
                     ? null
-                    : $"walls +{Delta(before, after, WallsKey)} (need +16), doors +{Delta(before, after, DoorsKey)} (need +1)"
+                    : string.Create(CultureInfo.InvariantCulture, $"walls +{Delta(before, after, WallsKey)} (need +16), doors +{Delta(before, after, DoorsKey)} (need +1)")
         };
 
     private static BenchTask ResearchPriorityTask() =>
@@ -119,7 +120,7 @@ public sealed class BenchmarkComponent : GameComponent
             Id = "research_priority",
             Instruction = "讓每一位能做研究的殖民者，把研究工作的優先級設為 1。",
             Measure = map => new() { ["missing"] = ColonistsWithoutResearchPriorityOne(map) },
-            Check = (_, after, _) => after["missing"] == 0 ? null : $"{after["missing"]} capable colonist(s) not at research priority 1"
+            Check = (_, after, _) => after["missing"] == 0 ? null : string.Create(CultureInfo.InvariantCulture, $"{after["missing"]} capable colonist(s) not at research priority 1")
         };
 
     private static BenchTask CutTreesTask() =>
@@ -128,7 +129,7 @@ public sealed class BenchmarkComponent : GameComponent
             Id = "cut_trees",
             Instruction = "標記砍伐殖民者附近的 5 棵樹。",
             Measure = map => new() { ["marked"] = map.designationManager.SpawnedDesignationsOfDef(DesignationDefOf.CutPlant).Count() },
-            Check = (before, after, _) => Delta(before, after, "marked") >= 5 ? null : $"cut designations +{Delta(before, after, "marked")}, need +5"
+            Check = (before, after, _) => Delta(before, after, "marked") >= 5 ? null : string.Create(CultureInfo.InvariantCulture, $"cut designations +{Delta(before, after, "marked")}, need +5")
         };
 
     private static BenchTask FoodReportTask() =>
@@ -137,7 +138,7 @@ public sealed class BenchmarkComponent : GameComponent
             Id = "food_report",
             Instruction = "告訴我殖民地目前的食物存量大概能撐幾天。只要回答，不要下任何指令。",
             Measure = _ => new(),
-            Check = (_, _, reply) => reply != null && Regex.IsMatch(reply, "[0-9０-９]", RegexOptions.None, TimeSpan.FromSeconds(1)) ? null : "reply has no number"
+            Check = (_, _, reply) => reply != null && DigitPattern.IsMatch(reply) ? null : "reply has no number"
         };
 
     private static BenchTask TwoRoomHouseTask() =>
@@ -153,13 +154,13 @@ public sealed class BenchmarkComponent : GameComponent
                 ["woodWalls"] = CountBuildTargets(map, d => d == ThingDefOf.Wall, ThingDefOf.WoodLog),
                 [DoorsKey] = CountBuildTargets(map, d => d.IsDoor),
                 ["beds"] = CountBuildTargets(map, IsRealBed),
-                ["benches"] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench")),
+                ["benches"] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench", StringComparison.Ordinal)),
                 ["spread"] = WallBounds(map) is CellRect r ? Math.Max(r.Width, r.Height) : 0
             },
             Check = (before, after, _) => Fails(
                 Need(after, before, "woodWalls", 20), Need(after, before, DoorsKey, 2),
                 Need(after, before, "beds", 2), Need(after, before, "benches", 1),
-                after["spread"] <= 20 ? null : $"walls spread over {after["spread"]} cells (max 20, not one building)")
+                after["spread"] <= 20 ? null : string.Create(CultureInfo.InvariantCulture, $"walls spread over {after["spread"]} cells (max 20, not one building)"))
         };
 
     private static BenchTask FreezerTask() =>
@@ -242,7 +243,7 @@ public sealed class BenchmarkComponent : GameComponent
             Instruction = "把所有殖民者的作息改成：0 點到 6 點前睡覺，6 點到 22 點前工作，22 點到午夜娛樂。",
             Setup = ResetSchedules,
             Measure = map => new() { ["wrongHours"] = WrongScheduleHours(map) },
-            Check = (_, after, _) => after["wrongHours"] == 0 ? null : $"{after["wrongHours"]} colonist-hours differ from the requested schedule"
+            Check = (_, after, _) => after["wrongHours"] == 0 ? null : string.Create(CultureInfo.InvariantCulture, $"{after["wrongHours"]} colonist-hours differ from the requested schedule")
         };
 
     private static BenchTask DefendTask() =>
@@ -259,8 +260,8 @@ public sealed class BenchmarkComponent : GameComponent
                 ["notAttacking"] = Fighters(map).Count(p => !IsAttackingEnemy(p))
             },
             Check = (_, after, _) => Fails(
-                after["notDrafted"] == 0 ? null : $"{after["notDrafted"]} fighter(s) not drafted",
-                after["notAttacking"] == 0 ? null : $"{after["notAttacking"]} fighter(s) not ordered to attack an enemy")
+                after["notDrafted"] == 0 ? null : string.Create(CultureInfo.InvariantCulture, $"{after["notDrafted"]} fighter(s) not drafted"),
+                after["notAttacking"] == 0 ? null : string.Create(CultureInfo.InvariantCulture, $"{after["notAttacking"]} fighter(s) not ordered to attack an enemy"))
         };
 
     public BenchmarkComponent(Verse.Game game)
@@ -278,14 +279,14 @@ public sealed class BenchmarkComponent : GameComponent
         if (_readyAt < 0f) _readyAt = UnityEngine.Time.realtimeSinceStartup + 5f;
         if (UnityEngine.Time.realtimeSinceStartup < _readyAt) return;
         _started = true;
-        _ = RunAsync(null, isolated: true);
+        _ = RunAsync(tier: null, isolated: true);
     }
 
     /// <summary>同一時間只跑一輪：題目共用同一個會話與地圖。</summary>
     private static bool _running;
 
     [DebugAction("RimAgent", "Benchmark: all tasks", allowedGameStates = AllowedGameStates.PlayingOnMap)]
-    private static void DebugRunAll() => ConfirmAndRun(null);
+    private static void DebugRunAll() => ConfirmAndRun(tier: null);
 
     [DebugAction("RimAgent", "Benchmark: basic tasks", allowedGameStates = AllowedGameStates.PlayingOnMap)]
     private static void DebugRunBasic() => ConfirmAndRun(Basic);
@@ -301,7 +302,7 @@ public sealed class BenchmarkComponent : GameComponent
     {
         if (_running)
         {
-            Messages.Message("RimAgent benchmark is already running.", MessageTypeDefOf.RejectInput, false);
+            Messages.Message("RimAgent benchmark is already running.", MessageTypeDefOf.RejectInput, historical: false);
             return;
         }
         Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(
@@ -329,22 +330,12 @@ public sealed class BenchmarkComponent : GameComponent
                 Log.Warning(LogPrefix + $"FAIL not started: settings={settings != null}, component={agent != null}");
                 return;
             }
-            // 只改記憶體裡的設定：完整權限讓行動直接執行，關掉自主照顧免得插隊。
-            if (isolated)
-            {
-                string modelOverride = Regex.Match(await File.ReadAllTextAsync(MarkerPath), "model=\"([^\"]+)\"", RegexOptions.None, TimeSpan.FromSeconds(1)).Groups[1].Value;
-                if (modelOverride.Length > 0) settings.agentModel = modelOverride;
-            }
-            settings.mode = AgentMode.Autonomous;
-            settings.autonomousCare = false;
-            settings.recordRuns = true;
-            // 暫停讓地圖狀態不受時間影響；工具照常可用。
-            Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
+            await ApplyBenchmarkSettingsAsync(settings, isolated);
 
             string folder = RunLogWriter.DefaultFolder;
             Directory.CreateDirectory(folder);
             string resultPath = Path.Combine(folder, "Benchmark.jsonl");
-            string runId = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            string runId = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
             string modVersion = LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.ModVersion ?? string.Empty;
             string model = string.IsNullOrWhiteSpace(settings.agentModel) ? "(framework default)" : settings.agentModel;
 
@@ -356,23 +347,9 @@ public sealed class BenchmarkComponent : GameComponent
             foreach (BenchTask task in tasks)
             {
                 (string failure, List<TranscriptEntry> tools, float seconds, string reply) = await RunTaskAsync(session, task);
-                int failures = tools.Count(t => t.Failed && !t.Cancelled);
+                int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply);
                 totalTools += tools.Count;
                 totalFailures += failures;
-
-                Append(resultPath, new Dictionary<string, object>
-                {
-                    ["task"] = task.Id,
-                    ["tier"] = task.Tier,
-                    ["ok"] = failure == null,
-                    ["detail"] = failure ?? string.Empty,
-                    ["tools"] = tools.Count,
-                    ["toolFailures"] = failures,
-                    ["toolNames"] = string.Join(",", tools.Select(t => t.ToolName)),
-                    ["seconds"] = Math.Round(seconds, 1),
-                    ["reply"] = Short(reply)
-                });
-                Log.Message(LogPrefix + $"{task.Tier}/{task.Id}: {(failure == null ? "PASS" : "FAIL " + failure)} tools={tools.Count} failed={failures} {seconds:0}s");
                 if (failure == null) passedByTier[task.Tier]++;
             }
 
@@ -395,7 +372,7 @@ public sealed class BenchmarkComponent : GameComponent
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary));
             if (!isolated)
             {
-                Messages.Message($"RimAgent benchmark: {summary["passed"]}/{summary["total"]} passed. Details: {resultPath}", MessageTypeDefOf.NeutralEvent, false);
+                Messages.Message($"RimAgent benchmark: {summary["passed"]}/{summary["total"]} passed. Details: {resultPath}", MessageTypeDefOf.NeutralEvent, historical: false);
             }
         }
         catch (Exception ex)
@@ -414,6 +391,43 @@ public sealed class BenchmarkComponent : GameComponent
             }
             _running = false;
         }
+    }
+
+    /// <summary>
+    /// 只改記憶體裡的設定：完整權限讓行動直接執行，關掉自主照顧免得插隊；隔離環境另套用標記檔的模型覆寫。
+    /// 遊戲暫停讓地圖狀態不受時間影響，工具照常可用。
+    /// </summary>
+    private static async Task ApplyBenchmarkSettingsAsync(RimAgentSettings settings, bool isolated)
+    {
+        if (isolated)
+        {
+            string modelOverride = ModelOverridePattern.Match(await File.ReadAllTextAsync(MarkerPath)).Groups["model"].Value;
+            if (modelOverride.Length > 0) settings.agentModel = modelOverride;
+        }
+        settings.mode = AgentMode.Autonomous;
+        settings.autonomousCare = false;
+        settings.recordRuns = true;
+        Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
+    }
+
+    /// <summary>把單題結果寫進結果檔與日誌；回傳這題失敗的工具呼叫數（取消不算）。</summary>
+    private static int RecordTaskResult(string resultPath, BenchTask task, string failure, List<TranscriptEntry> tools, float seconds, string reply)
+    {
+        int failures = tools.Count(t => t.Failed && !t.Cancelled);
+        Append(resultPath, new Dictionary<string, object>
+        {
+            ["task"] = task.Id,
+            ["tier"] = task.Tier,
+            ["ok"] = failure == null,
+            ["detail"] = failure ?? string.Empty,
+            ["tools"] = tools.Count,
+            ["toolFailures"] = failures,
+            ["toolNames"] = string.Join(',', tools.Select(t => t.ToolName)),
+            ["seconds"] = Math.Round(seconds, 1, MidpointRounding.ToEven),
+            ["reply"] = Short(reply)
+        });
+        Log.Message(LogPrefix + string.Create(CultureInfo.InvariantCulture, $"{task.Tier}/{task.Id}: {(failure == null ? "PASS" : "FAIL " + failure)} tools={tools.Count} failed={failures} {seconds:0}s"));
+        return failures;
     }
 
     private static async Task<(string failure, List<TranscriptEntry> tools, float seconds, string reply)> RunTaskAsync(ColonyAgentSession session, BenchTask task)
@@ -519,7 +533,7 @@ public sealed class BenchmarkComponent : GameComponent
     /// <summary>真正的床，不含睡覺地鋪。</summary>
     private static bool IsRealBed(ThingDef def)
     {
-        return def.IsBed && def.building != null && def.building.bed_humanlike && !def.defName.Contains("Spot");
+        return def.IsBed && def.building != null && def.building.bed_humanlike && !def.defName.Contains("Spot", StringComparison.Ordinal);
     }
 
     private static bool IsCornOnlyStore(Zone_Stockpile zone)
@@ -585,7 +599,7 @@ public sealed class BenchmarkComponent : GameComponent
         {
             ResearchProjectDef project = DefDatabase<ResearchProjectDef>.GetNamedSilentFail(name);
             if (project == null) return "missing research " + name;
-            if (!project.IsFinished) Find.ResearchManager.FinishProject(project, false, null, false);
+            if (!project.IsFinished) Find.ResearchManager.FinishProject(project, doCompletionDialog: false, researcher: null, doCompletionLetter: false);
         }
         return null;
     }
@@ -603,7 +617,7 @@ public sealed class BenchmarkComponent : GameComponent
         ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(defName);
         if (def == null) return null;
         IntVec3 start = map.mapPawns.FreeColonistsSpawned.FirstOrDefault()?.Position ?? map.Center;
-        foreach (IntVec3 cell in GenRadial.RadialCellsAround(start, 25f, false))
+        foreach (IntVec3 cell in GenRadial.RadialCellsAround(start, 25f, useCenter: false))
         {
             CellRect rect = GenAdj.OccupiedRect(cell, Rot4.North, def.size).ExpandedBy(1);
             if (!rect.InBounds(map)) continue;
@@ -694,7 +708,7 @@ public sealed class BenchmarkComponent : GameComponent
     private static string Need(Dictionary<string, int> after, Dictionary<string, int> before, string key, int min)
     {
         int delta = Delta(before, after, key);
-        return delta >= min ? null : $"{key} +{delta} (need +{min})";
+        return delta >= min ? null : string.Create(CultureInfo.InvariantCulture, $"{key} +{delta} (need +{min})");
     }
 
     /// <summary>合併多個檢查；全部為 null 表示通過。</summary>
@@ -713,12 +727,17 @@ public sealed class BenchmarkComponent : GameComponent
 
     private static void Append(string path, Dictionary<string, object> line)
     {
-        File.AppendAllText(path, JsonSerializer.Serialize(line) + "\n", new UTF8Encoding(false));
+        File.AppendAllText(path, JsonSerializer.Serialize(line) + "\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
     private static string Short(string text)
     {
-        string flat = (text ?? string.Empty).Replace("\r", string.Empty).Replace("\n", " / ");
+        string flat = (text ?? string.Empty).Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", " / ", StringComparison.Ordinal);
         return flat.Length > MaxReplyChars ? flat[..MaxReplyChars] + "…" : flat;
     }
+
+    [GeneratedRegex("[0-9０-９]", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex DigitPattern { get; }
+    [GeneratedRegex("model=\"(?<model>[^\"]+)\"", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ModelOverridePattern { get; }
 }

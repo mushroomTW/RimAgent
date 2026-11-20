@@ -44,7 +44,7 @@ public class InterjectionTests
         ColonyAgentSession session = null;
         bool accepted = false;
         var client = new ScriptedChatClient()
-            .CallTool("get_colony_overview", null).Do(() => accepted = session.Interject("Prioritize the raid instead."))
+            .CallTool("get_colony_overview", arguments: null).Do(() => accepted = session.Interject("Prioritize the raid instead."))
             .Reply("Switched to the raid.");
         session = NewSession(client);
 
@@ -53,7 +53,7 @@ public class InterjectionTests
         Assert.That(accepted, Is.True);
         Assert.That(reply, Is.EqualTo("Switched to the raid."));
         Assert.That(client.CallCount, Is.EqualTo(2), "插話已送達，不必另起一句");
-        string toolResult = client.ReceivedMessages[1].Last().Contents.OfType<FunctionResultContent>().Single().Result?.ToString();
+        string toolResult = client.ReceivedMessages[1][^1].Contents.OfType<FunctionResultContent>().Single().Result?.ToString();
         Assert.That(toolResult, Does.Contain("Prioritize the raid instead."));
         TranscriptEntry[] users = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.User)];
         Assert.That(users.Select(u => u.Text), Is.EqualTo(["plan the next build", "Prioritize the raid instead."]));
@@ -76,7 +76,7 @@ public class InterjectionTests
 
         Assert.That(session.HasPendingConfirmation, Is.True, "待確認的命令保留");
         Assert.That(client.CallCount, Is.EqualTo(2), "不自動送出插話");
-        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("waiting for confirmation")), Is.True);
+        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("waiting for confirmation", System.StringComparison.Ordinal)), Is.True);
     }
 
     [Test]
@@ -117,7 +117,7 @@ public class InterjectionTests
         await session.SendAsync("build a wall", cancellationToken: cts.Token);
 
         Assert.That(client.CallCount, Is.EqualTo(1), "按停止後不會再送出插話");
-        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("not delivered")), Is.True);
+        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("not delivered", System.StringComparison.Ordinal)), Is.True);
     }
 
     [Test]
@@ -128,7 +128,7 @@ public class InterjectionTests
         var client = new ScriptedChatClient()
             .CallTool("delegate_task", new { agent = "scout", tasks = _taskLook })
             // 子代理的第一步：先模擬玩家插話，再叫工具。
-            .CallTool("get_colony_overview", null).Do(() => session.Interject("Hurry up."))
+            .CallTool("get_colony_overview", arguments: null).Do(() => session.Interject("Hurry up."))
             .Reply("Scout report.")
             .Reply("Done.");
         session = new ColonyAgentSession(client, _world, () => ToolPermissions.All, 8, () => AgentMode.Autonomous,
@@ -136,9 +136,9 @@ public class InterjectionTests
 
         await session.SendAsync("send the scout");
 
-        string subagentToolResult = client.ReceivedMessages[2].Last().Contents.OfType<FunctionResultContent>().Single().Result?.ToString();
+        string subagentToolResult = client.ReceivedMessages[2][^1].Contents.OfType<FunctionResultContent>().Single().Result?.ToString();
         Assert.That(subagentToolResult, Does.Not.Contain("Hurry up."));
-        Assert.That(client.ReceivedMessages.Last().Last(m => m.Role == ChatRole.User).Text, Is.EqualTo("Hurry up."),
+        Assert.That(client.ReceivedMessages[^1].Last(m => m.Role == ChatRole.User).Text, Is.EqualTo("Hurry up."),
             "主 Agent 在委派後沒有再呼叫工具，插話在本輪結束後接著送出");
     }
 }

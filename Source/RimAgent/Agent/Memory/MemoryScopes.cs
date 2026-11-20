@@ -70,6 +70,6 @@ public static class MemoryIndex
                 ? "- **" + file.Name + "**: " + file.Description
                 : "- **" + file.Name + "**");
         // 逐行組合，避免在索引末尾附加換行。
-        return string.Join("\n", lines);
+        return string.Join('\n', lines);
     }
 }

@@ -40,10 +40,10 @@ public enum GoalAction
 /// </summary>
 public static class SlashCommands
 {
-    public static readonly SlashCommand Goal = new("goal", true, "RimAgent.Slash.Goal");
-    public static readonly SlashCommand Clear = new("clear", false, "RimAgent.Slash.Clear");
-    public static readonly SlashCommand Compact = new("compact", false, "RimAgent.Slash.Compact");
-    public static readonly SlashCommand Stop = new("stop", false, "RimAgent.Slash.Stop");
+    public static readonly SlashCommand Goal = new("goal", takesArgs: true, "RimAgent.Slash.Goal");
+    public static readonly SlashCommand Clear = new("clear", takesArgs: false, "RimAgent.Slash.Clear");
+    public static readonly SlashCommand Compact = new("compact", takesArgs: false, "RimAgent.Slash.Compact");
+    public static readonly SlashCommand Stop = new("stop", takesArgs: false, "RimAgent.Slash.Stop");
 
     /// <summary>復原不是指令：狀態列在有可復原的操作時顯示按鈕（見 Window_Agent.DrawUndoButton）。</summary>
     public static readonly IReadOnlyList<SlashCommand> All = [Goal, Clear, Compact, Stop];
@@ -51,7 +51,7 @@ public static class SlashCommands
     /// <summary>還在打指令名稱（以 / 開頭且尚無空白）：此時顯示彈出選單。</summary>
     public static bool IsTypingName(string input)
     {
-        return input != null && input.Length > 0 && input[0] == '/' && input.IndexOf(' ') < 0;
+        return input != null && input.Length > 0 && input[0] == '/' && input.IndexOf(' ', StringComparison.Ordinal) < 0;
     }
 
     /// <summary>依目前輸入的前綴篩選指令；非指令狀態回傳空清單。</summary>
@@ -74,7 +74,7 @@ public static class SlashCommands
             command = null;
             return false;
         }
-        int space = text.IndexOf(' ');
+        int space = text.IndexOf(' ', StringComparison.Ordinal);
         string name = space < 0 ? text.Substring(1) : text.Substring(1, space - 1);
         args = space < 0 ? string.Empty : text.Substring(space + 1).Trim();
         command = All.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -154,7 +154,7 @@ public static class SlashCommands
         rest = string.Empty;
         if (!text.StartsWith("edit ", StringComparison.OrdinalIgnoreCase)) return false;
         string trimmed = text.Substring(5).Trim();
-        int separator = trimmed.IndexOf(' ');
+        int separator = trimmed.IndexOf(' ', StringComparison.Ordinal);
         if (!int.TryParse(separator < 0 ? trimmed : trimmed.Substring(0, separator), CultureInfo.InvariantCulture, out index)) return false;
         rest = separator < 0 ? string.Empty : trimmed.Substring(separator + 1).Trim();
         return true;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using RimAgent.Game;
@@ -52,9 +53,9 @@ internal static class LayoutCheck
                 Building endTable = L(2, 8).GetEdifice(map);
                 foreach ((int x, int z) in new[] { (1, 8), (2, 9), (3, 8) })
                 {
-                    if (L(x, z).GetEdifice(map) is not Building_Bed bed) { failures.Add($"no bed at local ({x},{z})"); continue; }
+                    if (L(x, z).GetEdifice(map) is not Building_Bed bed) { failures.Add(string.Create(CultureInfo.InvariantCulture, $"no bed at local ({x},{z})")); continue; }
                     if (endTable == null || !bed.GetSleepingSlotPos(0).AdjacentToCardinal(endTable.Position))
-                        failures.Add($"bed at local ({x},{z}) does not have its head at the end table");
+                        failures.Add(string.Create(CultureInfo.InvariantCulture, $"bed at local ({x},{z}) does not have its head at the end table"));
                 }
             }
         },
@@ -107,7 +108,7 @@ internal static class LayoutCheck
             return failures;
         }
         int imported = CheckImportedLayouts(world, tools, shared.Value.CenterCell, checkedNames, failures);
-        Log.Message(TestHelpers.LogPrefix + $"LayoutCheck imported layouts checked: {imported}");
+        Log.Message(TestHelpers.LogPrefix + string.Create(CultureInfo.InvariantCulture, $"LayoutCheck imported layouts checked: {imported}"));
 
         CheckPartMaterials(world, tools, map, Specs[0].Layout, m => failures.Add("materials " + m));
 
@@ -128,7 +129,7 @@ internal static class LayoutCheck
             if (!room.ProperRoom) failures.Add($"{spec.Layout} {name}: not a proper room");
             if (seen.TryGetValue(room, out string other)) failures.Add($"{spec.Layout} {name} shares a room with {other}");
             else seen[room] = name;
-            Log.Message(TestHelpers.LogPrefix + $"LayoutCheck {spec.Layout} {name}: {room.CellCount} cells, role {room.Role?.defName ?? "none"}");
+            Log.Message(TestHelpers.LogPrefix + string.Create(CultureInfo.InvariantCulture, $"LayoutCheck {spec.Layout} {name}: {room.CellCount} cells, role {room.Role?.defName ?? "none"}"));
         }
         var extra = new List<string>();
         spec.Extra(map, L, extra);
@@ -159,10 +160,10 @@ internal static class LayoutCheck
         {
             int total = world.GetLayoutPlan(layout, center.x, center.z, rot).Pieces.Count;
             string reply = tools.PlaceBlueprint(layout, "layout", center.x, center.z, 0, 0, rot, "");
-            Log.Message(TestHelpers.LogPrefix + $"LayoutCheck {layout} rotation {rot}: {reply}");
-            if (!reply.StartsWith($"Placed {total} of {total}", StringComparison.Ordinal))
+            Log.Message(TestHelpers.LogPrefix + string.Create(CultureInfo.InvariantCulture, $"LayoutCheck {layout} rotation {rot}: {reply}"));
+            if (!reply.StartsWith(string.Create(CultureInfo.InvariantCulture, $"Placed {total} of {total}"), StringComparison.Ordinal))
             {
-                fail($"rotation {rot}: {reply}");
+                fail(string.Create(CultureInfo.InvariantCulture, $"rotation {rot}: {reply}"));
                 if (rot == 0) LogMissingFloors(world, layout, center);
             }
             world.RemoveBlueprints(new CellRectSpec(center.x - 6, center.z - 6, center.x + 6, center.z + 6));
@@ -181,7 +182,7 @@ internal static class LayoutCheck
         int total = world.GetLayoutPlan(layout, center.x, center.z, 0).Pieces.Count;
         string reply = tools.PlaceBlueprint(layout, "layout", center.x, center.z, 0, 0, 0, "walls=BlocksGranite; floor=FlagstoneGranite; furniture=Steel");
         Log.Message(TestHelpers.LogPrefix + $"LayoutCheck materials: {reply}");
-        if (!reply.StartsWith($"Placed {total} of {total}", StringComparison.Ordinal)) fail(reply);
+        if (!reply.StartsWith(string.Create(CultureInfo.InvariantCulture, $"Placed {total} of {total}"), StringComparison.Ordinal)) fail(reply);
 
         CellRect rect = CellRect.CenteredOn(center, 6);
         int walls = 0, floors = 0, steel = 0;
@@ -189,8 +190,8 @@ internal static class LayoutCheck
         {
             CheckBlueprintMaterial(bp, rect, ref walls, ref floors, ref steel, fail);
         }
-        Log.Message(TestHelpers.LogPrefix + $"LayoutCheck materials: walls {walls}, floors {floors}, steel furniture {steel}");
-        if (walls == 0 || floors == 0 || steel == 0) fail($"expected walls, floors and steel furniture, got {walls}/{floors}/{steel}");
+        Log.Message(TestHelpers.LogPrefix + string.Create(CultureInfo.InvariantCulture, $"LayoutCheck materials: walls {walls}, floors {floors}, steel furniture {steel}"));
+        if (walls == 0 || floors == 0 || steel == 0) fail(string.Create(CultureInfo.InvariantCulture, $"expected walls, floors and steel furniture, got {walls}/{floors}/{steel}"));
         world.RemoveBlueprints(new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ));
     }
 
@@ -289,7 +290,7 @@ internal static class LayoutCheck
     private static bool IsClearArea(Map map, CellRect candidate)
     {
         return candidate.Cells.All(c => !c.Fogged(map) && c.Standable(map) && c.GetEdifice(map) == null
-            && c.GetThingList(map).All(t => t is Plant || t is Pawn) && !c.GetThingList(map).Any(t => t is Blueprint)
+            && c.GetThingList(map).TrueForAll(t => t is Plant || t is Pawn) && !c.GetThingList(map).Any(t => t is Blueprint)
             && map.terrainGrid.TerrainAt(c).affordances.Contains(TerrainAffordanceDefOf.Heavy));
     }
 
@@ -315,7 +316,7 @@ internal static class LayoutCheck
         Building_NutrientPasteDispenser dispenser = L(3, 8).GetFirstThing<Building_NutrientPasteDispenser>(map);
         if (dispenser == null) failures.Add("no nutrient paste dispenser at local (3,8)");
         else if (dispenser.InteractionCell != L(6, 8)) failures.Add($"dispenser serves {dispenser.InteractionCell - L(0, 0)}, expected local (6,8)");
-        else if (HopperCount(map, dispenser) != 3) failures.Add($"dispenser sees {HopperCount(map, dispenser)} hoppers, expected 3");
+        else if (HopperCount(map, dispenser) != 3) failures.Add(string.Create(CultureInfo.InvariantCulture, $"dispenser sees {HopperCount(map, dispenser)} hoppers, expected 3"));
         Building cooler = L(0, 10).GetFirstThing<Building_Cooler>(map);
         if (cooler == null) failures.Add("no cooler at local (0,10)");
         else if ((cooler.Position + IntVec3.North.RotatedBy(cooler.Rotation)).GetRoom(map) != L(2, 11).GetRoom(map))
@@ -329,15 +330,15 @@ internal static class LayoutCheck
         foreach ((int x, int z) in new[] { (1, 12), (0, 10), (0, 2), (1, 0) })
         {
             Building cooler = L(x, z).GetFirstThing<Building_Cooler>(map);
-            if (cooler == null) failures.Add($"no cooler at local ({x},{z})");
+            if (cooler == null) failures.Add(string.Create(CultureInfo.InvariantCulture, $"no cooler at local ({x},{z})"));
             else if ((cooler.Position + IntVec3.North.RotatedBy(cooler.Rotation)).GetRoom(map) != freezer)
-                failures.Add($"cooler at local ({x},{z}) does not blow cold air into the freezer");
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"cooler at local ({x},{z}) does not blow cold air into the freezer"));
         }
         foreach ((int x, int z) in new[] { (1, 8), (1, 4) })
         {
             Building stove = L(x, z).GetEdifice(map);
-            if (stove?.def.defName != "ElectricStove") failures.Add($"no electric stove at local ({x},{z})");
-            else if (stove.InteractionCell != L(x + 1, z)) failures.Add($"stove at local ({x},{z}) is used from {stove.InteractionCell - L(0, 0)}");
+            if (stove?.def.defName != "ElectricStove") failures.Add(string.Create(CultureInfo.InvariantCulture, $"no electric stove at local ({x},{z})"));
+            else if (stove.InteractionCell != L(x + 1, z)) failures.Add(string.Create(CultureInfo.InvariantCulture, $"stove at local ({x},{z}) is used from {stove.InteractionCell - L(0, 0)}"));
         }
         Building butcher = L(10, 4).GetEdifice(map);
         if (butcher?.def.defName != "TableButcher") failures.Add("no butcher table at local (10,4)");
@@ -415,7 +416,7 @@ public sealed class LayoutCheckComponent : GameComponent
     /// <summary>鏡頭對準房型中心，回傳等畫面穩定後要截圖的影格。</summary>
     private static int AimAt(IntVec3 center)
     {
-        Find.WindowStack.TryRemove(typeof(LudeonTK.EditWindow_Log), false);
+        Find.WindowStack.TryRemove(typeof(LudeonTK.EditWindow_Log), doCloseSound: false);
         Find.CameraDriver.JumpToCurrentMapLoc(center);
         Find.CameraDriver.SetRootPosAndSize(center.ToVector3Shifted(), 16f);
         return Time.frameCount + 30;

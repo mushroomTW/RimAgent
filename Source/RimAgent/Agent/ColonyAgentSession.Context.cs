@@ -73,7 +73,7 @@ public sealed partial class ColonyAgentSession
 
     /// <summary>
     /// 下一次請求的上下文依類別估算 token，供 UI 分析面板用。
-    /// 組法與 <see cref="BuildRunOptions(ReasoningLevel?, string)"/> 相同，但不碰進行中的呼叫狀態。
+    /// 組法與 <see cref="CreateRunOptions(ReasoningLevel?, string)"/> 相同，但不碰進行中的呼叫狀態。
     /// 估算用字元數換算（CJK 一字約一 token，其餘約四字元一 token），只看比例，與供應商計數會有落差。
     /// </summary>
     public IReadOnlyList<ContextPart> GetContextBreakdown()
@@ -300,9 +300,9 @@ public sealed partial class ColonyAgentSession
                 _summarizer,
                 CompactionTriggers.Always,
                 ManualSummaryPreservedGroups,
-                null,
-                null);
-            IList<ChatMessage> after = [.. (await CompactionProvider.CompactAsync(strategy, before, null, cancellationToken).ConfigureAwait(false))];
+                summarizationPrompt: null,
+                target: null);
+            IList<ChatMessage> after = [.. (await CompactionProvider.CompactAsync(strategy, before, logger: null, cancellationToken).ConfigureAwait(false))];
 #pragma warning restore MAAI001
             // 摘要只會把多組折成一則，不可能變多；一樣多代表沒折到
             // （歷史太短，或策略吞掉了摘要失敗），誠實回報而不是謊稱成功。

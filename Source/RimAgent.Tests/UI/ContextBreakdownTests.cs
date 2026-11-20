@@ -19,7 +19,7 @@ public class ContextBreakdownTests
     [Test]
     public void EstimateCountsCjkPerCharAndLatinPerFourChars()
     {
-        Assert.That(ColonyAgentSession.EstimateTokens(null), Is.EqualTo(0));
+        Assert.That(ColonyAgentSession.EstimateTokens(text: null), Is.EqualTo(0));
         Assert.That(ColonyAgentSession.EstimateTokens("殖民地"), Is.EqualTo(3));
         Assert.That(ColonyAgentSession.EstimateTokens("abcdefgh"), Is.EqualTo(2));
     }

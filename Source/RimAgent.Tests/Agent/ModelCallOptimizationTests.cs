@@ -77,7 +77,7 @@ public class ModelCallOptimizationTests
                    .Reply("Done.");
         classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"safe\"}");
         var session = new ColonyAgentSession(agentClient, _world, () => _permissions, 8,
-            () => AgentMode.Auto, null, null, classifierClient, classifierPrompt: () => "prompt");
+            () => AgentMode.Auto, instructions: null, mcp: null, classifierClient, classifierPrompt: () => "prompt");
 
         await session.SendAsync("set Ali's doctor to 1");
 
@@ -95,7 +95,7 @@ public class ModelCallOptimizationTests
         classifierClient.Reply("{\"risk\": \"low\", \"authorized\": true}")
                         .Reply("{\"risk\": \"low\", \"authorized\": true}");
         var session = new ColonyAgentSession(agentClient, _world, () => _permissions, 8,
-            () => AgentMode.Auto, null, null, classifierClient, classifierPrompt: () => "prompt");
+            () => AgentMode.Auto, instructions: null, mcp: null, classifierClient, classifierPrompt: () => "prompt");
 
         await session.SendAsync("set Ali's doctor to 1");
         await session.SendAsync("set Ali's doctor to 1");
@@ -115,12 +115,11 @@ public class ModelCallOptimizationTests
 
         Assert.That(_world.ColonistQueryCount, Is.EqualTo(2), "重複查詢仍讀取即時世界");
         // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
-        List<TranscriptEntry> tools = session.Transcript.Snapshot()
-            .Where(e => e.Kind == TranscriptKind.Tool).ToList();
+        List<TranscriptEntry> tools = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool)];
         Assert.That(tools.Count, Is.EqualTo(2), "行動紀錄照記兩次");
         Assert.That(tools[0].Result, Does.Not.Contain("Changed by player"));
         Assert.That(tools[1].Result, Does.Contain("Changed by player"));
-        Assert.That(tools.All(t => !t.Failed), Is.True);
+        Assert.That(tools.TrueForAll(t => !t.Failed), Is.True);
     }
 
     [Test]
@@ -135,9 +134,8 @@ public class ModelCallOptimizationTests
         await session.SendAsync("how is Nobody? how is Nobody?");
 
         // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
-        List<TranscriptEntry> tools = session.Transcript.Snapshot()
-            .Where(e => e.Kind == TranscriptKind.Tool).ToList();
-        Assert.That(tools.All(t => t.Failed), Is.True, "查詢失敗均有記錄");
+        List<TranscriptEntry> tools = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool)];
+        Assert.That(tools.TrueForAll(t => t.Failed), Is.True, "查詢失敗均有記錄");
         Assert.That(tools[1].Result, Does.Not.Contain("already failed"), "允許原樣重試一次");
         Assert.That(tools[2].Result, Does.Not.Contain("already failed"), "查詢失敗後世界仍可能自行變化");
     }
@@ -228,8 +226,8 @@ public class ModelCallOptimizationTests
         var session = new ColonyAgentSession(_client, _world, () => _permissions, 8);
         session.Reasoning = ReasoningLevel.High;
 
-        RimLLMChatOptions overridden = session.BuildRunOptions(ReasoningLevel.Low);
-        RimLLMChatOptions preset = session.BuildRunOptions();
+        RimLLMChatOptions overridden = session.CreateRunOptions(ReasoningLevel.Low);
+        RimLLMChatOptions preset = session.CreateRunOptions();
 
         Assert.That(overridden.Reasoning?.Effort, Is.EqualTo(ReasoningEffort.Low));
         Assert.That(preset.Reasoning?.Effort, Is.EqualTo(ReasoningEffort.High));
@@ -244,7 +242,7 @@ public class ModelCallOptimizationTests
             new AgentSkill { Name = "raid-defense", Description = "fight", Body = "Draft everyone and hold the line." }
         };
 
-        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", null, null, skills);
+        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", playerNotes: null, conduct: null, skills);
 
         Assert.That(text, Does.Contain("raid-defense").And.Contain("fight").And.Contain("read_skill"));
         Assert.That(text, Does.Not.Contain("Draft everyone"));
@@ -253,7 +251,7 @@ public class ModelCallOptimizationTests
     [Test]
     public void RegistryOffersReadSkillOnlyWhenSkillsProvided()
     {
-        var withSkills = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null,
+        var withSkills = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), undo: null, gate: null,
             skills: () => [new AgentSkill { Name = "s", Description = "d", Body = "b" }]);
         var withoutSkills = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript());
 
@@ -277,8 +275,7 @@ public class ModelCallOptimizationTests
         await session.SendAsync("check skills");
 
         // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
-        List<TranscriptEntry> tools = session.Transcript.Snapshot()
-            .Where(e => e.Kind == TranscriptKind.Tool).ToList();
+        List<TranscriptEntry> tools = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool)];
         Assert.That(tools[0].Result, Does.Contain("Draft everyone."));
         Assert.That(tools[0].Failed, Is.False);
         Assert.That(tools[1].Failed, Is.True);
@@ -288,7 +285,7 @@ public class ModelCallOptimizationTests
     [Test]
     public void EmptySkillListStillOffersReadSkill()
     {
-        var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null,
+        var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), undo: null, gate: null,
             skills: () => []);
 
         Assert.That(registry.Descriptors.Any(d => d.Name == "read_skill"), Is.True,
@@ -298,7 +295,7 @@ public class ModelCallOptimizationTests
     [Test]
     public async Task BlacklistedCommandSkipsClassifierInAuto()
     {
-        _permissions.Set(ToolCategory.Trade, true);
+        _permissions.Set(ToolCategory.Trade, value: true);
         _world.Traders.Add(new TraderInfo
         {
             Kind = TraderInfo.OrbitalKind, Id = "PassingShip_1", Name = "Starweaver", Faction = "Outlanders", Silver = 1200,
@@ -309,7 +306,7 @@ public class ModelCallOptimizationTests
         agentClient.CallTool("execute_trade", new { trader = "PassingShip_1", buys = "spacer component x4", sells = "", negotiator = "Ali" })
                    .Reply("rejected.");
         var session = new ColonyAgentSession(agentClient, _world, () => _permissions, 8,
-            () => AgentMode.Auto, null, null, classifierClient, classifierPrompt: () => "prompt");
+            () => AgentMode.Auto, instructions: null, mcp: null, classifierClient, classifierPrompt: () => "prompt");
 
         await session.SendAsync("buy 4 spacer components");
 

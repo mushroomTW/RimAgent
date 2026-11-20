@@ -36,7 +36,7 @@ public class ImageAttachingTests
     [Test]
     public async Task AttachesImageAfterTheToolMessagesOfTheCurrentTurn()
     {
-        var client = Create(true, path => Task.FromResult(path == ShotPath ? Image : null));
+        var client = Create(enabled: true, path => Task.FromResult(path == ShotPath ? Image : null));
 
         List<ChatMessage> sent = [.. await client.AttachAsync(TurnWithScreenshot(), CancellationToken.None)];
 
@@ -53,7 +53,7 @@ public class ImageAttachingTests
     public async Task DisabledSendsMessagesUnchanged()
     {
         int loads = 0;
-        var client = Create(false, _ => { loads++; return Task.FromResult(Image); });
+        var client = Create(enabled: false, _ => { loads++; return Task.FromResult(Image); });
         List<ChatMessage> messages = TurnWithScreenshot();
 
         IEnumerable<ChatMessage> sent = await client.AttachAsync(messages, CancellationToken.None);
@@ -65,7 +65,7 @@ public class ImageAttachingTests
     [Test]
     public async Task ScreenshotsFromEarlierTurnsAreNotResent()
     {
-        var client = Create(true, _ => Task.FromResult(Image));
+        var client = Create(enabled: true, _ => Task.FromResult(Image));
         List<ChatMessage> messages = TurnWithScreenshot();
         messages.Add(new ChatMessage(ChatRole.Assistant, "done"));
         messages.Add(new ChatMessage(ChatRole.User, "next instruction"));
@@ -78,7 +78,7 @@ public class ImageAttachingTests
     [Test]
     public async Task FailedScreenshotResultIsIgnored()
     {
-        var client = Create(true, _ => Task.FromResult(Image));
+        var client = Create(enabled: true, _ => Task.FromResult(Image));
         List<ChatMessage> messages = TurnWithScreenshot("Error: failed to take screenshot.");
 
         Assert.That(await client.AttachAsync(messages, CancellationToken.None), Is.SameAs(messages));
@@ -88,7 +88,7 @@ public class ImageAttachingTests
     public async Task RetriesUntilTheFileIsWrittenThenCaches()
     {
         int loads = 0;
-        var client = Create(true, _ => Task.FromResult(++loads < 3 ? null : Image));
+        var client = Create(enabled: true, _ => Task.FromResult(++loads < 3 ? null : Image));
 
         List<ChatMessage> first = [.. await client.AttachAsync(TurnWithScreenshot(), CancellationToken.None)];
         List<ChatMessage> second = [.. await client.AttachAsync(TurnWithScreenshot(), CancellationToken.None)];
@@ -101,7 +101,7 @@ public class ImageAttachingTests
     [Test]
     public async Task PlayerImagesAttachToTheCurrentInstructionWithoutTouchingHistory()
     {
-        var client = Create(true, _ => Task.FromResult<byte[]>(null));
+        var client = Create(enabled: true, _ => Task.FromResult<byte[]>(null));
         List<ChatMessage> messages =
         [
             new ChatMessage(ChatRole.User, "old instruction"),
@@ -117,14 +117,14 @@ public class ImageAttachingTests
         Assert.That(sent[0].Contents.OfType<DataContent>().Any(), Is.False, "只附在本句指令");
         Assert.That(messages[2].Contents.OfType<DataContent>().Any(), Is.False, "對話歷史裡的原訊息不能被改");
 
-        client.SetPlayerImages(null);
+        client.SetPlayerImages(images: null);
         Assert.That(await client.AttachAsync(messages, CancellationToken.None), Is.SameAs(messages));
     }
 
     [Test]
     public async Task PlayerImagesAndScreenshotCanBothBeAttached()
     {
-        var client = Create(true, _ => Task.FromResult(Image));
+        var client = Create(enabled: true, _ => Task.FromResult(Image));
         client.SetPlayerImages([Image]);
 
         List<ChatMessage> sent = [.. await client.AttachAsync(TurnWithScreenshot(), CancellationToken.None)];
@@ -137,7 +137,7 @@ public class ImageAttachingTests
     [Test]
     public async Task PlayerImagesAreNotSentWhenImageInputIsOff()
     {
-        var client = Create(false, _ => Task.FromResult(Image));
+        var client = Create(enabled: false, _ => Task.FromResult(Image));
         client.SetPlayerImages([Image]);
         List<ChatMessage> messages = [new ChatMessage(ChatRole.User, "hi")];
 
@@ -152,13 +152,13 @@ public class ImageAttachingTests
 
         await client.GetResponseAsync(TurnWithScreenshot());
 
-        Assert.That(inner.ReceivedMessages[0].Last().Contents.OfType<DataContent>().Any(), Is.True);
+        Assert.That(inner.ReceivedMessages[0][^1].Contents.OfType<DataContent>().Any(), Is.True);
     }
 
     [Test]
     public async Task ScreenshotTakenInsideRunScriptIsAttached()
     {
-        var client = Create(true, path => Task.FromResult(path == ShotPath ? Image : null));
+        var client = Create(enabled: true, path => Task.FromResult(path == ShotPath ? Image : null));
         List<ChatMessage> messages =
         [
             new ChatMessage(ChatRole.User, "pause and look"),

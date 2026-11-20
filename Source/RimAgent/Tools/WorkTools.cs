@@ -25,7 +25,7 @@ public sealed class WorkTools
 
         public string Describe()
         {
-            return $"{Colonist.Name}'s {Work.Label} priority {PreviousLabel} -> {Priority}";
+            return string.Create(CultureInfo.InvariantCulture, $"{Colonist.Name}'s {Work.Label} priority {PreviousLabel} -> {Priority}");
         }
     }
 
@@ -76,7 +76,7 @@ public sealed class WorkTools
                 _undo.RecordPriority(change.Colonist.Id, change.Work.DefName, change.Previous, change.Priority);
             }
         }
-        string suffix = notes.Count == 0 ? string.Empty : " " + string.Join(" ", notes);
+        string suffix = notes.Count == 0 ? string.Empty : " " + string.Join(' ', notes);
         return "Set " + string.Join("; ", applied.Select(c => c.Describe())) + "." + suffix;
     }
 
@@ -132,7 +132,7 @@ public sealed class WorkTools
         change = null;
         error = null;
         string part = raw.Trim();
-        int colon = part.IndexOf(':');
+        int colon = part.IndexOf(':', StringComparison.Ordinal);
         int equals = part.LastIndexOf('=');
         if (colon <= 0 || equals <= colon + 1 || equals == part.Length - 1)
         {
@@ -211,8 +211,7 @@ public sealed class WorkTools
         foreach (ColonistInfo c in pawns.Value)
         {
             sb.Append(ToolText.Colonist(c)).Append(": ")
-              .Append(string.Join(", ", c.WorkPriorities.Select(w => w.Disabled ? $"{w.Label}=incapable" : $"{w.Label}={w.Priority}")))
-              .Append(ToolText.Unreadable(c))
+              .AppendJoin(", ", c.WorkPriorities.Select(w => w.Disabled ? $"{w.Label}=incapable" : string.Create(CultureInfo.InvariantCulture, $"{w.Label}={w.Priority}"))).Append(ToolText.Unreadable(c))
               .AppendLine();
         }
         return sb.ToString().Trim();
@@ -244,7 +243,7 @@ public sealed class WorkTools
         var hours = new List<int>();
         for (int h = startHour; h != endHour; h = (h + 1) % 24) hours.Add(h);
 
-        string schedulePreview = $"would set hours {startHour}-{(endHour + 23) % 24} " +
+        string schedulePreview = string.Create(CultureInfo.InvariantCulture, $"would set hours {startHour}-{(endHour + 23) % 24} ") +
             $"({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
         string blockedSchedule = ToolText.Blocked(_gate, schedulePreview);
         if (blockedSchedule != null) return blockedSchedule;
@@ -252,7 +251,7 @@ public sealed class WorkTools
         var failures = new List<string>();
         ApplyScheduleToColonists(pawns.Value, hours, assign.Value, failures);
 
-        string summary = $"Set hours {startHour}-{(endHour + 23) % 24} ({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Set hours {startHour}-{(endHour + 23) % 24} ({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.");
         return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures);
     }
 
@@ -268,7 +267,7 @@ public sealed class WorkTools
                 CommandResult r = _world.SetTimeAssignment(c.Id, hour, assign.DefName);
                 if (!r.Success)
                 {
-                    failures.Add($"{c.Name} hour {hour}: {r.Message}");
+                    failures.Add(string.Create(CultureInfo.InvariantCulture, $"{c.Name} hour {hour}: {r.Message}"));
                     break;
                 }
                 _undo?.RecordAssignment(c.Id, hour, oldAssignment, assign.DefName);

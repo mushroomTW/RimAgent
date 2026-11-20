@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -52,6 +52,7 @@ public sealed class DecisionReasoningRouter
     }
 
     /// <summary>解析指令該分流至哪個類別與思考強度。</summary>
+    #pragma warning disable VSTHRD202 // 保留 async：讀設定與建題目的例外要放進 Task，不在呼叫當下同步拋出。
     public async Task<DecisionRoute> ResolveAsync(
         string request,
         IReadOnlyList<DecisionRouteCategory> categories,
@@ -80,6 +81,7 @@ public sealed class DecisionReasoningRouter
 
         return await EvaluateAndRoute(service, state, plan, fallbackReasoning, minConfidence, activeCategories, ct);
     }
+    #pragma warning restore VSTHRD202
 
     private static async Task<DecisionRoute> EvaluateAndRoute(IDecisionService service, string state, DecisionPlan plan, ReasoningLevel fallbackReasoning, float minConfidence, List<DecisionRouteCategory> activeCategories, CancellationToken ct)
     {
@@ -231,6 +233,6 @@ public sealed class DecisionReasoningRouter
 
     private static string Escape(string value)
     {
-        return (value ?? string.Empty).Replace("<", "\\<");
+        return (value ?? string.Empty).Replace("<", "\\<", StringComparison.Ordinal);
     }
 }

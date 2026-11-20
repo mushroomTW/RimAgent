@@ -1,8 +1,9 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -68,7 +69,7 @@ public sealed class SubagentTools
         _remainingBudget = remainingBudget;
         _client = responseObserved == null ? client : new ObservingChatClient(client, responseObserved);
         Function = AIFunctionFactory.Create(
-            typeof(SubagentTools).GetMethod(nameof(DelegateTask)), this, ToolName, null, null);
+            typeof(SubagentTools).GetMethod(nameof(DelegateTask)), this, ToolName, description: null, serializerOptions: null);
     }
 
     /// <summary>本局 DLC 啟用狀況的一行說明，接在子代理提示詞裡；null 或空白就不加。</summary>
@@ -83,9 +84,7 @@ public sealed class SubagentTools
     /// <summary>在目前權限下至少拿得到一個工具的子代理；拿不到工具的不必列給模型，免得白白委派一次。</summary>
     public IReadOnlyList<AgentSubagent> Available(ToolPermissions permissions)
     {
-        return Subagents
-            .Where(s => s != null && _registry.SelectForSubagent(permissions, s.Categories, s.ReadOnly).Count > 0)
-            .ToList();
+        return [.. Subagents.Where(s => s != null && _registry.SelectForSubagent(permissions, s.Categories, s.ReadOnly).Count > 0)];
     }
 
     /// <summary>主 Agent 系統提示詞裡的子代理索引；沒有子代理時回空字串。</summary>
@@ -125,36 +124,21 @@ public sealed class SubagentTools
             ToolName = ToolName,
             ToolCategory = ToolCategory.Agents,
             ToolRisk = subagent != null && subagent.ReadOnly ? ToolRisk.Query : ToolRisk.Safe,
-            Arguments = "agent=" + wanted + ", tasks=" + briefs.Count,
+            Arguments = "agent=" + wanted + ", tasks=" + briefs.Count.ToString(CultureInfo.InvariantCulture),
             InstructionId = _transcript.CurrentInstructionId,
             Result = "running…"
         };
         string error = Validate(subagent, wanted, briefs);
-        if (error != null)
-        {
-            entry.Result = error;
-            entry.Failed = true;
-            _transcript.Add(entry);
-            return error;
-        }
+        if (error != null) return RecordFailure(entry, error);
 
         IList<AITool> tools = _registry.SelectForSubagent(_permissions(), subagent.Categories, subagent.ReadOnly);
         if (tools.Count == 0)
         {
-            entry.Result = ToolText.Error("subagent " + subagent.Name + " has no tools allowed under the player's current permissions.");
-            entry.Failed = true;
-            _transcript.Add(entry);
-            return entry.Result;
+            return RecordFailure(entry, ToolText.Error("subagent " + subagent.Name + " has no tools allowed under the player's current permissions."));
         }
         // 自主模式的額度用完就不起子代理：它們只會拿到「額度用完」的錯誤，白燒模型呼叫。
         int? remaining = _remainingBudget?.Invoke();
-        if (remaining == 0)
-        {
-            entry.Result = ToolText.Error("autonomous tool budget exhausted.");
-            entry.Failed = true;
-            _transcript.Add(entry);
-            return entry.Result;
-        }
+        if (remaining == 0) return RecordFailure(entry, ToolText.Error("autonomous tool budget exhausted."));
         // 先寫一筆「進行中」，子代理的工具紀錄才會排在它後面，玩家看得出是這次委派做的。
         _transcript.Add(entry);
 
@@ -162,33 +146,47 @@ public sealed class SubagentTools
         ReasoningLevel reasoning = subagent.Reasoning ?? _reasoning?.Invoke() ?? ReasoningLevel.Auto;
         // 每個任務的迴圈不超過剩餘額度：額度共用，超過的迭代只會拿到錯誤。
         int steps = remaining.HasValue ? Math.Max(1, Math.Min(MaxSteps, remaining.Value)) : MaxSteps;
-        bool parallel = briefs.Count > 1 && subagent.ReadOnly;
 
         string[] reports;
         try
         {
-            if (parallel)
-            {
-                reports = await Task.WhenAll(briefs.Select(b => RunOneAsync(subagent, tools, b, model, reasoning, steps, cancellationToken))).ConfigureAwait(false);
-            }
-            else
-            {
-                reports = new string[briefs.Count];
-                for (int i = 0; i < briefs.Count; i++)
-                {
-                    reports[i] = await RunOneAsync(subagent, tools, briefs[i], model, reasoning, steps, cancellationToken).ConfigureAwait(false);
-                }
-            }
+            reports = await RunAllAsync(subagent, tools, briefs, model, reasoning, steps, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            _transcript.UpdateToolResult(entry, "cancelled", true);
+            _transcript.UpdateToolResult(entry, "cancelled", failed: true);
             throw;
         }
 
         string result = ToolOutputLimit.Apply(Combine(subagent.Name, reports), store: _registry.Outputs);
         _transcript.UpdateToolResult(entry, result, reports.All(r => r.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal)));
         return result;
+    }
+
+    /// <summary>委派還沒開始就失敗：把錯誤寫進紀錄並回給模型。</summary>
+    private string RecordFailure(TranscriptEntry entry, string error)
+    {
+        entry.Result = error;
+        entry.Failed = true;
+        _transcript.Add(entry);
+        return error;
+    }
+
+    /// <summary>唯讀子代理的多個任務並行執行，其他子代理依序執行。</summary>
+    private async Task<string[]> RunAllAsync(
+        AgentSubagent subagent, IList<AITool> tools, List<string> briefs, string model, ReasoningLevel reasoning,
+        int steps, CancellationToken cancellationToken)
+    {
+        if (briefs.Count > 1 && subagent.ReadOnly)
+        {
+            return await Task.WhenAll(briefs.Select(b => RunOneAsync(subagent, tools, b, model, reasoning, steps, cancellationToken))).ConfigureAwait(false);
+        }
+        var reports = new string[briefs.Count];
+        for (int i = 0; i < briefs.Count; i++)
+        {
+            reports[i] = await RunOneAsync(subagent, tools, briefs[i], model, reasoning, steps, cancellationToken).ConfigureAwait(false);
+        }
+        return reports;
     }
 
     private string Validate(AgentSubagent subagent, string wanted, List<string> briefs)
@@ -199,7 +197,7 @@ public sealed class SubagentTools
             return ToolText.Error("unknown subagent '" + wanted + "'. Available: " + (names.Length == 0 ? "none" : names) + ".");
         }
         if (briefs.Count == 0) return ToolText.Error("give at least one task brief.");
-        if (briefs.Count > MaxTasks) return ToolText.Error("at most " + MaxTasks + " tasks per call; split the work into several calls.");
+        if (briefs.Count > MaxTasks) return ToolText.Error("at most " + MaxTasks.ToString(CultureInfo.InvariantCulture) + " tasks per call; split the work into several calls.");
         return null;
     }
 

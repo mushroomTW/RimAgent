@@ -22,9 +22,10 @@ namespace RimAgent.InGameTests;
 /// 工具登錄與擴充包在真實 mod 資料夾與真實 DefDatabase 上能否建立。headless 測試跑在假世界，這些都看不到。
 /// </summary>
 [TestFixture(TestType.MainMenu)]
+[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)]
 // DevTools 只註冊有一個公開建構式的類別：不能宣告私有建構式，測試方法因此是實例方法。
-#pragma warning disable CA1822 // 測試方法不存取實例資料，但必須是實例方法
-internal sealed class StartupTests
+#pragma warning disable CA1822, MA0036, S1118 // 測試方法不存取實例資料，但必須是實例方法；類別也不能改成 static
+internal sealed partial class StartupTests
 {
     private const string FrameworkPackageId = "GreenMushroom.RimLLMFramework";
     private const string RimAgentModNotLoaded = "RimAgentMod is not loaded";
@@ -34,7 +35,7 @@ internal sealed class StartupTests
     /// （RimWorld 啟動會掃這兩層，缺閉包時只在 log 留 AggregateException，功能到用時才壞）。
     /// </summary>
     [Test]
-    public void ShippedAssembliesResolveAllTypesAndFields()
+    public static void ShippedAssembliesResolveAllTypesAndFields()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -97,7 +98,7 @@ internal sealed class StartupTests
     /// 第二份 MEAI 會讓 IChatClient 等型別轉換全部失敗（RimAgent.csproj 的出貨白名單就是為此而設）。
     /// </summary>
     [Test]
-    public void NoSecondCopyOfSharedAssemblies()
+    public static void NoSecondCopyOfSharedAssemblies()
     {
         var failures = new List<string>();
         ModContentPack agent = TestHelpers.RimAgentContent;
@@ -127,7 +128,7 @@ internal sealed class StartupTests
     /// 名稱唯一且符合供應商的工具名規則。
     /// </summary>
     [Test]
-    public void ToolRegistryBuildsAgainstRealWorld()
+    public static void ToolRegistryBuildsAgainstRealWorld()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -135,15 +136,14 @@ internal sealed class StartupTests
         if (content == null) return;
 
         AgentPack pack = AgentPackLoader.Load(Path.Combine(content.RootDir, "AgentPack"));
-        var registry = new AgentToolRegistry(new RimWorldGameWorld(), new AgentTranscript(), null, null, skills: () => pack.Skills);
+        var registry = new AgentToolRegistry(new RimWorldGameWorld(), new AgentTranscript(), undo: null, gate: null, skills: () => pack.Skills);
 
         IReadOnlyList<AgentToolDescriptor> tools = registry.Descriptors;
         if (tools.Count == 0) failures.Add("no tool was registered");
-        var validName = new Regex("^[a-zA-Z0-9_-]{1,64}$", RegexOptions.None, TimeSpan.FromSeconds(1));
         failures.AddRange(tools
-            .Where(tool => !validName.IsMatch(tool.Name ?? string.Empty))
+            .Where(tool => !ValidName.IsMatch(tool.Name ?? string.Empty))
             .Select(tool => $"invalid tool name \"{tool.Name}\""));
-        foreach (IGrouping<string, AgentToolDescriptor> dup in tools.GroupBy(t => t.Name).Where(g => g.Count() > 1))
+        foreach (IGrouping<string, AgentToolDescriptor> dup in tools.GroupBy(t => t.Name).Where(g => g.Skip(1).Any()))
             failures.Add($"tool name {dup.Key} registered {dup.Count()} times");
         Log.Message($"{TestHelpers.LogPrefix}registered {tools.Count} tools");
         TestHelpers.AssertNone(failures, "tool registry problems");
@@ -151,7 +151,7 @@ internal sealed class StartupTests
 
     /// <summary>從遊戲實際載入的 mod 資料夾讀擴充包：Skills/ 與 Agents/ 下每個資料夾都成為一個技能／子代理。</summary>
     [Test]
-    public void AgentPackLoadsFromModFolder()
+    public static void AgentPackLoadsFromModFolder()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -181,7 +181,7 @@ internal sealed class StartupTests
     /// 在 RimAgent 出貨的每種語言都有 Keyed 條目（不在就退回英文、英文也沒有就顯示鍵名）。
     /// </summary>
     [Test]
-    public void EveryTranslationKeyExistsInShippedLanguages()
+    public static void EveryTranslationKeyExistsInShippedLanguages()
     {
         var failures = new List<string>();
         ModContentPack content = TestHelpers.RimAgentContent;
@@ -191,7 +191,7 @@ internal sealed class StartupTests
         List<string> keys = [.. LiteralTranslationKeys(typeof(RimAgentMod).Assembly, failures)
             .Concat(DynamicTranslationKeys())
             .Distinct()
-            .OrderBy(k => k, StringComparer.Ordinal)];
+            .Order(StringComparer.Ordinal)];
         if (keys.Count == 0) failures.Add("no translation key literal found in RimAgent.dll");
 
         string languagesDir = Path.Combine(content.RootDir, "Languages");
@@ -217,7 +217,7 @@ internal sealed class StartupTests
             // （重複鍵、壞掉的 XML、對不到 def 的 DefInjected；遊戲只在 log 留一句「N errors」）。
             missing = [.. keys.Where(k => !language.HaveTextForKey(k))];
             IEnumerable<string> loadErrors = language.loadErrors.Concat(language.defInjections.SelectMany(p => p.loadErrors));
-            foreach (string error in loadErrors.Where(e => e.Contains("RimAgent")))
+            foreach (string error in loadErrors.Where(e => e.Contains("RimAgent", StringComparison.Ordinal)))
                 failures.Add($"{language.folderName}: {error}");
         }
         else
@@ -232,7 +232,7 @@ internal sealed class StartupTests
 
     /// <summary>Agent 主按鈕的 def 已載入，worker 類別解析到 RimAgent 的型別。</summary>
     [Test]
-    public void MainButtonDefIsLoaded()
+    public static void MainButtonDefIsLoaded()
     {
         MainButtonDef def = DefDatabase<MainButtonDef>.GetNamedSilentFail("RimAgent");
         Expect.IsNotNull(def, "MainButtonDef RimAgent not found");
@@ -245,7 +245,7 @@ internal sealed class StartupTests
     /// ——模型拿到的 defName 必須打得回去。
     /// </summary>
     [Test]
-    public void DefCatalogsResolveByDefName()
+    public static void DefCatalogsResolveByDefName()
     {
         var failures = new List<string>();
         var world = new RimWorldGameWorld();
@@ -348,8 +348,6 @@ internal sealed class StartupTests
         return keys;
     }
 
-    private static readonly Regex KeyLiteral = new(@"^RimAgent(\.[A-Za-z0-9_]+){2,}$", RegexOptions.None, TimeSpan.FromSeconds(1));
-
     /// <summary>
     /// 掃描組件每個方法體的 ldstr，取出形如 RimAgent.X.Y 的字面字串（含 lambda 與 async 狀態機）。
     /// 解不開的方法記成失敗，不默默少掃。
@@ -434,5 +432,10 @@ internal sealed class StartupTests
             }
         }
     }
+
+    [GeneratedRegex("^[a-zA-Z0-9_-]{1,64}$", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ValidName { get; }
+    [GeneratedRegex(@"^RimAgent(\.[A-Za-z0-9_]+){2,}$", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex KeyLiteral { get; }
 }
-#pragma warning restore CA1822
+#pragma warning restore CA1822, MA0036, S1118

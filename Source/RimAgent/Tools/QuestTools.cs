@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -44,7 +45,7 @@ public sealed class QuestTools
         List<QuestInfo> shown = [.. quests.Where(q => includeDismissed || !q.Dismissed)
             .OrderBy(q => q.State == QuestInfo.AvailableState ? 0 : 1).ThenBy(q => q.Id)];
         int hidden = quests.Count - shown.Count;
-        string hiddenNote = hidden == 0 ? string.Empty : $"{hidden} dismissed quest(s) are hidden; pass includeDismissed to list them.";
+        string hiddenNote = hidden == 0 ? string.Empty : string.Create(CultureInfo.InvariantCulture, $"{hidden} dismissed quest(s) are hidden; pass includeDismissed to list them.");
         if (shown.Count == 0) return "No available or active quests." + (hidden == 0 ? string.Empty : " " + hiddenNote);
         return string.Join("\n\n", shown.Select(q => Format(q, MaxListDescriptionChars))) + (hidden == 0 ? string.Empty : "\n\n" + hiddenNote);
     }
@@ -59,9 +60,9 @@ public sealed class QuestTools
         QuestInfo quest = _world.GetQuests().FirstOrDefault(q => q.Id == questId);
         if (quest == null) return NotFound(questId);
         if (quest.State != QuestInfo.AvailableState)
-            return ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] is already accepted.");
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] is already accepted."));
         if (!quest.CanAccept)
-            return ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] cannot be accepted now: {Requirements(quest)}");
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] cannot be accepted now: {Requirements(quest)}"));
 
         QuestRewardInfo option = null;
         if (quest.RewardOptions.Count > 0)
@@ -69,12 +70,12 @@ public sealed class QuestTools
             option = SelectRewardOption(quest, reward);
             if (option == null)
             {
-                return ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] needs a reward choice. Choices: " + FormatRewardOptions(quest));
+                return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] needs a reward choice. Choices: ") + FormatRewardOptions(quest));
             }
         }
         else if (reward > 1)
         {
-            return ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] has no reward choices.");
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] has no reward choices."));
         }
 
         QuestAccepterInfo picked = null;
@@ -85,13 +86,13 @@ public sealed class QuestTools
             picked = resolved.Value;
         }
 
-        string preview = $"would accept quest \"{quest.Name}\" [{quest.Id}]" + RewardClause(option) + AccepterClause(picked) + ". This cannot be undone.";
+        string preview = string.Create(CultureInfo.InvariantCulture, $"would accept quest \"{quest.Name}\" [{quest.Id}]") + RewardClause(option) + AccepterClause(picked) + ". This cannot be undone.";
         string blocked = ToolText.Blocked(_gate, preview);
         if (blocked != null) return blocked;
 
         CommandResult r = _world.AcceptQuest(quest.Id, option?.Number ?? 0, picked?.Id ?? 0);
         if (!r.Success) return ToolText.Error(r.Message);
-        string summary = $"Accepted quest \"{quest.Name}\" [{quest.Id}]" + RewardClause(option) + AccepterClause(picked) + ".";
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Accepted quest \"{quest.Name}\" [{quest.Id}]") + RewardClause(option) + AccepterClause(picked) + ".";
         return string.IsNullOrEmpty(picked?.Warning) ? summary : summary + " Warning from the game: " + picked.Warning;
     }
 
@@ -113,35 +114,35 @@ public sealed class QuestTools
         if (quest == null) return NotFound(questId);
         // 只有尚未接受的任務能被拒絕；但進行中的任務若曾被收起來，仍可取消。
         if (dismissed && quest.State != QuestInfo.AvailableState)
-            return ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] is already accepted; only available quests can be dismissed.");
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] is already accepted; only available quests can be dismissed."));
         string verb = dismissed ? "dismissed" : "restored";
-        if (quest.Dismissed == dismissed) return $"Quest \"{quest.Name}\" [{quest.Id}] is already {(dismissed ? "dismissed" : "not dismissed")}.";
+        if (quest.Dismissed == dismissed) return string.Create(CultureInfo.InvariantCulture, $"Quest \"{quest.Name}\" [{quest.Id}] is already {(dismissed ? "dismissed" : "not dismissed")}.");
 
-        string blocked = ToolText.Blocked(_gate, $"would mark quest \"{quest.Name}\" [{quest.Id}] as {verb}.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would mark quest \"{quest.Name}\" [{quest.Id}] as {verb}."));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.SetQuestDismissed(quest.Id, dismissed);
         if (!r.Success) return ToolText.Error(r.Message);
-        return $"Quest \"{quest.Name}\" [{quest.Id}] {verb}.";
+        return string.Create(CultureInfo.InvariantCulture, $"Quest \"{quest.Name}\" [{quest.Id}] {verb}.");
     }
 
     private static string NotFound(int questId)
     {
-        return ToolText.Error($"no available or active quest with id {questId}. Call list_quests for the current ids.");
+        return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no available or active quest with id {questId}. Call list_quests for the current ids."));
     }
 
     private static Result<QuestAccepterInfo> ResolveAccepter(QuestInfo quest, string accepter)
     {
         if (quest.Accepters.Count == 0)
         {
-            return Result<QuestAccepterInfo>.Fail(ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] needs an accepter, but no colonist can accept it right now."));
+            return Result<QuestAccepterInfo>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] needs an accepter, but no colonist can accept it right now.")));
         }
         if (string.IsNullOrWhiteSpace(accepter))
         {
             if (quest.Accepters.Count == 1) return Result<QuestAccepterInfo>.Ok(quest.Accepters[0]);
-            return Result<QuestAccepterInfo>.Fail(ToolText.Error($"quest \"{quest.Name}\" [{quest.Id}] needs an accepter. Colonists who can accept: " + FormatAccepters(quest.Accepters)));
+            return Result<QuestAccepterInfo>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] needs an accepter. Colonists who can accept: ") + FormatAccepters(quest.Accepters)));
         }
-        return TargetResolver.ResolveEntity(accepter, quest.Accepters, a => a.Id, AccepterNames, a => $"[{a.Id}] {a.FullName}", "colonist");
+        return TargetResolver.ResolveEntity(accepter, quest.Accepters, a => a.Id, AccepterNames, a => string.Create(CultureInfo.InvariantCulture, $"[{a.Id}] {a.FullName}"), "colonist");
     }
 
     private static IEnumerable<string> AccepterNames(QuestAccepterInfo a)
@@ -153,7 +154,7 @@ public sealed class QuestTools
     private static string RewardClause(QuestRewardInfo option)
     {
         if (option == null || option.Rewards.Count == 0) return string.Empty;
-        return " for reward " + option.Number + " (" + string.Join("; ", option.Rewards) + ")";
+        return " for reward " + option.Number.ToString(CultureInfo.InvariantCulture) + " (" + string.Join("; ", option.Rewards) + ")";
     }
 
     private static string AccepterClause(QuestAccepterInfo accepter)
@@ -165,12 +166,12 @@ public sealed class QuestTools
 
     private static string FormatAccepters(IReadOnlyList<QuestAccepterInfo> accepters)
     {
-        return string.Join("; ", accepters.Select(a => $"[{a.Id}] {a.Name}" + (string.IsNullOrEmpty(a.Warning) ? string.Empty : " (warning: " + a.Warning + ")")));
+        return string.Join("; ", accepters.Select(a => string.Create(CultureInfo.InvariantCulture, $"[{a.Id}] {a.Name}") + (string.IsNullOrEmpty(a.Warning) ? string.Empty : " (warning: " + a.Warning + ")")));
     }
 
     private static string FormatRewardOptions(QuestInfo quest)
     {
-        return string.Join("; ", quest.RewardOptions.Select(o => o.Number + ") " + (o.Rewards.Count == 0 ? "(nothing listed)" : string.Join(", ", o.Rewards))
+        return string.Join("; ", quest.RewardOptions.Select(o => o.Number.ToString(CultureInfo.InvariantCulture) + ") " + (o.Rewards.Count == 0 ? "(nothing listed)" : string.Join(", ", o.Rewards))
             + (o.RequiresAccepter ? " [needs an accepter]" : string.Empty)));
     }
 
@@ -197,7 +198,7 @@ public sealed class QuestTools
         sb.Append(')');
         foreach (string deadline in q.Deadlines) sb.AppendLine().Append("Deadline: ").Append(deadline);
         if (!string.IsNullOrEmpty(q.Description))
-            sb.AppendLine().Append(ToolText.TruncateField(q.Description.Replace('\n', ' ').Replace("\r", string.Empty), descriptionLimit));
+            sb.AppendLine().Append(ToolText.TruncateField(q.Description.Replace('\n', ' ').Replace("\r", string.Empty, StringComparison.Ordinal), descriptionLimit));
         if (q.State == QuestInfo.AvailableState)
         {
             sb.AppendLine().Append(q.CanAccept ? "Can accept: yes" : "Can accept: NO - " + Requirements(q));

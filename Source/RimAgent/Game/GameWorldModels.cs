@@ -230,12 +230,12 @@ public sealed class CommandResult : Result<string>
 
     public static new CommandResult Ok(string message = "")
     {
-        return new CommandResult(true, message);
+        return new CommandResult(success: true, message);
     }
 
     public static new CommandResult Fail(string message)
     {
-        return new CommandResult(false, message);
+        return new CommandResult(success: false, message);
     }
 }
 

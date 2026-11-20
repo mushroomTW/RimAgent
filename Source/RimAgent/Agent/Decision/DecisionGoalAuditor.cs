@@ -163,7 +163,7 @@ public sealed class DecisionGoalAuditor
 
     private static string Escape(string value)
     {
-        return (value ?? string.Empty).Replace("<", "\\<");
+        return (value ?? string.Empty).Replace("<", "\\<", StringComparison.Ordinal);
     }
 
     private IDecisionService ResolveService()

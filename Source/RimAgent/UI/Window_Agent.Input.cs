@@ -46,7 +46,7 @@ public partial class Window_Agent
         bool isSlash = _input.Length > 0 && _input[0] == '/';
         if (session.IsBusy)
         {
-            if (DrawUnifiedButton(buttonRect, "RimAgent.Stop".Translate(), EmergencyColor, EmergencyColor, true))
+            if (DrawUnifiedButton(buttonRect, "RimAgent.Stop".Translate(), EmergencyColor, EmergencyColor, enabled: true))
             {
                 StopRun();
             }
@@ -132,7 +132,7 @@ public partial class Window_Agent
     private List<byte[]> TakePastedImages()
     {
         if (_pastedImages.Count == 0) return [];
-        List<byte[]> images = _pastedImages.Select(p => p.Jpeg).ToList();
+        List<byte[]> images = [.. _pastedImages.Select(p => p.Jpeg)];
         foreach (PastedImage image in _pastedImages) UnityEngine.Object.Destroy(image.Thumbnail);
         _pastedImages.Clear();
         return images;

@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using HarmonyLib;
 using RimWorld;
@@ -119,7 +120,7 @@ internal sealed class MapShotCapture : MonoBehaviour
         {
             rendered = _target.CreateTexture2D(TextureFormat.RGBA32);
             byte[] pixels = MapShotOverlay.Compose(rendered.GetRawTextureData(), _layout);
-            composed = new Texture2D(_layout.ImageWidth, _layout.ImageHeight, TextureFormat.RGBA32, false);
+            composed = new Texture2D(_layout.ImageWidth, _layout.ImageHeight, TextureFormat.RGBA32, mipChain: false);
             composed.LoadRawTextureData(pixels);
             composed.Apply();
             File.WriteAllBytes(_path, composed.EncodeToPNG());
@@ -134,7 +135,7 @@ internal sealed class MapShotCapture : MonoBehaviour
     private void Update()
     {
         if (Time.frameCount - _startFrame <= StaleFrames) return;
-        Log.Warning("RimAgent: map screenshot gave up after " + StaleFrames + " frames without rendering.");
+        Log.Warning("RimAgent: map screenshot gave up after " + StaleFrames.ToString(CultureInfo.InvariantCulture) + " frames without rendering.");
         Destroy(gameObject);
     }
 

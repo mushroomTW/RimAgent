@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using RimAgent.Game;
@@ -10,7 +11,7 @@ internal sealed partial class FakeGameWorld
 {
     public CommandResult AddDesignationOnCell(int x, int z, string designationDefName)
     {
-        Calls.Add($"AddDesignationOnCell({x},{z},{designationDefName})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"AddDesignationOnCell({x},{z},{designationDefName})"));
         ThingInfo thing = Things.FirstOrDefault(t => t.X == x && t.Z == z && t.Kind == ThingKind.Mineable);
         if (thing == null) return CommandResult.Fail("nothing mineable there");
         Mark(thing, designationDefName);
@@ -19,7 +20,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult AddDesignationOnThing(int thingId, string designationDefName)
     {
-        Calls.Add($"AddDesignationOnThing({thingId},{designationDefName})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"AddDesignationOnThing({thingId},{designationDefName})"));
         ThingInfo thing = Things.Concat(Selection).FirstOrDefault(t => t.Id == thingId);
         if (thing == null) return CommandResult.Fail("thing not found");
         Mark(thing, designationDefName);
@@ -28,7 +29,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult RemoveDesignationOnCell(int x, int z, string designationDefName)
     {
-        Calls.Add($"RemoveDesignationOnCell({x},{z},{designationDefName})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"RemoveDesignationOnCell({x},{z},{designationDefName})"));
         ThingInfo thing = Things.FirstOrDefault(t => t.X == x && t.Z == z && t.Designations.Contains(designationDefName));
         if (thing == null) return CommandResult.Fail("no such designation there");
         Unmark(thing, designationDefName);
@@ -37,7 +38,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult RemoveDesignationOnThing(int thingId, string designationDefName)
     {
-        Calls.Add($"RemoveDesignationOnThing({thingId},{designationDefName})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"RemoveDesignationOnThing({thingId},{designationDefName})"));
         ThingInfo thing = Things.Concat(Selection).FirstOrDefault(t => t.Id == thingId);
         if (thing == null || !thing.Designations.Contains(designationDefName)) return CommandResult.Fail("no such designation");
         Unmark(thing, designationDefName);
@@ -64,7 +65,7 @@ internal sealed partial class FakeGameWorld
     public IReadOnlyList<DefInfo> GetLookupCatalog(string kind)
     {
         return LookupInfos.TryGetValue(kind ?? string.Empty, out List<DefLookupInfo> list)
-            ? list.Select(i => new DefInfo(i.DefName, i.Label)).ToList()
+            ? [.. list.Select(i => new DefInfo(i.DefName, i.Label))]
             : new List<DefInfo>();
     }
 
@@ -76,7 +77,7 @@ internal sealed partial class FakeGameWorld
     public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName, bool checkOnly = false)
     {
         // 只檢查的呼叫不記進 Calls，既有測試對實際放置順序的斷言不受影響。
-        if (!checkOnly) Calls.Add($"TryPlaceBlueprint({buildableDefName},{x},{z},{rotation},{stuffDefName})");
+        if (!checkOnly) Calls.Add(string.Create(CultureInfo.InvariantCulture, $"TryPlaceBlueprint({buildableDefName},{x},{z},{rotation},{stuffDefName})"));
         if (BlockedCells.TryGetValue((x, z), out string reason)) return CommandResult.Fail(reason);
         if (BlockedStuff.TryGetValue((buildableDefName, stuffDefName ?? string.Empty), out string stuffReason)) return CommandResult.Fail(stuffReason);
         if (checkOnly) return CommandResult.Ok();
@@ -93,14 +94,14 @@ internal sealed partial class FakeGameWorld
 
     public LayoutPlan GetLayoutPlan(string layoutDefName, int x, int z, int rotation)
     {
-        Calls.Add($"GetLayoutPlan({layoutDefName},{x},{z},{rotation})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"GetLayoutPlan({layoutDefName},{x},{z},{rotation})"));
         LayoutInfo info = LayoutList.FirstOrDefault(l => l.DefName == layoutDefName);
         if (info == null || !LayoutPieces.TryGetValue(layoutDefName, out List<LayoutPiece> local)) return null;
         int minX = x - (info.Width - 1) / 2, minZ = z - (info.Height - 1) / 2;
         return new LayoutPlan
         {
             Rect = new CellRectSpec(minX, minZ, minX + info.Width - 1, minZ + info.Height - 1),
-            Pieces = local.Select(p => new LayoutPiece { DefName = p.DefName, Part = p.Part, StuffDefName = p.StuffDefName, X = minX + p.X, Z = minZ + p.Z, Rotation = p.Rotation }).ToList()
+            Pieces = [.. local.Select(p => new LayoutPiece { DefName = p.DefName, Part = p.Part, StuffDefName = p.StuffDefName, X = minX + p.X, Z = minZ + p.Z, Rotation = p.Rotation })]
         };
     }
 

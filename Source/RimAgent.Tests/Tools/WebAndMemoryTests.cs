@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -103,7 +104,7 @@ public class WebAndMemoryTests
             memory.WriteAsync("big.md", new string('x', AgentMemoryStore.MaxFileChars + 1)));
 
         for (int i = 0; i < AgentMemoryStore.MaxFiles; i++)
-            memory.WriteAsync("note" + i + ".md", "value").GetAwaiter().GetResult();
+            await memory.WriteAsync("note" + i.ToString(CultureInfo.InvariantCulture) + ".md", "value");
         await Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync("extra.md", "value"));
         // 描述檔與索引不佔檔數；既有檔案仍可覆寫。
         await Assert.DoesNotThrowAsync(() => memory.WriteAsync("note0_description.md", "desc"));
@@ -120,7 +121,7 @@ public class WebAndMemoryTests
 
         await Invoke(memory, "file_memory_write", ("fileName", "base.md"), ("content", "Near river"), ("description", description));
 
-        string line = memory.Index.Split('\n').Single(l => l.Contains("base.md"));
+        string line = memory.Index.Split('\n').Single(l => l.Contains("base.md", StringComparison.Ordinal));
         Assert.That(line, Does.Contain("notes ## Rules Always release prisoners"));
         Assert.That(line.Length, Is.LessThan(AgentMemoryStore.MaxDescriptionChars + 40));
         Assert.That(memory.Index, Does.Not.Contain("\n## Rules"));
@@ -131,7 +132,7 @@ public class WebAndMemoryTests
     {
         var entries = new List<AgentMemoryEntry>();
         for (int i = 0; i < AgentMemoryStore.MaxFiles + 1; i++)
-            entries.Add(new AgentMemoryEntry { name = "note" + i + ".md", content = "value" });
+            entries.Add(new AgentMemoryEntry { name = "note" + i.ToString(CultureInfo.InvariantCulture) + ".md", content = "value" });
         entries.Add(new AgentMemoryEntry { name = "big.md", content = new string('x', AgentMemoryStore.MaxFileChars + 1) });
         entries.Add(new AgentMemoryEntry { name = AgentMemoryStore.IndexFileName, content = "# Memory Index\n\n- **note0.md**\n- **note30.md**\n- **big.md**: large" });
 
@@ -192,7 +193,7 @@ public class WebAndMemoryTests
         await Invoke(memory, "file_memory_replace_lines", ("fileName", "base.md"), ("edits", edits));
 
         Assert.That(await Invoke(memory, "file_memory_read", ("fileName", "base.md")), Does.Contain("a\nc\n"));
-        AIFunction tool = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null, null, memory: memory)
+        AIFunction tool = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), undo: null, gate: null, memory: memory)
             .All.OfType<AIFunction>().Single(t => t.Name == "file_memory_replace_lines");
         string schema = tool.JsonSchema.GetRawText();
         Assert.That(tool.Description.Length + schema.Length, Is.LessThan(700), "精簡後的說明與 schema");
@@ -201,7 +202,7 @@ public class WebAndMemoryTests
 
     private static async Task<string> Invoke(AgentMemoryStore memory, string toolName, params (string Key, object Value)[] arguments)
     {
-        var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null,
+        var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), undo: null,
             new ConfirmationGate(() => AgentMode.Autonomous), memory: memory);
         AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == toolName);
         var args = new AIFunctionArguments(arguments.ToDictionary(a => a.Key, a => a.Value));

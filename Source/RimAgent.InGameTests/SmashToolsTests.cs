@@ -13,12 +13,13 @@ namespace RimAgent.InGameTests;
 
 /// <summary>驗證隨附 SDK 的初始化擁有者、補丁唯一性與主執行緒工作派送。</summary>
 [TestFixture(TestType.MainMenu)]
+[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)]
 // DevTools 只註冊有一個公開建構式的類別：不能宣告私有建構式，測試方法因此是實例方法。
-#pragma warning disable CA1822 // 測試方法不存取實例資料，但必須是實例方法
+#pragma warning disable CA1822, MA0036, S1118 // 測試方法不存取實例資料，但必須是實例方法；類別也不能改成 static
 internal sealed class SmashToolsTests
 {
     [Test]
-    public void SetupBelongsToRimAgentAndPatchesOnce()
+    public static void SetupBelongsToRimAgentAndPatchesOnce()
     {
         var setup = LoadedModManager.GetMod<ProjectSetup>();
         Expect.IsNotNull(setup);
@@ -35,14 +36,14 @@ internal sealed class SmashToolsTests
                 var sdkPatches = patches.Where(p => p.PatchMethod.DeclaringType?.Assembly == sdkAssembly).ToList();
                 count += sdkPatches.Count;
                 Expect.All(sdkPatches, p => p.owner == setup.Content.PackageIdPlayerFacing, target.ToString());
-                Expect.All(sdkPatches.GroupBy(p => p.PatchMethod), group => group.Count() == 1, target.ToString());
+                Expect.All(sdkPatches.GroupBy(p => p.PatchMethod), group => group.Take(2).Count() == 1, target.ToString());
             }
         }
         Expect.GreaterThan(count, 0, "SmashTools 必須實際安裝生命週期補丁");
     }
 
     [Test]
-    public IEnumerator BackgroundDispatchReturnsToGameThread()
+    public static IEnumerator BackgroundDispatchReturnsToGameThread()
     {
         // 必須先在遊戲執行緒建立 UnityThread，才能從背景工作派送。
         Expect.IsTrue(UnityThread.IsInMainThread);
@@ -57,4 +58,4 @@ internal sealed class SmashToolsTests
         Expect.IsTrue(ranOnGameThread);
     }
 }
-#pragma warning restore CA1822
+#pragma warning restore CA1822, MA0036, S1118

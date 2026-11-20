@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using RimAgent.Game;
@@ -53,7 +54,7 @@ internal sealed partial class FakeGameWorld
             }
             else
             {
-                return new CaravanPlanInfo { Error = $"no pawn with id {id} is on this map" };
+                return new CaravanPlanInfo { Error = string.Create(CultureInfo.InvariantCulture, $"no pawn with id {id} is on this map") };
             }
         }
 
@@ -63,21 +64,21 @@ internal sealed partial class FakeGameWorld
             CaravanCargoInfo have = CaravanCargo.FirstOrDefault(c => string.Equals(c.DefName, line.DefName, StringComparison.OrdinalIgnoreCase));
             if (have == null || have.Count < line.Count)
             {
-                return new CaravanPlanInfo { Error = $"the colony can only supply {have?.Count ?? 0} {line.DefName} for the caravan (asked for {line.Count})" };
+                return new CaravanPlanInfo { Error = string.Create(CultureInfo.InvariantCulture, $"the colony can only supply {have?.Count ?? 0} {line.DefName} for the caravan (asked for {line.Count})") };
             }
             cargo.Add(new CaravanPlanCargo { DefName = have.DefName, Label = have.Label, Count = line.Count, MassEach = have.MassEach });
         }
 
         float usage = cargo.Sum(c => c.MassEach * c.Count);
         float capacity = members.Count(m => m.Kind != CaravanMemberInfo.AnimalKind) * 40f + members.Count(m => m.Kind == CaravanMemberInfo.AnimalKind) * 120f;
-        bool pemmican = cargo.Any(c => c.DefName == "Pemmican");
+        bool pemmican = cargo.Exists(c => c.DefName == "Pemmican");
         var blockers = new List<string>();
         var warnings = new List<string>();
         if (request.DestinationTile < 0) blockers.Add("You must choose a route first.");
-        if (!members.Any(m => m.Kind == CaravanMemberInfo.ColonistKind && !m.Downed)) blockers.Add("A caravan needs at least one colonist who is not downed.");
+        if (!members.Exists(m => m.Kind == CaravanMemberInfo.ColonistKind && !m.Downed)) blockers.Add("A caravan needs at least one colonist who is not downed.");
         if (usage > capacity) blockers.Add("Too big caravan mass usage.");
         float foodDays = pemmican ? cargo.First(c => c.DefName == "Pemmican").Count / 4f : 0f;
-        if (foodDays < 5f) warnings.Add(foodDays < 0.1f ? "The caravan has no food." : $"The caravan only has {foodDays:0.#} days' worth of food.");
+        if (foodDays < 5f) warnings.Add(foodDays < 0.1f ? "The caravan has no food." : string.Create(CultureInfo.InvariantCulture, $"The caravan only has {foodDays:0.#} days' worth of food."));
         return new CaravanPlanInfo
         {
             Members = members,
@@ -92,7 +93,7 @@ internal sealed partial class FakeGameWorld
             ForagedPerDay = members.Count > 1 ? 1.5f : 0f,
             Visibility = 0.4f,
             DestinationTile = request.DestinationTile,
-            DestinationLabel = request.DestinationTile < 0 ? string.Empty : "tile " + request.DestinationTile + " (Temperate forest)",
+            DestinationLabel = request.DestinationTile < 0 ? string.Empty : "tile " + request.DestinationTile.ToString(CultureInfo.InvariantCulture) + " (Temperate forest)",
             DistanceTiles = request.DestinationTile < 0 ? 0f : 12f,
             EtaTicks = request.DestinationTile < 0 ? 0 : 120000,
             DestinationReachable = request.DestinationTile >= 0,
@@ -121,27 +122,27 @@ internal sealed partial class FakeGameWorld
             Id = _nextFormingId++,
             Status = "gathering items",
             Members = plan.Members,
-            Cargo = plan.Cargo.Select(c => c.Label + " x" + c.Count).ToList(),
+            Cargo = [.. plan.Cargo.Select(c => c.Label + " x" + c.Count.ToString(CultureInfo.InvariantCulture))],
             ExitX = 0,
             ExitZ = 30
         });
-        return CommandResult.Ok($"Started forming a caravan with {string.Join(", ", plan.Members.Select(m => m.Name).ToArray())} for tile {request.DestinationTile}");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Started forming a caravan with {string.Join(", ", plan.Members.Select(m => m.Name).ToArray())} for tile {request.DestinationTile}"));
     }
 
     private static string Describe(CaravanRequest request)
     {
         if (request == null) return "null";
-        return $"{string.Join("+", (request.PawnIds ?? []).ToArray())}|" +
-               $"{string.Join("+", (request.Cargo ?? []).Select(l => l.DefName + ":" + l.Count).ToArray())}|{request.DestinationTile}";
+        return $"{string.Join('+', (request.PawnIds ?? []).ToArray())}|" +
+               string.Create(CultureInfo.InvariantCulture, $"{string.Join('+', (request.Cargo ?? []).Select(l => l.DefName + ":" + l.Count.ToString(CultureInfo.InvariantCulture)).ToArray())}|{request.DestinationTile}");
     }
 
     public IReadOnlyList<FormingCaravanInfo> GetFormingCaravans() => Forming;
 
     public CommandResult CancelFormingCaravan(int formingId)
     {
-        Calls.Add($"CancelFormingCaravan({formingId})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"CancelFormingCaravan({formingId})"));
         FormingCaravanInfo forming = Forming.FirstOrDefault(f => f.Id == formingId);
-        if (forming == null) return CommandResult.Fail($"no caravan is being formed with id {formingId}");
+        if (forming == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no caravan is being formed with id {formingId}"));
         Forming.Remove(forming);
         return CommandResult.Ok("Stopped forming the caravan");
     }
@@ -152,14 +153,14 @@ internal sealed partial class FakeGameWorld
 
     public IReadOnlyList<TravelEstimateInfo> GetTravelEstimates(int originCaravanId, IReadOnlyList<int> tiles)
     {
-        return tiles.Select(t => TravelEstimates.TryGetValue(t, out TravelEstimateInfo e)
+        return [.. tiles.Select(t => TravelEstimates.TryGetValue(t, out TravelEstimateInfo e)
             ? e
-            : new TravelEstimateInfo { Tile = t, Reachable = true, Ticks = 60000, DistanceTiles = 10f }).ToList();
+            : new TravelEstimateInfo { Tile = t, Reachable = true, Ticks = 60000, DistanceTiles = 10f })];
     }
 
     public WorldTileInfo GetWorldTile(int tile, int originCaravanId)
     {
-        if (tile > 99999) return new WorldTileInfo { Tile = tile, Error = $"tile {tile} does not exist on this layer of the world" };
+        if (tile > 99999) return new WorldTileInfo { Tile = tile, Error = string.Create(CultureInfo.InvariantCulture, $"tile {tile} does not exist on this layer of the world") };
         return WorldTiles.TryGetValue(tile, out WorldTileInfo info)
             ? info
             : new WorldTileInfo { Tile = tile, Biome = "Temperate forest", Hilliness = "Flat", TemperatureC = 14f, MinTemperatureC = -8f, MaxTemperatureC = 31f, RainfallMm = 900f, ElevationM = 300f, CanSettle = true };
@@ -175,7 +176,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult SendCaravan(int caravanId, int tile, int optionNumber, string label)
     {
-        Calls.Add($"SendCaravan({caravanId},{tile},{optionNumber},{label})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SendCaravan({caravanId},{tile},{optionNumber},{label})"));
         CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
         if (caravan == null) return CommandResult.Fail("caravan not found");
         FloatMenuOptionInfo option = CaravanOrders.FirstOrDefault(o => o.Number == optionNumber);
@@ -190,14 +191,14 @@ internal sealed partial class FakeGameWorld
         caravan.Moving = true;
         caravan.Paused = false;
         caravan.DestinationTile = tile;
-        caravan.DestinationLabel = "tile " + tile;
+        caravan.DestinationLabel = "tile " + tile.ToString(CultureInfo.InvariantCulture);
         caravan.EtaTicks = 150000;
-        return CommandResult.Ok($"{caravan.Name} is on its way to tile {tile}");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"{caravan.Name} is on its way to tile {tile}"));
     }
 
     public CommandResult SetCaravanMovement(int caravanId, string action)
     {
-        Calls.Add($"SetCaravanMovement({caravanId},{action})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SetCaravanMovement({caravanId},{action})"));
         CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
         if (caravan == null) return CommandResult.Fail("caravan not found");
         if (!caravan.Moving) return CommandResult.Fail($"{caravan.Name} has no destination");
@@ -220,7 +221,7 @@ internal sealed partial class FakeGameWorld
 
     public CommandResult SettleCaravan(int caravanId, string action)
     {
-        Calls.Add($"SettleCaravan({caravanId},{action})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"SettleCaravan({caravanId},{action})"));
         CaravanInfo caravan = Caravans.FirstOrDefault(c => c.Id == caravanId);
         if (caravan == null) return CommandResult.Fail("caravan not found");
         if (FollowUpDialog != null)

@@ -1,6 +1,7 @@
 #nullable disable
 
 using System;
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -40,12 +41,12 @@ internal sealed class SearxngSearchClient
             using HttpResponseMessage response = await _client.GetAsync(url, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                return ToolText.Error("SearXNG returned HTTP " + (int)response.StatusCode +
+                return ToolText.Error("SearXNG returned HTTP " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture) +
                     ". Check that the service is running and JSON output is enabled.");
             }
             string body = await ReadLimitedAsync(response.Content, cancellationToken).ConfigureAwait(false);
             return body == null
-                ? ToolText.Error("SearXNG response is larger than " + MaxBodyBytes / (1024 * 1024) + " MB; ignored.")
+                ? ToolText.Error("SearXNG response is larger than " + (MaxBodyBytes / (1024 * 1024)).ToString(CultureInfo.InvariantCulture) + " MB; ignored.")
                 : FormatResults(body);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -69,7 +70,7 @@ internal sealed class SearxngSearchClient
     private static async Task<string> ReadLimitedAsync(HttpContent content, CancellationToken cancellationToken)
     {
         if (content.Headers.ContentLength > MaxBodyBytes) return null;
-        using System.IO.Stream stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using System.IO.Stream stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var buffer = new System.IO.MemoryStream();
         var chunk = new byte[16 * 1024];
         int read;

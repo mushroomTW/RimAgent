@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using NUnit.Framework;
@@ -39,7 +40,7 @@ public class AgentActivityTests
         var tracker = new AgentActivityTracker();
         AgentActivity during = null;
         AIFunction inner = AIFunctionFactory.Create(() => { during = tracker.Current; return "ok"; }, "probe");
-        var tool = new LoggingAIFunction(inner, new AgentTranscript(), _world, ToolCategory.Observe, ToolRisk.Query, null, activity: tracker);
+        var tool = new LoggingAIFunction(inner, new AgentTranscript(), _world, ToolCategory.Observe, ToolRisk.Query, gate: null, activity: tracker);
 
         await tool.InvokeAsync([]);
 
@@ -54,7 +55,7 @@ public class AgentActivityTests
         ColonyAgentSession session = null;
         AgentActivity first = null;
         var client = new ScriptedChatClient()
-            .CallTool("get_colony_overview", null).Do(() => first = session.Activity.Current)
+            .CallTool("get_colony_overview", arguments: null).Do(() => first = session.Activity.Current)
             .Reply("Done.");
         session = new ColonyAgentSession(client, _world, () => ToolPermissions.All, 8, () => AgentMode.Autonomous);
 
@@ -74,7 +75,7 @@ public class AgentActivityTests
             .Reply("Done.");
         var classifier = new ScriptedChatClient()
             .Reply("{\"risk\": \"low\", \"authorized\": true, \"reason\": \"ok\"}").Do(() => checking = session.Activity.Current);
-        session = new ColonyAgentSession(agent, _world, () => ToolPermissions.All, 8, () => AgentMode.Auto, null, null, classifier,
+        session = new ColonyAgentSession(agent, _world, () => ToolPermissions.All, 8, () => AgentMode.Auto, instructions: null, mcp: null, classifier,
             classifierPrompt: () => "test classifier prompt");
 
         await session.SendAsync("make Ali a doctor");
@@ -90,11 +91,11 @@ public class AgentActivityTests
         AgentActivity compacting = null;
         var client = new ScriptedChatClient();
         // 歷史要夠長，策略才會真的呼叫摘要模型。
-        for (int i = 0; i < 6; i++) client.Reply("ok " + i);
+        for (int i = 0; i < 6; i++) client.Reply("ok " + i.ToString(CultureInfo.InvariantCulture));
         client.Reply("Summary.").Do(() => compacting = session.Activity.Current);
         session = new ColonyAgentSession(client, _world, () => ToolPermissions.All, 8, () => AgentMode.Autonomous);
 
-        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i.ToString(CultureInfo.InvariantCulture));
         await session.CompactAsync();
 
         Assert.That(compacting?.Kind, Is.EqualTo(AgentActivityKind.Compacting));

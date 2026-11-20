@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,7 +48,7 @@ internal sealed class ScriptedChatClient : IChatClient
     {
         _script.Add((_, __) =>
         {
-            string callId = "call_" + (++_callIds);
+            string callId = "call_" + (++_callIds).ToString(CultureInfo.InvariantCulture);
             var args = arguments == null
                 ? []
                 : arguments.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(arguments));
@@ -65,7 +66,7 @@ internal sealed class ScriptedChatClient : IChatClient
             var contents = new List<AIContent>();
             foreach ((string name, object arguments) in calls)
             {
-                string callId = "call_" + (++_callIds);
+                string callId = "call_" + (++_callIds).ToString(CultureInfo.InvariantCulture);
                 var args = arguments == null
                     ? []
                     : arguments.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(arguments));
@@ -100,7 +101,7 @@ internal sealed class ScriptedChatClient : IChatClient
     {
         _script.Add((_, __) =>
         {
-            string callId = "call_" + (++_callIds);
+            string callId = "call_" + (++_callIds).ToString(CultureInfo.InvariantCulture);
             var message = new ChatMessage(ChatRole.Assistant,
                 [new TextReasoningContent(reasoning), new FunctionCallContent(callId, name, new Dictionary<string, object>())]);
             return new ChatResponse(message) { FinishReason = ChatFinishReason.ToolCalls };

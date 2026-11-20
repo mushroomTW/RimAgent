@@ -40,7 +40,7 @@ internal sealed partial class RimWorldGameWorld
     public IReadOnlyList<CaravanCargoInfo> GetCaravanCargo()
     {
         // AllReachableColonyItems 回傳共用的暫存清單，先複製再分組。
-        return CaravanFormingUtility.AllReachableColonyItems(Map, false, false, false)
+        return [.. CaravanFormingUtility.AllReachableColonyItems(Map, allowEvenIfOutsideHomeArea: false, allowEvenIfReserved: false, canMinify: false)
             .GroupBy(t => t.GetInnerIfMinified().def)
             .Select(g => new CaravanCargoInfo
             {
@@ -49,8 +49,7 @@ internal sealed partial class RimWorldGameWorld
                 Count = g.Sum(t => t.stackCount),
                 MassEach = g.Key.BaseMass
             })
-            .OrderBy(c => c.Label, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+            .OrderBy(c => c.Label, StringComparer.OrdinalIgnoreCase)];
     }
 
     public CaravanPlanInfo PlanCaravan(CaravanRequest request)
@@ -74,9 +73,9 @@ internal sealed partial class RimWorldGameWorld
         string members = string.Join(", ", draft.Pawns.Select(p => p.LabelShort).ToArray());
         string cargo;
         if (plan.Cargo.Count == 0) cargo = "no cargo";
-        else cargo = string.Join(", ", plan.Cargo.Select(c => c.Label + " x" + c.Count).ToArray());
-        return CommandResult.Ok($"Started forming a caravan with {members}; they gather {cargo} at ({draft.MeetingPoint.x},{draft.MeetingPoint.z}) " +
-                                $"and then leave the map at ({draft.ExitSpot.x},{draft.ExitSpot.z}) for tile {draft.Destination.tileId}");
+        else cargo = string.Join(", ", plan.Cargo.Select(c => c.Label + " x" + c.Count.ToString(CultureInfo.InvariantCulture)).ToArray());
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Started forming a caravan with {members}; they gather {cargo} at ({draft.MeetingPoint.x},{draft.MeetingPoint.z}) ") +
+                                string.Create(CultureInfo.InvariantCulture, $"and then leave the map at ({draft.ExitSpot.x},{draft.ExitSpot.z}) for tile {draft.Destination.tileId}"));
     }
 
     private static CaravanDraft RejectCaravan(CaravanDraft draft, string error)
@@ -93,12 +92,12 @@ internal sealed partial class RimWorldGameWorld
         if (map == null) return RejectCaravan(draft, "there is no current map");
 
         // 成員：只收組隊視窗會列出的人（AllSendablePawns），其餘說明為什麼不行。
-        List<Pawn> sendable = Dialog_FormCaravan.AllSendablePawns(map, false);
+        List<Pawn> sendable = Dialog_FormCaravan.AllSendablePawns(map, reform: false);
         if (!ValidateCaravanPawns(request, sendable, map, draft, out var rejectReason)) return rejectReason;
 
         // 貨物：與視窗物品頁同一份清單（AddItemsToTransferables），同種物品依原版規則併成一行。
         var items = new List<TransferableOneWay>();
-        foreach (Thing thing in CaravanFormingUtility.AllReachableColonyItems(map, false, false, false).ToList())
+        foreach (Thing thing in CaravanFormingUtility.AllReachableColonyItems(map, allowEvenIfOutsideHomeArea: false, allowEvenIfReserved: false, canMinify: false).ToList())
         {
             TransferableOneWay transferable = TransferableUtility.TransferableMatching(thing, items, TransferAsOneMode.PodsOrCaravanPacking);
             if (transferable == null)
@@ -149,7 +148,7 @@ internal sealed partial class RimWorldGameWorld
         }
         if (def == null) { rejectReason = $"the colony has no {line.DefName} to carry; the game only lists items in storage or the home area that nobody has reserved"; return false; }
         string label = string.IsNullOrEmpty(def.label) ? def.defName : def.label;
-        if (remaining > 0) { rejectReason = $"the colony can only supply {line.Count - remaining} {label} for the caravan (asked for {line.Count}); the game only lists items in storage or the home area that nobody has reserved"; return false; }
+        if (remaining > 0) { rejectReason = string.Create(CultureInfo.InvariantCulture, $"the colony can only supply {line.Count - remaining} {label} for the caravan (asked for {line.Count}); the game only lists items in storage or the home area that nobody has reserved"); return false; }
         cargoLine = new CaravanPlanCargo { DefName = def.defName, Label = label, Count = line.Count, MassEach = def.BaseMass };
         return true;
     }
@@ -160,7 +159,7 @@ internal sealed partial class RimWorldGameWorld
         foreach (int id in (request.PawnIds ?? []).Distinct())
         {
             Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
-            if (pawn == null) { rejectReason = RejectCaravan(draft, $"no pawn with id {id} is on this map"); return false; }
+            if (pawn == null) { rejectReason = RejectCaravan(draft, string.Create(CultureInfo.InvariantCulture, $"no pawn with id {id} is on this map")); return false; }
             if (!sendable.Contains(pawn)) { rejectReason = RejectCaravan(draft, $"{pawn.LabelShort} cannot join a caravan: {WhyNotSendable(pawn)}"); return false; }
             // 被徵召的人不吃集結的職責（原版「強制出發」也會先解除徵召）。
             if (pawn.Drafted) { rejectReason = RejectCaravan(draft, $"{pawn.LabelShort} is drafted; undraft them first"); return false; }
@@ -195,7 +194,7 @@ internal sealed partial class RimWorldGameWorld
         var blockers = new List<string>();
         var warnings = new List<string>();
         PlanetTile origin = map.Tile;
-        var plan = new CaravanPlanInfo { Members = draft.Pawns.Select(ToCaravanMember).ToList(), Cargo = cargoLines };
+        var plan = new CaravanPlanInfo { Members = [.. draft.Pawns.Select(ToCaravanMember)], Cargo = cargoLines };
 
         if (!origin.LayerDef.canFormCaravans) blockers.Add("caravans cannot be formed on this world layer");
 
@@ -211,12 +210,12 @@ internal sealed partial class RimWorldGameWorld
 
         // 數字：與 Dialog_FormCaravan 的 MassUsage／MassCapacity／TilesPerDay／DaysWorthOfFood／ForagedFoodPerDay／Visibility／TicksToArrive 同一組呼叫。
         List<TransferableOneWay> transferables = draft.Transferables;
-        plan.MassUsage = CollectionsMassCalculator.MassUsageTransferables(transferables, CaravanInventoryMode, false, false);
+        plan.MassUsage = CollectionsMassCalculator.MassUsageTransferables(transferables, CaravanInventoryMode, includePawnsMass: false, ignoreSpawnedCorpsesGearAndInventory: false);
         plan.MassCapacity = CollectionsMassCalculator.CapacityTransferables(transferables, new StringBuilder());
         if (draft.Pawns.Count > 0)
         {
-            plan.TilesPerDay = TilesPerDayCalculator.ApproxTilesPerDay(transferables, plan.MassUsage, plan.MassCapacity, origin, draft.StartingTile, false, null);
-            plan.TicksPerMove = CaravanTicksPerMoveUtility.GetTicksPerMove(draft.Pawns, plan.MassUsage, plan.MassCapacity, false, null);
+            plan.TilesPerDay = TilesPerDayCalculator.ApproxTilesPerDay(transferables, plan.MassUsage, plan.MassCapacity, origin, draft.StartingTile, isShuttle: false, explanation: null);
+            plan.TicksPerMove = CaravanTicksPerMoveUtility.GetTicksPerMove(draft.Pawns, plan.MassUsage, plan.MassCapacity, isShuttle: false, explanation: null);
         }
         CalculateCaravanFoodAndRot(transferables, origin, destination, plan);
 
@@ -254,8 +253,8 @@ internal sealed partial class RimWorldGameWorld
         else
         {
             PlanetTile asked = ToPlanetTile(request.DestinationTile, origin);
-            if (!TileInWorld(asked)) blockers.Add($"tile {request.DestinationTile} does not exist on this layer of the world");
-            else if (!Find.WorldReachability.CanReach(origin, asked)) blockers.Add($"tile {asked.tileId} cannot be reached by land from here");
+            if (!TileInWorld(asked)) blockers.Add(string.Create(CultureInfo.InvariantCulture, $"tile {request.DestinationTile} does not exist on this layer of the world"));
+            else if (!Find.WorldReachability.CanReach(origin, asked)) blockers.Add(string.Create(CultureInfo.InvariantCulture, $"tile {asked.tileId} cannot be reached by land from here"));
             else destination = asked;
             plan.DestinationTile = request.DestinationTile;
             plan.DestinationLabel = TileInWorld(asked) ? DescribeWorldTile(asked) : string.Empty;
@@ -268,7 +267,7 @@ internal sealed partial class RimWorldGameWorld
     {
         if (destination.Valid)
         {
-            using WorldPath path = origin.Layer.Pather.FindPath(origin, destination, null);
+            using WorldPath path = origin.Layer.Pather.FindPath(origin, destination, caravan: null);
             plan.FoodDays = DaysWorthOfFoodCalculator.ApproxDaysWorthOfFood(transferables, origin, CaravanInventoryMode, Faction.OfPlayer, path, 0f, plan.TicksPerMove);
             plan.DaysUntilRot = DaysUntilRotCalculator.ApproxDaysUntilRot(transferables, origin, CaravanInventoryMode, path, 0f, plan.TicksPerMove);
             plan.EtaTicks = CaravanArrivalTimeEstimator.EstimatedTicksToArrive(origin, destination, path, 0f, plan.TicksPerMove, Find.TickManager.TicksAbs);
@@ -347,9 +346,9 @@ internal sealed partial class RimWorldGameWorld
         IntVec3 root = pawns.Aggregate(IntVec3.Zero, (acc, p) => acc + p.Position) / pawns.Count;
         string direction = Find.WorldGrid.GetDirection8WayFromTo(map.Tile, draft.StartingTile).LabelShort();
         IntVec3 exit;
-        if (!RCellFinder.TryFindClosestEdgeCellTo(root, map, out exit) && !TryFindCaravanExitSpot(map, pawns, draft.StartingTile, true, out exit))
+        if (!RCellFinder.TryFindClosestEdgeCellTo(root, map, out exit) && !TryFindCaravanExitSpot(map, pawns, draft.StartingTile, reachableForEveryColonist: true, out exit))
         {
-            if (!TryFindCaravanExitSpot(map, pawns, draft.StartingTile, false, out exit))
+            if (!TryFindCaravanExitSpot(map, pawns, draft.StartingTile, reachableForEveryColonist: false, out exit))
             {
                 blockers.Add("CaravanCouldNotFindExitSpot".Translate(direction).Resolve());
                 return;
@@ -389,7 +388,7 @@ internal sealed partial class RimWorldGameWorld
         if (reachableForEveryColonist)
         {
             return CellFinder.TryFindRandomEdgeCellWith(
-                c => !c.Fogged(map) && c.Standable(map) && pawns.All(p => !p.IsColonist || p.Downed || p.CanReach(c, PathEndMode.Touch, Danger.Deadly)),
+                c => !c.Fogged(map) && c.Standable(map) && pawns.TrueForAll(p => !p.IsColonist || p.Downed || p.CanReach(c, PathEndMode.Touch, Danger.Deadly)),
                 map, exitDirection, CellFinder.EdgeRoadChance_Always, out spot);
         }
         IntVec3 best = IntVec3.Invalid;
@@ -432,9 +431,8 @@ internal sealed partial class RimWorldGameWorld
                 {
                     Id = lord.loadID,
                     Status = PlainText(job.Status),
-                    Members = lord.ownedPawns.Concat(job.downedPawns).Distinct().Select(ToCaravanMember).ToList(),
-                    Cargo = job.transferables.Where(t => t.HasAnyThing && t.CountToTransfer > 0)
-                        .Select(t => t.Label + " x" + t.CountToTransfer).ToList(),
+                    Members = [.. lord.ownedPawns.Concat(job.downedPawns).Distinct().Select(ToCaravanMember)],
+                    Cargo = [.. job.transferables.Where(t => t.HasAnyThing && t.CountToTransfer > 0).Select(t => t.Label + " x" + t.CountToTransfer.ToString(CultureInfo.InvariantCulture))],
                     ExitX = job.ExitSpot.x,
                     ExitZ = job.ExitSpot.z
                 });
@@ -453,7 +451,7 @@ internal sealed partial class RimWorldGameWorld
             CaravanFormingUtility.StopFormingCaravan(lord);
             return CommandResult.Ok($"Stopped forming the caravan ({names}); they put down what they were carrying and go back to their usual work");
         }
-        return CommandResult.Fail($"no caravan is being formed with id {formingId}");
+        return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no caravan is being formed with id {formingId}"));
     }
 
     // ---- 世界地圖：商隊與世界物件 ----
@@ -465,7 +463,7 @@ internal sealed partial class RimWorldGameWorld
 
     public IReadOnlyList<CaravanInfo> GetCaravans()
     {
-        return Find.WorldObjects.Caravans.Where(c => c.IsPlayerControlled).Select(ToCaravanInfo).ToList();
+        return [.. Find.WorldObjects.Caravans.Where(c => c.IsPlayerControlled).Select(ToCaravanInfo)];
     }
 
     private static CaravanInfo ToCaravanInfo(Caravan caravan)
@@ -482,7 +480,7 @@ internal sealed partial class RimWorldGameWorld
             Name = caravan.LabelCap,
             Tile = caravan.Tile,
             Terrain = caravan.Tile.Tile.PrimaryBiome.LabelCap + ", " + caravan.Tile.Tile.hilliness.GetLabelCap(),
-            Members = caravan.PawnsListForReading.Select(ToCaravanMember).ToList(),
+            Members = [.. caravan.PawnsListForReading.Select(ToCaravanMember)],
             Moving = moving,
             Paused = caravan.pather.Paused,
             Resting = caravan.NightResting,
@@ -501,7 +499,7 @@ internal sealed partial class RimWorldGameWorld
             SettleBlockedReason = settle.Disabled ? PlainText(settle.disabledReason) : string.Empty,
             CanCamp = !camp.Disabled,
             CampBlockedReason = camp.Disabled ? PlainText(camp.disabledReason) : string.Empty,
-            ObjectsHere = Find.WorldObjects.ObjectsAt(caravan.Tile).Where(o => o != caravan).Select(o => o.LabelCap + " [" + o.ID + "]").ToList()
+            ObjectsHere = [.. Find.WorldObjects.ObjectsAt(caravan.Tile).Where(o => o != caravan).Select(o => o.LabelCap + " [" + o.ID.ToString(CultureInfo.InvariantCulture) + "]")]
         };
     }
 
@@ -554,7 +552,7 @@ internal sealed partial class RimWorldGameWorld
     private static List<CaravanOrder> BuildCaravanOrders(Caravan caravan, PlanetTile to)
     {
         var orders = new List<CaravanOrder>();
-        string name = "Travel to tile " + to.tileId;
+        string name = "Travel to tile " + to.tileId.ToString(CultureInfo.InvariantCulture);
         if (to == caravan.Tile)
         {
             orders.Add(new CaravanOrder { Label = name + " (the caravan is already here)", Disabled = true });
@@ -570,8 +568,8 @@ internal sealed partial class RimWorldGameWorld
             {
                 orders.Add(new CaravanOrder
                 {
-                    Label = destination == to ? name : name + " (stops at the nearest reachable tile " + destination.tileId + ")",
-                    Run = () => caravan.pather.StartPath(destination, null, repathImmediately: true)
+                    Label = destination == to ? name : name + " (stops at the nearest reachable tile " + destination.tileId.ToString(CultureInfo.InvariantCulture) + ")",
+                    Run = () => caravan.pather.StartPath(destination, arrivalAction: null, repathImmediately: true)
                 });
             }
         }
@@ -590,9 +588,9 @@ internal sealed partial class RimWorldGameWorld
     {
         foreach (FloatMenuOption option in FloatMenuMakerWorld.ChoicesAtFor(to, caravan))
         {
-            if (option.Label.Contains("(Dev:")) continue;
+            if (option.Label.Contains("(Dev:", StringComparison.Ordinal)) continue;
             FloatMenuOption chosen = option;
-            orders.Add(new CaravanOrder { Label = chosen.Label.StripTags(), Disabled = chosen.Disabled, Run = () => chosen.Chosen(colonistOrdering: false, null) });
+            orders.Add(new CaravanOrder { Label = chosen.Label.StripTags(), Disabled = chosen.Disabled, Run = () => chosen.Chosen(colonistOrdering: false, floatMenu: null) });
         }
     }
 
@@ -601,11 +599,11 @@ internal sealed partial class RimWorldGameWorld
         Caravan caravan = FindPlayerCaravan(caravanId);
         if (caravan == null) return new CaravanOptionsInfo { Error = CaravanNotFound };
         PlanetTile to = ToPlanetTile(tile, caravan.Tile);
-        if (!TileInWorld(to)) return new CaravanOptionsInfo { Error = $"tile {tile} does not exist on this layer of the world", CaravanName = caravan.LabelCap };
+        if (!TileInWorld(to)) return new CaravanOptionsInfo { Error = string.Create(CultureInfo.InvariantCulture, $"tile {tile} does not exist on this layer of the world"), CaravanName = caravan.LabelCap };
         return new CaravanOptionsInfo
         {
             CaravanName = caravan.LabelCap,
-            Options = BuildCaravanOrders(caravan, to).Select((o, i) => new FloatMenuOptionInfo { Number = i + 1, Label = o.Label, Disabled = o.Disabled }).ToList()
+            Options = [.. BuildCaravanOrders(caravan, to).Select((o, i) => new FloatMenuOptionInfo { Number = i + 1, Label = o.Label, Disabled = o.Disabled })]
         };
     }
 
@@ -614,12 +612,12 @@ internal sealed partial class RimWorldGameWorld
         Caravan caravan = FindPlayerCaravan(caravanId);
         if (caravan == null) return CommandResult.Fail(CaravanNotFound);
         PlanetTile to = ToPlanetTile(tile, caravan.Tile);
-        if (!TileInWorld(to)) return CommandResult.Fail($"tile {tile} does not exist on this layer of the world");
+        if (!TileInWorld(to)) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"tile {tile} does not exist on this layer of the world"));
         List<CaravanOrder> orders = BuildCaravanOrders(caravan, to);
         CaravanOrder order = optionNumber >= 1 && optionNumber <= orders.Count ? orders[optionNumber - 1] : null;
         if (order == null || !string.Equals(order.Label, label, StringComparison.OrdinalIgnoreCase))
         {
-            return CommandResult.Fail($"{caravan.LabelCap}'s orders for tile {tile} changed; call get_world_tile again");
+            return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"{caravan.LabelCap}'s orders for tile {tile} changed; call get_world_tile again"));
         }
         if (order.Disabled) return CommandResult.Fail($"\"{label}\" is disabled");
 
@@ -704,7 +702,7 @@ internal sealed partial class RimWorldGameWorld
                 if (!pather.Moving) return CommandResult.Fail($"{caravan.LabelCap} has no destination, so there is nothing to pause");
                 if (pather.Paused) return CommandResult.Ok($"{caravan.LabelCap} is already paused.");
                 pather.Paused = true;
-                return CommandResult.Ok($"{caravan.LabelCap} paused on tile {caravan.Tile.tileId}; its destination is kept.");
+                return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"{caravan.LabelCap} paused on tile {caravan.Tile.tileId}; its destination is kept."));
             case CaravanMovementAction.Resume:
                 if (!pather.Moving) return CommandResult.Fail($"{caravan.LabelCap} has no destination; send it somewhere first");
                 if (!pather.Paused) return CommandResult.Ok($"{caravan.LabelCap} is already travelling.");
@@ -713,7 +711,7 @@ internal sealed partial class RimWorldGameWorld
             case CaravanMovementAction.Stop:
                 if (!pather.Moving) return CommandResult.Ok($"{caravan.LabelCap} is already stopped.");
                 pather.StopDead();
-                return CommandResult.Ok($"{caravan.LabelCap} stopped on tile {caravan.Tile.tileId}; its destination was cleared.");
+                return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"{caravan.LabelCap} stopped on tile {caravan.Tile.tileId}; its destination was cleared."));
             default:
                 return CommandResult.Fail($"unknown action \"{action}\"");
         }
@@ -745,8 +743,8 @@ internal sealed partial class RimWorldGameWorld
         CommandResult windowFailure = CloseUnsupportedWindows(before, verb);
         if (windowFailure != null) return windowFailure;
         if (Find.WindowStack.Windows.Any(w => !before.Contains(w)))
-            return CommandResult.Ok(WithGameMessages($"The game asks to confirm before {caravan.LabelCap} can {verb} on tile {caravan.Tile.tileId}", watch));
+            return CommandResult.Ok(WithGameMessages(string.Create(CultureInfo.InvariantCulture, $"The game asks to confirm before {caravan.LabelCap} can {verb} on tile {caravan.Tile.tileId}"), watch));
         return CommandResult.Ok(WithGameMessages(
-            $"{caravan.LabelCap} is starting to {verb} on tile {caravan.Tile.tileId}. The map is generated in the background; it shows up in get_maps when it is ready", watch));
+            string.Create(CultureInfo.InvariantCulture, $"{caravan.LabelCap} is starting to {verb} on tile {caravan.Tile.tileId}. The map is generated in the background; it shows up in get_maps when it is ready"), watch));
     }
 }

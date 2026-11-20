@@ -80,7 +80,7 @@ public class ZoneToolsTests
         string text = _tools.AddZone("growing", 10, 10, 12, 12, plant);
 
         Assert.That(text, Does.StartWith("Added"));
-        Assert.That(_world.Calls.Last(), Does.EndWith(",Plant_Rice)"), "世界層收到的是正確的 defName");
+        Assert.That(_world.Calls[^1], Does.EndWith(",Plant_Rice)"), "世界層收到的是正確的 defName");
     }
 
     [Test]

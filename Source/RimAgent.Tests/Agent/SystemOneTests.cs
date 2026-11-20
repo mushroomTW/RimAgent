@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -128,9 +129,9 @@ public class SystemOneTests
     {
         var fake = new FakeDecisionService();
         Assert.That(await new DecisionAutonomousTriage(fake, () => Criteria)
-            .EvaluateAsync(AutonomousTrigger.Fire, default, null, null), Is.Null);
-        Assert.That(await new DecisionAutonomousTriage(null, () => Criteria)
-            .EvaluateAsync(AutonomousTrigger.Cold, default, null, null), Is.Null);
+            .EvaluateAsync(AutonomousTrigger.Fire, default, lastRunReply: null, hoursSinceLastRun: null), Is.Null);
+        Assert.That(await new DecisionAutonomousTriage(decisionService: null, () => Criteria)
+            .EvaluateAsync(AutonomousTrigger.Cold, default, lastRunReply: null, hoursSinceLastRun: null), Is.Null);
         Assert.That(fake.EvaluateCount, Is.EqualTo(0));
     }
 
@@ -144,7 +145,7 @@ public class SystemOneTests
         long tick = 0;
         for (int i = 0; i < AutonomousScheduler.MaxAttempts + 2; i++)
         {
-            Assert.That(scheduler.Evaluate(tick, signals, config), Is.EqualTo(AutonomousTrigger.BedShortage), "第 " + (i + 1) + " 次");
+            Assert.That(scheduler.Evaluate(tick, signals, config), Is.EqualTo(AutonomousTrigger.BedShortage), "第 " + (i + 1).ToString(CultureInfo.InvariantCulture) + " 次");
             scheduler.Defer(AutonomousTrigger.BedShortage, tick);
             tick += AutonomousScheduler.RetryBaseTicks;
         }
@@ -155,14 +156,14 @@ public class SystemOneTests
     public void DecisionReportsAreTakenOnceAndCapped()
     {
         var reports = new DecisionReports();
-        for (int i = 0; i < DecisionReports.MaxPending + 5; i++) reports.Add("action " + i);
+        for (int i = 0; i < DecisionReports.MaxPending + 5; i++) reports.Add("action " + i.ToString(CultureInfo.InvariantCulture));
 
         string all = reports.TakeAll();
 
         Assert.That(all.Split('\n'), Has.Length.EqualTo(DecisionReports.MaxPending));
-        Assert.That(all, Does.Not.Contain("action 4\n").And.Contain("action " + (DecisionReports.MaxPending + 4)));
+        Assert.That(all, Does.Not.Contain("action 4\n").And.Contain("action " + (DecisionReports.MaxPending + 4).ToString(CultureInfo.InvariantCulture)));
         Assert.That(reports.TakeAll(), Is.Null);
-        Assert.That(DecisionReports.Prepend(null, "hello"), Is.EqualTo("hello"));
+        Assert.That(DecisionReports.Prepend(reports: null, "hello"), Is.EqualTo("hello"));
     }
 
     [Test]
@@ -202,7 +203,7 @@ public class SystemOneTests
         Assert.That(names, Does.Contain("draft"));
         Assert.That(names, Does.Not.Contain("get_health"));
         Assert.That(fake.ReceivedPlans[0].Questions.Select(q => q.Id), Is.EquivalentTo(_combatMedical));
-        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("combat")), Is.True);
+        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("combat", StringComparison.Ordinal)), Is.True);
     }
 
     [Test]

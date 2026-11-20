@@ -165,7 +165,7 @@ public sealed class ConfirmationGate
     {
         get
         {
-            lock (_gate) return _pending.Any(p => CanRememberForSession(p.ToolName));
+            lock (_gate) return _pending.Exists(p => CanRememberForSession(p.ToolName));
         }
     }
 

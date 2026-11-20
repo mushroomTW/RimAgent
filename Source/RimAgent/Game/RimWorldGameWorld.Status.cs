@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -30,7 +31,7 @@ internal sealed partial class RimWorldGameWorld
             OutdoorTemperatureC = map.mapTemperature.OutdoorTemp,
             Wealth = map.wealthWatcher.WealthTotal,
             Factions = [.. Find.FactionManager.AllFactionsVisible.Where(f => !f.IsPlayer)
-                .Select(f => $"{f.Name} {f.PlayerGoodwill:+0;-0;0} ({f.PlayerRelationKind.GetLabel()})")],
+                .Select(f => string.Create(CultureInfo.InvariantCulture, $"{f.Name} {f.PlayerGoodwill:+0;-0;0} ({f.PlayerRelationKind.GetLabel()})"))],
             HostileCount = CountHostiles(map),
             ColonistsNearMentalBreak = colonists.Count(IsNearMentalBreak)
         };
@@ -184,7 +185,7 @@ internal sealed partial class RimWorldGameWorld
         PowerNetManager manager = map.powerNetManager;
         if (manager == null) return false;
         // CA1859：使用 List<T> 而非 IReadOnlyList<T>，AllNetsListForReading 需轉為 List。
-        List<PowerNet> nets = manager.AllNetsListForReading.ToList();
+        List<PowerNet> nets = [.. manager.AllNetsListForReading];
         for (int i = 0; i < nets.Count; i++)
         {
             List<CompPowerTrader> comps = nets[i].powerComps;
@@ -265,7 +266,7 @@ internal sealed partial class RimWorldGameWorld
         return new ResourceSnapshot
         {
             TotalHumanEdibleNutrition = counter.TotalHumanEdibleNutrition,
-            Items = counter.AllCountedAmounts
+            Items = [.. counter.AllCountedAmounts
                 .Where(pair => pair.Value > 0)
                 .Select(pair => new ResourceInfo
                 {
@@ -273,8 +274,7 @@ internal sealed partial class RimWorldGameWorld
                     Label = pair.Key.label,
                     Count = pair.Value,
                     Category = pair.Key.FirstThingCategory?.label ?? pair.Key.category.ToString()
-                })
-                .ToList()
+                })]
         };
     }
 
@@ -289,26 +289,25 @@ internal sealed partial class RimWorldGameWorld
     public IReadOnlyList<AlertInfo> GetAlerts()
     {
         if (ActiveAlertsField?.GetValue(Find.Alerts) is not IEnumerable<Alert> alerts) return [];
-        return alerts.Where(a => a != null && a.Active).Select(a => new AlertInfo
+        return [.. alerts.Where(a => a != null && a.Active).Select(a => new AlertInfo
         {
-            Label = a.Label.ToString(),
+            Label = a.Label,
             Priority = a.Priority.ToString()
-        }).ToList();
+        })];
     }
 
     public IReadOnlyList<LetterInfo> GetRecentLetters()
     {
-        return Find.LetterStack.LettersListForReading
+        return [.. Find.LetterStack.LettersListForReading
             .Where(l => l != null)
             .Take(20)
-            .Select(l => new LetterInfo { Label = l.Label.ToString() })
-            .ToList();
+            .Select(l => new LetterInfo { Label = l.Label.ToString() })];
     }
 
     public PowerInfo GetPower()
     {
         // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
-        List<PowerNet> nets = Map.powerNetManager.AllNetsListForReading.ToList();
+        List<PowerNet> nets = [.. Map.powerNetManager.AllNetsListForReading];
         return new PowerInfo
         {
             NetworkCount = nets.Count,

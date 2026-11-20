@@ -95,7 +95,7 @@ public static class MapShotOverlay
         ArgumentNullException.ThrowIfNull(layout);
         int mapW = layout.MapWidthPx;
         int mapH = layout.MapHeightPx;
-        if (mapPixels.Length != mapW * mapH * 4) throw new ArgumentException($"expected {mapW}x{mapH} RGBA pixels", nameof(mapPixels));
+        if (mapPixels.Length != mapW * mapH * 4) throw new ArgumentException(string.Create(CultureInfo.InvariantCulture, $"expected {mapW}x{mapH} RGBA pixels"), nameof(mapPixels));
 
         int width = layout.ImageWidth;
         int height = layout.ImageHeight;

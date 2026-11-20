@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using RimAgent.Game;
@@ -62,7 +63,7 @@ internal sealed partial class MapWorldTests
     {
         CheckGizmoIsTarget(gizmo, failures);
 
-        CommandResult none = _world.UseGizmo(mortar.thingIDNumber, gizmo.Number, gizmo.Label, null);
+        CommandResult none = _world.UseGizmo(mortar.thingIDNumber, gizmo.Number, gizmo.Label, target: null);
         if (none.Success) failures.Add("pressing without a target succeeded");
         if (Find.Targeter.IsTargeting) failures.Add("targeter was left active after pressing without a target");
         if (mortar.ForcedTarget.IsValid) failures.Add("pressing without a target set a forced target");
@@ -78,7 +79,7 @@ internal sealed partial class MapWorldTests
         {
             CommandResult far = _world.UseGizmo(mortar.thingIDNumber, gizmo.Number, gizmo.Label, MapTarget.OfCell(bad.x, bad.z));
             if (far.Success) failures.Add("a cell out of range was accepted");
-            else if (!far.Message.Contains("cannot")) failures.Add("out-of-range reason is unclear: " + far.Message);
+            else if (!far.Message.Contains("cannot", StringComparison.Ordinal)) failures.Add("out-of-range reason is unclear: " + far.Message);
             if (mortar.ForcedTarget.IsValid) failures.Add("out-of-range target became the forced target");
         }
 
@@ -111,7 +112,7 @@ internal sealed partial class MapWorldTests
         .OrderByDescending(c => (c - pos).LengthHorizontal).First();
         // 小地圖整張都在迫擊砲射程內，就改用低於最小射程的近處格子測拒絕。
         return verb.CanHitTarget(farCorner)
-            ? GenRadial.RadialCellsAround(pos, Math.Min(verb.verbProps.minRange, 20f), false)
+            ? GenRadial.RadialCellsAround(pos, Math.Min(verb.verbProps.minRange, 20f), useCenter: false)
                 .Where(c => c.InBounds(map) && (c - pos).LengthHorizontal >= 2f && !verb.CanHitTarget(c))
                 .DefaultIfEmpty(IntVec3.Invalid).First()
             : farCorner;
@@ -172,9 +173,9 @@ internal sealed partial class MapWorldTests
 
     private void CheckUseItemTargets(Map map, Thing serum, CompUsable usable, GizmoInfo gizmo, List<string> failures)
     {
-        CommandResult none = _world.UseGizmo(serum.thingIDNumber, gizmo.Number, gizmo.Label, null);
+        CommandResult none = _world.UseGizmo(serum.thingIDNumber, gizmo.Number, gizmo.Label, target: null);
         if (none.Success) failures.Add("pressing without a target succeeded");
-        else if (!none.Message.Contains("target")) failures.Add("missing-target message does not mention a target: " + none.Message);
+        else if (!none.Message.Contains("target", StringComparison.Ordinal)) failures.Add("missing-target message does not mention a target: " + none.Message);
         if (Find.Targeter.IsTargeting) failures.Add("targeter was left active after pressing without a target");
 
         CommandResult cell = _world.UseGizmo(serum.thingIDNumber, gizmo.Number, gizmo.Label, MapTarget.OfCell(serum.Position.x, serum.Position.z));
@@ -190,7 +191,7 @@ internal sealed partial class MapWorldTests
             if (vanilla.Accepted) continue;
             CommandResult rejected = _world.UseGizmo(serum.thingIDNumber, gizmo.Number, gizmo.Label, MapTarget.OfThing(pawn.thingIDNumber));
             if (rejected.Success) failures.Add($"{pawn.LabelShort} cannot use the serum in vanilla but the command succeeded");
-            else if (!vanilla.Reason.NullOrEmpty() && !rejected.Message.Contains(vanilla.Reason.CapitalizeFirst().StripTags()))
+            else if (!vanilla.Reason.NullOrEmpty() && !rejected.Message.Contains(vanilla.Reason.CapitalizeFirst().StripTags(), StringComparison.Ordinal))
                 failures.Add($"reason for {pawn.LabelShort} differs: tool \"{rejected.Message}\", vanilla \"{vanilla.Reason}\"");
             if (Find.Targeter.IsTargeting) failures.Add("targeter was left active after a rejected target");
             return;
@@ -271,17 +272,17 @@ internal sealed partial class MapWorldTests
         }
         for (int i = 0; i < vanilla.Count; i++)
         {
-            if (menu.Options[i].Number != i + 1) failures.Add($"{target}: option {i + 1} is numbered {menu.Options[i].Number}");
+            if (menu.Options[i].Number != i + 1) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{target}: option {i + 1} is numbered {menu.Options[i].Number}"));
             if (!string.Equals(menu.Options[i].Label, vanilla[i].Label.StripTags(), StringComparison.Ordinal))
-                failures.Add($"{target}: option {i + 1} is \"{menu.Options[i].Label}\", vanilla \"{vanilla[i].Label}\"");
-            if (menu.Options[i].Disabled != vanilla[i].Disabled) failures.Add($"{target}: option {i + 1} disabled flag differs");
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"{target}: option {i + 1} is \"{menu.Options[i].Label}\", vanilla \"{vanilla[i].Label}\""));
+            if (menu.Options[i].Disabled != vanilla[i].Disabled) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{target}: option {i + 1} disabled flag differs"));
         }
     }
 
     private void CheckGotoOption(Map map, Pawn pawn, List<string> failures)
     {
         IntVec3 start = pawn.Position;
-        IntVec3 cell = GenRadial.RadialCellsAround(start, 8f, false)
+        IntVec3 cell = GenRadial.RadialCellsAround(start, 8f, useCenter: false)
             .Where(c => c.InBounds(map) && c.Standable(map) && (c - start).LengthHorizontal >= 4f && pawn.CanReach(c, PathEndMode.OnCell, Danger.Deadly))
             .DefaultIfEmpty(IntVec3.Invalid)
             .First();

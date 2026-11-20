@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -75,32 +76,32 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     public IReadOnlyList<ColonistInfo> GetColonists()
     {
-        return Map.mapPawns.FreeColonistsSpawned.Select(ToColonist).ToList();
+        return [.. Map.mapPawns.FreeColonistsSpawned.Select(ToColonist)];
     }
 
     public IReadOnlyList<MapInfo> GetMaps()
     {
         Map current = Map;
-        return Find.Maps.Select(m => new MapInfo
+        return [.. Find.Maps.Select(m => new MapInfo
         {
             Id = m.uniqueID,
-            Label = m.Parent?.LabelCap ?? ("Map " + m.uniqueID),
+            Label = m.Parent?.LabelCap ?? ("Map " + m.uniqueID.ToString(CultureInfo.InvariantCulture)),
             Tile = m.Tile,
             ColonistCount = m.mapPawns.FreeColonistsSpawnedCount,
             IsCurrent = m == current
-        }).ToList();
+        })];
     }
 
     public CommandResult SetCurrentMap(int mapId)
     {
         Map map = Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
-        if (map == null) return CommandResult.Fail($"no map has id {mapId}");
-        string label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID);
+        if (map == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no map has id {mapId}"));
+        string label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID.ToString(CultureInfo.InvariantCulture));
         if (map == Map) return CommandResult.Ok($"{label} is already the current map.");
         Current.Game.CurrentMap = map;
         // 讓畫面跟著切換：TryJump 會離開世界地圖並把鏡頭移到該地圖。
         CameraJumper.TryJump(map.Center, map);
-        return CommandResult.Ok($"Switched to {label} [{mapId}]. Later tools now operate on this map.");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Switched to {label} [{mapId}]. Later tools now operate on this map."));
     }
 
     public IReadOnlyList<DefInfo> TimeSpeeds => TimeSpeedDirectory.Default;
@@ -115,7 +116,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         object parsed;
         try
         {
-            parsed = Enum.Parse<TimeSpeed>((speedDefName ?? string.Empty).Trim(), true);
+            parsed = Enum.Parse<TimeSpeed>((speedDefName ?? string.Empty).Trim(), ignoreCase: true);
         }
         catch (ArgumentException)
         {
@@ -205,38 +206,35 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     private static string FormatLogError(LogMessage message, int occurrences)
     {
         string text = (message.text ?? string.Empty).Trim();
-        int newline = text.IndexOf('\n');
+        int newline = text.IndexOf('\n', StringComparison.Ordinal);
         if (newline >= 0) text = text.Substring(0, newline);
-        return occurrences > 1 ? $"(x{occurrences}) {text}" : text;
+        return occurrences > 1 ? string.Create(CultureInfo.InvariantCulture, $"(x{occurrences}) {text}") : text;
     }
 
     public IReadOnlyList<DefInfo> WorkTypes =>
-        _workTypes ?? (_workTypes = DefDatabase<WorkTypeDef>.AllDefsListForReading
+        _workTypes ?? (_workTypes = [.. DefDatabase<WorkTypeDef>.AllDefsListForReading
             .Where(w => w.visible)
-            .Select(w => new DefInfo(w.defName, w.labelShort ?? w.label))
-            .ToList());
+            .Select(w => new DefInfo(w.defName, w.labelShort ?? w.label))]);
 
     public IReadOnlyList<DefInfo> Buildables =>
-        _buildables ?? (_buildables = DefDatabase<ThingDef>.AllDefsListForReading.Where(d => d.BuildableByPlayer).Select(d => new DefInfo(d.defName, d.label))
-            .Concat(DefDatabase<TerrainDef>.AllDefsListForReading.Where(d => d.BuildableByPlayer).Select(d => new DefInfo(d.defName, d.label)))
-            .ToList());
+        _buildables ?? (_buildables =
+        [
+            .. DefDatabase<ThingDef>.AllDefsListForReading.Where(d => d.BuildableByPlayer).Select(d => new DefInfo(d.defName, d.label)),
+            .. DefDatabase<TerrainDef>.AllDefsListForReading.Where(d => d.BuildableByPlayer).Select(d => new DefInfo(d.defName, d.label)),
+        ]);
 
     public IReadOnlyList<DefInfo> Stuffs =>
-        _stuffs ?? (_stuffs = DefDatabase<ThingDef>.AllDefsListForReading
+        _stuffs ?? (_stuffs = [.. DefDatabase<ThingDef>.AllDefsListForReading
             .Where(d => d.IsStuff)
-            .Select(d => new DefInfo(d.defName, d.label))
-            .ToList());
+            .Select(d => new DefInfo(d.defName, d.label))]);
 
     public IReadOnlyList<DefInfo> TimeAssignments =>
-        _timeAssignments ?? (_timeAssignments = DefDatabase<TimeAssignmentDef>.AllDefsListForReading
-            .Select(d => new DefInfo(d.defName, d.label))
-            .ToList());
+        _timeAssignments ?? (_timeAssignments = [.. DefDatabase<TimeAssignmentDef>.AllDefsListForReading.Select(d => new DefInfo(d.defName, d.label))]);
 
     public IReadOnlyList<DefInfo> TradeGoods =>
-        _tradeGoods ?? (_tradeGoods = DefDatabase<ThingDef>.AllDefsListForReading
+        _tradeGoods ?? (_tradeGoods = [.. DefDatabase<ThingDef>.AllDefsListForReading
             .Where(d => d.category == ThingCategory.Item)
-            .Select(d => new DefInfo(d.defName, d.label))
-            .ToList());
+            .Select(d => new DefInfo(d.defName, d.label))]);
 
     // ---- 轉換 ----
 
@@ -288,11 +286,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             }).ToList() ?? (IReadOnlyList<SkillInfo>)[], []),
             WorkPriorities = pawn.workSettings == null
                 ? (IReadOnlyList<WorkPriorityInfo>)[]
-                : ReadOrDefault<IReadOnlyList<WorkPriorityInfo>>(pawn, unreadable, ColonistInfo.WorkPrioritiesPart, () => DefDatabase<WorkTypeDef>.AllDefsListForReading.Where(w => w.visible).Select(w => ToWorkPriority(pawn, w)).ToList(),
+                : ReadOrDefault<IReadOnlyList<WorkPriorityInfo>>(pawn, unreadable, ColonistInfo.WorkPrioritiesPart, () => [.. DefDatabase<WorkTypeDef>.AllDefsListForReading.Where(w => w.visible).Select(w => ToWorkPriority(pawn, w))],
                     []),
             Timetable = pawn.timetable == null
                 ? (IReadOnlyList<string>)[]
-                : Enumerable.Range(0, 24).Select(h => pawn.timetable.GetAssignment(h)?.defName ?? string.Empty).ToList(),
+                : [.. Enumerable.Range(0, 24).Select(h => pawn.timetable.GetAssignment(h)?.defName ?? string.Empty)],
             // 初始設定式依序求值，放最後才收得到上面每一段的失敗。
             UnreadableParts = unreadable
         };
@@ -361,7 +359,7 @@ StringComparer.Ordinal.GetHashCode(("RimAgent:" + part + ":" + who)));
         RoyalTitleDef title = pawn.royalty.GetCurrentTitle(empire);
         int honor = pawn.royalty.GetFavor(empire);
         if (title == null && honor == 0) return string.Empty;
-        return $"{empire.Name}: {title?.GetLabelFor(pawn) ?? "no title"}, honor {honor}";
+        return string.Create(CultureInfo.InvariantCulture, $"{empire.Name}: {title?.GetLabelFor(pawn) ?? "no title"}, honor {honor}");
     }
 
     private static ThingInfo ToThing(Thing thing, Map map)
@@ -384,7 +382,7 @@ StringComparer.Ordinal.GetHashCode(("RimAgent:" + part + ":" + who)));
             Harvestable = (thing as Plant)?.HarvestableNow ?? false,
             Wild = thing is Pawn pawn && IsWildAnimal(pawn),
             Forbidden = thing.IsForbidden(Faction.OfPlayer),
-            Designations = designations.Distinct(StringComparer.Ordinal).ToList()
+            Designations = [.. designations.Distinct(StringComparer.Ordinal)]
         };
     }
 

@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -106,7 +107,7 @@ internal sealed partial class RimWorldGameWorld
 
         // 之後全走遊戲的原生結算：價格、銀兩與物品交割都由 TradeDeal 處理，
         // 這裡只做「先驗證全部、再一次交割」，餘額或庫存不足整筆不做。
-        TradeSession.SetupWith(trader, negotiator, false);
+        TradeSession.SetupWith(trader, negotiator, giftMode: false);
         try
         {
             TradeDeal deal = TradeSession.deal;
@@ -119,7 +120,7 @@ internal sealed partial class RimWorldGameWorld
             // 交割前先把收據算好：銀兩實際變動取自貨幣行的公式值，品項數量即交割數量。
             string receipt = $"Traded with {TraderLabel(trader)} (negotiated by {negotiator.LabelShort}): " +
                 string.Join("; ", ReceiptParts(buys, sells)) +
-                $". Colony silver {colonySilver} -> {postDealSilver}.";
+                string.Create(CultureInfo.InvariantCulture, $". Colony silver {colonySilver} -> {postDealSilver}.");
             if (!deal.TryExecute(out _))
             {
                 return CommandResult.Fail("the trade was blocked before anything changed hands.");
@@ -138,12 +139,12 @@ internal sealed partial class RimWorldGameWorld
         var sellAllocations = new Dictionary<Tradeable, int>();
         foreach (TradeLine line in buys)
         {
-            string fail = Allocate(buyAllocations, deal, line, true, TraderLabel(trader));
+            string fail = Allocate(buyAllocations, deal, line, buy: true, TraderLabel(trader));
             if (fail != null) return CommandResult.Fail(fail);
         }
         foreach (TradeLine line in sells)
         {
-            string fail = Allocate(sellAllocations, deal, line, false, TraderLabel(trader));
+            string fail = Allocate(sellAllocations, deal, line, buy: false, TraderLabel(trader));
             if (fail != null) return CommandResult.Fail(fail);
         }
         foreach (Tradeable row in buyAllocations.Keys.Concat(sellAllocations.Keys).Distinct())
@@ -152,7 +153,7 @@ internal sealed partial class RimWorldGameWorld
             // AdjustTo 為 void，且會把數量夾在可交易範圍內；事後比對實際數量，與預期不符就整筆不做（此時尚未交割）。
             row.AdjustTo(target);
             if (row.CountToTransfer != target)
-                return CommandResult.Fail($"could only set {row.LabelCap} to {row.CountToTransfer} instead of {target}; the trade was not executed.");
+                return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"could only set {row.LabelCap} to {row.CountToTransfer} instead of {target}; the trade was not executed."));
         }
         return null;
     }
@@ -166,7 +167,7 @@ internal sealed partial class RimWorldGameWorld
         if (currency == null || postDealSilver < 0)
         {
             int need = colonySilver - postDealSilver;
-            return CommandResult.Fail($"the colony cannot afford this: needs {need} silver but has {colonySilver}.");
+            return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"the colony cannot afford this: needs {need} silver but has {colonySilver}."));
         }
         if (!deal.DoesTraderHaveEnoughSilver())
         {
@@ -197,8 +198,8 @@ internal sealed partial class RimWorldGameWorld
         {
             int available = line.Count - rest;
             return buy
-                ? $"{traderLabel} only has {available} {ItemLabel(line.DefName)} for sale, not {line.Count}."
-                : $"the colony only has {available} sellable {ItemLabel(line.DefName)}, not {line.Count}.";
+                ? string.Create(CultureInfo.InvariantCulture, $"{traderLabel} only has {available} {ItemLabel(line.DefName)} for sale, not {line.Count}.")
+                : string.Create(CultureInfo.InvariantCulture, $"the colony only has {available} sellable {ItemLabel(line.DefName)}, not {line.Count}.");
         }
         return null;
     }

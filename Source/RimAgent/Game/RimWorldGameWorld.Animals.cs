@@ -16,7 +16,7 @@ internal sealed partial class RimWorldGameWorld
 {
     public IReadOnlyList<AnimalInfo> GetAnimals()
     {
-        return Map.mapPawns.AllPawnsSpawned.Where(p => p.RaceProps.Animal && !p.Fogged()).Select(ToAnimal).ToList();
+        return [.. Map.mapPawns.AllPawnsSpawned.Where(p => p.RaceProps.Animal && !p.Fogged()).Select(ToAnimal)];
     }
 
     private static AnimalInfo ToAnimal(Pawn pawn)
@@ -35,17 +35,14 @@ internal sealed partial class RimWorldGameWorld
     }
 
     public IReadOnlyList<DefInfo> AnimalTraining =>
-        _animalTraining ?? (_animalTraining = DefDatabase<TrainableDef>.AllDefsListForReading
-            .Select(d => new DefInfo(d.defName, d.label))
-            .ToList());
+        _animalTraining ?? (_animalTraining = [.. DefDatabase<TrainableDef>.AllDefsListForReading.Select(d => new DefInfo(d.defName, d.label))]);
 
     /// <summary>區域是每張地圖的執行期資料（玩家隨時新增、切圖就換），不快取。</summary>
     [SuppressMessage("Major Code Smell", "S2365:Properties should not copy collections", Justification = "Implements IGameWorld property contract border reflects dynamic game state")]
     public IReadOnlyList<DefInfo> AnimalAreas =>
-        Map.areaManager.AllAreas
+        [.. Map.areaManager.AllAreas
             .Where(a => a.AssignableAsAllowed())
-            .Select(a => new DefInfo(a.Label, a.Label))
-            .ToList();
+            .Select(a => new DefInfo(a.Label, a.Label))];
 
     public CommandResult TameAnimal(int pawnId)
     {

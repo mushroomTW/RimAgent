@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -48,15 +49,15 @@ public sealed class ChoiceTools
         ChoiceOptionInfo picked = choice.Options.FirstOrDefault(o => o.Number == option);
         if (picked == null)
         {
-            return ToolText.Error($"\"{choice.Title}\" has no option {option}. Options: " + string.Join("; ", choice.Options.Select(FormatOption)));
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"\"{choice.Title}\" has no option {option}. Options: ") + string.Join("; ", choice.Options.Select(FormatOption)));
         }
-        if (picked.Disabled) return ToolText.Error($"option {option} of \"{choice.Title}\" is disabled" + DisabledSuffix(picked));
+        if (picked.Disabled) return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"option {option} of \"{choice.Title}\" is disabled") + DisabledSuffix(picked));
 
         // 輸入常是清單序號，附上清單，確認的人才看得出選了什麼。
         string inputPart = string.IsNullOrEmpty(input) ? string.Empty : $" Input: {input}.";
         string textPart = string.IsNullOrEmpty(choice.Text) ? string.Empty : "\n" + choice.Text;
         string given = inputPart + textPart;
-        string blocked = ToolText.Blocked(_gate, $"would answer \"{choice.Title}\" with option {option}: {picked.Text}.{given}");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would answer \"{choice.Title}\" with option {option}: {picked.Text}.{given}"));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.ChooseOption(choice.Id, option, input);
@@ -81,7 +82,7 @@ public sealed class ChoiceTools
 
     private static string FormatOption(ChoiceOptionInfo o)
     {
-        return o.Number + ") " + o.Text + (o.Disabled ? " (disabled" + DisabledSuffix(o) + ")" : string.Empty);
+        return o.Number.ToString(CultureInfo.InvariantCulture) + ") " + o.Text + (o.Disabled ? " (disabled" + DisabledSuffix(o) + ")" : string.Empty);
     }
 
     private static string DisabledSuffix(ChoiceOptionInfo o)

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using RimAgent.Game;
@@ -14,7 +15,7 @@ internal sealed partial class FakeGameWorld
     /// </summary>
     public CommandResult ExecuteTrade(TradeRequest request)
     {
-        Calls.Add($"ExecuteTrade({request?.TraderId},{request?.NegotiatorPawnId})");
+        Calls.Add(string.Create(CultureInfo.InvariantCulture, $"ExecuteTrade({request?.TraderId},{request?.NegotiatorPawnId})"));
         if (request == null) return CommandResult.Fail("no trade requested");
         TraderInfo trader = Traders.FirstOrDefault(t => string.Equals(t.Id, request.TraderId, StringComparison.OrdinalIgnoreCase));
         if (trader == null) return CommandResult.Fail($"unknown trader \"{request.TraderId}\". List the traders again to get a valid id.");
@@ -35,14 +36,14 @@ internal sealed partial class FakeGameWorld
         {
             int available = trader.Goods.Where(g => string.Equals(g.DefName, line.DefName, StringComparison.OrdinalIgnoreCase)).Sum(g => g.Count);
             if (available < line.Count)
-                return CommandResult.Fail($"{trader.Name} only has {available} {line.DefName} for sale, not {line.Count}.");
+                return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"{trader.Name} only has {available} {line.DefName} for sale, not {line.Count}."));
         }
         var stock = Resources.Items.ToList();
         foreach (TradeLine line in sells)
         {
             int available = stock.Where(r => string.Equals(r.DefName, line.DefName, StringComparison.OrdinalIgnoreCase)).Sum(r => r.Count);
             if (available < line.Count)
-                return CommandResult.Fail($"the colony only has {available} sellable {line.DefName}, not {line.Count}.");
+                return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"the colony only has {available} sellable {line.DefName}, not {line.Count}."));
         }
 
         float PriceOf(string defName, float fallback)
@@ -53,9 +54,9 @@ internal sealed partial class FakeGameWorld
         int sellTotal = sells.Sum(l => (int)(PriceOf(l.DefName, 1f) * l.Count));
         int colonySilver = stock.Where(r => string.Equals(r.DefName, "Silver", StringComparison.OrdinalIgnoreCase)).Sum(r => r.Count);
         if (colonySilver - buyTotal + sellTotal < 0)
-            return CommandResult.Fail($"the colony cannot afford this: needs {buyTotal - sellTotal} silver but has {colonySilver}.");
+            return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"the colony cannot afford this: needs {buyTotal - sellTotal} silver but has {colonySilver}."));
         if (trader.Silver - sellTotal + buyTotal < 0)
-            return CommandResult.Fail($"{trader.Name} cannot afford this: needs {sellTotal - buyTotal} silver but has {trader.Silver}.");
+            return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"{trader.Name} cannot afford this: needs {sellTotal - buyTotal} silver but has {trader.Silver}."));
 
         foreach (TradeLine line in buys) TakeFrom(trader.Goods, line.DefName, line.Count);
         foreach (TradeLine line in buys) AddTo(stock, line.DefName, LabelOf(line.DefName), line.Count);
@@ -74,7 +75,7 @@ internal sealed partial class FakeGameWorld
         string bought = buys.Count == 0 ? string.Empty : "bought " + string.Join(", ", buys.Select(l => $"{LabelOf(l.DefName)} ({l.DefName}) x{l.Count}"));
         string sold = sells.Count == 0 ? string.Empty : "sold " + string.Join(", ", sells.Select(l => $"{LabelOf(l.DefName)} ({l.DefName}) x{l.Count}"));
         string what = string.Join("; ", new[] { bought, sold }.Where(s => s.Length > 0));
-        return CommandResult.Ok($"Traded with {trader.Name} (negotiated by {negotiator.Name}): {what}. Colony silver {colonySilver} -> {colonySilver - buyTotal + sellTotal}.");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Traded with {trader.Name} (negotiated by {negotiator.Name}): {what}. Colony silver {colonySilver} -> {colonySilver - buyTotal + sellTotal}."));
     }
 
     private string LabelOf(string defName)
@@ -136,6 +137,6 @@ internal sealed partial class FakeGameWorld
 
     private static void Unmark(ThingInfo thing, string def)
     {
-        thing.Designations = thing.Designations.Where(d => d != def).ToList();
+        thing.Designations = [.. thing.Designations.Where(d => d != def)];
     }
 }

@@ -15,8 +15,6 @@ internal sealed partial class RimWorldGameWorld
 {
     private const string QuestNotFound = "no available or active quest with that id. Call list_quests for the current ids.";
 
-    private static readonly Regex MarkupTags = new("<[^>]+>", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-
     /// <summary>任務分頁會列出的任務：可接受與進行中，不含已結束、已過期與隱藏的。</summary>
     public IReadOnlyList<QuestInfo> GetQuests()
     {
@@ -46,10 +44,10 @@ internal sealed partial class RimWorldGameWorld
         };
         if (!available)
         {
-            info.Deadlines = quest.PartsListForReading.OfType<QuestPartActivable>()
+            info.Deadlines = [.. quest.PartsListForReading.OfType<QuestPartActivable>()
                 .Where(p => p.State == QuestPartState.Enabled && !p.ExpiryInfoPart.NullOrEmpty())
                 .OrderBy(p => p.EnableTick)
-                .Select(p => PlainText(p.ExpiryInfoPart)).ToList();
+                .Select(p => PlainText(p.ExpiryInfoPart))];
             return info;
         }
         if (quest.TicksUntilExpiry > 0) info.ExpiresInTicks = quest.TicksUntilExpiry;
@@ -58,14 +56,14 @@ internal sealed partial class RimWorldGameWorld
         if (!report.Accepted) info.UnmetRequirements = UnmetQuestRequirements(quest, report);
         if (quest.RequiresAccepter || info.RewardOptions.Any(o => o.RequiresAccepter))
         {
-            info.Accepters = QuestAccepterCandidates(quest)
+            info.Accepters = [.. QuestAccepterCandidates(quest)
                 .Select(p => new QuestAccepterInfo
                 {
                     Id = p.thingIDNumber,
                     Name = p.LabelShort,
                     FullName = p.Name?.ToStringFull ?? p.LabelShort,
                     Warning = AccepterWarning(quest, p)
-                }).ToList();
+                })];
         }
         return info;
     }
@@ -111,7 +109,7 @@ internal sealed partial class RimWorldGameWorld
             result.Add(new QuestRewardInfo
             {
                 Number = i + 1,
-                Rewards = choice.choices[i].rewards.Select(RewardText).Where(t => t.Length > 0).ToList(),
+                Rewards = [.. choice.choices[i].rewards.Select(RewardText).Where(t => t.Length > 0)],
                 RequiresAccepter = ChoiceRequiresAccepter(quest, choice, choice.choices[i])
             });
         }
@@ -163,7 +161,7 @@ internal sealed partial class RimWorldGameWorld
         IEnumerable<Trait> psylinkTraits = RoyalTitleUtility.GetTraitsAffectingPsylinkNegatively(pawn);
         if (!pawn.HasPsylink && psylinkTraits.Any())
             warnings.Add("RoyalWithTraitAffectingPsylinkNegatively".Translate(pawnArg, factionArg, psylinkTraits.Select(t => t.Label).ToCommaList(useAnd: true)).Resolve());
-        return PlainText(string.Join(" ", warnings));
+        return PlainText(string.Join(' ', warnings));
     }
 
     private static string PlainText(string text)
@@ -244,4 +242,7 @@ internal sealed partial class RimWorldGameWorld
         }
         return CommandResult.Ok();
     }
+
+    [GeneratedRegex("<[^>]+>", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex MarkupTags { get; }
 }

@@ -271,7 +271,7 @@ public partial class Window_Agent
         bool unseen = _linesTranscriptVersion != _seenVersion;
         string jumpLabel = _jumpLabel.Get(unseen, u => (u ? "RimAgent.Scroll.NewMessages" : "RimAgent.Scroll.Latest").Translate().ToString());
         Color jumpColor = unseen ? NoticeColor : TitleColor;
-        if (DrawUnifiedButton(jumpRect, jumpLabel, jumpColor, jumpColor, true, GameFont.Tiny)) _scrollToBottom = true;
+        if (DrawUnifiedButton(jumpRect, jumpLabel, jumpColor, jumpColor, enabled: true, GameFont.Tiny)) _scrollToBottom = true;
     }
 
     /// <summary>寬度是否已經停在同一個值超過 <see cref="ReflowDelayMs"/>（用 TickCount：BCL 在測試與遊戲內都能 JIT）。</summary>
@@ -294,7 +294,7 @@ public partial class Window_Agent
     {
         if (_bubbleStyle != null) return _bubbleStyle;
         int size = BubbleRadius * 2 + 1;
-        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false)
         {
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Bilinear

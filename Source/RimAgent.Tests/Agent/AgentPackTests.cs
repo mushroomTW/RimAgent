@@ -28,7 +28,7 @@ public class AgentPackTests
     {
         try
         {
-            Directory.Delete(_root, true);
+            Directory.Delete(_root, recursive: true);
         }
         catch (Exception)
         {
@@ -205,7 +205,7 @@ public class AgentPackTests
             Assert.That(skill.Description, Is.Not.Empty, skill.Name + " 缺描述");
             Assert.That(skill.Body, Does.Not.Contain("[skill truncated]"), skill.Name + " 超過單一技能上限");
         }
-        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", null, null, pack.Skills);
+        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", playerNotes: null, conduct: null, pack.Skills);
         Assert.That(text, Does.Not.Contain("omitted: over budget"), "技能索引超過總量上限");
     }
 
@@ -256,7 +256,7 @@ public class AgentPackTests
     [Test]
     public void ComposeWithSkillIndexPutsExpansionsRightAfterPreamble()
     {
-        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "Tall, not wide.", null, null, "Game expansions active: Biotech.");
+        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "Tall, not wide.", conduct: null, skills: null, "Game expansions active: Biotech.");
 
         Assert.That(text, Does.StartWith("CORE\n\nGame expansions active: Biotech."));
         Assert.That(text.IndexOf("Biotech", StringComparison.Ordinal), Is.LessThan(text.IndexOf("Tall, not wide.", StringComparison.Ordinal)));
@@ -266,8 +266,8 @@ public class AgentPackTests
     [Test]
     public void ComposeWithSkillIndexAddsLayoutsHintOnlyWhenEnabled()
     {
-        string on = AgentPromptComposer.ComposeWithSkillIndex("CORE", null, null, null, "Game expansions active: none.", layouts: true);
-        string off = AgentPromptComposer.ComposeWithSkillIndex("CORE", null, null, null, "Game expansions active: none.", layouts: false);
+        string on = AgentPromptComposer.ComposeWithSkillIndex("CORE", playerNotes: null, conduct: null, skills: null, "Game expansions active: none.", layouts: true);
+        string off = AgentPromptComposer.ComposeWithSkillIndex("CORE", playerNotes: null, conduct: null, skills: null, "Game expansions active: none.", layouts: false);
 
         Assert.That(on, Does.Contain(AgentPromptComposer.LayoutsHint));
         Assert.That(on, Does.Contain("shape=layout"));
@@ -278,10 +278,10 @@ public class AgentPackTests
     [Test]
     public void LayoutsHintNeedsBuildToolsToBeAllowed()
     {
-        Assert.That(AgentPromptComposer.LayoutsHintApplies(true, ToolPermissions.All), Is.True);
-        Assert.That(AgentPromptComposer.LayoutsHintApplies(true, null), Is.True);
-        Assert.That(AgentPromptComposer.LayoutsHintApplies(true, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work)), Is.False);
-        Assert.That(AgentPromptComposer.LayoutsHintApplies(false, ToolPermissions.All), Is.False);
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(layoutsOn: true, ToolPermissions.All), Is.True);
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(layoutsOn: true, permissions: null), Is.True);
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(layoutsOn: true, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work)), Is.False);
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(layoutsOn: false, ToolPermissions.All), Is.False);
     }
 
     [Test]
@@ -309,7 +309,7 @@ public class AgentPackTests
     [Test]
     public void ComposeWithSkillIndexWithAllEmptyLayersReturnsCoreOnly()
     {
-        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "  ", null, null);
+        string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "  ", conduct: null, skills: null);
 
         Assert.That(text, Is.EqualTo("CORE"));
     }

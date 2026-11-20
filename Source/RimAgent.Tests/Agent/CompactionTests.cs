@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,7 +47,7 @@ public class CompactionTests
     {
         ColonyAgentSession session = new(_client, _world, () => _permissions, 8,
             contextWindowLookup: _ => 10000) { PreferredModel = "Test:model" };
-        session.SyncAutoCompact(false, 20);
+        session.SyncAutoCompact(enabled: false, 20);
 
         Assert.That(session.AutoCompactEnabled, Is.False);
         Assert.That(session.AutoCompactThreshold, Is.EqualTo(20));
@@ -117,8 +118,8 @@ public class CompactionTests
         await session.SendAsync("set doctor 1");
         await session.SendAsync("hello");
 
-        IList<ChatMessage> lastRequest = _client.ReceivedMessages.Last();
-        string forwarded = string.Join("\n", lastRequest.Select(m => m.Text ?? string.Empty));
+        IList<ChatMessage> lastRequest = _client.ReceivedMessages[^1];
+        string forwarded = string.Join('\n', lastRequest.Select(m => m.Text ?? string.Empty));
         // 工具結果住在 FunctionResultContent 裡（.Text 看不到），用數量判斷是否被折疊；
         // 折疊後的摘要是 assistant 文字，內含 "[Tool Calls]" 標記。
         int resultCount = lastRequest.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Count();
@@ -143,11 +144,11 @@ public class CompactionTests
     {
         for (int i = 0; i < 32; i++)
         {
-            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i.ToString(CultureInfo.InvariantCulture));
         }
         ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         // 每句 4 則；30 句 120 則還不裁。
-        for (int i = 0; i < 30; i++) await session.SendAsync("set doctor " + i);
+        for (int i = 0; i < 30; i++) await session.SendAsync("set doctor " + i.ToString(CultureInfo.InvariantCulture));
         Assert.That(session.History.Count, Is.EqualTo(120));
 
         await session.SendAsync("set doctor 30");
@@ -162,11 +163,11 @@ public class CompactionTests
     [Test]
     public async Task StoredHistoryIsKeptWhenAutoCompactIsOff()
     {
-        for (int i = 0; i < 12; i++) _client.Reply("ok " + i);
+        for (int i = 0; i < 12; i++) _client.Reply("ok " + i.ToString(CultureInfo.InvariantCulture));
         ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
-        session.SyncAutoCompact(false, 5);
+        session.SyncAutoCompact(enabled: false, 5);
 
-        for (int i = 0; i < 12; i++) await session.SendAsync("instruction " + i);
+        for (int i = 0; i < 12; i++) await session.SendAsync("instruction " + i.ToString(CultureInfo.InvariantCulture));
 
         Assert.That(session.History.Count, Is.EqualTo(24), "關閉自動壓縮時不動存量歷史");
     }
@@ -176,11 +177,11 @@ public class CompactionTests
     {
         for (int i = 0; i < 8; i++)
         {
-            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i);
+            _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done " + i.ToString(CultureInfo.InvariantCulture));
         }
         ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
         session.AutoCompactThreshold = 75;
-        for (int i = 0; i < 4; i++) await session.SendAsync("set doctor " + i);
+        for (int i = 0; i < 4; i++) await session.SendAsync("set doctor " + i.ToString(CultureInfo.InvariantCulture));
 
         string saved = session.SerializeForSave();
 
@@ -256,10 +257,10 @@ public class CompactionTests
     [Test]
     public async Task CompactSummarizesOldHistoryAndKeepsLog()
     {
-        for (int i = 0; i < 6; i++) _client.Reply("ok " + i);
+        for (int i = 0; i < 6; i++) _client.Reply("ok " + i.ToString(CultureInfo.InvariantCulture));
         _client.Reply("Summary of the colony so far.");
         ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
-        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i.ToString(CultureInfo.InvariantCulture));
         int before = session.History.Count;
         Assert.That(before, Is.GreaterThan(8), "歷史要夠長，摘要才有東西可折");
 
@@ -267,8 +268,8 @@ public class CompactionTests
 
         IReadOnlyList<ChatMessage> after = session.History;
         Assert.That(after.Count, Is.LessThan(before));
-        Assert.That(after.Any(m => m.Text != null && m.Text.Contains("Summary of the colony so far.")), Is.True);
-        Assert.That(result, Does.Contain(before + " -> " + after.Count));
+        Assert.That(after.Any(m => m.Text != null && m.Text.Contains("Summary of the colony so far.", StringComparison.Ordinal)), Is.True);
+        Assert.That(result, Does.Contain(before.ToString(CultureInfo.InvariantCulture) + " -> " + after.Count.ToString(CultureInfo.InvariantCulture)));
         TranscriptEntry notice = session.Transcript.Snapshot()[^1];
         Assert.That(notice.Kind, Is.EqualTo(TranscriptKind.Notice));
         // 可見對話紀錄不受影響：6 句指令的 User 條目都在。
@@ -281,10 +282,10 @@ public class CompactionTests
     {
         // 歷史要夠長（超過保留下限），策略才會真的呼叫摘要 client 並觸發 Throw；
         // AF 策略吞掉摘要例外並原樣回傳，Compact 以「一則沒少」認出並誠實回報。
-        for (int i = 0; i < 6; i++) _client.Reply("ok " + i);
+        for (int i = 0; i < 6; i++) _client.Reply("ok " + i.ToString(CultureInfo.InvariantCulture));
         _client.Throw(new InvalidOperationException("summarizer down"));
         ColonyAgentSession session = new(_client, _world, () => _permissions, 8);
-        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("instruction " + i.ToString(CultureInfo.InvariantCulture));
         int before = session.History.Count;
         Assert.That(before, Is.GreaterThan(8));
         int callsBefore = _client.CallCount;

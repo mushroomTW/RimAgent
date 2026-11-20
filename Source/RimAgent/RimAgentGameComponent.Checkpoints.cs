@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using RimAgent.Agent;
@@ -34,10 +35,10 @@ public partial class RimAgentGameComponent
                 session.Transcript.Add(new TranscriptEntry
                 {
                     Kind = TranscriptKind.Notice,
-                    Text = "Reloaded " + reload.SaveName + " (attempt " + reload.Attempt + "/" + SaveLedger.MaxLoadsPerSave + "): " + reload.Lesson
+                    Text = "Reloaded " + reload.SaveName + " (attempt " + reload.Attempt.ToString(CultureInfo.InvariantCulture) + "/" + SaveLedger.MaxLoadsPerSave.ToString(CultureInfo.InvariantCulture) + "): " + reload.Lesson
                 });
                 if (!care) return;
-                _ =RunAutonomousGuardedAsync(session, AutonomousTrigger.Reloaded, Find.TickManager.TicksGame, ToConfig(settings), null,
+                _ =RunAutonomousGuardedAsync(session, AutonomousTrigger.Reloaded, Find.TickManager.TicksGame, ToConfig(settings), signals: null,
                     DescribeReloads(SaveLedger.Shared.HistoryOf(ColonyId)));
                 return;
             }
@@ -48,7 +49,7 @@ public partial class RimAgentGameComponent
             }
             string died = "Died: " + string.Join(", ", _pendingDeaths) + ".";
             _pendingDeaths.Clear();
-            _ =RunAutonomousGuardedAsync(session, AutonomousTrigger.ColonistDied, Find.TickManager.TicksGame, ToConfig(settings), null, died);
+            _ =RunAutonomousGuardedAsync(session, AutonomousTrigger.ColonistDied, Find.TickManager.TicksGame, ToConfig(settings), signals: null, died);
         }
         catch (Exception ex)
         {

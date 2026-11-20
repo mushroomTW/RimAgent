@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -58,12 +59,12 @@ public class SaveToolsTests
     [Test]
     public async Task SaveNamesCheckpointByColonyAndTickAndKeepsNewestFive()
     {
-        for (int i = 1; i <= 6; i++) AddSave("RimAgent-colony1-" + i * 1000, i * 1000, checkpoint: true);
+        for (int i = 1; i <= 6; i++) AddSave("RimAgent-colony1-" + (i * 1000).ToString(CultureInfo.InvariantCulture), i * 1000, checkpoint: true);
 
         string text = await _tools.SaveGame();
 
         Assert.That(text, Is.EqualTo("Saved checkpoint RimAgent-colony1-300000."));
-        string[] left = _world.SaveFiles.Where(s => s.Checkpoint).Select(s => s.Name).ToArray();
+        string[] left = [.. _world.SaveFiles.Where(s => s.Checkpoint).Select(s => s.Name)];
         Assert.That(left, Has.Length.EqualTo(SaveTools.MaxCheckpoints));
         Assert.That(left, Does.Contain("RimAgent-colony1-300000").And.Contain("RimAgent-colony1-3000"));
         Assert.That(left, Does.Not.Contain("RimAgent-colony1-2000"));
@@ -122,7 +123,7 @@ public class SaveToolsTests
         AddSave("Autosave-1", 1000);
         for (int i = 1; i <= SaveLedger.MaxLoadsPerSave; i++)
         {
-            Assert.That(await _tools.LoadSave("Autosave-1", "try " + i), Does.Contain($"attempt {i}/3"));
+            Assert.That(await _tools.LoadSave("Autosave-1", "try " + i.ToString(CultureInfo.InvariantCulture)), Does.Contain(string.Create(CultureInfo.InvariantCulture, $"attempt {i}/3")));
         }
 
         Assert.That(await _tools.LoadSave("Autosave-1", "again"), Does.StartWith("Error:").And.Contain("accept the loss"));
@@ -172,7 +173,7 @@ public class SaveToolsTests
     [Test]
     public void SaveToolsAreOffUnlessTheSaveCategoryIsAllowed()
     {
-        var registry = new AgentToolRegistry(_world, new AgentTranscript(), null, null);
+        var registry = new AgentToolRegistry(_world, new AgentTranscript(), undo: null, gate: null);
 
         Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Time)).Select(t => t.Name), Has.None.EqualTo("load_save"));
         Assert.That(registry.Select(ToolPermissions.For(ToolCategory.Save)).Select(t => t.Name),

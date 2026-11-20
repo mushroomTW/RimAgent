@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -89,11 +90,11 @@ internal static class PendingUiCheck
     private static IntVec3? FindClear(Map map, int width, int height)
     {
         IntVec3 start = Colonist().Position;
-        foreach (IntVec3 cell in GenRadial.RadialCellsAround(start, 40f, false))
+        foreach (IntVec3 cell in GenRadial.RadialCellsAround(start, 40f, useCenter: false))
         {
             var rect = new CellRect(cell.x, cell.z, width, height);
             if (rect.InBounds(map) && rect.ExpandedBy(1).InBounds(map)
-                && rect.Cells.All(c => !c.Fogged(map) && c.Standable(map) && c.GetEdifice(map) == null && c.GetThingList(map).All(t => t is Plant)))
+                && rect.Cells.All(c => !c.Fogged(map) && c.Standable(map) && c.GetEdifice(map) == null && c.GetThingList(map).TrueForAll(t => t is Plant)))
             {
                 return cell;
             }
@@ -128,7 +129,7 @@ internal static class PendingUiCheck
         try
         {
             if (Pending(world, c => c.Id == "dialog-tile") != null) failures.Add("a tile picker the player can cancel counted as pending");
-            SetFlag("_agentExpectsTile", true);
+            SetFlag("_agentExpectsTile", value: true);
             PendingChoiceInfo choice = Pending(world, c => c.Id == "dialog-tile");
             if (choice == null || string.IsNullOrEmpty(choice.InputHint))
             {
@@ -156,8 +157,8 @@ internal static class PendingUiCheck
         {
             got = t;
             return true;
-        }, true);
-        SetFlag("_agentWorldTarget", true);
+        }, canTargetTiles: true);
+        SetFlag("_agentWorldTarget", value: true);
         try
         {
             PendingChoiceInfo choice = Pending(world, c => c.Id == "dialog-world-target");
@@ -182,7 +183,7 @@ internal static class PendingUiCheck
         Pawn colonist = Colonist();
         LocalTargetInfo got = LocalTargetInfo.Invalid;
         Find.Targeter.BeginTargeting(TargetingParameters.ForColonist(), t => got = t, caster: null, actionWhenFinished: null, mouseAttachment: null, requiresCastedSelected: false);
-        SetFlag("_agentMapTarget", true);
+        SetFlag("_agentMapTarget", value: true);
         try
         {
             PendingChoiceInfo choice = Pending(world, c => c.Id == "dialog-map-target");
@@ -191,7 +192,7 @@ internal static class PendingUiCheck
                 failures.Add("map target is not pending");
                 return;
             }
-            CommandResult ok = world.ChooseOption(choice.Id, 1, "#" + colonist.thingIDNumber);
+            CommandResult ok = world.ChooseOption(choice.Id, 1, "#" + colonist.thingIDNumber.ToString(CultureInfo.InvariantCulture));
             if (!ok.Success || got.Thing != colonist) failures.Add($"map target not delivered: {ok.Message}, got {got}");
             if (Find.Targeter.IsTargeting) failures.Add("targeter still active after answering");
         }
@@ -214,14 +215,14 @@ internal static class PendingUiCheck
         {
             AccessTools.Method(typeof(RimWorldGameWorld), "AdoptOpenedWindows").Invoke(null, [snapshot]);
             CommandResult chosen = world.ChooseOption(Pending(world, c => c.Title == "Menu").Id, 1);
-            AccessTools.Method(typeof(Targeter), "ConfirmStillValid").Invoke(Find.Targeter, null);
+            AccessTools.Method(typeof(Targeter), "ConfirmStillValid").Invoke(Find.Targeter, parameters: null);
             PendingChoiceInfo target = Pending(world, c => c.Id == "dialog-map-target");
             if (!chosen.Success || target == null)
             {
                 failures.Add("target after a menu did not survive a frame: " + chosen.Message);
                 return;
             }
-            CommandResult ok = world.ChooseOption(target.Id, 1, "#" + colonist.thingIDNumber);
+            CommandResult ok = world.ChooseOption(target.Id, 1, "#" + colonist.thingIDNumber.ToString(CultureInfo.InvariantCulture));
             if (!ok.Success || got.Thing != colonist) failures.Add("target after a menu not delivered: " + ok.Message);
         }
         finally
@@ -235,7 +236,7 @@ internal static class PendingUiCheck
     {
         bool ran = false;
         var snapshot = new HashSet<Window>(Find.WindowStack.Windows);
-        var menu = new FloatMenu([new FloatMenuOption("Check run", () => ran = true), new FloatMenuOption("Check disabled", null)]);
+        var menu = new FloatMenu([new FloatMenuOption("Check run", () => ran = true), new FloatMenuOption("Check disabled", action: null)]);
         Find.WindowStack.Add(menu);
         try
         {
@@ -253,7 +254,7 @@ internal static class PendingUiCheck
         }
         finally
         {
-            if (Find.WindowStack.Windows.Contains(menu)) menu.Close(false);
+            if (Find.WindowStack.Windows.Contains(menu)) menu.Close(doCloseSound: false);
         }
     }
 
@@ -264,7 +265,7 @@ internal static class PendingUiCheck
         public bool AskFirst;
 
         public CheckLordJobDialog()
-            : base(null)
+            : base(participantsDrawer: null)
         {
         }
 
@@ -317,19 +318,19 @@ internal static class PendingUiCheck
                 return;
             }
             CommandResult refused = world.ChooseOption(choice.Id, 1);
-            if (refused.Success || dialog.Started != 0 || !refused.Message.Contains("Check blocked")) failures.Add("a blocked ceremony: " + refused.Message);
+            if (refused.Success || dialog.Started != 0 || !refused.Message.Contains("Check blocked", StringComparison.Ordinal)) failures.Add("a blocked ceremony: " + refused.Message);
             if (!Find.WindowStack.Windows.Contains(dialog)) failures.Add("a blocked ceremony closed the window");
             dialog.Refuse = false;
             CommandResult asked = world.ChooseOption(choice.Id, 1);
             if (!asked.Success || dialog.Started != 0) failures.Add("a ceremony asking for confirmation: " + asked.Message);
             if (world.ChooseOption(choice.Id, 1).Success) failures.Add("a second confirmation box was stacked");
-            PendingChoiceInfo box = Pending(world, c => c.Text.Contains("Check confirm"));
+            PendingChoiceInfo box = Pending(world, c => c.Text.Contains("Check confirm", StringComparison.Ordinal));
             CommandResult ok = box == null ? CommandResult.Fail("no confirmation box") : world.ChooseOption(box.Id, 1);
             if (!ok.Success || dialog.Started != 1) failures.Add("ceremony did not start: " + ok.Message);
         }
         finally
         {
-            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(false);
+            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(doCloseSound: false);
         }
     }
 
@@ -361,7 +362,7 @@ internal static class PendingUiCheck
                 failures.Add("load button is not an action: " + string.Join(", ", world.GetGizmos(pod.thingIDNumber).Select(g => g.Label + "/" + g.Kind)));
                 return;
             }
-            CommandResult pressed = world.UseGizmo(pod.thingIDNumber, load.Number, load.Label, null);
+            CommandResult pressed = world.UseGizmo(pod.thingIDNumber, load.Number, load.Label, target: null);
             PendingChoiceInfo choice = Pending(world, c => c.Title == "Choose what to load");
             if (!pressed.Success || choice == null)
             {
@@ -376,7 +377,7 @@ internal static class PendingUiCheck
         }
         finally
         {
-            foreach (Dialog_LoadTransporters open in Find.WindowStack.Windows.OfType<Dialog_LoadTransporters>().ToList()) open.Close(false);
+            foreach (Dialog_LoadTransporters open in Find.WindowStack.Windows.OfType<Dialog_LoadTransporters>().ToList()) open.Close(doCloseSound: false);
             pod.TryGetComp<CompTransporter>()?.CancelLoad();
             pod.Destroy();
             launcher.Destroy();
@@ -395,9 +396,9 @@ internal static class PendingUiCheck
         }
         MinifiedThing mini = ((Building)ThingMaker.MakeThing(def)).MakeMinified();
         GenSpawn.Spawn(mini, itemCell.Value, map);
-        IntVec3? target = GenRadial.RadialCellsAround(itemCell.Value, 15f, false)
+        IntVec3? target = GenRadial.RadialCellsAround(itemCell.Value, 15f, useCenter: false)
             .Where(c => c.InBounds(map) && !c.Fogged(map) && GenConstruct.CanPlaceBlueprintAt(def, c, Rot4.North, map).Accepted)
-            .Select(c => (IntVec3?)c).FirstOrDefault();
+            .Cast<IntVec3?>().FirstOrDefault();
         try
         {
             GizmoInfo install = world.GetGizmos(mini.thingIDNumber).FirstOrDefault(g => g.Kind == GizmoInfo.TargetKind);
@@ -432,7 +433,7 @@ internal static class PendingUiCheck
         colonist.royalty.SetFavor(empire, 7);
         ColonistInfo info = world.GetColonists().FirstOrDefault(c => c.Id == colonist.thingIDNumber);
         // 原版給榮譽時可能自動升頭銜，數字不一定還是 7。
-        if (info == null || !info.RoyalStatus.Contains("honor ")) failures.Add("royal status: " + info?.RoyalStatus);
+        if (info == null || !info.RoyalStatus.Contains("honor ", StringComparison.Ordinal)) failures.Add("royal status: " + info?.RoyalStatus);
         colonist.royalty.SetFavor(empire, honor);
     }
 
@@ -463,7 +464,7 @@ internal static class PendingUiCheck
         }
         finally
         {
-            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(false);
+            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(doCloseSound: false);
         }
     }
 
@@ -471,7 +472,7 @@ internal static class PendingUiCheck
     {
         if (!ModsConfig.IdeologyActive) return;
         bool next = false;
-        var dialog = new Dialog_ConfigureIdeo(Find.CurrentMap.mapPawns.FreeColonistsSpawned, () => next = true, true);
+        var dialog = new Dialog_ConfigureIdeo(Find.CurrentMap.mapPawns.FreeColonistsSpawned, () => next = true, forArchonexusRestart: true);
         Find.WindowStack.Add(dialog);
         try
         {
@@ -487,7 +488,7 @@ internal static class PendingUiCheck
         }
         finally
         {
-            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(false);
+            if (Find.WindowStack.Windows.Contains(dialog)) dialog.Close(doCloseSound: false);
         }
     }
 
@@ -527,11 +528,11 @@ internal static class PendingUiCheck
             failures.Add("landing is not pending");
             return;
         }
-        Log.Message(TestHelpers.LogPrefix + "landing: " + choice.Text + " | " + string.Join("; ", choice.Options.Select(o => o.Number + ") " + o.Text + (o.Disabled ? " (disabled)" : string.Empty))));
+        Log.Message(TestHelpers.LogPrefix + "landing: " + choice.Text + " | " + string.Join("; ", choice.Options.Select(o => o.Number.ToString(CultureInfo.InvariantCulture) + ") " + o.Text + (o.Disabled ? " (disabled)" : string.Empty))));
         if (world.ChooseOption(choice.Id, 2, "not a cell").Success) failures.Add("garbage landing cell accepted");
         Designator_MoveGravship designator = Find.GravshipController.MoveDesignator();
         IntVec3 target = map.AllCells.Where(c => designator.CanDesignateCell(c).Accepted).OrderBy(c => c.DistanceTo(map.Center)).FirstOrDefault();
-        CommandResult moved = world.ChooseOption(choice.Id, 2, target.x + "," + target.z);
+        CommandResult moved = world.ChooseOption(choice.Id, 2, target.x.ToString(CultureInfo.InvariantCulture) + "," + target.z.ToString(CultureInfo.InvariantCulture));
         if (!moved.Success) failures.Add($"marker refused at {target}: {moved.Message}");
         PendingChoiceInfo after = Pending(world, c => c.Id == "dialog-landing");
         if (after == null || after.Options[0].Disabled) failures.Add("landing still cannot be confirmed after placing the marker");

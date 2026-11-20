@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -76,12 +77,12 @@ public sealed class LookupDefExperimentComponent : GameComponent
                 List<TranscriptEntry> added = [.. session.Transcript.Snapshot().Skip(before)];
                 List<TranscriptEntry> tools = [.. added.Where(e => e.Kind == TranscriptKind.Tool)];
                 string errors = string.Join(" | ", added.Where(e => e.Kind == TranscriptKind.Error).Select(e => e.Text));
-                Log.Message(LogPrefix + $"Q{i + 1}: {Questions[i]}\nTools ({tools.Count}):\n" +
-                            string.Join("\n", tools.Select(t => $"- {t.ToolName}({t.Arguments}){(t.Failed ? " FAILED" : string.Empty)} => {Short(t.Result, 300)}")) +
+                Log.Message(LogPrefix + string.Create(CultureInfo.InvariantCulture, $"Q{i + 1}: {Questions[i]}\nTools ({tools.Count}):\n") +
+                            string.Join('\n', tools.Select(t => $"- {t.ToolName}({t.Arguments}){(t.Failed ? " FAILED" : string.Empty)} => {Short(t.Result, 300)}")) +
                             (errors.Length > 0 ? "\nErrors: " + errors : string.Empty) +
                             "\nReply:\n" + (reply ?? "(null)"));
                 int lookups = tools.Count(t => t.ToolName == "lookup_def");
-                summary.Add($"Q{i + 1} tools={tools.Count} lookup_def={lookups} reply={(reply == null ? "null" : "ok")}");
+                summary.Add(string.Create(CultureInfo.InvariantCulture, $"Q{i + 1} tools={tools.Count} lookup_def={lookups} reply={(reply == null ? "null" : "ok")}"));
             }
             Log.Warning(LogPrefix + "DONE: " + string.Join("; ", summary));
         }
@@ -93,7 +94,7 @@ public sealed class LookupDefExperimentComponent : GameComponent
 
     private static string Short(string text, int max)
     {
-        string flat = (text ?? string.Empty).Replace("\r", string.Empty).Replace("\n", " / ");
+        string flat = (text ?? string.Empty).Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", " / ", StringComparison.Ordinal);
         return flat.Length > max ? flat[..max] + "…" : flat;
     }
 }

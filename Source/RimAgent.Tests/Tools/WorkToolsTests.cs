@@ -120,7 +120,7 @@ public class WorkToolsTests
     [Test]
     public void BlockedPriorityReturnsPreviewWithoutTouchingWorld()
     {
-        var gated = new WorkTools(_world, null, new ConfirmationGate(() => AgentMode.Confirm));
+        var gated = new WorkTools(_world, undo: null, new ConfirmationGate(() => AgentMode.Confirm));
 
         string text = gated.SetWorkPriorities("Ali:doctor=1");
 
@@ -132,7 +132,7 @@ public class WorkToolsTests
     [Test]
     public void BlockedScheduleReturnsPreviewWithoutTouchingWorld()
     {
-        var gated = new WorkTools(_world, null, new ConfirmationGate(() => AgentMode.Confirm));
+        var gated = new WorkTools(_world, undo: null, new ConfirmationGate(() => AgentMode.Confirm));
 
         string text = gated.SetSchedule("Ali", 22, 23, "sleep");
 

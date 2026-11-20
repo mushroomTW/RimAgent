@@ -34,7 +34,7 @@ public class AgentModelResidueTests
         var settings = new RimAgentSettings { agentModel = "OpenRouter:x" };
 
         Assert.That(settings.ClearAgentModelIfMissing([]), Is.False);
-        Assert.That(settings.ClearAgentModelIfMissing(null), Is.False);
+        Assert.That(settings.ClearAgentModelIfMissing(configuredModels: null), Is.False);
         Assert.That(settings.agentModel, Is.EqualTo("OpenRouter:x"));
     }
 }

@@ -14,7 +14,7 @@ internal sealed partial class RimWorldGameWorld
 {
     public IReadOnlyList<PrisonerInfo> GetPrisoners()
     {
-        return Map.mapPawns.PrisonersOfColonySpawned.Select(ToPrisoner).ToList();
+        return [.. Map.mapPawns.PrisonersOfColonySpawned.Select(ToPrisoner)];
     }
 
     private static PrisonerInfo ToPrisoner(Pawn pawn)
@@ -39,9 +39,7 @@ internal sealed partial class RimWorldGameWorld
     }
 
     public IReadOnlyList<DefInfo> PrisonerInteractionModes =>
-        _prisonerInteractionModes ?? (_prisonerInteractionModes = DefDatabase<PrisonerInteractionModeDef>.AllDefsListForReading
-            .Select(d => new DefInfo(d.defName, d.label))
-            .ToList());
+        _prisonerInteractionModes ?? (_prisonerInteractionModes = [.. DefDatabase<PrisonerInteractionModeDef>.AllDefsListForReading.Select(d => new DefInfo(d.defName, d.label))]);
 
     public CommandResult SetPrisonerInteraction(int pawnId, string modeDefName)
     {

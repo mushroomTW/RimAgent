@@ -51,18 +51,18 @@ public sealed class TranscriptEntryData : IExposable
         Scribe_Values.Look(ref toolRisk, "toolRisk", 0);
         Scribe_Values.Look(ref arguments, "args", string.Empty);
         Scribe_Values.Look(ref result, "result", string.Empty);
-        Scribe_Values.Look(ref failed, "failed", false);
+        Scribe_Values.Look(ref failed, "failed", defaultValue: false);
         // 舊存檔沒有這兩欄：以預設值讀入。
-        Scribe_Values.Look(ref cancelled, "cancelled", false);
+        Scribe_Values.Look(ref cancelled, "cancelled", defaultValue: false);
         Scribe_Values.Look(ref durationMs, "durationMs", 0L);
-        Scribe_Values.Look(ref budgetConsumed, "budgetConsumed", false);
-        Scribe_Values.Look(ref toolsStripped, "stripped", false);
+        Scribe_Values.Look(ref budgetConsumed, "budgetConsumed", defaultValue: false);
+        Scribe_Values.Look(ref toolsStripped, "stripped", defaultValue: false);
         Scribe_Values.Look(ref errorKind, "error", 0);
         Scribe_Values.Look(ref riskCheck, "risk", string.Empty);
         Scribe_Values.Look(ref riskCheckSource, "riskSource", string.Empty);
-        Scribe_Values.Look(ref autonomous, "autonomous", false);
-        Scribe_Values.Look(ref goalRun, "goalRun", false);
-        Scribe_Values.Look(ref interjection, "interjection", false);
+        Scribe_Values.Look(ref autonomous, "autonomous", defaultValue: false);
+        Scribe_Values.Look(ref goalRun, "goalRun", defaultValue: false);
+        Scribe_Values.Look(ref interjection, "interjection", defaultValue: false);
         Scribe_Values.Look(ref agent, "agent", string.Empty);
     }
 

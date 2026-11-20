@@ -48,21 +48,20 @@ internal sealed partial class RimWorldGameWorld
             if (node == null) continue;
             result.Add(new PendingChoiceInfo
             {
-                Id = DialogChoicePrefix + dialog.ID,
+                Id = DialogChoicePrefix + dialog.ID.ToString(CultureInfo.InvariantCulture),
                 Title = NodeTreeTitleField?.GetValue(dialog) as string ?? string.Empty,
                 Text = LimitChoiceText(node.text.Resolve()),
-                Options = ToChoiceOptions(node.options.ToList()).ToList()
+                Options = [.. ToChoiceOptions([.. node.options])]
             });
         }
         foreach (Dialog_MessageBox box in Find.WindowStack.Windows.OfType<Dialog_MessageBox>())
         {
             result.Add(new PendingChoiceInfo
             {
-                Id = DialogChoicePrefix + box.ID,
+                Id = DialogChoicePrefix + box.ID.ToString(CultureInfo.InvariantCulture),
                 Title = box.title ?? string.Empty,
                 Text = LimitChoiceText(box.text.Resolve()),
-                Options = MessageBoxButtons(box)
-                    .Select(b => new ChoiceOptionInfo { Number = b.Number, Text = b.Text }).ToList()
+                Options = [.. MessageBoxButtons(box).Select(b => new ChoiceOptionInfo { Number = b.Number, Text = b.Text })]
             });
         }
         int now = Find.TickManager.TicksGame;
@@ -71,11 +70,11 @@ internal sealed partial class RimWorldGameWorld
             if (!IsDecisionLetter(letter)) continue;
             result.Add(new PendingChoiceInfo
             {
-                Id = LetterChoicePrefix + letter.ID,
+                Id = LetterChoicePrefix + letter.ID.ToString(CultureInfo.InvariantCulture),
                 Title = letter.Label.Resolve(),
                 Text = LimitChoiceText(letter.Text.Resolve()),
                 ExpiresInTicks = letter.TimeoutActive ? letter.disappearAtTick - now : (int?)null,
-                Options = ToChoiceOptions(letter.Choices.ToList()).ToList()
+                Options = [.. ToChoiceOptions([.. letter.Choices])]
             });
         }
         return result;
@@ -87,7 +86,7 @@ internal sealed partial class RimWorldGameWorld
         {
             Window window = Find.WindowStack.Windows.FirstOrDefault(w => w.ID == windowId);
             if (window is Dialog_MessageBox box) return PressMessageBoxButton(box, option);
-            return window is Dialog_NodeTree dialog ? ActivateOption(dialog, option, false) : CommandResult.Fail(ChoiceNotFound);
+            return window is Dialog_NodeTree dialog ? ActivateOption(dialog, option, closeOnFail: false) : CommandResult.Fail(ChoiceNotFound);
         }
         if (TryParseChoiceId(id, LetterChoicePrefix, out int letterId))
         {
@@ -100,7 +99,7 @@ internal sealed partial class RimWorldGameWorld
             Dialog_NodeTree dialog = Find.WindowStack.Windows.OfType<Dialog_NodeTree>().LastOrDefault(w => !before.Contains(w));
             return dialog == null
                 ? CommandResult.Fail("the letter did not open a choice dialog")
-                : ActivateOption(dialog, option, true);
+                : ActivateOption(dialog, option, closeOnFail: true);
         }
         return CommandResult.Fail(ChoiceNotFound);
     }
@@ -176,14 +175,14 @@ internal sealed partial class RimWorldGameWorld
             if (close) box.Close();
             return CommandResult.Ok(text);
         }
-        return CommandResult.Fail($"option {option} does not exist");
+        return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"option {option} does not exist"));
     }
 
     private static CommandResult ActivateOption(Dialog_NodeTree dialog, int option, bool closeOnFail)
     {
         if (DiaOptionActivateMethod == null)
         {
-            if (closeOnFail) dialog.Close(false);
+            if (closeOnFail) dialog.Close(doCloseSound: false);
             return CommandResult.Fail("this game version does not expose dialog options");
         }
         List<DiaOption> options = CurrentNode(dialog)?.options;
@@ -191,24 +190,24 @@ internal sealed partial class RimWorldGameWorld
         string error = null;
         if (chosen == null)
         {
-            error = $"option {option} does not exist";
+            error = string.Create(CultureInfo.InvariantCulture, $"option {option} does not exist");
         }
         else if (chosen.hyperlink.def != null)
         {
-            error = $"option {option} only opens an info card";
+            error = string.Create(CultureInfo.InvariantCulture, $"option {option} only opens an info card");
         }
         else if (chosen.disabled)
         {
-            error = $"option {option} is disabled" + (string.IsNullOrEmpty(chosen.disabledReason) ? string.Empty : ": " + chosen.disabledReason);
+            error = string.Create(CultureInfo.InvariantCulture, $"option {option} is disabled") + (string.IsNullOrEmpty(chosen.disabledReason) ? string.Empty : ": " + chosen.disabledReason);
         }
         if (error != null)
         {
             // 為了按選項才打開的信件對話框要關回去，不留一個擋住遊戲的視窗。
-            if (closeOnFail) dialog.Close(false);
+            if (closeOnFail) dialog.Close(doCloseSound: false);
             return CommandResult.Fail(error);
         }
         string label = OptionText(chosen);
-        DiaOptionActivateMethod.Invoke(chosen, null);
+        DiaOptionActivateMethod.Invoke(chosen, parameters: null);
         return CommandResult.Ok(label);
     }
 }

@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -15,7 +16,7 @@ internal sealed partial class RimWorldGameWorld
 {
     public IReadOnlyList<WorkTableInfo> GetWorkTables()
     {
-        return Map.listerBuildings.allBuildingsColonist
+        return [.. Map.listerBuildings.allBuildingsColonist
             .Where(b => b is IBillGiver)
             .Select(b => new WorkTableInfo
             {
@@ -24,8 +25,7 @@ internal sealed partial class RimWorldGameWorld
                 X = b.Position.x,
                 Z = b.Position.z,
                 BillCount = ((IBillGiver)b).BillStack.Bills.Count
-            })
-            .ToList();
+            })];
     }
 
     public IReadOnlyList<BillInfo> GetBills(int tableId)
@@ -45,8 +45,8 @@ internal sealed partial class RimWorldGameWorld
     {
         if (bill is not Bill_Production production) return string.Empty;
         if (production.repeatMode == BillRepeatModeDefOf.Forever) return "forever";
-        if (production.repeatMode == BillRepeatModeDefOf.TargetCount) return $"until {production.targetCount}";
-        if (production.repeatMode == BillRepeatModeDefOf.RepeatCount) return $"{production.repeatCount}x";
+        if (production.repeatMode == BillRepeatModeDefOf.TargetCount) return string.Create(CultureInfo.InvariantCulture, $"until {production.targetCount}");
+        if (production.repeatMode == BillRepeatModeDefOf.RepeatCount) return string.Create(CultureInfo.InvariantCulture, $"{production.repeatCount}x");
         return production.repeatMode?.label ?? string.Empty;
     }
 
@@ -58,16 +58,15 @@ internal sealed partial class RimWorldGameWorld
     {
         if (FindBillGiver(tableId) is not Thing table) return [];
         // 屠宰、火化、熔煉等配方沒有單一產物，改用配方名稱，否則這類工作單無法新增。
-        return table.def.AllRecipes
+        return [.. table.def.AllRecipes
             .Where(r => r.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass))
-            .Select(r => new DefInfo(r.defName, r.ProducedThingDef?.label ?? r.label))
-            .ToList();
+            .Select(r => new DefInfo(r.defName, r.ProducedThingDef?.label ?? r.label))];
     }
 
     public CommandResult AddBill(int tableId, string recipeDefName, int count)
     {
         IBillGiver giver = FindBillGiver(tableId);
-        if (giver == null) return CommandResult.Fail($"no work table has id {tableId}");
+        if (giver == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no work table has id {tableId}"));
         var table = (Thing)giver;
         RecipeDef recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(recipeDefName);
         if (recipe == null) return CommandResult.Fail($"unknown bill recipe {recipeDefName}");
@@ -75,23 +74,23 @@ internal sealed partial class RimWorldGameWorld
             return CommandResult.Fail($"{table.LabelCap} cannot make {recipe.ProducedThingDef?.label ?? recipe.label}");
         if (!recipe.AvailableOnNow(table))
             return CommandResult.Fail($"{table.LabelCap} cannot make {recipe.ProducedThingDef?.label ?? recipe.label} yet: missing research or facilities");
-        if (count < 1) return CommandResult.Fail($"count must be at least 1, not {count}");
+        if (count < 1) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"count must be at least 1, not {count}"));
         // 用 MakeNewBill 取得正確的子類別（例如 Bill_ProductionWithUft），與遊戲內視窗新增帳單一致。
         if (recipe.MakeNewBill() is not Bill_Production bill)
             return CommandResult.Fail($"{recipe.label} is not a production bill and cannot be added with a count");
         bill.repeatMode = BillRepeatModeDefOf.RepeatCount;
         bill.repeatCount = count;
         giver.BillStack.AddBill(bill);
-        return CommandResult.Ok($"Added bill [{giver.BillStack.Bills.Count}] {bill.LabelCap} x{count} on {table.LabelCap}.");
+        return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Added bill [{giver.BillStack.Bills.Count}] {bill.LabelCap} x{count} on {table.LabelCap}."));
     }
 
     public CommandResult DeleteBill(int tableId, int index)
     {
         IBillGiver giver = FindBillGiver(tableId);
-        if (giver == null) return CommandResult.Fail($"no work table has id {tableId}");
+        if (giver == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no work table has id {tableId}"));
         var table = (Thing)giver;
         if (index < 1 || index > giver.BillStack.Bills.Count)
-            return CommandResult.Fail($"bill [{index}] does not exist on {table.LabelCap}. List the bills again to get valid numbers.");
+            return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"bill [{index}] does not exist on {table.LabelCap}. List the bills again to get valid numbers."));
         Bill bill = giver.BillStack.Bills[index - 1];
         string label = bill.LabelCap;
         giver.BillStack.Delete(bill);
@@ -120,7 +119,7 @@ internal sealed partial class RimWorldGameWorld
         if (needsManualPriorities && !UseWorkPriorities)
         {
             // 1/2/4 只有在手動優先級開啟時才有意義；否則遊戲只認勾選／不勾選。
-            SetUseWorkPriorities(true);
+            SetUseWorkPriorities(value: true);
             note = "Manual work priorities were turned on for the colony.";
         }
         pawn.workSettings.SetPriority(workType, priority);

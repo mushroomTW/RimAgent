@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -137,7 +138,7 @@ public class ColonyAgentSessionTests
         _client.Reply("ok").Reply("ok");
         ColonyAgentSession session = NewSession();
         await session.SendAsync("one");
-        _permissions.Set(ToolCategory.Build, true);
+        _permissions.Set(ToolCategory.Build, value: true);
         await session.SendAsync("two");
 
         Assert.That(_client.ReceivedOptions[0].Tools.OfType<AIFunction>().Any(t => t.Name == "place_blueprint"), Is.False);
@@ -167,7 +168,7 @@ public class ColonyAgentSessionTests
     {
         for (int i = 0; i < 21; i++)
         {
-            _client.CallTool("get_colony_overview", null);
+            _client.CallTool("get_colony_overview", arguments: null);
         }
         _client.Reply("完成");
         ColonyAgentSession session = NewSession(maxSteps: int.MaxValue);
@@ -181,7 +182,7 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task MaxStepsBoundsARunawayLoop()
     {
-        _client.CallTool("get_colony_overview", null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具
+        _client.CallTool("get_colony_overview", arguments: null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具
         ColonyAgentSession session = NewSession(maxSteps: 3);
 
         await Assert.DoesNotThrowAsync(async () => await session.SendAsync("loop forever"));
@@ -194,7 +195,7 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task PerRunStepLimitIsAppliedAndThenRestored()
     {
-        _client.CallTool("get_colony_overview", null); // 腳本用完後持續要求同一工具。
+        _client.CallTool("get_colony_overview", arguments: null); // 腳本用完後持續要求同一工具。
         ColonyAgentSession session = NewSession(maxSteps: 4);
 
         await session.SendAsync("budgeted autonomous run", maxToolSteps: 1);
@@ -223,7 +224,7 @@ public class ColonyAgentSessionTests
 
         List<TranscriptEntry> tools = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool)];
         Assert.That(tools.Count(e => e.BudgetConsumed), Is.EqualTo(1));
-        Assert.That(tools.Count(e => e.Failed && e.Result.Contains("budget exhausted")), Is.EqualTo(1));
+        Assert.That(tools.Count(e => e.Failed && e.Result.Contains("budget exhausted", StringComparison.Ordinal)), Is.EqualTo(1));
         Assert.That(_world.Calls.Count(c => c.StartsWith("SetWorkPriority(")), Is.EqualTo(1));
     }
 
@@ -231,8 +232,8 @@ public class ColonyAgentSessionTests
     public async Task HittingTheStepLimitAddsTheNoticeAndHidesRawToolCallText()
     {
         // 步數用完時 MEAI 會拿掉工具再要一次回覆；有些模型（Nemotron）就把工具呼叫寫成純文字。
-        _client.CallTool("get_colony_overview", null)
-               .CallTool("get_colony_overview", null)
+        _client.CallTool("get_colony_overview", arguments: null)
+               .CallTool("get_colony_overview", arguments: null)
                .Reply("<tool_call> <function=inspect_area> <parameter=x1> 124 </parameter> </function> </tool_call>");
         ColonyAgentSession session = NewSession(maxSteps: 2);
 
@@ -242,7 +243,7 @@ public class ColonyAgentSessionTests
         TranscriptEntry reply = entries.Last(e => e.Kind == TranscriptKind.Assistant);
         Assert.That(reply.Text, Does.Not.Contain("<tool_call>"), "原始工具呼叫標記不能當成回覆給玩家看");
         Assert.That(reply.ToolsStripped, Is.False, "這不是供應商不支援工具");
-        Assert.That(entries.Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget was reached")), Is.True);
+        Assert.That(entries.Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget was reached", StringComparison.Ordinal)), Is.True);
     }
 
     [TestCase("I placed two beds. <tool_call> <function=inspect_area> </function> </tool_call>", "I placed two beds.")]
@@ -258,14 +259,14 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task FinishingWithinTheStepLimitHasNoBudgetNotice()
     {
-        _client.CallTool("get_colony_overview", null).Reply("All good.");
+        _client.CallTool("get_colony_overview", arguments: null).Reply("All good.");
         ColonyAgentSession session = NewSession(maxSteps: 2);
 
         await session.SendAsync("look around");
 
         IReadOnlyList<TranscriptEntry> entries = session.Transcript.Snapshot();
         Assert.That(entries.Last(e => e.Kind == TranscriptKind.Assistant).Text, Is.EqualTo("All good."));
-        Assert.That(entries.Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget")), Is.False);
+        Assert.That(entries.Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget", StringComparison.Ordinal)), Is.False);
     }
 
     /// <summary>回歸：推理模型的思考內容只進了模型歷史，對話裡看不到。</summary>
@@ -294,7 +295,7 @@ public class ColonyAgentSessionTests
         await session.SendAsync("do something");
 
         // 供應商不支援工具時，UI 會依 ToolsStripped 顯示正確原因；不該再多一條「步數用完」的錯誤說明。
-        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget")), Is.False);
+        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget", StringComparison.Ordinal)), Is.False);
     }
 
     [Test]
@@ -373,7 +374,7 @@ public class ColonyAgentSessionTests
         IList<ChatMessage> secondCall = _client.ReceivedMessages[1];
         Assert.That(secondCall.Count(m => m.Role == ChatRole.User), Is.EqualTo(1));
         Assert.That(secondCall.Single(m => m.Role == ChatRole.User).Text, Is.EqualTo("next question"));
-        Assert.That(secondCall.SelectMany(m => m.Contents).OfType<TextContent>().Any(c => c.Text.Contains("failed question")), Is.False);
+        Assert.That(secondCall.SelectMany(m => m.Contents).OfType<TextContent>().Any(c => c.Text.Contains("failed question", StringComparison.Ordinal)), Is.False);
     }
 
     [Test]
@@ -419,7 +420,7 @@ public class ColonyAgentSessionTests
 
         List<TranscriptEntry> users = [.. session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.User)];
         Assert.That(users.Select(u => u.Autonomous), Is.EqualTo([true, false]));
-        TranscriptEntryData saved = TranscriptEntryData.FromTranscript(session.Transcript).First();
+        TranscriptEntryData saved = TranscriptEntryData.FromTranscript(session.Transcript)[0];
         Assert.That(saved.autonomous, Is.True);
         Assert.That(saved.ToEntry().Autonomous, Is.True);
     }
@@ -430,7 +431,7 @@ public class ColonyAgentSessionTests
         _client.Reply("never");
         ColonyAgentSession session = NewSession();
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
 
         string reply = await session.SendAsync("stop me", cancellationToken: cts.Token);
 
@@ -442,7 +443,7 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task SecondInstructionCarriesTheWholeHistory()
     {
-        _client.CallTool("get_colony_overview", null).Reply("Two colonists.").Reply("Sure.");
+        _client.CallTool("get_colony_overview", arguments: null).Reply("Two colonists.").Reply("Sure.");
         ColonyAgentSession session = NewSession();
         await session.SendAsync("status?");
         await session.SendAsync("thanks");
@@ -450,7 +451,7 @@ public class ColonyAgentSessionTests
         IList<ChatMessage> thirdCall = _client.ReceivedMessages[2];
         Assert.That(thirdCall.Count(m => m.Role == ChatRole.User), Is.EqualTo(2));
         Assert.That(thirdCall.Any(m => m.Contents.OfType<FunctionResultContent>().Any()), Is.True);
-        Assert.That(thirdCall.Last().Text, Is.EqualTo("thanks"));
+        Assert.That(thirdCall[^1].Text, Is.EqualTo("thanks"));
     }
 
     [Test]
@@ -481,7 +482,7 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task UpdatedMaxStepsApplyWithoutReloading()
     {
-        _client.CallTool("get_colony_overview", null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具
+        _client.CallTool("get_colony_overview", arguments: null); // 腳本用完會重複最後一則：模型永遠要求再呼叫工具
         ColonyAgentSession session = NewSession(maxSteps: 8);
         session.UpdateMaxSteps(2);
 
@@ -496,7 +497,7 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task EntriesOfOneInstructionShareAnInstructionId()
     {
-        _client.CallTool("get_colony_overview", null).Reply("Two colonists.").Reply("Sure.");
+        _client.CallTool("get_colony_overview", arguments: null).Reply("Two colonists.").Reply("Sure.");
         ColonyAgentSession session = NewSession();
         await session.SendAsync("status?");
         await session.SendAsync("thanks");
@@ -617,7 +618,7 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task ReadOnlyInstructionLeavesNothingToUndo()
     {
-        _client.CallTool("get_colony_overview", null).Reply("Two colonists.");
+        _client.CallTool("get_colony_overview", arguments: null).Reply("Two colonists.");
         ColonyAgentSession session = NewSession();
         await session.SendAsync("status?");
 
@@ -657,7 +658,7 @@ public class ColonyAgentSessionTests
         var transcript = new AgentTranscript();
         for (int i = 0; i < TranscriptEntryData.MaxSavedEntries + 10; i++)
         {
-            transcript.Add(new TranscriptEntry { Kind = TranscriptKind.User, Text = "x" + i, InstructionId = i });
+            transcript.Add(new TranscriptEntry { Kind = TranscriptKind.User, Text = "x" + i.ToString(CultureInfo.InvariantCulture), InstructionId = i });
         }
         transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, Result = new string('x', 3000) });
 
@@ -672,7 +673,7 @@ public class ColonyAgentSessionTests
     public async Task ConfirmModeBlocksIrreversibleToolThenExecutesOnConfirm()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                .Reply("I will send Bob to attack the bear.");
         var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
@@ -696,7 +697,7 @@ public class ColonyAgentSessionTests
     public async Task GoalConfirmationProvidesExecutedResultsForNextTurn()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                .Reply("Waiting for confirmation.");
         var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
@@ -718,7 +719,7 @@ public class ColonyAgentSessionTests
     public async Task PlayerConfirmationIsNotOwnedByGoal()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                .Reply("Waiting for confirmation.");
         var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
@@ -734,7 +735,7 @@ public class ColonyAgentSessionTests
     public async Task ConfirmExecutesOnlyTheCapturedCommandAndDoesNotRepeatSafeCommands()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("list_colonists", new { })
                .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                .Reply("I need confirmation before the attack.");
@@ -742,7 +743,7 @@ public class ColonyAgentSessionTests
 
         await session.SendAsync("who is here and attack the bear");
         var toolEntries = session.Transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool).ToList();
-        Assert.That(toolEntries.Any(e => e.Result != null && !e.Result.StartsWith(ToolText.ConfirmationPrefix)), Is.True, "查詢直接執行");
+        Assert.That(toolEntries.Exists(e => e.Result != null && !e.Result.StartsWith(ToolText.ConfirmationPrefix)), Is.True, "查詢直接執行");
         Assert.That(_world.Calls, Does.Not.Contain("OrderAttack(102,900)"), "命令需要確認");
 
         await session.ConfirmAsync();
@@ -795,7 +796,7 @@ public class ColonyAgentSessionTests
     public async Task RememberedApprovalsCoverOnlyTheApprovedToolAndAreClearedByClear()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" })
                .Reply("Waiting for confirmation.")
                .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
@@ -820,7 +821,7 @@ public class ColonyAgentSessionTests
     [Test]
     public async Task IrreversibleBlacklistedToolsAreNeverRememberedForTheSession()
     {
-        _permissions.Set(ToolCategory.Trade, true);
+        _permissions.Set(ToolCategory.Trade, value: true);
         _client.CallTool("form_caravan", new { colonists = "Bob", tile = 4600 })
                .Reply("Waiting for confirmation.")
                .CallTool("form_caravan", new { colonists = "Ali", tile = 4600 })
@@ -848,7 +849,7 @@ public class ColonyAgentSessionTests
         await session.SendAsync("set doctor to 1");
         using (var cts = new CancellationTokenSource())
         {
-            cts.Cancel();
+            await cts.CancelAsync();
             Assert.That(await session.ConfirmAsync(rememberForSession: true, cancellationToken: cts.Token), Is.Null);
         }
         Assert.That(_world.Calls, Is.Empty, "取消時一個都不該執行");
@@ -881,7 +882,7 @@ public class ColonyAgentSessionTests
     public async Task NewInstructionDiscardsPreviouslyCapturedCommands()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                .Reply("First attack needs confirmation.")
                .Reply("Old request discarded.")
@@ -902,7 +903,7 @@ public class ColonyAgentSessionTests
     public async Task ClearDiscardsCapturedCommandsBeforeTheNextConfirmation()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
                .Reply("First attack needs confirmation.")
                .CallTool("order_attack", new { colonists = "Bob", targetId = 900 })
@@ -964,7 +965,7 @@ public class ColonyAgentSessionTests
     public async Task AutonomousModeRunsIrreversibleToolDirectly()
     {
         _world.Threats.Add(new ThreatInfo { Id = 900, Label = "grizzly bear", Kind = "Manhunter", X = 20, Z = 20 });
-        _permissions.Set(ToolCategory.Combat, true);
+        _permissions.Set(ToolCategory.Combat, value: true);
         _client.CallTool("order_attack", new { colonists = "Bob", targetId = 900 }).Reply("Done.");
         var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Autonomous);
 
@@ -997,22 +998,22 @@ public class ColonyAgentSessionTests
     [Test]
     public void ComposedInstructionsOverrideCorePerRun()
     {
-        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, null, () => "COMPOSED PROMPT");
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, mode: null, () => "COMPOSED PROMPT");
 
-        Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT"));
+        Assert.That(session.CreateRunOptions().Instructions, Is.EqualTo("COMPOSED PROMPT"));
     }
 
     [Test]
     public void PreferredModelBecomesRequestModelId()
     {
         ColonyAgentSession session = NewSession();
-        Assert.That(session.BuildRunOptions().ModelId, Is.Null, "未指定時交給框架備援鏈");
+        Assert.That(session.CreateRunOptions().ModelId, Is.Null, "未指定時交給框架備援鏈");
 
         session.PreferredModel = " OpenRouter:deepseek/deepseek-chat ";
-        Assert.That(session.BuildRunOptions().ModelId, Is.EqualTo("OpenRouter:deepseek/deepseek-chat"));
+        Assert.That(session.CreateRunOptions().ModelId, Is.EqualTo("OpenRouter:deepseek/deepseek-chat"));
 
         session.PreferredModel = "  ";
-        Assert.That(session.BuildRunOptions().ModelId, Is.Null);
+        Assert.That(session.CreateRunOptions().ModelId, Is.Null);
     }
 
     [Test]
@@ -1032,7 +1033,7 @@ public class ColonyAgentSessionTests
         ColonyAgentSession session = NewSession();
 
         // agent 層不放 Instructions（AF 會把兩層串接），保底前情改由 run 層送出。
-        Assert.That(session.BuildRunOptions().Instructions, Is.EqualTo(AgentPromptComposer.FallbackPreamble));
+        Assert.That(session.CreateRunOptions().Instructions, Is.EqualTo(AgentPromptComposer.FallbackPreamble));
     }
 
     [Test]
@@ -1040,15 +1041,15 @@ public class ColonyAgentSessionTests
     {
         ColonyAgentSession session = NewSession();
 
-        RimLLMChatOptions auto = session.BuildRunOptions();
+        RimLLMChatOptions auto = session.CreateRunOptions();
         Assert.That(auto.Reasoning, Is.Null, "Auto 不設定，交給框架預設");
         Assert.That(auto.DisableReasoning, Is.False);
 
         session.Reasoning = ReasoningLevel.Off;
-        Assert.That(session.BuildRunOptions().DisableReasoning, Is.True);
+        Assert.That(session.CreateRunOptions().DisableReasoning, Is.True);
 
         session.Reasoning = ReasoningLevel.High;
-        RimLLMChatOptions high = session.BuildRunOptions();
+        RimLLMChatOptions high = session.CreateRunOptions();
         Assert.That(high.Reasoning?.Effort, Is.EqualTo(ReasoningEffort.High));
         Assert.That(high.DisableReasoning, Is.False);
     }
@@ -1059,7 +1060,7 @@ public class ColonyAgentSessionTests
         var registry = new AgentToolRegistry(_world, new AgentTranscript());
         Assert.That(registry.All.Count, Is.EqualTo(81));
         var observeOnly = new ToolPermissions();
-        observeOnly.Set(ToolCategory.Observe, true);
+        observeOnly.Set(ToolCategory.Observe, value: true);
         Assert.That(registry.Select(observeOnly).Count, Is.EqualTo(22));
         Assert.That(registry.Select(new ToolPermissions()), Is.Empty);
     }
@@ -1073,7 +1074,7 @@ public class ColonyAgentSessionTests
             Assert.That(tool.Description, Is.Not.Empty, tool.Name);
             string schema = tool.JsonSchema.ToString();
             Assert.That(schema, Does.Contain("\"type\""), tool.Name);
-            bool hasParameters = schema.Contains("\"properties\"") && !schema.Contains("\"properties\":{}");
+            bool hasParameters = schema.Contains("\"properties\"", StringComparison.Ordinal) && !schema.Contains("\"properties\":{}", StringComparison.Ordinal);
             // FileMemoryProvider 的參數 schema 由上游產生、沒有逐項說明，無法在這裡補。
             bool upstreamSchema = tool.Name.StartsWith("file_memory_", StringComparison.Ordinal);
             if (hasParameters && !upstreamSchema)

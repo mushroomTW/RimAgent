@@ -147,7 +147,7 @@ public class CommandGateTests
     public async Task BlockedCommandToolsPreviewWithoutTouchingWorld()
     {
         // 確認模式的閘門擋下所有命令，正好用來驗證每個命令工具都有預覽分支。
-        var registry = new AgentToolRegistry(_world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Confirm));
+        var registry = new AgentToolRegistry(_world, new AgentTranscript(), undo: null, new ConfirmationGate(() => AgentMode.Confirm));
 
         foreach (AIFunction tool in registry.All.OfType<AIFunction>())
         {
@@ -169,7 +169,7 @@ public class CommandGateTests
         {
             if (NotRecordedInWorld.Contains(name)) continue;
             FakeGameWorld world = NewWorld();
-            var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Autonomous));
+            var registry = new AgentToolRegistry(world, new AgentTranscript(), undo: null, new ConfirmationGate(() => AgentMode.Autonomous));
             AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == name);
 
             string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments[name])))?.ToString();
@@ -185,7 +185,7 @@ public class CommandGateTests
         foreach (string name in ValidArguments.Keys)
         {
             FakeGameWorld world = NewWorld();
-            var registry = new AgentToolRegistry(world, new AgentTranscript(), null, new ConfirmationGate(() => AgentMode.Confirm));
+            var registry = new AgentToolRegistry(world, new AgentTranscript(), undo: null, new ConfirmationGate(() => AgentMode.Confirm));
             AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == name);
 
             string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments[name])))?.ToString();
@@ -198,11 +198,11 @@ public class CommandGateTests
     [Test]
     public async Task MissingModeFallsBackToConfirm()
     {
-        var gate = new ConfirmationGate(null);
+        var gate = new ConfirmationGate(mode: null);
         Assert.That(gate.Mode, Is.EqualTo(AgentMode.Confirm));
 
         FakeGameWorld world = NewWorld();
-        var registry = new AgentToolRegistry(world, new AgentTranscript(), null, gate);
+        var registry = new AgentToolRegistry(world, new AgentTranscript(), undo: null, gate);
         AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == "set_work_priorities");
 
         string text = (await tool.InvokeAsync(new AIFunctionArguments(ValidArguments["set_work_priorities"])))?.ToString();

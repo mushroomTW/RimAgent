@@ -238,7 +238,7 @@ public class AutonomousRunnerTests
         await RunAsync(Request(session, tick: 1000));
 
         Assert.That(_runner.HoldUntilTick, Is.EqualTo(1000 + AutonomousRunner.ConfigurationErrorHoldTicks));
-        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("paused for one in-game day")), Is.True);
+        Assert.That(session.Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("paused for one in-game day", System.StringComparison.Ordinal)), Is.True);
         Assert.That(_scheduler.Runs, Is.EqualTo(1));
     }
 

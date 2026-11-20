@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using RimWorld;
@@ -64,7 +65,7 @@ internal sealed partial class RimWorldGameWorld
         {
             while (File.Exists(fullPath) || !ReservedScreenshotPaths.Add(fullPath))
             {
-                fullPath = Path.Combine(folder, $"{baseName}_{counter++}.png");
+                fullPath = Path.Combine(folder, string.Create(CultureInfo.InvariantCulture, $"{baseName}_{counter++}.png"));
             }
         }
         return fullPath;
@@ -91,10 +92,9 @@ internal sealed partial class RimWorldGameWorld
         }
 
         var rooms = new Dictionary<int, RoomInfo>();
-        List<RoomInfo> indoor = map.regionGrid.AllRooms
+        List<RoomInfo> indoor = [.. map.regionGrid.AllRooms
             .Where(r => !r.PsychologicallyOutdoors && !r.TouchesMapEdge && r.CellCount > 0 && !r.Fogged)
-            .Select(r => ToRoom(r, rooms))
-            .ToList();
+            .Select(r => ToRoom(r, rooms))];
 
         Area_Home home = map.areaManager.Home;
         CellRectSpec? homeRect = null;
@@ -111,7 +111,7 @@ internal sealed partial class RimWorldGameWorld
             ResourceLabels = resourceLabels,
             ThickRoof = thickRoof,
             Rooms = indoor,
-            Zones = map.zoneManager.AllZones.Select(ToZoneWithExtents).ToList(),
+            Zones = [.. map.zoneManager.AllZones.Select(ToZoneWithExtents)],
             HomeArea = homeRect,
             HomeAreaCells = homeCells,
             Colonists = map.mapPawns.FreeColonistsSpawned.Select(p => (p.Position.x, p.Position.z)).ToList(),

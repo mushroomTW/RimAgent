@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using DevTools.Testing;
 using RimAgent.Game;
@@ -33,9 +34,9 @@ internal sealed partial class MapWorldTests
             if (info == null) failures.Add("generated quest is missing from GetQuests");
             else CheckQuestInfo(info, quest, failures);
 
-            CommandResult dismiss = _world.SetQuestDismissed(quest.id, true);
+            CommandResult dismiss = _world.SetQuestDismissed(quest.id, dismissed: true);
             if (!dismiss.Success || !quest.dismissed) failures.Add("dismiss did not set quest.dismissed: " + dismiss.Error);
-            CommandResult restore = _world.SetQuestDismissed(quest.id, false);
+            CommandResult restore = _world.SetQuestDismissed(quest.id, dismissed: false);
             if (!restore.Success || quest.dismissed) failures.Add("restore did not clear quest.dismissed: " + restore.Error);
 
             TryAcceptQuest(quest, failures);
@@ -139,8 +140,8 @@ internal sealed partial class MapWorldTests
             foreach (WorldObject target in targets)
             {
                 WorldObjectInfo info = survey.Objects.FirstOrDefault(o => o.Id == target.ID);
-                if (info == null) failures.Add($"quest target {target.LabelCap} [{target.ID}] is not in the survey");
-                else if (!info.Quests.Any(q => q.QuestId == quest.id && q.Active)) failures.Add($"{target.LabelCap} is not linked to the accepted quest {quest.id}");
+                if (info == null) failures.Add(string.Create(CultureInfo.InvariantCulture, $"quest target {target.LabelCap} [{target.ID}] is not in the survey"));
+                else if (!info.Quests.Any(q => q.QuestId == quest.id && q.Active)) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{target.LabelCap} is not linked to the accepted quest {quest.id}"));
             }
         }
         finally

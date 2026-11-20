@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -34,7 +35,7 @@ public class MemoryScopeTests
     {
         try
         {
-            if (Directory.Exists(_folder)) Directory.Delete(_folder, true);
+            if (Directory.Exists(_folder)) Directory.Delete(_folder, recursive: true);
         }
         catch (IOException)
         {
@@ -58,8 +59,8 @@ public class MemoryScopeTests
         // 新的一局：局內記憶空白，全域記憶仍看得到。
         ScopedMemoryStore nextGame = NewMemory(new AgentMemoryStore());
 
-        Assert.That(nextGame.ReadAsync("global_preferences.md").GetAwaiter().GetResult(), Is.EqualTo("Never sell components."));
-        Assert.That(nextGame.ReadAsync("base.md").GetAwaiter().GetResult(), Is.Null, "局內記憶不跨存檔");
+        Assert.That(await nextGame.ReadAsync("global_preferences.md"), Is.EqualTo("Never sell components."));
+        Assert.That(await nextGame.ReadAsync("base.md"), Is.Null, "局內記憶不跨存檔");
         Assert.That(await Invoke(nextGame, "file_memory_ls"), Does.Contain("global_preferences.md").And.Not.Contain("base.md"));
     }
 
@@ -98,7 +99,7 @@ public class MemoryScopeTests
         await Invoke(memory, "file_memory_delete", ("fileName", "global_preferences.md"));
 
         AgentMemoryStore reloaded = NewGlobalStore();
-        Assert.That(reloaded.ReadAsync("global_preferences.md").GetAwaiter().GetResult(), Is.Null);
+        Assert.That(await reloaded.ReadAsync("global_preferences.md"), Is.Null);
         Assert.That(reloaded.DescribedFiles(), Is.Empty);
     }
 
@@ -108,7 +109,7 @@ public class MemoryScopeTests
         ScopedMemoryStore memory = NewMemory(new AgentMemoryStore());
         for (int i = 0; i < AgentMemoryStore.MaxFiles; i++)
         {
-            memory.WriteAsync("global_note" + i + ".md", "value").GetAwaiter().GetResult();
+            await memory.WriteAsync("global_note" + i.ToString(CultureInfo.InvariantCulture) + ".md", "value");
         }
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => memory.WriteAsync("global_extra.md", "value"));
@@ -162,8 +163,8 @@ public class MemoryScopeTests
         var global = new AgentMemoryStore();
         for (int i = 0; i < AgentMemoryStore.MaxFiles; i++)
         {
-            save.WriteAsync("note" + i.ToString("D2") + ".md", "value").GetAwaiter().GetResult();
-            global.WriteAsync("global_note" + i.ToString("D2") + ".md", "value").GetAwaiter().GetResult();
+            save.WriteAsync("note" + i.ToString("D2", CultureInfo.InvariantCulture) + ".md", "value").GetAwaiter().GetResult();
+            global.WriteAsync("global_note" + i.ToString("D2", CultureInfo.InvariantCulture) + ".md", "value").GetAwaiter().GetResult();
         }
 
         string[] lines = new ScopedMemoryStore(save, global).Index.Split('\n');
@@ -209,8 +210,8 @@ public class MemoryScopeTests
         var globalEntries = new List<AgentMemoryEntry>();
         for (int i = 0; i < AgentMemoryStore.MaxFiles + 1; i++)
         {
-            saveEntries.Add(new AgentMemoryEntry { name = "note" + i + ".md", content = "value" });
-            globalEntries.Add(new AgentMemoryEntry { name = "global_note" + i + ".md", content = "value" });
+            saveEntries.Add(new AgentMemoryEntry { name = "note" + i.ToString(CultureInfo.InvariantCulture) + ".md", content = "value" });
+            globalEntries.Add(new AgentMemoryEntry { name = "global_note" + i.ToString(CultureInfo.InvariantCulture) + ".md", content = "value" });
         }
 
         var memory = new ScopedMemoryStore(new AgentMemoryStore(saveEntries), new AgentMemoryStore(globalEntries));
@@ -223,7 +224,7 @@ public class MemoryScopeTests
     {
         Directory.CreateDirectory(_folder);
         string path = Path.Combine(_folder, "save.xml");
-        var component = new RimAgentGameComponent(null);
+        var component = new RimAgentGameComponent(game: null);
         typeof(RimAgentGameComponent).GetField("_loadedTranscript", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(component, new List<TranscriptEntryData> { new() { text = "saved conversation" } });
         typeof(RimAgentGameComponent).GetField("_pendingGlobalMigration", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -252,8 +253,8 @@ public class MemoryScopeTests
     public async Task SessionPromptListsGlobalMemoryEvenOnANewSave()
     {
         AgentMemoryStore global = NewGlobalStore();
-        global.WriteAsync("global_preferences.md", "Never sell components.").GetAwaiter().GetResult();
-        global.WriteAsync("global_preferences_description.md", "Player rules").GetAwaiter().GetResult();
+        await global.WriteAsync("global_preferences.md", "Never sell components.");
+        await global.WriteAsync("global_preferences_description.md", "Player rules");
         ScopedMemoryStore memory = new(new AgentMemoryStore(), global);
         var client = new ScriptedChatClient().Reply("done");
 
@@ -280,7 +281,7 @@ public class MemoryScopeTests
 
     private static async Task<string> Invoke(AgentMemoryStore memory, string toolName, params (string Key, object Value)[] arguments)
     {
-        var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), null,
+        var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), undo: null,
             new ConfirmationGate(() => AgentMode.Autonomous), memory: memory);
         AIFunction tool = registry.All.OfType<AIFunction>().Single(t => t.Name == toolName);
         var args = new AIFunctionArguments(arguments.ToDictionary(a => a.Key, a => a.Value));

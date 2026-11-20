@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -30,7 +31,7 @@ public sealed class PrisonerTools
         if (prisoners.Count == 0) return "There are no prisoners in the colony.";
 
         var sb = new StringBuilder();
-        sb.Append(prisoners.Count == 1 ? "1 prisoner:" : prisoners.Count + " prisoners:").AppendLine();
+        sb.Append(prisoners.Count == 1 ? "1 prisoner:" : prisoners.Count.ToString(CultureInfo.InvariantCulture) + " prisoners:").AppendLine();
         foreach (PrisonerInfo p in prisoners)
         {
             sb.Append('[').Append(p.Id).Append("] ").Append(DisplayName(p));
@@ -74,7 +75,7 @@ public sealed class PrisonerTools
         Result<PrisonerInfo> pawn = ResolvePrisoner(prisoner, _world.GetPrisoners());
         if (!pawn.Success) return pawn.Error;
 
-        string blocked = ToolText.Blocked(_gate, $"would release {DisplayName(pawn.Value)} [{pawn.Value.Id}]; they leave the colony for good.");
+        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would release {DisplayName(pawn.Value)} [{pawn.Value.Id}]; they leave the colony for good."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.ReleasePrisoner(pawn.Value.Id);
@@ -100,7 +101,7 @@ public sealed class PrisonerTools
             prisoners,
             p => p.Id,
             Names,
-            p => $"[{p.Id}] {p.FullName}",
+            p => string.Create(CultureInfo.InvariantCulture, $"[{p.Id}] {p.FullName}"),
             "prisoner");
     }
 

@@ -134,14 +134,14 @@ public sealed class RiskClassifier : IRiskChecker
 
     private static string Escape(string value)
     {
-        return value.Replace("<", "\\<");
+        return value.Replace("<", "\\<", StringComparison.Ordinal);
     }
 
     /// <summary>找出回覆裡第一個 JSON 物件；兩個欄位缺一或值不合法就回 null（由呼叫端當失敗處理）。</summary>
     internal static RiskVerdict Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
-        int start = text.IndexOf('{');
+        int start = text.IndexOf('{', StringComparison.Ordinal);
         int end = text.LastIndexOf('}');
         if (start < 0 || end <= start) return null;
         try

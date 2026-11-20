@@ -87,10 +87,10 @@ public sealed class UndoFrame : IExposable
         Scribe_Values.Look(ref label, "label");
         Scribe_Collections.Look(ref priorities, "priorities", LookMode.Deep);
         Scribe_Collections.Look(ref assignments, "assignments", LookMode.Deep);
-        Scribe_Values.Look(ref hasOldUse, "hasOldUseWorkPriorities", false);
-        Scribe_Values.Look(ref oldUse, "oldUseWorkPriorities", false);
-        Scribe_Values.Look(ref hasNewUse, "hasNewUseWorkPriorities", false);
-        Scribe_Values.Look(ref newUse, "newUseWorkPriorities", false);
+        Scribe_Values.Look(ref hasOldUse, "hasOldUseWorkPriorities", defaultValue: false);
+        Scribe_Values.Look(ref oldUse, "oldUseWorkPriorities", defaultValue: false);
+        Scribe_Values.Look(ref hasNewUse, "hasNewUseWorkPriorities", defaultValue: false);
+        Scribe_Values.Look(ref newUse, "newUseWorkPriorities", defaultValue: false);
         Label = label ?? string.Empty;
         Priorities = priorities ?? [];
         Assignments = assignments ?? [];

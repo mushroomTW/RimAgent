@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -12,15 +13,12 @@ namespace RimAgent.Tools;
 /// （雙向：輸入包含 label，或 label / defName 包含輸入）→ 忽略分隔符的包含。同一層命中多於一個即視為歧義；
 /// 全部落空時附上最接近的候選。
 /// </summary>
-public static class DefResolver
+public static partial class DefResolver
 {
     private const int MaxListedCandidates = 10;
     private const int MaxSuggestions = 5;
     private const int MinWordLength = 3;
     private const string NoMatchPrefix = "no ";
-
-    /// <summary>拆字詞：駝峰（FueledResearchBench）、全大寫縮寫、數字、非 ASCII 連續字（中文名）。</summary>
-    private static readonly Regex Words = new(@"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+|[^\x00-\x7F]+", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     public static Result<DefInfo> Resolve(string input, IReadOnlyList<DefInfo> candidates, string kindLabel)
     {
@@ -105,13 +103,13 @@ public static class DefResolver
     private static string Compact(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
-        return new string(text.Where(ch => ch != ' ' && ch != '_' && ch != '-').ToArray());
+        return new string([.. text.Where(ch => ch != ' ' && ch != '_' && ch != '-')]);
     }
 
     private static Result<DefInfo> Ambiguous(string needle, List<DefInfo> matches, string kindLabel)
     {
         string listed = string.Join(", ", matches.Take(MaxListedCandidates).Select(m => $"{m.DefName} ({m.Label})"));
-        string more = matches.Count > MaxListedCandidates ? $" and {matches.Count - MaxListedCandidates} more" : string.Empty;
+        string more = matches.Count > MaxListedCandidates ? string.Create(CultureInfo.InvariantCulture, $" and {matches.Count - MaxListedCandidates} more") : string.Empty;
         return Result<DefInfo>.Fail($"Error: \"{needle}\" matches several {kindLabel}s: {listed}{more}. Use the exact defName.");
     }
 
@@ -124,4 +122,8 @@ public static class DefResolver
     {
         return !string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(part) && text.Contains(part, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>拆字詞：駝峰（FueledResearchBench）、全大寫縮寫、數字、非 ASCII 連續字（中文名）。</summary>
+    [GeneratedRegex(@"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+|[^\x00-\x7F]+", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex Words { get; }
 }

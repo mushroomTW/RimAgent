@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -17,7 +18,7 @@ public class AgentFixesTests
     public void InstructionCacheStillUpdatesExistingKeyWhenFull()
     {
         var cache = new InstructionCache<int>();
-        for (int i = 0; i < 128; i++) cache.Store("k" + i, i);
+        for (int i = 0; i < 128; i++) cache.Store("k" + i.ToString(CultureInfo.InvariantCulture), i);
 
         cache.Store("k0", 99);
         cache.Store("new", 1);
@@ -43,7 +44,7 @@ public class AgentFixesTests
     {
         var stack = new WorkUndoStack();
         stack.BeginFrame();
-        stack.RecordUseWorkPriorities(false, true);
+        stack.RecordUseWorkPriorities(oldValue: false, newValue: true);
         stack.EndFrame("toggle");
 
         Assert.That(stack.CanUndo, Is.True);
@@ -55,7 +56,7 @@ public class AgentFixesTests
         var stack = new WorkUndoStack();
         stack.BeginFrame();
         // set_work_priorities 每次都會記錄手動優先級；前後相同代表沒動，不能留下空的復原步。
-        stack.RecordUseWorkPriorities(true, true);
+        stack.RecordUseWorkPriorities(oldValue: true, newValue: true);
         stack.EndFrame("no-op");
 
         Assert.That(stack.CanUndo, Is.False);
@@ -81,7 +82,7 @@ public class AgentFixesTests
     public async Task HighImpactKindForcesRiskyRegardlessOfProbability(string kind)
     {
         var service = new FakeDecisionService().Reply(0.05, 0.95, kind);
-        var checker = new DecisionRiskChecker(service, null, () => "## risk\ncustom");
+        var checker = new DecisionRiskChecker(service, fallback: null, () => "## risk\ncustom");
 
         RiskVerdict verdict = await checker.ClassifyAsync(new RiskQuestion
         {
@@ -98,7 +99,7 @@ public class AgentFixesTests
     public async Task LowImpactKindStaysNotRiskyWithLowProbability()
     {
         var service = new FakeDecisionService().Reply(0.05, 0.95, "reversible_colony_change");
-        var checker = new DecisionRiskChecker(service, null, () => "## risk\ncustom");
+        var checker = new DecisionRiskChecker(service, fallback: null, () => "## risk\ncustom");
 
         RiskVerdict verdict = await checker.ClassifyAsync(new RiskQuestion
         {
@@ -123,7 +124,7 @@ public class AgentFixesTests
             for (int i = 0; i < 3; i++)
             {
                 var service = new FakeDecisionService().Throw(new InvalidOperationException("boom"));
-                var checker = new DecisionRiskChecker(service, null, () => "## risk\ncustom");
+                var checker = new DecisionRiskChecker(service, fallback: null, () => "## risk\ncustom");
                 await checker.ClassifyAsync(new RiskQuestion { Instruction = "x", ToolName = "t", Arguments = "a", Preview = "p" }, CancellationToken.None);
             }
         }
@@ -140,9 +141,9 @@ public class AgentFixesTests
     [Test]
     public void KeylessBlockedRepliesAccumulateTowardsBlock()
     {
-        GoalTurnDecision first = GoalProgress.AfterTurn(0, 0, "can't proceed\n[[GOAL:BLOCKED]]", false, false);
+        GoalTurnDecision first = GoalProgress.AfterTurn(0, 0, "can't proceed\n[[GOAL:BLOCKED]]", waitingConfirmation: false, hasToolEvidence: false);
         GoalTurnDecision second = GoalProgress.AfterTurn(first.Turns, first.BlockedTurns,
-            "still stuck, different words\n[[GOAL:BLOCKED]]", false, false, first.BlockerKey);
+            "still stuck, different words\n[[GOAL:BLOCKED]]", waitingConfirmation: false, hasToolEvidence: false, first.BlockerKey);
 
         Assert.That(second.BlockedTurns, Is.EqualTo(2));
     }
@@ -155,14 +156,14 @@ public class AgentFixesTests
         try
         {
             Parallel.For(0, 20, i => GlobalMemoryFile.Save(path,
-                new List<AgentMemoryEntry> { new() { name = "global_a.md", content = "v" + i } }));
+                new List<AgentMemoryEntry> { new() { name = "global_a.md", content = "v" + i.ToString(CultureInfo.InvariantCulture) } }));
 
             Assert.That(File.Exists(path), Is.True);
             Assert.That(Directory.GetFiles(dir).Select(Path.GetFileName), Is.EquivalentTo(["global.json"]));
         }
         finally
         {
-            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         }
     }
 

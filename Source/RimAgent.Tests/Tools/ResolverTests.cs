@@ -55,7 +55,7 @@ public class DefResolverTests
     public void ModDefWithoutLabelDoesNotBreakContainsMatching()
     {
         // 模組 def 常不填 label（Def.label 預設 null）；走到包含比對時不能因此丟例外。
-        var defs = new[] { new DefInfo("ModX_Thing", null), new DefInfo("WindTurbine", "wind turbine") };
+        var defs = new[] { new DefInfo("ModX_Thing", label: null), new DefInfo("WindTurbine", "wind turbine") };
 
         Result<DefInfo> r = DefResolver.Resolve("turbine", defs, "buildable");
 
@@ -234,5 +234,14 @@ public class TargetResolverTests
         Assert.That(TargetResolver.CheckCell(9, 9, bounds), Is.Null);
         Assert.That(TargetResolver.CheckCell(10, 0, bounds), Does.StartWith("Error:"));
         Assert.That(TargetResolver.CheckCell(-1, 0, bounds), Does.StartWith("Error:"));
+    }
+
+    [Test]
+    [SetCulture("sv-SE")]
+    public void CheckCellMessageIgnoresPlayerCulture()
+    {
+        // 瑞典文的負號是 U+2212；送給模型的座標必須是 ASCII 的 -1，模型才能照抄回工具參數。
+        var bounds = new MapBounds { Width = 10, Height = 10 };
+        Assert.That(TargetResolver.CheckCell(-1, 0, bounds), Does.Contain("cell (-1,0)"));
     }
 }

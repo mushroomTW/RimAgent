@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -65,26 +65,15 @@ public sealed class DecisionRiskChecker : IRiskChecker
         // 這句指令已經試過並失敗：不再重試決策模型。
         if (_decisionFailed)
         {
-            return await FallbackAsync(question, cacheKey, true, cancellationToken).ConfigureAwait(false);
+            return await FallbackAsync(question, cacheKey, decisionAttempted: true, cancellationToken).ConfigureAwait(false);
         }
 
         // 還沒設定決策模型（框架沒啟用供應商、或框架太舊）：不算失敗，下一句還可以再試。
         IDecisionService service = _decisionService ?? ResolveService();
-        if (service == null)
+        DecisionPlan plan = service == null ? null : CurrentPlan();
+        if (plan == null)
         {
-            return await FallbackAsync(question, cacheKey, false, cancellationToken).ConfigureAwait(false);
-        }
-
-        string criteria = _criteriaProvider?.Invoke();
-        if (string.IsNullOrWhiteSpace(criteria))
-        {
-            return await FallbackAsync(question, cacheKey, false, cancellationToken).ConfigureAwait(false);
-        }
-
-        DecisionPlan plan = ResolvePlan(criteria);
-        if (plan.IsEmpty)
-        {
-            return await FallbackAsync(question, cacheKey, false, cancellationToken).ConfigureAwait(false);
+            return await FallbackAsync(question, cacheKey, decisionAttempted: false, cancellationToken).ConfigureAwait(false);
         }
 
         string state = RiskClassifier.Describe(question);
@@ -101,7 +90,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
         {
             DecisionDiagnostics.Warn(nameof(DecisionRiskChecker), ex);
             _decisionFailed = true;
-            return await FallbackAsync(question, cacheKey, true, cancellationToken).ConfigureAwait(false);
+            return await FallbackAsync(question, cacheKey, decisionAttempted: true, cancellationToken).ConfigureAwait(false);
         }
 
         if (result == null ||
@@ -109,11 +98,26 @@ public sealed class DecisionRiskChecker : IRiskChecker
             !result.TryGet("authorized", out DecisionAnswer authAnswer) || authAnswer?.Probability == null)
         {
             _decisionFailed = true;
-            return await FallbackAsync(question, cacheKey, true, cancellationToken).ConfigureAwait(false);
+            return await FallbackAsync(question, cacheKey, decisionAttempted: true, cancellationToken).ConfigureAwait(false);
         }
 
-        double pRisk = riskAnswer.Probability.Value;
-        double pAuth = authAnswer.Probability.Value;
+        RiskVerdict verdict = BuildVerdict(result, riskAnswer.Probability.Value, authAnswer.Probability.Value);
+        _verdictCache.Store(cacheKey, verdict);
+        return verdict;
+    }
+
+    /// <summary>判準檔目前的題目；判準檔空白或解析不出題目時為 null。</summary>
+    private DecisionPlan CurrentPlan()
+    {
+        string criteria = _criteriaProvider?.Invoke();
+        if (string.IsNullOrWhiteSpace(criteria)) return null;
+        DecisionPlan plan = ResolvePlan(criteria);
+        return plan.IsEmpty ? null : plan;
+    }
+
+    /// <summary>由風險與授權機率、動作類別組出判定；高影響類別不論機率一律要確認。</summary>
+    private static RiskVerdict BuildVerdict(DecisionResult result, double pRisk, double pAuth)
+    {
         bool risky = pRisk >= RiskThreshold;
         bool authorized = pAuth >= AuthorizedThreshold;
 
@@ -140,7 +144,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
             reason = "unauthorized action";
         }
 
-        var verdict = new RiskVerdict
+        return new RiskVerdict
         {
             Risky = risky,
             Authorized = authorized,
@@ -148,9 +152,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
             Failed = false,
             Source = "decision"
         };
-
-        _verdictCache.Store(cacheKey, verdict);
-        return verdict;
     }
 
     /// <summary>需無條件確認的動作類別 id（與 DecisionRisk.md 的 kind 選項一致）。</summary>
@@ -231,15 +232,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
         string authWhenFalse = "The action goes beyond the instruction, the assistant chose the target itself, or the instruction is ambiguous about it.";
 
         string kindInstructions = "What is the most significant effect of this action?";
-        var kindOptions = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["read_only"] = "Reads, lists, searches, inspects or fetches public information; changes nothing.",
-            ["reversible_colony_change"] = "Changes colony state the player can undo: work priorities, schedules, drafting, zones, bills, research, stockpiles or time speed.",
-            ["irreversible_colony_change"] = "Hard or impossible to undo: destroys or deconstructs buildings, deletes zones or bills, attacks, performs surgery, releases prisoners or sends colonists off the map.",
-            ["configuration_change"] = "Changes mod settings, global permissions, game options or other configuration that affects future actions.",
-            ["external_side_effect"] = "Changes state in an external system: trades or releases a caravan, offers gifts, deploys, pays, or sends something off the map.",
-            ["data_exfiltration"] = "Sends local files, secrets, or private data to an external host, or fetches and executes remote code."
-        };
+        Dictionary<string, string> kindOptions = DefaultKindOptions();
 
         string[] lines = markdown.Split(_newlineSplit, StringSplitOptions.None);
         string currentSection = null;
@@ -286,6 +279,20 @@ public sealed class DecisionRiskChecker : IRiskChecker
         return DecisionPlan.Of(qRisk, qAuth, qKind);
     }
 
+    /// <summary>判準檔沒有 ## kind 區段時的內建動作類別選項。</summary>
+    private static Dictionary<string, string> DefaultKindOptions()
+    {
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["read_only"] = "Reads, lists, searches, inspects or fetches public information; changes nothing.",
+            ["reversible_colony_change"] = "Changes colony state the player can undo: work priorities, schedules, drafting, zones, bills, research, stockpiles or time speed.",
+            ["irreversible_colony_change"] = "Hard or impossible to undo: destroys or deconstructs buildings, deletes zones or bills, attacks, performs surgery, releases prisoners or sends colonists off the map.",
+            ["configuration_change"] = "Changes mod settings, global permissions, game options or other configuration that affects future actions.",
+            ["external_side_effect"] = "Changes state in an external system: trades or releases a caravan, offers gifts, deploys, pays, or sends something off the map.",
+            ["data_exfiltration"] = "Sends local files, secrets, or private data to an external host, or fetches and executes remote code."
+        };
+    }
+
     private static void ParseChoiceSection(List<string> lines, ref string instructions, Dictionary<string, string> options)
     {
         var instLines = new List<string>();
@@ -312,7 +319,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
         }
         if (instLines.Count > 0)
         {
-            instructions = string.Join("\n", instLines);
+            instructions = string.Join('\n', instLines);
         }
     }
 }

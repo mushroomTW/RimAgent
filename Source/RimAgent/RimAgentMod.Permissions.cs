@@ -69,7 +69,7 @@ public partial class RimAgentMod
     private static void DrawPermissionList(Listing_Standard listing)
     {
         listing.Gap(8f);
-        if (DrawExpandButton(listing, _showPermissionList, "RimAgent.Settings.PermissionListShow".Translate(), "RimAgent.Settings.PermissionListHide".Translate(), null))
+        if (DrawExpandButton(listing, _showPermissionList, "RimAgent.Settings.PermissionListShow".Translate(), "RimAgent.Settings.PermissionListHide".Translate(), tip: null))
         {
             _showPermissionList = !_showPermissionList;
         }
@@ -92,7 +92,7 @@ public partial class RimAgentMod
                 var cell = new Rect(grid.x + (i % 2) * (columnWidth + PermissionColumnGap), grid.y + (i / 2) * PermissionRowHeight, columnWidth, PermissionRowHeight - 4f);
                 Widgets.DrawBoxSolid(new Rect(cell.x, cell.y, 3f, cell.height), color);
                 bool allowed = Settings.GetAllow(members[i]);
-                Widgets.CheckboxDraw(cell.x + 10f, cell.y + 3f, allowed, false);
+                Widgets.CheckboxDraw(cell.x + 10f, cell.y + 3f, allowed, disabled: false);
                 float textX = cell.x + 42f;
                 float textWidth = cell.xMax - textX;
                 Text.WordWrap = false;

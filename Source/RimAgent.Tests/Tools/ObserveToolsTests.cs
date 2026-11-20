@@ -12,7 +12,7 @@ namespace RimAgent.Tests;
 public partial class ObserveToolsTests
 {
     [GeneratedRegex(@"TakeScreenshot\(RimAgent_\d{8}_\d{6}\)")]
-    private static partial Regex TakeScreenshotRegex();
+    private static partial Regex TakeScreenshotRegex { get; }
     private FakeGameWorld _world;
     private ObserveTools _tools;
 
@@ -262,7 +262,7 @@ public partial class ObserveToolsTests
     {
         string defaultText = _tools.TakeScreenshot();
         Assert.That(defaultText, Does.StartWith("Screenshot saved:").And.Match(@"RimAgent_\d{8}_\d{6}\.png").And.Contain("1920x1080"));
-        Assert.That(_world.Calls.Exists(c => TakeScreenshotRegex().IsMatch(c)), Is.True);
+        Assert.That(_world.Calls.Exists(c => TakeScreenshotRegex.IsMatch(c)), Is.True);
 
         string customText = _tools.TakeScreenshot("colony_base");
         Assert.That(customText, Does.StartWith("Screenshot saved:").And.Contain("colony_base.png").And.Contain("1920x1080"));
@@ -273,7 +273,7 @@ public partial class ObserveToolsTests
     public void SetResearchEmptyProjectIsAnErrorNotStop()
     {
         Assert.That(_tools.SetResearch(""), Does.StartWith("Error:"));
-        Assert.That(_tools.SetResearch(null), Does.StartWith("Error:"));
+        Assert.That(_tools.SetResearch(project: null), Does.StartWith("Error:"));
     }
 
     [TestCase("CON")]
@@ -290,7 +290,7 @@ public partial class ObserveToolsTests
     [Test]
     public void ResolveScreenshotNameSanitizesAndFallsBackToTimestamp()
     {
-        Assert.That(ObserveTools.ResolveScreenshotName(null), Does.Match(@"^RimAgent_\d{8}_\d{6}$"));
+        Assert.That(ObserveTools.ResolveScreenshotName(input: null), Does.Match(@"^RimAgent_\d{8}_\d{6}$"));
         Assert.That(ObserveTools.ResolveScreenshotName("   "), Does.Match(@"^RimAgent_\d{8}_\d{6}$"));
         Assert.That(ObserveTools.ResolveScreenshotName("my_base.png"), Is.EqualTo("my_base"));
         Assert.That(ObserveTools.ResolveScreenshotName("folder/sub/base"), Is.EqualTo("base"));

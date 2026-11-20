@@ -7,6 +7,8 @@ namespace RimAgent.InGameTests;
 
 /// <summary>對話視窗繪製的回歸測試（需要遊戲的字型與 GUI 樣式，單元測試環境沒有）。DevTools 只註冊有一個公開建構式的類別，所以不宣告私有建構式。</summary>
 [TestFixture(TestType.MainMenu)]
+[System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)]
+#pragma warning disable MA0036, S1118 // 類別不能改成 static，否則 DevTools 無法以公開建構式註冊
 internal sealed class TranscriptUiTests
 {
     /// <summary>
@@ -15,7 +17,7 @@ internal sealed class TranscriptUiTests
     /// </summary>
     [Test]
 #pragma warning disable CA1822 // DevTools 要實例方法才能配合隱含的公開建構式註冊
-    public void SelectableLayerTextIsTransparentInEveryState()
+    public static void SelectableLayerTextIsTransparentInEveryState()
     {
         foreach (GameFont font in new[] { GameFont.Tiny, GameFont.Small, GameFont.Medium })
         {
@@ -31,3 +33,4 @@ internal sealed class TranscriptUiTests
     }
 #pragma warning restore CA1822
 }
+#pragma warning restore MA0036, S1118

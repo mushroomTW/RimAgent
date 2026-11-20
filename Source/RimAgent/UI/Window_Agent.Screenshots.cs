@@ -114,7 +114,7 @@ public partial class Window_Agent
         Texture2D full = null;
         try
         {
-            full = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            full = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
             if (!full.LoadImage(bytes))
             {
                 UnityEngine.Object.Destroy(full);
@@ -133,7 +133,7 @@ public partial class Window_Agent
     {
         if (full.width <= MaxScreenshotWidth)
         {
-            full.Apply(false, true);
+            full.Apply(updateMipmaps: false, makeNoLongerReadable: true);
             return full;
         }
 
@@ -156,11 +156,11 @@ public partial class Window_Agent
             while (width > MaxScreenshotWidth);
 
             RenderTexture.active = step;
-            var preview = new Texture2D(step.width, step.height, TextureFormat.RGBA32, false);
+            var preview = new Texture2D(step.width, step.height, TextureFormat.RGBA32, mipChain: false);
             try
             {
                 preview.ReadPixels(new Rect(0f, 0f, step.width, step.height), 0, 0);
-                preview.Apply(false, true);
+                preview.Apply(updateMipmaps: false, makeNoLongerReadable: true);
             }
             catch
             {

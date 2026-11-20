@@ -361,7 +361,7 @@ public partial class Window_Agent : Window
     public override void PostClose()
     {
         base.PostClose();
-        Find.WindowStack.WindowOfType<ContextPanel>()?.Close(false);
+        Find.WindowStack.WindowOfType<ContextPanel>()?.Close(doCloseSound: false);
         // 關窗後不該再讓進行中的對話繼續跑；下一次送出會建立新的 CTS。
         RimAgentGameComponent.GameTornDown -= OnGameTornDown;
         CancelRunCts();

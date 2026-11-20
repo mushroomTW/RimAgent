@@ -1,7 +1,8 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -54,19 +55,9 @@ public sealed partial class ColonyAgentSession
             Undo.EndFrame(text + " (confirmed)");
             _pendingConfirmation = null;
             _pendingGoalObjective = null;
-            string summary = $"Executed {executed} confirmed command(s).";
+            string summary = string.Create(CultureInfo.InvariantCulture, $"Executed {executed} confirmed command(s).");
             if (rememberForSession) summary += " Those tools will not ask again this session.";
-            if (goalObjective != null)
-            {
-                _confirmedGoalObjective = goalObjective;
-                _goalConfirmationReport = BuildGoalConfirmationReport(summary, instructionId);
-            }
-            Transcript.Add(new TranscriptEntry
-            {
-                Kind = TranscriptKind.Notice,
-                Text = summary,
-                InstructionId = Transcript.CurrentInstructionId
-            });
+            ReportConfirmation(summary, TranscriptKind.Notice, errorKind: default, goalObjective, instructionId);
             confirmOutcome = "confirmed";
             return summary;
         }
@@ -80,20 +71,9 @@ public sealed partial class ColonyAgentSession
                 _pendingConfirmation = null;
                 _pendingGoalObjective = null;
             }
-            string failure = $"Confirmation stopped after {executed} command(s); {remaining} command(s) still await confirmation. " +
+            string failure = string.Create(CultureInfo.InvariantCulture, $"Confirmation stopped after {executed} command(s); {remaining} command(s) still await confirmation. ") +
                 "The failed command will not be retried automatically. " + ex.Message;
-            if (goalObjective != null)
-            {
-                _confirmedGoalObjective = goalObjective;
-                _goalConfirmationReport = BuildGoalConfirmationReport(failure, instructionId);
-            }
-            Transcript.Add(new TranscriptEntry
-            {
-                Kind = TranscriptKind.Error,
-                ErrorKind = Classify(ex),
-                Text = failure,
-                InstructionId = Transcript.CurrentInstructionId
-            });
+            ReportConfirmation(failure, TranscriptKind.Error, Classify(ex), goalObjective, instructionId);
             return null;
         }
         finally
@@ -101,6 +81,23 @@ public sealed partial class ColonyAgentSession
             TryWriteRunLog(confirmLog, instructionId, confirmOutcome);
             Volatile.Write(ref _busy, 0);
         }
+    }
+
+    /// <summary>把確認結果寫進對話紀錄；確認的是目標的命令時，同時留給目標流程回報。</summary>
+    private void ReportConfirmation(string text, TranscriptKind kind, AgentErrorKind errorKind, string goalObjective, int instructionId)
+    {
+        if (goalObjective != null)
+        {
+            _confirmedGoalObjective = goalObjective;
+            _goalConfirmationReport = BuildGoalConfirmationReport(text, instructionId);
+        }
+        Transcript.Add(new TranscriptEntry
+        {
+            Kind = kind,
+            ErrorKind = errorKind,
+            Text = text,
+            InstructionId = Transcript.CurrentInstructionId
+        });
     }
 
     /// <summary>丟掉等待中的確認（玩家送新指令時由 SendAsync 自動呼叫；UI 的取消鍵也走這裡）。</summary>
@@ -136,7 +133,7 @@ public sealed partial class ColonyAgentSession
             lines.Add(entry.ToolName + " (" + entry.Arguments + "): " +
                 (entry.Failed ? "failed: " : string.Empty) + RunLogRecord.Limit(entry.Result));
         }
-        string report = string.Join("\n", lines);
+        string report = string.Join('\n', lines);
         return report.Length <= 4000 ? report : report[..4000] + "…";
     }
 }

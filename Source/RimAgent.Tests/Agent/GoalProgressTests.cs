@@ -67,13 +67,13 @@ public class GoalProgressTests
         Assert.That(entries.Single(e => e.Kind == TranscriptKind.User).Text, Is.EqualTo("Build a hospital"));
         Assert.That(entries.Single(e => e.Kind == TranscriptKind.User).GoalRun, Is.True);
         Assert.That(entries.Single(e => e.Kind == TranscriptKind.Assistant).Text, Is.EqualTo("Hospital exists."));
-        Assert.That(TranscriptEntryData.FromTranscript(session.Transcript).First().goalRun, Is.True);
+        Assert.That(TranscriptEntryData.FromTranscript(session.Transcript)[0].goalRun, Is.True);
     }
 
     [Test]
     public void ConfirmationWaitDoesNotConsumeGoalTurn()
     {
-        GoalTurnDecision decision = GoalProgress.AfterTurn(2, 1, "waiting", true, false);
+        GoalTurnDecision decision = GoalProgress.AfterTurn(2, 1, "waiting", waitingConfirmation: true, hasToolEvidence: false);
 
         Assert.That(decision.Turns, Is.EqualTo(2));
         Assert.That(decision.BlockedTurns, Is.EqualTo(1));
@@ -83,14 +83,14 @@ public class GoalProgressTests
     [Test]
     public void RepeatedBlockersPauseButProgressResetsTheCounter()
     {
-        GoalTurnDecision second = GoalProgress.AfterTurn(1, 1, "blocked\n[[GOAL:BLOCKED:missing-steel]]", false, false,
+        GoalTurnDecision second = GoalProgress.AfterTurn(1, 1, "blocked\n[[GOAL:BLOCKED:missing-steel]]", waitingConfirmation: false, hasToolEvidence: false,
             "missing-steel");
         GoalTurnDecision progress = GoalProgress.AfterTurn(second.Turns, second.BlockedTurns,
-            "moved forward\n[[GOAL:CONTINUE]]", false, true, second.BlockerKey);
+            "moved forward\n[[GOAL:CONTINUE]]", waitingConfirmation: false, hasToolEvidence: true, second.BlockerKey);
         GoalTurnDecision different = GoalProgress.AfterTurn(2, 2, "waiting\n[[GOAL:BLOCKED:missing-wood]]",
-            false, false, "missing-steel");
+            waitingConfirmation: false, hasToolEvidence: false, "missing-steel");
         GoalTurnDecision third = GoalProgress.AfterTurn(2, 2, "still waiting\n[[GOAL:BLOCKED:missing-steel]]",
-            false, false, "missing-steel");
+            waitingConfirmation: false, hasToolEvidence: false, "missing-steel");
 
         Assert.That(second.Pause, Is.False);
         Assert.That(progress.BlockedTurns, Is.Zero);
@@ -102,10 +102,10 @@ public class GoalProgressTests
     [Test]
     public void CompletionNeedsExplicitVerifiedStatus()
     {
-        Assert.That(GoalProgress.AfterTurn(0, 0, "Done.", false, true).Complete, Is.False);
-        Assert.That(GoalProgress.AfterTurn(0, 0, "Done.\n[[GOAL:COMPLETE]]", false, false).Complete, Is.False);
-        Assert.That(GoalProgress.AfterTurn(0, 0, "[[GOAL:COMPLETE]]", false, true).Complete, Is.False);
-        Assert.That(GoalProgress.AfterTurn(0, 0, "Done.\n[[GOAL:COMPLETE]]", false, true).Complete, Is.True);
+        Assert.That(GoalProgress.AfterTurn(0, 0, "Done.", waitingConfirmation: false, hasToolEvidence: true).Complete, Is.False);
+        Assert.That(GoalProgress.AfterTurn(0, 0, "Done.\n[[GOAL:COMPLETE]]", waitingConfirmation: false, hasToolEvidence: false).Complete, Is.False);
+        Assert.That(GoalProgress.AfterTurn(0, 0, "[[GOAL:COMPLETE]]", waitingConfirmation: false, hasToolEvidence: true).Complete, Is.False);
+        Assert.That(GoalProgress.AfterTurn(0, 0, "Done.\n[[GOAL:COMPLETE]]", waitingConfirmation: false, hasToolEvidence: true).Complete, Is.True);
     }
 
     [Test]
@@ -133,12 +133,12 @@ public class GoalProgressTests
     public void ThreeTurnsWithoutSuccessfulToolsPauseAsNoProgress()
     {
         GoalTurnDecision first = GoalProgress.AfterTurn(0, 0, "thinking\n[[GOAL:CONTINUE]]",
-            false, false);
+            waitingConfirmation: false, hasToolEvidence: false);
         GoalTurnDecision second = GoalProgress.AfterTurn(first.Turns, first.BlockedTurns,
-            "thinking again\n[[GOAL:CONTINUE]]", false, false,
+            "thinking again\n[[GOAL:CONTINUE]]", waitingConfirmation: false, hasToolEvidence: false,
             first.BlockerKey, first.IdleTurns);
         GoalTurnDecision third = GoalProgress.AfterTurn(second.Turns, second.BlockedTurns,
-            "still thinking\n[[GOAL:CONTINUE]]", false, false,
+            "still thinking\n[[GOAL:CONTINUE]]", waitingConfirmation: false, hasToolEvidence: false,
             second.BlockerKey, second.IdleTurns);
 
         Assert.That(first.Pause, Is.False);
@@ -152,7 +152,7 @@ public class GoalProgressTests
     public void SuccessfulToolResetsIdleCounter()
     {
         GoalTurnDecision decision = GoalProgress.AfterTurn(2, 0, "checked state\n[[GOAL:CONTINUE]]",
-            false, true, previousIdleTurns: 2, usedTool: true);
+            waitingConfirmation: false, hasToolEvidence: true, previousIdleTurns: 2, usedTool: true);
 
         Assert.That(decision.IdleTurns, Is.Zero);
         Assert.That(decision.Pause, Is.False);
@@ -196,7 +196,7 @@ public class GoalProgressTests
     [Test]
     public void GoalLifecycleCanEditPauseResumeAndClear()
     {
-        var component = new RimAgentGameComponent(null);
+        var component = new RimAgentGameComponent(game: null);
         Assert.That(component.AddGoal(new string('x', RimAgentGameComponent.MaxGoalChars + 1)), Is.False);
         string longGoal = new('x', RimAgentGameComponent.MaxGoalChars);
         Assert.That(component.AddGoal(longGoal), Is.True);

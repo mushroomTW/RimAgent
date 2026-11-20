@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using RimAgent.Game;
 
@@ -35,7 +36,7 @@ public sealed class SaveLedger
     private readonly List<ReloadRecord> _history = [];
     private ReloadRecord _pending;
 
-    private static string KeyOf(SaveSlotInfo save) => save.Name + "@" + save.WrittenUtcTicks;
+    private static string KeyOf(SaveSlotInfo save) => save.Name + "@" + save.WrittenUtcTicks.ToString(CultureInfo.InvariantCulture);
 
     public int LoadsOf(SaveSlotInfo save)
     {

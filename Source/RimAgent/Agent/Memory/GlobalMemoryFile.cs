@@ -17,7 +17,7 @@ public static class GlobalMemoryFile
     public const string FileName = "global-memory.json";
     /// <summary>讀不了的檔案改存這個後綴，玩家還找得回來。</summary>
     public const string PreservedSuffix = ".invalid.txt";
-    private static readonly UTF8Encoding Utf8 = new(false);
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>讀取全域記憶；<paramref name="warning"/> 非 null 代表檔案讀不了（原檔已改名保留）。</summary>
@@ -61,7 +61,7 @@ public static class GlobalMemoryFile
             try
             {
                 File.WriteAllText(temp, JsonSerializer.Serialize(document, Options), Utf8);
-                if (File.Exists(path)) File.Replace(temp, path, null);
+                if (File.Exists(path)) File.Replace(temp, path, destinationBackupFileName: null);
                 else File.Move(temp, path);
             }
             finally

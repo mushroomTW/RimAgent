@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -93,7 +94,7 @@ internal sealed partial class RimWorldGameWorld
 
         var cell = new IntVec3(x, 0, z);
         var rot = new Rot4(rotation);
-        AcceptanceReport report = GenConstruct.CanPlaceBlueprintAt(def, cell, rot, map, false, null, null, stuff);
+        AcceptanceReport report = GenConstruct.CanPlaceBlueprintAt(def, cell, rot, map, godMode: false, thingToIgnore: null, thing: null, stuff);
         CommandResult reportFail = HandleBlueprintReport(def, report, cell, rot, map, stuff);
         if (reportFail != null) return reportFail;
 
@@ -133,7 +134,7 @@ internal sealed partial class RimWorldGameWorld
             ProcessBlockersAtCell(c, map, def, stuff, seen, parts, ref extra);
         }
         if (parts.Count == 0) return string.Empty;
-        return " (blocked by: " + string.Join("; ", parts) + (extra > 0 ? $"; +{extra} more" : string.Empty) + ")";
+        return " (blocked by: " + string.Join("; ", parts) + (extra > 0 ? string.Create(CultureInfo.InvariantCulture, $"; +{extra} more") : string.Empty) + ")";
     }
 
     private static void ProcessBlockersAtCell(IntVec3 c, Map map, BuildableDef def, ThingDef stuff, HashSet<int> seen, List<string> parts, ref int extra)
@@ -150,9 +151,9 @@ internal sealed partial class RimWorldGameWorld
             }
             CellRect r = t.OccupiedRect();
             string where = r.Width == 1 && r.Height == 1
-                ? $"({r.minX},{r.minZ})"
-                : $"({r.minX},{r.minZ})-({r.maxX},{r.maxZ})";
-            parts.Add($"{t.LabelNoCount} #{t.thingIDNumber} {where}");
+                ? string.Create(CultureInfo.InvariantCulture, $"({r.minX},{r.minZ})")
+                : string.Create(CultureInfo.InvariantCulture, $"({r.minX},{r.minZ})-({r.maxX},{r.maxZ})");
+            parts.Add(string.Create(CultureInfo.InvariantCulture, $"{t.LabelNoCount} #{t.thingIDNumber} {where}"));
         }
     }
 
@@ -161,15 +162,14 @@ internal sealed partial class RimWorldGameWorld
         Map map = Map;
         var removed = new List<string>();
         CellRect area = CellRect.FromLimits(rect.MinX, rect.MinZ, rect.MaxX, rect.MaxZ).ClipInsideMap(map);
-        List<Thing> targets = area.Cells
+        List<Thing> targets = [.. area.Cells
             .SelectMany(c => c.GetThingList(map))
             .Where(t => (t is Blueprint || t is Frame) && t.Faction == Faction.OfPlayer)
-            .Distinct()
-            .ToList();
+            .Distinct()];
         foreach (Thing t in targets)
         {
             CellRect r = t.OccupiedRect();
-            removed.Add($"{t.LabelNoCount} ({r.minX},{r.minZ})-({r.maxX},{r.maxZ})");
+            removed.Add(string.Create(CultureInfo.InvariantCulture, $"{t.LabelNoCount} ({r.minX},{r.minZ})-({r.maxX},{r.maxZ})"));
             t.Destroy(DestroyMode.Cancel);
         }
         return removed;
@@ -218,9 +218,7 @@ internal sealed partial class RimWorldGameWorld
 
     public IReadOnlyList<ShipPartRequirement> GetRequiredShipParts()
     {
-        return ShipUtility.RequiredParts()
-            .Select(p => new ShipPartRequirement { DefName = p.Key.defName, Label = p.Key.label ?? p.Key.defName, Count = p.Value })
-            .ToList();
+        return [.. ShipUtility.RequiredParts().Select(p => new ShipPartRequirement { DefName = p.Key.defName, Label = p.Key.label ?? p.Key.defName, Count = p.Value })];
     }
 
     public BuildingInfo GetBuildingInfo(string buildableDefName)
@@ -242,15 +240,15 @@ internal sealed partial class RimWorldGameWorld
             Width = size.x,
             Height = size.z,
             IsTerrain = thing == null,
-            Costs = (def.CostList ?? []).Select(c => new BuildingCost { Label = c.thingDef.label ?? c.thingDef.defName, Count = c.count }).ToList(),
+            Costs = [.. (def.CostList ?? []).Select(c => new BuildingCost { Label = c.thingDef.label ?? c.thingDef.defName, Count = c.count })],
             StuffCount = def.MadeFromStuff ? def.CostStuffCount : 0,
             StuffCategories = def.MadeFromStuff ? def.stuffCategories.Select(s => s.label ?? s.defName).ToList() : [],
             TerrainAffordance = def.terrainAffordanceNeeded?.defName ?? string.Empty,
             AffordanceFromStuff = def.useStuffTerrainAffordance,
-            Research = (def.researchPrerequisites ?? []).Select(r => new BuildingResearch { Label = r.label ?? r.defName, Done = Current.ProgramState == ProgramState.Playing && r.IsFinished }).ToList(),
+            Research = [.. (def.researchPrerequisites ?? []).Select(r => new BuildingResearch { Label = r.label ?? r.defName, Done = Current.ProgramState == ProgramState.Playing && r.IsFinished })],
             ConstructionSkill = def.constructionSkillPrerequisite,
             ArtisticSkill = def.artisticSkillPrerequisite,
-            PlaceWorkers = (def.placeWorkers ?? []).Select(t => t.Name).ToList(),
+            PlaceWorkers = [.. (def.placeWorkers ?? []).Select(t => t.Name)],
             ShipPart = thing?.building != null && thing.building.shipPart,
             PowerWatts = power != null ? power.PowerConsumption : 0f,
             InteractionOffsets = interaction

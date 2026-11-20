@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -78,6 +78,7 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
+    #pragma warning disable VSTHRD202 // 保留 async：主線程列檔的 IO 例外要放進 Task，不在呼叫當下同步拋出。
     public async System.Threading.Tasks.Task<IReadOnlyList<SaveSlotInfo>> GetSaveFilesAsync()
     {
         // 列檔案在主線程（GenFilePaths 會建資料夾）；開 autosave 讀代號交給背景執行緒。
@@ -86,7 +87,7 @@ internal sealed partial class RimWorldGameWorld
             .Where(f => f.Name.StartsWith(Tools.SaveTools.CheckpointPrefix, StringComparison.OrdinalIgnoreCase)
                 || f.Name.StartsWith(GameDataSaveLoader.AutosavePrefix, StringComparison.OrdinalIgnoreCase))
             .ToList();
-        return await System.Threading.Tasks.Task.Run(() => (IReadOnlyList<SaveSlotInfo>)files.Select(f =>
+        return await System.Threading.Tasks.Task.Run(() => (IReadOnlyList<SaveSlotInfo>)[.. files.Select(f =>
         {
             var info = new SaveSlotInfo { Name = f.Name, WrittenUtcTicks = f.Written };
             if (TryParseCheckpointName(f.Name, out string colonyId, out int tick))
@@ -102,8 +103,9 @@ internal sealed partial class RimWorldGameWorld
                 info.Tick = scan.Tick;
             }
             return info;
-        }).ToList());
+        })]);
     }
+    #pragma warning restore VSTHRD202
 
     /// <summary>檢查點名稱是「前綴＋代號＋-＋tick」；代號本身不含連字號。</summary>
     private static bool TryParseCheckpointName(string name, out string colonyId, out int tick)
@@ -121,7 +123,7 @@ internal sealed partial class RimWorldGameWorld
     public CommandResult SaveGame(string saveName)
     {
         // 同原版存檔視窗：排成長事件，在下一幀、離開目前的更新流程後才寫檔。
-        LongEventHandler.QueueLongEvent(() => GameDataSaveLoader.SaveGame(saveName), "SavingLongEvent", false, null);
+        LongEventHandler.QueueLongEvent(() => GameDataSaveLoader.SaveGame(saveName), "SavingLongEvent", doAsynchronously: false, exceptionHandler: null);
         return CommandResult.Ok();
     }
 
@@ -145,7 +147,7 @@ internal sealed partial class RimWorldGameWorld
         if (!SaveGameFilesUtility.SavedGameNamedExists(saveName)) return CommandResult.Fail("save not found: " + saveName);
         RimAgentGameComponent.Instance?.PrepareForReload();
         // 讀檔會當場 Dispose 目前的遊戲：排成長事件，等這一幀的遊戲更新跑完才換掉。
-        LongEventHandler.QueueLongEvent(() => GameDataSaveLoader.LoadGame(saveName), "LoadingLongEvent", false, null);
+        LongEventHandler.QueueLongEvent(() => GameDataSaveLoader.LoadGame(saveName), "LoadingLongEvent", doAsynchronously: false, exceptionHandler: null);
         return CommandResult.Ok();
     }
 }

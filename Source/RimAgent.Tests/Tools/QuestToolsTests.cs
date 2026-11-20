@@ -243,7 +243,7 @@ public class QuestToolsTests
     {
         Assert.That(_tools.DismissQuest(7), Is.EqualTo("Quest \"Hospitality request\" [7] dismissed."));
         Assert.That(_world.Quests[0].Dismissed, Is.True);
-        Assert.That(_tools.DismissQuest(7, false), Is.EqualTo("Quest \"Hospitality request\" [7] restored."));
+        Assert.That(_tools.DismissQuest(7, dismissed: false), Is.EqualTo("Quest \"Hospitality request\" [7] restored."));
         Assert.That(_world.Quests[0].Dismissed, Is.False);
         Assert.That(_world.Calls, Is.EqualTo(["SetQuestDismissed(7,True)", "SetQuestDismissed(7,False)"]));
     }
@@ -252,7 +252,7 @@ public class QuestToolsTests
     public void DismissIsIdempotentAndRefusesAcceptedOrUnknownQuests()
     {
         Assert.That(_tools.DismissQuest(30), Does.Contain("already dismissed"));
-        Assert.That(_tools.DismissQuest(7, false), Does.Contain("already not dismissed"));
+        Assert.That(_tools.DismissQuest(7, dismissed: false), Does.Contain("already not dismissed"));
         Assert.That(_tools.DismissQuest(20), Does.StartWith("Error:").And.Contain("already accepted"));
         Assert.That(_tools.DismissQuest(99), Does.StartWith("Error:").And.Contain("list_quests"));
         Assert.That(_world.Calls, Is.Empty);

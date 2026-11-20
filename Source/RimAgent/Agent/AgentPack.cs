@@ -310,7 +310,7 @@ public static class AgentPackLoader
 
     private static void ApplySubagentField(AgentSubagent subagent, List<ToolCategory> categories, string line)
     {
-        int colon = line.IndexOf(':');
+        int colon = line.IndexOf(':', StringComparison.Ordinal);
         if (colon <= 0) return;
         string key = line.Substring(0, colon).Trim().ToLowerInvariant();
         string value = line.Substring(colon + 1).Trim();
@@ -351,7 +351,7 @@ public static class AgentPackLoader
         result = default(T);
         string trimmed = (value ?? string.Empty).Trim();
         if (trimmed.Length == 0 || char.IsDigit(trimmed[0]) || trimmed[0] == '-') return false;
-        return Enum.TryParse(trimmed, true, out result) && Enum.IsDefined(typeof(T), result);
+        return Enum.TryParse(trimmed, ignoreCase: true, out result) && Enum.IsDefined(typeof(T), result);
     }
 
     internal static AgentSkill ParseSkill(string folderName, string text)

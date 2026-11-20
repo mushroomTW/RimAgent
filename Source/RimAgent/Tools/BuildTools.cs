@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using RimAgent.Agent;
@@ -87,8 +88,8 @@ public sealed class BuildTools
             int eligible = targets.Value.Count(t => dk.Applies(t) && !t.Designations.Contains(dk.DefName, StringComparer.OrdinalIgnoreCase));
             string where = useSelection
                 ? "the player's selection"
-                : $"rectangle ({x1},{z1})-({x2},{z2})";
-            string preview = $"would mark {eligible} object(s) for {dk.Verb} " +
+                : string.Create(CultureInfo.InvariantCulture, $"rectangle ({x1},{z1})-({x2},{z2})");
+            string preview = string.Create(CultureInfo.InvariantCulture, $"would mark {eligible} object(s) for {dk.Verb} ") +
                 $"among {targets.Value.Count} matching object(s) in {where}." + OmittedNote(omitted);
             return ToolText.Blocked(_gate, preview);
         }
@@ -130,24 +131,24 @@ public sealed class BuildTools
     /// <summary>搜尋被 Limit 截斷時提醒模型還有物件沒處理；沒有截斷時回傳空字串。</summary>
     private static string OmittedNote(int omitted)
     {
-        return omitted > 0 ? $" {omitted} more matching object(s) were not included (search limit): repeat the call or narrow the rectangle." : string.Empty;
+        return omitted > 0 ? string.Create(CultureInfo.InvariantCulture, $" {omitted} more matching object(s) were not included (search limit): repeat the call or narrow the rectangle.") : string.Empty;
     }
 
     private static string FormatDesignateSummary(DesignationKind dk, int totalTargets, int marked, int skipped, int notApplicable, List<string> failures, int omitted)
     {
         if (marked == 0 && skipped == 0 && failures.Count == 0)
         {
-            return ToolText.Error($"nothing eligible for {dk.Verb} among {totalTargets} matching object(s)" +
-                                  (notApplicable > 0 ? $" ({notApplicable} not applicable, e.g. not ripe or not player-owned)." : ".") + OmittedNote(omitted));
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"nothing eligible for {dk.Verb} among {totalTargets} matching object(s)") +
+                                  (notApplicable > 0 ? string.Create(CultureInfo.InvariantCulture, $" ({notApplicable} not applicable, e.g. not ripe or not player-owned).") : ".") + OmittedNote(omitted));
         }
         if (marked == 0 && skipped == 0)
         {
             return ToolText.Error($"could not mark anything for {dk.Verb}. Failures: " + string.Join("; ", failures.Take(5)));
         }
 
-        string summary = $"Marked {marked} for {dk.Verb}";
-        if (skipped > 0) summary += $", {skipped} already marked";
-        if (notApplicable > 0) summary += $", {notApplicable} not applicable";
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Marked {marked} for {dk.Verb}");
+        if (skipped > 0) summary += string.Create(CultureInfo.InvariantCulture, $", {skipped} already marked");
+        if (notApplicable > 0) summary += string.Create(CultureInfo.InvariantCulture, $", {notApplicable} not applicable");
         summary += "." + OmittedNote(omitted);
         return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
     }
@@ -188,7 +189,7 @@ public sealed class BuildTools
 
         if (removed == 0 && failures.Count == 0) return $"No {dk.Verb} marks found there." + OmittedNote(omitted);
         if (removed == 0) return ToolText.Error("could not remove any marks. Failures: " + string.Join("; ", failures.Take(5)));
-        string summary = $"Removed {removed} {dk.Verb} mark(s)." + OmittedNote(omitted);
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Removed {removed} {dk.Verb} mark(s).") + OmittedNote(omitted);
         return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
     }
 
@@ -255,7 +256,7 @@ public sealed class BuildTools
     private static string BuildPlaceValidationError(string what, List<(int X, int Z)> cells, (bool success, List<string> failures) validation)
     {
         return ToolText.Error($"placed nothing: {validation.failures.Count} of {cells.Count} {what} blueprint(s) cannot go there. "
-            + string.Join("; ", validation.failures.Take(5)) + (validation.failures.Count > 5 ? $"; and {validation.failures.Count - 5} more" : string.Empty)
+            + string.Join("; ", validation.failures.Take(5)) + (validation.failures.Count > 5 ? string.Create(CultureInfo.InvariantCulture, $"; and {validation.failures.Count - 5} more") : string.Empty)
             + ". Clear the blockers or choose other cells, then place them all again.");
     }
 
@@ -337,7 +338,7 @@ public sealed class BuildTools
 
         if (string.IsNullOrWhiteSpace(layout)) return ListLayouts(layouts);
         Result<DefInfo> chosen = ResolveLayout(layout, layouts);
-        if (!chosen.Success) return chosen.Error + " Layouts: " + string.Join("; ", layouts.Select(l => $"{l.Label} {l.Width}x{l.Height}")) + ".";
+        if (!chosen.Success) return chosen.Error + " Layouts: " + string.Join("; ", layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} {l.Width}x{l.Height}"))) + ".";
 
         if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
         Result<LayoutMaterials> materials = ResolveLayoutMaterials(stuff);
@@ -381,7 +382,7 @@ public sealed class BuildTools
         int refused = CheckLayoutPieces(plan, materials, Info, Label, failures);
         if (refused > 0)
         {
-            return ToolText.Error($"placed nothing: {refused} of {plan.Pieces.Count} parts of the {what} layout cannot go in {plan.Rect}. "
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"placed nothing: {refused} of {plan.Pieces.Count} parts of the {what} layout cannot go in {plan.Rect}. ")
                 + FormatLayoutFailures(failures) + " Clear the blockers or choose another spot, then place the layout again.");
         }
 
@@ -391,10 +392,10 @@ public sealed class BuildTools
         PlaceLayoutPieces(plan, materials, Info, Label, ref placed, lateFailures, fellBack);
         if (lateFailures.Count > 0)
         {
-            return ToolText.Error($"only {placed} of {plan.Pieces.Count} blueprints of the {what} layout were placed in {plan.Rect}; "
+            return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"only {placed} of {plan.Pieces.Count} blueprints of the {what} layout were placed in {plan.Rect}; ")
                 + "these were refused after the check: " + FormatLayoutFailures(lateFailures));
         }
-        string summary = $"Placed all {placed} blueprints of the {what} layout, covering {plan.Rect}.";
+        string summary = string.Create(CultureInfo.InvariantCulture, $"Placed all {placed} blueprints of the {what} layout, covering {plan.Rect}.");
         if (fellBack.Count > 0) summary += " Kept the layout's own material or floor (the requested one was refused): " + FormatLayoutFailures(fellBack);
         return summary;
     }
@@ -409,7 +410,7 @@ public sealed class BuildTools
         int refused = 0;
         foreach (LayoutPiece piece in plan.Pieces)
         {
-            CommandResult check = PlaceLayoutPiece(piece, materials.For(piece.Part), Info(piece.DefName), true, out _);
+            CommandResult check = PlaceLayoutPiece(piece, materials.For(piece.Part), Info(piece.DefName), checkOnly: true, out _);
             if (check.Success) continue;
             refused++;
             string key = $"{Label(piece)}: {check.Message}";
@@ -422,7 +423,7 @@ public sealed class BuildTools
     {
         foreach (LayoutPiece piece in plan.Pieces)
         {
-            CommandResult r = PlaceLayoutPiece(piece, materials.For(piece.Part), Info(piece.DefName), false, out bool usedOwnStuff);
+            CommandResult r = PlaceLayoutPiece(piece, materials.For(piece.Part), Info(piece.DefName), checkOnly: false, out bool usedOwnStuff);
             string label = Label(piece);
             if (r.Success)
             {
@@ -438,7 +439,7 @@ public sealed class BuildTools
     private static string ListLayouts(IReadOnlyList<LayoutInfo> layouts)
     {
         return "Layouts (size, then what it is): " + string.Join("; ",
-            layouts.Select(l => $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}" + (l.Description.Length > 0 ? ": " + l.Description : string.Empty))) + ".";
+            layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}") + (l.Description.Length > 0 ? ": " + l.Description : string.Empty))) + ".";
     }
 
     /// <summary>放一件房型內容；有指定替換時先試替換，被拒再退回房型原本的設計。</summary>
@@ -557,8 +558,8 @@ public sealed class BuildTools
     private static string FormatLayoutFailures(Dictionary<string, int> failures)
     {
         IEnumerable<string> listed = failures.OrderByDescending(f => f.Value).Take(MaxLayoutFailuresListed)
-            .Select(f => f.Value > 1 ? $"{f.Key} (x{f.Value})" : f.Key);
-        string more = failures.Count > MaxLayoutFailuresListed ? $"; +{failures.Count - MaxLayoutFailuresListed} more kinds" : string.Empty;
+            .Select(f => f.Value > 1 ? string.Create(CultureInfo.InvariantCulture, $"{f.Key} (x{f.Value})") : f.Key);
+        string more = failures.Count > MaxLayoutFailuresListed ? string.Create(CultureInfo.InvariantCulture, $"; +{failures.Count - MaxLayoutFailuresListed} more kinds") : string.Empty;
         return string.Join("; ", listed) + more + ".";
     }
 
@@ -576,7 +577,7 @@ public sealed class BuildTools
         IReadOnlyList<string> removed = _world.RemoveBlueprints(rect);
         if (removed.Count == 0) return ToolText.Error($"no blueprints or frames in {rect}.");
         return $"Cancelled {removed.Count}: " + string.Join("; ", removed.Take(MaxFootprintsListed))
-            + (removed.Count > MaxFootprintsListed ? $"; +{removed.Count - MaxFootprintsListed} more." : ".");
+            + (removed.Count > MaxFootprintsListed ? string.Create(CultureInfo.InvariantCulture, $"; +{removed.Count - MaxFootprintsListed} more.") : ".");
     }
 
     /// <summary>最多逐一列出幾個藍圖的佔格；更多的只報數量。</summary>
@@ -620,12 +621,12 @@ public sealed class BuildTools
     private static string FootprintNote(BuildingInfo info, List<(int X, int Z)> placedCells, int rotation)
     {
         CellRectSpec first = OccupiedRect(placedCells[0].X, placedCells[0].Z, rotation, info);
-        string size = $"{first.MaxX - first.MinX + 1}x{first.MaxZ - first.MinZ + 1}";
-        if (placedCells.Count == 1) return $" Size {size}, rotation {rotation}, covers {first}.";
+        string size = string.Create(CultureInfo.InvariantCulture, $"{first.MaxX - first.MinX + 1}x{first.MaxZ - first.MinZ + 1}");
+        if (placedCells.Count == 1) return string.Create(CultureInfo.InvariantCulture, $" Size {size}, rotation {rotation}, covers {first}.");
         IEnumerable<string> listed = placedCells.Take(MaxFootprintsListed)
             .Select(c => $"{ToolText.Cell(c.X, c.Z)} covers {OccupiedRect(c.X, c.Z, rotation, info)}");
-        string more = placedCells.Count > MaxFootprintsListed ? $"; +{placedCells.Count - MaxFootprintsListed} more" : string.Empty;
-        return $" Each is {size}, rotation {rotation}: {string.Join("; ", listed)}{more}.";
+        string more = placedCells.Count > MaxFootprintsListed ? string.Create(CultureInfo.InvariantCulture, $"; +{placedCells.Count - MaxFootprintsListed} more") : string.Empty;
+        return string.Create(CultureInfo.InvariantCulture, $" Each is {size}, rotation {rotation}: {string.Join("; ", listed)}{more}.");
     }
 
     /// <summary>PlaceWorker 類別 → 模型看得懂的限制；沒收錄的只回類別名。</summary>
@@ -770,7 +771,7 @@ public sealed class BuildTools
         if (hidden.Count > 0)
         {
             sb.Append("More stat groups (pass detail=<name> or \"all\"): ")
-              .AppendLine(string.Join(", ", hidden.Select(g => $"{g.Key} ({g.Count()})")) + ".");
+              .AppendJoin(", ", hidden.Select(g => $"{g.Key} ({g.Count()})")).AppendLine(".");
         }
     }
 
@@ -799,14 +800,14 @@ public sealed class BuildTools
         sb.Append("Size: ").Append(b.Width).Append('x').Append(b.Height).Append(" (x by z, facing north). ");
         sb.AppendLine(b.Width == b.Height
             ? "Rotation does not change the footprint."
-            : $"Rotation 1 or 3 (east/west) makes it {b.Height}x{b.Width}.");
+            : string.Create(CultureInfo.InvariantCulture, $"Rotation 1 or 3 (east/west) makes it {b.Height}x{b.Width}."));
         if (b.Width > 1 || b.Height > 1) sb.AppendLine("place_blueprint x,z is the center cell; its reply lists the covered rectangle.");
     }
 
     private static void AppendCost(StringBuilder sb, BuildingInfo b)
     {
         var cost = new List<string>(b.Costs.Select(c => $"{c.Label} x{c.Count}"));
-        if (b.StuffCount > 0) cost.Add($"{b.StuffCount} of a material ({string.Join(", ", b.StuffCategories)})");
+        if (b.StuffCount > 0) cost.Add(string.Create(CultureInfo.InvariantCulture, $"{b.StuffCount} of a material ({string.Join(", ", b.StuffCategories)})"));
         sb.Append("Cost: ").AppendLine(cost.Count == 0 ? "none" : string.Join(", ", cost));
     }
 
@@ -822,7 +823,7 @@ public sealed class BuildTools
     private static void AppendResearch(StringBuilder sb, BuildingInfo b)
     {
         if (b.Research.Count == 0) sb.AppendLine("Research: none.");
-        else sb.Append("Research: ").AppendLine(string.Join(", ", b.Research.Select(r => r.Label + (r.Done ? " (done)" : " (NOT done)"))));
+        else sb.Append("Research: ").AppendJoin(", ", b.Research.Select(r => r.Label + (r.Done ? " (done)" : " (NOT done)"))).AppendLine();
     }
 
     private static void AppendBuilderSkill(StringBuilder sb, BuildingInfo b)
@@ -830,9 +831,9 @@ public sealed class BuildTools
         if (b.ConstructionSkill > 0 || b.ArtisticSkill > 0)
         {
             var skills = new List<string>();
-            if (b.ConstructionSkill > 0) skills.Add($"construction {b.ConstructionSkill}");
-            if (b.ArtisticSkill > 0) skills.Add($"artistic {b.ArtisticSkill}");
-            sb.Append("Builder skill: ").Append(string.Join(", ", skills)).AppendLine(".");
+            if (b.ConstructionSkill > 0) skills.Add(string.Create(CultureInfo.InvariantCulture, $"construction {b.ConstructionSkill}"));
+            if (b.ArtisticSkill > 0) skills.Add(string.Create(CultureInfo.InvariantCulture, $"artistic {b.ArtisticSkill}"));
+            sb.Append("Builder skill: ").AppendJoin(", ", skills).AppendLine(".");
         }
     }
 
@@ -840,8 +841,8 @@ public sealed class BuildTools
     {
         if (b.PlaceWorkers.Count > 0)
         {
-            sb.Append("Placement: ").AppendLine(string.Join("; ", b.PlaceWorkers.Select(w =>
-                PlaceWorkerRules.TryGetValue(w, out string rule) ? w + " -> " + rule : w)));
+            sb.Append("Placement: ").AppendJoin("; ", b.PlaceWorkers.Select(w =>
+                PlaceWorkerRules.TryGetValue(w, out string rule) ? w + " -> " + rule : w)).AppendLine();
         }
     }
 
@@ -860,8 +861,7 @@ public sealed class BuildTools
     {
         if (b.InteractionOffsets.Count > 0)
         {
-            sb.Append("Interaction cell: offset ").Append(string.Join(", ", b.InteractionOffsets.Select(o => ToolText.Cell(o.X, o.Z))))
-              .AppendLine(" from the center when facing north (turns with rotation); keep it free.");
+            sb.Append("Interaction cell: offset ").AppendJoin(", ", b.InteractionOffsets.Select(o => ToolText.Cell(o.X, o.Z))).AppendLine(" from the center when facing north (turns with rotation); keep it free.");
         }
     }
 
@@ -886,7 +886,7 @@ public sealed class BuildTools
         long count = kind == "outline" && width > 2 && height > 2 ? 2 * (width + height) - 4 : width * height;
         if (count > MaxBlueprintCells)
         {
-            return Result<List<(int X, int Z)>>.Fail(ToolText.Error($"that {kind} covers {count} cells; the limit is {MaxBlueprintCells} per call. Split it into smaller pieces."));
+            return Result<List<(int X, int Z)>>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"that {kind} covers {count} cells; the limit is {MaxBlueprintCells} per call. Split it into smaller pieces.")));
         }
 
         if (kind == "line")
@@ -972,8 +972,7 @@ public sealed class BuildTools
         if (useSelection)
         {
             List<ThingInfo> selected = [.. _world.GetSelection()
-                .Where(t => t.Kind == thingKind)
-                .Where(t => needle.Length == 0 || Matches(t, needle))];
+                .Where(t => t.Kind == thingKind && (needle.Length == 0 || Matches(t, needle)))];
             if (selected.Count == 0)
             {
                 return Result<List<ThingInfo>>.Fail(ToolText.Error(
