@@ -268,6 +268,24 @@ public class ColonyAgentSessionTests
         Assert.That(entries.Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("tool-step budget")), Is.False);
     }
 
+    /// <summary>回歸：推理模型的思考內容只進了模型歷史，對話裡看不到。</summary>
+    [Test]
+    public async Task ReasoningIsShownBeforeTheToolsItLedTo()
+    {
+        _client.CallToolWithReasoning("Need the overview first.", "get_colony_overview")
+               .Reply("All good.");
+        ColonyAgentSession session = NewSession();
+
+        await session.SendAsync("look around");
+
+        List<TranscriptEntry> entries = [.. session.Transcript.Snapshot()];
+        int reasoning = entries.FindIndex(e => e.Kind == TranscriptKind.Reasoning);
+        int tool = entries.FindIndex(e => e.Kind == TranscriptKind.Tool);
+        Assert.That(reasoning, Is.GreaterThanOrEqualTo(0));
+        Assert.That(entries[reasoning].Text, Is.EqualTo("Need the overview first."));
+        Assert.That(reasoning, Is.LessThan(tool), "思考要排在它引出的工具之前");
+    }
+
     [Test]
     public async Task StrippedToolsDoNotClaimTheStepBudgetWasReached()
     {

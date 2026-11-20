@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using LudeonTK;
 using RimAgent.Agent;
 using RimWorld;
 using Verse;
@@ -18,6 +19,7 @@ namespace RimAgent.InGameTests;
 /// 只有隔離環境的 Config 有 <see cref="MarkerFileName"/> 才啟動；模型照 seed 進來的玩家設定，
 /// 標記檔根節點可帶 model="供應商:模型" 覆寫。結果附加到 SaveData/RimAgent/Benchmark.jsonl，
 /// 最後一行 Log "[RimAgent.InGameTests] Benchmark DONE" 彙總。
+/// 也可在開發模式的除錯動作「RimAgent」分類手動起跑（全部、基本或高難度題），用目前的模型設定，跑完還原。
 /// </summary>
 public sealed class BenchmarkComponent : GameComponent
 {
@@ -276,30 +278,70 @@ public sealed class BenchmarkComponent : GameComponent
         if (_readyAt < 0f) _readyAt = UnityEngine.Time.realtimeSinceStartup + 5f;
         if (UnityEngine.Time.realtimeSinceStartup < _readyAt) return;
         _started = true;
-        _ = RunAsync();
+        _ = RunAsync(null, isolated: true);
     }
 
-    private static async Task RunAsync()
+    /// <summary>同一時間只跑一輪：題目共用同一個會話與地圖。</summary>
+    private static bool _running;
+
+    [DebugAction("RimAgent", "Benchmark: all tasks", allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    private static void DebugRunAll() => ConfirmAndRun(null);
+
+    [DebugAction("RimAgent", "Benchmark: basic tasks", allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    private static void DebugRunBasic() => ConfirmAndRun(Basic);
+
+    [DebugAction("RimAgent", "Benchmark: hard tasks", allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    private static void DebugRunHard() => ConfirmAndRun(Hard);
+
+    /// <summary>
+    /// 開發模式按鈕手動起跑：題目會清空對話、在地圖上放藍圖與區域、生成敵人，所以先確認；
+    /// 跑完還原暫時改動的設定與時間流速（隔離環境用標記檔起跑時不需要還原）。
+    /// </summary>
+    private static void ConfirmAndRun(string tier)
     {
+        if (_running)
+        {
+            Messages.Message("RimAgent benchmark is already running.", MessageTypeDefOf.RejectInput, false);
+            return;
+        }
+        Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(
+            "RimAgent benchmark clears the agent conversation, gives the agent full access and changes this map (zones, blueprints, spawned enemies). The game stays paused while it runs. Use a throwaway save. Start?",
+            () => _ = RunAsync(tier, isolated: false), destructive: true));
+    }
+
+    /// <param name="tier">只跑這一級的題目；null 表示全部。</param>
+    /// <param name="isolated">由隔離環境的標記檔起跑：讀標記檔的模型覆寫，跑完不還原設定。</param>
+    private static async Task RunAsync(string tier, bool isolated)
+    {
+        if (_running) return;
+        _running = true;
+        RimAgentSettings settings = RimAgentMod.Settings;
+        string savedModel = settings?.agentModel;
+        AgentMode savedMode = settings?.mode ?? AgentMode.Confirm;
+        bool savedCare = settings?.autonomousCare ?? false;
+        bool savedRecord = settings?.recordRuns ?? false;
+        TimeSpeed savedSpeed = Find.TickManager?.CurTimeSpeed ?? TimeSpeed.Normal;
         try
         {
-            RimAgentSettings settings = RimAgentMod.Settings;
             RimAgentGameComponent agent = RimAgentGameComponent.Instance;
             if (settings == null || agent == null)
             {
                 Log.Warning(LogPrefix + $"FAIL not started: settings={settings != null}, component={agent != null}");
                 return;
             }
-            // 只改隔離環境記憶體裡的設定：完整權限讓行動直接執行，關掉自主照顧免得插隊。
-            string modelOverride = Regex.Match(await File.ReadAllTextAsync(MarkerPath), "model=\"([^\"]+)\"", RegexOptions.None, TimeSpan.FromSeconds(1)).Groups[1].Value;
-            if (modelOverride.Length > 0) settings.agentModel = modelOverride;
+            // 只改記憶體裡的設定：完整權限讓行動直接執行，關掉自主照顧免得插隊。
+            if (isolated)
+            {
+                string modelOverride = Regex.Match(await File.ReadAllTextAsync(MarkerPath), "model=\"([^\"]+)\"", RegexOptions.None, TimeSpan.FromSeconds(1)).Groups[1].Value;
+                if (modelOverride.Length > 0) settings.agentModel = modelOverride;
+            }
             settings.mode = AgentMode.Autonomous;
             settings.autonomousCare = false;
             settings.recordRuns = true;
             // 暫停讓地圖狀態不受時間影響；工具照常可用。
             Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
 
-            string folder = Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent");
+            string folder = RunLogWriter.DefaultFolder;
             Directory.CreateDirectory(folder);
             string resultPath = Path.Combine(folder, "Benchmark.jsonl");
             string runId = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
@@ -310,7 +352,8 @@ public sealed class BenchmarkComponent : GameComponent
             var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0 };
             int totalTools = 0;
             int totalFailures = 0;
-            foreach (BenchTask task in Tasks)
+            BenchTask[] tasks = [.. Tasks.Where(t => tier == null || t.Tier == tier)];
+            foreach (BenchTask task in tasks)
             {
                 (string failure, List<TranscriptEntry> tools, float seconds, string reply) = await RunTaskAsync(session, task);
                 int failures = tools.Count(t => t.Failed && !t.Cancelled);
@@ -340,20 +383,36 @@ public sealed class BenchmarkComponent : GameComponent
                 ["model"] = model,
                 ["note"] = "summary",
                 ["passed"] = passedByTier.Values.Sum(),
-                ["total"] = Tasks.Length,
+                ["total"] = tasks.Length,
                 ["basicPassed"] = passedByTier[Basic],
-                ["basicTotal"] = Tasks.Count(t => t.Tier == Basic),
+                ["basicTotal"] = tasks.Count(t => t.Tier == Basic),
                 ["hardPassed"] = passedByTier[Hard],
-                ["hardTotal"] = Tasks.Count(t => t.Tier == Hard),
+                ["hardTotal"] = tasks.Count(t => t.Tier == Hard),
                 ["toolCalls"] = totalTools,
                 ["toolFailures"] = totalFailures
             };
             Append(resultPath, summary);
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary));
+            if (!isolated)
+            {
+                Messages.Message($"RimAgent benchmark: {summary["passed"]}/{summary["total"]} passed. Details: {resultPath}", MessageTypeDefOf.NeutralEvent, false);
+            }
         }
         catch (Exception ex)
         {
             Log.Warning(LogPrefix + "FAIL exception: " + ex);
+        }
+        finally
+        {
+            if (!isolated && settings != null)
+            {
+                settings.agentModel = savedModel;
+                settings.mode = savedMode;
+                settings.autonomousCare = savedCare;
+                settings.recordRuns = savedRecord;
+                if (Find.TickManager != null) Find.TickManager.CurTimeSpeed = savedSpeed;
+            }
+            _running = false;
         }
     }
 

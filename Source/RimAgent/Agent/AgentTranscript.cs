@@ -14,7 +14,9 @@ public enum TranscriptKind
     Assistant,
     Tool,
     Error,
-    Notice
+    Notice,
+    /// <summary>模型這一步的思考內容（推理模型回傳的 reasoning）；存檔以整數記，只能加在最後。</summary>
+    Reasoning
 }
 
 /// <summary>玩家看不到底層 LLM 例外，只需要知道該去哪裡處理；UI 依此挑翻譯字串。</summary>

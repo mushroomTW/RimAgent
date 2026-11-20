@@ -544,7 +544,7 @@ public partial class RimAgentGameComponent : GameComponent
             if (!settings.recordRuns) return;
             if (_runLogWriter == null)
             {
-                _runLogWriter = new RunLogWriter(Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent"))
+                _runLogWriter = new RunLogWriter(RunLogWriter.DefaultFolder)
                 {
                     ModVersion = LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.ModVersion ?? string.Empty
                 };
@@ -567,7 +567,8 @@ public partial class RimAgentGameComponent : GameComponent
             pack != null ? pack.PlayerNotes : string.Empty,
             !fullAccess && pack != null ? pack.Conduct : string.Empty,
             pack?.Skills,
-            _expansions);
+            _expansions,
+            AgentPromptComposer.LayoutsHintApplies(RimAgentMod.Settings?.layouts ?? true, RimAgentMod.Settings?.ToPermissions()));
     }
 
     private static string ExpansionsLine()

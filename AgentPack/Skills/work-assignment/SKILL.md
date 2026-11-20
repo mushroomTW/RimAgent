@@ -22,7 +22,7 @@ Done when each essential job has a primary and a backup, or the gap is named to 
 - Passion with low skill is a long-term investment; start it on jobs where early quality matters little (Growing, Construction, Research).
 
 ## 3. Surge for the current need
-Temporary raises on the best people, and tell the player /undo reverts them:
+Temporary raises on the best people, and tell the player the Undo button reverts them:
 - Food shortage: Growing, Cooking, Hunting.
 - Big build: Construction, with Doctor and Firefighting left as they are.
 - After a raid: Doctor and Hauling for a day.

@@ -8,6 +8,6 @@
     3. 玩家 Config 裡的 Mod_RimLLM Framework_RimLLMFrameworkMod.xml 與 RimLLM_EncryptionKey.dat（供應商設定與金鑰）
     以上 2、3 都直接指向玩家的 Config 路徑帶入，不要複製進版本庫。
   結果附加到 SaveData/RimAgent/Benchmark.jsonl（每題一行，最後一行 note=summary），
-  執行紀錄 RimAgent-runs.jsonl 可再用 Source/Scripts/run_log_stats.py 統計 token 與各工具成功率。
+  執行紀錄 RimAgent-runs.jsonl 可在開發模式除錯動作「RimAgent／Run log stats」統計 token 與各工具成功率。
 -->
 <RimAgentBenchmark />

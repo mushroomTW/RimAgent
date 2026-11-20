@@ -191,13 +191,11 @@
   <RimAgent.Reasoning.Routing>自动</RimAgent.Reasoning.Routing>
   <RimAgent.Reasoning.RoutingTip>由决策模型将每句指令分类至任务类别，并以该类别配置的思考强度执行；模型维持模型菜单所选的那一个。</RimAgent.Reasoning.RoutingTip>
   <RimAgent.Slash.Goal>持续目标（列出、新增、修改、清空、暂停与恢复）</RimAgent.Slash.Goal>
-  <RimAgent.Slash.Undo>撤销上一句指令改的工作设置</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>清除对话</RimAgent.Slash.Clear>
   <RimAgent.Slash.Compact>压缩上下文（摘要折叠较旧的对话）</RimAgent.Slash.Compact>
   <RimAgent.Slash.Stop>停止执行中的指令</RimAgent.Slash.Stop>
   <RimAgent.Slash.Unknown>未知指令：{0}。输入 / 查看可用指令。</RimAgent.Slash.Unknown>
   <RimAgent.Slash.Busy>Agent 执行中，请先 /stop 或等它完成。</RimAgent.Slash.Busy>
-  <RimAgent.Slash.NothingToUndo>没有可撤销的操作。</RimAgent.Slash.NothingToUndo>
   <RimAgent.Goal.ListHeader>持续目标（依次执行，与自主模式分开）：</RimAgent.Goal.ListHeader>
   <RimAgent.Goal.Empty>还没有目标。用 /goal &lt;文字&gt; 新增，例如 /goal 研发电力。</RimAgent.Goal.Empty>
   <RimAgent.Goal.Added>已加入目标 #{0}，即将开始或排队：{1}</RimAgent.Goal.Added>
@@ -313,4 +311,38 @@
   <RimAgent.Settings.HideAdvanced>收起高级设置</RimAgent.Settings.HideAdvanced>
   <RimAgent.Settings.ResetDefaults>恢复默认</RimAgent.Settings.ResetDefaults>
   <RimAgent.Settings.ResetDefaultsConfirm>要把这一页的设置全部恢复成默认吗？\n\nAgent 窗口里选的模型和执行模式不会变。</RimAgent.Settings.ResetDefaultsConfirm>
+  <RimAgent.Tag.Reasoning>思考</RimAgent.Tag.Reasoning>
+  <RimAgent.Reasoning.ToggleTip>点一下显示或隐藏模型这一步的思考内容；右键可复制这一行。</RimAgent.Reasoning.ToggleTip>
+  <RimAgent.Undo.Button>撤销</RimAgent.Undo.Button>
+  <RimAgent.Undo.Tip>撤销上一句指令改的工作设置</RimAgent.Undo.Tip>
+
+  <!-- 技能選單的顯示名稱與說明（$ 選單）；模型看到的仍是 SKILL.md 的英文說明 -->
+  <RimAgent.Skill.colony-progression.Label>殖民地发展</RimAgent.Skill.colony-progression.Label>
+  <RimAgent.Skill.colony-progression.Desc>“接下来做什么”、闲时例行检查、研究选择与长期规划：依殖民地阶段挑下一个目标。</RimAgent.Skill.colony-progression.Desc>
+  <RimAgent.Skill.defense-building.Label>防御工事</RimAgent.Skill.defense-building.Label>
+  <RimAgent.Skill.defense-building.Desc>在袭击来之前盖防御：隘口、杀戮箱、沙袋、炮塔、陷阱与迫击炮，依殖民地财富规划规模。</RimAgent.Skill.defense-building.Desc>
+  <RimAgent.Skill.endgame-archonexus.Label>结局：Archonexus</RimAgent.Skill.endgame-archonexus.Label>
+  <RimAgent.Skill.endgame-archonexus.Desc>Archonexus 结局（Ideology DLC）：累积财富、带殖民地迁移三次，最后启动核心。</RimAgent.Skill.endgame-archonexus.Desc>
+  <RimAgent.Skill.endgame-journey.Label>结局：远方飞船</RimAgent.Skill.endgame-journey.Label>
+  <RimAgent.Skill.endgame-journey.Desc>前往远方现成飞船的结局（本体）：抵达任务中的飞船并离开星球。</RimAgent.Skill.endgame-journey.Desc>
+  <RimAgent.Skill.endgame-mechhive.Label>结局：机械巢</RimAgent.Skill.endgame-mechhive.Label>
+  <RimAgent.Skill.endgame-mechhive.Desc>机械巢结局（Odyssey DLC）：建造并驾驶重力船，循重力核心任务前往轨道机械巢，摧毁 Cerebrex 核心。</RimAgent.Skill.endgame-mechhive.Desc>
+  <RimAgent.Skill.endgame-royal.Label>结局：皇家飞升</RimAgent.Skill.endgame-royal.Label>
+  <RimAgent.Skill.endgame-royal.Desc>皇家飞升结局（Royalty DLC）：取得帝国伯爵爵位、接待星系长并搭皇家穿梭机离开。</RimAgent.Skill.endgame-royal.Desc>
+  <RimAgent.Skill.endgame-ship.Label>结局：建造飞船</RimAgent.Skill.endgame-ship.Label>
+  <RimAgent.Skill.endgame-ship.Desc>自建飞船离开星球：研究、零件、材料、船体配置、在袭击下撑过 14 天反应堆启动，然后发射。</RimAgent.Skill.endgame-ship.Desc>
+  <RimAgent.Skill.endgame-void.Label>结局：虚空</RimAgent.Skill.endgame-void.Label>
+  <RimAgent.Skill.endgame-void.Desc>虚空结局（Anomaly DLC）：唤醒巨石碑、研究实体、进入虚空，最后拥抱或切断连结。</RimAgent.Skill.endgame-void.Desc>
+  <RimAgent.Skill.food-security.Label>粮食安全</RimAgent.Skill.food-security.Label>
+  <RimAgent.Skill.food-security.Desc>缺粮、粮食问题、农田或狩猎规划：算出粮食还能撑几天并补足缺口。</RimAgent.Skill.food-security.Desc>
+  <RimAgent.Skill.medical-triage.Label>医疗分诊</RimAgent.Skill.medical-triage.Label>
+  <RimAgent.Skill.medical-triage.Desc>受伤、倒地、流血或生病的殖民者、瘟疫感染、药品存量与手术：依急迫程度排序并逐一治疗。</RimAgent.Skill.medical-triage.Desc>
+  <RimAgent.Skill.mood-management.Label>心情管理</RimAgent.Skill.mood-management.Label>
+  <RimAgent.Skill.mood-management.Desc>心情低落、快要精神崩溃、“为什么某人不开心”：从心情因素找出根本原因并排除。</RimAgent.Skill.mood-management.Desc>
+  <RimAgent.Skill.raid-defense.Label>迎击袭击</RimAgent.Skill.raid-defense.Label>
+  <RimAgent.Skill.raid-defense.Desc>地图上有敌人（袭击、围攻、工兵、兽群、机械族）：征召前先读，评估威胁、选定战术并部署战斗人员。</RimAgent.Skill.raid-defense.Desc>
+  <RimAgent.Skill.seasonal-prep.Label>季节准备</RimAgent.Skill.seasonal-prep.Label>
+  <RimAgent.Skill.seasonal-prep.Desc>即将入冬或入夏、寒流、热浪、危险气温、毒尘或火山冬天：检查粮食、保暖、燃料与衣物并补足缺口。</RimAgent.Skill.seasonal-prep.Desc>
+  <RimAgent.Skill.work-assignment.Label>工作分配</RimAgent.Skill.work-assignment.Label>
+  <RimAgent.Skill.work-assignment.Desc>工作优先级或作息、新殖民者加入、没人做的工作：依覆盖率、技能与热情分配工作。</RimAgent.Skill.work-assignment.Desc>
 </LanguageData>

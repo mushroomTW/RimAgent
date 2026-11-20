@@ -252,7 +252,9 @@ public partial class Window_Agent
             {
                 Widgets.DrawHighlight(lineRect);
                 if (_toolToggleTip == null) _toolToggleTip = "RimAgent.Tool.ToggleTip".Translate();
-                TooltipHandler.TipRegion(lineRect, _toolToggleTip);
+                if (_reasoningToggleTip == null) _reasoningToggleTip = "RimAgent.Reasoning.ToggleTip".Translate();
+                // 思考列共用工具摘要列的展開與右鍵複製，但說明不能講「參數與結果」。
+                TooltipHandler.TipRegion(lineRect, line.Entry?.Kind == TranscriptKind.Reasoning ? _reasoningToggleTip : _toolToggleTip);
             }
             if (Widgets.ButtonInvisible(lineRect)) clickedTool = line.Entry;
         }
@@ -319,7 +321,10 @@ public partial class Window_Agent
         return _bubbleStyle;
     }
 
-    /// <summary>框選層樣式快取（按字體）：平時文字透明、只看到底下的彩色 Label；取得焦點才顯示純文字，複製不到顏色標籤。</summary>
+    /// <summary>
+    /// 框選層樣式快取（按字體）：所有狀態的文字都透明，只看到底下的彩色 Label 與半透明反白；複製的是純文字，不含顏色標籤。
+    /// 取得焦點時不能改顯示純文字：Label 的 markdown 標題放大、粗體變寬，與純文字排版不同，兩層會疊字。
+    /// </summary>
     private static readonly Dictionary<GameFont, GUIStyle> SelectableStyles = [];
 
     /// <summary>
@@ -334,12 +339,18 @@ public partial class Window_Agent
         // 唯讀框選層不需要文字游標：焦點在它身上時 Unity 會畫一條閃爍豎線（如氣泡尾端的游標），
         // 把全域游標色暫時設透明即可隱藏；選取反白不受影響，畫完立刻還原，後面畫的輸入框游標正常。
         Color oldCursor = GUI.skin.settings.cursorColor;
+        Color oldSelection = GUI.skin.settings.selectionColor;
         GUI.skin.settings.cursorColor = Color.clear;
+        // 框選層的字永遠透明，反白要半透明才看得到底下 Label 的字。
+        GUI.skin.settings.selectionColor = SelectionColor;
         GUI.TextArea(rect, plainText ?? string.Empty, GetSelectableStyle());
         GUI.skin.settings.cursorColor = oldCursor;
+        GUI.skin.settings.selectionColor = oldSelection;
     }
 
-    private static GUIStyle GetSelectableStyle()
+    private static readonly Color SelectionColor = new(0.35f, 0.60f, 0.95f, 0.40f);
+
+    internal static GUIStyle GetSelectableStyle()
     {
         GameFont font = Text.Font;
         if (!SelectableStyles.TryGetValue(font, out GUIStyle style) || style == null)
@@ -349,21 +360,21 @@ public partial class Window_Agent
                 richText = false,
                 wordWrap = true
             };
-            Color plain = new(0.90f, 0.93f, 0.96f);
             // GUIStyleState 是參考型別，收進陣列迴圈賦值仍會寫回樣式本體。
-            foreach (GUIStyleState state in new[] { style.normal, style.hover, style.onNormal, style.onHover })
+            foreach (GUIStyleState state in SelectableStates(style))
             {
                 state.background = null;
                 state.textColor = Color.clear;
             }
-            foreach (GUIStyleState state in new[] { style.active, style.focused, style.onActive, style.onFocused })
-            {
-                state.background = null;
-                state.textColor = plain;
-            }
             SelectableStyles[font] = style;
         }
         return style;
+    }
+
+    /// <summary>框選層樣式的全部狀態（含焦點與按下）；遊戲內測試以此確認每個狀態的文字都透明。</summary>
+    internal static GUIStyleState[] SelectableStates(GUIStyle style)
+    {
+        return [style.normal, style.hover, style.active, style.focused, style.onNormal, style.onHover, style.onActive, style.onFocused];
     }
 
     /// <summary>

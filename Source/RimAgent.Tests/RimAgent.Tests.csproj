@@ -24,6 +24,11 @@
     <ProjectReference Include="..\RimAgent\RimAgent.csproj" />
   </ItemGroup>
 
+  <!-- 運行紀錄統計只隨開發伴隨模組出貨，不進正式 DLL；以連結編進測試，免得測試專案參考整個伴隨模組。 -->
+  <ItemGroup>
+    <Compile Include="..\RimAgent.InGameTests\RunLogStats.cs" Link="Linked\RunLogStats.cs" />
+  </ItemGroup>
+
   <!-- 1.7 的遊戲組件、Harmony 3.0、框架組件與 SmashTools：直接參考並複製到測試輸出，執行期才找得到。 -->
   <ItemGroup>
     <Reference Include="0Harmony">

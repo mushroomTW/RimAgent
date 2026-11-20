@@ -183,6 +183,21 @@ public class AgentFixesTests
         Assert.That(record.TranscriptSteps, Has.Count.EqualTo(1));
     }
 
+    /// <summary>回歸：推理模型每步一則思考，會擠掉執行紀錄有限的步驟名額與存檔筆數，所以兩邊都不收。</summary>
+    [Test]
+    public void ReasoningIsLeftOutOfRunLogsAndSaves()
+    {
+        var transcript = new AgentTranscript();
+        transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Reasoning, Text = "thinking", InstructionId = 1 });
+        transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "t", InstructionId = 1 });
+        var record = new RunLogRecord();
+
+        record.CaptureTranscript(transcript.Snapshot(), 1);
+
+        Assert.That(record.TranscriptSteps.Select(s => s.Kind), Is.EqualTo((string[])["Tool"]));
+        Assert.That(TranscriptEntryData.FromTranscript(transcript).Select(d => d.kind), Is.EqualTo((int[])[(int)TranscriptKind.Tool]));
+    }
+
     [Test]
     public void TranscriptSaveDataKeepsCancelledAndDuration()
     {

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using RimAgent.Agent;
+using RimAgent.Tools;
 
 namespace RimAgent.Tests;
 
@@ -259,6 +260,28 @@ public class AgentPackTests
 
         Assert.That(text, Does.StartWith("CORE\n\nGame expansions active: Biotech."));
         Assert.That(text.IndexOf("Biotech", StringComparison.Ordinal), Is.LessThan(text.IndexOf("Tall, not wide.", StringComparison.Ordinal)));
+    }
+
+    /// <summary>回歸：模組化房型開著，模型仍一件一件放牆與床；開啟時系統提示詞要明講優先用房型。</summary>
+    [Test]
+    public void ComposeWithSkillIndexAddsLayoutsHintOnlyWhenEnabled()
+    {
+        string on = AgentPromptComposer.ComposeWithSkillIndex("CORE", null, null, null, "Game expansions active: none.", layouts: true);
+        string off = AgentPromptComposer.ComposeWithSkillIndex("CORE", null, null, null, "Game expansions active: none.", layouts: false);
+
+        Assert.That(on, Does.Contain(AgentPromptComposer.LayoutsHint));
+        Assert.That(on, Does.Contain("shape=layout"));
+        Assert.That(off, Does.Not.Contain("shape=layout"));
+    }
+
+    /// <summary>回歸：玩家關掉建造類工具時，提示詞不能要模型用拿不到的 place_blueprint。</summary>
+    [Test]
+    public void LayoutsHintNeedsBuildToolsToBeAllowed()
+    {
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(true, ToolPermissions.All), Is.True);
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(true, null), Is.True);
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(true, ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work)), Is.False);
+        Assert.That(AgentPromptComposer.LayoutsHintApplies(false, ToolPermissions.All), Is.False);
     }
 
     [Test]

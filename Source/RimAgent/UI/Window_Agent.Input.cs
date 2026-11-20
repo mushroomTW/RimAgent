@@ -322,21 +322,34 @@ public partial class Window_Agent
             Widgets.DrawHighlightIfMouseover(row);
             if (first + i == _skillIndex) Widgets.DrawHighlightSelected(row);
 
-            string label = "$" + name;
+            // 選單已經在 $ 底下，名稱前不再重複 $；有翻譯就顯示在地化的名稱與說明，玩家自訂的技能沿用 SKILL.md。
+            AgentSkill skill = skills.FirstOrDefault(s => s != null && string.Equals((s.Name ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
+            string label = SkillLabel(name);
             float nameWidth = Text.CalcSize(label).x;
             GUI.color = ToolActionColor;
             Widgets.Label(new Rect(row.x + 6f, row.y, nameWidth, row.height), label);
 
-            AgentSkill skill = skills.FirstOrDefault(s => s != null && string.Equals((s.Name ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
             var descRect = new Rect(row.x + 6f + nameWidth + 10f, row.y, row.width - nameWidth - 22f, row.height);
             GUI.color = ToolTextColor;
-            Widgets.Label(descRect, (skill?.Description ?? string.Empty).Truncate(descRect.width));
+            Widgets.Label(descRect, SkillDescription(name, skill?.Description).Truncate(descRect.width));
             GUI.color = Color.white;
 
             if (Widgets.ButtonInvisible(row)) AcceptSkill(name);
         }
         Text.WordWrap = true;
         Text.Anchor = TextAnchor.UpperLeft;
+    }
+
+    /// <summary>技能的顯示名稱：有 RimAgent.Skill.{名稱}.Label 翻譯就用，否則用技能名稱本身。</summary>
+    private static string SkillLabel(string name)
+    {
+        return ("RimAgent.Skill." + name + ".Label").TryTranslate(out TaggedString label) ? label.ToString() : name;
+    }
+
+    /// <summary>技能的顯示說明：有 RimAgent.Skill.{名稱}.Desc 翻譯就用，否則用 SKILL.md 的 description。</summary>
+    private static string SkillDescription(string name, string fallback)
+    {
+        return ("RimAgent.Skill." + name + ".Desc").TryTranslate(out TaggedString desc) ? desc.ToString() : fallback ?? string.Empty;
     }
 
     private void AcceptSlash(ColonyAgentSession session, SlashCommand command)

@@ -21,12 +21,25 @@ public sealed class TimeTools
 
     private readonly IGameWorld _world;
     private readonly ConfirmationGate _gate;
+    private readonly PlayerInterjections _interjections;
+    private readonly AgentTranscript _transcript;
 
-    public TimeTools(IGameWorld world, ConfirmationGate gate = null)
+    /// <param name="interjections">玩家執行中的插話；有新的就提早結束等待。null 表示不檢查。</param>
+    /// <param name="transcript">用來判斷目前是不是主 Agent；子代理拿不到插話，不能為它提早結束。null 視為主 Agent。</param>
+    public TimeTools(IGameWorld world, ConfirmationGate gate = null, PlayerInterjections interjections = null, AgentTranscript transcript = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
+        _interjections = interjections;
+        _transcript = transcript;
     }
+
+    /// <summary>
+    /// 有插話等著送給「這次呼叫的」Agent。插話只附在主 Agent 的工具結果（見 LoggingAIFunction），
+    /// 子代理的等待若也提早結束，話送不到它，只會讓它每次等 0.1 小時就被打斷。
+    /// </summary>
+    private bool PlayerMessageWaiting =>
+        _interjections?.HasPending == true && (_transcript == null || _transcript.CurrentAgent.Length == 0);
 
     [AgentTool("set_time_speed", ToolCategory.Time, ToolRisk.Safe)]
     [Description("Pauses the game or changes the time speed. Pause before a batch of orders that needs a still game; speed up while waiting. Reports the previous and new speed.")]
@@ -54,7 +67,7 @@ public sealed class TimeTools
     }
 
     [AgentTool("wait_for_time", ToolCategory.Time, ToolRisk.Safe)]
-    [Description("Lets in-game time pass while colonists carry out orders (building, hauling, harvesting, research), then returns the colony overview. Use this to wait for progress instead of calling query tools over and over. The game must be unpaused (see set_time_speed). Stops early when the game gets paused, the current map changes, new hostiles appear, a colonist goes down or starts bleeding badly (not from surgery under anesthesia), or a fire starts.")]
+    [Description("Lets in-game time pass while colonists carry out orders (building, hauling, harvesting, research), then returns the colony overview. Use this to wait for progress instead of calling query tools over and over. The game must be unpaused (see set_time_speed). Stops early when the game gets paused, the current map changes, new hostiles appear, a colonist goes down or starts bleeding badly (not from surgery under anesthesia), a fire starts, or the player sends a message.")]
     public async Task<string> WaitForTime(
         [Description("In-game hours to wait, 1-24.")] int hours,
         CancellationToken cancellationToken)
@@ -99,6 +112,12 @@ public sealed class TimeTools
             if (_world.GetFireCount() > firesBefore)
             {
                 stopReason = "a fire started";
+                break;
+            }
+            // 插話要等工具結束才會附在結果送給模型：長等待不先回來，玩家要等好幾個遊戲小時才有反應。
+            if (PlayerMessageWaiting)
+            {
+                stopReason = "the player sent a message";
                 break;
             }
         }

@@ -11,7 +11,8 @@ public class SlashCommandsTests
     [Test]
     public void MatchFiltersByPrefixWhileTypingName()
     {
-        Assert.That(SlashCommands.Match("/").Select(c => c.Name), Is.EqualTo(["goal", "undo", "clear", "compact", "stop"]));
+        // 復原改成狀態列按鈕，不在斜線選單裡。
+        Assert.That(SlashCommands.Match("/").Select(c => c.Name), Is.EqualTo(["goal", "clear", "compact", "stop"]));
         Assert.That(SlashCommands.Match("/G").Select(c => c.Name), Is.EqualTo(["goal"]));
         Assert.That(SlashCommands.Match("/xyz"), Is.Empty);
         Assert.That(SlashCommands.Match("/goal "), Is.Empty, "打了空白代表名稱已定，不再彈選單");
@@ -26,8 +27,8 @@ public class SlashCommandsTests
         Assert.That(command, Is.SameAs(SlashCommands.Goal));
         Assert.That(args, Is.EqualTo("research electricity"));
 
-        Assert.That(SlashCommands.TryParse("/UNDO", out command, out _), Is.True);
-        Assert.That(command, Is.SameAs(SlashCommands.Undo));
+        Assert.That(SlashCommands.TryParse("/STOP", out command, out _), Is.True);
+        Assert.That(command, Is.SameAs(SlashCommands.Stop));
 
         Assert.That(SlashCommands.TryParse("/compact", out command, out _), Is.True);
         Assert.That(command, Is.SameAs(SlashCommands.Compact));

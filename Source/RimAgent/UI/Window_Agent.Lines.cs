@@ -78,7 +78,13 @@ public partial class Window_Agent
             bool collapsed = false;
             if (entry.Kind == TranscriptKind.Tool)
             {
-                collapsed = !TrackToolGroup(entry, i > 0 && entries[i - 1].Kind == TranscriptKind.Tool, width);
+                collapsed = !TrackToolGroup(entry, PreviousIsTool(entries, i), width);
+            }
+            else if (entry.Kind == TranscriptKind.Reasoning && _groupFirst != null)
+            {
+                // 推理模型每步都有思考：夾在工具之間的思考算進同一個工具群組，群組收合時一起藏起來，
+                // 不然每一步都會把「已執行 N 個工具」切成一組。
+                collapsed = !IsGroupExpanded(_groupFirst);
             }
             else
             {
@@ -87,6 +93,17 @@ public partial class Window_Agent
             _linesTotal += BuildEntryLines(entry, width, turnStart, _lines, collapsed);
         }
         _linesEntryCount = entries.Count;
+    }
+
+    /// <summary>往前跳過思考紀錄，看上一筆是不是工具：思考不打斷連續的工具群組。</summary>
+    internal static bool PreviousIsTool(IReadOnlyList<TranscriptEntry> entries, int index)
+    {
+        for (int j = index - 1; j >= 0; j--)
+        {
+            if (entries[j].Kind == TranscriptKind.Reasoning) continue;
+            return entries[j].Kind == TranscriptKind.Tool;
+        }
+        return false;
     }
 
     private string _toolGroupToggleTip;
@@ -233,6 +250,7 @@ public partial class Window_Agent
     /// <summary>工具紀錄預設收合，只有等待確認的預覽預設展開（玩家要看得到確認的是什麼）；玩家親手設定過的照玩家的。</summary>
     private bool IsToolExpanded(TranscriptEntry entry)
     {
+        if (entry.Kind == TranscriptKind.Reasoning) return _toolExpanded.TryGetValue(entry, out bool open) && open;
         if (entry.Kind != TranscriptKind.Tool) return false;
         if (_toolExpanded.TryGetValue(entry, out bool expanded)) return expanded;
         return entry.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
@@ -270,6 +288,10 @@ public partial class Window_Agent
 
             case TranscriptKind.Tool:
                 foreach (var line in RenderTool(entry, toolExpanded, combatNoted)) yield return line;
+                break;
+
+            case TranscriptKind.Reasoning:
+                foreach (var line in RenderReasoning(entry, toolExpanded)) yield return line;
                 break;
 
             case TranscriptKind.Error:
@@ -348,7 +370,7 @@ public partial class Window_Agent
         {
             tag += ColorTagPrefix + SubTextHex + ">[" + EscapeRichText(entry.Agent) + "]" + ColorTagCloseSpace;
         }
-        string call = arrow + tag + ColorTagPrefix + (entry.Failed ? EmergencyHex : TextHex) + ">" + EscapeRichText(entry.ToolName) + ColorTagClose;
+        string call = arrow + tag + ColorTagPrefix + (entry.Failed ? EmergencyHex : ToolCategoryHex(entry.ToolCategory)) + ">" + EscapeRichText(entry.ToolName) + ColorTagClose;
         if (entry.RiskCheck.Length > 0)
         {
             call += " " + ColorTagPrefix + (entry.Failed ? EmergencyHex : NoticeHex) + ">["
@@ -374,6 +396,40 @@ public partial class Window_Agent
             string combatNote = ColorTagPrefix + NoticeHex + ">" + "RimAgent.CombatLatencyNote".Translate() + ColorTagClose;
             yield return (combatNote, LineKind.CombatNote);
         }
+    }
+
+    /// <summary>思考內容預設收合成一列（▸ 思考），點開才顯示全文；沿用工具列的展開與右鍵複製。</summary>
+    private static IEnumerable<(string Text, LineKind Kind)> RenderReasoning(TranscriptEntry entry, bool expanded)
+    {
+        string arrow = ColorTagPrefix + SubTextHex + ">" + (expanded ? "▾" : "▸") + ColorTagCloseSpace;
+        string header = arrow + ColorTagPrefix + ReasoningHex + ">" + "RimAgent.Tag.Reasoning".Translate() + ColorTagClose;
+        if (!string.IsNullOrEmpty(entry.Agent))
+        {
+            header += " " + ColorTagPrefix + SubTextHex + ">[" + EscapeRichText(entry.Agent) + "]" + ColorTagClose;
+        }
+        yield return (header, LineKind.ToolHeader);
+        if (expanded)
+        {
+            yield return (ColorTagPrefix + SubTextHex + ">" + EscapeRichText(entry.Text) + ColorTagClose, LineKind.Text);
+        }
+    }
+
+    /// <summary>工具名稱依類別上色，一眼分得出查詢、下令、建造、戰鬥等；失敗時一律轉紅（呼叫端處理）。</summary>
+    internal static string ToolCategoryHex(ToolCategory category)
+    {
+        return category switch
+        {
+            ToolCategory.Observe or ToolCategory.Memory or ToolCategory.Web or ToolCategory.Mcp => "9CC8EE",
+            ToolCategory.Work or ToolCategory.Zone or ToolCategory.Production => "8FD694",
+            ToolCategory.Build => "E8C170",
+            ToolCategory.Combat => "FF9A6B",
+            ToolCategory.Medical => "F29BC0",
+            ToolCategory.Animal or ToolCategory.Prisoner => "B5D98A",
+            ToolCategory.Trade => "D7B8FF",
+            ToolCategory.Time or ToolCategory.Save => "C9CFF5",
+            ToolCategory.Agents => "73CCFF",
+            _ => TextHex,
+        };
     }
 
     private static string RiskLabel(string risk)

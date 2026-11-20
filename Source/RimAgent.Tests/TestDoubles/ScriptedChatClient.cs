@@ -95,6 +95,19 @@ internal sealed class ScriptedChatClient : IChatClient
         return this;
     }
 
+    /// <summary>回一則先附思考內容（<see cref="TextReasoningContent"/>）再要求呼叫工具的 assistant 訊息。</summary>
+    public ScriptedChatClient CallToolWithReasoning(string reasoning, string name)
+    {
+        _script.Add((_, __) =>
+        {
+            string callId = "call_" + (++_callIds);
+            var message = new ChatMessage(ChatRole.Assistant,
+                [new TextReasoningContent(reasoning), new FunctionCallContent(callId, name, new Dictionary<string, object>())]);
+            return new ChatResponse(message) { FinishReason = ChatFinishReason.ToolCalls };
+        });
+        return this;
+    }
+
     /// <summary>回一則帶「工具已被剝除」標記的文字回應。</summary>
     public ScriptedChatClient ReplyWithToolsStripped(string text)
     {

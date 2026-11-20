@@ -86,6 +86,7 @@ public partial class Window_Agent : Window
     private const string TextHex = "E6EDF5";       // 柔和淺白：內文敘述
     private const string SubTextHex = "A0B0C0";    // 淺灰藍：次要細節 / 結果
     private const string NoticeHex = "FFD670";     // 提示黃
+    private const string ReasoningHex = "B9A6E0";  // 淡紫：模型思考
 
     private static readonly Color ControlBgColor = new(0.08f, 0.11f, 0.15f, 0.75f);
     private static readonly Color ControlBorderColor = new(0.45f, 0.52f, 0.60f, 0.65f);
@@ -222,6 +223,7 @@ public partial class Window_Agent : Window
     private string _workingText;
     private readonly TextCache<bool> _jumpLabel = new();
     private string _toolToggleTip;
+    private string _reasoningToggleTip;
     private float _workingHeight;
     private float _workingHeightWidth = -1f;
     private string _workingHeightText;

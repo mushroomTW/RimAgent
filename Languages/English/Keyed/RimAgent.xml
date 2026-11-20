@@ -191,13 +191,11 @@
   <RimAgent.Reasoning.Routing>Auto</RimAgent.Reasoning.Routing>
   <RimAgent.Reasoning.RoutingTip>Use the decision model to classify each instruction into a task category and run it with that category's reasoning effort. The model stays the one selected in the model menu.</RimAgent.Reasoning.RoutingTip>
   <RimAgent.Slash.Goal>Persistent goals: list, add, edit, clear, pause, resume</RimAgent.Slash.Goal>
-  <RimAgent.Slash.Undo>Undo the work settings changed by the last instruction</RimAgent.Slash.Undo>
   <RimAgent.Slash.Clear>Clear the conversation</RimAgent.Slash.Clear>
   <RimAgent.Slash.Compact>Compact context (summarize older history)</RimAgent.Slash.Compact>
   <RimAgent.Slash.Stop>Stop the running instruction</RimAgent.Slash.Stop>
   <RimAgent.Slash.Unknown>Unknown command: {0}. Type / to see the available commands.</RimAgent.Slash.Unknown>
   <RimAgent.Slash.Busy>The agent is working; /stop it or wait for it to finish.</RimAgent.Slash.Busy>
-  <RimAgent.Slash.NothingToUndo>Nothing to undo.</RimAgent.Slash.NothingToUndo>
   <RimAgent.Goal.ListHeader>Persistent goals (run in order, separate from Autonomous mode):</RimAgent.Goal.ListHeader>
   <RimAgent.Goal.Empty>No goals yet. Add one with /goal &lt;text&gt;, e.g. /goal research electricity.</RimAgent.Goal.Empty>
   <RimAgent.Goal.Added>Queued goal #{0}; it will start shortly: {1}</RimAgent.Goal.Added>
@@ -313,4 +311,38 @@
   <RimAgent.Settings.HideAdvanced>Hide advanced settings</RimAgent.Settings.HideAdvanced>
   <RimAgent.Settings.ResetDefaults>Reset to defaults</RimAgent.Settings.ResetDefaults>
   <RimAgent.Settings.ResetDefaultsConfirm>Reset every setting on this page to its default?\n\nThe model and mode chosen in the Agent window stay the same.</RimAgent.Settings.ResetDefaultsConfirm>
+  <RimAgent.Tag.Reasoning>Thinking</RimAgent.Tag.Reasoning>
+  <RimAgent.Reasoning.ToggleTip>Click to show or hide the model's thinking for this step; right-click copies this row.</RimAgent.Reasoning.ToggleTip>
+  <RimAgent.Undo.Button>Undo</RimAgent.Undo.Button>
+  <RimAgent.Undo.Tip>Undo the work settings changed by the last instruction</RimAgent.Undo.Tip>
+
+  <!-- 技能選單的顯示名稱與說明（$ 選單）；模型看到的仍是 SKILL.md 的英文說明 -->
+  <RimAgent.Skill.colony-progression.Label>Colony progression</RimAgent.Skill.colony-progression.Label>
+  <RimAgent.Skill.colony-progression.Desc>"What should we do next", idle checks, research choice and long-term planning: picks the next project from the colony's stage.</RimAgent.Skill.colony-progression.Desc>
+  <RimAgent.Skill.defense-building.Label>Defense building</RimAgent.Skill.defense-building.Label>
+  <RimAgent.Skill.defense-building.Desc>Building defenses before raids come: choke points, kill boxes, sandbags, turrets, traps and mortars, scaled to colony wealth.</RimAgent.Skill.defense-building.Desc>
+  <RimAgent.Skill.endgame-archonexus.Label>Ending: Archonexus</RimAgent.Skill.endgame-archonexus.Label>
+  <RimAgent.Skill.endgame-archonexus.Desc>Archonexus ending (Ideology DLC): grow wealth, move the colony across three cycles, then invoke the core.</RimAgent.Skill.endgame-archonexus.Desc>
+  <RimAgent.Skill.endgame-journey.Label>Ending: Journey</RimAgent.Skill.endgame-journey.Label>
+  <RimAgent.Skill.endgame-journey.Desc>Ending by reaching a ready-made ship far away (Core game).</RimAgent.Skill.endgame-journey.Desc>
+  <RimAgent.Skill.endgame-mechhive.Label>Ending: Mechhive</RimAgent.Skill.endgame-mechhive.Label>
+  <RimAgent.Skill.endgame-mechhive.Desc>Mechhive ending (Odyssey DLC): fly a gravship to the orbital mechhive and finish the Cerebrex core.</RimAgent.Skill.endgame-mechhive.Desc>
+  <RimAgent.Skill.endgame-royal.Label>Ending: Royal ascent</RimAgent.Skill.endgame-royal.Label>
+  <RimAgent.Skill.endgame-royal.Desc>Royal ascent ending (Royalty DLC): earn a Count title, host a stellarch and leave on the imperial shuttle.</RimAgent.Skill.endgame-royal.Desc>
+  <RimAgent.Skill.endgame-ship.Label>Ending: Starship</RimAgent.Skill.endgame-ship.Label>
+  <RimAgent.Skill.endgame-ship.Desc>Ending by building and launching the starship: research, parts, hull layout, the 14-day reactor startup and launch.</RimAgent.Skill.endgame-ship.Desc>
+  <RimAgent.Skill.endgame-void.Label>Ending: Void</RimAgent.Skill.endgame-void.Label>
+  <RimAgent.Skill.endgame-void.Desc>Void endings (Anomaly DLC): raise the monolith, study entities, enter the void, then embrace or disrupt the link.</RimAgent.Skill.endgame-void.Desc>
+  <RimAgent.Skill.food-security.Label>Food security</RimAgent.Skill.food-security.Label>
+  <RimAgent.Skill.food-security.Desc>Food shortage, farm or hunting planning: measures the food runway in days and closes the gap.</RimAgent.Skill.food-security.Desc>
+  <RimAgent.Skill.medical-triage.Label>Medical triage</RimAgent.Skill.medical-triage.Label>
+  <RimAgent.Skill.medical-triage.Desc>Injured, downed, bleeding or sick colonists, medicine and surgery: orders patients by urgency and treats each one.</RimAgent.Skill.medical-triage.Desc>
+  <RimAgent.Skill.mood-management.Label>Mood management</RimAgent.Skill.mood-management.Label>
+  <RimAgent.Skill.mood-management.Desc>Low mood, impending mental break, "why is X unhappy": finds the root cause and removes it.</RimAgent.Skill.mood-management.Desc>
+  <RimAgent.Skill.raid-defense.Label>Raid defense</RimAgent.Skill.raid-defense.Label>
+  <RimAgent.Skill.raid-defense.Desc>Hostiles on the map: read before drafting anyone, to size up the threat, pick a stance and position fighters.</RimAgent.Skill.raid-defense.Desc>
+  <RimAgent.Skill.seasonal-prep.Label>Seasonal prep</RimAgent.Skill.seasonal-prep.Label>
+  <RimAgent.Skill.seasonal-prep.Desc>Coming winter or summer, cold snaps, heat waves, toxic fallout: checks food, heat, fuel and clothing for the season.</RimAgent.Skill.seasonal-prep.Desc>
+  <RimAgent.Skill.work-assignment.Label>Work assignment</RimAgent.Skill.work-assignment.Label>
+  <RimAgent.Skill.work-assignment.Desc>Work priorities or schedules, a new colonist, a job nobody does: assigns jobs by coverage, skill and passion.</RimAgent.Skill.work-assignment.Desc>
 </LanguageData>

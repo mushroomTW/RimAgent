@@ -29,11 +29,12 @@ public partial class Window_Agent
 
         var modelRect = new Rect(reasoningRect.xMax + 6f, rect.y, Mathf.Clamp(rect.xMax - reasoningRect.xMax - 6f, 0f, ModelDropdownWidth), rect.height);
         DrawModelButton(modelRect, enabled, settings);
+        float right = DrawUndoButton(new Rect(modelRect.xMax + 6f, rect.y, rect.xMax - modelRect.xMax - 6f, rect.height), session);
 
         // 視窗窄到模型按鈕吃滿時，用量字樣就不畫。
-        if (RimAgentGameComponent.AutonomousEnabled && rect.xMax - modelRect.xMax > 8f)
+        if (RimAgentGameComponent.AutonomousEnabled && rect.xMax - right > 8f)
         {
-            var usageRect = new Rect(modelRect.xMax + 8f, rect.y, rect.xMax - modelRect.xMax - 8f, rect.height);
+            var usageRect = new Rect(right + 8f, rect.y, rect.xMax - right - 8f, rect.height);
             Text.Anchor = TextAnchor.MiddleRight;
             GUI.color = ToolTextColor;
             Widgets.Label(usageRect, _autoUsageLabel.Get(component.AutonomousToolsUsed, used => "RimAgent.Auto.StatusUnlimited".Translate(used).ToString()));
@@ -41,6 +42,35 @@ public partial class Window_Agent
             Text.Anchor = TextAnchor.UpperLeft;
         }
     }
+
+    /// <summary>
+    /// 復原按鈕：上一句指令改過工作設定時才出現，執行中停用（復原會與進行中的指令搶同一批設定）。
+    /// 回傳按鈕右緣；沒有按鈕時回傳 <paramref name="space"/> 的左緣減去間距，讓後面的元件接著排。
+    /// </summary>
+    private float DrawUndoButton(Rect space, ColonyAgentSession session)
+    {
+        if (!session.Undo.CanUndo) return space.x - 6f;
+        string label = _undoLabel.Get(0, _ =>
+        {
+            string text = "RimAgent.Undo.Button".Translate().ToString();
+            GameFont oldFont = Text.Font;
+            Text.Font = GameFont.Tiny;
+            _undoLabelWidth = Mathf.Ceil(Text.CalcSize(text).x) + 24f;
+            Text.Font = oldFont;
+            return text;
+        });
+        if (space.width < _undoLabelWidth) return space.x - 6f;
+        var undoRect = new Rect(space.x, space.y, _undoLabelWidth, space.height);
+        if (DrawUnifiedButton(undoRect, label, ControlBorderColor, TitleColor, !session.IsBusy, GameFont.Tiny))
+        {
+            session.UndoLast();
+        }
+        if (Mouse.IsOver(undoRect)) TooltipHandler.TipRegion(undoRect, "RimAgent.Undo.Tip".Translate());
+        return undoRect.xMax;
+    }
+
+    private readonly TextCache<int> _undoLabel = new();
+    private float _undoLabelWidth;
 
     private void DrawModeButton(Rect modeRect, bool enabled, RimAgentSettings settings, ColonyAgentSession session)
     {

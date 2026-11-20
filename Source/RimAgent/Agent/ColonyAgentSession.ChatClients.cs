@@ -128,14 +128,20 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>等模型回覆期間把活動標成思考中；主 Agent 與子代理的模型呼叫都經過它。</summary>
+    /// <summary>
+    /// 等模型回覆期間把活動標成思考中，回覆後把思考內容寫進對話；主 Agent 與子代理的模型呼叫都經過它。
+    /// 框架以 MEAI 原生的 <see cref="TextReasoningContent"/> 交還推理內容，顯示與否由呈現層決定。
+    /// </summary>
     private sealed class ThinkingActivityClient : DelegatingChatClient
     {
         private readonly AgentActivityTracker _activity;
+        private readonly AgentTranscript _transcript;
 
-        public ThinkingActivityClient(IChatClient innerClient, AgentActivityTracker activity) : base(innerClient)
+        /// <param name="transcript">思考內容寫入的對話；null 表示不記。</param>
+        public ThinkingActivityClient(IChatClient innerClient, AgentActivityTracker activity, AgentTranscript transcript = null) : base(innerClient)
         {
             _activity = activity;
+            _transcript = transcript;
         }
 
         public override async Task<ChatResponse> GetResponseAsync(
@@ -143,10 +149,31 @@ public sealed partial class ColonyAgentSession
             ChatOptions options = null,
             CancellationToken cancellationToken = default)
         {
+            ChatResponse response;
             using (_activity.Begin(AgentActivityKind.Thinking))
             {
-                return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+                response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             }
+            RecordReasoning(response);
+            return response;
+        }
+
+        private void RecordReasoning(ChatResponse response)
+        {
+            if (_transcript == null || response?.Messages == null) return;
+            string reasoning = string.Join("\n\n", response.Messages
+                .SelectMany(m => m.Contents)
+                .OfType<TextReasoningContent>()
+                .Select(r => r.Text?.Trim())
+                .Where(t => !string.IsNullOrEmpty(t)));
+            if (reasoning.Length == 0) return;
+            _transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Reasoning,
+                Text = reasoning,
+                InstructionId = _transcript.CurrentInstructionId,
+                Agent = _transcript.CurrentAgent
+            });
         }
     }
 }

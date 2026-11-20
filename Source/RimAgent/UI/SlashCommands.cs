@@ -41,12 +41,12 @@ public enum GoalAction
 public static class SlashCommands
 {
     public static readonly SlashCommand Goal = new("goal", true, "RimAgent.Slash.Goal");
-    public static readonly SlashCommand Undo = new("undo", false, "RimAgent.Slash.Undo");
     public static readonly SlashCommand Clear = new("clear", false, "RimAgent.Slash.Clear");
     public static readonly SlashCommand Compact = new("compact", false, "RimAgent.Slash.Compact");
     public static readonly SlashCommand Stop = new("stop", false, "RimAgent.Slash.Stop");
 
-    public static readonly IReadOnlyList<SlashCommand> All = [Goal, Undo, Clear, Compact, Stop];
+    /// <summary>復原不是指令：狀態列在有可復原的操作時顯示按鈕（見 Window_Agent.DrawUndoButton）。</summary>
+    public static readonly IReadOnlyList<SlashCommand> All = [Goal, Clear, Compact, Stop];
 
     /// <summary>還在打指令名稱（以 / 開頭且尚無空白）：此時顯示彈出選單。</summary>
     public static bool IsTypingName(string input)

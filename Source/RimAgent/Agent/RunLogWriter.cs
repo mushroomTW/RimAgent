@@ -66,7 +66,8 @@ public sealed class RunLogRecord
     {
         if (entries == null || _transcriptCaptured) return;
         _transcriptCaptured = true;
-        List<TranscriptEntry> own = [.. entries.Where(e => e.InstructionId == instructionId)];
+        // 思考內容不進紀錄：推理模型每步都有一則，會把有限的步驟名額（工具與失敗原因）擠掉。
+        List<TranscriptEntry> own = [.. entries.Where(e => e.InstructionId == instructionId && e.Kind != TranscriptKind.Reasoning)];
         foreach (TranscriptEntry tool in own.Where(e => e.Kind == TranscriptKind.Tool))
         {
             ToolCalls++;
@@ -154,10 +155,16 @@ public sealed class RunLogWriter
     /// <summary>檔案目前的筆數；-1 代表還沒數過（第一次寫入時讀檔數一次）。</summary>
     private int _lineCount = -1;
 
+    /// <summary>紀錄檔名。</summary>
+    public const string FileName = "RimAgent-runs.jsonl";
+
+    /// <summary>遊戲存檔資料夾下的 RimAgent 資料夾；運行紀錄、benchmark 結果與統計報表都放這裡。</summary>
+    public static string DefaultFolder => Path.Combine(Verse.GenFilePaths.SaveDataFolderPath, "RimAgent");
+
     public RunLogWriter(string folder)
     {
         if (string.IsNullOrWhiteSpace(folder)) throw new ArgumentException("Log folder is required.", nameof(folder));
-        FilePath = Path.Combine(folder, "RimAgent-runs.jsonl");
+        FilePath = Path.Combine(folder, FileName);
     }
 
     public string FilePath { get; }

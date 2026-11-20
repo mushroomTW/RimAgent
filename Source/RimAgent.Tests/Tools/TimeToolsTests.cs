@@ -63,6 +63,40 @@ public class TimeToolsTests
         Assert.That(_world.TicksGame, Is.LessThan(12 * 2500));
     }
 
+    /// <summary>回歸：玩家在長等待中插話，模型要等到整段等完才看得到，看起來像 agent 沒反應。</summary>
+    [Test]
+    public async Task WaitStopsEarlyWhenThePlayerInterjects()
+    {
+        var interjections = new PlayerInterjections();
+        interjections.Open();
+        var tools = new TimeTools(_world, interjections: interjections);
+        _world.EventAtTick = 3000;
+        _world.OnEvent = () => interjections.TryAdd("請使用模塊化房間");
+
+        string text = await tools.WaitForTime(12, CancellationToken.None);
+
+        Assert.That(text, Does.StartWith("Stopped waiting after about").And.Contain("the player sent a message"));
+        Assert.That(_world.TicksGame, Is.LessThan(12 * 2500));
+        // 等待只負責提早回來；話本身留給工具包裝層附在結果後面送出。
+        Assert.That(interjections.HasPending, Is.True);
+    }
+
+    /// <summary>回歸：子代理拿不到插話，它的等待不能因此提早結束，否則每次只等 0.1 小時就被打斷。</summary>
+    [Test]
+    public async Task SubagentWaitIgnoresThePlayersMessage()
+    {
+        var interjections = new PlayerInterjections();
+        interjections.Open();
+        interjections.TryAdd("請使用模塊化房間");
+        var transcript = new AgentTranscript();
+        var tools = new TimeTools(_world, interjections: interjections, transcript: transcript);
+        transcript.SwapCurrentAgent("scout");
+
+        string text = await tools.WaitForTime(2, CancellationToken.None);
+
+        Assert.That(text, Does.StartWith("Waited 2 in-game hour(s)."));
+    }
+
     [Test]
     public async Task WaitStopsEarlyWhenAColonistGoesDown()
     {

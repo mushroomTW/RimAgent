@@ -17,6 +17,24 @@ public static class AgentPromptComposer
     public const string FallbackPreamble =
 @"You are RimAgent. You manage the player's RimWorld colony through tools; the player talks to you in the game's Agent tab.";
 
+    /// <summary>
+    /// 設定頁開啟模組化房型時附加的建造準則。工具說明裡已有同樣的建議，但模型常在規劃階段就決定一件一件放，
+    /// 看到工具說明時已來不及，所以放進系統提示詞。設定只在設定頁改，不破壞前綴快取。
+    /// </summary>
+    public const string LayoutsHint =
+        "Room layouts are enabled: build every room (bedroom, kitchen, workshop, storage, hospital, etc.) with place_blueprint shape=layout first. " +
+        "List the layouts with an empty building and pick the closest fit; place walls, doors and furniture one by one only when the player asks for a specific size or shape, or no layout fits.";
+
+    /// <summary>
+    /// 是否附 <see cref="LayoutsHint"/>：房型開關開著，且玩家沒關掉建造類工具（關掉時模型根本拿不到 place_blueprint）。
+    /// </summary>
+    /// <param name="layoutsOn">設定頁的模組化房型開關。</param>
+    /// <param name="permissions">玩家放行的工具類別；null 視為全部放行。</param>
+    public static bool LayoutsHintApplies(bool layoutsOn, RimAgent.Tools.ToolPermissions permissions)
+    {
+        return layoutsOn && (permissions == null || permissions.Allows(RimAgent.Tools.ToolCategory.Build));
+    }
+
     /// <summary>技能區的總量上限（字數），超過就省略剩下的並註明。</summary>
     public const int MaxSkillsChars = 8000;
 
@@ -24,12 +42,17 @@ public static class AgentPromptComposer
     /// 索引版組裝：只列技能名稱與描述，全文由 `read_skill` 按需讀取。
     /// 易變的記憶索引由呼叫端接在尾端，保住前綴快取。
     /// </summary>
-    public static string ComposeWithSkillIndex(string preamble, string playerNotes, string conduct, IReadOnlyList<AgentSkill> skills, string expansions = null)
+    /// <param name="layouts">設定頁的模組化房型開關；開啟時附上 <see cref="LayoutsHint"/>。</param>
+    public static string ComposeWithSkillIndex(string preamble, string playerNotes, string conduct, IReadOnlyList<AgentSkill> skills, string expansions = null, bool layouts = false)
     {
         var sb = new StringBuilder(preamble ?? string.Empty);
         if (!string.IsNullOrWhiteSpace(expansions))
         {
             sb.Append("\n\n").Append(expansions.Trim());
+        }
+        if (layouts)
+        {
+            sb.Append("\n\n").Append(LayoutsHint);
         }
         if (!string.IsNullOrWhiteSpace(playerNotes))
         {

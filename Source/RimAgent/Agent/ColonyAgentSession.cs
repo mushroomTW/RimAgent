@@ -147,7 +147,7 @@ public sealed partial class ColonyAgentSession
         _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity,
             layoutsEnabled: () => RimAgentMod.Settings?.layouts ?? true);
         // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
-        _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity), _registry, Transcript, subagentsProvider, _permissions,
+        _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity, Transcript), _registry, Transcript, subagentsProvider, _permissions,
             routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);
         _tokenUsage = new TokenTrackingChatClient(innerClient);
         _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
@@ -155,7 +155,7 @@ public sealed partial class ColonyAgentSession
         _tokenUsage.ResponseObserved = RecordModelResponse;
         // 附圖在 FICC 之內：每次模型呼叫前都看得到這一輪最新的工具結果。讀圖要排到主線程。
         _images = new ImageAttachingChatClient(
-            new ThinkingActivityClient(_tokenUsage, Activity),
+            new ThinkingActivityClient(_tokenUsage, Activity, Transcript),
             () => ImageInputEnabled,
             path => LoadScreenshotForModelAsync(world, path));
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。

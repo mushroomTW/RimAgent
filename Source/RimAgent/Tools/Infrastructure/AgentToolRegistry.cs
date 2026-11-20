@@ -109,7 +109,7 @@ public sealed class AgentToolRegistry
         Register(new AnimalTools(world, gate), transcript);
         Register(new ZoneTools(world, gate), transcript);
         Register(new ProductionTools(world, gate), transcript);
-        Register(new TimeTools(world, gate), transcript);
+        Register(new TimeTools(world, gate, interjections, transcript), transcript);
         Register(new SaveTools(world, gate), transcript);
         Register(new McpTools(mcp ?? new Mcp.McpManager(null), gate), transcript);
         Register(new WebSearchTools(useLocalSearch: useLocalSearch, searxngUrl: searxngUrl, gate: gate), transcript);

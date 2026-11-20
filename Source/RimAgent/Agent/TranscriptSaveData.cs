@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using RimAgent.Tools;
 using Verse;
 
@@ -96,7 +97,8 @@ public sealed class TranscriptEntryData : IExposable
     {
         var data = new List<TranscriptEntryData>();
         if (transcript == null) return data;
-        IReadOnlyList<TranscriptEntry> entries = transcript.Snapshot();
+        // 思考內容只在當局顯示，不存檔：每步一則會吃掉存檔的筆數上限，讓較早的對話提早被裁掉。
+        List<TranscriptEntry> entries = [.. transcript.Snapshot().Where(e => e.Kind != TranscriptKind.Reasoning)];
         int start = entries.Count > MaxSavedEntries ? entries.Count - MaxSavedEntries : 0;
         for (int i = start; i < entries.Count; i++)
         {

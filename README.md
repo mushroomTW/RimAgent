@@ -55,7 +55,7 @@ The agent uses tools to inspect the current map and execute authorized actions. 
 - **Autonomous events and goals:** Proactively handle emergencies, manage routine base upkeep, perform scheduled patrols, or queue multi-step persistent tasks via `/goal`.
 - **Subagents and model roles:** Delegate self-contained missions to subagents with isolated tools and contexts (read-only tasks run in parallel); assign dedicated models and reasoning levels to subagents, the Auto-mode classifier, and `/compact` summaries.
 - **Customizable and MCP-extensible:** Edit prompts in `AgentPack/Prompts/`, add custom skills or subagents, or connect local external tools via the official Model Context Protocol (MCP).
-- **Persistent progress:** Full conversation transcripts, model history, scheduler state, persistent goals, colony memories, and `/undo` history persist with your save; global memories are shared across all saves in the mod data directory.
+- **Persistent progress:** Full conversation transcripts, model history, scheduler state, persistent goals, colony memories, and Undo history persist with your save; global memories are shared across all saves in the mod data directory.
 
 ---
 
@@ -83,7 +83,6 @@ Drag the window title bar to move it, or drag the lower-right corner to resize i
 | `/goal remove <n>` | Remove goal `n` from the queue |
 | `/goal clear` | Clear all queued goals and recent completion history |
 | `/goal pause` / `/goal resume` | Pause or resume persistent goal execution |
-| `/undo` | Revert work priorities and daily schedules altered by the previous instruction |
 | `/clear` | Clear the visible conversation transcript in the window |
 | `/compact` | Compact context: trigger an LLM summarization call to fold older model history into a concise briefing (visible log is preserved) |
 | `/stop` | Immediately terminate the currently running instruction and active tool calls |
@@ -168,7 +167,7 @@ All 16 tool categories except Save are enabled by default and can be toggled ind
 | Category | Capabilities & Examples |
 | --- | --- |
 | **Observe** | Comprehensive colony overview, resources, threat assessment, research progress, maps, object lookups, a game encyclopedia for any item, building, floor, research or health condition (modded content included), allowed areas, a whole-map summary (terrain, rooms, zones, ore, water), off-screen top-down map renders with a coordinate grid, real-time screenshots, skill index/body retrieval, pending choices, and quest management (list, accept, dismiss) |
-| **Work** | Individual and batch work priority adjustments, 24-hour daily schedules (fully reversible with `/undo`) |
+| **Work** | Individual and batch work priority adjustments, 24-hour daily schedules (fully reversible with the Undo button in the status strip) |
 | **Build** | Designations (mine, cut, harvest, hunt, deconstruct, haul), blueprint placement (single cell, line, rectangle fill, outline; up to 400 cells), item forbidden toggles, gizmo command triggers (including targeted commands), and right-click context menu actions |
 | **Combat** | Colonist drafting, tactical movement, attack targeting, casualty rescue, enemy capture, emergency medical tending, equipment stripping, weapon/gear equipping, and entering cryptosleep caskets |
 | **Trade** | Orbital and visiting trader interactions, buying and selling transactions, caravan preparation (pack animal assignment, rations, cargo loading, cancellation during packing), and world map operations (inspecting world objects and tiles, dispatching caravans with arrival directives, pause/resume movement, settling new colonies) |
@@ -200,7 +199,7 @@ Memory management utilizes Agent Framework's `FileMemoryProvider` across two sco
 
 #### Subagent Collaboration
 Subagents follow the hermes-agent `delegate_task` paradigm. Subagents are defined in `AgentPack/Agents/<name>/AGENT.md` using YAML frontmatter to declare permitted tool categories, `read_only` status, and optional `reasoning` levels.
-The primary agent can delegate up to four distinct task briefs per invocation. Each brief executes in an isolated context with its own prompt, tool pack, and assigned model, returning only its final summary report to the primary agent's history. Read-only subagents execute concurrently in parallel; state-altering subagents run sequentially. Subagents inherit only tool categories enabled in global mod settings, and all actions remain bound by the current execution mode, confirmation gates, proactive budget limits, `/undo` stacks, and run logs. The default `scout` subagent provides comprehensive read-only reconnaissance across all categories.
+The primary agent can delegate up to four distinct task briefs per invocation. Each brief executes in an isolated context with its own prompt, tool pack, and assigned model, returning only its final summary report to the primary agent's history. Read-only subagents execute concurrently in parallel; state-altering subagents run sequentially. Subagents inherit only tool categories enabled in global mod settings, and all actions remain bound by the current execution mode, confirmation gates, proactive budget limits, undo stacks, and run logs. The default `scout` subagent provides comprehensive read-only reconnaissance across all categories.
 
 ---
 

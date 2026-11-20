@@ -32,12 +32,7 @@ public partial class Window_Agent
             Notice(session, "RimAgent.Slash.Busy".Translate());
             return;
         }
-        if (command == SlashCommands.Undo)
-        {
-            if (session.Undo.CanUndo) session.UndoLast();
-            else Notice(session, "RimAgent.Slash.NothingToUndo".Translate());
-        }
-        else if (command == SlashCommands.Clear)
+        if (command == SlashCommands.Clear)
         {
             session.Clear();
             _scrollToBottom = true;

@@ -27,6 +27,18 @@ public sealed class PlayerInterjections
         }
     }
 
+    /// <summary>是否有還沒送出的插話；長時間的工具（例如等待）據此提早結束，讓模型盡快看到玩家的話。</summary>
+    public bool HasPending
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _pending.Count > 0;
+            }
+        }
+    }
+
     public void Open()
     {
         lock (_lock)
