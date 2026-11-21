@@ -12,7 +12,7 @@ namespace RimAgent.UI;
 public partial class Window_Agent
 {
     /// <summary>各類別是字元估算；供應商有回報總量時按比例縮放，只看分布不看絕對精準度。</summary>
-    private sealed class ContextPanel : Window
+    internal sealed class ContextPanel : Window
     {
         private const float PanelWidth = 340f;
         private const float RowHeight = 22f;
@@ -92,9 +92,8 @@ public partial class Window_Agent
             if (!EnsureSessionAndRefresh()) return;
 
             ColonyAgentSession.ContextStatus status = _session.GetContextStatus();
-            long estimated = _parts.Sum(p => p.Tokens);
-            double scale = status.LastInputTokens is > 0 && estimated > 0 ? (double)status.LastInputTokens.Value / estimated : 1d;
-            long used = status.LastInputTokens ?? estimated;
+            IReadOnlyList<ColonyAgentSession.ContextPart> parts = ColonyAgentSession.ReconcileParts(_parts, status.ProjectedInputTokens);
+            long used = status.ProjectedInputTokens ?? parts.Sum(p => p.Tokens);
             long? window = status.ContextWindow;
 
             DrawRoundedBox(inRect, BgColor, BorderColor, WindowRadius);
@@ -103,9 +102,9 @@ public partial class Window_Agent
 
             y = DrawUsageOverview(y, width, used, window);
 
-            y = DrawUsageBar(y, width, _parts, scale, used, window, status);
+            y = DrawUsageBar(y, width, parts, used, window, status);
 
-            y = DrawPartsDetail(y, width, _parts, scale, used, window);
+            y = DrawPartsDetail(y, width, parts, used, window);
 
             y += 6f;
             Widgets.DrawBoxSolid(new Rect(Pad, y, width, 1f), DividerColor);
@@ -118,9 +117,8 @@ public partial class Window_Agent
             {
                 compact = "RimAgent.ContextPanel.CompactOff".Translate();
             }
-            else if (window is > 0)
+            else if (status.CompactBudget is { } budget)
             {
-                long budget = window.Value * status.Threshold / 100;
                 compact = "RimAgent.ContextPanel.CompactAt".Translate(status.Threshold, FormatTokens(budget), FormatTokens(Math.Max(0, budget - used)));
             }
             else
@@ -179,7 +177,7 @@ public partial class Window_Agent
             return y;
         }
 
-        private static float DrawUsageBar(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, double scale, long used, long? window, ColonyAgentSession.ContextStatus status)
+        private static float DrawUsageBar(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, long used, long? window, ColonyAgentSession.ContextStatus status)
         {
             var bar = new Rect(Pad, y, width, BarHeight);
             DrawRoundedBox(bar, FreeColor, Color.clear, BarHeight / 2f);
@@ -187,36 +185,36 @@ public partial class Window_Agent
             float x = bar.x;
             foreach (ColonyAgentSession.ContextPart part in parts)
             {
-                float w = (float)(bar.width * Math.Min(1d, part.Tokens * scale / total));
+                float w = (float)(bar.width * Math.Min(1d, part.Tokens / total));
                 if (w < 0.5f) continue;
                 w = Mathf.Min(w, bar.xMax - x);
                 Widgets.DrawBoxSolid(new Rect(x, bar.y, w, bar.height), PartColors[part.Key]);
                 x += w + 1f;
                 if (x >= bar.xMax) break;
             }
-            if (window is > 0 && status.AutoCompactEnabled)
+            if (window is > 0 && status.AutoCompactEnabled && status.CompactBudget is { } budget)
             {
-                float mark = bar.x + bar.width * status.Threshold / 100f;
+                float mark = bar.x + bar.width * (float)budget / window.Value;
                 Widgets.DrawBoxSolid(new Rect(mark - 1f, bar.y - 3f, 2f, bar.height + 6f), PauseColor);
             }
             return y + BarHeight + 12f;
         }
 
-        private static float DrawPartsDetail(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, double scale, long used, long? window)
+        private static float DrawPartsDetail(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, long used, long? window)
         {
             Text.Font = GameFont.Small;
             foreach (ColonyAgentSession.ContextPart part in parts)
             {
-                y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), (long)Math.Round(part.Tokens * scale, MidpointRounding.ToEven), window);
+                y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), part.Tokens, window, part.Exact);
             }
             if (window is > 0)
             {
-                y = DrawRow(y, width, FreeColor, "RimAgent.ContextPanel.Free".Translate(), Math.Max(0, window.Value - used), window);
+                y = DrawRow(y, width, FreeColor, "RimAgent.ContextPanel.Free".Translate(), Math.Max(0, window.Value - used), window, exact: true);
             }
             return y;
         }
 
-        private static float DrawRow(float y, float width, Color color, string label, long tokens, long? window)
+        private static float DrawRow(float y, float width, Color color, string label, long tokens, long? window, bool exact)
         {
             var row = new Rect(Pad, y, width, RowHeight);
             var swatch = new Rect(row.x, row.y + 6f, 10f, 10f);
@@ -226,7 +224,7 @@ public partial class Window_Agent
             Widgets.Label(new Rect(row.x + 18f, row.y, row.width - 140f, row.height), label);
             Text.Anchor = TextAnchor.MiddleRight;
             GUI.color = ToolTextColor;
-            Widgets.Label(new Rect(row.xMax - 122f, row.y, 66f, row.height), FormatTokens(tokens));
+            Widgets.Label(new Rect(row.xMax - 122f, row.y, 66f, row.height), (exact ? string.Empty : "~") + FormatTokens(tokens));
             string percent = window is > 0 ? (100.0 * tokens / window.Value).ToString("0.0", CultureInfo.InvariantCulture) + "%" : "—";
             Widgets.Label(new Rect(row.xMax - 56f, row.y, 56f, row.height), percent);
             Text.Anchor = TextAnchor.UpperLeft;

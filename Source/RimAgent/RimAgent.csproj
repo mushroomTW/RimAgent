@@ -131,8 +131,6 @@
       <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.compliance.abstractions\10.10.0\lib\net10.0\Microsoft.Extensions.Compliance.Abstractions.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.vectordata.abstractions\10.10.0\lib\net10.0\Microsoft.Extensions.VectorData.Abstractions.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.extensions.filesystemglobbing\10.0.12\lib\net10.0\Microsoft.Extensions.FileSystemGlobbing.dll" />
-      <BundledAssemblies Include="$(NuGetPackageRoot)microsoft.ml.tokenizers\2.0.0\lib\net8.0\Microsoft.ML.Tokenizers.dll" />
-      <BundledAssemblies Include="$(NuGetPackageRoot)google.protobuf\3.30.2\lib\net5.0\Google.Protobuf.dll" />
       <BundledAssemblies Include="$(NuGetPackageRoot)modelcontextprotocol.core\2.4.0\lib\net10.0\ModelContextProtocol.Core.dll" />
       <!-- SmashTools bundled DLLs -->
       <BundledAssemblies Include="$(SmashToolsDir)SmashTools.dll" />

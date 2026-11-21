@@ -24,14 +24,19 @@ public sealed partial class ColonyAgentSession
         public readonly int? ContextWindow;
         public readonly bool AutoCompactEnabled;
         public readonly long? LastInputTokens;
+        public readonly long? CompactBudget;
+        /// <summary>上次真實用量加上之後新增、還沒送出的內容；與自動壓縮觸發時比的是同一個量。</summary>
+        public readonly long? ProjectedInputTokens;
 
-        public ContextStatus(int messages, int threshold, bool autoCompactEnabled, long? lastInputTokens, int? contextWindow)
+        public ContextStatus(int messages, int threshold, bool autoCompactEnabled, long? lastInputTokens, int? contextWindow, long? pendingTokens = null)
         {
             Messages = messages;
             Threshold = Math.Max(1, threshold);
             AutoCompactEnabled = autoCompactEnabled;
             LastInputTokens = lastInputTokens;
             ContextWindow = contextWindow;
+            CompactBudget = CompactionBudget(contextWindow, Threshold);
+            ProjectedInputTokens = lastInputTokens + (pendingTokens ?? 0);
         }
 
         /// <summary>最近一次供應商回報用量占模型視窗的比例；任一數值未知時無法計算。</summary>
@@ -47,8 +52,18 @@ public sealed partial class ColonyAgentSession
 
     public ContextStatus GetContextStatus()
     {
+        long? pending;
+        try
+        {
+            pending = _tokenUsage.Meter.Inspect(History).Pending;
+        }
+        catch (InvalidOperationException)
+        {
+            // 執行中歷史正被寫入；這一輪只顯示上次真實值。
+            pending = null;
+        }
         return new ContextStatus(History.Count, AutoCompactThreshold, AutoCompactEnabled,
-            _tokenUsage.LastInputTokens, GetContextWindow());
+            _tokenUsage.LastInputTokens, GetContextWindow(), pending);
     }
 
     public readonly struct ContextPart
@@ -56,16 +71,19 @@ public sealed partial class ColonyAgentSession
         public readonly string Key;
         public readonly long Tokens;
         public readonly int Count;
+        /// <summary>數字由供應商回報的用量推回；否則為字元數估算。</summary>
+        public readonly bool Exact;
 
-        public ContextPart(string key, long tokens, int count = 0)
+        public ContextPart(string key, long tokens, int count = 0, bool exact = false)
         {
             Key = key;
             Tokens = tokens;
             Count = count;
+            Exact = exact;
         }
     }
 
-    /// <summary>組法與 <see cref="CreateRunOptions(ReasoningLevel?, string)"/> 相同但不碰進行中的呼叫狀態；估算用字元數換算（CJK 一字約一 token，其餘約四字元一 token），只看比例，與供應商計數會有落差。</summary>
+    /// <summary>組法與 <see cref="CreateRunOptions(ReasoningLevel?, string)"/> 相同但不碰進行中的呼叫狀態。歷史用供應商用量推回的大小；其餘以字元數估算（CJK 一字約一 token，其餘約四字元一 token）。</summary>
     public IReadOnlyList<ContextPart> GetContextBreakdown()
     {
         ToolPermissions permissions = _permissions();
@@ -93,17 +111,17 @@ public sealed partial class ColonyAgentSession
             if (tool is AIFunctionDeclaration function) toolTokens += EstimateTokens(function.JsonSchema.GetRawText());
         }
 
-        long user = 0, assistant = 0, calls = 0, results = 0;
-        int userCount = 0, callCount = 0;
+        HistoryTally user = new(), assistant = new(), calls = new(), results = new();
+        int userCount = 0;
         try
         {
-            CountHistory(ref user, ref assistant, ref calls, ref results, ref userCount, ref callCount);
+            CountHistory(user, assistant, calls, results, ref userCount);
         }
         catch (InvalidOperationException)
         {
             // 執行中歷史或訊息內容正被寫入／折疊；這一輪先不算，面板下一次刷新再補。
-            user = assistant = calls = results = 0;
-            userCount = callCount = 0;
+            user = new(); assistant = new(); calls = new(); results = new();
+            userCount = 0;
         }
 
         return
@@ -113,38 +131,58 @@ public sealed partial class ColonyAgentSession
             new ContextPart("ToolPacks", EstimateTokens(packIndex), selected.Packs.Count),
             new ContextPart("Subagents", EstimateTokens(subagentText), subagents.Count),
             new ContextPart("Memory", EstimateTokens(memory)),
-            new ContextPart("UserMessages", user, userCount),
-            new ContextPart("AssistantMessages", assistant),
-            new ContextPart("ToolCalls", calls, callCount),
-            new ContextPart("ToolResults", results)
+            user.ToPart("UserMessages", userCount),
+            assistant.ToPart("AssistantMessages", 0),
+            calls.ToPart("ToolCalls", calls.Items),
+            results.ToPart("ToolResults", 0)
         ];
     }
 
-    private void CountHistory(ref long user, ref long assistant, ref long calls, ref long results, ref int userCount, ref int callCount)
+    /// <summary>精確的部分照原值；真實總數與精確部分的差額，按比例分給估算的部分。</summary>
+    internal static IReadOnlyList<ContextPart> ReconcileParts(IReadOnlyList<ContextPart> parts, long? realTotal)
     {
+        if (!realTotal.HasValue) return parts;
+        long exact = parts.Where(p => p.Exact).Sum(p => p.Tokens);
+        long estimated = parts.Where(p => !p.Exact).Sum(p => p.Tokens);
+        if (estimated <= 0) return parts;
+        double scale = Math.Max(0, realTotal.Value - exact) / (double)estimated;
+        return [.. parts.Select(p => p.Exact ? p : new ContextPart(p.Key, (long)Math.Round(p.Tokens * scale, MidpointRounding.ToEven), p.Count))];
+    }
+
+    private sealed class HistoryTally
+    {
+        public long Tokens;
+        public int Items;
+        private bool _allMeasured = true;
+
+        public void Add(long? measured, long estimate)
+        {
+            Items++;
+            Tokens += measured ?? estimate;
+            if (!measured.HasValue) _allMeasured = false;
+        }
+
+        public ContextPart ToPart(string key, int count) => new(key, Tokens, count, exact: _allMeasured);
+    }
+
+    private void CountHistory(HistoryTally user, HistoryTally assistant, HistoryTally calls, HistoryTally results, ref int userCount)
+    {
+        ContextMeter meter = _tokenUsage.Meter;
+        HashSet<AIContent> folded = meter.Inspect(History).Folded;
         foreach (ChatMessage message in History)
         {
             foreach (AIContent content in message.Contents)
             {
-                switch (content)
+                if (folded.Contains(content)) continue;
+                HistoryTally target = content switch
                 {
-                    case TextContent text when message.Role == ChatRole.User:
-                        user += EstimateTokens(text.Text);
-                        break;
-                    case TextContent text:
-                        assistant += EstimateTokens(text.Text);
-                        break;
-                    case TextReasoningContent reasoning:
-                        assistant += EstimateTokens(reasoning.Text);
-                        break;
-                    case FunctionCallContent call:
-                        callCount++;
-                        calls += EstimateTokens(call.Name) + (call.Arguments == null ? 0 : call.Arguments.Sum(a => EstimateTokens(a.Key) + EstimateTokens(a.Value?.ToString())));
-                        break;
-                    case FunctionResultContent result:
-                        results += EstimateTokens(result.Result?.ToString());
-                        break;
-                }
+                    TextContent when message.Role == ChatRole.User => user,
+                    TextContent or TextReasoningContent => assistant,
+                    FunctionCallContent => calls,
+                    FunctionResultContent => results,
+                    _ => null
+                };
+                target?.Add(meter.Measured(content), ContextMeter.Estimate(content));
             }
             if (message.Role == ChatRole.User) userCount++;
         }
@@ -157,17 +195,73 @@ public sealed partial class ColonyAgentSession
         return wide + (text.Length - wide + 3) / 4;
     }
 
-    /// <summary>以 AF 估算的歷史 token 數觸發，保留輸出空間；框架查不到模型視窗時不猜上限。</summary>
+    private const double ReserveShare = 0.15;
+    private const long ReserveMin = 16000;
+
+    /// <summary>預留量照 opencode（`packages/core/src/session/compaction.ts` 的 calculateCeiling）：視窗的 15%，且至少 16k；視窗不到 32k 時只留 15%。框架查不到模型視窗時不猜上限。</summary>
+    internal static long? CompactionBudget(int? window, int threshold)
+    {
+        if (!window.HasValue || window.Value <= 0) return null;
+        long size = window.Value;
+        long budget = Math.Min(size * Math.Max(1, threshold) / 100, size - Reserve(size));
+        return budget > 0 ? budget : null;
+    }
+
+    private static long Reserve(long window) => Math.Max((long)Math.Floor(window * ReserveShare), window >= 2 * ReserveMin ? ReserveMin : 0);
+
+    /// <summary>不超過模型的輸出上限（超過會被部分供應商拒絕），也不超過壓縮預留量，輸入與輸出才放得進視窗；輸出上限不明時不放寬預設值。</summary>
+    internal static int OutputBudget(int? window, int? outputLimit)
+    {
+        long cap = outputLimit is > 0 ? outputLimit.Value : DefaultMaxOutputTokens;
+        if (window is > 0) cap = Math.Min(cap, Reserve(window.Value));
+        return (int)Math.Max(1, cap);
+    }
+
+    /// <summary><paramref name="model"/> 為空或哨兵值（跟隨主模型）時查目前的主模型。</summary>
+    internal int MaxOutputFor(string model)
+    {
+        string resolved = string.IsNullOrWhiteSpace(model)
+            || RimAgentSettings.IsModelSentinel(model.Trim())
+            || string.Equals(model, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal)
+            ? ResolveCurrentModel()
+            : model.Trim();
+        if (resolved == null) return DefaultMaxOutputTokens;
+        List<string> chain;
+        try { chain = RimLLMProvider.GetFallbackChain(); }
+        catch (InvalidOperationException) { chain = []; }
+        try
+        {
+            return OutputBudgetFor([resolved, .. chain], _contextWindowLookup, _outputLimitLookup);
+        }
+        catch (InvalidOperationException)
+        {
+            // 框架尚未初始化時，上限暫不可用。
+            return DefaultMaxOutputTokens;
+        }
+    }
+
+    /// <summary>框架失敗時會沿備援鏈換模型重送同一份 options，取所有候選中最小的預算，換到誰都不會超過上限。</summary>
+    internal static int OutputBudgetFor(IEnumerable<string> candidates, Func<string, int?> windowLookup, Func<string, int?> limitLookup)
+    {
+        int? minimum = null;
+        foreach (string model in candidates.Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            int budget = OutputBudget(windowLookup(model), limitLookup(model));
+            if (!minimum.HasValue || budget < minimum.Value) minimum = budget;
+        }
+        return minimum ?? DefaultMaxOutputTokens;
+    }
+
+    /// <summary>有供應商回報的用量時以它為錨點推算這次請求的輸入 token；沒有時退回 AF 估算的訊息量。</summary>
 #pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
     internal bool ShouldAutoCompact(CompactionMessageIndex index)
     {
         if (index == null || !AutoCompactEnabled) return false;
-        int? window = GetContextWindow();
-        if (!window.HasValue) return false;
-        long budget = Math.Min((long)window.Value * Math.Max(1, AutoCompactThreshold) / 100,
-            (long)window.Value - MaxOutputTokens);
+        long? budget = CompactionBudget(GetContextWindow(), AutoCompactThreshold);
+        if (!budget.HasValue) return false;
         // IncludedTokenCount 才是不含排除群組、實際會送進模型的量；TotalTokenCount 會把排除內容也算進去。
-        return budget > 0 && index.IncludedTokenCount >= budget;
+        long measure = _tokenUsage.Meter.Project(index.GetIncludedMessages()) ?? index.IncludedTokenCount;
+        return measure >= budget.Value;
     }
 
     private int? GetContextWindow()

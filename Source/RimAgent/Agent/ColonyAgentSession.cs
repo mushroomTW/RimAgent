@@ -23,7 +23,7 @@ public sealed partial class ColonyAgentSession
     public const string ModId = "greenmushroom.rimagent";
     public const float Temperature = 0.3f;
     // 高推理強度的供應商可能把推理 token 計入輸出上限；保留足夠空間給工具規劃與最終回覆。
-    public const int MaxOutputTokens = 4000;
+    public const int DefaultMaxOutputTokens = 8192;
     private const int StoredHistoryMessageLimit = 60;
     private const int AutoFoldPreservedGroups = 6;
     /// <summary>手動 /compact 保留的最近組數：比自動折疊更積極，壓完只留最近一兩輪。</summary>
@@ -49,6 +49,7 @@ public sealed partial class ColonyAgentSession
     private readonly TokenTrackingChatClient _tokenUsage;
     private readonly Func<string, int?> _contextWindowLookup;
     private readonly Func<string, bool?> _visionLookup;
+    private readonly Func<string, int?> _outputLimitLookup;
     private readonly DecisionReasoningRouter _router;
     private readonly DecisionToolPackSelector _packSelector;
     private readonly IRiskChecker _classifier;
@@ -89,7 +90,7 @@ public sealed partial class ColonyAgentSession
     /// <param name="decisionService">測試用決策模型服務；null 則透過 DecisionServiceFactory 建立。</param>
     /// <param name="router">測試用決策模型分流器；null 則透過 DecisionServiceFactory 建立。</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionReasoningRouter router = null, Func<string, bool?> visionLookup = null)
+    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionReasoningRouter router = null, Func<string, bool?> visionLookup = null, Func<string, int?> outputLimitLookup = null)
     {
         ArgumentNullException.ThrowIfNull(innerClient);
         ArgumentNullException.ThrowIfNull(world);
@@ -120,10 +121,11 @@ public sealed partial class ColonyAgentSession
             layoutsEnabled: () => RimAgentMod.Settings?.layouts ?? true);
         // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
         _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity, Transcript), _registry, Transcript, subagentsProvider, _permissions,
-            routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse);
+            routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse, MaxOutputFor);
         _tokenUsage = new TokenTrackingChatClient(innerClient);
         _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
         _visionLookup = visionLookup ?? RimLLMProvider.SupportsVision;
+        _outputLimitLookup = outputLimitLookup ?? RimLLMProvider.GetMaxOutputTokens;
         _tokenUsage.ResponseObserved = RecordModelResponse;
         // 附圖在 FICC 之內：每次模型呼叫前都看得到這一輪最新的工具結果。讀圖要排到主線程。
         _images = new ImageAttachingChatClient(

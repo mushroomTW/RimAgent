@@ -29,9 +29,8 @@ dependency assemblies in `Assemblies/` remain under their own licenses:
 
   SmashTools, CoreLib ..................................... MIT (Smash Phil)
   Microsoft.Agents.AI, Microsoft.Agents.AI.Abstractions,
-  Microsoft.Extensions.*, Microsoft.ML.Tokenizers ......... MIT (Microsoft)
+  Microsoft.Extensions.* ................................. MIT (Microsoft)
   ModelContextProtocol.Core ............................... Apache-2.0 (MCP Contributors)
-  Google.Protobuf ......................................... BSD-3-Clause (Google LLC)
 
 RimWorld and its assemblies are property of Ludeon Studios and are not
 redistributed by this mod.

@@ -79,8 +79,7 @@
     <Reference Include="TypeSafeAI">
       <HintPath>$(RimLLMDir)TypeSafeAI.dll</HintPath>
       <Private>true</Private>
-    </Reference>
-  </ItemGroup>
+    </Reference>  </ItemGroup>
 
   <ItemGroup>
     <!-- Krafs.Rimworld.Ref 帶入的 compile-only ref 會抑制 Reference 的 CopyLocal，在此明確複製執行期實體 DLL -->

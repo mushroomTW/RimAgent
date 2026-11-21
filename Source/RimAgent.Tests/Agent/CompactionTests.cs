@@ -110,7 +110,7 @@ public class CompactionTests
                .CallTool("set_work_priorities", new { assignments = "Ali:doctor=1" }).Reply("done 4")
                .Reply("hello back");
         ColonyAgentSession session = new(_client, _world, () => _permissions, 8,
-            contextWindowLookup: _ => 4010) { PreferredModel = "Test:model" };
+            contextWindowLookup: _ => 20) { PreferredModel = "Test:model" };
         session.AutoCompactEnabled = enabled;
         await session.SendAsync("set doctor 1");
         await session.SendAsync("set doctor 2");

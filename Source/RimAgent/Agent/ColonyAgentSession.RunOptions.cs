@@ -89,9 +89,12 @@ public sealed partial class ColonyAgentSession
             Tools = tools,
             ToolMode = ChatToolMode.Auto,
             Temperature = Temperature,
-            MaxOutputTokens = MaxOutputTokens
+            MaxOutputTokens = MaxOutputFor(modelToUse)
         };
+        int outputBudget = options.MaxOutputTokens.Value;
         ModelSlots.ApplyReasoning(options, reasoningOverride ?? Reasoning);
+        // 思考下限不能蓋過模型上限或視窗預留量，超過會被拒絕或擠爆視窗。
+        options.MaxOutputTokens = Math.Min(options.MaxOutputTokens.Value, outputBudget);
         if (!string.IsNullOrWhiteSpace(modelToUse)
             && !string.Equals(modelToUse, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal))
         {

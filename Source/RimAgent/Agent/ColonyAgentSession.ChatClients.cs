@@ -36,10 +36,13 @@ public sealed partial class ColonyAgentSession
             }
         }
 
+        public ContextMeter Meter { get; } = new();
+
         public void Reset()
         {
             Interlocked.Exchange(ref _lastInputTokens, -1);
             ResetModel();
+            Meter.Reset();
         }
 
         public override async Task<ChatResponse> GetResponseAsync(
@@ -47,10 +50,14 @@ public sealed partial class ColonyAgentSession
             ChatOptions options = null,
             CancellationToken cancellationToken = default)
         {
-            ChatResponse response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            IList<ChatMessage> sent = messages as IList<ChatMessage> ?? [.. messages];
+            ChatResponse response = await base.GetResponseAsync(sent, options, cancellationToken).ConfigureAwait(false);
             Volatile.Write(ref _lastModel, response?.ModelId);
             long? tokens = response?.Usage?.InputTokenCount;
             Interlocked.Exchange(ref _lastInputTokens, tokens.HasValue && tokens.Value >= 0 ? tokens.Value : -1);
+            // 備援可能換成別的模型回答，以回應的 ModelId 為準；要求的 ModelId 只在回應沒帶時補位。
+            Meter.Observe(sent, tokens, response?.ModelId ?? options?.ModelId);
+            Meter.ObserveOutput(response?.Messages, response?.Usage?.OutputTokenCount, response?.Usage?.ReasoningTokenCount);
             try { ResponseObserved?.Invoke(response); }
             catch { /* 選用紀錄失敗不影響模型回覆。 */ }
             return response;

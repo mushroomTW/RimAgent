@@ -246,8 +246,8 @@
   <RimAgent.ContextPanel.CompactAt>自動壓縮門檻：{0}%（{1}），距離自動壓縮還有 {2} token。</RimAgent.ContextPanel.CompactAt>
   <RimAgent.ContextPanel.CompactOff>自動壓縮已關閉。</RimAgent.ContextPanel.CompactOff>
   <RimAgent.ContextPanel.CompactUnknown>自動壓縮門檻 {0}%；模型上限未知，不會自動壓縮。</RimAgent.ContextPanel.CompactUnknown>
-  <RimAgent.ContextPanel.NoteScaled>各類別依字元估算，再按供應商回報的總量等比例分配；看分布用，與實際計數會有落差。</RimAgent.ContextPanel.NoteScaled>
-  <RimAgent.ContextPanel.NoteEstimated>供應商尚未回報 token；各類別都是依字元估算的近似值。</RimAgent.ContextPanel.NoteEstimated>
+  <RimAgent.ContextPanel.NoteScaled>總量是供應商回報的真實值。不帶 ~ 的類別是由供應商用量推回的精確值；帶 ~ 的依字元估算，再分攤剩餘的真實總量。</RimAgent.ContextPanel.NoteScaled>
+  <RimAgent.ContextPanel.NoteEstimated>供應商尚未回報 token；帶 ~ 的類別是依字元估算的近似值。</RimAgent.ContextPanel.NoteEstimated>
   <RimAgent.ContextPanel.Part.SystemPrompt>系統提示</RimAgent.ContextPanel.Part.SystemPrompt>
   <RimAgent.ContextPanel.Part.Tools>工具定義</RimAgent.ContextPanel.Part.Tools>
   <RimAgent.ContextPanel.Part.ToolPacks>工具包索引</RimAgent.ContextPanel.Part.ToolPacks>

@@ -227,7 +227,7 @@ dotnet build "Source/RimAgent/RimAgent.csproj" -c Release
 Release compilation outputs `Assemblies/RimAgent.dll`, alongside bundled SmashTools and required standalone assemblies not supplied by the base game or framework:
 
 - **Bundled SmashTools Assemblies:** `SmashTools.dll`, `CoreLib.dll`.
-- **Agent Framework & MCP SDK Assemblies:** `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.AI.Evaluation`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `Microsoft.ML.Tokenizers`, `Google.Protobuf`, `ModelContextProtocol.Core`.
+- **Agent Framework & MCP SDK Assemblies:** `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Abstractions`, `Microsoft.Extensions.AI.Evaluation`, `Microsoft.Extensions.Compliance.Abstractions`, `Microsoft.Extensions.VectorData.Abstractions`, `Microsoft.Extensions.FileSystemGlobbing`, `ModelContextProtocol.Core`.
 
 RimWorld 1.7 natively supplies `System.Collections.Immutable`, `Microsoft.Bcl.Memory`, and `Microsoft.Extensions.ObjectPool`; `HashCode` is provided by the .NET 10 runtime. Because RimWorld inspects types via `Assembly.GetTypes()` and `GetFields()` during startup, all base and referenced types resolve cleanly. The project references RimLLM Framework assemblies from `../RimLLM Framework/Assemblies` (override with `/p:RimLLMDir=<path>` if installed elsewhere).
 

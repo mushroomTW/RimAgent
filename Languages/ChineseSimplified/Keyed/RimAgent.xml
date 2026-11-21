@@ -246,8 +246,8 @@
   <RimAgent.ContextPanel.CompactAt>自动压缩门槛：{0}%（{1}），距离自动压缩还有 {2} token。</RimAgent.ContextPanel.CompactAt>
   <RimAgent.ContextPanel.CompactOff>自动压缩已关闭。</RimAgent.ContextPanel.CompactOff>
   <RimAgent.ContextPanel.CompactUnknown>自动压缩门槛 {0}%；模型上限未知，不会自动压缩。</RimAgent.ContextPanel.CompactUnknown>
-  <RimAgent.ContextPanel.NoteScaled>各类别依字符估算，再按供应商回报的总量等比例分配；看分布用，与实际计数会有落差。</RimAgent.ContextPanel.NoteScaled>
-  <RimAgent.ContextPanel.NoteEstimated>供应商尚未回报 token；各类别都是依字符估算的近似值。</RimAgent.ContextPanel.NoteEstimated>
+  <RimAgent.ContextPanel.NoteScaled>总量是供应商回报的真实值。不带 ~ 的类别是由供应商用量推回的精确值；带 ~ 的依字符估算，再分摊剩余的真实总量。</RimAgent.ContextPanel.NoteScaled>
+  <RimAgent.ContextPanel.NoteEstimated>供应商尚未回报 token；带 ~ 的类别是依字符估算的近似值。</RimAgent.ContextPanel.NoteEstimated>
   <RimAgent.ContextPanel.Part.SystemPrompt>系统提示</RimAgent.ContextPanel.Part.SystemPrompt>
   <RimAgent.ContextPanel.Part.Tools>工具定义</RimAgent.ContextPanel.Part.Tools>
   <RimAgent.ContextPanel.Part.ToolPacks>工具包索引</RimAgent.ContextPanel.Part.ToolPacks>

@@ -17,6 +17,7 @@
 | 發送／停止 | 輸入框右側按鈕；處理中變成停止 | `ColonyAgentSessionTests` |
 | 插話 | 處理中直接輸入送出 | `InterjectionTests` |
 | 輸入 token 顯示 | 標題列；游標停留看歷史則數與壓縮門檻 | `ContextBreakdownTests` |
+| 上下文面板（各部分 token、壓縮門檻） | 點標題列的用量條；`~` 為估算 | `ContextMeterTests`；遊戲內 `ContextPanelProof`（截圖、tokenizer 由框架出貨） |
 | 對話流（氣泡、分隔線、工具摘要可展開） | 對話區；點工具摘要展開 | `ToolGroupTests`、`AgentTranscriptTests`；截圖 |
 | Markdown、LaTeX 轉純文字 | 模型回覆 | `ReplyMarkdownTests`、`LatexMathTests` |
 | 框選複製、右鍵複製工具列 | 拖曳選取；工具列按右鍵 | `TranscriptUiTests`（遊戲內）；截圖 |

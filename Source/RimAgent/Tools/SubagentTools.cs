@@ -33,6 +33,7 @@ public sealed class SubagentTools
     private readonly Func<IReadOnlyList<AgentSubagent>> _subagents;
     private readonly Func<ToolPermissions> _permissions;
     private readonly Func<string, string> _model;
+    private readonly Func<string, int> _maxOutputFor;
     private readonly Func<ReasoningLevel> _reasoning;
     private readonly Func<int?> _remainingBudget;
 
@@ -40,7 +41,7 @@ public sealed class SubagentTools
     public SubagentTools(IChatClient client, AgentToolRegistry registry, AgentTranscript transcript,
         Func<IReadOnlyList<AgentSubagent>> subagents, Func<ToolPermissions> permissions,
         Func<string, string> model = null, Func<ReasoningLevel> reasoning = null,
-        Func<int?> remainingBudget = null, Action<ChatResponse> responseObserved = null)
+        Func<int?> remainingBudget = null, Action<ChatResponse> responseObserved = null, Func<string, int> maxOutputFor = null)
 #pragma warning restore S107
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -53,6 +54,7 @@ public sealed class SubagentTools
         _model = model;
         _reasoning = reasoning;
         _remainingBudget = remainingBudget;
+        _maxOutputFor = maxOutputFor;
         _client = responseObserved == null ? client : new ObservingChatClient(client, responseObserved);
         Function = AIFunctionFactory.Create(
             typeof(SubagentTools).GetMethod(nameof(DelegateTask)), this, ToolName, description: null, serializerOptions: null);
@@ -192,9 +194,12 @@ public sealed class SubagentTools
             Tools = scoped,
             ToolMode = ChatToolMode.Auto,
             Temperature = ColonyAgentSession.Temperature,
-            MaxOutputTokens = ColonyAgentSession.MaxOutputTokens
+            MaxOutputTokens = _maxOutputFor?.Invoke(model) ?? ColonyAgentSession.DefaultMaxOutputTokens
         };
+        int outputBudget = options.MaxOutputTokens.Value;
         ModelSlots.Apply(options, model, reasoning);
+        // 思考下限不能蓋過模型上限或視窗預留量，超過會被拒絕或擠爆視窗。
+        options.MaxOutputTokens = Math.Min(options.MaxOutputTokens ?? outputBudget, outputBudget);
         var messages = new List<ChatMessage>
         {
             new(ChatRole.System, BuildPrompt(subagent, Expansions)),

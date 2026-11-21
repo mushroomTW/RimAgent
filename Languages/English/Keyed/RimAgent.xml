@@ -246,8 +246,8 @@
   <RimAgent.ContextPanel.CompactAt>Auto-compact threshold: {0}% ({1}); {2} tokens until auto-compact.</RimAgent.ContextPanel.CompactAt>
   <RimAgent.ContextPanel.CompactOff>Auto-compact is off.</RimAgent.ContextPanel.CompactOff>
   <RimAgent.ContextPanel.CompactUnknown>Auto-compact threshold {0}%; the model limit is unknown, so it will not trigger.</RimAgent.ContextPanel.CompactUnknown>
-  <RimAgent.ContextPanel.NoteScaled>Each category is estimated from character counts, then scaled to the total reported by the provider. Use it for proportions; actual counts differ.</RimAgent.ContextPanel.NoteScaled>
-  <RimAgent.ContextPanel.NoteEstimated>The provider has not reported tokens yet; every category is a character-based estimate.</RimAgent.ContextPanel.NoteEstimated>
+  <RimAgent.ContextPanel.NoteScaled>The total is the real count reported by the provider. Categories without ~ are exact, derived from provider usage; those with ~ are character-based estimates scaled to the remaining real total.</RimAgent.ContextPanel.NoteScaled>
+  <RimAgent.ContextPanel.NoteEstimated>The provider has not reported tokens yet; categories marked ~ are character-based estimates.</RimAgent.ContextPanel.NoteEstimated>
   <RimAgent.ContextPanel.Part.SystemPrompt>System prompt</RimAgent.ContextPanel.Part.SystemPrompt>
   <RimAgent.ContextPanel.Part.Tools>Tool definitions</RimAgent.ContextPanel.Part.Tools>
   <RimAgent.ContextPanel.Part.ToolPacks>Tool pack index</RimAgent.ContextPanel.Part.ToolPacks>

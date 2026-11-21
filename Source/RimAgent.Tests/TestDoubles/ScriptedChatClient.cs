@@ -43,6 +43,19 @@ internal sealed class ScriptedChatClient : IChatClient
         return this;
     }
 
+    /// <summary>替前一步的回應附上供應商回報的輸入 token。</summary>
+    public ScriptedChatClient WithUsage(long inputTokens, long? outputTokens = null)
+    {
+        var step = _script[^1];
+        _script[^1] = (messages, options) =>
+        {
+            ChatResponse response = step(messages, options);
+            response.Usage = new UsageDetails { InputTokenCount = inputTokens, OutputTokenCount = outputTokens };
+            return response;
+        };
+        return this;
+    }
+
     /// <summary>回一則要求呼叫工具的 assistant 訊息。</summary>
     public ScriptedChatClient CallTool(string name, object arguments)
     {

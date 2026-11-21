@@ -227,7 +227,7 @@ dotnet build "Source/RimAgent/RimAgent.csproj" -c Release
 Release 建置會將產物輸出至 `Assemblies/RimAgent.dll`，並一併複製隨附的 SmashTools 與未隨框架打包的第三方必要依賴組件：
 
 - **隨附 SmashTools 組件：** `SmashTools.dll`、`CoreLib.dll`。
-- **Agent Framework 與 MCP SDK 組件：** `Microsoft.Agents.AI`、`Microsoft.Agents.AI.Abstractions`、`Microsoft.Extensions.AI.Evaluation`、`Microsoft.Extensions.Compliance.Abstractions`、`Microsoft.Extensions.VectorData.Abstractions`、`Microsoft.Extensions.FileSystemGlobbing`、`Microsoft.ML.Tokenizers`、`Google.Protobuf`、`ModelContextProtocol.Core`。
+- **Agent Framework 與 MCP SDK 組件：** `Microsoft.Agents.AI`、`Microsoft.Agents.AI.Abstractions`、`Microsoft.Extensions.AI.Evaluation`、`Microsoft.Extensions.Compliance.Abstractions`、`Microsoft.Extensions.VectorData.Abstractions`、`Microsoft.Extensions.FileSystemGlobbing`、`ModelContextProtocol.Core`。
 
 RimWorld 1.7 原生具備 `System.Collections.Immutable`、`Microsoft.Bcl.Memory` 與 `Microsoft.Extensions.ObjectPool`，`HashCode` 則由 .NET 10 執行階段原生提供。RimWorld 在遊戲啟動時會透過 `Assembly.GetTypes()` 與 `GetFields()` 掃描所有組件，因此所有基底型別與欄位依賴均能完美解析。本專案預設透過相對路徑 `../RimLLM Framework/Assemblies` 引用框架組件（非預設目錄時可透過建置參數 `/p:RimLLMDir=<路徑>` 自訂覆寫）。
 
