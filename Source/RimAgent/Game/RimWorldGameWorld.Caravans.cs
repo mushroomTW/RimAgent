@@ -17,7 +17,6 @@ internal sealed partial class RimWorldGameWorld
 {
     private const string CaravanNotFound = "caravan not found";
 
-    // ---- 組商隊：照 Dialog_FormCaravan 的「送出」 ----
 
     /// <summary>原版組隊視窗對背包的算法（非重組模式）。</summary>
     private const IgnorePawnsInventoryMode CaravanInventoryMode = IgnorePawnsInventoryMode.IgnoreIfAssignedToUnload;
@@ -126,9 +125,6 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    /// <summary>嘗試從物品清單撥貨給一條託運項目；會直接調整 transferable 的 CountToTransfer。</summary>
-    /// <param name="cargoLine">撥貨成功時回傳的貨物明細。</param>
-    /// <param name="rejectReason">失敗時回傳的拒絕說明。</param>
     private static bool TryAllocateCargoLine(TradeLine line, List<TransferableOneWay> items, out CaravanPlanCargo cargoLine, out string rejectReason)
     {
         cargoLine = null;
@@ -172,7 +168,6 @@ internal sealed partial class RimWorldGameWorld
         return true;
     }
 
-    /// <summary>為什麼 AllSendablePawns 不列這個 pawn（依那個方法的條件逐項對照）。</summary>
     private static string WhyNotSendable(Pawn pawn)
     {
         if (pawn.Dead) return "it is dead";
@@ -185,10 +180,6 @@ internal sealed partial class RimWorldGameWorld
         return "the game does not offer it for caravans";
     }
 
-    /// <summary>
-    /// 算出視窗顯示的數字，並照 CheckForErrors／TryFormAndSendCaravan／TrySend 收集拒絕原因與警告。
-    /// 出口與集合點的搜尋也在這裡做，讓規劃能事先說出「找不到出口」。
-    /// </summary>
     private static void FillCaravanPlan(CaravanDraft draft, CaravanRequest request, Map map, List<CaravanPlanCargo> cargoLines)
     {
         var blockers = new List<string>();
@@ -242,7 +233,6 @@ internal sealed partial class RimWorldGameWorld
         draft.Plan = plan;
     }
 
-    /// <summary>解析商隊目的地格，並將結果填入 plan.DestinationTile／DestinationLabel；找不到可行目的地則回傳 PlanetTile.Invalid。</summary>
     private static PlanetTile ResolveCaravanDestination(CaravanRequest request, PlanetTile origin, CaravanPlanInfo plan, List<string> blockers)
     {
         PlanetTile destination = PlanetTile.Invalid;
@@ -262,7 +252,6 @@ internal sealed partial class RimWorldGameWorld
         return destination;
     }
 
-    /// <summary>算出食物天數、腐敗天數與預估到達時間；無有效目的地時只算不含路徑的基礎值。</summary>
     private static void CalculateCaravanFoodAndRot(List<TransferableOneWay> transferables, PlanetTile origin, PlanetTile destination, CaravanPlanInfo plan)
     {
         if (destination.Valid)
@@ -454,7 +443,6 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no caravan is being formed with id {formingId}"));
     }
 
-    // ---- 世界地圖：商隊與世界物件 ----
 
     private static Caravan FindPlayerCaravan(int id)
     {
@@ -537,7 +525,6 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    /// <summary>商隊對一格能下的一道命令：標籤與執行動作。</summary>
     private sealed class CaravanOrder
     {
         public string Label = string.Empty;

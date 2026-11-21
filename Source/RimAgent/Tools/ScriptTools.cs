@@ -15,8 +15,7 @@ using RimAgent.Agent;
 namespace RimAgent.Tools;
 
 /// <summary>
-/// run_script：模型一次送出一串工具呼叫，依序執行並合併回報，省下逐一往返的模型呼叫。
-/// 只給主 Agent，由會話建立。每一步都呼叫原本的工具實例，所以權限、模式、確認閘門、分類器、
+/// 每一步都呼叫原本的工具實例，所以權限、模式、確認閘門、分類器、
 /// 額度與行動紀錄都照常套用；本身不經 <see cref="LoggingAIFunction"/>，避免閘門的呼叫狀態巢狀。
 /// </summary>
 internal sealed class ScriptTools
@@ -38,9 +37,6 @@ internal sealed class ScriptTools
     private readonly ToolOutputStore _outputs;
     private readonly PlayerInterjections _interjections;
 
-    /// <param name="availableTools">目前權限下主 Agent 可執行的工具（含未公告的工具包），每次執行時取用。</param>
-    /// <param name="outputs">合併結果過長時存放原文的輸出庫。</param>
-    /// <param name="interjections">玩家插話佇列；某一步帶出了插話就停下，讓模型先讀。</param>
     public ScriptTools(Func<IList<AITool>> availableTools, ToolOutputStore outputs = null, PlayerInterjections interjections = null)
     {
         _availableTools = availableTools ?? throw new ArgumentNullException(nameof(availableTools));
@@ -123,7 +119,6 @@ internal sealed class ScriptTools
         }
     }
 
-    /// <summary>先完整解析並檢查全部步驟，任何一步有誤就一步都不執行。</summary>
     private bool TryParse(string steps, out List<Call> calls, out string error)
     {
         calls = [];

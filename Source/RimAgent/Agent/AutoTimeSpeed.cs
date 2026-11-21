@@ -7,11 +7,7 @@ using System.Threading.Tasks;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 日常自動調整遊戲速度。規則先把關：有敵人、起火或急診就一律降回正常；安全時才問決策模型要開幾倍
-/// （決策模型沒設定或失敗時用「加速」）。玩家自己改了速度就退讓一段時間，玩家暫停時完全不碰。
-/// 時間與狀態都由呼叫端傳入，邏輯本身不碰遊戲，方便單元測試。
-/// </summary>
+/// <summary>日常自動調整遊戲速度：規則先把關（有敵人、起火或急診一律降回正常），安全時才問決策模型；時間與狀態都由呼叫端傳入，邏輯不碰遊戲。</summary>
 public sealed class AutoTimeSpeed
 {
     public const string Paused = "Paused";
@@ -19,13 +15,10 @@ public sealed class AutoTimeSpeed
     public const string Fast = "Fast";
     public const string Superfast = "Superfast";
 
-    /// <summary>低於此信心就不採用決策模型的答案，改用「加速」。</summary>
     public const double MinConfidence = 0.5;
 
-    /// <summary>玩家自己改過速度後，這段時間不再自動調整。</summary>
     public static readonly TimeSpan PlayerBackoff = TimeSpan.FromMinutes(5);
 
-    /// <summary>安全時向決策模型詢問的最短間隔。</summary>
     public static readonly TimeSpan AskInterval = TimeSpan.FromSeconds(60);
 
     private const string QuestionId = "speed";
@@ -50,19 +43,13 @@ public sealed class AutoTimeSpeed
         _serviceFactory = serviceFactory;
     }
 
-    /// <summary>目前想要的速度（安全時）；測試與除錯用。</summary>
     public string Desired => _desired;
 
-    /// <summary>沒有敵人、火災與急診才算安全。</summary>
     public static bool IsSafe(int hostiles, int fires, int emergencies)
     {
         return hostiles <= 0 && fires <= 0 && emergencies <= 0;
     }
 
-    /// <summary>
-    /// 看目前速度與安全狀態，回傳要改成的速度 defName；不用改回傳 null。
-    /// 安全且該問決策模型時，用 <paramref name="stateProvider"/> 取殖民地狀態文字並在背景發問，答案下次呼叫才生效。
-    /// </summary>
     public string Step(string current, bool safe, DateTime now, Func<string> stateProvider)
     {
         if (string.Equals(current, Paused, StringComparison.OrdinalIgnoreCase))
@@ -140,7 +127,6 @@ public sealed class AutoTimeSpeed
         }
     }
 
-    /// <summary>把決策答案轉成速度 defName；答不出來或信心不足都回「加速」。</summary>
     internal static string Parse(DecisionResult result)
     {
         if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || answer == null) return Fast;

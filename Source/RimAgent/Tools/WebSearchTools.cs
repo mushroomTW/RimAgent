@@ -13,7 +13,6 @@ using RimAgent.Mcp;
 
 namespace RimAgent.Tools;
 
-/// <summary>以匿名遠端 MCP 連線搜尋；不需要金鑰或本機搜尋伺服器。</summary>
 public sealed class WebSearchTools
 {
     private const string SearchEndpoint = "https://search.parallel.ai/mcp";

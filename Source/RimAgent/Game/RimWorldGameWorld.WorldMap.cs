@@ -15,9 +15,6 @@ namespace RimAgent.Game;
 
 internal sealed partial class RimWorldGameWorld
 {
-    /// <summary>
-    /// 查詢與距離的起點：指定的商隊，否則當前地圖所在的格子。找不到起點時回傳無效格（呼叫端要檢查 Valid）。
-    /// </summary>
     private static PlanetTile ResolveOrigin(int originCaravanId, out Caravan caravan, out string label)
     {
         caravan = originCaravanId >= 0 ? FindPlayerCaravan(originCaravanId) : null;
@@ -36,7 +33,6 @@ internal sealed partial class RimWorldGameWorld
         return map.Tile;
     }
 
-    /// <summary>工具給的格子編號對到起點同一個星球層的格子（預設地表）。</summary>
     private static PlanetTile ToPlanetTile(int id, PlanetTile origin)
     {
         return origin.Valid ? new PlanetTile(id, origin.Layer) : new PlanetTile(id);
@@ -47,7 +43,6 @@ internal sealed partial class RimWorldGameWorld
         return tile.Valid && Find.WorldGrid.InBounds(tile);
     }
 
-    /// <summary>格子的白話名稱：上面有世界物件就用物件名與編號（排除商隊），否則是格子編號加生態。</summary>
     private static string DescribeWorldTile(PlanetTile tile)
     {
         if (!TileInWorld(tile)) return "no tile";

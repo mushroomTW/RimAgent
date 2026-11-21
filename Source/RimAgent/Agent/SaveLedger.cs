@@ -8,7 +8,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Agent;
 
-/// <summary>一次讀檔重來：讀了哪份存檔、第幾次，以及模型說要改的做法。</summary>
 public sealed class ReloadRecord
 {
     public string ColonyId { get; set; } = string.Empty;
@@ -17,12 +16,7 @@ public sealed class ReloadRecord
     public string Lesson { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// 讀檔重來的紀錄。讀檔會換掉整場遊戲（連同存檔裡的對話與記憶），
-/// 所以放在遊戲行程內的共用實例，跨讀檔存活；重開遊戲就歸零。
-/// 同一份存檔（名稱＋寫入時間：autosave 會輪流覆寫）最多讀 <see cref="MaxLoadsPerSave"/> 次；
-/// 用完之後，同一局不比它新的存檔也鎖住——不再往更早退，接受損失繼續玩。
-/// </summary>
+/// <summary>讀檔會換掉整場遊戲（連同存檔裡的對話與記憶），所以放在遊戲行程內的共用實例，跨讀檔存活；重開遊戲就歸零。同一份存檔（名稱＋寫入時間：autosave 會輪流覆寫）最多讀 <see cref="MaxLoadsPerSave"/> 次；用完之後，同一局不比它新的存檔也鎖住——不再往更早退，接受損失繼續玩。</summary>
 public sealed class SaveLedger
 {
     public const int MaxLoadsPerSave = 3;
@@ -48,7 +42,6 @@ public sealed class SaveLedger
         lock (_gate) return _abandoned.Contains(KeyOf(save));
     }
 
-    /// <summary>擋住這份存檔的、已用完次數的存檔（可能就是它自己）；沒被擋時回傳 null。</summary>
     public SaveSlotInfo ExhaustedBlocker(SaveSlotInfo save, IEnumerable<SaveSlotInfo> colonySaves)
     {
         lock (_gate)
@@ -92,7 +85,6 @@ public sealed class SaveLedger
         }
     }
 
-    /// <summary>這一局在本次遊戲行程裡的全部讀檔重來，由舊到新。</summary>
     public IReadOnlyList<ReloadRecord> HistoryOf(string colonyId)
     {
         lock (_gate) return [.. _history.Where(r => string.Equals(r.ColonyId, colonyId, StringComparison.Ordinal))];

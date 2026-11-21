@@ -21,9 +21,6 @@ public sealed class ScopedMemoryStore : AgentMemoryStore
     private readonly AgentMemoryStore _globalScope;
     private readonly Action _persistGlobal;
 
-    /// <param name="saveScope">局內記憶的儲存；null 則視為空的局內記憶。</param>
-    /// <param name="globalScope">全域記憶的儲存；null 則視為空的全域記憶。</param>
-    /// <param name="persistGlobal">全域記憶改動後的回寫動作；null 則只留在記憶體。</param>
     public ScopedMemoryStore(AgentMemoryStore saveScope, AgentMemoryStore globalScope, Action persistGlobal = null)
         : base((List<AgentMemoryEntry>)null)
     {
@@ -32,13 +29,10 @@ public sealed class ScopedMemoryStore : AgentMemoryStore
         _persistGlobal = persistGlobal;
     }
 
-    /// <summary>局內記憶的儲存（存檔序列化的來源）。</summary>
     public AgentMemoryStore SaveScope => _saveScope;
 
-    /// <summary>全域記憶的儲存。</summary>
     public AgentMemoryStore GlobalScope => _globalScope;
 
-    /// <summary>兩個範圍各自在讀檔時捨棄的檔數。</summary>
     public override int DroppedOnLoad => _saveScope.DroppedOnLoad + _globalScope.DroppedOnLoad;
 
     /// <summary>存檔只留局內記憶；全域記憶另外寫在模組資料夾。</summary>

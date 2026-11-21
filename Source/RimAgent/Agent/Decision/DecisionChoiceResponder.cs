@@ -11,7 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Agent;
 
-/// <summary>System One 對一個抉擇選定的選項。</summary>
 public sealed class ChoiceDecision
 {
     public PendingChoiceInfo Choice { get; init; }
@@ -19,11 +18,7 @@ public sealed class ChoiceDecision
     public double Confidence { get; init; }
 }
 
-/// <summary>
-/// 由 System One 代答抉擇信件與對話框：每個抉擇一道選項題，一次請求平行評估。
-/// 要附輸入（選世界格子、地圖目標）的抉擇它填不了，留給主 LLM；信心不足的也留給主 LLM。
-/// 決策模型沒設定、判準檔缺失或呼叫失敗時回傳空清單，呼叫端照舊交給主 LLM。
-/// </summary>
+/// <summary>每個抉擇一道選項題，一次請求平行評估；要附輸入（選世界格子、地圖目標）的抉擇它填不了、信心不足的也留給主 LLM。決策模型沒設定、判準檔缺失或呼叫失敗時回傳空清單，呼叫端照舊交給主 LLM。</summary>
 public sealed class DecisionChoiceResponder
 {
     /// <summary>低於此信心不代答：多數抉擇是永久的（收人、付贖金、拒絕難民）。</summary>
@@ -44,7 +39,6 @@ public sealed class DecisionChoiceResponder
         _serviceFactory = serviceFactory;
     }
 
-    /// <summary>System One 能不能自己回答這個抉擇：不用額外輸入，且至少有一個能按的選項。</summary>
     public static bool CanAnswer(PendingChoiceInfo choice)
     {
         return choice != null

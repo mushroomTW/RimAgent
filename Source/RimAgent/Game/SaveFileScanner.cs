@@ -15,7 +15,6 @@ namespace RimAgent.Game;
 /// </summary>
 public static class SaveFileScanner
 {
-    /// <summary>RimAgentGameComponent 存殖民地代號用的節點名稱。</summary>
     public const string ColonyIdNode = "rimAgentColonyId";
     private const string TicksNode = "ticksGame";
     private const string TickManagerNode = "tickManager";
@@ -31,12 +30,10 @@ public static class SaveFileScanner
             Tick = tick;
         }
 
-        /// <summary>沒有代號（本功能之前或沒裝 RimAgent 的存檔）時為空字串。</summary>
         public string ColonyId { get; }
         public int Tick { get; }
     }
 
-    /// <summary>讀不了（損毀、寫到一半）時回傳空代號，呼叫端會把它當成別局的存檔略過。</summary>
     public static Scan Read(string path, long writtenUtcTicks)
     {
         lock (Gate)

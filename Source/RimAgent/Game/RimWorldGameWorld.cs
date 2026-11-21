@@ -22,10 +22,8 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     private const string MineDefName = "Mine";
     private const string ColonistNotFound = "colonist not found";
 
-    /// <summary>綁定的遊戲；不為 null 時，換成別的遊戲（讀檔）後一律不可執行工具。</summary>
     private readonly Verse.Game _boundGame;
 
-    /// <summary>遊戲截圖資料夾；截圖時（主線程）記下，供背景執行緒讀截圖檔使用。還沒截過圖時為 null。</summary>
     private volatile string _screenshotFolder;
 
     public RimWorldGameWorld(Verse.Game boundGame = null)

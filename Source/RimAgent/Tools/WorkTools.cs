@@ -11,7 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>工作優先級與時間表。</summary>
 public sealed class WorkTools
 {
     private sealed class WorkPriorityChange
@@ -20,7 +19,6 @@ public sealed class WorkTools
         public DefInfo Work;
         public int Priority;
         public int Previous;
-        /// <summary>回報用的舊值；遊戲沒給這項工作的資料時是 "?"。</summary>
         public string PreviousLabel;
 
         public string Describe()

@@ -7,18 +7,15 @@ using RimAgent.Agent;
 
 namespace RimAgent.UI;
 
-/// <summary>僅接受截圖工具成功回傳、且位於遊戲截圖資料夾的 PNG 路徑。</summary>
 internal static partial class TranscriptScreenshot
 {
 
-    /// <summary>從截圖工具的結果取出存檔路徑（未驗證資料夾）；格式不符回傳 null。</summary>
     public static string TryParseSavedPath(string result)
     {
         Match match = SavedResult.Match(result ?? string.Empty);
         return match.Success ? match.Groups["path"].Value : null;
     }
 
-    /// <summary>從 run_script 的合併結果取出最後一次截圖的存檔路徑（未驗證資料夾）；沒有截圖步驟回傳 null。</summary>
     public static string TryParseScriptSavedPath(string scriptResult)
     {
         MatchCollection matches = ScriptSavedLine.Matches(scriptResult ?? string.Empty);
@@ -31,10 +28,7 @@ internal static partial class TranscriptScreenshot
         return ResolveInFolder(TryParseSavedPath(entry.Result), screenshotFolder);
     }
 
-    /// <summary>
-    /// 路徑位在截圖資料夾（不含子資料夾）且是 PNG 時回傳完整路徑，否則 null。
-    /// 工具結果與模型輸出都不可信，讀檔前一律經此檢查，避免被拿來讀任意檔案。
-    /// </summary>
+    /// <summary>工具結果與模型輸出都不可信，讀檔前一律經此檢查，避免被拿來讀任意檔案。</summary>
     public static string ResolveInFolder(string path, string screenshotFolder)
     {
         if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(screenshotFolder)) return null;

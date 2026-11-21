@@ -11,10 +11,6 @@ using Verse;
 
 namespace RimAgent.Game;
 
-/// <summary>
-/// 讓 agent 掌握全圖的兩個資料來源：離屏俯視截圖（take_screenshot 給範圍時，渲染見 <see cref="MapShotCapture"/>）
-/// 與全圖勘查（get_map_overview）。
-/// </summary>
 internal sealed partial class RimWorldGameWorld
 {
     /// <summary>天然地面算「肥沃土壤」的肥沃度下限（原版肥沃土壤 140%、一般土壤 100%）。</summary>
@@ -53,7 +49,6 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>已預約但可能尚未寫出的截圖路徑；檔案要過幾幀才寫入，只靠 File.Exists 會讓同秒的兩次請求撞名。</summary>
     private static readonly HashSet<string> ReservedScreenshotPaths = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>在遊戲截圖資料夾找一個不重複（磁碟上沒有、也沒被預約）的檔名並記下資料夾（供 <see cref="ReadScreenshotFile"/> 驗證路徑）。</summary>
     private string ReserveScreenshotPath(string filename)
     {
         string baseName = Tools.ObserveTools.ResolveScreenshotName(filename);

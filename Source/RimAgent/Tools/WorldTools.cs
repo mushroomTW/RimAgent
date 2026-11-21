@@ -12,10 +12,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 世界地圖上的商隊：查看商隊與世界物件（定居點、據點、任務地點）、查一格的地形、派商隊前往並選抵達動作、
-/// 暫停與停下、就地建立殖民地或營地。離開地圖組隊仍是 form_caravan；抵達後進入地圖就是對商隊所在的格子下「進入」命令。
-/// </summary>
 public sealed partial class WorldTools
 {
     internal const int DefaultObjectLimit = 20;
@@ -135,14 +131,12 @@ public sealed partial class WorldTools
         return sb.ToString().Trim();
     }
 
-    /// <summary>當沒給 tile id 時，從車隊或當前地圖推導原點格子；找不到時回 -1。</summary>
     private int ResolveOriginTile(Result<CaravanInfo> from)
     {
         if (from.Value != null) return from.Value.Tile;
         return _world.GetMaps().FirstOrDefault(m => m.IsCurrent)?.Tile ?? -1;
     }
 
-    /// <summary>把車隊在該格的可下達指令寫入摘要；沒有車隊或沒有指令則不寫。</summary>
     private void AppendCaravanOrders(StringBuilder sb, Result<CaravanInfo> from, int tileId)
     {
         if (from.Value == null) return;
@@ -281,12 +275,8 @@ public sealed partial class WorldTools
         return result.Message + "." + GizmoTools.OpenDialogs(_world);
     }
 
-    // ---- 解析 ----
 
-    /// <summary>
-    /// 用編號或名稱指定一支商隊。名稱先精確再包含比對；沒給名稱時只有一支就用它。
-    /// <paramref name="required"/> 為 false 時沒有商隊或沒指名（且不只一支）回成功但值為 null（代表從當前地圖量）。
-    /// </summary>
+    /// <summary><paramref name="required"/> 為 false 時，沒有商隊或沒指名（且不只一支）回成功但值為 null，代表從當前地圖量。</summary>
     internal static Result<CaravanInfo> ResolveCaravan(string input, IReadOnlyList<CaravanInfo> caravans, bool required)
     {
         string needle = (input ?? string.Empty).Trim();
@@ -323,10 +313,7 @@ public sealed partial class WorldTools
         return string.Join(", ", caravans.Select(c => "[" + c.Id.ToString(CultureInfo.InvariantCulture) + "] " + c.Name).ToArray());
     }
 
-    /// <summary>
-    /// 目的格：tile 或 worldObjectId 擇一（兩個都給必須指向同一格）；都沒給回成功且值為 -1。
-    /// worldObjectId 可以是世界物件，也可以是自己的商隊。
-    /// </summary>
+    /// <summary>目的格：tile 與 worldObjectId 兩個都給必須指向同一格；都沒給回成功且值為 -1。</summary>
     private Result<int> ResolveTile(int tile, int worldObjectId, IReadOnlyList<CaravanInfo> caravans, int originCaravanId)
     {
         return ResolveTile(_world, tile, worldObjectId, caravans, originCaravanId);
@@ -353,10 +340,7 @@ public sealed partial class WorldTools
         return Result<int>.Ok(objectTile);
     }
 
-    /// <summary>
-    /// 解析命令序號：「2) 標籤」「2: 標籤」「2 標籤」要求序號與標籤對得上現在的清單（選單變了就擋下），
-    /// 單獨的數字照現在的序號；純文字則標籤完全相同，再退而求其次找唯一一個包含這段文字的。
-    /// </summary>
+    /// <summary>解析命令序號；帶標籤的寫法要求序號與標籤對得上現在的清單，選單變了就擋下。</summary>
     internal static Result<FloatMenuOptionInfo> ResolveOption(string input, IReadOnlyList<FloatMenuOptionInfo> options)
     {
         string text = (input ?? string.Empty).Trim();
@@ -420,7 +404,6 @@ public sealed partial class WorldTools
         return !string.IsNullOrEmpty(text) && text.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ---- 格式 ----
 
     private static string DescribeOrigin(WorldSurveyInfo survey)
     {

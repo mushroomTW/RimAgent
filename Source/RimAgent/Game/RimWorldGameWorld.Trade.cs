@@ -176,10 +176,6 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    /// <summary>
-    /// 把一行買入賣出需求按方向分到同 def 的各行（同 def 可能因品質／材料分多行）。
-    /// 全部吃不下回傳原因字串；成功回傳 null。只算數不動遊戲狀態。
-    /// </summary>
     private static string Allocate(Dictionary<Tradeable, int> allocations, TradeDeal deal, TradeLine line, bool buy, string traderLabel)
     {
         List<Tradeable> rows = [.. deal.AllTradeables.Where(r => !r.IsCurrency && r.ThingDef != null && string.Equals(r.ThingDef.defName, line.DefName, StringComparison.OrdinalIgnoreCase))];

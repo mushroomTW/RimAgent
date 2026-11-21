@@ -40,7 +40,6 @@ public sealed class DecisionRouteCategory : IExposable
         Reasoning = reasoning;
     }
 
-    /// <summary>建立內建的四個決策分流類別。</summary>
     public static List<DecisionRouteCategory> CreateDefaultCategories()
     {
         return

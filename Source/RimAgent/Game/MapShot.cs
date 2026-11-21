@@ -4,11 +4,6 @@ using System.Linq;
 
 namespace RimAgent.Game;
 
-/// <summary>
-/// 地圖俯視截圖的版面：每格幾像素、座標格線間距與四周留白。
-/// 圖片長邊不超過 <see cref="MaxEdge"/>，送給模型時就不必再縮圖，格線與數字不會被糊掉。
-/// 不碰 Unity，可單元測試；世界層照它渲染，工具層照它寫說明文字。
-/// </summary>
 public sealed class MapShotLayout
 {
     /// <summary>圖片長邊上限，與送模型前的縮圖上限一致。</summary>
@@ -33,12 +28,10 @@ public sealed class MapShotLayout
         TopMargin = topMargin;
     }
 
-    /// <summary>截圖涵蓋的格子範圍（含頭尾）。</summary>
     public CellRectSpec Rect { get; }
     public int CellsWide => Rect.MaxX - Rect.MinX + 1;
     public int CellsHigh => Rect.MaxZ - Rect.MinZ + 1;
     public int PixelsPerCell { get; }
-    /// <summary>格線畫在座標為此數倍數的格子的西緣與南緣。</summary>
     public int GridStep { get; }
     public int LeftMargin { get; }
     public int RightMargin { get; }
@@ -49,7 +42,6 @@ public sealed class MapShotLayout
     public int ImageWidth => LeftMargin + MapWidthPx + RightMargin;
     public int ImageHeight => BottomMargin + MapHeightPx + TopMargin;
 
-    /// <summary>依範圍算出版面；範圍需已裁進地圖內。</summary>
     public static MapShotLayout For(CellRectSpec rect)
     {
         int left = DigitFont.TextWidth(Math.Max(rect.MaxZ, 0).ToString(CultureInfo.InvariantCulture)) + 2 * DigitFont.Padding;
@@ -81,14 +73,8 @@ public static class MapShotOverlay
     /// <summary>格線與地圖混色的比例（0-255）；太實會蓋住格子內容，太淡在雪地上看不到。</summary>
     private const int LineAlpha = 150;
 
-    /// <summary>格線延伸進留白區的長度（像素），讓數字與線對得起來。</summary>
     private const int TickLength = 3;
 
-    /// <summary>
-    /// 組出最終圖片：深灰底、地圖貼在留白內側、每 <see cref="MapShotLayout.GridStep"/> 格一條黃線、
-    /// 左緣標 z、下緣標 x。地圖像素的 alpha 一律補成不透明。
-    /// </summary>
-    /// <param name="mapPixels">渲染結果，大小須為 MapWidthPx x MapHeightPx。</param>
     public static byte[] Compose(byte[] mapPixels, MapShotLayout layout)
     {
         ArgumentNullException.ThrowIfNull(mapPixels);
@@ -110,9 +96,7 @@ public static class MapShotOverlay
             for (int x = 0; x < mapW; x++) image[dst + x * 4 + 3] = 255;
         }
 
-        // 直線：x 為 step 倍數的格子西緣。
         DrawVerticalGridLines(image, layout);
-        // 橫線：z 為 step 倍數的格子南緣。
         DrawHorizontalGridLines(image, layout);
         return image;
     }
@@ -181,7 +165,6 @@ public static class MapShotOverlay
     }
 }
 
-/// <summary>3x5 點陣數字，放大 <see cref="Scale"/> 倍；不依賴 Unity 字型，直接寫進像素陣列。</summary>
 internal static class DigitFont
 {
     public const int Scale = 2;
@@ -199,7 +182,6 @@ internal static class DigitFont
 
     public static int TextWidth(string text) => text.Length * GlyphWidth + Math.Max(0, text.Length - 1) * Gap;
 
-    /// <summary>以 (x, y) 為左下角畫字；y 往上增加。超出圖片的像素略過。</summary>
     public static void Draw(byte[] image, int width, int height, string text, int x, int y, byte[] color)
     {
         for (int n = 0; n < text.Length; n++)
@@ -230,7 +212,6 @@ internal static class DigitFont
         }
     }
 
-    /// <summary>把一個縮放後的像素寫入圖片；超出圖片範圍的像素略過。</summary>
     private static void DrawPixel(byte[] image, int width, int height, int px, int py, byte[] color)
     {
         if (px < 0 || py < 0 || px >= width || py >= height) return;

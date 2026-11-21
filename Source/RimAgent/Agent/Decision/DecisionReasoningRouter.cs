@@ -21,10 +21,6 @@ public sealed class DecisionRoute
     public bool IsFallback => string.IsNullOrEmpty(CategoryId);
 }
 
-/// <summary>
-/// 思考強度分流器：每一句指令由決策模型進行 choice 分類，
-/// 再用該類別對應的思考強度執行。
-/// </summary>
 public sealed class DecisionReasoningRouter
 {
     public const string QuestionId = "category";
@@ -51,7 +47,6 @@ public sealed class DecisionReasoningRouter
         _historyProvider = historyProvider;
     }
 
-    /// <summary>解析指令該分流至哪個類別與思考強度。</summary>
     #pragma warning disable VSTHRD202 // 保留 async：讀設定與建題目的例外要放進 Task，不在呼叫當下同步拋出。
     public async Task<DecisionRoute> ResolveAsync(
         string request,
@@ -183,10 +178,6 @@ public sealed class DecisionReasoningRouter
         return _service;
     }
 
-    /// <summary>
-    /// 組裝給決策模型的 state：包含當前指令，以及最多前 3 輪對話的精簡片段。
-    /// 使用者訊息取頭 600 字、回答取頭 300 尾 300 字。
-    /// </summary>
     public static string Describe(string request, IEnumerable<ChatMessage> history = null)
     {
         var sb = new StringBuilder();
@@ -195,7 +186,6 @@ public sealed class DecisionReasoningRouter
         return sb.ToString();
     }
 
-    /// <summary>把最近的對話片段寫入 sb：最多取前幾輪的 User/Assistant 訊息，並包在 <recent_history> 標籤內。</summary>
     private static void AppendRecentHistory(StringBuilder sb, IEnumerable<ChatMessage> history)
     {
         if (history == null) return;
@@ -212,7 +202,6 @@ public sealed class DecisionReasoningRouter
         }
     }
 
-    /// <summary>把一條對話訊息的摘要寫入 sb：使用者訊息取頭 600 字、回答取頭 300 尾 300 字。</summary>
     private static void AppendMessage(StringBuilder sb, ChatMessage msg)
     {
         string text = msg.Text?.Trim() ?? string.Empty;

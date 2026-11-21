@@ -131,7 +131,6 @@ internal sealed partial class RimWorldGameWorld
         return text.Length <= ChoiceTextLimit ? text : text[..ChoiceTextLimit] + "…";
     }
 
-    // CA1859：參數用 List<T>、傳回 IEnumerable<T>，避免 IList<T> / IReadOnlyList<T>。
     private static List<ChoiceOptionInfo> ToChoiceOptions(List<DiaOption> options)
     {
         var result = new List<ChoiceOptionInfo>();

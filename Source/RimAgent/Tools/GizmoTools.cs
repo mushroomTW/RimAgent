@@ -11,11 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 物件的指令按鈕（gizmo）：選取建築、物品或 pawn 時畫面下方那排按鈕，
-/// 例如飛船反應爐啟動、飛船發射、開關電源。支援按一下、開關，以及按下後要在地圖上選目標的按鈕
-/// （迫擊砲指定射擊位置、虛空巨石柱與互動物件指名殖民者、使用物品指名使用者）。
-/// </summary>
 public sealed class GizmoTools
 {
     private const string DialogIdPrefix = "dialog-";
@@ -82,9 +77,7 @@ public sealed class GizmoTools
         return summary + OpenDialogs(_world);
     }
 
-    /// <summary>
-    /// 不少按鈕與右鍵選項會先跳確認；附上開著的對話框，模型才知道事情還沒做完。沒有對話框回傳空字串。
-    /// </summary>
+    /// <summary>不少按鈕與右鍵選項會先跳確認；附上開著的對話框，模型才知道事情還沒做完。</summary>
     internal static string OpenDialogs(IGameWorld world)
     {
         List<PendingChoiceInfo> dialogs = [.. world.GetPendingChoices().Where(c => c.Id.StartsWith(DialogIdPrefix, StringComparison.OrdinalIgnoreCase))];
@@ -107,7 +100,6 @@ public sealed class GizmoTools
         return null;
     }
 
-    /// <summary>序號優先；否則標籤完全相同，再退而求其次找唯一一個包含這段文字的。</summary>
     private static GizmoInfo Resolve(IReadOnlyList<GizmoInfo> gizmos, string input)
     {
         string needle = input?.Trim() ?? string.Empty;

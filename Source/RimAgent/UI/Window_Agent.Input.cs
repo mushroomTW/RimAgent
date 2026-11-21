@@ -73,7 +73,6 @@ public partial class Window_Agent
 
     private static GUIStyle _bareTextFieldStyle;
 
-    /// <summary>沿用遊戲輸入框的字型與游標，但拿掉方形底圖，改由外面畫的圓角框當背景。</summary>
     private static GUIStyle GetBareTextFieldStyle()
     {
         if (_bareTextFieldStyle != null) return _bareTextFieldStyle;
@@ -92,10 +91,7 @@ public partial class Window_Agent
         return _bareTextFieldStyle;
     }
 
-    /// <summary>
-    /// Ctrl+V：目前模型可看圖（見 <see cref="ColonyAgentSession.ImageInputEnabled"/>）且剪貼簿只有圖片時，把圖片附到下一句指令。
-    /// 剪貼簿有文字時不攔截，輸入框照常貼上文字。
-    /// </summary>
+    /// <summary>剪貼簿有文字時不攔截，輸入框照常貼上文字。</summary>
     private void HandlePasteImage(ColonyAgentSession session)
     {
         Event e = Event.current;
@@ -128,7 +124,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>取出貼上的圖片並清空縮圖；沒有圖片時回傳空陣列。</summary>
     private List<byte[]> TakePastedImages()
     {
         if (_pastedImages.Count == 0) return [];
@@ -146,7 +141,6 @@ public partial class Window_Agent
         var innerInputRect = inputRect.ContractedBy(4f, 2f);
         if (_pastedImages.Count > 0)
         {
-            // 貼上的圖片縮圖排在輸入框右側，文字區讓出空間。
             float thumbSize = inputRect.height - 6f;
             float thumbsWidth = _pastedImages.Count * (thumbSize + 3f);
             innerInputRect.width -= thumbsWidth;
@@ -170,10 +164,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>
-    /// 輸入框有焦點時 ↑／↓ 瀏覽送出過的輸入，↓ 走到底還原原本的草稿。
-    /// 斜線選單開著時讓給選單；但已經在瀏覽歷史時（叫回的是斜線指令也一樣）繼續瀏覽。
-    /// </summary>
     private bool HandleHistoryKeys()
     {
         if (Event.current.type != EventType.KeyDown || InputHistory.Count == 0) return false;
@@ -258,7 +248,6 @@ public partial class Window_Agent
         return true;
     }
 
-    /// <summary>輸入尾端正在打 $ 時符合的技能名稱。</summary>
     private List<string> SkillMatches()
     {
         IReadOnlyList<AgentSkill> skills = RimAgentGameComponent.Instance?.Skills;
@@ -313,7 +302,6 @@ public partial class Window_Agent
         IReadOnlyList<AgentSkill> skills = RimAgentGameComponent.Instance?.Skills ?? [];
         Text.Anchor = TextAnchor.MiddleLeft;
         Text.WordWrap = false;
-        // 選中項超出可見列數時，視窗跟著捲動。
         int first = Mathf.Clamp(_skillIndex - maxRows + 1, 0, matches.Count - shown);
         for (int i = 0; i < shown; i++)
         {
@@ -340,13 +328,11 @@ public partial class Window_Agent
         Text.Anchor = TextAnchor.UpperLeft;
     }
 
-    /// <summary>技能的顯示名稱：有 RimAgent.Skill.{名稱}.Label 翻譯就用，否則用技能名稱本身。</summary>
     private static string SkillLabel(string name)
     {
         return ("RimAgent.Skill." + name + ".Label").TryTranslate(out TaggedString label) ? label.ToString() : name;
     }
 
-    /// <summary>技能的顯示說明：有 RimAgent.Skill.{名稱}.Desc 翻譯就用，否則用 SKILL.md 的 description。</summary>
     private static string SkillDescription(string name, string fallback)
     {
         return ("RimAgent.Skill." + name + ".Desc").TryTranslate(out TaggedString desc) ? desc.ToString() : fallback ?? string.Empty;

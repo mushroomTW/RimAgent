@@ -17,9 +17,6 @@ namespace RimAgent.Agent;
 
 public sealed partial class ColonyAgentSession
 {
-    /// <summary>
-    /// 送給模型的完整歷史（含工具呼叫與結果），直接讀 AF session 內的存貨，供測試檢查脈絡是否延續。
-    /// </summary>
     public IReadOnlyList<ChatMessage> History
     {
         get
@@ -30,23 +27,12 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 送出一句玩家指令並等待 agent 做完。回傳最後一則 assistant 文字。
-    /// 失敗時把錯誤寫進 transcript 並回傳 null；失敗那一輪的使用者訊息不會進歷史
-    /// （AF 的 ChatHistoryProvider 在例外時略過儲存，等同以往的手動回滾）。
-    /// 執行中沒趕上工具結果的插話（<see cref="Interject"/>）會接著跑完才返回，回傳值仍是這句的回覆。
-    /// </summary>
-    /// <param name="userText">玩家輸入的指令文字。</param>
-    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <summary>送出一句玩家指令並等待 agent 做完；失敗時把錯誤寫進 transcript 並回傳 null。失敗那一輪的使用者訊息不會進歷史（AF 的 ChatHistoryProvider 在例外時略過儲存）。執行中沒趕上工具結果的插話（<see cref="Interject"/>）會接著跑完才返回，回傳值仍是這句的回覆。</summary>
     /// <param name="autonomous">這句是排程器起的自主任務；只影響對話裡的標示，模型看到的內容相同。</param>
     /// <param name="maxToolSteps">本輪額外步數上限；自主排程器用它把單輪呼叫夾在剩餘每日預算內。</param>
-    /// <param name="goalRun">是否為 /goal 長期目標的執行輪次。</param>
-    /// <param name="displayText">自訂顯示於對話介面的文字；null 則顯示 userText。</param>
-    /// <param name="reasoningOverride">覆寫本次呼叫的思考強度；null 則沿用預設。</param>
     /// <param name="onAccepted">玩家訊息寫入對話後的通知；忙碌而拒收時不呼叫。</param>
     /// <param name="autonomousInfo">自主任務的起跑脈絡，只寫進執行紀錄；帶了就視為自主任務。</param>
     /// <param name="images">玩家貼上的圖片（JPEG）；只在這句指令期間附給模型，不寫進對話歷史。</param>
-    /// <returns>模型最後回覆的文字內容；發生錯誤或文字為空白時回傳 null。</returns>
 #pragma warning disable S107 // 公共方法參數多，但皆為選用參數，呼叫端可省略，無需重構
     public async Task<string> SendAsync(
         string userText,
@@ -110,11 +96,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 玩家在執行中送出的話：寫進對話並排入佇列，主 Agent 下一個工具結果會帶給模型；
-    /// 沒趕上的在本輪結束後接著當新指令跑。只在 <see cref="SendAsync"/> 執行期間收，其他時候回傳 false，
-    /// 呼叫端照一般指令送出（或在確認、壓縮等忙碌時提示稍候）。
-    /// </summary>
+    /// <summary>玩家在執行中送出的話：排入佇列，主 Agent 下一個工具結果會帶給模型，沒趕上的在本輪結束後接著當新指令跑。只在 <see cref="SendAsync"/> 執行期間收，其他時候回傳 false，由呼叫端照一般指令送出。</summary>
     public bool Interject(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
@@ -130,11 +112,7 @@ public sealed partial class ColonyAgentSession
         return true;
     }
 
-    /// <summary>
-    /// 本輪最後已不再呼叫工具時，佇列裡的插話接著當新指令跑（同一段忙碌期間，不與排程器或目標搶執行權）。
-    /// 原指令的回覆不變，目標判讀不受影響。按了停止就不再送，丟棄並留一則說明。
-    /// 有命令等玩家確認時也不送：新指令會作廢那些確認，玩家連確認列都還沒看到。
-    /// </summary>
+    /// <summary>佇列裡的插話在同一段忙碌期間接著當新指令跑，不與排程器或目標搶執行權；原指令的回覆不變，目標判讀不受影響。按了停止或有命令等玩家確認時不送（新指令會作廢那些確認），丟棄並留一則說明。</summary>
     private async Task RunLateInterjectionsAsync(CancellationToken cancellationToken)
     {
         while (true)
@@ -178,7 +156,6 @@ public sealed partial class ColonyAgentSession
         public AutonomousRunInfo AutonomousInfo { get; init; }
     }
 
-    /// <summary>執行指令的核心非同步處理流程。</summary>
     private async Task<string> RunInstructionAsync(
         string text,
         InstructionOptions options,
@@ -237,7 +214,6 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>把模型的最終回覆寫進對話紀錄；用完工具步數時另加提示。目標回合同時記下回報的狀態。</summary>
     private string RecordReply(AgentResponse response, int instructionId, bool goalRun, ref string runOutcome)
     {
         string reply = FinalAssistantText(response);
@@ -263,7 +239,6 @@ public sealed partial class ColonyAgentSession
         return reply;
     }
 
-    /// <summary>當 echo 為 true 時，將使用者指令寫入對話記錄。</summary>
     private void AddUserTranscriptEntryIfEcho(
         bool echo,
         string displayText,
@@ -285,7 +260,6 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>處理 ConfirmGate 封鎖的工具呼叫，設定等待中的确認並記入對話記錄。</summary>
     private void HandleBlockedConfirmations(
         string text,
         bool goalRun,
@@ -308,7 +282,6 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>處理指令執行例外：記錄錯誤結果、結束復原框架、寫入錯誤對話記錄。</summary>
     private string HandleInstructionError(
         Exception ex,
         string text,
@@ -424,8 +397,7 @@ public sealed partial class ColonyAgentSession
     public void Clear()
     {
         if (IsBusy) throw new InvalidOperationException("Cannot clear while RimAgent is working.");
-        // 丟棄 AF session（含歷史）；下一次 SendAsync 重建。復原堆疊跟著清掉：
-        // 對話歸零後「上一句」已無所指，留著只會讓人困惑。等待中的確認一併作廢。
+        // 丟棄 AF session（含歷史），下一次 SendAsync 重建；復原堆疊與等待中的確認一併作廢，對話歸零後「上一句」已無所指。
         _session = null;
         _serializedSession = null;
         _saveSnapshot = null;
@@ -443,7 +415,6 @@ public sealed partial class ColonyAgentSession
         Undo.Clear();
     }
 
-    /// <summary>清除句內分類器判定快取。</summary>
     private void ResetInstructionCaches()
     {
         _registry.ClearClassifierCache();

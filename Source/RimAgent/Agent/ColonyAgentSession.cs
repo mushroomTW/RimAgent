@@ -17,13 +17,7 @@ using RimLLM_Framework.Api;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 一場遊戲期間的對話：歷史交給 Agent Framework 的 session，行動紀錄寫進 transcript，
-/// 「送出一句指令」即一次 <see cref="ChatClientAgent.RunAsync(string, AgentSession, ChatClientAgentRunOptions, CancellationToken)"/>。
-/// 多輪工具呼叫仍由框架的主線程包裝（inner）在單次 GetResponseAsync 內跑完；
-/// ChatClientAgent 以 UseProvidedChatClientAsIs 持有 inner，只做歷史拼接與回覆包裝，不另起工具迴圈。
-/// 同一時間只允許一個請求在飛。
-/// </summary>
+/// <summary>一場遊戲期間的對話：歷史交給 Agent Framework 的 session，行動紀錄寫進 transcript，同一時間只允許一個請求在飛；多輪工具呼叫由框架的主線程包裝（inner）在單次 GetResponseAsync 內跑完，ChatClientAgent 以 UseProvidedChatClientAsIs 持有 inner，不另起工具迴圈。</summary>
 public sealed partial class ColonyAgentSession
 {
     public const string ModId = "greenmushroom.rimagent";
@@ -31,7 +25,6 @@ public sealed partial class ColonyAgentSession
     // 高推理強度的供應商可能把推理 token 計入輸出上限；保留足夠空間給工具規劃與最終回覆。
     public const int MaxOutputTokens = 4000;
     private const int StoredHistoryMessageLimit = 60;
-    /// <summary>自動折疊保留的最近組數（免 LLM，只折舊工具輸出）。</summary>
     private const int AutoFoldPreservedGroups = 6;
     /// <summary>手動 /compact 保留的最近組數：比自動折疊更積極，壓完只留最近一兩輪。</summary>
     private const int ManualSummaryPreservedGroups = 4;
@@ -44,7 +37,6 @@ public sealed partial class ColonyAgentSession
     private readonly AIFunction _toolPackLoader;
     /// <summary>run_script：一步依序執行多個工具呼叫；只給主 Agent。</summary>
     private readonly AIFunction _scriptRunner;
-    /// <summary>把玩家貼圖與截圖附到送出的請求上。</summary>
     private readonly ImageAttachingChatClient _images;
     /// <summary>本段對話展開過的工具包；清除對話、讀檔或手動壓縮時重置。工具（主線程）與組請求（背景）都會碰，所以上鎖。</summary>
     private readonly HashSet<string> _loadedPacks = new(StringComparer.Ordinal);
@@ -81,12 +73,9 @@ public sealed partial class ColonyAgentSession
     public Func<bool> RunLoggingEnabled { get; set; }
     public Action<RunLogRecord> RunLogSink { get; set; }
 
-    /// <summary>初始化殖民地 Agent 對話工作階段與各項依賴。</summary>
     /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
-    /// <param name="world">遊戲世界介面（提供地圖、殖民者與遊戲狀態存取）。</param>
     /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
-    /// <param name="maxSteps">單輪工具呼叫的最大步數上限。</param>
-    /// <param name="mode">執行模式；同樣每次送出時讀取。null 視為 <see cref="AgentMode.Autonomous"/>（命令全放行；排程器不在這層）。</param>
+    /// <param name="mode">執行模式；每次送出時讀取，null 時採確認模式。</param>
     /// <param name="instructions">每句送出時組裝的完整系統提示詞；null 則沿用核心提示詞。</param>
     /// <param name="mcp">MCP 管理器；null 則用停用的預設管理器。</param>
     /// <param name="classifierClient">自動模式分類器用的 client；null 則與 innerClient 共用（測試可另給假 client）。</param>
@@ -94,9 +83,6 @@ public sealed partial class ColonyAgentSession
     /// <param name="classifierPrompt">分類器的系統提示詞（AgentPack/Prompts/RiskClassifier.md）；null 則分類器 fail-closed。</param>
     /// <param name="contextWindowLookup">依模型識別碼查詢上下文視窗上限的委派；null 則使用預設值。</param>
     /// <param name="memory">記憶儲存庫；null 則建立新的預設實例。</param>
-    /// <param name="useLocalSearch">是否啟用本機/SearXNG 搜尋的委派。</param>
-    /// <param name="searxngUrl">SearXNG 伺服器網址提供者。</param>
-    /// <param name="skillsProvider">載入之技能清單的提供者。</param>
     /// <param name="subagentsProvider">AgentPack/Agents 載入的子代理；null 或空清單則不提供委派工具。</param>
     /// <param name="routing">分類器、/compact 摘要與子代理的模型槽；null 則全部沿用框架備援鏈與 Auto 思考強度。</param>
     /// <param name="decisionRiskCriteria">自動模式決策模型的判準檔內容（AgentPack/Prompts/DecisionRisk.md）；null 則不啟用決策模型。</param>
@@ -183,13 +169,7 @@ public sealed partial class ColonyAgentSession
     }
 
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
-    /// <summary>
-    /// 只折疊送出請求裡較舊的工具輸出，保留最近的對話、使用者意圖與工具呼叫。
-    /// 掛在工具迴圈內側（ChatClientBuilder 層）：迴圈每一步送出前都會折疊，長指令中途也不會撐爆視窗；
-    /// 掛在 ChatClientAgentOptions 只在指令邊界執行，工具迴圈內不會觸發（見 AF Agent_Step18 說明）。
-    /// 這一層只改送出的內容，不動 session 內存的歷史；存量上限另由 TrimStoredHistory 管。
-    /// 觸發條件讀即時設定（ShouldAutoCompact），設定頁調整下一句生效，不必重建會話。
-    /// </summary>
+    /// <summary>只折疊送出請求裡較舊的工具輸出。掛在工具迴圈內側（ChatClientBuilder 層）才會每一步送出前都折疊；掛在 ChatClientAgentOptions 只在指令邊界執行，工具迴圈內不會觸發（見 AF Agent_Step18 說明）。只改送出的內容，不動 session 內存的歷史；觸發條件讀即時設定，設定頁調整下一句生效。</summary>
     private CompactionProvider CreateCompaction()
     {
         return new CompactionProvider(new ToolResultCompactionStrategy(
@@ -198,10 +178,7 @@ public sealed partial class ColonyAgentSession
     }
 #pragma warning restore MAAI001
 
-    /// <summary>
-    /// 載入工具包的工具。經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話。
-    /// 不碰遊戲世界，不扣自主模式的工具額度。
-    /// </summary>
+    /// <summary>經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話；不碰遊戲世界，不扣自主模式的工具額度。</summary>
     private LoggingAIFunction CreateToolPackLoader(IGameWorld world)
     {
         return new LoggingAIFunction(
@@ -218,11 +195,7 @@ public sealed partial class ColonyAgentSession
             new ScriptTools(() => _registry.Select(_permissions()), _registry.Outputs, _interjections), ScriptTools.ToolName, description: null, serializerOptions: null);
     }
 
-    /// <summary>
-    /// 建構時不綁 tools：每輪經 RunOptions 傳，權限變更下一句生效。
-    /// 提示詞只走 run 層 Instructions（見 ComposeRunInstructions）：AF 1.28 的 ChatClientAgent 會把
-    /// agent 層與 run 層 Instructions 以換行串接而非覆寫，agent 層再放保底前情會讓它每句重複一次。
-    /// </summary>
+    /// <summary>建構時不綁 tools（每輪經 RunOptions 傳，權限變更下一句生效）。提示詞只走 run 層 Instructions：AF 1.28 的 ChatClientAgent 會把 agent 層與 run 層 Instructions 以換行串接而非覆寫，agent 層再放保底前情會讓它每句重複一次。</summary>
     private static ChatClientAgent CreateAgent(IChatClient invokingClient)
     {
         return new ChatClientAgent(invokingClient, new ChatClientAgentOptions
@@ -232,24 +205,18 @@ public sealed partial class ColonyAgentSession
         });
     }
 
-    /// <summary>本次主模型實際回應的模型；尚無回應時為 null。</summary>
     public string CurrentAgentModel => _tokenUsage.LastModel;
 
     public AgentTranscript Transcript { get; }
 
-    /// <summary>Agent 此刻實際在做的事，供視窗的執行中提示；不存檔。</summary>
     public AgentActivityTracker Activity { get; } = new AgentActivityTracker();
 
-    /// <summary>背景照顧是否需要確認重大操作；完整權限模式不受影響。</summary>
     public Func<bool> ConfirmAutonomousMajor { get; set; }
 
-    /// <summary>工作設定復原堆疊（工作優先級與時間表）。UI 的復原鍵經此操作。</summary>
     public WorkUndoStack Undo { get; }
 
-    /// <summary>命令閘門：命令工具經此決定執行或預覽。</summary>
     public ConfirmationGate ConfirmGate { get; }
 
-    /// <summary>目前的執行模式（每次讀取設定）。</summary>
     public AgentMode Mode => ConfirmGate.Mode;
 
     private string _pendingConfirmation;
@@ -257,7 +224,6 @@ public sealed partial class ColonyAgentSession
     private string _confirmedGoalObjective;
     private string _goalConfirmationReport;
 
-    /// <summary>上一句是否有被擋下的命令在等玩家確認（有則 UI 顯示確認鍵）。</summary>
     public bool HasPendingConfirmation => _pendingConfirmation != null;
 
     /// <summary>等待中的確認是否由目標執行器提出，供目標指令避免取消玩家自己的命令。</summary>
@@ -269,7 +235,6 @@ public sealed partial class ColonyAgentSession
         return _confirmedGoalObjective == objective ? _goalConfirmationReport : null;
     }
 
-    /// <summary>取走指定目標上一次確認的實際執行結果，供下一輪模型續跑。</summary>
     public string TakeGoalConfirmationReport(string objective)
     {
         if (PeekGoalConfirmationReport(objective) == null) return null;
@@ -298,13 +263,10 @@ public sealed partial class ColonyAgentSession
     /// <summary>模型思考強度；每句指令組請求時讀取，改完下一句生效。由 GameComponent 從設定同步。</summary>
     public ReasoningLevel Reasoning { get; set; } = ReasoningLevel.Auto;
 
-    /// <summary>思考強度自動分流；開啟時每句指令由決策模型決定思考強度。由 GameComponent 從設定同步。</summary>
     public bool ReasoningRouting { get; set; }
 
-    /// <summary>每句指令先由 System One 預載用得到的工具包。由 GameComponent 從設定同步。</summary>
     public bool PreloadToolPacks { get; set; }
 
-    /// <summary>System One 自己動手做過的事；下一句指令開頭交給主 LLM。</summary>
     public DecisionReports DecisionReports { get; } = new();
 
     /// <summary>用自動模式同一個風險分類器判定一個不經主 LLM 的動作（System One 代答抉擇用）。</summary>

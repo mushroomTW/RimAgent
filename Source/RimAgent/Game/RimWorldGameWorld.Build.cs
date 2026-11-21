@@ -114,7 +114,6 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    /// <summary>最多列出幾個占用者；更多的只報數量。</summary>
     private const int MaxBlockersListed = 4;
 
     /// <summary>

@@ -10,12 +10,10 @@ namespace RimAgent.Agent;
 /// </summary>
 public static class MemoryScopes
 {
-    /// <summary>全域記憶的檔名前綴。</summary>
     public const string GlobalPrefix = "global_";
     /// <summary>系統提示裡的索引筆數上限；兩個範圍都滿時也要全部列得進去。</summary>
     public const int MaxIndexEntries = AgentMemoryStore.MaxFiles * 2;
 
-    /// <summary>這個檔名是否屬全域記憶。</summary>
     public static bool IsGlobal(string name)
     {
         return AgentMemoryStore.NormalizeName(name).StartsWith(GlobalPrefix, StringComparison.OrdinalIgnoreCase);
@@ -41,7 +39,6 @@ public static class MemoryScopes
     }
 }
 
-/// <summary>索引的一筆：記憶檔名與它的描述（沒有描述時為空字串）。</summary>
 public sealed class MemoryFileInfo
 {
     public MemoryFileInfo(string name, string description)
@@ -69,7 +66,6 @@ public static class MemoryIndex
             .Select(file => file.Description.Length > 0
                 ? "- **" + file.Name + "**: " + file.Description
                 : "- **" + file.Name + "**");
-        // 逐行組合，避免在索引末尾附加換行。
         return string.Join('\n', lines);
     }
 }

@@ -10,13 +10,12 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>十二類工具各自的開關，以 <see cref="ToolCategory"/> 順序存成陣列。權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
+/// <summary>權限以「有沒有放進 ChatOptions.Tools」表達，不在執行期再檢查。</summary>
 public sealed class ToolPermissions
 {
     private static readonly int CategoryCount = Enum.GetValues<ToolCategory>().Length;
     private readonly bool[] _flags = new bool[CategoryCount];
 
-    /// <summary>所有工具類別權限皆開啟的執行個體。</summary>
     public static ToolPermissions All
     {
         get
@@ -27,7 +26,6 @@ public sealed class ToolPermissions
         }
     }
 
-    /// <summary>只開啟指定類別的執行個體（取代舊的物件初始器寫法）。</summary>
     public static ToolPermissions For(params ToolCategory[] enabled)
     {
         var permissions = new ToolPermissions();
@@ -47,10 +45,6 @@ public sealed class ToolPermissions
     }
 }
 
-/// <summary>
-/// 以反射收集標了 <see cref="AgentToolAttribute"/> 的方法，透過 AIFunctionFactory 建成 MEAI 工具，
-/// 並包上行動紀錄與閘門通知。建構時建好一次，之後依權限與模式挑選。
-/// </summary>
 public sealed class AgentToolRegistry
 {
     private sealed class Entry
@@ -59,7 +53,6 @@ public sealed class AgentToolRegistry
         public ToolCategory Category;
         public ToolRisk Risk;
         public AITool Tool;
-        /// <summary>所屬的工具包；常駐工具為 null。</summary>
         public string Pack;
     }
 
@@ -128,10 +121,8 @@ public sealed class AgentToolRegistry
     private IReadOnlyList<AITool> _allTools;
     private IReadOnlyList<AgentToolDescriptor> _descriptors;
 
-    /// <summary>全部工具，不分權限（供測試與診斷）。</summary>
     public IReadOnlyList<AITool> All => _allTools ?? (_allTools = [.. _tools.Select(t => t.Tool)]);
 
-    /// <summary>全部工具的名稱、類別與風險，依登錄順序（供測試與診斷）。</summary>
     public IReadOnlyList<AgentToolDescriptor> Descriptors =>
         _descriptors ?? (_descriptors = [.. _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk))]);
 
@@ -141,14 +132,10 @@ public sealed class AgentToolRegistry
         return [.. WithOutputReader(Allowed(permissions)).Select(t => t.Tool)];
     }
 
-    /// <summary>主 Agent 一次請求的工具，依權限一次分好。</summary>
     internal sealed class MainAgentTools
     {
-        /// <summary>放進 ChatOptions.Tools 公告給模型的：常駐工具加上已展開的包。</summary>
         public readonly List<AITool> Advertised = [];
-        /// <summary>每個包可用的工具（含已展開的）；未公告的仍可直接執行。</summary>
         public readonly Dictionary<string, List<AITool>> PackTools = new(StringComparer.Ordinal);
-        /// <summary>至少有一個可用工具的包，依 <see cref="ToolPacks.All"/> 的順序。</summary>
         public IReadOnlyList<ToolPacks.Pack> Packs = [];
     }
 
@@ -191,10 +178,6 @@ public sealed class AgentToolRegistry
         return _tools.Where(t => permissions.Allows(t.Category));
     }
 
-    /// <summary>
-    /// 子代理的工具：玩家權限照 <see cref="Select(ToolPermissions)"/>，
-    /// 再限縮到子代理宣告的類別；唯讀子代理只拿查詢工具。
-    /// </summary>
     /// <summary>子代理專用版本；輸出儲存由 <see cref="SubagentTools"/> 在每次任務的呼叫流程上指定。</summary>
     public IList<AITool> SelectForSubagent(ToolPermissions permissions, IReadOnlyList<ToolCategory> categories, bool readOnly)
     {
@@ -236,20 +219,17 @@ public sealed class AgentToolRegistry
         "choose_option"
     };
 
-    /// <summary>是否為通用按鈕通道；這類工具不能記成「本局不再問」。</summary>
     public static bool IsGenericActionTool(string name)
     {
         return !string.IsNullOrEmpty(name) && GenericActionToolNames.Contains(name);
     }
 
-    /// <summary>新的一句指令開始時清空分類器的句內判定快取（查詢快取由閘門的額度計數一併清空）。</summary>
     internal void ClearClassifierCache()
     {
         if (_classifier is RiskClassifier rc) rc.ClearCache();
         else if (_classifier is DecisionRiskChecker drc) drc.ClearCache();
     }
 
-    /// <summary>工具名稱 → 靜態風險（供測試檢查標記）。</summary>
     public ToolRisk RiskOf(string toolName)
     {
         Entry entry = _tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal)) ?? throw new ArgumentException($"unknown tool {toolName}", nameof(toolName));
@@ -284,7 +264,6 @@ public sealed class AgentToolRegistry
     }
 }
 
-/// <summary>一個工具的靜態描述：名稱、類別、風險。</summary>
 public sealed class AgentToolDescriptor
 {
     public AgentToolDescriptor(string name, ToolCategory category, ToolRisk risk)

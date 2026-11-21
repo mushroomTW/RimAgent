@@ -26,24 +26,14 @@ public enum GoalPauseReason
     Error
 }
 
-/// <summary>
-/// 持有這一場遊戲的 <see cref="ColonyAgentSession"/>。玩家看得到的對話
-/// （指令、回覆、行動紀錄）與序列化後的 AF session 模型上下文皆寫進存檔，讀檔後仍在；
-/// 新局時兩者都清空，避免把上一個殖民地的脈絡帶進來。RimWorld 會自動為每個 GameComponent 子類建立實例。
-///
-/// 自主模式：設定頁選「自主」後，每 500 tick 檢查一次訊號（襲擊、心境、糧食、急診、火災與基地狀況），
-/// 嚴重度變高就起一次自主任務，條件沒解決會退避重試三次。自主任務與玩家指令走同一個 session
-/// （同歷史、同權限、同閘門），差別在指令文字由排程器產生；持續 goal 另由 GameComponentUpdate 續跑。
-/// </summary>
+/// <summary>對話與 AF session 模型上下文皆寫進存檔；新局時清空，避免把上一個殖民地的脈絡帶進來。</summary>
 public partial class RimAgentGameComponent : GameComponent
 {
-    /// <summary>訊號檢查間隔（500 tick ≈ 遊戲內 12 分鐘），避免每幀掃全圖。</summary>
     private const int SignalCheckIntervalTicks = 500;
 
     /// <summary>每輪自主任務的工具呼叫上限：背景執行沒人盯著，模型打轉時靠它止血。</summary>
     private const int AutonomousRunMaxSteps = 20;
 
-    /// <summary>長期目標上限（條數／每條字數），避免無限塞進指令。</summary>
     private const int MaxGoals = 20;
     public const int MaxGoalChars = 4000;
 
@@ -52,15 +42,12 @@ public partial class RimAgentGameComponent : GameComponent
     private List<TranscriptEntryData> _loadedTranscript;
     private List<UndoFrame> _loadedUndoFrames;
     private List<string> _goals = [];
-    /// <summary>局內記憶：跟著這份存檔序列化，新局清空。</summary>
     private AgentMemoryStore _saveMemory = new();
     /// <summary>全域記憶：跨存檔，放在 RimAgent 資料夾；null 代表還沒從磁碟載入。</summary>
     private AgentMemoryStore _globalMemory;
     private List<AgentMemoryEntry> _pendingGlobalMigration = [];
-    /// <summary>agent 實際使用的記憶：兩個範圍的合成視圖。</summary>
     private ScopedMemoryStore _scopedMemory;
     private AgentPack _pack;
-    /// <summary>目前載入的技能；輸入列用 $ 補全技能名稱。擴充包還沒載入時為空。</summary>
     public IReadOnlyList<AgentSkill> Skills => (_pack ??= AgentPackLoader.Load(PackRoot))?.Skills ?? [];
     /// <summary>DLC 啟用狀況；模組清單要重開遊戲才會變，建立會話時在主線程算一次。</summary>
     private string _expansions;
@@ -71,7 +58,6 @@ public partial class RimAgentGameComponent : GameComponent
     private List<AutonomousWatch> _schedulerWatch = [];
     private readonly RimWorldGameWorld _autoWorld = new();
     private string _lastAutoError;
-    /// <summary>自主任務的執行生命週期（同時只跑一輪、讀檔作廢、結束後回寫排程器）。</summary>
     private readonly AutonomousRunner _runner;
     /// <summary>見過的抉擇 id：只在出現新抉擇時起一輪，模型沒處理掉的不會每幾秒重觸發、白燒 API。</summary>
     private readonly HashSet<string> _seenChoices = [];
@@ -117,21 +103,17 @@ public partial class RimAgentGameComponent : GameComponent
         serviceFactory: () => DecisionServiceFactory.Create());
     /// <summary>每種基地狀況上一輪自主任務的回覆與結束 tick；System One 篩選時看它判斷是不是已在處理。不存檔。</summary>
     private readonly Dictionary<AutonomousTrigger, (string Reply, int Tick)> _lastAutoReplies = new();
-    /// <summary>已告知玩家「System One 判定先等」的條件；同一段等待只提示一次，真的跑了再清掉。</summary>
     private readonly HashSet<AutonomousTrigger> _triageNoticed = new();
     private int _goalGeneration;
     private RunLogWriter _runLogWriter;
 
     /// <summary>殖民地代號：寫進每份存檔，讀檔重來靠它認出同一局的 autosave；本功能之前的存檔第一次取用時補上。</summary>
     private string _colonyId;
-    /// <summary>上一次自動檢查點的 tick（跟存檔走）。</summary>
     private int _lastCheckpointTick;
     private const int CheckpointIntervalTicks = 60000;
     /// <summary>上次檢查時還活著的殖民者；不存檔，讀檔後重新點名。</summary>
     private readonly Dictionary<int, Pawn> _trackedColonists = [];
-    /// <summary>死了但還沒交給 agent 處理的殖民者名字。</summary>
     private readonly List<string> _pendingDeaths = [];
-    /// <summary>剛讀檔重來：要交給讀回來的這一局的那次讀檔紀錄。</summary>
     private ReloadRecord _pendingReload;
 
     // RimAgent.Game 命名空間會遮蔽 Verse.Game，這裡要寫全名。
@@ -147,10 +129,8 @@ public partial class RimAgentGameComponent : GameComponent
 
     /// <summary>目前活著的元件；新局／讀檔會建立新的元件，舊的得由這裡找到並收掉。</summary>
     private static RimAgentGameComponent _live;
-    /// <summary>回主選單的補丁只打一次。</summary>
     private static bool _menuPatched;
 
-    /// <summary>遊戲被換掉或回到主選單、舊元件已被收尾時觸發（主線程）；視窗據此取消進行中的玩家指令。</summary>
     public static event Action GameTornDown;
 
     /// <summary>登記新的活元件並收掉舊的；舊元件的 CTS 與 MCP 行程屬於上一局，新元件的同名操作碰不到。</summary>
@@ -179,10 +159,7 @@ public partial class RimAgentGameComponent : GameComponent
         Interlocked.Exchange(ref _live, value: null)?.Teardown();
     }
 
-    /// <summary>
-    /// 這一局結束：取消自主任務與持續目標、讓其收尾失效、關掉 MCP server，並通知視窗。
-    /// 讀檔時新元件在背景執行緒建構（Root_Play 的非同步 LongEvent），所以碰 UI 的部分排回主線程。
-    /// </summary>
+    /// <summary>讀檔時新元件在背景執行緒建構（Root_Play 的非同步 LongEvent），所以碰 UI 的部分排回主線程。</summary>
     private void Teardown()
     {
         PrepareForReload();
@@ -239,7 +216,6 @@ public partial class RimAgentGameComponent : GameComponent
         }
     }
 
-    /// <summary>玩家設的持續目標（跟存檔走），由獨立執行流程依序推進。</summary>
     public IReadOnlyList<string> Goals => _goals;
     public bool GoalPaused => _goalPaused;
     public bool IsGoalRunning => _goalRunning;
@@ -253,7 +229,6 @@ public partial class RimAgentGameComponent : GameComponent
     public string GoalAuditNote => _goalAuditNote;
     public string GoalBlockerKey => _goalBlockerKey;
 
-    /// <summary>出貨的 AgentPack 資料夾；測試或缺 mod 資料時為 null。</summary>
     private static string PackRoot
     {
         get
@@ -273,10 +248,8 @@ public partial class RimAgentGameComponent : GameComponent
         }
     }
 
-    /// <summary>UI 狀態列用：主動照顧是否開啟。</summary>
     public static bool AutonomousEnabled => RimAgentMod.Settings != null && RimAgentMod.Settings.autonomousCare;
 
-    /// <summary>今日自主任務已消耗的工具呼叫次數。</summary>
     public int AutonomousToolsUsed => _scheduler.ToolsUsed;
 
     #pragma warning disable S3776 // RimWorld ExposeData serialization requires sequential save/load branches
@@ -303,12 +276,10 @@ public partial class RimAgentGameComponent : GameComponent
 
         if (Scribe.mode == LoadSaveMode.Saving && _mcp != null)
         {
-            // 存檔時順手關掉閒置的 MCP server，不阻塞。
             _mcp.SweepIdle();
         }
     }
 
-    /// <summary>對話紀錄、復原堆疊與代理會話；存檔時取自目前會話，讀檔時先暫存，等會話建立後再套用。</summary>
     private void ExposeSessionData()
     {
         List<TranscriptEntryData> data = Scribe.mode == LoadSaveMode.Saving && _session != null
@@ -328,7 +299,6 @@ public partial class RimAgentGameComponent : GameComponent
         if (Scribe.mode == LoadSaveMode.LoadingVars) _loadedAgentSession = agentSession;
     }
 
-    /// <summary>局內記憶；讀到舊存檔裡的全域記憶時移回全域記憶檔。</summary>
     private void ExposeMemories()
     {
         List<AgentMemoryEntry> memories = Scribe.mode == LoadSaveMode.Saving
@@ -349,7 +319,6 @@ public partial class RimAgentGameComponent : GameComponent
         }
     }
 
-    /// <summary>目標進度與暫停狀態。</summary>
     private void ExposeGoalState()
     {
         Scribe_Values.Look(ref _goalPaused, "goalPaused", defaultValue: false);
@@ -423,10 +392,7 @@ public partial class RimAgentGameComponent : GameComponent
         _pendingReload = SaveLedger.Shared.TakePending(ColonyId);
     }
 
-    /// <summary>
-    /// load_save 排入讀檔前呼叫：停掉這一局的自主任務與持續目標，讓它們的收尾失效。
-    /// 玩家指令的那一輪由會話的遊戲綁定擋住（見 RimWorldGameWorld.GetNotReadyReason）。
-    /// </summary>
+    /// <summary>玩家指令的那一輪由會話的遊戲綁定擋住（見 RimWorldGameWorld.GetNotReadyReason）。</summary>
     public void PrepareForReload()
     {
         _goalCts?.Cancel();
@@ -435,7 +401,6 @@ public partial class RimAgentGameComponent : GameComponent
         _runner.Invalidate();
     }
 
-    /// <summary>關掉 MCP server 並丟掉擴充包快取（開新局／讀檔時重抓）。</summary>
     private void ResetMcp()
     {
         _mcp?.Shutdown();
@@ -481,7 +446,6 @@ public partial class RimAgentGameComponent : GameComponent
         try
         {
             ColonyAgentSession session = Session;
-            // 玩家還在忙、持續目標正在跑或審計，或有預覽等確認就不搶。
             if (_runner.IsRunning || _goalRunning || session.IsBusy || session.HasPendingConfirmation) return;
             AutonomousConfig config = ToConfig(settings);
             AutonomousSignals signals = GatherSignals();
@@ -503,7 +467,6 @@ public partial class RimAgentGameComponent : GameComponent
         }
     }
 
-    /// <summary>讀檔後第一次開分頁時，把存檔裡的對話倒回 transcript，並把指令編號推過舊紀錄。</summary>
     private void RestoreTranscript(ColonyAgentSession session)
     {
         List<TranscriptEntryData> loaded = _loadedTranscript;
@@ -573,7 +536,6 @@ public partial class RimAgentGameComponent : GameComponent
         return session;
     }
 
-    /// <summary>每句指令的完整提示詞：前情提要→DLC 啟用狀況→玩家自留地→行為準則→技能索引（全文按需讀）。每句現組，AgentPack 變更後下一句生效。</summary>
     private string ComposeInstructions()
     {
         AgentPack pack = _pack;

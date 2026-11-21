@@ -11,7 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>標記（開採／砍伐／收成／拆除／搬運）與藍圖放置。</summary>
 public sealed class BuildTools
 {
     /// <summary>一次最多放的藍圖格數（20x20）；再大就分批，免得一句話鋪滿半張地圖。</summary>
@@ -21,7 +20,6 @@ public sealed class BuildTools
     private readonly ConfirmationGate _gate;
     private readonly Func<bool> _layoutsEnabled;
 
-    /// <param name="layoutsEnabled">設定頁的「模組化房型」開關；null 視為開啟。</param>
     public BuildTools(IGameWorld world, ConfirmationGate gate = null, Func<bool> layoutsEnabled = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
@@ -29,21 +27,14 @@ public sealed class BuildTools
         _layoutsEnabled = layoutsEnabled ?? (() => true);
     }
 
-    /// <summary>
-    /// 房型開關關掉時 <c>place_blueprint</c> 改用的說明：拿掉 layout，免得模型每蓋一間房都先試一次被拒。
-    /// 內容與 <see cref="PlaceBlueprint"/> 的 <see cref="DescriptionAttribute"/> 相同，只少了 layout 那段。
-    /// </summary>
+    /// <summary>房型開關關掉時 <c>place_blueprint</c> 改用的說明（拿掉 layout），免得模型每蓋一間房都先試一次被拒。</summary>
     private const string PlaceBlueprintWithoutLayoutsDescription = "Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors) or outline (its border, e.g. room walls; add a door on the wall afterwards). Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. All or nothing: if any cell is refused, nothing is placed and the reasons are listed; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.";
 
-    /// <summary>註冊工具時取代 <see cref="DescriptionAttribute"/> 的說明；不需取代時回 null。</summary>
-    /// <param name="toolName">工具名稱。</param>
-    /// <returns>取代用的說明，或 null 表示沿用屬性上的說明。</returns>
     internal string DescriptionOverride(string toolName)
     {
         return toolName == "place_blueprint" && !_layoutsEnabled() ? PlaceBlueprintWithoutLayoutsDescription : null;
     }
 
-    /// <summary>模型看到的標記種類 → 要找的物件種類、標記 defName、標記是掛在格子還是物件上。</summary>
     private sealed class DesignationKind
     {
         public string Name;
@@ -128,7 +119,6 @@ public sealed class BuildTools
         else failures.Add($"{t.Label} at {ToolText.Cell(t.X, t.Z)}: {r.Message}");
     }
 
-    /// <summary>搜尋被 Limit 截斷時提醒模型還有物件沒處理；沒有截斷時回傳空字串。</summary>
     private static string OmittedNote(int omitted)
     {
         return omitted > 0 ? string.Create(CultureInfo.InvariantCulture, $" {omitted} more matching object(s) were not included (search limit): repeat the call or narrow the rectangle.") : string.Empty;
@@ -306,7 +296,6 @@ public sealed class BuildTools
     }
 #pragma warning restore S107
 
-    /// <summary>把範圍內的格子記為已占用；有任何一格已被占用時回傳 false。</summary>
     private static bool Claim(HashSet<(int X, int Z)> claimed, CellRectSpec rect)
     {
         for (int x = rect.MinX; x <= rect.MaxX; x++)
@@ -323,13 +312,8 @@ public sealed class BuildTools
         return true;
     }
 
-    /// <summary>失敗原因最多列幾種；同一種東西同一個原因合併計數。</summary>
     private const int MaxLayoutFailuresListed = 6;
 
-    /// <summary>
-    /// 整組放一個房型：先建築後地板，逐件走一般藍圖放置（同樣的放置檢查與失敗原因）。
-    /// 牆（含門）、地板、家具可各自指定材料；不能用的那件退回房型原本的設計。
-    /// </summary>
     private string PlaceLayout(string layout, int x, int z, int rotation, string stuff)
     {
         if (!_layoutsEnabled()) return ToolText.Error("room layouts are turned off in the RimAgent settings; build with the other shapes instead.");
@@ -357,14 +341,12 @@ public sealed class BuildTools
         return ApplyLayout(plan, materials.Value, what);
     }
 
-    /// <summary>房型的矩形是否超出地圖邊界。</summary>
     private static bool LayoutOutOfMap(LayoutPlan plan, MapBounds bounds)
     {
         return TargetResolver.CheckCell(plan.Rect.MinX, plan.Rect.MinZ, bounds) != null
             || TargetResolver.CheckCell(plan.Rect.MaxX, plan.Rect.MaxZ, bounds) != null;
     }
 
-    /// <summary>驗證並放置房型的每件建築，失敗時回傳說明，成功則回放置摘要。</summary>
     private string ApplyLayout(LayoutPlan plan, LayoutMaterials materials, string what)
     {
         var infos = new Dictionary<string, BuildingInfo>(StringComparer.Ordinal);
@@ -442,13 +424,6 @@ public sealed class BuildTools
             layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}") + (l.Description.Length > 0 ? ": " + l.Description : string.Empty))) + ".";
     }
 
-    /// <summary>放一件房型內容；有指定替換時先試替換，被拒再退回房型原本的設計。</summary>
-    /// <param name="piece">要放的一件。</param>
-    /// <param name="replacement">這一類指定的材料 defName（地板則是地板 defName）；空字串表示不替換。</param>
-    /// <param name="info">這件的建造資訊；查不到時為 null。</param>
-    /// <param name="checkOnly">true 時只檢查放不放得下，不放置。</param>
-    /// <param name="usedOwnStuff">指定的替換被拒、改用房型原本的設計放成功時為 true。</param>
-    /// <returns>放置結果；替換與原設計都失敗時回替換的失敗原因。</returns>
     private CommandResult PlaceLayoutPiece(LayoutPiece piece, string replacement, BuildingInfo info, bool checkOnly, out bool usedOwnStuff)
     {
         usedOwnStuff = false;
@@ -467,7 +442,6 @@ public sealed class BuildTools
         return own.Success ? own : r;
     }
 
-    /// <summary>房型三類各自指定的替換；空字串表示該類照房型原本的設計。</summary>
     private sealed class LayoutMaterials
     {
         public string Walls = string.Empty;
@@ -481,7 +455,6 @@ public sealed class BuildTools
             _ => Furniture
         };
 
-        /// <summary>回覆與確認訊息用，只列有指定的類別。</summary>
         public string Describe()
         {
             var parts = new List<string>();
@@ -492,13 +465,6 @@ public sealed class BuildTools
         }
     }
 
-    /// <summary>
-    /// 解析房型的 stuff：單一材料同時套用到牆與家具（地板不變）；
-    /// 或用 <c>walls=…; floor=…; furniture=…</c> 各自指定，省略的類別照房型原本的設計。
-    /// 材料從遊戲全部可用材料、地板從全部可建地板中解析，模組加入的也算。
-    /// </summary>
-    /// <param name="stuff">模型給的 stuff 參數。</param>
-    /// <returns>解析好的三類替換，或第一個解析失敗的錯誤。</returns>
     private Result<LayoutMaterials> ResolveLayoutMaterials(string stuff)
     {
         var result = new LayoutMaterials();
@@ -580,13 +546,9 @@ public sealed class BuildTools
             + (removed.Count > MaxFootprintsListed ? string.Create(CultureInfo.InvariantCulture, $"; +{removed.Count - MaxFootprintsListed} more.") : ".");
     }
 
-    /// <summary>最多逐一列出幾個藍圖的佔格；更多的只報數量。</summary>
     private const int MaxFootprintsListed = 5;
 
-    /// <summary>
-    /// 一個建築放在 (x,z)、朝向 rotation 時佔的矩形；與 GenAdj.OccupiedRect 同一公式（遊戲內測試逐一對照）：
-    /// 朝東西時寬深對調；(x,z) 是中心格，偶數邊長多出的那格落在東／北側，旋轉再依方向挪一格。
-    /// </summary>
+    /// <summary>建築放在 (x,z)、朝向 rotation 時佔的矩形；與 GenAdj.OccupiedRect 同一公式（遊戲內測試逐一對照）。</summary>
     internal static CellRectSpec OccupiedRect(int x, int z, int rotation, BuildingInfo info)
     {
         int w = info.Width, h = info.Height;
@@ -617,7 +579,6 @@ public sealed class BuildTools
         return new CellRectSpec(minX, minZ, minX + w - 1, minZ + h - 1);
     }
 
-    /// <summary>成功訊息裡大於 1x1 的建築的佔格：單一藍圖直接寫範圍，多個則逐一列出中心與範圍。</summary>
     private static string FootprintNote(BuildingInfo info, List<(int X, int Z)> placedCells, int rotation)
     {
         CellRectSpec first = OccupiedRect(placedCells[0].X, placedCells[0].Z, rotation, info);
@@ -629,7 +590,6 @@ public sealed class BuildTools
         return string.Create(CultureInfo.InvariantCulture, $" Each is {size}, rotation {rotation}: {string.Join("; ", listed)}{more}.");
     }
 
-    /// <summary>PlaceWorker 類別 → 模型看得懂的限制；沒收錄的只回類別名。</summary>
     private static readonly Dictionary<string, string> PlaceWorkerRules = new(StringComparer.Ordinal)
     {
         ["PlaceWorker_NotUnderRoof"] = "must not be under a roof",
@@ -639,7 +599,6 @@ public sealed class BuildTools
         ["PlaceWorker_OnSteamGeyser"] = "must sit on a steam geyser"
     };
 
-    /// <summary>預設輸出的數值列上限；整個類別放得下才放，其餘只列類別名稱讓模型用 detail 再查。</summary>
     private const int DefaultStatBudget = 30;
     private const int MaxDescriptionChars = 800;
 
@@ -681,7 +640,6 @@ public sealed class BuildTools
         return sb.ToString().TrimEnd('\r', '\n');
     }
 
-    /// <summary>依 wanted 種類蒐集候選物件，並把每個物件對應的種類記入 kindOf。</summary>
     private List<DefInfo> CollectLookupCandidates(string wanted, Dictionary<DefInfo, string> kindOf)
     {
         var candidates = new List<DefInfo>();
@@ -696,7 +654,6 @@ public sealed class BuildTools
         return candidates;
     }
 
-    /// <summary>把查詢結果的「事實」清單附加到摘要。</summary>
     private static void AppendLookupFacts(System.Text.StringBuilder sb, DefLookupInfo info)
     {
         if (info.Facts.Count > 0)
@@ -706,7 +663,6 @@ public sealed class BuildTools
         }
     }
 
-    /// <summary>該 def 是否可放置為建築（物件，或屬於建築的地形）。</summary>
     private bool IsPlaceableBuildable(string resolvedKind, DefLookupInfo info)
     {
         return string.Equals(resolvedKind, DefLookupKind.Thing, StringComparison.OrdinalIgnoreCase)
@@ -714,10 +670,6 @@ public sealed class BuildTools
                 && _world.Buildables.Any(b => b.DefName == info.DefName));
     }
 
-    /// <summary>
-    /// 依類別分行輸出數值。detail 空白時依序放整個類別直到超過預算（第一個類別一定放）；
-    /// 指定類別（defName 或顯示名稱）只放那一類；all 全放。沒放的類別列在最後。
-    /// </summary>
     private static void AppendStats(System.Text.StringBuilder sb, IReadOnlyList<DefStatEntry> stats, string detail)
     {
         if (stats.Count == 0) return;
@@ -736,7 +688,6 @@ public sealed class BuildTools
         AppendHiddenGroups(sb, groups, shown);
     }
 
-    /// <summary>依 detail 參數挑選要顯示的統計群組；detail 為空白時依預算依序放入。</summary>
     private static List<IGrouping<string, DefStatEntry>> SelectShownGroups(List<IGrouping<string, DefStatEntry>> groups, string detail, System.Text.StringBuilder sb)
     {
         bool all = string.Equals(detail, "all", StringComparison.OrdinalIgnoreCase);
@@ -865,7 +816,6 @@ public sealed class BuildTools
         }
     }
 
-    /// <summary>形狀展開成格子；line 照模型給的起點走向終點，fill／outline 由下往上逐列。</summary>
     private static Result<List<(int X, int Z)>> ShapeCells(string shape, int x, int z, int x2, int z2)
     {
         string kind = shape?.Trim().ToLowerInvariant() ?? string.Empty;
@@ -964,7 +914,6 @@ public sealed class BuildTools
         return Kinds.FirstOrDefault(k => string.Equals(k.Name, needle, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>依「選取」或「矩形＋過濾」收集候選物件。</summary>
     private Result<List<ThingInfo>> CollectTargets(ThingKind thingKind, bool useSelection, (int x1, int z1, int x2, int z2) coords, string filter, out int omitted)
     {
         omitted = 0;

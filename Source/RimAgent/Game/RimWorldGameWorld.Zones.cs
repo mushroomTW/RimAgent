@@ -30,7 +30,6 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    /// <summary>連同範圍：要掃過整個區域的格子，只給列區域的地方用（逐格查詢用 <see cref="ToZone"/>）。</summary>
     private static ZoneInfo ToZoneWithExtents(Zone zone)
     {
         ZoneInfo info = ToZone(zone);
@@ -107,9 +106,6 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    /// <summary>
-    /// 收集矩形內可畫區域的格子；不合格的格子跳過並依原因計數，與原版拖曳只套用合格格子的行為一致。
-    /// </summary>
     private static List<IntVec3> CollectZoneCells(Map map, CellRectSpec rect, Designator_ZoneAdd designator, bool growing, out Dictionary<string, int> skipped)
     {
         var cells = new List<IntVec3>();
@@ -146,7 +142,6 @@ internal sealed partial class RimWorldGameWorld
         return cells;
     }
 
-    /// <summary>以四方向相鄰把格子分成連通的群組。</summary>
     private static List<List<IntVec3>> SplitContiguous(List<IntVec3> cells)
     {
         var remaining = new HashSet<IntVec3>(cells);

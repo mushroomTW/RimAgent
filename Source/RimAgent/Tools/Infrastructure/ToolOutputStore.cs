@@ -8,13 +8,11 @@ using System.Threading;
 namespace RimAgent.Tools;
 
 /// <summary>
-/// 被截斷的工具結果原文，以代號（out_1、out_2…）保存到對話結束，供 read_tool_output 取回省略的部分。
 /// 只留最近幾份；不進存檔，讀檔或清除對話後舊代號失效，模型會被告知重跑原工具。
 /// 子代理與主 Agent 的工具可能先後寫入，所以上鎖。
 /// </summary>
 internal sealed class ToolOutputStore
 {
-    /// <summary>保留的份數；更舊的先丟，代號不重用。</summary>
     public const int Capacity = 20;
 
     /// <summary>
@@ -32,13 +30,8 @@ internal sealed class ToolOutputStore
     private int _next;
     private long _totalChars;
 
-    /// <summary>目前呼叫流程專用的輸出儲存；null 代表使用工具原本的（主 Agent）儲存。</summary>
     public static ToolOutputStore Current => Scoped.Value;
 
-    /// <summary>
-    /// 在這段非同步流程內把工具輸出改寫到指定儲存；離開時還原外層的值。
-    /// 並行子代理各自持有不同執行個體，因此互不覆蓋。
-    /// </summary>
     public static IDisposable EnterScope(ToolOutputStore store)
     {
         ArgumentNullException.ThrowIfNull(store);

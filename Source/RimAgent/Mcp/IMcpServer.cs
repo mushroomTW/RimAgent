@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 
 namespace RimAgent.Mcp;
 
-/// <summary>一個 MCP server 提供的工具摘要（SDK 型別的精簡版，方便測試替身）。</summary>
 public sealed class McpServerTool
 {
     public McpServerTool(string name, string description)
@@ -18,9 +17,6 @@ public sealed class McpServerTool
     public string Description { get; }
 }
 
-/// <summary>
-/// 已連線的 MCP server。實作分兩種：SdkMcpServer（官方 SDK＋stdio 行程）與測試替身。
-/// </summary>
 public interface IMcpServer : IDisposable
 {
     string Name { get; }

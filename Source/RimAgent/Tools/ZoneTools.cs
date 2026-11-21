@@ -11,7 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>區域：查詢、新增儲藏／種植區、刪除、儲藏篩選。</summary>
 public sealed class ZoneTools
 {
     private readonly IGameWorld _world;
@@ -151,7 +150,6 @@ public sealed class ZoneTools
         return Result<List<DefInfo>>.Ok(defs);
     }
 
-    /// <summary>區域解析：id 精確命中；label 精確或唯一包含，撞名即報錯。</summary>
     internal static Result<ZoneInfo> ResolveZone(string input, IReadOnlyList<ZoneInfo> zones)
     {
         return TargetResolver.ResolveEntity(

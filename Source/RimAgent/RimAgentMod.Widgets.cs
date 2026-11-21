@@ -16,7 +16,6 @@ namespace RimAgent;
 
 public partial class RimAgentMod
 {
-    /// <summary>區段標題：金色圓號、標題，下方一行白話說明。</summary>
     private static void DrawSectionHeader(Listing_Standard listing, int number, string title, string hint)
     {
         listing.Gap(18f);
@@ -37,7 +36,6 @@ public partial class RimAgentMod
         listing.Gap(4f);
     }
 
-    /// <summary>小字說明，依寬度自動換行。</summary>
     private static void DrawHint(Listing_Standard listing, string text, float indent, Color color)
     {
         Text.Font = GameFont.Tiny;
@@ -70,7 +68,6 @@ public partial class RimAgentMod
         if (Widgets.ButtonInvisible(seg)) Settings.autonomousCooldownMinutes = minutes;
     }
 
-    /// <summary>大開關卡片：整張可點，開啟時綠框。</summary>
     private static void DrawToggleCard(Listing_Standard listing, ref bool value, string title, string desc, string tip)
     {
         Rect card = listing.GetRect(58f);
@@ -96,14 +93,6 @@ public partial class RimAgentMod
         if (Widgets.ButtonInvisible(card)) value = !value;
     }
 
-    /// <summary>一列勾選：名稱下面直接一行小字說明，整列可點；完整說明在提示。</summary>
-    /// <param name="listing">介面繪製清單控制項。</param>
-    /// <param name="value">勾選狀態布林變數參考。</param>
-    /// <param name="label">選項名稱標籤。</param>
-    /// <param name="desc">選項下方簡短說明文字。</param>
-    /// <param name="tip">工具提示文字。</param>
-    /// <param name="indent">左側縮排距離。</param>
-    /// <param name="disabled">true 時勾選框與文字變灰、點了不會切換。</param>
     private static void DrawToggleRow(Listing_Standard listing, ref bool value, string label, string desc, string tip, float indent, bool disabled = false)
     {
         float textX = indent + 34f;
@@ -130,7 +119,6 @@ public partial class RimAgentMod
         listing.Gap(4f);
     }
 
-    /// <summary>展開／收合按鈕；按下回傳 true，由呼叫端切換狀態。</summary>
     private static bool DrawExpandButton(Listing_Standard listing, bool expanded, string showLabel, string hideLabel, string tip)
     {
         Rect row = listing.GetRect(30f);

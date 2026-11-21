@@ -16,9 +16,6 @@ using RimLLM_Framework.Api;
 namespace RimAgent.Tools;
 
 /// <summary>
-/// 子代理委派（參照 hermes-agent 的 delegate_task）：主 Agent 把自足的任務交給 AgentPack/Agents 裡的子代理，
-/// 每個任務以全新上下文、子代理自己的工具類別與模型槽跑完，只有最後的報告回到主 Agent 的歷史。
-///
 /// 子代理的工具就是主 Agent 用的同一批 <see cref="LoggingAIFunction"/>：權限、模式、閘門、分類器、
 /// 自主額度、復原堆疊與行動紀錄都照走，委派不是後門。子代理拿不到 delegate_task（只委派一層）。
 /// 唯讀子代理的多個任務並行（各自的模型呼叫同時跑，遊戲存取仍由框架排到主線程），其餘依序。
@@ -28,7 +25,6 @@ public sealed class SubagentTools
     public const string ToolName = "delegate_task";
     /// <summary>單一任務的工具迴圈上限：子代理是做一件事，不是接管整句指令。</summary>
     public const int MaxSteps = 15;
-    /// <summary>單次委派的任務數上限。</summary>
     public const int MaxTasks = 4;
 
     private readonly IChatClient _client;
@@ -40,16 +36,6 @@ public sealed class SubagentTools
     private readonly Func<ReasoningLevel> _reasoning;
     private readonly Func<int?> _remainingBudget;
 
-    /// <summary>初始化子代理工具集與執行環境。</summary>
-    /// <param name="client">框架交出的原始 client（不經主 Agent 的 token 計量）；每個任務另包一層主線程工具迴圈。</param>
-    /// <param name="registry">Agent 工具註冊表。</param>
-    /// <param name="transcript">對話與活動紀錄。</param>
-    /// <param name="subagents">可用的子代理清單提供者。</param>
-    /// <param name="permissions">工具權限提供者。</param>
-    /// <param name="model">子代理名稱 → 已解析的模型識別碼；null 或空白走框架備援鏈。</param>
-    /// <param name="reasoning">子代理預設思考強度；AGENT.md 有寫 reasoning 時以它為準。</param>
-    /// <param name="remainingBudget">本輪剩餘的工具額度（null 表示不限制）；子代理的迴圈夾在額度內。</param>
-    /// <param name="responseObserved">子代理每次模型回應的觀察者（執行紀錄）；並行任務會從不同執行緒呼叫。</param>
 #pragma warning disable S107 // Subagent execution context requires dependencies injected for agent dispatching
     public SubagentTools(IChatClient client, AgentToolRegistry registry, AgentTranscript transcript,
         Func<IReadOnlyList<AgentSubagent>> subagents, Func<ToolPermissions> permissions,
@@ -72,13 +58,10 @@ public sealed class SubagentTools
             typeof(SubagentTools).GetMethod(nameof(DelegateTask)), this, ToolName, description: null, serializerOptions: null);
     }
 
-    /// <summary>本局 DLC 啟用狀況的一行說明，接在子代理提示詞裡；null 或空白就不加。</summary>
     public string Expansions { get; set; }
 
-    /// <summary>交給主 Agent 的工具。</summary>
     public AIFunction Function { get; }
 
-    /// <summary>目前載入的子代理；沒有就不必把委派工具交給模型。</summary>
     public IReadOnlyList<AgentSubagent> Subagents => _subagents() ?? [];
 
     /// <summary>在目前權限下至少拿得到一個工具的子代理；拿不到工具的不必列給模型，免得白白委派一次。</summary>
@@ -87,7 +70,6 @@ public sealed class SubagentTools
         return [.. Subagents.Where(s => s != null && _registry.SelectForSubagent(permissions, s.Categories, s.ReadOnly).Count > 0)];
     }
 
-    /// <summary>主 Agent 系統提示詞裡的子代理索引；沒有子代理時回空字串。</summary>
     public static string Instructions(IReadOnlyList<AgentSubagent> subagents)
     {
         if (subagents == null || subagents.Count == 0) return string.Empty;
@@ -163,7 +145,6 @@ public sealed class SubagentTools
         return result;
     }
 
-    /// <summary>委派還沒開始就失敗：把錯誤寫進紀錄並回給模型。</summary>
     private string RecordFailure(TranscriptEntry entry, string error)
     {
         entry.Result = error;
@@ -172,7 +153,6 @@ public sealed class SubagentTools
         return error;
     }
 
-    /// <summary>唯讀子代理的多個任務並行執行，其他子代理依序執行。</summary>
     private async Task<string[]> RunAllAsync(
         AgentSubagent subagent, IList<AITool> tools, List<string> briefs, string model, ReasoningLevel reasoning,
         int steps, CancellationToken cancellationToken)
@@ -268,7 +248,6 @@ public sealed class SubagentTools
         return sb.ToString();
     }
 
-    /// <summary>把子代理每次模型回應交給觀察者（執行紀錄）；觀察失敗不影響子代理。</summary>
     private sealed class ObservingChatClient : DelegatingChatClient
     {
         private readonly Action<ChatResponse> _observed;

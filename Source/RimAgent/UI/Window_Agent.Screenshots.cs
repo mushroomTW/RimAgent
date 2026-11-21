@@ -34,7 +34,6 @@ public partial class Window_Agent
         GUI.color = Color.white;
     }
 
-    /// <summary>繪製時只查快取；還沒載入的記下來，交給 <see cref="LoadPendingScreenshot"/> 在 WindowUpdate 載入。</summary>
     private Texture2D GetScreenshotTexture(string path)
     {
         if (_screenshotTextures.TryGetValue(path, out Texture2D cached))
@@ -64,10 +63,7 @@ public partial class Window_Agent
     }
 
     /// <summary>
-    /// 每幀最多載入一張截圖（在 WindowUpdate，不在 OnGUI 裡解碼）：先在背景讀檔，讀完才在主線程解碼，
-    /// 再用 GPU 逐次減半縮到 <see cref="MaxScreenshotWidth"/>（一次大倍率縮會嚴重鋸齒），
-    /// 只留縮圖且丟掉 CPU 端副本，原圖立即釋放。
-    /// 檔案還不在或讀不了就隔 <see cref="ScreenshotRetryMs"/> 再試，不每幀打磁碟。
+    /// 每幀最多載入一張；GPU 逐次減半縮圖（一次大倍率縮會嚴重鋸齒）。
     /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
     /// </summary>
     private void LoadPendingScreenshot()

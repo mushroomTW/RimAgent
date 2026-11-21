@@ -8,11 +8,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 把玩家或模型給的名稱對到 Def。依序嘗試：精確 defName → 精確 label → 前綴 → 包含
-/// （雙向：輸入包含 label，或 label / defName 包含輸入）→ 忽略分隔符的包含。同一層命中多於一個即視為歧義；
-/// 全部落空時附上最接近的候選。
-/// </summary>
 public static partial class DefResolver
 {
     private const int MaxListedCandidates = 10;
@@ -70,17 +65,13 @@ public static partial class DefResolver
             .Select(c => c.Key)];
     }
 
-    /// <summary>解析失敗是「一個都對不到」（而不是名稱為空或多個候選的歧義）。</summary>
     public static bool IsNoMatch(Result<DefInfo> result)
     {
         return !result.Success && result.Error != null
             && result.Error.StartsWith("Error: " + NoMatchPrefix, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 找不到時附上最像的幾個（以輸入拆出的字詞命中數排序），讓模型換對名稱而不是盲猜。
-    /// 一個字詞都沒命中就不附，免得列出無關的東西。
-    /// </summary>
+    /// <summary>找不到時附上最像的候選讓模型換對名稱；一個字詞都沒命中就不附，免得列出無關的東西。</summary>
     private static string Closest(string needle, List<KeyValuePair<DefInfo, string>> compacted)
     {
         List<string> words = [.. Words.Matches(needle).Cast<Match>()
@@ -123,7 +114,6 @@ public static partial class DefResolver
         return !string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(part) && text.Contains(part, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>拆字詞：駝峰（FueledResearchBench）、全大寫縮寫、數字、非 ASCII 連續字（中文名）。</summary>
     [GeneratedRegex(@"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+|[^\x00-\x7F]+", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Words { get; }
 }

@@ -16,11 +16,7 @@ namespace RimAgent.Agent;
 
 public sealed partial class ColonyAgentSession
 {
-    /// <summary>
-    /// 供 GameComponent 在存檔時保存 AF 的模型歷史與工具呼叫內容。
-    /// 讀檔後還沒送過指令時 AF session 尚未重建，原樣帶回讀進來的內容；
-    /// 其餘情況用上一句指令結束時備妥的快照（忙碌中存檔也拿得到上一句為止的歷史）。
-    /// </summary>
+    /// <summary>讀檔後還沒送過指令時 AF session 尚未重建，原樣帶回讀進來的內容；其餘情況用上一句指令結束時備妥的快照（忙碌中存檔也拿得到上一句為止的歷史）。</summary>
     public string SerializeForSave()
     {
         if (_session == null) return _serializedSession;
@@ -63,11 +59,7 @@ public sealed partial class ColonyAgentSession
         return document.GetRawText();
     }
 
-    /// <summary>
-    /// 指令或 /compact 結束、仍持有忙碌旗標時呼叫（通常在背景續行上，不佔主線程）：
-    /// 裁掉超量的舊歷史、丟掉壓縮器的分組快取，再把 session 序列化成存檔快照。
-    /// 分組快取裡是另一份完整歷史，存進檔案只會讓存檔翻倍；下次請求時壓縮器會從歷史重建。
-    /// </summary>
+    /// <summary>分組快取裡是另一份完整歷史，存進檔案只會讓存檔翻倍，所以序列化前裁掉超量的舊歷史並丟掉它；下次請求時壓縮器會從歷史重建。通常在背景續行上呼叫，不佔主線程。</summary>
     private void PrepareSaveSnapshot()
     {
         AgentSession session = _session;
@@ -91,16 +83,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 自動壓縮開啟時的存量上限：請求端的折疊只縮送出的內容（且摘要仍含工具輸出全文），
-    /// session 內存的歷史不會變少，會隨遊戲無限成長並拖慢存讀檔。
-    /// 超過門檻兩倍時，從最舊的完整一輪往後裁到門檻以內；只在玩家訊息處下刀，
-    /// 工具呼叫與結果不會被拆開，也不會留下開頭不是玩家訊息的歷史（部分供應商會拒收）。
-    /// 最近一輪本身就超過門檻時只留最近一輪。
-    /// 不用 <c>InMemoryChatHistoryProviderOptions.ChatReducer</c>：MEAI 現成的 <c>MessageCountingChatReducer</c>
-    /// 會丟掉函式呼叫與結果、也不保證從玩家訊息開頭；reducer 又是建構 agent 時固定的，
-    /// 無法隨「自動壓縮」設定即時開關。所以在存檔快照前自己裁。
-    /// </summary>
+    /// <summary>自動壓縮開啟時的存量上限：請求端的折疊只縮送出的內容，session 內存的歷史會隨遊戲無限成長並拖慢存讀檔。超過門檻兩倍時從最舊的完整一輪往後裁到門檻以內；只在玩家訊息處下刀，工具呼叫與結果不被拆開，也不留下開頭不是玩家訊息的歷史（部分供應商會拒收）。不用 <c>InMemoryChatHistoryProviderOptions.ChatReducer</c>：MEAI 現成的 <c>MessageCountingChatReducer</c> 會丟掉函式呼叫與結果、也不保證從玩家訊息開頭，且 reducer 建構時固定，無法隨「自動壓縮」設定即時開關。</summary>
     private void TrimStoredHistory(AgentSession session)
     {
         if (!AutoCompactEnabled) return;

@@ -23,8 +23,8 @@ namespace RimAgent.InGameTests;
 /// </summary>
 [TestFixture(TestType.MainMenu)]
 [System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)]
-// DevTools 只註冊有一個公開建構式的類別：不能宣告私有建構式，測試方法因此是實例方法。
-#pragma warning disable CA1822, MA0036, S1118 // 測試方法不存取實例資料，但必須是實例方法；類別也不能改成 static
+// DevTools 只註冊非 static、且只有一個公開建構式的類別（測試方法可以是 static）。
+#pragma warning disable MA0036, S1118 // 類別不能改成 static，也不能為此宣告私有建構式
 internal sealed partial class StartupTests
 {
     private const string FrameworkPackageId = "GreenMushroom.RimLLMFramework";
@@ -438,4 +438,4 @@ internal sealed partial class StartupTests
     [GeneratedRegex(@"^RimAgent(\.[A-Za-z0-9_]+){2,}$", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex KeyLiteral { get; }
 }
-#pragma warning restore CA1822, MA0036, S1118
+#pragma warning restore MA0036, S1118

@@ -173,7 +173,6 @@ internal sealed partial class RimWorldGameWorld
         return parameters == null ? string.Empty : "Accepts: " + DescribeTargets(parameters);
     }
 
-    // CA1859：傳回 IEnumerable<T> 而非 IReadOnlyList<T>，減少介面約束。
     private static List<ChoiceOptionInfo> Buttons(params string[] labels)
     {
         return [.. labels.Select((label, i) => new ChoiceOptionInfo { Number = i + 1, Text = label })];
@@ -300,7 +299,6 @@ internal sealed partial class RimWorldGameWorld
         return result.Success && windowFailure != null ? windowFailure : result;
     }
 
-    /// <summary>不是這裡管的 id 回傳 null，交回一般的對話框與信件流程。</summary>
     private static CommandResult AnswerPendingUi(string id, int option, string input)
     {
         var watch = new MessageWatch();

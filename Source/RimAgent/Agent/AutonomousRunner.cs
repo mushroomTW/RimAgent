@@ -9,13 +9,8 @@ namespace RimAgent.Agent;
 /// 自主任務的執行生命週期：同時只跑一輪、新局或讀檔後讓舊任務作廢、每輪換新的取消語彙基元，
 /// 以及任務結束後回寫排程器（冷卻、重試退避、工具配額）與設定錯誤後的暫停。
 /// </summary>
-/// <remarks>
-/// 從 <see cref="RimAgentGameComponent"/> 抽出：原本直接讀 <c>Find.TickManager</c> 與 <c>Current.Game</c>，
-/// 無法單元測試。遊戲時間改由建構時傳入的委派提供。
-/// </remarks>
 internal sealed class AutonomousRunner
 {
-    /// <summary>設定錯誤（金鑰、額度、供應商離線）後暫停自主任務的長度：一個遊戲日。</summary>
     public const int ConfigurationErrorHoldTicks = 60000;
 
     private readonly AutonomousScheduler _scheduler;
@@ -29,13 +24,8 @@ internal sealed class AutonomousRunner
     /// </summary>
     private volatile bool _running;
 
-    /// <summary>新局、讀檔時遞增；舊的自主任務藉此確認自己已不屬於目前這份遊戲。</summary>
     private int _generation;
 
-    /// <summary>建立自主任務執行器。</summary>
-    /// <param name="scheduler">任務結束後要回寫的排程器。</param>
-    /// <param name="currentTick">目前的遊戲 tick；沒有遊戲（例如已回到主選單）時回傳 null。</param>
-    /// <param name="warn">寫入除錯記錄的警告。</param>
     public AutonomousRunner(AutonomousScheduler scheduler, Func<int?> currentTick, Action<string> warn)
     {
         _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
@@ -46,21 +36,16 @@ internal sealed class AutonomousRunner
     /// <summary>是否有自主任務正在進行（含 System One 篩選與代答）。</summary>
     public bool IsRunning => _running;
 
-    /// <summary>目前這份遊戲的世代編號。</summary>
     public int Generation => _generation;
 
     /// <summary>設定錯誤後暫停到這個 tick 為止；不存檔，讀檔即恢復。</summary>
     public int HoldUntilTick { get; private set; }
 
-    /// <summary><paramref name="generation"/> 是否仍屬於目前這份遊戲。</summary>
     public bool IsCurrent(int generation) => generation == _generation;
 
     /// <summary>取消進行中的自主任務；收尾時會壓住該條件的重試。</summary>
     public void Stop() => _cts?.Cancel();
 
-    /// <summary>
-    /// 新局、讀檔或排入讀檔時呼叫：取消進行中的任務，並讓它的收尾與排程器寫入失效。
-    /// </summary>
     public void Invalidate()
     {
         _cts?.Cancel();
@@ -68,10 +53,7 @@ internal sealed class AutonomousRunner
         _running = false;
     }
 
-    /// <summary>
-    /// 起一輪自主任務：同步標記為執行中並換一個新的取消來源，<paramref name="body"/> 結束後只清掉自己這一代的旗標。
-    /// </summary>
-    /// <param name="body">任務內容，收到這一輪的世代編號與取消語彙基元；例外由它自己處理。</param>
+    /// <summary>同步標記為執行中並換新的取消來源；<paramref name="body"/> 結束後只清掉自己這一代的旗標，body 的例外由它自己處理。</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S2930:\"IDisposables\" should be disposed",
         Justification = "還在收尾的上一輪可能仍在使用舊的取消來源；CTS 沒有計時器或等待把手，交給 GC 即可。")]
     public async Task RunGuardedAsync(Func<int, CancellationToken, Task> body)
@@ -93,16 +75,7 @@ internal sealed class AutonomousRunner
         }
     }
 
-    /// <summary>
-    /// 送出一輪主 LLM 的自主任務，結束後回寫排程器。
-    /// </summary>
-    /// <param name="request">這一輪的內容。</param>
-    /// <param name="generation">由 <see cref="RunGuardedAsync"/> 取得的世代編號。</param>
-    /// <param name="cancellationToken">由 <see cref="RunGuardedAsync"/> 取得的取消語彙基元。</param>
-    /// <returns>
-    /// 模型正常回覆時 <c>Completed</c> 為 true（<c>Reply</c> 仍可能為 null）；
-    /// session 被占用、取消、失敗或已作廢時為 false。
-    /// </returns>
+    /// <summary>送出一輪主 LLM 的自主任務並回寫排程器；<c>Completed</c> 為 true 表示模型正常回覆（<c>Reply</c> 仍可能為 null），session 被占用、取消、失敗或已作廢時為 false。</summary>
     public async Task<(bool Completed, string? Reply)> RunTaskAsync(AutonomousRunRequest request, int generation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -144,7 +117,6 @@ internal sealed class AutonomousRunner
         return outcome;
     }
 
-    /// <summary>任務結束後的紀錄：冷卻、重試退避、工具配額計數，以及設定錯誤後的暫停。</summary>
     private void RecordRun(AutonomousRunRequest request, bool stopped, int instructionId)
     {
         // 冷卻、定期巡視與重試退避都從任務結束起算：一輪在高速下常跑掉十幾個遊戲小時，
@@ -174,22 +146,16 @@ internal sealed class AutonomousRunner
     }
 }
 
-/// <summary><see cref="AutonomousRunner.RunTaskAsync"/> 一輪自主任務的內容。</summary>
 internal sealed class AutonomousRunRequest
 {
-    /// <summary>送出任務的殖民地 Agent 工作階段。</summary>
     public required ColonyAgentSession Session { get; init; }
 
-    /// <summary>觸發這一輪的條件。</summary>
     public required AutonomousTrigger Trigger { get; init; }
 
-    /// <summary>觸發時的遊戲 tick。</summary>
     public required int Tick { get; init; }
 
-    /// <summary>自主任務設定；回寫冷卻時使用。</summary>
     public required AutonomousConfig Config { get; init; }
 
-    /// <summary>送給模型的任務指令。</summary>
     public required string Instruction { get; init; }
 
     /// <summary>本輪工具步數上限；null 代表不額外限制。</summary>

@@ -83,7 +83,6 @@ public static partial class GoalProgress
             + "[[GOAL:COMPLETE]] only when verified, [[GOAL:BLOCKED:short-key]] when blocked, or [[GOAL:CONTINUE]] otherwise.";
     }
 
-    /// <summary>綜合審計的三個問題數值，決定目標狀態：是完成、阻塞、還是應繼續。</summary>
     public static GoalAuditVerdict CombineAudit(double allDone, double remaining, double needsUser)
     {
         if (needsUser >= 0.5) return GoalAuditVerdict.Blocked;
@@ -132,7 +131,6 @@ public static partial class GoalProgress
         return verified;
     }
 
-    /// <summary>送給目標審計的當輪工具證據；只留成功或失敗的實際工具結果，記憶、網頁與委派轉述不算。</summary>
     public const int AuditEvidenceMaxEntries = 20;
     public const int AuditEvidenceResultChars = 600;
 

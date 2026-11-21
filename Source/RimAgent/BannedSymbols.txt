@@ -1,0 +1,4 @@
+M:System.Net.Http.HttpClient.#ctor;LLM 請求走 RimLLM Framework，MCP 走 ModelContextProtocol 的 HttpClientTransport。沒有 SDK 的端點才以 #pragma warning disable RS0030 豁免，上一行以「// SDK 豁免：」寫明理由（見 AGENTS.md「SDK 優先」）
+M:System.Net.Http.HttpClient.#ctor(System.Net.Http.HttpMessageHandler);同上：先確認框架與 SDK 沒有對應功能，豁免時註明理由
+M:System.Net.Http.HttpClient.#ctor(System.Net.Http.HttpMessageHandler,System.Boolean);同上：先確認框架與 SDK 沒有對應功能，豁免時註明理由
+N:Newtonsoft.Json;框架與 MEAI 的 schema 和序列化都用 System.Text.Json，請勿引入 Newtonsoft.Json

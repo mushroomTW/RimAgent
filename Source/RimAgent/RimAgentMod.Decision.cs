@@ -15,7 +15,6 @@ namespace RimAgent;
 
 public partial class RimAgentMod
 {
-    /// <summary>決策模型的連線狀態一行，沒設定時附「前往」按鈕；下方是測試按鈕。</summary>
     private static bool IsDecisionReady(DecisionAvailability availability)
     {
         return availability != null && availability.Enabled && !string.IsNullOrWhiteSpace(availability.Model)
@@ -58,7 +57,6 @@ public partial class RimAgentMod
         if (ok) DrawDecisionTest(listing, SubIndent);
     }
 
-    /// <summary>畫決策模型的供應商與模型選單（狀態與測試在主頁）；回傳框架是否已啟用決策模型。</summary>
     private static bool DrawDecisionSettings(Listing_Standard listing)
     {
         DecisionAvailability availability = DecisionServiceFactory.GetAvailability();
@@ -69,7 +67,6 @@ public partial class RimAgentMod
         return availability != null && availability.Enabled;
     }
 
-    /// <summary>決策供應商下拉：供應商一律沿用框架啟用的那一個。</summary>
     private static void DrawDecisionProviderRow(Listing_Standard listing)
     {
         // 這裡只讓玩家選擇「本模組不使用決策模型」；關掉後整段隱藏，可在主頁的決策模型開關重新啟用。
@@ -99,7 +96,6 @@ public partial class RimAgentMod
         });
     }
 
-    /// <summary>「標籤＋下拉按鈕」一列；目前值為空時顯示「預設」，點開才建立選項。</summary>
     private static void DrawDecisionDropdownRow(Listing_Standard listing, string labelKey, string current, string tipKey, Func<List<FloatMenuOption>> options)
     {
         const float labelWidth = 160f;
@@ -123,7 +119,6 @@ public partial class RimAgentMod
         listing.Gap(6f);
     }
 
-    /// <summary>測試按鈕與最近一次結果；送出的是設定頁目前選的供應商與模型。</summary>
     private static void DrawDecisionTest(Listing_Standard listing, float indent)
     {
         Rect row = listing.GetRect(28f);
@@ -169,7 +164,6 @@ public partial class RimAgentMod
 
     private static void DrawDecisionRoutingSettings(Listing_Standard listing)
     {
-        // 備援思考強度
         DrawReasoningRow(
             listing,
             "RimAgent.Settings.DecisionFallbackReasoning".Translate(),
@@ -177,7 +171,6 @@ public partial class RimAgentMod
             v => Settings.decisionFallbackReasoning = v,
             "RimAgent.Settings.DecisionFallbackReasoningTip".Translate());
 
-        // 最小信心門檻
         listing.Label(
             "RimAgent.Settings.DecisionMinConfidence".Translate(Settings.decisionRoutingMinConfidence.ToString("P0", CultureInfo.CurrentCulture)),
             -1f,
@@ -186,7 +179,6 @@ public partial class RimAgentMod
 
         listing.Gap(6f);
 
-        // 類別清單
         Rect catHeader = listing.GetRect(28f);
         const float ActionButtonWidth = 90f;
         Rect resetRect = new(catHeader.xMax - ActionButtonWidth, catHeader.y, ActionButtonWidth, 26f);
@@ -208,7 +200,6 @@ public partial class RimAgentMod
         DrawCategoryList(listing);
     }
 
-    /// <summary>新增分類的選單：自訂分類，或還原已刪除的內建分類。</summary>
     private static void ShowAddCategoryMenu()
     {
         var options = new List<FloatMenuOption>

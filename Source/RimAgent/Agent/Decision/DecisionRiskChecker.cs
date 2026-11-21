@@ -7,16 +7,7 @@ using System.Threading.Tasks;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 使用 TypeSafe System One / Jev 決策模型的風險檢查器。
-/// 一次送出三道題目（risk, authorized, kind）平行評估：
-/// - risk (Noul): 機率 >= 0.6 視為高風險
-/// - authorized (Noul): 機率 >= 0.7 視為已授權
-/// - kind (Choice): 動作分類（read_only / reversible_colony_change / irreversible_colony_change / configuration_change / external_side_effect / data_exfiltration）
-///
-/// 決策模型沒設定、呼叫失敗或逾時時，當場回退包裹的 LLM 分類器；
-/// 同一句指令內不再重試決策模型，下一句指令會再試一次（網路恢復後自動回來）。
-/// </summary>
+/// <summary>一次送出三道題目平行評估：risk 與 authorized（Noul）、kind（Choice，動作分類）。決策模型沒設定、呼叫失敗或逾時時當場回退包裹的 LLM 分類器；同一句指令內不再重試決策模型，下一句會再試一次。</summary>
 public sealed class DecisionRiskChecker : IRiskChecker
 {
     public const double RiskThreshold = 0.6;
@@ -34,10 +25,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
     private volatile ParsedPlan _parsed;
     private bool _decisionFailed;
 
-    /// <param name="decisionService">直接注入的決策服務（測試用）；null 則由 <paramref name="serviceFactory"/> 建立。</param>
     /// <param name="serviceFactory">執行期建立決策服務；回 null 代表玩家還沒設定決策模型。</param>
-    /// <param name="fallback">決策模型不可用時接手判定的 LLM 分類器。</param>
-    /// <param name="decisionRiskCriteria">判準檔內容（AgentPack/Prompts/DecisionRisk.md）。</param>
     public DecisionRiskChecker(
         IDecisionService decisionService = null,
         IRiskChecker fallback = null,
@@ -50,7 +38,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
         _criteriaProvider = decisionRiskCriteria;
     }
 
-    /// <summary>這句指令內是否已放棄決策模型。</summary>
     public bool HasFailed => _decisionFailed;
 
     public async Task<RiskVerdict> ClassifyAsync(RiskQuestion question, CancellationToken cancellationToken)
@@ -106,7 +93,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
         return verdict;
     }
 
-    /// <summary>判準檔目前的題目；判準檔空白或解析不出題目時為 null。</summary>
     private DecisionPlan CurrentPlan()
     {
         string criteria = _criteriaProvider?.Invoke();
@@ -115,7 +101,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
         return plan.IsEmpty ? null : plan;
     }
 
-    /// <summary>由風險與授權機率、動作類別組出判定；高影響類別不論機率一律要確認。</summary>
     private static RiskVerdict BuildVerdict(DecisionResult result, double pRisk, double pAuth)
     {
         bool risky = pRisk >= RiskThreshold;
@@ -127,7 +112,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
             kind = kindAnswer.Value.Trim();
         }
 
-        // 高影響類別（不可逆改動、外部副作用、資料外洩）不論風險機率一律要確認。
         if (IsHighImpactKind(kind)) risky = true;
 
         string reason;
@@ -169,7 +153,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
         return _service;
     }
 
-    /// <summary>判準檔的內容很少變，解析結果留著重用；內容變了才重解析。</summary>
     private DecisionPlan ResolvePlan(string criteria)
     {
         ParsedPlan current = _parsed;
@@ -214,11 +197,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
         else if (_fallback is DecisionRiskChecker drc) drc.ClearCache();
     }
 
-    /// <summary>
-    /// 從 markdown 格式判準檔解析 DecisionPlan。
-    /// 支援 ## risk、## authorized、## kind 三個區段；區段缺漏時以內建預設值兜底。
-    /// 判準文字與提示詞檔一致用英文：它要送給決策模型，不是給玩家看的。
-    /// </summary>
+    /// <summary>支援 ## risk、## authorized、## kind 三個區段，缺漏時以內建預設值兜底；判準文字與提示詞檔一致用英文，因為它要送給決策模型。</summary>
     public static DecisionPlan ParsePlan(string markdown)
     {
         if (string.IsNullOrWhiteSpace(markdown)) return DecisionPlan.Of();
@@ -279,7 +258,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
         return DecisionPlan.Of(qRisk, qAuth, qKind);
     }
 
-    /// <summary>判準檔沒有 ## kind 區段時的內建動作類別選項。</summary>
     private static Dictionary<string, string> DefaultKindOptions()
     {
         return new Dictionary<string, string>(StringComparer.Ordinal)

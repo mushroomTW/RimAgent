@@ -6,7 +6,6 @@ using Verse;
 
 namespace RimAgent.Agent;
 
-/// <summary>一次工作優先級修改的反操作：改回舊值。</summary>
 public sealed class UndoWorkPriority : IExposable
 {
     public int PawnId { get; set; }
@@ -32,7 +31,6 @@ public sealed class UndoWorkPriority : IExposable
     }
 }
 
-/// <summary>一個小時作息修改的反操作：改回舊指派。</summary>
 public sealed class UndoTimeAssignment : IExposable
 {
     public int PawnId { get; set; }
@@ -58,10 +56,7 @@ public sealed class UndoTimeAssignment : IExposable
     }
 }
 
-/// <summary>
-/// 一句指令改過的工作設定：送出時開框、工具記錄舊值、結束時整框推進堆疊。
-/// 復原時整框倒著 replay，把每個值寫回去。
-/// </summary>
+/// <summary>一句指令改過的工作設定：送出時開框、工具記錄舊值、結束時整框推進堆疊；復原時整框倒著 replay。</summary>
 public sealed class UndoFrame : IExposable
 {
     public string Label { get; set; } = string.Empty;
@@ -99,11 +94,7 @@ public sealed class UndoFrame : IExposable
     }
 }
 
-/// <summary>
-/// 工作設定復原堆疊：只記工作優先級與時間表（規格說明的範圍），
-/// 深度上限 20 框，超過丟掉最舊的。鎖保護：記錄發生在主線程的工具裡，
-/// 開框與復原發生在送指令的執行緒。
-/// </summary>
+/// <summary>只記工作優先級與時間表（規格說明的範圍）。鎖保護：記錄發生在主線程的工具裡，開框與復原發生在送指令的執行緒。</summary>
 public sealed class WorkUndoStack
 {
     public const int MaxFrames = 20;
@@ -178,7 +169,6 @@ public sealed class WorkUndoStack
         }
     }
 
-    /// <summary>收框：有記錄才推進堆疊，空框直接丟掉。</summary>
     public void EndFrame(string label)
     {
         lock (_gate)

@@ -260,7 +260,6 @@ internal sealed partial class RimWorldGameWorld
         if (names != null) into.Add(how + " " + names);
     }
 
-    /// <summary>逗號列出前幾個名稱，超過時附上總數；沒有任何項目回傳 null。</summary>
     private static string NameList<T>(IEnumerable<T> items, Func<T, string> name)
     {
         List<string> names = [.. items.Select(name).Distinct(StringComparer.Ordinal)];

@@ -17,7 +17,6 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>只開放本模組的房型，原版與其他模組的 PrefabDef 多半是遺跡、地圖生成用的。</summary>
     private const string LayoutPrefix = "RimAgent_";
 
-    /// <summary>Def 載入後不會變，第一次用到時算一次。</summary>
     private static IReadOnlyList<LayoutInfo> _layouts;
 
     public IReadOnlyList<LayoutInfo> Layouts => _layouts ??=

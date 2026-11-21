@@ -77,7 +77,6 @@ internal sealed partial class RimWorldGameWorld
         return GizmoInfo.UnsupportedKind;
     }
 
-    // CA1859：參數用 Verb 而非 ITargetingSource 介面。
     private static string TargetKindOf(Verb source, out string targetHint)
     {
         targetHint = string.Empty;
@@ -93,7 +92,6 @@ internal sealed partial class RimWorldGameWorld
         return parameters == null ? GizmoInfo.UnsupportedKind : GizmoInfo.TargetKind;
     }
 
-    /// <summary>把 TargetingParameters 轉成白話的「可以指什麼」；細項（距離、視線、可否到達）由遊戲在指定時驗證。</summary>
     private static string DescribeTargets(TargetingParameters p)
     {
         var kinds = new List<string>();
@@ -174,7 +172,6 @@ internal sealed partial class RimWorldGameWorld
         return target.HasThing ? string.Create(CultureInfo.InvariantCulture, $"{target.Thing.LabelShort} [{target.Thing.thingIDNumber}]") : string.Create(CultureInfo.InvariantCulture, $"cell ({target.Cell.x},{target.Cell.z})");
     }
 
-    /// <summary>把工具給的目標對到遊戲裡的物件或格子；回傳 false 時 error 為原因。</summary>
     private static bool TryResolveTarget(MapTarget target, out LocalTargetInfo resolved, out string error)
     {
         resolved = LocalTargetInfo.Invalid;

@@ -11,7 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>囚犯：查詢、互動模式切換、立即釋放。招募走獄卒原生機制，不硬轉派系。</summary>
 public sealed class PrisonerTools
 {
     private readonly IGameWorld _world;
@@ -93,7 +92,6 @@ public sealed class PrisonerTools
         return resistance < 0f ? "none" : ToolText.Num(resistance);
     }
 
-    /// <summary>囚犯解析：id、全名、綽號、短名或其前綴；大小寫不敏感，歧義即報錯。</summary>
     internal static Result<PrisonerInfo> ResolvePrisoner(string input, IReadOnlyList<PrisonerInfo> prisoners)
     {
         return TargetResolver.ResolveEntity(

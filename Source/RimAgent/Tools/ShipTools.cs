@@ -58,7 +58,6 @@ public sealed class ShipTools
 
     private static int CountIn(IEnumerable<ShipPartInfo> parts, ShipPartState state) => parts.Count(p => p.State == state);
 
-    /// <summary>依接觸分組；第 1 組是有電腦核心的那組（從核心發射），沒有核心就是最大組。</summary>
     private static List<List<ShipPartInfo>> GroupByContact(IReadOnlyList<ShipPartInfo> parts)
     {
         var remaining = new List<ShipPartInfo>(parts);
@@ -80,7 +79,6 @@ public sealed class ShipTools
             .ThenByDescending(g => g.Count)];
     }
 
-    /// <summary>兩矩形之間隔幾格；負數表示該軸的範圍重疊。</summary>
     private static (int X, int Z) Gap(CellRectSpec a, CellRectSpec b)
     {
         return (Math.Max(a.MinX - b.MaxX, b.MinX - a.MaxX) - 1, Math.Max(a.MinZ - b.MaxZ, b.MinZ - a.MaxZ) - 1);
@@ -112,7 +110,6 @@ public sealed class ShipTools
         };
     }
 
-    /// <summary>找這組離第 1 組最近的一對零件，說明差多少、往哪移就會貼上。</summary>
     private static string DescribeGap(int number, List<ShipPartInfo> group, List<ShipPartInfo> main)
     {
         var closest = group

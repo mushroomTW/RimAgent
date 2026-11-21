@@ -12,14 +12,9 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 讀檔重來：殖民者死亡後由模型決定要不要讀回死亡前的存檔。
-/// 可讀的是這一局的 RimAgent 檢查點與遊戲 autosave；次數上限與時間線規則由 <see cref="SaveLedger"/> 把關。
-/// </summary>
 public sealed class SaveTools
 {
     public const string CheckpointPrefix = "RimAgent-";
-    /// <summary>保留的檢查點份數；更舊的在存新檔時刪掉。</summary>
     public const int MaxCheckpoints = 5;
     private const int TicksPerHour = 2500;
     private const int TicksPerDay = 60000;
@@ -121,7 +116,6 @@ public sealed class SaveTools
         return string.Create(CultureInfo.InvariantCulture, $"Reloading {target.Name} (attempt {attempt}/{SaveLedger.MaxLoadsPerSave}). This run ends now; the lesson is handed to the reloaded game.");
     }
 
-    /// <summary>存一份檢查點並刪掉超出份數的舊檢查點；每日自動存檔與 save_game 共用。呼叫端已確認可以存。</summary>
     internal async Task<string> CreateCheckpointAsync(SaveContext context)
     {
         string name = CheckpointName(context.ColonyId, context.Tick);
@@ -137,7 +131,6 @@ public sealed class SaveTools
         return $"Saved checkpoint {name}.";
     }
 
-    /// <summary>現在不能存檢查點的原因；可以存時回傳 null。</summary>
     internal string SaveRefusal(SaveContext context)
     {
         if (context.Permadeath) return "this is a commitment-mode game; the game manages its only save";
@@ -157,7 +150,6 @@ public sealed class SaveTools
             : $"{blocker.Name} (newer) used all {SaveLedger.MaxLoadsPerSave} reloads; going further back is not allowed";
     }
 
-    /// <summary>這一局、沒被放棄的存檔，新到舊。</summary>
     private async Task<List<SaveSlotInfo>> ColonySavesAsync(SaveContext context)
     {
         IReadOnlyList<SaveSlotInfo> all = await _world.GetSaveFilesAsync();

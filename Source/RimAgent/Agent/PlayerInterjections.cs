@@ -57,7 +57,6 @@ public sealed class PlayerInterjections
         }
     }
 
-    /// <summary>取走全部待送的插話（多則以空行相接）；沒有則回傳 null。</summary>
     public string TakeAll()
     {
         lock (_lock)
@@ -77,7 +76,6 @@ public sealed class PlayerInterjections
         }
     }
 
-    /// <summary>關閉並丟棄待送的插話，回傳丟棄的則數。</summary>
     public int CloseAndDiscard()
     {
         lock (_lock)

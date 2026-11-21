@@ -17,13 +17,11 @@ namespace RimAgent;
 
 public partial class RimAgentGameComponent
 {
-    /// <summary>全域記憶檔：跨存檔共用，玩家可直接檢視、備份或手動編輯。</summary>
     internal static string GlobalMemoryPath
     {
         get { return Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent", "Memory", GlobalMemoryFile.FileName); }
     }
 
-    /// <summary>全域記憶；第一次取用時從磁碟載入，讀不了的檔案改名保留再從空白開始。</summary>
     private AgentMemoryStore GlobalMemory
     {
         get
@@ -39,7 +37,6 @@ public partial class RimAgentGameComponent
         }
     }
 
-    /// <summary>agent 看到的一組記憶：以檔名把局內記憶與全域記憶分到兩個範圍。</summary>
     private ScopedMemoryStore Memory
     {
         get
@@ -56,7 +53,6 @@ public partial class RimAgentGameComponent
         _scopedMemory = null;
     }
 
-    /// <summary>寫回全域記憶；寫不了就讓工具回報失敗，不假裝記住了。</summary>
     private void SaveGlobalMemory()
     {
         AgentMemoryStore global = _globalMemory ?? GlobalMemory;
@@ -71,7 +67,6 @@ public partial class RimAgentGameComponent
         }
     }
 
-    /// <summary>把先前版本留在存檔裡的全域記憶併入全域記憶（同名者以磁碟上的為準）；回傳被捨棄的筆數。</summary>
     private int MergeIntoGlobalMemory(List<AgentMemoryEntry> migrated)
     {
         List<AgentMemoryEntry> merged = GlobalMemory.Snapshot();

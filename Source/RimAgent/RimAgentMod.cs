@@ -15,7 +15,6 @@ using Verse;
 
 namespace RimAgent;
 
-/// <summary>Mod 進入點與設定頁。執行模式由 Agent 視窗切換。</summary>
 public partial class RimAgentMod : Mod
 {
     public static RimAgentSettings Settings { get; internal set; }
@@ -39,7 +38,6 @@ public partial class RimAgentMod : Mod
 
     private static readonly ToolCategory[] Categories = Enum.GetValues<ToolCategory>();
 
-    /// <summary>權限清單依影響程度分三組：只看、會改遊戲但改得回來、影響大。</summary>
     private static readonly (string Key, Color Color, ToolCategory[] Members)[] PermissionGroups =
     [
         ("RimAgent.Settings.PermissionGroupGreen", Green, [ToolCategory.Observe, ToolCategory.Memory, ToolCategory.Web]),
@@ -92,7 +90,6 @@ public partial class RimAgentMod : Mod
         listing.maxOneColumn = true;
         listing.Begin(viewRect);
 
-        // 主頁只問三個問題；說明直接寫在選項下面，不靠滑鼠停留的提示。
         DrawReadyCard(listing);
 
         DrawSectionHeader(listing, 1, "RimAgent.Settings.Section1Title".Translate(), "RimAgent.Settings.Section1Hint".Translate());
@@ -102,7 +99,6 @@ public partial class RimAgentMod : Mod
         DrawSectionHeader(listing, 2, "RimAgent.Settings.Section2Title".Translate(), "RimAgent.Settings.Section2Hint".Translate());
         DrawAutonomousCare(listing);
 
-        // 總開關與連線狀態放在主頁；供應商、模型與各項細節留在進階設定。
         DrawSectionHeader(listing, 3, "RimAgent.Settings.Section3Title".Translate(), "RimAgent.Settings.Section3Hint".Translate());
         // 決策模型沒設定好時開關變灰、點不動，下方說明原因並給前往按鈕；存檔裡的值不動，設定好後照原值生效。
         DecisionAvailability decision = DecisionServiceFactory.GetAvailability();
@@ -128,7 +124,6 @@ public partial class RimAgentMod : Mod
         Widgets.EndScrollView();
     }
 
-    /// <summary>進階設定：模型分工、決策模型（含分流）、上下文壓縮、網路搜尋來源與執行紀錄。</summary>
     private static void DrawAdvanced(Listing_Standard listing)
     {
         DrawModelRoles(listing);
@@ -169,7 +164,6 @@ public partial class RimAgentMod : Mod
         DrawRunLogSettings(listing);
     }
 
-    /// <summary>決策模型與分流設定；主頁關掉決策模型時整段不顯示。</summary>
     private static void DrawDecisionSection(Listing_Standard listing)
     {
         // 主頁關掉決策模型時，這些細節都沒有作用，整段不顯示；
@@ -193,7 +187,6 @@ public partial class RimAgentMod : Mod
         }
     }
 
-    /// <summary>執行紀錄開關，開啟時顯示紀錄檔路徑與開啟資料夾按鈕。</summary>
     private static void DrawRunLogSettings(Listing_Standard listing)
     {
         listing.Gap();
@@ -208,7 +201,6 @@ public partial class RimAgentMod : Mod
             Rect logRow = listing.GetRect(28f);
             Rect openRect = new(logRow.xMax - OpenFolderButtonWidth, logRow.y, OpenFolderButtonWidth, 26f);
             Rect pathRect = new(logRow.x, logRow.y + 3f, openRect.x - logRow.x - 8f, 24f);
-            // 路徑很長，單行截斷，完整路徑放在提示。
             Text.WordWrap = false;
             Widgets.Label(pathRect, "RimAgent.Settings.RunLogPath".Translate(logPath).ToString().Truncate(pathRect.width));
             Text.WordWrap = true;
@@ -220,7 +212,6 @@ public partial class RimAgentMod : Mod
         }
     }
 
-    /// <summary>最上面的準備狀態：框架有沒有可用的 AI 模型；沒有就給一顆直接前往框架設定的按鈕。</summary>
     private static void DrawReadyCard(Listing_Standard listing)
     {
         // 框架沒有公開「主供應商有沒有金鑰」的 API，只能以備援鏈裡有沒有模型判斷。
@@ -259,7 +250,6 @@ public partial class RimAgentMod : Mod
         }
     }
 
-    /// <summary>主動照顧：一個大開關，開啟後才顯示子選項與出手頻率。</summary>
     private static void DrawAutonomousCare(Listing_Standard listing)
     {
         bool careWasEnabled = Settings.autonomousCare;
@@ -291,7 +281,6 @@ public partial class RimAgentMod : Mod
         DrawHint(listing, hint, SubIndent, Dim);
     }
 
-    /// <summary>頁尾：框架設定的位置與前往按鈕，右側恢復預設（先確認）。</summary>
     private static void DrawFooter(Listing_Standard listing)
     {
         listing.Gap(16f);

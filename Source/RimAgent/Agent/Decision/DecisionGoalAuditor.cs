@@ -8,24 +8,18 @@ using System.Threading.Tasks;
 
 namespace RimAgent.Agent;
 
-/// <summary>目標審計結果，包含是否完成與決策理由摘要。</summary>
 public sealed class GoalAuditResult
 {
-    public bool AllDone { get; init; }     // all_done >= 0.5
-    public bool Remaining { get; init; }   // remaining >= 0.5
-    public bool NeedsUser { get; init; }   // needs_user >= 0.5
+    public bool AllDone { get; init; }
+    public bool Remaining { get; init; }
+    public bool NeedsUser { get; init; }
     public string Reason { get; init; } = string.Empty;
     public double AllDoneProbability { get; init; }
     public double RemainingProbability { get; init; }
     public double NeedsUserProbability { get; init; }
-    /// <summary>真正完成：全部做完、沒有 agent 自己留下的待辦，也沒有在等玩家回答。</summary>
     public bool Completed => AllDone && !Remaining && !NeedsUser;
 }
 
-/// <summary>
-/// 使用 TypeSafe System One / Jev 決策模型的目標審計器。
-/// 在 Agent 宣稱完成目標時進行獨立審計，客觀評估是否真正滿足要求、是否有剩餘步驟或等待玩家。
-/// </summary>
 public sealed class DecisionGoalAuditor
 {
     public const double AllDoneThreshold = 0.5;
@@ -141,7 +135,6 @@ public sealed class DecisionGoalAuditor
     public static string Describe(string objective, string reply, string toolEvidence = null)
     {
         string trimmedReply = (reply ?? string.Empty).Trim();
-        // 頭尾都留：開頭說明了做了什麼，結尾是完成報告，中間是過程。
         if (trimmedReply.Length > ReplyHeadChars + ReplyTailChars)
         {
             trimmedReply = trimmedReply.Substring(0, ReplyHeadChars).TrimEnd()

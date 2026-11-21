@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 namespace RimAgent.Agent;
 
-/// <summary>設定頁的「測試決策模型」：送一題固定的選項題，回報是否答對與耗時。</summary>
 public static class DecisionModelTester
 {
     private const string QuestionId = "test";
@@ -22,10 +21,8 @@ public static class DecisionModelTester
     /// <summary>最近一次測試的結果；文字由設定頁翻譯（背景執行緒不碰翻譯）。</summary>
     public static TestOutcome Outcome => _outcome;
 
-    /// <summary>成功時為「選到的答案 · 耗時毫秒」，失敗時為錯誤訊息。</summary>
     public static string Detail => _detail;
 
-    /// <summary>以設定頁目前選的供應商與模型送出一題測試；已有測試進行中時不重複送。</summary>
     public static void Start()
     {
         if (_running) return;

@@ -17,7 +17,6 @@ namespace RimAgent.Agent;
 
 public sealed partial class ColonyAgentSession
 {
-    /// <summary>記錄主模型最近一次回報的輸入 token；供應商未回報時維持未知。</summary>
     private sealed class TokenTrackingChatClient : DelegatingChatClient
     {
         private long _lastInputTokens = -1;
@@ -58,11 +57,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 記下工具迴圈最近一步實際使用的 ChatOptions。掛在迴圈內側：迴圈可能中途換成複本
-    /// （ConversationId 改變、最後一輪剝除工具），每一步送出時記的都是當下那份。
-    /// load_toolpack 在這一步的工具執行期間改它；迴圈下一步重讀（或複製）options.Tools，新清單就生效。
-    /// </summary>
+    /// <summary>記下工具迴圈最近一步實際使用的 ChatOptions；掛在迴圈內側，因為迴圈可能中途換成複本（ConversationId 改變、最後一輪剝除工具）。load_toolpack 靠它改 options.Tools，迴圈下一步重讀（或複製）後新清單才生效。</summary>
     private sealed class RunOptionsCapture : DelegatingChatClient
     {
         private ChatOptions _current;
@@ -88,9 +83,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 把送進壓縮器的訊息換成複本（連 AdditionalProperties 一起複製），原物件不被改動。
-    /// </summary>
+    /// <summary>把送進壓縮器的訊息換成複本（含 AdditionalProperties），原物件不被改動。</summary>
     /// <remarks>
     /// 補救 Microsoft.Agents.AI 1.28.0：<c>CompactionProvider</c> 掛在 ChatClientBuilder 層時，會把
     /// 這一輪新進的訊息直接改寫來源標記為 ChatHistory（就地寫入 <see cref="ChatMessage.AdditionalProperties"/>）。
@@ -128,16 +121,12 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 等模型回覆期間把活動標成思考中，回覆後把思考內容寫進對話；主 Agent 與子代理的模型呼叫都經過它。
-    /// 框架以 MEAI 原生的 <see cref="TextReasoningContent"/> 交還推理內容，顯示與否由呈現層決定。
-    /// </summary>
+    /// <summary>框架以 MEAI 原生的 <see cref="TextReasoningContent"/> 交還推理內容，顯示與否由呈現層決定；主 Agent 與子代理的模型呼叫都經過它。</summary>
     private sealed class ThinkingActivityClient : DelegatingChatClient
     {
         private readonly AgentActivityTracker _activity;
         private readonly AgentTranscript _transcript;
 
-        /// <param name="transcript">思考內容寫入的對話；null 表示不記。</param>
         public ThinkingActivityClient(IChatClient innerClient, AgentActivityTracker activity, AgentTranscript transcript = null) : base(innerClient)
         {
             _activity = activity;

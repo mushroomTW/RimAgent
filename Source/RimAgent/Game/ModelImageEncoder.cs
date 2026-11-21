@@ -10,12 +10,10 @@ namespace RimAgent.Game;
 /// </summary>
 internal static class ModelImageEncoder
 {
-    /// <summary>送給模型的圖片長邊上限（像素）。</summary>
     public const int MaxEdge = 1280;
 
     private const int JpegQuality = 80;
 
-    /// <summary>解碼 PNG／JPEG 位元組後縮圖；資料為空或不完整（例如截圖仍在寫入）時回傳空陣列。</summary>
     public static byte[] FromEncoded(byte[] data, int maxEdge = MaxEdge)
     {
         if (data == null || data.Length == 0) return [];
@@ -30,7 +28,6 @@ internal static class ModelImageEncoder
         }
     }
 
-    /// <summary>把可讀取的貼圖縮到長邊上限內並編成 JPEG。</summary>
     public static byte[] FromTexture(Texture2D source, int maxEdge = MaxEdge)
     {
         int width = source.width;

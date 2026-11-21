@@ -11,7 +11,6 @@ using RimAgent.Tools;
 
 namespace RimAgent.Agent;
 
-/// <summary>單次指令可觀察到的執行過程；每個欄位與事件數都有上限。</summary>
 public sealed class RunLogRecord
 {
     private const int MaxFieldChars = 500;
@@ -24,14 +23,12 @@ public sealed class RunLogRecord
     public string Source { get; set; } = string.Empty;
     public string Instruction { get; set; } = string.Empty;
     public string Outcome { get; set; } = string.Empty;
-    /// <summary>寫入時的 RimAgent 版本（About.xml modVersion），比較改版前後的成功率用。</summary>
     public string ModVersion { get; set; } = string.Empty;
     /// <summary>本句全部工具呼叫的計數，不受 <see cref="TranscriptSteps"/> 只留最後 40 步的影響。</summary>
     public int ToolCalls { get; set; }
     /// <summary>工具本身失敗的次數（不含停止／取消）。</summary>
     public int ToolFailures { get; set; }
     public int ToolCancellations { get; set; }
-    /// <summary>自主任務的起跑脈絡；玩家指令與目標為 null。</summary>
     public AutonomousRunInfo Autonomous { get; set; }
     public List<RunLogModelStep> ModelSteps { get; set; } = [];
     public List<RunLogTranscriptStep> TranscriptSteps { get; set; } = [];
@@ -100,17 +97,12 @@ public sealed class RunLogRecord
     }
 }
 
-/// <summary>
-/// 自主任務起跑時的觸發、嘗試次數、遊戲 tick 與排程器看到的訊號。
-/// 指令文字會被截斷（共用通則在前），觸發原因要在這裡另記，才能事後比對重試與施工進度。
-/// </summary>
+/// <summary>指令文字會被截斷（共用通則在前），觸發原因要在這裡另記，才能事後比對重試與施工進度。</summary>
 public sealed class AutonomousRunInfo
 {
     public string Trigger { get; set; } = string.Empty;
-    /// <summary>該條件的第幾次嘗試（含首次）；定期巡視與抉擇不走重試表，為 null。</summary>
     public int? Attempt { get; set; }
     public int GameTick { get; set; }
-    /// <summary>觸發當下排程器評估用的訊號；抉擇不經排程器評估，為 null。</summary>
     public AutonomousSignals? Signals { get; set; }
 }
 
@@ -138,10 +130,7 @@ public sealed class RunLogTranscriptStep
     public long DurationMs { get; set; }
 }
 
-/// <summary>
-/// 獨立 JSONL 日誌；最多 500 筆或 16 MiB。平常只在檔尾附加一行；
-/// 會超過上限時才整檔重寫，一次裁到 450 筆／九成大小，之後幾十筆又只需附加。
-/// </summary>
+/// <summary>獨立 JSONL 日誌；平常只在檔尾附加一行，會超過上限時才整檔重寫、一次裁到九成大小，之後幾十筆又只需附加。</summary>
 public sealed class RunLogWriter
 {
     public const int MaxRuns = 500;
@@ -155,7 +144,6 @@ public sealed class RunLogWriter
     /// <summary>檔案目前的筆數；-1 代表還沒數過（第一次寫入時讀檔數一次）。</summary>
     private int _lineCount = -1;
 
-    /// <summary>紀錄檔名。</summary>
     public const string FileName = "RimAgent-runs.jsonl";
 
     /// <summary>遊戲存檔資料夾下的 RimAgent 資料夾；運行紀錄、benchmark 結果與統計報表都放這裡。</summary>
@@ -169,7 +157,6 @@ public sealed class RunLogWriter
 
     public string FilePath { get; }
 
-    /// <summary>寫入時補進紀錄的模組版本；由遊戲端從 About.xml 讀取。</summary>
     public string ModVersion { get; set; } = string.Empty;
 
     public void Append(RunLogRecord record)
@@ -216,7 +203,6 @@ public sealed class RunLogWriter
         RewriteTrimmed(json);
     }
 
-    /// <summary>從最新往回保留，直到筆數或位元組碰到裁切目標。</summary>
     private void RewriteTrimmed(string newestJson)
     {
         List<string> lines = [.. File.ReadAllLines(FilePath, Utf8)];

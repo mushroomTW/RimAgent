@@ -1,0 +1,39 @@
+#!/bin/sh
+# 自動遞增 About/About.xml 的 modVersion，格式為「年.月.日.當天第幾次修改」。
+# 同一天再次提交時最後一段加一，跨日重設為 1。
+# 這次提交已手動改過 modVersion（與 HEAD 不同）時不動；About.xml 另有未暫存的修改時只提醒，避免把它們一起暫存。
+# pre-commit 分不出 --amend：修正上一筆提交時用 KEEP_MOD_VERSION=1 git commit --amend，避免版號跳號。
+# 啟用方式（每個 clone 執行一次）：git config core.hooksPath .githooks
+
+about=About/About.xml
+[ "${KEEP_MOD_VERSION:-}" = 1 ] && exit 0
+# git commit <路徑>／--only 用暫存 index 提交，這裡 git add 的版號進不了真正的 index，提交後會留下一筆把版號改回去的暫存變更。
+case "$(basename "${GIT_INDEX_FILE:-index}")" in
+  next-index*)
+    echo "pre-commit: 指定路徑提交，略過 modVersion 遞增。" >&2
+    exit 0 ;;
+esac
+[ -f "$about" ] || exit 0
+
+read_version() {
+  sed -n 's:.*<modVersion>\(.*\)</modVersion>.*:\1:p' | head -n 1 | tr -d '\r'
+}
+
+current=$(read_version < "$about")
+head_version=$(git show "HEAD:$about" 2>/dev/null | read_version)
+[ -n "$current" ] || exit 0
+[ "$current" = "$head_version" ] || exit 0
+
+if ! git diff --quiet -- "$about"; then
+  echo "pre-commit: $about 有未暫存的修改，略過 modVersion 遞增。" >&2
+  exit 0
+fi
+
+today=$(date +%Y.%m.%d)
+case "$current" in
+  "$today".*) next="$today.$((${current##*.} + 1))" ;;
+  *) next="$today.1" ;;
+esac
+
+sed -b -i "s:<modVersion>$current</modVersion>:<modVersion>$next</modVersion>:" "$about"
+git add -- "$about"

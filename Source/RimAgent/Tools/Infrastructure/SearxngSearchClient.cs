@@ -13,7 +13,10 @@ namespace RimAgent.Tools;
 /// <summary>可選的本機 SearXNG 搜尋來源；查詢時明確排除 Bing 引擎。</summary>
 internal sealed class SearxngSearchClient
 {
+    // SDK 豁免：SearXNG 是本機搜尋服務的 JSON API，框架與 SDK 都沒有對應的用戶端。
+#pragma warning disable RS0030
     private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(20) };
+#pragma warning restore RS0030
     private const int MaxBodyBytes = 2 * 1024 * 1024;
     private readonly Func<string> _endpoint;
     private readonly HttpClient _client;

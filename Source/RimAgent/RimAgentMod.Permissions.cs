@@ -16,7 +16,6 @@ namespace RimAgent;
 
 public partial class RimAgentMod
 {
-    /// <summary>三張權限方案卡片；目前權限不符合任何方案時下方提示「自訂」。</summary>
     private static void DrawPresetCards(Listing_Standard listing)
     {
         RimAgentSettings.PermissionPreset? current = Settings.MatchPreset();
@@ -65,7 +64,6 @@ public partial class RimAgentMod
         }
     }
 
-    /// <summary>可收合的權限清單：依綠／黃／紅分組，每項一行名稱加一行說明，整格可點。</summary>
     private static void DrawPermissionList(Listing_Standard listing)
     {
         listing.Gap(8f);
@@ -137,7 +135,6 @@ public partial class RimAgentMod
         return "RimAgent.Settings." + (category == ToolCategory.Mcp ? "MCP" : category.ToString());
     }
 
-    /// <summary>權限方案卡片的翻譯鍵（說明另加 "Desc" 後綴）。</summary>
     internal static string PresetKey(RimAgentSettings.PermissionPreset preset)
     {
         return "RimAgent.Settings.Preset." + preset;

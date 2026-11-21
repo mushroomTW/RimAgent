@@ -11,7 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>生產：工作台與帳單查詢、帳單增刪。材料篩選沿用遊戲預設，不另調。</summary>
 public sealed class ProductionTools
 {
     private readonly IGameWorld _world;
@@ -124,7 +123,6 @@ public sealed class ProductionTools
         return result.Message;
     }
 
-    /// <summary>工作台解析：id 精確命中；名稱精確或唯一包含，撞名即報錯。</summary>
     internal static Result<WorkTableInfo> ResolveTable(string input, IReadOnlyList<WorkTableInfo> tables)
     {
         return TargetResolver.ResolveEntity(

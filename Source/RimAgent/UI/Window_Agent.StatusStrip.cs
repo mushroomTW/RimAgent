@@ -31,7 +31,6 @@ public partial class Window_Agent
         DrawModelButton(modelRect, enabled, settings);
         float right = DrawUndoButton(new Rect(modelRect.xMax + 6f, rect.y, rect.xMax - modelRect.xMax - 6f, rect.height), session);
 
-        // 視窗窄到模型按鈕吃滿時，用量字樣就不畫。
         if (RimAgentGameComponent.AutonomousEnabled && rect.xMax - right > 8f)
         {
             var usageRect = new Rect(right + 8f, rect.y, rect.xMax - right - 8f, rect.height);
@@ -43,10 +42,7 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>
-    /// 復原按鈕：上一句指令改過工作設定時才出現，執行中停用（復原會與進行中的指令搶同一批設定）。
-    /// 回傳按鈕右緣；沒有按鈕時回傳 <paramref name="space"/> 的左緣減去間距，讓後面的元件接著排。
-    /// </summary>
+    /// <summary>執行中停用：復原會與進行中的指令搶同一批設定。</summary>
     private float DrawUndoButton(Rect space, ColonyAgentSession session)
     {
         if (!session.Undo.CanUndo) return space.x - 6f;
@@ -90,12 +86,10 @@ public partial class Window_Agent
         if (Mouse.IsOver(modeRect)) TooltipHandler.TipRegion(modeRect, ModeDescription(session.Mode));
     }
 
-    /// <summary>按鈕寬度貼合文字（「推理：高」很短，固定寬度會留一大片空白）；回傳實際使用的範圍。</summary>
     private Rect DrawReasoningButton(Rect reasoningRect, bool enabled, RimAgentSettings settings)
     {
         ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
         bool routing = settings != null && settings.reasoningRouting;
-        // 快取鍵：分流時用 -1，其餘用列舉值。文字變了才重新量寬度。
         string reasoningStatus = _reasoningLabel.Get(routing ? -1 : (int)current, key =>
         {
             string label = "RimAgent.Reasoning.Status".Translate(
@@ -163,9 +157,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>
-    /// 統一的扁平科技風按鈕繪製，消除重複代碼。
-    /// </summary>
     private static bool DrawUnifiedButton(Rect rect, string label, Color borderColor, Color textColor, bool enabled, GameFont font = GameFont.Small)
     {
         Color bg = enabled ? ControlBgColor : new Color(0.05f, 0.07f, 0.09f, 0.5f);
@@ -196,7 +187,6 @@ public partial class Window_Agent
         };
     }
 
-    /// <summary>模式說明（含自動／完整權限的風險提醒）；設定頁不再列模式，改在下拉選單與按鈕的提示顯示。</summary>
     private static string ModeDescription(AgentMode mode)
     {
         return mode switch
@@ -235,7 +225,6 @@ public partial class Window_Agent
         settings.Write();
     }
 
-    /// <summary>換模型後重新檢查工具呼叫能力：指定的模型可能不在備援鏈上。</summary>
     private void SetModel(RimAgentSettings settings, string model)
     {
         if (settings == null || string.Equals(settings.agentModel, model, StringComparison.Ordinal)) return;
@@ -244,7 +233,6 @@ public partial class Window_Agent
         ProbeCapabilities();
     }
 
-    /// <summary>按鈕上只顯示模型名；"供應商:模型" 取冒號後，純供應商條目（用該供應商預設模型）顯示供應商名。</summary>
     private static string ModelShortName(string model)
     {
         if (string.IsNullOrWhiteSpace(model)) return "RimAgent.Model.Default".Translate();
@@ -253,10 +241,7 @@ public partial class Window_Agent
         return colon > 0 && colon < trimmed.Length - 1 ? trimmed.Substring(colon + 1) : trimmed;
     }
 
-    /// <summary>
-    /// 可切換的模型＝玩家在 RimLLM Framework 備援鏈上設好的條目（已有金鑰與供應商設定）。
-    /// 框架未初始化或版本太舊（沒有 GetFallbackChain）就只剩「預設」。設定頁的分類器模型選單也用這份清單。
-    /// </summary>
+    /// <summary>框架未初始化或版本太舊（沒有 GetFallbackChain）時只剩「預設」；設定頁的分類器模型選單也用這份清單。</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static List<string> ConfiguredModels()
     {

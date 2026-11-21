@@ -11,11 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 殖民者的右鍵選單（FloatMenu）：對一個物件或格子按右鍵會跳出的選項，
-/// 例如使用神經增幅器、啟動互動物件、登上載具、研究、拾取。原版選單由各種 FloatMenuOptionProvider 與
-/// 物件元件組成，這一組工具把它整份列出來，再依序號執行，涵蓋 use_gizmo 與 order_job 沒有的操作。
-/// </summary>
 public sealed class FloatMenuTools
 {
     private readonly IGameWorld _world;
@@ -94,7 +89,6 @@ public sealed class FloatMenuTools
         return parsed;
     }
 
-    /// <summary>序號優先；否則標籤完全相同，再退而求其次找唯一一個包含這段文字的。</summary>
     private static FloatMenuOptionInfo Resolve(IReadOnlyList<FloatMenuOptionInfo> options, string needle)
     {
         if (needle.Length == 0) return null;

@@ -48,7 +48,6 @@ internal static class MemoryTools
         throw new InvalidOperationException("Unknown FileMemoryProvider tool: " + name);
     }
 
-    /// <summary>取出 provider 的工具；命令類包上閘門預覽，查詢類原樣回傳，未知工具不提供（沒有風險分級就不放行）。</summary>
     public static List<AIFunction> Create(AgentMemoryStore store, ConfirmationGate gate)
     {
 #pragma warning disable MAAI001, VSTHRD002 // VSTHRD002：同步等待的前提見下方註解
@@ -68,7 +67,6 @@ internal static class MemoryTools
     private const string ReplaceLinesDescription =
         "Replace lines in a memory file by 1-based line number (lines end at \\n, \\r\\n or \\r). Fails on out-of-range or duplicate line numbers.";
 
-    /// <summary>參數名稱與結構和 provider 原版相同，只縮短說明；引數仍由原函式綁定。</summary>
     private static readonly JsonElement ReplaceLinesSchema = JsonDocument.Parse(
         "{\"type\":\"object\",\"properties\":{\"fileName\":{\"type\":\"string\"},\"edits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{" +
         "\"line_number\":{\"type\":\"integer\"}," +
@@ -76,10 +74,7 @@ internal static class MemoryTools
         "\"expected_line\":{\"description\":\"Optional current text of the line (without the read prefix); the edit is rejected if it differs.\",\"type\":[\"string\",\"null\"]}" +
         "}}}},\"required\":[\"fileName\",\"edits\"]}").RootElement;
 
-    /// <summary>
-    /// provider 內建 replace_lines 的說明與 schema 約 1.4k 字元，每次模型呼叫都要送；
-    /// 改送精簡版，執行仍交給原函式。
-    /// </summary>
+    /// <summary>provider 內建 replace_lines 的說明與 schema 約 1.4k 字元，每次模型呼叫都要送，改送精簡版。</summary>
     private sealed class SlimSchemaFunction : DelegatingAIFunction
     {
         private readonly string _description;
@@ -109,7 +104,6 @@ internal static class MemoryTools
         public void Dispose() { }
     }
 
-    /// <summary>寫入、刪除與編輯前先過命令閘門；擋下時回傳預覽，不碰儲存。</summary>
     private sealed class GatedMemoryFunction : DelegatingAIFunction
     {
         private readonly ConfirmationGate _gate;

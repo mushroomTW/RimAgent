@@ -11,10 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 任務分頁：古樞紐、旅程邀約、皇家飛升等結局路線都從任務開始。
-/// 列出可接受與進行中的任務，照分頁的接受鈕接受，或照拒絕鈕收起來。
-/// </summary>
 public sealed class QuestTools
 {
     private const int MaxListDescriptionChars = 300;

@@ -49,7 +49,6 @@ internal sealed class MapShotCapture : MonoBehaviour
     private int _renders;
     private int _startFrame;
 
-    /// <summary>開始一張截圖；檔案在之後一兩幀渲染完才寫到 <paramref name="path"/>。須在主線程呼叫。</summary>
     public static void Begin(Map map, MapShotLayout layout, string path)
     {
         EnsurePatched();
@@ -154,7 +153,6 @@ internal sealed class MapShotCapture : MonoBehaviour
         }
     }
 
-    /// <summary>這張地圖上進行中截圖的聯集範圍；沒有則為 null。</summary>
     private static CellRect? PendingBounds(Map map)
     {
         CellRect? union = null;
@@ -166,7 +164,6 @@ internal sealed class MapShotCapture : MonoBehaviour
         return union;
     }
 
-    /// <summary>第一次截圖時才打補丁，沒用到這功能的玩家不受任何影響。</summary>
     private static void EnsurePatched()
     {
         if (_patched) return;
@@ -179,7 +176,6 @@ internal sealed class MapShotCapture : MonoBehaviour
             finalizer: new HarmonyMethod(typeof(MapShotCapture), nameof(CullFinalizer)));
     }
 
-    /// <summary>地圖網格（含需要重建的區塊）也畫進行中截圖的範圍。</summary>
     private static void ViewRectPostfix(Map ___map, ref CellRect __result)
     {
         if (Active.Count == 0) return;

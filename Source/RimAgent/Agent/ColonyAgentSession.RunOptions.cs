@@ -56,7 +56,6 @@ public sealed partial class ColonyAgentSession
         return CreateRunOptions(effectiveReasoning, PreferredModel);
     }
 
-    /// <summary>System One 挑選這句用得到、目前可用但還沒載入的工具包。</summary>
     private Task<IReadOnlyList<string>> SelectToolPacksAsync(string text, CancellationToken cancellationToken)
     {
         List<string> loaded = LoadedPacks();
@@ -75,7 +74,6 @@ public sealed partial class ColonyAgentSession
     {
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, LoadedPacks());
-        // CA1859：使用 List<T> 而非 IList<T>（需支援 Add）。
         List<AITool> tools = [.. selected.Advertised];
         if (tools.Count > 0) tools.Add(_scriptRunner);
         IReadOnlyList<ToolPacks.Pack> packs = selected.Packs;
@@ -103,7 +101,6 @@ public sealed partial class ColonyAgentSession
         return options;
     }
 
-    /// <summary>load_toolpack 的本體：照目前權限與模式展開，記進本段對話，並把工具加進這一輪送出中的清單。</summary>
     private string LoadToolPack(string pack)
     {
         ToolPermissions permissions = _permissions();
@@ -172,17 +169,13 @@ public sealed partial class ColonyAgentSession
         return FinalAssistantText(response.Messages, response.Text);
     }
 
-    /// <summary>主 Agent 與子代理共用：取最後一則有文字的 assistant 訊息，沒有就退回整體文字。</summary>
     internal static string FinalAssistantText(IEnumerable<ChatMessage> messages, string fallback)
     {
         ChatMessage last = messages.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
         return last != null ? last.Text.Trim() : (fallback ?? string.Empty).Trim();
     }
 
-    /// <summary>
-    /// 回應是否停在工具迴圈的步數上限：每一輪都在呼叫工具，最後一輪被 MEAI 拿掉工具強制作答。
-    /// 不能用 WereToolsStripped 判斷，那代表「供應商不支援工具」，和步數無關。
-    /// </summary>
+    /// <summary>回應是否停在工具迴圈的步數上限（最後一輪被 MEAI 拿掉工具強制作答）；不能用 WereToolsStripped，那代表「供應商不支援工具」，和步數無關。</summary>
     internal static bool HitStepLimit(IEnumerable<ChatMessage> messages, int limit)
     {
         if (limit <= 0 || messages == null) return false;
@@ -193,10 +186,7 @@ public sealed partial class ColonyAgentSession
     /// <summary>各家模型把工具呼叫寫成純文字時的開頭標記（Hermes／Qwen、Mistral、Llama）。</summary>
     private static readonly string[] ToolCallMarkers = ["<tool_call", "<function=", "[TOOL_CALLS]", "<|tool_call", "<|python_tag|>"];
 
-    /// <summary>
-    /// 步數用完的最後一輪沒有工具定義，有些模型會把想呼叫的工具寫成純文字。
-    /// 那段不是給玩家的回覆：從最早出現的工具呼叫標記起截掉，保留前面的正文（可能是空字串）。
-    /// </summary>
+    /// <summary>步數用完的最後一輪沒有工具定義，有些模型會把想呼叫的工具寫成純文字；從最早出現的工具呼叫標記起截掉，保留前面的正文（可能是空字串）。</summary>
     internal static string StripToolCallMarkup(string text)
     {
         if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
@@ -246,7 +236,6 @@ public sealed partial class ColonyAgentSession
         return AgentErrorKind.Unknown;
     }
 
-    /// <summary>裸 JSON 形式的工具呼叫：{"name": "...", "arguments"／"parameters": ...}。</summary>
     [GeneratedRegex("\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"(arguments|parameters)\"\\s*:", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex JsonToolCall { get; }
 }

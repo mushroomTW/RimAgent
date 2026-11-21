@@ -53,10 +53,6 @@ public partial class Window_Agent
         RimAgentMod.Settings?.UpdateBounds(windowRect);
     }
 
-    /// <summary>
-    /// 以頭像為錨點排版：頭像整個留在螢幕內，泡泡預設在左側、左邊放不下就換到右側。
-    /// 按下後頭像沒被拖動就放開視為點擊，展開視窗。
-    /// </summary>
     private void UpdateCollapsedIcon()
     {
         // 頭像位置只跟著拖曳的位移走；不從視窗寬度反推，否則每幀 Rounded() 的誤差會累積成漂移。
@@ -144,7 +140,6 @@ public partial class Window_Agent
         float time = Time.realtimeSinceStartup;
         float pulse = Mathf.PingPong(time * 2f, 1f);
 
-        // 頭像：圓形底盤 + 外環，閒置時緩慢上下浮動，工作時浮得快一點。
         float bob = Mathf.Sin(time * (busy ? 5f : 2f)) * 2.5f;
         var avatarSlot = new Rect(_bubbleOnLeft ? inRect.xMax - AvatarSize : inRect.x, inRect.y, AvatarSize, AvatarSize);
         // 內縮要容得下外光暈 4px 加浮動 2.5px，否則上下會被視窗邊界截掉。
@@ -176,7 +171,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>依等待中／忙碌／閒置狀態解析外環顏色。</summary>
     private static Color ResolveRingColor(bool pending, bool busy, float pulse)
     {
         if (pending) return PauseColor;
@@ -184,7 +178,6 @@ public partial class Window_Agent
         return BorderColor;
     }
 
-    /// <summary>繪製忙碌／等待中／懸停時的外環暈圈。</summary>
     private static void DrawRingGlow(Rect avatar, Color ring, bool busy, bool pending, bool hover, float pulse)
     {
         if (busy || pending || hover)
@@ -194,7 +187,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>繪製未讀標記點。</summary>
     private static void DrawUnreadDot(Rect avatar, bool unread)
     {
         if (!unread) return;
@@ -205,7 +197,6 @@ public partial class Window_Agent
         GUI.DrawTexture(dot, DiscTex);
     }
 
-    /// <summary>繪製氣泡文字；寬度必須在 OnGUI 量測，結果留給 WindowUpdate 排版。</summary>
     private void DrawBubble(Rect inRect)
     {
         if (_bubbleText == null || inRect.width <= AvatarSize + AvatarBubbleGap) return;

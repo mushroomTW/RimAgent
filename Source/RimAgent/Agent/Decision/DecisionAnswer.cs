@@ -5,7 +5,6 @@ using System.Collections.Generic;
 
 namespace RimAgent.Agent;
 
-/// <summary>一道題的答案。</summary>
 public sealed class DecisionAnswer
 {
     /// <summary>
@@ -26,7 +25,6 @@ public sealed class DecisionAnswer
     public IReadOnlyDictionary<string, double> Probabilities { get; init; } = new Dictionary<string, double>(StringComparer.Ordinal);
 }
 
-/// <summary>一次決策請求的全部答案，依題目 Id 取用。</summary>
 public sealed class DecisionResult
 {
     private readonly Dictionary<string, DecisionAnswer> _answers;
@@ -40,7 +38,6 @@ public sealed class DecisionResult
 
     public IReadOnlyDictionary<string, DecisionAnswer> Answers => _answers;
 
-    /// <summary>取某題的答案；題目沒問或模型沒答都回 false。</summary>
     public bool TryGet(string id, out DecisionAnswer answer)
     {
         if (string.IsNullOrEmpty(id))
@@ -51,7 +48,6 @@ public sealed class DecisionResult
         return _answers.TryGetValue(id, out answer);
     }
 
-    /// <summary>取某題的答案；沒有就回 null。</summary>
     public DecisionAnswer Get(string id)
     {
         return TryGet(id, out DecisionAnswer answer) ? answer : null;

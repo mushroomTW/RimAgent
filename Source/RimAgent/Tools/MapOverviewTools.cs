@@ -8,11 +8,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 全圖語意摘要：把勘查資料整理成地貌比例、基地、房間、區域、礦脈、水域、肥沃土壤與岩體，
-/// 每項附範圍與方位，讓模型一次掌握全圖，再用截圖或 inspect_area 往下看。
-/// 分群與排版只用 <see cref="MapSurvey"/>，不碰遊戲，可單元測試。
-/// </summary>
 public sealed class MapOverviewTools
 {
     private const int MaxRooms = 30;
@@ -32,7 +27,6 @@ public sealed class MapOverviewTools
         _world = world ?? throw new ArgumentNullException(nameof(world));
     }
 
-    /// <summary>一個相連的格子群（四方向相連）。</summary>
     internal sealed class Cluster
     {
         public int Key;
@@ -85,7 +79,6 @@ public sealed class MapOverviewTools
         return sb.ToString();
     }
 
-    /// <summary>已探索地面的地形組成與厚岩頂比例。</summary>
     private static void AppendGround(StringBuilder sb, int[] counts, int revealed, int thickRoof)
     {
         if (revealed > 0)
@@ -105,7 +98,6 @@ public sealed class MapOverviewTools
         }
     }
 
-    /// <summary>礦脈、水域、肥沃土地與大塊岩體的分布。</summary>
     private static void AppendTerrainClusters(StringBuilder sb, MapSurvey survey)
     {
         List<Cluster> ores = FindClusters(survey, i => survey.Resource[i]);
@@ -213,7 +205,6 @@ public sealed class MapOverviewTools
         sb.AppendLine();
     }
 
-    /// <summary>四方向洪水填充，把 key 相同（且非 0）的相連格子分成一群。key 先整張算好，填充時只查陣列。</summary>
     internal static List<Cluster> FindClusters(MapSurvey survey, Func<int, int> keyOf)
     {
         int width = survey.Width;
@@ -279,7 +270,6 @@ public sealed class MapOverviewTools
 
     private static bool IsWater(SurveyCell cell) => cell == SurveyCell.ShallowWater || cell == SurveyCell.DeepWater;
 
-    /// <summary>把地圖切成 3x3，回傳中心點所在的方位（north-west、centre 等）。</summary>
     internal static string Direction(MapSurvey survey, int x, int z)
     {
         int col = Math.Min(2, Math.Max(0, x * 3 / Math.Max(1, survey.Width)));

@@ -10,7 +10,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>徵召與戰鬥指令，以及救援、俘虜、包紮等戰後命令。LLM 有數秒延遲，只適合戰前佈署與撤退。</summary>
 public sealed class CombatTools
 {
     private static readonly string[] Jobs = ["rescue", "capture", "tend", "strip", "equip", "enter_casket"];

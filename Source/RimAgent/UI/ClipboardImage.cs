@@ -6,10 +6,7 @@ using Object = UnityEngine.Object;
 
 namespace RimAgent.UI;
 
-/// <summary>
-/// 從 Windows 剪貼簿讀取圖片並轉成給模型看的 JPEG。Unity IMGUI 只能貼文字，所以直接呼叫 Win32 API。
-/// 優先讀「PNG」格式（截圖工具、瀏覽器複製圖片），沒有再讀 CF_DIB（PrintScreen）。只能在主線程呼叫。
-/// </summary>
+/// <summary>Unity IMGUI 只能貼文字，因此以 Win32 API 讀剪貼簿圖片；只能在主線程呼叫。</summary>
 internal static class ClipboardImage
 {
     private const uint CfUnicodeText = 13;
@@ -44,10 +41,6 @@ internal static class ClipboardImage
     private static bool IsWindows =>
         Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor;
 
-    /// <summary>
-    /// 剪貼簿有圖片且沒有文字時讀出並轉成 JPEG；有文字時交給輸入框照常貼上。
-    /// </summary>
-    /// <returns>JPEG 位元組；沒有可用的圖片或非 Windows 時回傳空陣列。</returns>
     public static byte[] TryRead()
     {
         if (!IsWindows) return [];
@@ -84,7 +77,6 @@ internal static class ClipboardImage
         }
     }
 
-    /// <summary>剪貼簿區塊上限（256 MB）；更大的視為異常資料，複製前就拒絕。</summary>
     private const ulong MaxClipboardBytes = 256UL * 1024 * 1024;
 
     private static byte[] ReadFormat(uint format)

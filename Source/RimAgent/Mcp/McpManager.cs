@@ -8,10 +8,6 @@ using System.Threading.Tasks;
 
 namespace RimAgent.Mcp;
 
-/// <summary>
-/// 一場遊戲期間的 MCP server 管理：設定讀一次，server 全部延遲連線，
-/// 閒置逾時掃蕩，關閉不阻塞主線程。缺設定時所有操作回報原因。
-/// </summary>
 public sealed class McpManager
 {
     /// <summary>server 閒置多久視為可關（分鐘）。</summary>
@@ -39,7 +35,6 @@ public sealed class McpManager
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
     }
 
-    /// <summary>設定與連線狀態的人類可讀摘要（mcp_list_tools 用）。</summary>
     public string Status()
     {
         List<McpServerEntry> entries = Entries();
@@ -73,7 +68,6 @@ public sealed class McpManager
         return sb.ToString().Trim();
     }
 
-    /// <summary>列出已啟用 server 的工具（會連線；失敗的 server 內嵌原因）。</summary>
     public async Task<string> ListToolsAsync(CancellationToken cancellationToken)
     {
         SweepIdle();
@@ -120,7 +114,6 @@ public sealed class McpManager
         }
     }
 
-    /// <summary>呼叫指定 server 的工具；server 未啟用或未知時回報原因。</summary>
     public async Task<string> CallAsync(string server, string tool, string argsJson, CancellationToken cancellationToken)
     {
         SweepIdle();
@@ -152,7 +145,6 @@ public sealed class McpManager
         }
     }
 
-    /// <summary>暖機：在背景把已啟用的 server 同時連起來，玩家真正用時不必等開行程。</summary>
     public Task WarmUpAsync()
     {
         var tasks = new List<Task>();
@@ -176,7 +168,6 @@ public sealed class McpManager
         }
     }
 
-    /// <summary>關掉閒置逾時的 server（存檔時與每次使用前呼叫，不阻塞）。</summary>
     public void SweepIdle()
     {
         List<string> stale = [];
@@ -191,7 +182,6 @@ public sealed class McpManager
         foreach (string name in stale) Drop(name);
     }
 
-    /// <summary>關掉全部 server（不等待行程結束）。</summary>
     public void Shutdown()
     {
         List<IMcpServer> servers;
@@ -278,7 +268,6 @@ public sealed class McpManager
         }
     }
 
-    /// <summary>更新指定 server 的最後使用時間；該實例已被換掉或丟掉就不動。</summary>
     private void Touch(string name, IMcpServer server)
     {
         lock (_gate)

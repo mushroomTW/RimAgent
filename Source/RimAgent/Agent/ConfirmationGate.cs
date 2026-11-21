@@ -9,15 +9,7 @@ using RimAgent.Tools;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 命令閘門實作，擁有者是 <see cref="ColonyAgentSession"/>。
-/// 依 <see cref="AgentMode"/> 與目前工具的 <see cref="ToolRisk"/> 決定放行或擋下：
-/// 確認模式擋 Confirm 級工具（回傳預覽並捕捉原呼叫，玩家按確認後直接執行原呼叫）；
-/// 自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再決定執行或拒絕。
-/// 工具的風險由 <see cref="LoggingAIFunction"/> 在每次呼叫前經 <see cref="BeginInvocation"/> 告知；
-/// 同一輪的多個查詢可並行執行，每條非同步流程各有一份呼叫狀態（AsyncLocal），
-/// 共用狀態（待確認、額度、失敗紀錄）各自上鎖。
-/// </summary>
+/// <summary>命令閘門，擁有者是 <see cref="ColonyAgentSession"/>：確認模式擋 Confirm 級工具（回傳預覽並捕捉原呼叫，玩家按確認後直接執行原呼叫）；自動模式由 <see cref="LoggingAIFunction"/> 先強制預覽、問過分類器再決定執行或拒絕。同一輪的多個查詢可並行，每條非同步流程各有一份呼叫狀態（AsyncLocal），共用狀態各自上鎖。</summary>
 public sealed class ConfirmationGate
 {
     private sealed class PendingApproval
@@ -30,6 +22,7 @@ public sealed class ConfirmationGate
     {
         public string ToolName;
         public ToolRisk Risk;
+        // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
         public bool? Forced;
     }
 
@@ -39,9 +32,8 @@ public sealed class ConfirmationGate
     private readonly List<PendingApproval> _pending = [];
     // 玩家按下「不再問」的工具；只活在這場遊戲的記憶體裡，不進存檔。
     private readonly HashSet<string> _sessionApproved = new(StringComparer.Ordinal);
-    // 不在工具呼叫期間（直接建構工具的測試）時以最保守的 Confirm 看待。
+    // 不在工具呼叫期間（例如直接建構工具的測試）時只有完整權限模式放行命令（見 AllowCommands）。
     private readonly AsyncLocal<InvocationState> _invocation = new();
-    // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
     private int _lastApprovalExecutedCount;
     // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
     private int _remainingToolCalls = -1;
@@ -82,6 +74,8 @@ public sealed class ConfirmationGate
         return _mode() switch
         {
             AgentMode.Confirm => invocation?.Risk == ToolRisk.Query || IsApprovedForSession(invocation?.ToolName),
+            // 命令只能由分類器核可（Forced = true）放行；沒有分類結果就失敗即關閉。
+            AgentMode.Auto => invocation?.Risk == ToolRisk.Query,
             AgentMode.Execute => invocation != null && (invocation.Risk != ToolRisk.Confirm
                                 || (_autonomousRun && !_confirmAutonomousMajor)
                                 || IsApprovedForSession(invocation.ToolName)),
@@ -99,7 +93,6 @@ public sealed class ConfirmationGate
         }
     }
 
-    /// <summary>封存預覽過的固定工具呼叫；核准時不會重送自然語句給模型。</summary>
     internal void RegisterPendingApproval(string toolName, Func<CancellationToken, Task<object>> executeAsync)
     {
         if (executeAsync == null) return;
@@ -109,10 +102,7 @@ public sealed class ConfirmationGate
         }
     }
 
-    /// <summary>批准並依序執行目前等待確認的所有工具呼叫。</summary>
-    /// <param name="cancellationToken">取消語彙基元。</param>
     /// <param name="rememberForSession">把這批工具記成「本局不再問」；MCP 工具不記（見 <see cref="CanRememberForSession"/>）。</param>
-    /// <returns>成功執行的工具呼叫數量。</returns>
     /// <remarks>
     /// 中途失敗或取消時：已移出待確認的項目（已執行的與出事的那一個）不會重試，
     /// 它們對應的預覽也從 blocked 前段移除（假設預覽與待確認同序登記）；
@@ -160,7 +150,6 @@ public sealed class ConfirmationGate
         }
     }
 
-    /// <summary>這批待確認裡有沒有可以記成「本局不再問」的工具（沒有就不必顯示那顆按鍵）。</summary>
     public bool CanRememberPending
     {
         get
@@ -189,7 +178,6 @@ public sealed class ConfirmationGate
         lock (_gate) return _sessionApproved.Contains(toolName);
     }
 
-    /// <summary>清掉所有「本局不再問」（對話重來時一併歸零）。</summary>
     public void ClearSessionApprovals()
     {
         lock (_gate) _sessionApproved.Clear();
@@ -260,7 +248,6 @@ public sealed class ConfirmationGate
         }
     }
 
-    /// <summary>拿走並清空本輪被擋下的預覽（送完一句指令時呼叫一次）。</summary>
     public IReadOnlyList<string> TakeBlocked()
     {
         lock (_gate)
@@ -272,11 +259,7 @@ public sealed class ConfirmationGate
         }
     }
 
-    /// <summary>
-    /// 同一句內一模一樣的呼叫是否已失敗到不該再跑；是則呼叫端直接擋下，不碰世界也不扣額度。
-    /// 模型常把同一組失敗參數重送十幾次直到額度用完，原錯誤訊息再給一次也不會變。
-    /// 允許原樣重試一次（與提示詞「重試一次」一致，也涵蓋格子被小人暫時擋住這類很快會好的失敗），第三次起才擋。
-    /// </summary>
+    /// <summary>同一句內一模一樣的呼叫是否已失敗到不該再跑；模型常把同一組失敗參數重送十幾次直到額度用完。允許原樣重試一次（涵蓋格子被小人暫時擋住這類很快會好的失敗），第三次起才擋。</summary>
     internal bool TryGetFailedCall(string toolName, string arguments, out string error)
     {
         if (_failedCalls.TryGet(QueryCacheKey(toolName, arguments), out FailedCall failed) && failed.Count >= MaxIdenticalFailures)
@@ -315,27 +298,23 @@ public sealed class ConfirmationGate
         return (toolName ?? string.Empty) + "\n" + (arguments ?? string.Empty);
     }
 
-    /// <summary>特定高敏感工具（如本機 MCP 工具）是否需要強制手動確認：僅在確認模式下需強制手動確認。</summary>
     internal bool RequiresExplicitConfirmation(string toolName)
     {
         return string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
             && _mode() == AgentMode.Confirm;
     }
 
-    /// <summary>這次工具呼叫是否要先問分類器：自動模式且是命令。</summary>
     internal bool NeedsClassification(ToolRisk risk)
     {
         return _mode() == AgentMode.Auto
             && risk != ToolRisk.Query;
     }
 
-    /// <summary>工具呼叫開始：記下這次工具的名稱與靜態風險。</summary>
     internal void BeginInvocation(string toolName, ToolRisk risk)
     {
         _invocation.Value = new InvocationState { ToolName = toolName, Risk = risk };
     }
 
-    /// <summary>工具呼叫結束：回到保守預設。</summary>
     internal void EndInvocation()
     {
         _invocation.Value = null;

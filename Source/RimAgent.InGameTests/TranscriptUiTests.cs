@@ -16,7 +16,6 @@ internal sealed class TranscriptUiTests
     /// 每個狀態（含焦點與按下）的文字都必須透明，畫面上只留 Label 與反白。
     /// </summary>
     [Test]
-#pragma warning disable CA1822 // DevTools 要實例方法才能配合隱含的公開建構式註冊
     public static void SelectableLayerTextIsTransparentInEveryState()
     {
         foreach (GameFont font in new[] { GameFont.Tiny, GameFont.Small, GameFont.Medium })
@@ -31,6 +30,5 @@ internal sealed class TranscriptUiTests
             }
         }
     }
-#pragma warning restore CA1822
 }
 #pragma warning restore MA0036, S1118

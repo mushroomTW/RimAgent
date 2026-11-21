@@ -9,7 +9,6 @@ using RimAgent.Mcp;
 
 namespace RimAgent.Tools;
 
-/// <summary>MCP 閘道：狀態、列工具、代呼叫。實際傳輸走官方 SDK，命令一律在本機行程執行。</summary>
 public sealed class McpTools
 {
     private readonly McpManager _manager;

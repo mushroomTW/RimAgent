@@ -126,7 +126,6 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok(note);
     }
 
-    /// <summary>殖民地目前是否使用手動工作優先級；遊戲尚未載入時視為關閉。</summary>
     public bool UseWorkPriorities => Current.Game?.playSettings?.useWorkPriorities ?? false;
 
     /// <summary>切換手動工作優先級；值沒變就不通知，避免每次復原都重算全體殖民者。</summary>

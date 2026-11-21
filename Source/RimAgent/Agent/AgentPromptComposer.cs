@@ -7,42 +7,26 @@ using System.Text;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 每句指令的系統提示詞組裝：前情提要→DLC 啟用狀況→玩家自留地→內建準則→技能索引。
-/// 純字串邏輯；任一層為空就跳過，不留空標題。
-/// </summary>
+/// <summary>每句指令的系統提示詞組裝；任一層為空就跳過，不留空標題。</summary>
 public static class AgentPromptComposer
 {
-    /// <summary>前情提要保底：擴充包遺失或損毀時模型至少知道自己是誰。</summary>
     public const string FallbackPreamble =
 @"You are RimAgent. You manage the player's RimWorld colony through tools; the player talks to you in the game's Agent tab.";
 
-    /// <summary>
-    /// 設定頁開啟模組化房型時附加的建造準則。工具說明裡已有同樣的建議，但模型常在規劃階段就決定一件一件放，
-    /// 看到工具說明時已來不及，所以放進系統提示詞。設定只在設定頁改，不破壞前綴快取。
-    /// </summary>
+    /// <summary>模型常在規劃階段就決定一件一件放，看到工具說明時已來不及，所以房型建議放進系統提示詞；設定只在設定頁改，不破壞前綴快取。</summary>
     public const string LayoutsHint =
         "Room layouts are enabled: build every room (bedroom, kitchen, workshop, storage, hospital, etc.) with place_blueprint shape=layout first. " +
         "List the layouts with an empty building and pick the closest fit; place walls, doors and furniture one by one only when the player asks for a specific size or shape, or no layout fits.";
 
-    /// <summary>
-    /// 是否附 <see cref="LayoutsHint"/>：房型開關開著，且玩家沒關掉建造類工具（關掉時模型根本拿不到 place_blueprint）。
-    /// </summary>
-    /// <param name="layoutsOn">設定頁的模組化房型開關。</param>
-    /// <param name="permissions">玩家放行的工具類別；null 視為全部放行。</param>
+    /// <summary>房型開關開著，且玩家沒關掉建造類工具（關掉時模型拿不到 place_blueprint）才附 <see cref="LayoutsHint"/>。</summary>
     public static bool LayoutsHintApplies(bool layoutsOn, RimAgent.Tools.ToolPermissions permissions)
     {
         return layoutsOn && (permissions == null || permissions.Allows(RimAgent.Tools.ToolCategory.Build));
     }
 
-    /// <summary>技能區的總量上限（字數），超過就省略剩下的並註明。</summary>
     public const int MaxSkillsChars = 8000;
 
-    /// <summary>
-    /// 索引版組裝：只列技能名稱與描述，全文由 `read_skill` 按需讀取。
-    /// 易變的記憶索引由呼叫端接在尾端，保住前綴快取。
-    /// </summary>
-    /// <param name="layouts">設定頁的模組化房型開關；開啟時附上 <see cref="LayoutsHint"/>。</param>
+    /// <summary>易變的記憶索引由呼叫端接在尾端，保住前綴快取。</summary>
     public static string ComposeWithSkillIndex(string preamble, string playerNotes, string conduct, IReadOnlyList<AgentSkill> skills, string expansions = null, bool layouts = false)
     {
         var sb = new StringBuilder(preamble ?? string.Empty);
@@ -66,9 +50,7 @@ public static class AgentPromptComposer
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 本局 DLC 啟用狀況的一行說明（名稱用 defName，不隨遊戲語言變動）；本體不列。整場遊戲不變，不破壞前綴快取。
-    /// </summary>
+    /// <summary>DLC 名稱用 defName，不隨遊戲語言變動；本體不列。整場遊戲不變，不破壞前綴快取。</summary>
     public static string FormatExpansions(IReadOnlyList<(string Name, bool IsCore, bool IsActive)> expansions)
     {
         var dlcs = (expansions ?? []).Where(e => !e.IsCore).ToList();
@@ -105,7 +87,6 @@ public static class AgentPromptComposer
         if (omitted > 0) sb.Append("\n[").Append(omitted).Append(" further skill(s) omitted: over budget]");
     }
 
-    /// <summary>技能區共用的總量管制：塞得下回傳 true，否則記一次省略。</summary>
     private static bool TryAppendSkillEntry(StringBuilder section, string entry)
     {
         if (section.Length + entry.Length > MaxSkillsChars) return false;
@@ -115,7 +96,6 @@ public static class AgentPromptComposer
 
     private static string TrimTrailingWhitespace(string value)
     {
-        // 僅清除提示詞組合時使用的行尾空白。
         return (value ?? string.Empty).TrimEnd('\r', '\n', ' ', '\t');
     }
 }

@@ -5,21 +5,15 @@ using System.Globalization;
 namespace RimAgent.Tools;
 
 /// <summary>
-/// 工具結果送進模型前的硬上限：留頭、留尾、丟中間，並在接縫處說明省略了多少字。
 /// 觀察類工具（例如 50x50 的格子摘要）可以回很長的文字，沒有上限時一次呼叫就能吃掉整個
 /// 上下文視窗，之後的歷史壓縮也救不回來（被折疊的是舊訊息，不是這一則）。
 /// 頭尾都留：多數工具結果開頭是摘要、結尾是總計或失敗清單，兩端都有訊息。
-/// 給了 <see cref="ToolOutputStore"/> 時完整原文存起來，接縫處附代號與續讀位置，模型可用 read_tool_output 取回中段。
 /// </summary>
 internal static class ToolOutputLimit
 {
     /// <summary>單次工具結果保留的字元數（約 2000 token）：一輪可能呼叫好幾個工具，還要留空間給歷史與回覆。</summary>
     public const int MaxResultChars = 8000;
 
-    /// <summary>保留的內容以 <paramref name="maxChars"/> 為上限；另加一行固定長度的省略說明。</summary>
-    /// <param name="text">工具原始結果。</param>
-    /// <param name="maxChars">保留字元上限，預設為 <see cref="MaxResultChars"/>。</param>
-    /// <param name="store">提供時保存完整原文，並在接縫處附上續讀代號；null 表示不保存。</param>
     public static string Apply(string text, int maxChars = MaxResultChars, ToolOutputStore store = null)
     {
         if (string.IsNullOrEmpty(text) || text.Length <= maxChars) return text;

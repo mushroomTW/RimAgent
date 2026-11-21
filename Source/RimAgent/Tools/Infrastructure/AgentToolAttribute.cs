@@ -30,7 +30,6 @@ public enum ToolCategory
 /// </summary>
 public enum ToolRisk
 {
-    /// <summary>只讀，不改遊戲狀態。</summary>
     Query,
     /// <summary>會改遊戲狀態，但改回來就好（優先級、作息、徵召、設定值）。</summary>
     Safe,
@@ -38,11 +37,6 @@ public enum ToolRisk
     Confirm
 }
 
-/// <summary>
-/// 標記一個公開方法為 agent 工具。<see cref="AgentToolRegistry"/> 以反射收集，
-/// 工具說明與參數說明則交給 <see cref="System.ComponentModel.DescriptionAttribute"/>，
-/// 由 MEAI 的 AIFunctionFactory 讀進 schema。
-/// </summary>
 [AttributeUsage(AttributeTargets.Method, Inherited = false)]
 public sealed class AgentToolAttribute : Attribute
 {
@@ -53,7 +47,6 @@ public sealed class AgentToolAttribute : Attribute
         Risk = risk;
     }
 
-    /// <summary>送給模型的工具名稱（snake_case）。</summary>
     public string Name { get; }
     public ToolCategory Category { get; }
     public ToolRisk Risk { get; }

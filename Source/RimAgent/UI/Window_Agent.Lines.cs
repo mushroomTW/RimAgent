@@ -17,7 +17,6 @@ namespace RimAgent.UI;
 #pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
-    /// <summary>執行中提示：依 Agent 此刻實際在做的事顯示；尚未得知時只說執行中。</summary>
     private static string ActivityText(AgentActivity activity)
     {
         if (activity == null) return "RimAgent.Working".Translate().ToString();
@@ -36,7 +35,6 @@ public partial class Window_Agent
         return ((System.Environment.TickCount & int.MaxValue) / 500) % 3;
     }
 
-    /// <summary>執行中動畫：. → .. → ... 循環，每 0.5 秒換一格。</summary>
     private static string WorkingDots(int phase)
     {
         return phase switch
@@ -58,7 +56,6 @@ public partial class Window_Agent
         AppendLines(entries, 0, width);
     }
 
-    /// <summary>丟掉已經不在逐字稿裡（/clear、裁掉舊紀錄、換存檔）的展開狀態，免得一直抓著舊紀錄。</summary>
     private void PruneToolExpanded(IReadOnlyList<TranscriptEntry> entries)
     {
         if (_toolExpanded.Count == 0) return;
@@ -95,7 +92,6 @@ public partial class Window_Agent
         _linesEntryCount = entries.Count;
     }
 
-    /// <summary>往前跳過思考紀錄，看上一筆是不是工具：思考不打斷連續的工具群組。</summary>
     internal static bool PreviousIsTool(IReadOnlyList<TranscriptEntry> entries, int index)
     {
         for (int j = index - 1; j >= 0; j--)
@@ -108,10 +104,6 @@ public partial class Window_Agent
 
     private string _toolGroupToggleTip;
 
-    /// <summary>
-    /// 把這筆工具紀錄記進連續工具群組並更新（或新建）群組摘要列，回傳該組目前是否展開。
-    /// 摘要列在組內第一筆工具時加入，之後每多一筆就改寫它的數字。
-    /// </summary>
     private bool TrackToolGroup(TranscriptEntry entry, bool continuesPrevious, float width)
     {
         if (!continuesPrevious || _groupFirst == null)
@@ -150,7 +142,6 @@ public partial class Window_Agent
         return expanded;
     }
 
-    /// <summary>群組預設收合；組內有等待確認的預覽時預設展開（玩家要看得到確認的是什麼）；玩家親手設定過的照玩家的。</summary>
     private bool IsGroupExpanded(TranscriptEntry first)
     {
         if (_groupExpanded.TryGetValue(first, out bool expanded)) return expanded;
@@ -177,7 +168,6 @@ public partial class Window_Agent
         return Text.CurFontStyle.CalcHeight(MeasureContent, width);
     }
 
-    /// <summary>把一筆紀錄排成若干行加到 <paramref name="into"/>，回傳佔用的總高度（含間距）。</summary>
     private float BuildEntryLines(TranscriptEntry entry, float width, bool turnStart, List<TranscriptLine> into, bool collapsedGroup = false)
     {
         float total = 0f;
@@ -217,7 +207,6 @@ public partial class Window_Agent
         return total;
     }
 
-    /// <summary>只重排一筆紀錄的行（展開／收合工具時），不必整份逐字稿重算 CalcHeight 與 markdown。</summary>
     private void RelayoutEntry(TranscriptEntry entry)
     {
         int start = -1;
@@ -247,7 +236,6 @@ public partial class Window_Agent
         _linesTotal += newHeight - oldHeight;
     }
 
-    /// <summary>工具紀錄預設收合，只有等待確認的預覽預設展開（玩家要看得到確認的是什麼）；玩家親手設定過的照玩家的。</summary>
     private bool IsToolExpanded(TranscriptEntry entry)
     {
         if (entry.Kind == TranscriptKind.Reasoning) return _toolExpanded.TryGetValue(entry, out bool open) && open;
@@ -256,9 +244,6 @@ public partial class Window_Agent
         return entry.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 雙色分離渲染條目：採用 Unity Rich Text 標籤，達成「高亮彩色前綴標籤 + 柔和淺白內文」的圖片設計層次。
-    /// </summary>
     private static IEnumerable<(string Text, LineKind Kind)> Render(TranscriptEntry entry, bool toolExpanded, HashSet<int> combatNoted)
     {
         switch (entry.Kind)
@@ -301,7 +286,6 @@ public partial class Window_Agent
                 break;
 
             default:
-                // Notice 條目：檢驗是否為暫停、告警或提醒
                 bool isPauseOrAlert = ContainsAny(entry.Text, "暫停", "暂停", "pause", "告警", "警告", "warn", "alert");
                 string noticeTag = isPauseOrAlert
                     ? ColorTagPrefix + PauseHex + ">" + "RimAgent.Tag.AutoPause".Translate().ToString() + ColorTagCloseSpace
@@ -351,7 +335,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>表格交給框架排版；格子套上內文顏色，純文字另存供右鍵複製。</summary>
     private static void LayoutTable(ref TranscriptLine line, float width)
     {
         var rows = RimLLM_Framework.Mod.RimLLMMarkdownTable.Split(line.Text)[0].Rows;
@@ -360,7 +343,6 @@ public partial class Window_Agent
         line.PlainText = line.Table.PlainText;
     }
 
-    /// <summary>摘要列（▸／▾、工具名、風險判定；失敗時工具名轉紅）一定顯示，參數與結果只在展開時顯示。</summary>
     private static IEnumerable<(string Text, LineKind Kind)> RenderTool(TranscriptEntry entry, bool expanded, HashSet<int> combatNoted)
     {
         string arrow = ColorTagPrefix + SubTextHex + ">" + (expanded ? "▾" : "▸") + ColorTagCloseSpace;
@@ -398,7 +380,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>思考內容預設收合成一列（▸ 思考），點開才顯示全文；沿用工具列的展開與右鍵複製。</summary>
     private static IEnumerable<(string Text, LineKind Kind)> RenderReasoning(TranscriptEntry entry, bool expanded)
     {
         string arrow = ColorTagPrefix + SubTextHex + ">" + (expanded ? "▾" : "▸") + ColorTagCloseSpace;
@@ -414,7 +395,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>工具名稱依類別上色，一眼分得出查詢、下令、建造、戰鬥等；失敗時一律轉紅（呼叫端處理）。</summary>
     internal static string ToolCategoryHex(ToolCategory category)
     {
         return category switch
@@ -502,7 +482,6 @@ public partial class Window_Agent
         return ColorTagPrefix + TextHex + ">" + RimLLM_Framework.Mod.RimLLMMarkdown.CellToRichText(math) + ColorTagClose;
     }
 
-    /// <summary>記住上一次的輸入值與組好的字串；值沒變就直接回傳，不重新翻譯與格式化。</summary>
     private sealed class TextCache<TKey>
     {
         private bool _hasValue;

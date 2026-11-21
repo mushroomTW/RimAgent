@@ -12,10 +12,8 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>交易：商人庫存查詢、買入與賣出一次結清。組商隊在 <see cref="CaravanTools"/>。</summary>
 public sealed partial class TradeTools
 {
-    /// <summary>單一商人最多列出的品項數，超過則截斷並註明（省 token）。</summary>
     internal const int MaxGoodsListed = 80;
 
     private const string SilverDefName = "Silver";
@@ -100,7 +98,6 @@ public sealed partial class TradeTools
         return result.Message;
     }
 
-    /// <summary>品名解析到 defName；銀兩不用列（自動結算），列了直接擋下並說明。</summary>
     private static Result<List<TradeLine>> ResolveLines(List<ParsedLine> parsed, IReadOnlyList<DefInfo> candidates, string missHint)
     {
         var lines = new List<TradeLine>();
@@ -117,7 +114,6 @@ public sealed partial class TradeTools
         return Result<List<TradeLine>>.Ok(lines);
     }
 
-    /// <summary>「品名 x 數量」一行；逗號、分號或換行分隔多行。</summary>
     internal sealed class ParsedLine
     {
         public string Item = string.Empty;
@@ -160,7 +156,6 @@ public sealed partial class TradeTools
     {
         if (string.IsNullOrWhiteSpace(negotiator))
         {
-            // 交涉者預設：社交技能最高且未倒地者。
             ColonistInfo defaultPawn = _world.GetColonists().Where(c => !c.Downed).OrderByDescending(SocialLevel).FirstOrDefault();
             if (defaultPawn == null) return Result<ColonistInfo>.Fail(ToolText.Error("no colonist is available to negotiate."));
             return Result<ColonistInfo>.Ok(defaultPawn);
@@ -177,10 +172,7 @@ public sealed partial class TradeTools
         return social != null ? social.Level : 0;
     }
 
-    /// <summary>格式化商人清單文字。</summary>
-    /// <param name="traders">商人資訊清單。</param>
-    /// <param name="kindLabel">單數稱謂，必含完整詞彙（orbital trader／visiting caravan），不單用 caravan。</param>
-    /// <returns>格式化後的商人清單字串。</returns>
+    /// <summary>格式化商人清單；kindLabel 必含完整詞彙（orbital trader／visiting caravan），不單用 caravan。</summary>
     private static string FormatTraders(List<TraderInfo> traders, string kindLabel)
     {
         var sb = new StringBuilder();

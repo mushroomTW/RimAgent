@@ -12,10 +12,7 @@ using RimAgent.Tools;
 
 namespace RimAgent.Mcp;
 
-/// <summary>
-/// 官方 SDK 的 stdio 用戶端：把設定條目起成子行程，initialize→list→call 全走 SDK。
-/// 連線是延遲的（第一次 list／call 才建），逾時與取消直接傳給 SDK。
-/// </summary>
+/// <summary>連線是延遲的（第一次 list／call 才建），逾時與取消直接傳給 SDK。</summary>
 public sealed class SdkMcpServer : IMcpServer
 {
     private readonly McpServerEntry _entry;

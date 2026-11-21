@@ -289,7 +289,6 @@ public partial class Window_Agent
 
     private static GUIStyle _bubbleStyle;
 
-    /// <summary>以九宮格貼圖保留圓角，避免介面材質不支援 GUI.DrawTexture 的圓角參數。</summary>
     private static GUIStyle GetBubbleStyle()
     {
         if (_bubbleStyle != null) return _bubbleStyle;
@@ -328,9 +327,7 @@ public partial class Window_Agent
     private static readonly Dictionary<GameFont, GUIStyle> SelectableStyles = [];
 
     /// <summary>
-    /// Labels 不能框選，TextArea 會把顏色標籤一起複製；所以彩色 Label 照常顯示，
-    /// 上面再疊一層同字體同排版、文字平時透明的 TextArea 專門給滑鼠拖選＋Ctrl+C。
-    /// 底色沿用 Label（透明），捲動、行高、換行都與量測時一致。
+    /// Labels 不能框選、TextArea 會連顏色標籤一起複製：彩色 Label 上疊一層同字體同排版、文字平時透明的 TextArea，專供拖選與 Ctrl+C。
     /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
     /// </summary>
     private static void DrawSelectableLine(Rect rect, string richText, string plainText)
@@ -371,14 +368,12 @@ public partial class Window_Agent
         return style;
     }
 
-    /// <summary>框選層樣式的全部狀態（含焦點與按下）；遊戲內測試以此確認每個狀態的文字都透明。</summary>
     internal static GUIStyleState[] SelectableStates(GUIStyle style)
     {
         return [style.normal, style.hover, style.active, style.focused, style.onNormal, style.onHover, style.onActive, style.onFocused];
     }
 
     /// <summary>
-    /// 工具摘要列沒有框選層（左鍵要留給展開／收合）：右鍵直接複製該列純文字。
     /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
     /// </summary>
     private static void CopyToolHeaderOnRightClick(Rect rect, string plainText)

@@ -15,7 +15,6 @@ internal sealed partial class RimWorldGameWorld
 {
     private const string QuestNotFound = "no available or active quest with that id. Call list_quests for the current ids.";
 
-    /// <summary>任務分頁會列出的任務：可接受與進行中，不含已結束、已過期與隱藏的。</summary>
     public IReadOnlyList<QuestInfo> GetQuests()
     {
         var result = new List<QuestInfo>();
@@ -68,7 +67,6 @@ internal sealed partial class RimWorldGameWorld
         return info;
     }
 
-    /// <summary>照任務分頁的說明區：任務描述，接著是已啟用的各段落補充（依啟用時間）。</summary>
     private static string QuestDescription(Quest quest)
     {
         var sb = new StringBuilder();
@@ -98,7 +96,6 @@ internal sealed partial class RimWorldGameWorld
         return reasons;
     }
 
-    /// <summary>獎勵選項：照任務分頁「以此獎勵接受」的每一組；描述用遊戲自己的獎勵說明文字。</summary>
     private static List<QuestRewardInfo> QuestRewardOptions(Quest quest)
     {
         var result = new List<QuestRewardInfo>();
@@ -174,7 +171,6 @@ internal sealed partial class RimWorldGameWorld
         return Find.QuestManager.QuestsListForReading.FirstOrDefault(q => q.id == questId && !q.hidden && !q.hiddenInUI);
     }
 
-    /// <summary>照任務分頁接受鈕：先過接受條件，有獎勵選項的先選定，需要接受者的再核對人選，最後 Quest.Accept。</summary>
     public CommandResult AcceptQuest(int questId, int rewardNumber, int accepterPawnId)
     {
         Quest quest = FindQuest(questId);

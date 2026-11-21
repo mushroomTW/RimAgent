@@ -16,10 +16,7 @@ namespace RimAgent.UI;
 #pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
-    /// <summary>
-    /// 換上新一輪的 CTS。舊的若還有未完成的工作握著它，就先收進 _retiredCts（停止時一併取消）而不 Dispose；
-    /// 舊工作已結束才安全釋放。
-    /// </summary>
+    /// <summary>舊 CTS 若還有未完成的工作握著，就先收進 _retiredCts（停止時一併取消）而不 Dispose；工作已結束才安全釋放。</summary>
     private CancellationTokenSource BeginRunCts()
     {
         CancellationTokenSource old = _cts;
@@ -33,7 +30,6 @@ public partial class Window_Agent
         return _cts;
     }
 
-    /// <summary>取消目前與已退役但仍在跑的 CTS（停止鍵、關窗、遊戲被換掉）。</summary>
     private void CancelRunCts()
     {
         _cts?.Cancel();
@@ -41,7 +37,6 @@ public partial class Window_Agent
         DisposeFinishedRetiredCts();
     }
 
-    /// <summary>工作已結束的退役 CTS 不會再有人讀，釋放並移出清單；仍在跑的留著。</summary>
     private void DisposeFinishedRetiredCts()
     {
         _retiredCts.RemoveAll(r =>
@@ -52,10 +47,6 @@ public partial class Window_Agent
         });
     }
 
-    /// <summary>
-    /// 記下發射後不管的請求；它 faulted（通常是同幀被自主任務搶先導致的忙碌衝突）
-    /// 才在主線程補一句忙碌提示。成功完成就靜靜丟掉。
-    /// </summary>
     private void Observe(ColonyAgentSession session, Task task)
     {
         _observedSession = session;
@@ -103,7 +94,6 @@ public partial class Window_Agent
         HandleSlashOrSend(session, text, images);
     }
 
-    /// <summary>嘗試將輸入當執行中的揬話；回傳 true 表示已送出或已擋下，呼叫端應在清除輸入後結束。</summary>
     private static bool TryInterject(ColonyAgentSession session, string text)
     {
         if (text[0] == '/' || !session.IsBusy) return false;
@@ -116,7 +106,6 @@ public partial class Window_Agent
         return interjected;
     }
 
-    /// <summary>探勘模型能力並檢查貼圖是否可送；若應擋下送出則回傳 false。</summary>
     private bool ProbeAndValidateImages(ColonyAgentSession session)
     {
         ProbeCapabilities();
@@ -130,7 +119,6 @@ public partial class Window_Agent
         return true;
     }
 
-    /// <summary>處理斜線指令，或一般文字送給模型。</summary>
     private void HandleSlashOrSend(ColonyAgentSession session, string text, List<byte[]> images)
     {
         if (SlashCommands.TryParse(text, out SlashCommand command, out string args))
@@ -173,7 +161,6 @@ public partial class Window_Agent
         }
     }
 
-    /// <summary>寫設定檔失敗（例如檔案被鎖）只記一次警告，不影響能力探測的結果。</summary>
     private static void TryWriteSettings(RimAgentSettings settings)
     {
         try

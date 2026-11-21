@@ -8,10 +8,8 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>把模型給的殖民者 / 座標 / 區域描述對到遊戲物件。</summary>
 public static class TargetResolver
 {
-    /// <summary>代表「玩家目前框選的東西」的區域關鍵字。</summary>
     public const string SelectionKeyword = "selection";
 
     public static readonly string[] EveryoneKeywords = ["all", "everyone", "*"];
@@ -22,10 +20,6 @@ public static class TargetResolver
         return EveryoneKeywords.Any(k => string.Equals(k, needle, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// 以 id、全名、綽號、短名或其前綴指定一位殖民者；大小寫不敏感。
-    /// 命中多於一位即回錯誤並列出候選。
-    /// </summary>
     public static Result<ColonistInfo> ResolveColonist(string input, IReadOnlyList<ColonistInfo> colonists)
     {
         return ResolveEntity(
@@ -37,10 +31,7 @@ public static class TargetResolver
             "colonist");
     }
 
-    /// <summary>
-    /// 命令的地圖目標：物件 id 或格子座標擇一（沒給的欄位為 -1）。都沒給回成功但值為 null，
-    /// 由命令決定缺目標算不算錯；兩種都給或格子只給一個座標就報錯。
-    /// </summary>
+    /// <summary>命令的地圖目標：都沒給回成功但值為 null，由命令決定缺目標算不算錯。</summary>
     public static Result<MapTarget> ResolveMapTarget(int targetId, int x, int z)
     {
         bool hasThing = targetId >= 0;
@@ -53,7 +44,6 @@ public static class TargetResolver
         return Result<MapTarget>.Ok(hasCell ? MapTarget.OfCell(x, z) : null);
     }
 
-    /// <summary>逗號分隔的多位殖民者，或 all / everyone / * 代表全部。</summary>
     public static Result<List<ColonistInfo>> ResolveColonists(string input, IReadOnlyList<ColonistInfo> colonists)
     {
         string needle = (input ?? string.Empty).Trim();
@@ -77,7 +67,6 @@ public static class TargetResolver
             : Result<List<ColonistInfo>>.Fail("Error: colonist is empty. Give names, ids, or \"all\".");
     }
 
-    /// <summary>通用實體解析：id 精確比對 → 名稱精確比對 → 前綴比對 → 包含比對；撞名或歧義報錯並列候選。</summary>
     public static Result<T> ResolveEntity<T>(
         string input,
         IReadOnlyList<T> candidates,
@@ -116,9 +105,6 @@ public static class TargetResolver
         return Result<T>.Fail($"Error: no {kindLabel} matches \"{needle}\". {FormatListAll(candidates, describe, kindLabel)}");
     }
 
-    /// <summary>
-    /// 去掉清單輸出慣用的 id 外框：「[3]」與「#3」。模型常照抄 list_zones 等工具的格式。
-    /// </summary>
     private static string StripIdDecoration(string needle)
     {
         if (needle.Length > 2 && needle[0] == '[' && needle[needle.Length - 1] == ']')
@@ -176,7 +162,6 @@ public static class TargetResolver
             Math.Max(0, rect.MinX), Math.Max(0, rect.MinZ), Math.Min(bounds.Width - 1, rect.MaxX), Math.Min(bounds.Height - 1, rect.MaxZ)));
     }
 
-    /// <summary>座標在地圖內回傳 null，否則回傳可轉述給模型的錯誤訊息。</summary>
     public static string CheckCell(int x, int z, MapBounds bounds)
     {
         if (bounds.Contains(x, z)) return null;

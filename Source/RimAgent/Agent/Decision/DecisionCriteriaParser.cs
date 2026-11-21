@@ -3,7 +3,6 @@ using System.Collections.Generic;
 
 namespace RimAgent.Agent;
 
-/// <summary>判準 markdown 的共用解析：風險檢查與目標稽核共用同一種 true/false 區段格式。</summary>
 internal static class DecisionCriteriaParser
 {
     /// <summary>解析 noul 區段：「true:」「false:」行取代對應敘述，其餘非空行合併為說明。</summary>

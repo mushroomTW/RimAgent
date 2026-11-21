@@ -7,29 +7,22 @@ using System.Text.RegularExpressions;
 
 namespace RimAgent.UI;
 
-/// <summary>
-/// 把 Markdown 裡的 LaTeX 數學段（$...$、$$...$$）轉成遊戲內顯示得出的純文字。
-/// 框架的 Markdig 管線是 CommonMark、沒有數學擴充，$ 與 \log 會原樣輸出；
-/// 遊戲內也沒有 KaTeX，只能做保守轉換：去分隔符、常見指令轉 Unicode／ASCII。
-/// 程式碼區（圍籬、行內碼）不碰；純 BCL，可單元測試。
-/// </summary>
+/// <summary>框架的 Markdig 管線沒有數學擴充、遊戲內也沒有 KaTeX，只能保守轉換成純文字；純 BCL 以便單元測試。</summary>
 internal static class LatexMath
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
-    /// <summary>轉換時不得碰的區域：``` 或 ~~~ 圍籬（含串流中尚未閉合的尾巴）、行內碼。</summary>
     private static readonly Regex CodeRegion = new(
         @"(?:^|(?<=\n))(?<fence>`{3,}|~{3,})[\s\S]*?(?:\n\k<fence>[ \t]*(?=\r?\n|\z)|\z)|`+[^`\n]*`+",
         RegexOptions.Compiled | RegexOptions.ExplicitCapture,
         RegexTimeout);
 
-    /// <summary>$$...$$ 顯示數學，可跨行。</summary>
     private static readonly Regex DisplayMath = new(
         @"\$\$(?<body>[\s\S]+?)\$\$",
         RegexOptions.Compiled,
         RegexTimeout);
 
-    /// <summary>$...$ 行內數學：開頭 $ 後非空白、結尾 $ 前非空白、後面不接數字（排除 "$5-$10" 這類金額區間）；排除 $$ 與 \$。</summary>
+    /// <summary>行內數學；後面不接數字，以排除 "$5-$10" 這類金額區間。</summary>
     private static readonly Regex InlineMath = new(
         @"(?<!\\)(?<!\$)\$(?!\$)(?!\s)(?<body>[^$\n]+?)(?<!\s)(?<!\\)\$(?!\$)(?!\d)",
         RegexOptions.Compiled,
@@ -75,7 +68,6 @@ internal static class LatexMath
         RegexOptions.Compiled,
         RegexTimeout);
 
-    // \left \right 只是排版提示；\, \; \: \! 與 <空白>、\quad 只是間距。
     private static readonly Regex SpacingPattern = new(
         @"\\(?:left|right)\s*|\\(?:quad|qquad)|\\[,;:\s!]",
         RegexOptions.Compiled,
@@ -95,7 +87,6 @@ internal static class LatexMath
     private const string SupDst = "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼";
     private const string SubDst = "₀₁₂₃₄₅₆₇₈₉₊₋₌";
 
-    /// <summary>數學段內的替換規則（依序套用，順序即優先級）；靜態函式另見 ConvertSegment。</summary>
     private struct MathRule
     {
         public readonly Regex Pattern;
@@ -189,15 +180,11 @@ internal static class LatexMath
         // \\ 是數學換行：顯示數學保留換行，行內數學壓成空白。
         string s = body.Replace("\\\\", display ? "\n" : " ", StringComparison.Ordinal);
         foreach (MathRule rule in SegmentRules) s = rule.Pattern.Replace(s, rule.Replace);
-        // 剩下的 { } 只是 LaTeX 分組，直接拿掉；~ 是數學空白。
         s = s.Replace("{", string.Empty, StringComparison.Ordinal).Replace("}", string.Empty, StringComparison.Ordinal).Replace('~', ' ');
         return s;
     }
 
-    /// <summary>
-    /// 上標／下標：全是數字與 +-＝ 才轉 Unicode（遊戲字體一定有），
-    /// 否則保留 ^／_ 記號，至少讀得出次方與下標關係。
-    /// </summary>
+    /// <summary>全是數字與 +-＝ 才轉 Unicode（遊戲字體一定有），否則保留 ^／_ 記號。</summary>
     private static string ConvertScript(string inner, bool superscript)
     {
         string dst = superscript ? SupDst : SubDst;

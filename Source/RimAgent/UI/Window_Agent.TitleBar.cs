@@ -18,15 +18,10 @@ namespace RimAgent.UI;
 #pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
-    // 上下文圓盤：每個百分比一張環形貼圖（0～100，用到才產生）。
     private const int GaugeTexSize = 34;
 
     private static readonly Dictionary<int, Texture2D> GaugeArcTex = [];
 
-    /// <summary>
-    /// 最近一次輸入 token 佔模型上下文上限的比例，畫成順時針填滿的圓環。
-    /// 到自動壓縮門檻變黃、90% 以上變紅；上限或用量未知時只畫底環。
-    /// </summary>
     private static void DrawContextGauge(Rect rect, ColonyAgentSession.ContextStatus status)
     {
         if (Event.current.type != EventType.Repaint) return;
@@ -67,7 +62,6 @@ public partial class Window_Agent
             float dy = y + 0.5f - half; // 貼圖 y 向上
             float distance = Mathf.Sqrt(dx * dx + dy * dy);
             float alpha = Mathf.Clamp01(outer + 0.5f - distance) * Mathf.Clamp01(distance - inner + 0.5f);
-            // 從正上方開始順時針。
             float angle = Mathf.Atan2(dx, dy);
             if (angle < 0f) angle += Mathf.PI * 2f;
             if (angle / (Mathf.PI * 2f) > limit) alpha = 0f;
@@ -83,7 +77,6 @@ public partial class Window_Agent
     private void DrawTitleBar(Rect titleRect, ColonyAgentSession session)
     {
         var bgRect = new Rect(titleRect.x + 1f, titleRect.y + 1f, titleRect.width - 2f, titleRect.height - 1f);
-        // 只圓上面兩角：在標題列範圍內裁切一個往下延伸的圓角塊，下緣的圓角被裁掉。
         Widgets.BeginGroup(bgRect);
         DrawRoundedBox(new Rect(0f, 0f, bgRect.width, bgRect.height + WindowRadius * 2f),
             new Color(0.08f, 0.11f, 0.14f, 0.6f), Color.clear, WindowRadius - 1f);
@@ -119,11 +112,8 @@ public partial class Window_Agent
         DrawCollapseButton(closeRect, session);
     }
 
-    /// <summary>上下文用量圓盤：點擊開關上下文面板，滑鼠停留時顯示提示。</summary>
     private void DrawContextGaugeButton(Rect titleRect, ColonyAgentSession session)
     {
-        // 只顯示供應商實際回報的最近一次主模型輸入 token；
-        // 訊息數與折疊門檻放在提示中，避免把訊息數誤標成 token 或視窗容量。
         ColonyAgentSession.ContextStatus status = session.GetContextStatus();
         var gaugeRect = new Rect(titleRect.xMax - 73f, titleRect.y + 7f, 17f, 17f);
         DrawContextGauge(gaugeRect, status);
@@ -135,14 +125,12 @@ public partial class Window_Agent
         {
             ContextPanel.ToggleContextPanel(session, new Vector2(windowRect.x + gaugeRect.xMax + 2f, windowRect.y + gaugeRect.yMax + 6f));
         }
-        // 提示字串只在滑鼠停在上面時才組。
         if (Mouse.IsOver(gaugeRect)) DrawContextGaugeTooltip(gaugeRect, status);
         GUI.color = Color.white;
         Text.Anchor = TextAnchor.UpperLeft;
         Text.Font = GameFont.Small;
     }
 
-    /// <summary>標題列的收合按鈕，位在關閉按鈕左邊。</summary>
     private void DrawCollapseButton(Rect closeRect, ColonyAgentSession session)
     {
         var collapseRect = new Rect(closeRect.x - 24f, closeRect.y, 20f, 20f);

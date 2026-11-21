@@ -10,10 +10,8 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>健康查詢、醫療等級調整與手術排程。</summary>
 public sealed class MedicalTools
 {
-    /// <summary>單一殖民者最多列出的異常數，超過則截斷並註明（省 token）。</summary>
     internal const int MaxConditionsListed = 30;
 
     private readonly IGameWorld _world;

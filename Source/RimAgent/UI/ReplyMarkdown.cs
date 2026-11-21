@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 
 namespace RimAgent.UI;
 
-/// <summary>模型回覆送進 Markdown 轉換前的角括號跳脫。</summary>
 internal static partial class ReplyMarkdown
 {
 

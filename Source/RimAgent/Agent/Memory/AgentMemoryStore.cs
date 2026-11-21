@@ -11,11 +11,7 @@ using Verse;
 namespace RimAgent.Agent;
 
 #pragma warning disable MAAI001
-/// <summary>
-/// FileMemoryProvider 的儲存層：只有平面檔名（provider 的工作資料夾固定為空字串），
-/// 並在這裡限制檔數與長度。一個實例就是一個範圍的記憶——
-/// 局內記憶跟著存檔走，全域記憶由 <see cref="ScopedMemoryStore"/> 另外寫進磁碟。
-/// </summary>
+/// <summary>FileMemoryProvider 的儲存層：只有平面檔名（provider 的工作資料夾固定為空字串），並在這裡限制檔數與長度。局內記憶跟著存檔走，全域記憶由 <see cref="ScopedMemoryStore"/> 另外寫進磁碟。</summary>
 public class AgentMemoryStore : AgentFileStore
 {
     public const int MaxFiles = 30;
@@ -74,7 +70,6 @@ public class AgentMemoryStore : AgentFileStore
         lock (_gate) return [.. _files.Select(f => new AgentMemoryEntry { name = f.Key, content = f.Value })];
     }
 
-    /// <summary>目前的記憶索引（檔名與描述）；沒有記憶時為空字串。</summary>
     public virtual string Index
     {
         get
@@ -194,7 +189,6 @@ public class AgentMemoryStore : AgentFileStore
         return !IsIndex(name) && !IsDescription(name);
     }
 
-    /// <summary>檔名正規化：扁平命名空間，反斜線一律視為斜線。</summary>
     internal static string NormalizeName(string path)
     {
         return (path ?? string.Empty).Replace('\\', '/').Trim().Trim('/');

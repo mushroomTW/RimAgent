@@ -12,7 +12,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>時間流速：切換暫停與加速（目前速度在殖民地概況裡），以及讓時間推進的等待。</summary>
 public sealed class TimeTools
 {
     private const int TicksPerHour = 2500;
@@ -25,8 +24,6 @@ public sealed class TimeTools
     private readonly PlayerInterjections _interjections;
     private readonly AgentTranscript _transcript;
 
-    /// <param name="interjections">玩家執行中的插話；有新的就提早結束等待。null 表示不檢查。</param>
-    /// <param name="transcript">用來判斷目前是不是主 Agent；子代理拿不到插話，不能為它提早結束。null 視為主 Agent。</param>
     public TimeTools(IGameWorld world, ConfirmationGate gate = null, PlayerInterjections interjections = null, AgentTranscript transcript = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
@@ -114,9 +111,6 @@ public sealed class TimeTools
         return head + "\n" + ObserveTools.FormatOverview(_world);
     }
 
-    /// <summary>
-    /// 等待中該提早回來的原因；沒有則為 null。已知的急診名單跟著縮小，恢復後再次倒下的人也算新的。
-    /// </summary>
     private string InterruptionReason(int hostilesBefore, HashSet<int> knownEmergencies, int firesBefore)
     {
         if (_world.GetHostileCount() > hostilesBefore) return "new hostiles appeared";
@@ -128,7 +122,6 @@ public sealed class TimeTools
         return PlayerMessageWaiting ? "the player sent a message" : null;
     }
 
-    /// <summary>中文別名（大小寫不敏感）；英文循 DefResolver 的既有規則。</summary>
     internal static string NormalizeSpeed(string input)
     {
         string needle = (input ?? string.Empty).Trim();

@@ -11,10 +11,7 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 要玩家按選項的事件：流浪者求加入、難民求助、勒索贖金等抉擇信件，以及開著的對話框。
-/// 不回應就招不到人；會暫停遊戲的對話框更會讓自主遊玩整個卡住。
-/// </summary>
+/// <summary>要玩家按選項的事件與對話框；不回應會招不到人，暫停遊戲的對話框更會卡住自主遊玩。</summary>
 public sealed class ChoiceTools
 {
     internal const string DialogIdPrefix = "dialog-";

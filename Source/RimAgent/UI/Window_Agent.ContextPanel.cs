@@ -11,10 +11,7 @@ namespace RimAgent.UI;
 #pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
-    /// <summary>
-    /// 點標題列上下文圓盤開啟的分析面板：依類別列出下一次請求的上下文分布、剩餘空間與自動壓縮門檻。
-    /// 各類別是字元估算；供應商有回報總量時按比例縮放到回報值，只看分布不看絕對精準度。
-    /// </summary>
+    /// <summary>各類別是字元估算；供應商有回報總量時按比例縮放，只看分布不看絕對精準度。</summary>
     private sealed class ContextPanel : Window
     {
         private const float PanelWidth = 340f;
@@ -43,7 +40,6 @@ public partial class Window_Agent
         private float _nextRefresh;
         private static int _closedFrame = -1;
 
-        /// <summary>面板是否在這一幀被關掉（例如按下滑鼠時被「點外面關閉」關掉）。</summary>
         public static bool ClosedThisFrame => _closedFrame == Time.frameCount;
 
         public override Vector2 InitialSize => new(PanelWidth, 420f);
@@ -63,7 +59,6 @@ public partial class Window_Agent
             windowRect = new Rect(anchor.x, anchor.y, PanelWidth, 420f);
         }
 
-        /// <summary>開或關；anchor 是面板右上角要貼齊的螢幕座標。</summary>
         public static void ToggleContextPanel(ColonyAgentSession session, Vector2 anchorTopRight)
         {
             ContextPanel existing = Find.WindowStack.WindowOfType<ContextPanel>();
@@ -78,7 +73,6 @@ public partial class Window_Agent
 
         protected override void SetInitialSizeAndPosition()
         {
-            // 位置在建構時就定好；這裡只保證不超出螢幕。
             windowRect.y = Mathf.Clamp(windowRect.y, 0f, Mathf.Max(0f, Verse.UI.screenHeight - windowRect.height));
         }
 
@@ -99,7 +93,6 @@ public partial class Window_Agent
 
             ColonyAgentSession.ContextStatus status = _session.GetContextStatus();
             long estimated = _parts.Sum(p => p.Tokens);
-            // 有回報總量就把估算按比例縮放到回報值。
             double scale = status.LastInputTokens is > 0 && estimated > 0 ? (double)status.LastInputTokens.Value / estimated : 1d;
             long used = status.LastInputTokens ?? estimated;
             long? window = status.ContextWindow;
@@ -151,7 +144,6 @@ public partial class Window_Agent
             if (Mathf.Abs(windowRect.height - y) > 0.5f) windowRect.height = y;
         }
 
-        /// <summary>確認面板對應的 session 仍有效，並在到期時重新擷取脈絡分類；回傳 false 表示面板已關閉，應停止繪製。</summary>
         private bool EnsureSessionAndRefresh()
         {
             if (RimAgentGameComponent.Instance?.Session != _session)
@@ -167,7 +159,6 @@ public partial class Window_Agent
             return true;
         }
 
-        /// <summary>繪製標題與使用量總覽，回傳下一個 y 座標。</summary>
         private static float DrawUsageOverview(float y, float width, long used, long? window)
         {
             Text.Font = GameFont.Small;
@@ -188,7 +179,6 @@ public partial class Window_Agent
             return y;
         }
 
-        /// <summary>繪製堆疊長條與自動壓縮門檻標記，回傳下一個 y 座標。</summary>
         private static float DrawUsageBar(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, double scale, long used, long? window, ColonyAgentSession.ContextStatus status)
         {
             var bar = new Rect(Pad, y, width, BarHeight);
@@ -212,7 +202,6 @@ public partial class Window_Agent
             return y + BarHeight + 12f;
         }
 
-        /// <summary>繪製各類別明細列，回傳下一個 y 座標。</summary>
         private static float DrawPartsDetail(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, double scale, long used, long? window)
         {
             Text.Font = GameFont.Small;

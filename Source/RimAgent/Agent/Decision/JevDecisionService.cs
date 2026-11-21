@@ -10,12 +10,7 @@ using TypeSafeAI;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 把 RimAgent 的決策計畫轉成 TypeSafe System One 的請求，並把答案轉回 RimAgent 的形狀。
-///
-/// TypeSafeAI 的型別只出現在方法內（不進任何欄位）：RimWorld 啟動時會掃描組件的欄位型別
-/// 並要求全部能解析，欄位若直接引用 SDK 型別會讓載入順序變成硬性相依。
-/// </summary>
+/// <summary>TypeSafeAI 的型別只出現在方法內（不進任何欄位）：RimWorld 啟動時會掃描組件的欄位型別並要求全部能解析，欄位直接引用 SDK 型別會讓載入順序變成硬性相依。</summary>
 public sealed class JevDecisionService : IDecisionService
 {
     private readonly RimLLMDecisionClient _client;

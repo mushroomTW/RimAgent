@@ -8,13 +8,7 @@ using RimLLM_Framework;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 建立決策模型服務，並回答「玩家到底有沒有設定決策模型」。
-///
-/// 供應商、金鑰與端點都在 RimLLM Framework 的設定裡；RimAgent 只決定
-/// 用哪一個供應商與哪一個模型（都可留空＝沿用框架啟用的那一個）。
-/// 框架版本太舊或尚未初始化時一律視為「沒有決策模型」，功能不啟動。
-/// </summary>
+/// <summary>建立決策模型服務並回答「玩家到底有沒有設定決策模型」；供應商、金鑰與端點都在 RimLLM Framework 的設定裡，框架版本太舊或尚未初始化時一律視為「沒有決策模型」。</summary>
 public static class DecisionServiceFactory
 {
     /// <summary>框架未初始化或版本太舊時回 null（功能不啟用），不擲例外。</summary>
@@ -40,7 +34,6 @@ public static class DecisionServiceFactory
         }
     }
 
-    /// <summary>指定供應商可獨立於框架預設供應商啟用。</summary>
     public static bool CanUseDecisionModel()
     {
         return IsEnabledInSettings && CanUseDecisionModel(GetAvailability());
@@ -55,13 +48,9 @@ public static class DecisionServiceFactory
         return availability != null && availability.Enabled && !string.IsNullOrWhiteSpace(availability.Model);
     }
 
-    /// <summary>
-    /// 建立決策服務；沒有任何可用的決策供應商時回 null（呼叫端據此走備援路徑）。
-    /// 供應商與模型每次呼叫時從 RimAgent 設定讀取，留空代表沿用框架啟用的那一個。
-    /// </summary>
+    /// <summary>沒有任何可用的決策供應商時回 null（呼叫端據此走備援路徑）；供應商與模型每次呼叫時從設定讀取，留空代表沿用框架啟用的那一個。</summary>
     public static IDecisionService Create()
     {
-        // 框架沒有決策模型、或玩家在設定裡關掉決策模型時一律回 null，各功能照常走備援路徑。
         if (!IsEnabledInSettings) return null;
         if (!CanUseDecisionModel(GetAvailability()))
         {
@@ -90,9 +79,6 @@ public static class DecisionServiceFactory
         }
     }
 
-    /// <summary>
-    /// 取得某供應商可用的決策模型清單；框架不可用或查詢失敗時回空清單。
-    /// </summary>
     public static async Task<IReadOnlyList<string>> FetchModelsAsync(
         Func<string> providerId, CancellationToken cancellationToken = default)
     {

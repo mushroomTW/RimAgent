@@ -8,14 +8,10 @@ using System.Text.Json;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 全域記憶的磁碟檔：跨所有存檔共用，放在 RimAgent 資料夾，玩家可直接檢視、備份或手動編輯。
-/// 讀檔一律不丟例外：讀不了的檔案改名保留，再從空白的全域記憶開始。
-/// </summary>
+/// <summary>全域記憶的磁碟檔：跨所有存檔共用，玩家可直接檢視、備份或手動編輯。讀檔一律不丟例外：讀不了的檔案改名保留，再從空白的全域記憶開始。</summary>
 public static class GlobalMemoryFile
 {
     public const string FileName = "global-memory.json";
-    /// <summary>讀不了的檔案改存這個後綴，玩家還找得回來。</summary>
     public const string PreservedSuffix = ".invalid.txt";
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
@@ -83,7 +79,6 @@ public static class GlobalMemoryFile
         return entries;
     }
 
-    /// <summary>保留讀不了的檔案；連改名都失敗就只能放棄，不讓它擋住遊戲。</summary>
     private static void Preserve(string path, string preserved)
     {
         try
@@ -97,7 +92,6 @@ public static class GlobalMemoryFile
         }
     }
 
-    #pragma warning disable S1144, S3459 // 由 System.Text.Json 反序列化賦值
     private sealed class MemoryDocumentDto
     {
         public List<MemoryFileDto> Files { get; set; } = [];
@@ -108,5 +102,4 @@ public static class GlobalMemoryFile
         public string Name { get; set; }
         public string Content { get; set; }
     }
-    #pragma warning restore S1144, S3459
 }

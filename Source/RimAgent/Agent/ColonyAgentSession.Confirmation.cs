@@ -19,11 +19,7 @@ namespace RimAgent.Agent;
 
 public sealed partial class ColonyAgentSession
 {
-    /// <summary>
-    /// 執行等待中的確認：執行預覽當下捕捉的原工具呼叫與引數，不再重送模型。
-    /// 沒有等待中的確認回傳 null。
-    /// </summary>
-    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <summary>執行等待中的確認：用預覽當下捕捉的原工具呼叫與引數，不再重送模型。</summary>
     /// <param name="rememberForSession">
     /// 把這批工具記成「本局不再問」：之後確認模式下同名工具直接執行。
     /// 只記工具名稱，重開遊戲即失效；MCP 工具永遠不記。
@@ -83,7 +79,6 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>把確認結果寫進對話紀錄；確認的是目標的命令時，同時留給目標流程回報。</summary>
     private void ReportConfirmation(string text, TranscriptKind kind, AgentErrorKind errorKind, string goalObjective, int instructionId)
     {
         if (goalObjective != null)
@@ -100,7 +95,6 @@ public sealed partial class ColonyAgentSession
         });
     }
 
-    /// <summary>丟掉等待中的確認（玩家送新指令時由 SendAsync 自動呼叫；UI 的取消鍵也走這裡）。</summary>
     public void DiscardPendingConfirmation()
     {
         if (_pendingConfirmation == null) return;

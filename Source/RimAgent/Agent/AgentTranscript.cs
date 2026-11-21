@@ -23,9 +23,7 @@ public enum TranscriptKind
 public enum AgentErrorKind
 {
     Cancelled,
-    /// <summary>金鑰、額度、供應商離線——要去 RimLLM Framework 設定頁處理。</summary>
     Configuration,
-    /// <summary>逾時、限流、網路——稍後再試。</summary>
     Transient,
     ContextTooLong,
     Unknown
@@ -36,10 +34,7 @@ public sealed class TranscriptEntry
     public TranscriptKind Kind { get; set; }
     public DateTime Time { get; set; } = DateTime.Now;
     public string Text { get; set; } = string.Empty;
-    /// <summary>
-    /// 所屬的那一句指令（由 SendAsync 配號；0 代表不屬於任何指令，如舊存檔載入的紀錄）。
-    /// 戰鬥延遲提醒以此為單位只顯示一次。
-    /// </summary>
+    /// <summary>所屬的那一句指令（由 SendAsync 配號；0 代表不屬於任何指令，如舊存檔載入的紀錄）。</summary>
     public int InstructionId { get; set; }
     /// <summary>User 專用：這句是排程器起的自主任務，不是玩家打的。</summary>
     public bool Autonomous { get; set; }
@@ -48,7 +43,6 @@ public sealed class TranscriptEntry
     /// <summary>User 專用：玩家在 agent 執行中插的話，屬於進行中的指令，不另起回合。</summary>
     public bool Interjection { get; set; }
 
-    // Tool 專用
     public string ToolName { get; set; } = string.Empty;
     public ToolCategory ToolCategory { get; set; }
     public ToolRisk ToolRisk { get; set; }
@@ -59,29 +53,22 @@ public sealed class TranscriptEntry
     public bool Cancelled { get; set; }
     /// <summary>工具執行的實際耗時（毫秒），含分類器檢查；未實際執行（前置檢查擋下）為 0。</summary>
     public long DurationMs { get; set; }
-    /// <summary>本次呼叫是否實際扣除自主模式的每日工具額度。</summary>
     public bool BudgetConsumed { get; set; }
     /// <summary>自動模式的分類結果：low／high／unavailable；沒經分類器為空。</summary>
     public string RiskCheck { get; set; } = string.Empty;
     /// <summary>自動模式風險判定來源：llm／decision／fallback；沒經分類器為空。</summary>
     public string RiskCheckSource { get; set; } = string.Empty;
-    /// <summary>替哪個子代理執行；主 Agent 自己的呼叫為空。</summary>
     public string Agent { get; set; } = string.Empty;
 
-    // Assistant / Error 專用
     public bool ToolsStripped { get; set; }
     public AgentErrorKind ErrorKind { get; set; }
 }
 
-/// <summary>
-/// 對話與行動紀錄的單一有序清單，UI 每幀讀取。
-/// 工具在主線程執行、LLM 回覆的續行可能在任何執行緒，因此以鎖保護，UI 讀快照。
-/// </summary>
+/// <summary>工具在主線程執行、LLM 回覆的續行可能在任何執行緒，因此以鎖保護，UI 讀快照。</summary>
 public sealed class AgentTranscript
 {
     /// <summary>執行期保留上限；超過就整批丟掉最舊的，讓 UI 全量重建的次數維持稀疏（存檔另有 200 則上限）。</summary>
     public const int MaxEntries = 600;
-    /// <summary>裁切後保留的則數。</summary>
     public const int TrimTo = 500;
 
     private readonly Lock _gate = new();
@@ -92,7 +79,6 @@ public sealed class AgentTranscript
     // 子代理與主 Agent 共用同一組工具實例，靠呼叫流程上的 AsyncLocal 分辨是誰呼叫的；並行的子代理各有一份。
     private readonly AsyncLocal<string> _agent = new();
 
-    /// <summary>每次 Add／Clear／既有紀錄更新時遞增；UI 以此判斷是否要更新渲染快取。</summary>
     public int Version
     {
         get
@@ -116,10 +102,6 @@ public sealed class AgentTranscript
         }
     }
 
-    /// <summary>
-    /// 開啟新的一句指令並取號。工具在執行時讀 <see cref="CurrentInstructionId"/>
-    /// 標記自己的紀錄，UI 再以此把「每句一次」的提醒去重。
-    /// </summary>
     public int BeginInstruction()
     {
         lock (_gate)
@@ -140,10 +122,7 @@ public sealed class AgentTranscript
         }
     }
 
-    /// <summary>
-    /// 存檔載入後把編號推過已載入的最大值，避免新指令的編號撞到舊紀錄
-    /// （戰鬥提醒以編號去重，撞號會讓新指令的提醒被吞掉）。
-    /// </summary>
+    /// <summary>存檔載入後把編號推過已載入的最大值；戰鬥提醒以編號去重，撞號會讓新指令的提醒被吞掉。</summary>
     public void EnsureInstructionIdAtLeast(int value)
     {
         lock (_gate)
@@ -152,10 +131,7 @@ public sealed class AgentTranscript
         }
     }
 
-    /// <summary>
-    /// 目前這句指令的原文（最後一則非插話的 User 紀錄），後面依序接上執行中的插話；沒有則為空字串。
-    /// 分類器要看玩家原話：只看插話會把原指令要求的命令誤判成未要求。
-    /// </summary>
+    /// <summary>目前這句指令的原文（最後一則非插話的 User 紀錄）加上其後的插話；分類器要看玩家原話，只看插話會把原指令要求的命令誤判成未要求。</summary>
     public string CurrentInstructionText
     {
         get
@@ -176,7 +152,6 @@ public sealed class AgentTranscript
         }
     }
 
-    /// <summary>目前這條呼叫流程所屬的子代理名稱；主 Agent 為空字串。工具紀錄以此標記。</summary>
     public string CurrentAgent => _agent.Value ?? string.Empty;
 
     /// <summary>設定目前呼叫流程的子代理並回傳原值；呼叫端要在 finally 以原值還原。</summary>
@@ -202,10 +177,7 @@ public sealed class AgentTranscript
         }
     }
 
-    /// <summary>
-    /// 原子更新已加入清單的工具紀錄。既有項目內容改變時遞增 Epoch，要求 UI 全量重建，
-    /// 避免確認執行後仍顯示舊的預覽結果。
-    /// </summary>
+    /// <summary>既有項目內容改變時遞增 Epoch，要求 UI 全量重建，避免確認執行後仍顯示舊的預覽結果。</summary>
     public void UpdateToolResult(TranscriptEntry entry, string result, bool failed)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -242,7 +214,6 @@ public sealed class AgentTranscript
         }
     }
 
-    /// <summary>一次快照，只取清單（不記錄 Version／Epoch）。</summary>
     public IReadOnlyList<TranscriptEntry> Snapshot()
     {
         lock (_gate)

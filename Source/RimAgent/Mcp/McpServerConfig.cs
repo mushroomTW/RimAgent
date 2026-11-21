@@ -7,7 +7,6 @@ using System.Text.Json;
 
 namespace RimAgent.Mcp;
 
-/// <summary>servers.json 裡的一個 server 條目。</summary>
 public sealed class McpServerEntry
 {
     public string Name { get; set; } = string.Empty;
@@ -31,7 +30,6 @@ public static class McpServerConfig
     };
 
     #pragma warning disable S1144, S3459 // 由 System.Text.Json 反序列化賦值
-    /// <summary>servers.json 條目的反序列化形態；缺欄位一律給預設，由呼叫端映射並容錯。</summary>
     private sealed class ServerDto
     {
         public string Name { get; set; }

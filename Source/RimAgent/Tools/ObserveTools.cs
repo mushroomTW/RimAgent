@@ -11,7 +11,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>唯讀工具：讀取殖民地狀態。所有輸出都附 id 與座標，供後續指令引用。</summary>
 public sealed class ObserveTools
 {
     private const int MaxResearchListed = 30;
@@ -251,7 +250,6 @@ public sealed class ObserveTools
             || string.Equals(input, "stop", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>用 id 或名稱找地圖：整數先對 id，否則對名稱做精確→包含比對。</summary>
     internal static Result<MapInfo> ResolveMap(string input, IReadOnlyList<MapInfo> maps)
     {
         string needle = (input ?? string.Empty).Trim();
@@ -326,7 +324,6 @@ public sealed class ObserveTools
         return sb.ToString().Trim();
     }
 
-    /// <summary>模型給的 kind 字串（大小寫不敏感）對到 <see cref="ThingKind"/>。</summary>
     internal static bool TryParseKind(string kind, out ThingKind parsed)
     {
         return Enum.TryParse((kind ?? string.Empty).Trim(), ignoreCase: true, out parsed) && Enum.IsDefined<ThingKind>(parsed);
@@ -338,7 +335,6 @@ public sealed class ObserveTools
     /// <summary>矩形上限的錯誤說明：角落含頭尾，51 格寬就超過了，要明講並給可直接照抄的例子。</summary>
     internal const string RectLimitHint = "at most 50 cells per side; corners are inclusive, so (0,0)-(49,49) is the largest square";
 
-    /// <summary>超額矩形裁切後每邊的格數；50x50 正好等於格數上限。</summary>
     private const int MaxSide = 50;
 
     /// <summary>
@@ -361,7 +357,6 @@ public sealed class ObserveTools
     private const int MaxObstaclesListed = 10;
     private const float FertileThreshold = 0.7f;
 
-    /// <summary>單格明細：inspect_area 兩個角落同一格時用。</summary>
     private string DescribeCell(int x, int z)
     {
         string outside = TargetResolver.CheckCell(x, z, _world.GetMapBounds());

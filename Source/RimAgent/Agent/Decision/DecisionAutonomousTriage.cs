@@ -8,21 +8,13 @@ using System.Threading.Tasks;
 
 namespace RimAgent.Agent;
 
-/// <summary>System One 對一次基地狀況觸發的判定。</summary>
 public sealed class TriageVerdict
 {
-    /// <summary>需要主 LLM 現在處理的機率。</summary>
     public double Probability { get; init; }
-    /// <summary>判定不必處理：本輪不叫主 LLM，稍後再看。</summary>
     public bool Skip { get; init; }
 }
 
-/// <summary>
-/// 自主任務篩選：基地狀況（受寒、沒床、露宿、停電、停研、心情低落）觸發時，
-/// 先由 System One 判斷要不要叫主 LLM。上一輪已經在處理（床在蓋、研究剛排）就先等，
-/// 省下一整輪主 LLM 呼叫。襲擊、火災、急救、精神崩潰、缺糧與定期巡檢不篩，一律照跑。
-/// 決策模型不可用、判準檔缺失或呼叫失敗時回傳 null，呼叫端照舊叫主 LLM。
-/// </summary>
+/// <summary>基地狀況觸發時先由 System One 判斷要不要叫主 LLM（上一輪已在處理就先等，省下一整輪呼叫）；襲擊、火災、急救、精神崩潰、缺糧與定期巡檢不篩。決策模型不可用、判準檔缺失或呼叫失敗時回傳 null，呼叫端照舊叫主 LLM。</summary>
 public sealed class DecisionAutonomousTriage
 {
     public const string QuestionId = "needs_action";
@@ -46,19 +38,12 @@ public sealed class DecisionAutonomousTriage
         _serviceFactory = serviceFactory;
     }
 
-    /// <summary>只篩基地狀況；應急事件與定期巡檢一律照跑。</summary>
     public static bool IsTriaged(AutonomousTrigger trigger)
     {
         return trigger is AutonomousTrigger.Cold or AutonomousTrigger.BedShortage or AutonomousTrigger.OutdoorsBed
             or AutonomousTrigger.PowerOutage or AutonomousTrigger.Research or AutonomousTrigger.LowMood;
     }
 
-    /// <summary>評估指定的自主任務觸發是否需要執行或略過。</summary>
-    /// <param name="trigger">自主任務觸發類型。</param>
-    /// <param name="signals">目前的自主任務信號。</param>
-    /// <param name="lastRunReply">上一輪同類任務的回覆；沒有則為 null。</param>
-    /// <param name="hoursSinceLastRun">距上一輪結束幾個遊戲小時；沒有上一輪為 null。</param>
-    /// <param name="cancellationToken">取消語彙基元。</param>
     /// <returns>分流裁決結果；不需分流或無服務時回傳 null。</returns>
     public async Task<TriageVerdict> EvaluateAsync(
         AutonomousTrigger trigger,
@@ -117,7 +102,6 @@ public sealed class DecisionAutonomousTriage
         return sb.ToString();
     }
 
-    /// <summary>排程器訊號的一行摘要；抉擇代答也拿它當殖民地現況。</summary>
     public static string DescribeSignals(AutonomousSignals s)
     {
         float perColonist = s.ColonistCount > 0 ? s.FoodNutrition / s.ColonistCount : 0f;

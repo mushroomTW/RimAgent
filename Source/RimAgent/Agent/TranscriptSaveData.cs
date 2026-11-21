@@ -5,14 +5,9 @@ using Verse;
 
 namespace RimAgent.Agent;
 
-/// <summary>
-/// 一則對話紀錄的存檔形態。這裡保存玩家看得到的對話：指令、回覆與行動紀錄
-/// （AF session 的模型上下文則由 GameComponent 另外序列化存檔）。
-/// 讀檔後可見對話完整還原，玩家可瀏覽過去指令與操作歷程。
-/// </summary>
+/// <summary>玩家看得到的對話（指令、回覆與行動紀錄）的存檔形態；AF session 的模型上下文由 GameComponent 另外序列化。</summary>
 public sealed class TranscriptEntryData : IExposable
 {
-    /// <summary>存檔上限：對話只留最近 200 則，避免存檔膨脹。</summary>
     public const int MaxSavedEntries = 200;
 
     /// <summary>單一欄位上限（工具結果可能很長，存檔時截斷）。</summary>
@@ -52,7 +47,6 @@ public sealed class TranscriptEntryData : IExposable
         Scribe_Values.Look(ref arguments, "args", string.Empty);
         Scribe_Values.Look(ref result, "result", string.Empty);
         Scribe_Values.Look(ref failed, "failed", defaultValue: false);
-        // 舊存檔沒有這兩欄：以預設值讀入。
         Scribe_Values.Look(ref cancelled, "cancelled", defaultValue: false);
         Scribe_Values.Look(ref durationMs, "durationMs", 0L);
         Scribe_Values.Look(ref budgetConsumed, "budgetConsumed", defaultValue: false);

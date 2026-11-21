@@ -4,17 +4,13 @@ using System;
 
 namespace RimAgent.UI;
 
-/// <summary>
-/// 解碼剪貼簿的 CF_DIB（BITMAPINFOHEADER + 像素）。只支援螢幕截圖常見的 24／32 位元未壓縮格式；
-/// 輸出 RGBA32、由下往上排列的列，與 Unity Texture2D.LoadRawTextureData 的順序相同。
-/// </summary>
+/// <summary>只支援 24／32 位元未壓縮 DIB；輸出 RGBA32、由下往上排列的列，與 Texture2D.LoadRawTextureData 順序相同。</summary>
 internal static class DibDecoder
 {
     private const int InfoHeaderSize = 40;
     private const int BiRgb = 0;
     private const int BiBitfields = 3;
 
-    /// <summary>超過這個像素數就不解碼，避免異常大小的剪貼簿資料吃光記憶體。</summary>
     internal const long MaxPixels = 40_000_000;
 
     public static bool TryDecode(byte[] dib, out int width, out int height, out byte[] rgba)

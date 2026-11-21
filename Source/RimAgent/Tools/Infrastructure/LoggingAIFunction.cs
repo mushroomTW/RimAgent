@@ -13,15 +13,9 @@ using RimAgent.Game;
 namespace RimAgent.Tools;
 
 /// <summary>
-/// 包住每個工具：被 FunctionInvokingChatClient 叫用時即時寫入行動紀錄（玩家不必等整個迴圈
-/// 結束才看到 agent 在做什麼），在呼叫前後把工具的靜態風險告知閘門，
-/// 並在自動模式下做兩段式執行：先強制預覽拿到「將做的事」，交給分類器判定，
-/// 分類器核可才強制執行一次；未核可則拒絕該命令並回報原因。
 /// 這裡刻意不用 ConfigureAwait(false)：續行要留在主線程，第二段執行才能碰遊戲狀態。
-///
 /// 同一輪多個查詢可由框架一起送出：每個呼叫的暫存狀態只用區域變數與 AsyncLocal，
 /// 共用狀態（閘門、快取、行動紀錄）各自上鎖，因此並行查詢安全；命令仍由閘門逐次把關。
-///
 /// 另外兩道與世界有關的守衛也在這裡，工具本身不必管：
 /// 遊戲沒在進行（讀檔中、回到主選單）時不碰工具直接回錯誤；
 /// 工具回傳後把這段期間遊戲記錄的錯誤附在結果後面，模型才知道命令雖然「成功」但遊戲隨即噴錯。
@@ -41,7 +35,6 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
     private readonly bool _consumesBudget;
     private readonly AgentActivityTracker _activity;
 
-    /// <summary>子代理在自己的非同步流程內指定儲存；主 Agent 則用工具建立時綁定的那一份。</summary>
     private ToolOutputStore Outputs => ToolOutputStore.Current ?? _outputs;
 
     private bool RequiresExplicitConfirmation =>
@@ -129,7 +122,6 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         }
     }
 
-    /// <summary>依閘門與模式決定執行方式：MCP 先要明確確認、自動模式先分類，其餘直接執行。</summary>
     private ValueTask<object> InvokeThroughGateAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
         if (_gate != null && RequiresExplicitConfirmation)
@@ -143,10 +135,6 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         return base.InvokeCoreAsync(arguments, cancellationToken);
     }
 
-    /// <summary>
-    /// 把工具結果寫進紀錄：失敗的呼叫記下來擋掉同句的原樣重送，成功命令後可重新嘗試；
-    /// 等待確認的預覽則登記核准後要執行的動作。
-    /// </summary>
     private string RecordResult(object result, AIFunctionArguments arguments, TranscriptEntry entry, string callKey)
     {
         string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), store: Outputs);
@@ -237,7 +225,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         }
     }
 
-    /// <summary>MCP 以使用者權限執行本機程式；所有可執行模式都必須先取得玩家明確確認。</summary>
+    /// <summary>確認模式下的 MCP 呼叫：MCP 以使用者權限執行本機程式，即使玩家按過「不再問」也要每次確認。</summary>
     private async Task<object> InvokeExplicitConfirmationAsync(
         AIFunctionArguments arguments,
         CancellationToken cancellationToken)
@@ -311,7 +299,6 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         }
     }
 
-    /// <summary>強制以預覽模式執行工具：只產生確認文字，不碰世界。</summary>
     private async Task<object> InvokePreviewAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         _gate.ForcePreview();
@@ -333,10 +320,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         return verdict.Authorized ? "low" : "unrequested";
     }
 
-    /// <summary>
-    /// 把這次呼叫期間遊戲記錄的錯誤附在結果後面。工具回「成功」只代表命令送進遊戲了，
-    /// 遊戲隨即噴的錯（例如藍圖放下後的例外）模型否則看不到。預覽也一樣附：它同樣在主線程跑過遊戲程式碼。
-    /// </summary>
+    /// <summary>把這次呼叫期間遊戲記錄的錯誤附在結果後面；工具回成功只代表命令送進遊戲，隨後噴的錯（例如藍圖放下後的例外）模型否則看不到。預覽同樣會附，它也在主線程跑過遊戲程式碼。</summary>
     private string AppendGameErrors(string text)
     {
         return AppendGameErrors(text, out _);
@@ -359,10 +343,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 失敗紀錄的鍵：依參數名排序，同一組參數換順序送來仍視為同一個呼叫
-    /// （模型重送時常打亂順序）；顯示用的 <see cref="FormatArguments"/> 保留原順序。
-    /// </summary>
+    /// <summary>失敗紀錄的鍵依參數名排序，模型重送時常打亂順序，仍視為同一個呼叫。</summary>
     private static string CallKey(AIFunctionArguments arguments)
     {
         if (arguments == null || arguments.Count == 0) return string.Empty;

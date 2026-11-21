@@ -53,8 +53,6 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         _failedPaths.Clear();
     }
 
-    /// <param name="innerClient">下一層 client。</param>
-    /// <param name="enabled">設定「模型支援圖片輸入」是否開啟。</param>
     /// <param name="load">讀取並縮圖（須排到主線程）；尚未寫完回傳 null。</param>
     public ImageAttachingChatClient(IChatClient innerClient, Func<bool> enabled, Func<string, Task<byte[]>> load)
         : base(innerClient)
@@ -118,7 +116,6 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         return copy ?? messages;
     }
 
-    /// <summary>找本句指令的原始使用者訊息：由後往前找含指令原文的那則；沒設定原文或找不到就用最後一則使用者訊息。</summary>
     private int FindInstructionMessage(List<ChatMessage> list, int lastUser)
     {
         string text = _instructionText;

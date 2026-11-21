@@ -2,7 +2,6 @@
 
 namespace RimAgent.Tools;
 
-/// <summary>成功帶值、失敗帶錯誤訊息的結果容器；解析器與命令結果共用此核心。</summary>
 public class Result<T>
 {
     protected Result(bool success, T value, string error)

@@ -9,7 +9,6 @@ using Microsoft.Extensions.AI;
 
 namespace RimAgent.Agent;
 
-/// <summary>分類器要看的一次命令：玩家原話、工具、參數、工具算好的預覽。</summary>
 public sealed class RiskQuestion
 {
     public string Instruction { get; set; } = string.Empty;
@@ -34,14 +33,7 @@ public sealed class RiskVerdict
     public bool ShouldReject => Failed || Risky || !Authorized;
 }
 
-/// <summary>
-/// 自動模式的風險分類器：把一次命令的預覽交給模型做一次不帶工具的判定。
-/// 兩軸分開問：動作本身危不危險（low／high），以及玩家這句話有沒有要它做這件事（authorized）。
-/// 只問風險會放掉「順手多做一件小事」——每件都低風險，但玩家沒要求。
-/// 任何失敗都當高風險並拒絕該命令。
-/// 系統提示詞來自 AgentPack/Prompts/RiskClassifier.md（經建構參數注入）；缺檔不斷言，
-/// 直接回 fail-closed，讓自動模式拒絕命令。
-/// </summary>
+/// <summary>兩軸分開問：動作本身危不危險（low／high），以及玩家這句話有沒有要它做這件事（authorized）；只問風險會放掉「順手多做一件小事」。任何失敗都當高風險並拒絕該命令；缺系統提示詞（AgentPack/Prompts/RiskClassifier.md）時直接回 fail-closed。</summary>
 public sealed class RiskClassifier : IRiskChecker
 {
     public const float Temperature = 0f;
@@ -50,7 +42,6 @@ public sealed class RiskClassifier : IRiskChecker
     private readonly IChatClient _client;
     private readonly Func<string> _modelProvider;
     private readonly Func<string> _systemPrompt;
-    /// <summary>同一句指令內的判定快取：模型重試相同命令時不再燒一次模型呼叫。</summary>
     private readonly InstructionCache<RiskVerdict> _verdictCache = new();
 
     public RiskClassifier(IChatClient client, Func<string> modelProvider = null, Func<string> systemPrompt = null)
@@ -109,7 +100,6 @@ public sealed class RiskClassifier : IRiskChecker
         return verdict;
     }
 
-    /// <summary>新的一句指令開始時清空：判定只在同一句內重用，不跨指令。</summary>
     internal void ClearCache()
     {
         _verdictCache.Clear();
@@ -169,7 +159,7 @@ public sealed class RiskClassifier : IRiskChecker
         }
     }
 
-    /// <summary>模型常把布林寫成字串；true／false 以外的值一律不接受（回 null 即 fail-closed）。</summary>
+    /// <summary>模型常把布林寫成字串；只接受 true／false／yes／no，其餘一律回 null（即 fail-closed）。</summary>
     private static bool? ReadBoolean(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.True) return true;

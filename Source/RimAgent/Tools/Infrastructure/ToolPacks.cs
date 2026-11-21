@@ -26,7 +26,6 @@ internal static class ToolPacks
         public string Summary { get; }
     }
 
-    /// <summary>包的順序即系統提示索引的順序。</summary>
     public static readonly IReadOnlyList<Pack> All =
     [
         new Pack("combat", "draft colonists, move them, attack and force jobs"),
@@ -58,7 +57,6 @@ internal static class ToolPacks
         "file_memory_write", "file_memory_delete", "file_memory_replace", "file_memory_replace_lines"
     };
 
-    /// <summary>工具所屬的包；常駐工具回傳 null。</summary>
     public static string PackOf(string toolName, ToolCategory category)
     {
         if (MemoryEditTools.Contains(toolName)) return "memory_edit";

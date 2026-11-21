@@ -17,9 +17,6 @@ namespace RimAgent.Agent;
 
 public sealed partial class ColonyAgentSession
 {
-    /// <summary>
-    /// 標題列計量用的快照：歷史則數、視窗上限與設定百分比。UI 不直接碰歷史與設定。
-    /// </summary>
     public readonly struct ContextStatus
     {
         public readonly int Messages;
@@ -42,21 +39,18 @@ public sealed partial class ColonyAgentSession
             ? (double)LastInputTokens.Value / ContextWindow.Value : (double?)null;
     }
 
-    /// <summary>給 GameComponent 的單一同步點：開關與門檻永遠成對更新。</summary>
     public void SyncAutoCompact(bool enabled, int threshold)
     {
         AutoCompactEnabled = enabled;
         AutoCompactThreshold = threshold;
     }
 
-    /// <summary>主模型最近一次回報的輸入 token、歷史則數及框架提供的視窗上限，供 UI 顯示。</summary>
     public ContextStatus GetContextStatus()
     {
         return new ContextStatus(History.Count, AutoCompactThreshold, AutoCompactEnabled,
             _tokenUsage.LastInputTokens, GetContextWindow());
     }
 
-    /// <summary>上下文分布的一個類別；Key 由 UI 翻譯成名稱。</summary>
     public readonly struct ContextPart
     {
         public readonly string Key;
@@ -71,11 +65,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 下一次請求的上下文依類別估算 token，供 UI 分析面板用。
-    /// 組法與 <see cref="CreateRunOptions(ReasoningLevel?, string)"/> 相同，但不碰進行中的呼叫狀態。
-    /// 估算用字元數換算（CJK 一字約一 token，其餘約四字元一 token），只看比例，與供應商計數會有落差。
-    /// </summary>
+    /// <summary>組法與 <see cref="CreateRunOptions(ReasoningLevel?, string)"/> 相同但不碰進行中的呼叫狀態；估算用字元數換算（CJK 一字約一 token，其餘約四字元一 token），只看比例，與供應商計數會有落差。</summary>
     public IReadOnlyList<ContextPart> GetContextBreakdown()
     {
         ToolPermissions permissions = _permissions();
@@ -167,10 +157,7 @@ public sealed partial class ColonyAgentSession
         return wide + (text.Length - wide + 3) / 4;
     }
 
-    /// <summary>
-    /// 以 AF 估算的模型歷史 token 數觸發；保留輸出空間，避免等到視窗滿才折疊。
-    /// 框架查不到模型視窗時不猜上限，仍可用 /compact 手動摘要。
-    /// </summary>
+    /// <summary>以 AF 估算的歷史 token 數觸發，保留輸出空間；框架查不到模型視窗時不猜上限。</summary>
 #pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
     internal bool ShouldAutoCompact(CompactionMessageIndex index)
     {
@@ -197,10 +184,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>
-    /// 是否讓模型看圖（截圖結果與玩家貼上的圖片）。框架知道目前模型支不支援圖片輸入就照它，
-    /// 不明時（未重新整理模型清單、資料來源沒有該模型）退回玩家的「圖片輸入」設定。
-    /// </summary>
+    /// <summary>框架知道目前模型支不支援圖片輸入就照它，不明時（未重新整理模型清單、資料來源沒有該模型）退回玩家的「圖片輸入」設定。</summary>
     public bool ImageInputEnabled
     {
         get

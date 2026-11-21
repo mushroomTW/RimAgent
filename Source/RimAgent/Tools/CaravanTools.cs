@@ -12,10 +12,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// 組商隊（照原版組隊視窗）：規劃、送出（成員到集合點收齊貨物再一起離開地圖）、中止集結。
-/// 商隊離開之後的世界地圖操作在 <see cref="WorldTools"/>。
-/// </summary>
 public sealed partial class CaravanTools
 {
     private readonly IGameWorld _world;
@@ -97,7 +93,6 @@ public sealed partial class CaravanTools
         return result.Message + ".";
     }
 
-    // ---- 解析 ----
 
     private sealed class Prepared
     {
@@ -134,7 +129,6 @@ public sealed partial class CaravanTools
 
     private static Result<Prepared> Fail(string error) => Result<Prepared>.Fail(ToolText.Error(error));
 
-    /// <summary>逗號分隔的殖民地動物：名稱或編號指一隻，「物種 x 數量」取該物種沒倒地的前幾隻。野生動物不收。</summary>
     internal static Result<List<AnimalInfo>> ResolveAnimals(string input, IReadOnlyList<AnimalInfo> all)
     {
         var chosen = new List<AnimalInfo>();
@@ -226,7 +220,6 @@ public sealed partial class CaravanTools
         return Result<List<TradeLine>>.Ok(lines);
     }
 
-    /// <summary>用集結編號、或其中一名成員的名稱／編號指定一支集結中的商隊；只有一支時可不指名。</summary>
     internal static Result<FormingCaravanInfo> ResolveForming(string input, IReadOnlyList<FormingCaravanInfo> forming)
     {
         if (forming.Count == 0)
@@ -254,7 +247,6 @@ public sealed partial class CaravanTools
         return "Forming: " + string.Join("; ", forming.Select(f => "[" + f.Id.ToString(CultureInfo.InvariantCulture) + "] " + string.Join(", ", f.Members.Select(m => m.Name).ToArray())).ToArray()) + ".";
     }
 
-    // ---- 格式 ----
 
     internal static string FormatPlan(CaravanPlanInfo p)
     {

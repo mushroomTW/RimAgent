@@ -14,10 +14,7 @@ namespace RimAgent;
 
 public partial class RimAgentGameComponent
 {
-    /// <summary>
-    /// 剛讀檔重來就先把教訓交給 agent；有殖民者死亡就讓 agent 決定要不要讀檔（需開啟存檔權限）。
-    /// 主動照顧關閉時讀檔重來只留通知，死亡不起任務。
-    /// </summary>
+    /// <summary>主動照顧關閉時讀檔重來只留通知，死亡不起任務。</summary>
     private void TryStartRecoveryRun()
     {
         if (_pendingReload == null && _pendingDeaths.Count == 0) return;
@@ -57,7 +54,6 @@ public partial class RimAgentGameComponent
         }
     }
 
-    /// <summary>這一局到目前為止每次讀檔重來的教訓，由舊到新。</summary>
     private static string DescribeReloads(IReadOnlyList<ReloadRecord> reloads)
     {
         var sb = new System.Text.StringBuilder("Reloads of this colony so far (oldest first):");

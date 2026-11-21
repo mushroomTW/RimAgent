@@ -179,12 +179,10 @@ internal sealed partial class RimWorldGameWorld
         return free;
     }
 
-    /// <summary>有東西真的通電在跑（不只是接了發電機）。</summary>
     private static bool HasWorkingPower(Map map)
     {
         PowerNetManager manager = map.powerNetManager;
         if (manager == null) return false;
-        // CA1859：使用 List<T> 而非 IReadOnlyList<T>，AllNetsListForReading 需轉為 List。
         List<PowerNet> nets = [.. manager.AllNetsListForReading];
         for (int i = 0; i < nets.Count; i++)
         {
@@ -224,7 +222,6 @@ internal sealed partial class RimWorldGameWorld
 
     public int GetFireCount() => FireCount(Map);
 
-    /// <summary>排程器的火災訊號與 wait_for_time 的提早結束共用同一個算法。</summary>
     private static int FireCount(Map map) => map.listerThings.ThingsOfDef(ThingDefOf.Fire).Count;
 
     /// <summary>流血到失血致死不到這麼久才算急診；小擦傷算出來要十幾天，不該打斷等待或起急診任務。</summary>
@@ -306,7 +303,6 @@ internal sealed partial class RimWorldGameWorld
 
     public PowerInfo GetPower()
     {
-        // CA1859：使用 List<T> 而非 IReadOnlyList<T>。
         List<PowerNet> nets = [.. Map.powerNetManager.AllNetsListForReading];
         return new PowerInfo
         {

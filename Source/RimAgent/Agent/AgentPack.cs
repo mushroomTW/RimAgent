@@ -8,7 +8,6 @@ using RimAgent.Tools;
 
 namespace RimAgent.Agent;
 
-/// <summary>一個技能包（Skills/ 下的一個資料夾，以 SKILL.md 為本體）。</summary>
 public sealed class AgentSkill
 {
     public string Name { get; set; } = string.Empty;
@@ -16,10 +15,6 @@ public sealed class AgentSkill
     public string Body { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// 一個子代理（Agents/ 下的一個資料夾，以 AGENT.md 為本體）：主 Agent 用 delegate_task 把任務交給它，
-/// 它以獨立上下文、自己的工具類別與模型槽跑完，只把報告交回主 Agent。
-/// </summary>
 public sealed class AgentSubagent
 {
     public string Name { get; set; } = string.Empty;
@@ -28,61 +23,45 @@ public sealed class AgentSubagent
     public IReadOnlyList<ToolCategory> Categories { get; set; } = [ToolCategory.Observe];
     /// <summary>只拿查詢工具；唯讀子代理的多個任務可並行執行。</summary>
     public bool ReadOnly { get; set; }
-    /// <summary>思考強度；null 則用設定頁的子代理預設。</summary>
     public ReasoningLevel? Reasoning { get; set; }
-    /// <summary>子代理的系統提示詞本文。</summary>
     public string Body { get; set; } = string.Empty;
 }
 
-/// <summary>出貨的 agent 擴充包內容：前情提要、玩家自留地、內建行為準則、Ask 註記、分類器提示詞、自主任務、技能包與子代理。</summary>
 public sealed class AgentPack
 {
-    /// <summary>前情提要（Briefing.md）：每次請求的第一層。缺檔時呼叫端用內建 fallback 兜底。</summary>
+    /// <summary>缺檔時呼叫端用內建 fallback。</summary>
     public string Preamble { get; set; } = string.Empty;
-    /// <summary>玩家自留地（AGENTS.md）：出貨是空的，玩家想交代 agent 的事寫這裡，擺在前情提要之後。</summary>
     public string PlayerNotes { get; set; } = string.Empty;
-    /// <summary>常駐行為準則（Conduct.md）。</summary>
     public string Conduct { get; set; } = string.Empty;
-    /// <summary>自動模式風險分類器的系統提示詞（RiskClassifier.md）。缺檔時分類器 fail-closed。</summary>
+    /// <summary>缺檔時分類器 fail-closed。</summary>
     public string ClassifierPrompt { get; set; } = string.Empty;
-    /// <summary>自動模式決策模型的判準檔（DecisionRisk.md）。缺檔時回退 LLM 分類器。</summary>
+    /// <summary>缺檔時回退 LLM 分類器。</summary>
     public string DecisionRiskCriteria { get; set; } = string.Empty;
-    /// <summary>目標審計決策模型的判準檔（DecisionGoal.md）。缺檔時目標審計回傳 null。</summary>
+    /// <summary>缺檔時目標審計回傳 null。</summary>
     public string DecisionGoalCriteria { get; set; } = string.Empty;
-    /// <summary>System One 代答抉擇的判準檔（DecisionChoice.md）。缺檔時抉擇照舊交給主 LLM。</summary>
+    /// <summary>缺檔時抉擇照舊交給主 LLM。</summary>
     public string DecisionChoiceCriteria { get; set; } = string.Empty;
-    /// <summary>System One 篩選基地狀況自主任務的判準檔（DecisionTriage.md）。缺檔時照舊叫主 LLM。</summary>
+    /// <summary>缺檔時照舊叫主 LLM。</summary>
     public string DecisionTriageCriteria { get; set; } = string.Empty;
-    /// <summary>自主任務文案（Autonomous.en.md，英文）。缺檔時該輪自主任務跳過。</summary>
+    /// <summary>缺檔時該輪自主任務跳過。</summary>
     public AutonomousPack Autonomous { get; set; } = new AutonomousPack();
     public IReadOnlyList<AgentSkill> Skills { get; set; } = [];
     public IReadOnlyList<AgentSubagent> Subagents { get; set; } = [];
 }
 
-/// <summary>一個語言的自主任務文案：共用通則＋觸發原因→指令文字。</summary>
 public sealed class AutonomousPack
 {
-    /// <summary>
-    /// 第一個 <c>## </c> 章節之前的通則，會接在每個任務前面。
-    /// 寫作時要假設模型看得到：共用規則（要產出、不要只回報）放這裡比每章節重複寫好。
-    /// </summary>
+    /// <summary>第一個 <c>## </c> 章節之前的通則，接在每個任務前面；共用規則放這裡比每章節重複寫好。</summary>
     public string Preamble { get; set; } = string.Empty;
     public IReadOnlyDictionary<string, string> Tasks { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
 }
 
-/// <summary>
-/// 讀 AgentPack/ 資料夾（Prompts/ 下的內建提示詞、根目錄的 AGENTS.md、Skills/*/SKILL.md、Agents/*/AGENT.md）。
-/// 純檔案邏輯，不碰遊戲 API，
-/// rootDir 可注入，方便測試。缺檔、壞檔一律視為空，不丟例外。
-/// </summary>
+/// <summary>缺檔、壞檔一律視為空，不丟例外。</summary>
 public static class AgentPackLoader
 {
-    /// <summary>單個技能讀進提示詞的上限（字數），超過截斷並註明。</summary>
     public const int MaxSkillChars = 3000;
-    /// <summary>單個子代理提示詞的上限（字數），超過截斷並註明。</summary>
     public const int MaxSubagentChars = 4000;
 
-    /// <summary>自主任務檔名（只留英文）。</summary>
     internal const string AutonomousFileName = "Autonomous.en.md";
     private const string PromptsFolderName = "Prompts";
 
@@ -133,9 +112,7 @@ public static class AgentPackLoader
         return TryReadText(path);
     }
 
-    /// <summary>
-    /// 讀單一檔案；被鎖或無權限只放棄這個檔（回空字串）並警告檔名，不連累擴充包裡其他檔案。
-    /// </summary>
+    /// <summary>被鎖或無權限只放棄這個檔（回空字串）並警告，不連累擴充包裡其他檔案。</summary>
     private static string TryReadText(string path)
     {
         try
@@ -156,9 +133,7 @@ public static class AgentPackLoader
         }
     }
 
-    /// <summary>
-    /// 找 frontmatter 結尾的 "---"：必須在行首（避免描述文字裡的 "---" 被誤認），回傳該 "---" 的索引；找不到回 -1。
-    /// </summary>
+    /// <summary>"---" 必須在行首，避免描述文字裡的 "---" 被誤認。</summary>
     private static int FindFrontmatterEnd(string text)
     {
         int newline = text.IndexOf("\n---", 3, StringComparison.Ordinal);
@@ -184,12 +159,7 @@ public static class AgentPackLoader
         pack.Autonomous = lang;
     }
 
-    /// <summary>
-    /// 切 `## 名稱` 章節；第一個標題之前的是共用通則（<paramref name="preamble"/>），
-    /// 不是章節但要送給模型，所以另外回傳而不是丟掉。
-    /// 同名重複以後者為準。key 嚴格比對，寫錯的章節名會被任務查詢略過。
-    /// 每行 Trim 後重組：縮排會被壓平，提示詞檔避免用縮排語法（清單、code block）。
-    /// </summary>
+    /// <summary>切 `## 名稱` 章節；第一個標題之前是共用通則（<paramref name="preamble"/>）。同名以後者為準、key 嚴格比對；每行 Trim 後重組，縮排會被壓平，提示詞檔避免用縮排語法。</summary>
     internal static IDictionary<string, string> ParseSections(string text, out string preamble)
     {
         var sections = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -210,7 +180,6 @@ public static class AgentPackLoader
                     && (inComment || lines.Skip(i + 1).Any(l => l.Contains("-->", StringComparison.Ordinal)));
                 continue;
             }
-            // Lines 已 Trim（含 \r），標題行即整行比對。
             if (line.StartsWith("## ", StringComparison.Ordinal))
             {
                 FlushSection(sections, ref current, body);
@@ -231,7 +200,6 @@ public static class AgentPackLoader
         return sections;
     }
 
-    // CA1859：使用 Dictionary<TKey, TValue> 而非 IDictionary<TKey, TValue>。
     private static void FlushSection(Dictionary<string, string> sections, ref string current, System.Text.StringBuilder body)
     {
         if (current == null) return;
@@ -396,7 +364,6 @@ public static class AgentPackLoader
         }
     }
 
-    /// <summary>兩處行迴圈共用的列舉器：集中切行與去除空白（含 \r）。</summary>
     private static IEnumerable<string> Lines(string text)
     {
         foreach (string rawLine in (text ?? string.Empty).Split('\n'))

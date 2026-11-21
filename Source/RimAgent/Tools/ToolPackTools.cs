@@ -5,10 +5,7 @@ using System.Linq;
 
 namespace RimAgent.Tools;
 
-/// <summary>
-/// load_toolpack：只給主 Agent，由會話建立（展開要改的是這一輪送出中的工具清單，登錄表碰不到）。
-/// 不經登錄表，子代理因此不會拿到它。
-/// </summary>
+/// <summary>load_toolpack 只給主 Agent、由會話建立：展開要改的是這一輪送出中的工具清單，登錄表碰不到；不經登錄表，子代理因此拿不到。</summary>
 internal sealed class ToolPackTools
 {
     public const string ToolName = "load_toolpack";
@@ -26,7 +23,6 @@ internal sealed class ToolPackTools
         return _load(pack);
     }
 
-    /// <summary>系統提示的包索引；只隨權限與模式改變，展開與否不影響內容。</summary>
     public static string Index(IReadOnlyList<ToolPacks.Pack> packs)
     {
         return "Tool packs: some tools stay hidden until you load their pack with " + ToolName +

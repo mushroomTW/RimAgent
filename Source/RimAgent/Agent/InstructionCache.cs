@@ -35,9 +35,6 @@ internal sealed class InstructionCache<TValue>
         }
     }
 
-    /// <summary>
-    /// 在同一把鎖內讀取舊值並寫入新值（原子的讀‧改‧寫）；快取已滿且為新鍵時不寫入。
-    /// </summary>
     public void AddOrUpdate(string key, Func<bool, TValue, TValue> update)
     {
         lock (_gate)

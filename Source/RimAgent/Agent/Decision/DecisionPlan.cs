@@ -5,7 +5,6 @@ using System.Collections.Generic;
 
 namespace RimAgent.Agent;
 
-/// <summary>決策題目的型別：對應 System One 的三種問法。</summary>
 public enum DecisionQuestionType
 {
     /// <summary>是非題：回傳 0 到 1 的肯定機率，不另帶信心分數。</summary>
@@ -16,7 +15,6 @@ public enum DecisionQuestionType
     Score
 }
 
-/// <summary>一次決策計畫裡的一道題。判準文字由玩家可改寫的擴充包檔案提供。</summary>
 public sealed class DecisionQuestion
 {
     /// <summary>題目識別碼：同一個計畫內唯一，回傳的答案用它對回。</summary>
@@ -24,7 +22,6 @@ public sealed class DecisionQuestion
 
     public DecisionQuestionType Type { get; init; }
 
-    /// <summary>題目敘述：問什麼、判準是什麼。</summary>
     public string Instructions { get; init; } = string.Empty;
 
     /// <summary>
@@ -35,10 +32,8 @@ public sealed class DecisionQuestion
     /// <summary>等級（Score）：由低到高。</summary>
     public IReadOnlyList<string> Levels { get; init; } = [];
 
-    /// <summary>是非題：肯定時的說明。</summary>
     public string WhenTrue => Option("true");
 
-    /// <summary>是非題：否定時的說明。</summary>
     public string WhenFalse => Option("false");
 
     private string Option(string key)
@@ -74,7 +69,6 @@ public sealed class DecisionQuestion
         };
     }
 
-    /// <summary>建一題評分題；等級由低到高。</summary>
     public static DecisionQuestion Score(string id, string instructions, IReadOnlyList<string> levels)
     {
         return new DecisionQuestion
@@ -92,7 +86,6 @@ public sealed class DecisionPlan
 {
     public IReadOnlyList<DecisionQuestion> Questions { get; init; } = [];
 
-    /// <summary>沒有題目時不必送出請求。</summary>
     public bool IsEmpty => Questions == null || Questions.Count == 0;
 
     public static DecisionPlan Of(params DecisionQuestion[] questions)

@@ -11,10 +11,8 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>動物：查詢、馴養、訓練開關、區域指派。馴養與訓練走遊戲原生機制。</summary>
 public sealed class AnimalTools
 {
-    /// <summary>無限制區域的關鍵字（大小寫不敏感）。</summary>
     internal const string UnrestrictedKeyword = "unrestricted";
 
     private readonly IGameWorld _world;
@@ -129,10 +127,7 @@ public sealed class AnimalTools
         return result.Message;
     }
 
-    /// <summary>
-    /// 只在野生（或只在殖民地）動物裡解析，同種的馴養與野生個體才不會互相造成歧義。
-    /// 範圍內找不到、但全體裡找得到時，回傳那隻讓呼叫端回報「已馴服／是野生的」。
-    /// </summary>
+    /// <summary>在野生（或殖民地）範圍內解析，避免同種歧義；範圍外但全體找得到時回傳該隻，讓呼叫端回報已馴服／是野生的。</summary>
     private static Result<AnimalInfo> ResolveAmong(string input, IReadOnlyList<AnimalInfo> animals, bool wild)
     {
         Result<AnimalInfo> scoped = ResolveAnimal(input, [.. animals.Where(a => a.Wild == wild)]);
@@ -141,7 +136,6 @@ public sealed class AnimalTools
         return any.Success ? any : scoped;
     }
 
-    /// <summary>動物解析：id 精確命中；名字／物種可模糊比對，歧義即報錯並列候選。</summary>
     internal static Result<AnimalInfo> ResolveAnimal(string input, IReadOnlyList<AnimalInfo> animals)
     {
         return TargetResolver.ResolveEntity(

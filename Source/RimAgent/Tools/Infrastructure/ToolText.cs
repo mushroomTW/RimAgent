@@ -10,7 +10,6 @@ using RimAgent.Game;
 
 namespace RimAgent.Tools;
 
-/// <summary>工具回傳給模型的文字格式。簡潔、每行一筆、附 id 與座標，讓後續指令能精確引用。</summary>
 internal static class ToolText
 {
     public const string ErrorPrefix = "Error: ";
@@ -28,10 +27,7 @@ internal static class ToolText
         return preview.StartsWith(ConfirmationPrefix, StringComparison.Ordinal) ? preview : ConfirmationPrefix + preview;
     }
 
-    /// <summary>
-    /// 命令前的閘門檢查：擋下時回傳要交給模型的預覽（已記入閘門），放行時回傳 null。
-    /// 呼叫點應在所有參數解析之後、真正動世界之前。
-    /// </summary>
+    /// <summary>呼叫點應在所有參數解析之後、真正動世界之前。</summary>
     public static string Blocked(ConfirmationGate gate, string preview)
     {
         if (gate == null || gate.AllowCommands()) return null;

@@ -19,10 +19,7 @@ namespace RimAgent.Agent;
 
 public sealed partial class ColonyAgentSession
 {
-    /// <summary>
-    /// 把上一個有工作設定改動的指令復原（工作優先級與時間表寫回舊值）。
-    /// 忙碌中不可復原；沒東西可復原回傳 null。呼叫者應在主線程（遊戲內由 UI 按鍵觸發）。
-    /// </summary>
+    /// <summary>復原上一個有工作設定改動的指令；沒東西可復原回傳 null，呼叫者應在主線程。</summary>
     public string UndoLast()
     {
         if (IsBusy) throw new InvalidOperationException("Cannot undo while RimAgent is working.");
