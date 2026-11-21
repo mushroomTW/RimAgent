@@ -8,6 +8,8 @@
 
 # RimAgent
 
+<img src="About/Preview.png" alt="RimAgent Preview" width="640">
+
 **Run your RimWorld colony in natural language.**
 
 An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in natural language through 82 tools, with control over when actions require approval.

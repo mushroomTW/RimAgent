@@ -8,6 +8,8 @@
 
 # RimAgent
 
+<img src="About/Preview.png" alt="RimAgent 預覽" width="640">
+
 **以自然語言管理你的 RimWorld 殖民地。**
 
 專為 RimWorld 1.7 設計的遊戲內 AI 助手。透過 82 項工具，以自然語言查詢殖民地、下達命令，並自行選擇操作前的把關方式。
