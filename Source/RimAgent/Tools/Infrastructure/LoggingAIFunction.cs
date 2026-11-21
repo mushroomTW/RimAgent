@@ -34,6 +34,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
     private readonly PlayerInterjections _interjections;
     private readonly bool _consumesBudget;
     private readonly AgentActivityTracker _activity;
+    private readonly FailureLoopGuard _loopGuard;
 
     private ToolOutputStore Outputs => ToolOutputStore.Current ?? _outputs;
 
@@ -41,7 +42,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         _gate != null && _gate.RequiresExplicitConfirmation(Name);
 
 #pragma warning disable S107 // 建構子參數皆為相依元件，無需重構
-    public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, IRiskChecker classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true, AgentActivityTracker activity = null)
+    public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, IRiskChecker classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true, AgentActivityTracker activity = null, FailureLoopGuard loopGuard = null)
         : base(inner)
     {
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -54,6 +55,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         _interjections = interjections;
         _consumesBudget = consumesBudget;
         _activity = activity;
+        _loopGuard = loopGuard;
     }
 #pragma warning restore S107
 
@@ -68,8 +70,13 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         }
         // 玩家執行中插話：附在主 Agent 這次的工具結果後面送給模型。只附在送回的文字，
         // 行動紀錄與失敗紀錄都存工具本身的結果。子代理的工具不取，免得話被子代理吃掉。
-        string interjection = _transcript.CurrentAgent.Length == 0 ? _interjections?.TakeAll() : null;
-        return interjection == null ? result : (result?.ToString() ?? string.Empty) + FormatInterjection(interjection);
+        bool mainAgent = _transcript.CurrentAgent.Length == 0;
+        string redirect = mainAgent && _loopGuard != null
+            ? await _loopGuard.ObserveAsync(Name, result?.ToString(), cancellationToken).ConfigureAwait(false)
+            : null;
+        string interjection = mainAgent ? _interjections?.TakeAll() : null;
+        if (redirect == null && interjection == null) return result;
+        return (result?.ToString() ?? string.Empty) + redirect + (interjection == null ? null : FormatInterjection(interjection));
     }
 
     private static string FormatInterjection(string text)

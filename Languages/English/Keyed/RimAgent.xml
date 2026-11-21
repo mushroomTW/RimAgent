@@ -102,6 +102,13 @@
   <RimAgent.Settings.UseLocalSearch>Use SearXNG on my own computer (most people leave this off)</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>Requires a running SearXNG server with JSON output enabled. Leave off to use Parallel's anonymous free tier without local setup.</RimAgent.Settings.UseLocalSearchTip>
   <RimAgent.Settings.SearxngUrl>SearXNG server URL</RimAgent.Settings.SearxngUrl>
+  <RimAgent.Settings.A2AHeader>Let other AI agents talk to RimAgent (A2A)</RimAgent.Settings.A2AHeader>
+  <RimAgent.Settings.A2AServer>Run an A2A server on this computer</RimAgent.Settings.A2AServer>
+  <RimAgent.Settings.A2AServerTip>Other agents (for example a coding assistant or another game agent) can send RimAgent instructions over the A2A protocol, using JSON-RPC or gRPC. Only programs on this computer can connect. Remote instructions follow the same permissions and confirmation mode as yours.</RimAgent.Settings.A2AServerTip>
+  <RimAgent.Settings.A2APort>Port (gRPC uses {0})</RimAgent.Settings.A2APort>
+  <RimAgent.Settings.A2ARunning>Running. Agent card: {0}</RimAgent.Settings.A2ARunning>
+  <RimAgent.Settings.A2AFailed>Could not start: {0}</RimAgent.Settings.A2AFailed>
+  <RimAgent.Settings.A2AApplyOnClose>Starts when you close this settings window.</RimAgent.Settings.A2AApplyOnClose>
   <RimAgent.Settings.Memory>Remember things</RimAgent.Settings.Memory>
   <RimAgent.Settings.MemoryTip>Allow the agent to read, write, edit and delete up to 30 memory files in this game's save file.</RimAgent.Settings.MemoryTip>
   <RimAgent.Settings.Agents>Send helpers</RimAgent.Settings.Agents>

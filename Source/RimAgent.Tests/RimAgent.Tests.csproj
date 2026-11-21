@@ -22,6 +22,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RimAgent\RimAgent.csproj" />
+    <ProjectReference Include="..\RimAgent.A2A\RimAgent.A2A.csproj" />
+  </ItemGroup>
+
+  <!-- A2A 伺服端在測試行程內跑：RimAgent.A2A 的套件都不帶執行期資產，這裡補上。 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="A2A.AspNetCore" Version="1.0.0-preview4" />
+    <PackageReference Include="A2A.Grpc" Version="1.0.0-preview4" />
+    <PackageReference Include="Grpc.AspNetCore.Server" Version="2.84.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.36.2" />
   </ItemGroup>
 
   <!-- 運行紀錄統計只隨開發伴隨模組出貨，不進正式 DLL；以連結編進測試，免得測試專案參考整個伴隨模組。 -->

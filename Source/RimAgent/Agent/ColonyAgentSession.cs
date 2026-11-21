@@ -59,6 +59,8 @@ public sealed partial class ColonyAgentSession
     private readonly IGameWorld _world;
     private readonly AgentMemoryStore _memory;
     private readonly PlayerInterjections _interjections = new();
+    private readonly FailureLoopGuard _loopGuard;
+    private readonly IDecisionService _decisionService;
     private readonly Func<string> _instructions;
     private AgentSession _session;
     private string _serializedSession;
@@ -73,6 +75,8 @@ public sealed partial class ColonyAgentSession
     /// <summary>可選的獨立執行紀錄；預設不記錄，由遊戲設定決定。</summary>
     public Func<bool> RunLoggingEnabled { get; set; }
     public Action<RunLogRecord> RunLogSink { get; set; }
+
+    public ToolUsageStats ToolUsage { get; set; }
 
     /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
     /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
@@ -116,9 +120,11 @@ public sealed partial class ColonyAgentSession
             decisionService,
             () => DecisionServiceFactory.Create());
         _classifier = classifier;
+        _decisionService = decisionService;
+        _loopGuard = new FailureLoopGuard(JudgeStuckAsync, NotifyStuck);
 
         _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity,
-            layoutsEnabled: () => RimAgentMod.Settings?.layouts ?? true);
+            layoutsEnabled: () => RimAgentMod.Settings?.layouts ?? true, loopGuard: _loopGuard);
         // 子代理用原始 client：它的用量不該蓋掉標題列顯示的主模型輸入 token。
         _subagents = new SubagentTools(new ThinkingActivityClient(innerClient, Activity, Transcript), _registry, Transcript, subagentsProvider, _permissions,
             routing?.SubagentModel, routing?.SubagentReasoning, () => ConfirmGate.RemainingToolBudget, RecordModelResponse, MaxOutputFor);

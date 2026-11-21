@@ -71,6 +71,14 @@ public class RimAgentSettings : ModSettings
     public bool useLocalSearch = false;
 #pragma warning disable S1075 // Default URL for local SearXNG service setting
     public string searxngUrl = "http://127.0.0.1:8888";
+
+    public const int DefaultA2APort = 47120;
+    public const int MinA2APort = 1024;
+    /// <summary>gRPC 用下一個埠，所以上限比 65535 少一。</summary>
+    public const int MaxA2APort = 65534;
+
+    public bool a2aServer = false;
+    public int a2aPort = DefaultA2APort;
 #pragma warning restore S1075
 
     // 自主模式（排程器）的節奏與配額在設定頁；持續目標另由獨立流程執行並跟著存檔走。
@@ -284,6 +292,8 @@ public class RimAgentSettings : ModSettings
         ExposeDecisionSettings();
         Scribe_Values.Look(ref useLocalSearch, "useLocalSearch", defaultValue: false);
         Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
+        Scribe_Values.Look(ref a2aServer, "a2aServer", defaultValue: false);
+        Scribe_Values.Look(ref a2aPort, "a2aPort", DefaultA2APort);
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
         Scribe_Values.Look(ref autonomousCare, "autonomousCare", defaultValue: false);
         // 同上：舊版預設為關，Scribe 預設值維持 false，老玩家升級後不變。

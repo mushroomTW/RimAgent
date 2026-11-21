@@ -24,6 +24,7 @@ public sealed partial class ColonyAgentSession
         ReasoningLevel? effectiveReasoning = reasoningOverride;
         _tokenUsage.ResetModel();
 
+        PreloadFrequentToolPacks();
         // 分流與預載工具包各問一次 System One，兩者互不相依，同時送出。
         Task<DecisionRoute> routing = ReasoningRouting
             ? _router.ResolveAsync(text, RimAgentMod.Settings?.decisionCategories, cancellationToken)
@@ -54,6 +55,25 @@ public sealed partial class ColonyAgentSession
         }
 
         return CreateRunOptions(effectiveReasoning, PreferredModel);
+    }
+
+    /// <summary>最近常用的工具包不必等模型呼叫 load_toolpack（每次展開都要多送一整輪上下文），也不必再問 System One。</summary>
+    private void PreloadFrequentToolPacks()
+    {
+        IReadOnlyList<string> frequent = ToolUsage?.FrequentPacks() ?? [];
+        if (frequent.Count == 0) return;
+        List<string> loaded = LoadedPacks();
+        List<string> added = [.. _registry.SelectForMainAgent(_permissions(), loaded).Packs
+            .Select(p => p.Id)
+            .Where(id => frequent.Contains(id, StringComparer.Ordinal) && !loaded.Contains(id, StringComparer.Ordinal))];
+        if (added.Count == 0) return;
+        lock (_loadedPacks) _loadedPacks.UnionWith(added);
+        Transcript.Add(new TranscriptEntry
+        {
+            Kind = TranscriptKind.Notice,
+            Text = "Preloaded frequently used tool packs: " + string.Join(", ", added) + ".",
+            InstructionId = Transcript.CurrentInstructionId
+        });
     }
 
     private Task<IReadOnlyList<string>> SelectToolPacksAsync(string text, CancellationToken cancellationToken)
@@ -151,6 +171,12 @@ public sealed partial class ColonyAgentSession
         {
             // 子代理清單只在擴充包變更時改變，放在易變的記憶索引之前，保住前綴快取。
             instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + SubagentTools.Instructions(subagents);
+        }
+        string lessons = ToolUsage?.LessonsPrompt();
+        if (lessons != null)
+        {
+            // 經驗只在確認或撤下時改變，放在易變的記憶索引之前。
+            instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + lessons;
         }
         if (permissions.Allows(ToolCategory.Memory))
         {

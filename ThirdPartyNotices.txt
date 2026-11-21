@@ -50,7 +50,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-Microsoft.Agents.AI / Microsoft.Agents.AI.Abstractions / Microsoft.Extensions.*
+Microsoft.Agents.AI / Microsoft.Agents.AI.Abstractions / Microsoft.Extensions.* /
+ASP.NET Core 10.0.12 (Microsoft.AspNetCore.*, Microsoft.Net.Http.Headers, System.Security.Cryptography.Pkcs/Xml; A2A/)
 
 MIT License
 
@@ -84,6 +85,46 @@ The MCP project is undergoing a licensing transition from the MIT License to the
 Contributions for which relicensing consent has been obtained are licensed under Apache-2.0. Contributions made by authors who originally licensed their work under the MIT License and who have not yet granted explicit permission to relicense remain licensed under the MIT License.
 
 No rights beyond those granted by the applicable original license are conveyed for such contributions.
+
+
+A2A / A2A.AspNetCore / A2A.Grpc 1.0.0-preview4 (A2A/)
+
+Copyright A2A Project Community Contributors.
+Licensed under the Apache License, Version 2.0 (full text below).
+
+
+Grpc.AspNetCore.Server / Grpc.Core.Api / Grpc.Net.Common / Grpc.Net.Client 2.84.0 (A2A/)
+
+Copyright 2019 The gRPC Authors.
+Licensed under the Apache License, Version 2.0 (full text below).
+
+
+Google.Api.CommonProtos 2.17.0 (A2A/)
+
+Copyright 2020 Google LLC
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---
 

@@ -106,6 +106,9 @@ public partial class RimAgentGameComponent : GameComponent
     private readonly HashSet<AutonomousTrigger> _triageNoticed = new();
     private int _goalGeneration;
     private RunLogWriter _runLogWriter;
+    /// <summary>統計跨存檔共用同一個檔案；讀檔重建會話時沿用同一個實例，免得兩份各自覆寫。</summary>
+    private static readonly Lazy<ToolUsageStats> SharedToolUsage =
+        new(() => new ToolUsageStats(System.IO.Path.Combine(RunLogWriter.DefaultFolder, ToolUsageStats.FileName)));
 
     /// <summary>殖民地代號：寫進每份存檔，讀檔重來靠它認出同一局的 autosave；本功能之前的存檔第一次取用時補上。</summary>
     private string _colonyId;
@@ -520,6 +523,7 @@ public partial class RimAgentGameComponent : GameComponent
         _expansions = ExpansionsLine();
         session.SubagentExpansions = _expansions;
         session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
+        session.ToolUsage = SharedToolUsage.Value;
         session.RunLoggingEnabled = () => settings.recordRuns;
         session.RunLogSink = record =>
         {

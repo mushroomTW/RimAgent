@@ -77,6 +77,11 @@
     <PackageReference Include="ModelContextProtocol.Core" Version="2.4.0" ExcludeAssets="runtime" />
   </ItemGroup>
 
+  <!-- A2A 伺服端另成組件，出貨到 Mod 根目錄的 A2A/（理由見該專案）；這裡只要編譯期參考，不複製進 Assemblies/。 -->
+  <ItemGroup>
+    <ProjectReference Include="..\RimAgent.A2A\RimAgent.A2A.csproj" Private="false" />
+  </ItemGroup>
+
   <!-- SDK 優先的編譯期守門：禁止繞過框架與 SDK 的底層 API，清單與理由見 BannedSymbols.txt。僅建置時使用，不隨 Mod 出貨。 -->
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" PrivateAssets="all" ExcludeAssets="runtime" />

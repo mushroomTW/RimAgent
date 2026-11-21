@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>RimAgent.A2A</AssemblyName>
+    <RootNamespace>RimAgent.A2A</RootNamespace>
+    <Deterministic>true</Deterministic>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- 放在 Mod 根目錄的 A2A/，不放 Assemblies/：RimWorld 啟動時會掃描 Assemblies/ 內所有型別，
+         此組件的型別繼承 A2A 與 gRPC 的型別，解析器註冊前就掃描會丟 ReflectionTypeLoadException。 -->
+    <OutputPath Condition="'$(Configuration)' == 'Release'">..\..\A2A\</OutputPath>
+    <OutputPath Condition="'$(Configuration)' != 'Release'">bin\$(Configuration)\</OutputPath>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <!-- 不可超過遊戲的執行環境（RimWorld.runtimeconfig.json 的 Microsoft.NETCore.App 10.0.15）。 -->
+    <AspNetCoreShippedVersion>10.0.12</AspNetCoreShippedVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="A2A.AspNetCore" Version="1.0.0-preview4" ExcludeAssets="runtime" />
+    <PackageReference Include="A2A.Grpc" Version="1.0.0-preview4" ExcludeAssets="runtime" />
+    <PackageReference Include="Grpc.AspNetCore.Server" Version="2.84.0" ExcludeAssets="runtime" />
+    <!-- MEAI 與 Google.Protobuf 由 RimLLM Framework 出貨，版本對齊框架那份。 -->
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Google.Protobuf" Version="3.36.2" ExcludeAssets="runtime" />
+    <!-- 遊戲沒有 ASP.NET Core 共用框架：執行期 DLL 從同版本的 runtime pack 取出，隨 Mod 出貨到 A2A/。 -->
+    <PackageDownload Include="Microsoft.AspNetCore.App.Runtime.win-x64" Version="[$(AspNetCoreShippedVersion)]" />
+  </ItemGroup>
+
+  <!--
+    出貨白名單：RimAgent.A2A.dll 的組件參考封閉集合，扣掉遊戲根目錄、RimLLM Framework 與 RimAgent Assemblies/ 已有的。
+    A2AShippingTests 會檢查 A2A/ 內每個 DLL 的參考都解析得到、且沒有與其他來源重複；升級套件後照它的失敗訊息增減。
+  -->
+  <PropertyGroup>
+    <_AspNetCorePack>$(NuGetPackageRoot)microsoft.aspnetcore.app.runtime.win-x64\$(AspNetCoreShippedVersion)\runtimes\win-x64\lib\net10.0\</_AspNetCorePack>
+    <_AspNetCoreShipped>
+      Microsoft.AspNetCore;Microsoft.AspNetCore.Authentication;Microsoft.AspNetCore.Authentication.Abstractions;Microsoft.AspNetCore.Authentication.Core;
+      Microsoft.AspNetCore.Authorization;Microsoft.AspNetCore.Authorization.Policy;Microsoft.AspNetCore.Connections.Abstractions;Microsoft.AspNetCore.Cryptography.Internal;
+      Microsoft.AspNetCore.DataProtection;Microsoft.AspNetCore.DataProtection.Abstractions;Microsoft.AspNetCore.Diagnostics;Microsoft.AspNetCore.Diagnostics.Abstractions;
+      Microsoft.AspNetCore.HostFiltering;Microsoft.AspNetCore.Hosting;Microsoft.AspNetCore.Hosting.Abstractions;Microsoft.AspNetCore.Hosting.Server.Abstractions;
+      Microsoft.AspNetCore.Http;Microsoft.AspNetCore.Http.Abstractions;Microsoft.AspNetCore.Http.Extensions;Microsoft.AspNetCore.Http.Features;Microsoft.AspNetCore.Http.Results;
+      Microsoft.AspNetCore.HttpOverrides;Microsoft.AspNetCore.Metadata;Microsoft.AspNetCore.Mvc.Abstractions;Microsoft.AspNetCore.Mvc.Core;Microsoft.AspNetCore.OutputCaching;
+      Microsoft.AspNetCore.ResponseCaching.Abstractions;Microsoft.AspNetCore.Routing;Microsoft.AspNetCore.Routing.Abstractions;Microsoft.AspNetCore.Server.HttpSys;
+      Microsoft.AspNetCore.Server.IIS;Microsoft.AspNetCore.Server.IISIntegration;Microsoft.AspNetCore.Server.Kestrel;Microsoft.AspNetCore.Server.Kestrel.Core;
+      Microsoft.AspNetCore.Server.Kestrel.Transport.NamedPipes;Microsoft.AspNetCore.Server.Kestrel.Transport.Quic;Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets;
+      Microsoft.AspNetCore.WebUtilities;Microsoft.Extensions.Caching.Memory;Microsoft.Extensions.Configuration.CommandLine;Microsoft.Extensions.Configuration.EnvironmentVariables;
+      Microsoft.Extensions.Configuration.FileExtensions;Microsoft.Extensions.Configuration.Json;Microsoft.Extensions.Configuration.UserSecrets;Microsoft.Extensions.Features;
+      Microsoft.Extensions.FileProviders.Composite;Microsoft.Extensions.FileProviders.Physical;Microsoft.Extensions.Hosting;Microsoft.Extensions.Logging.Debug;
+      Microsoft.Extensions.Logging.EventLog;Microsoft.Extensions.Logging.EventSource;Microsoft.Extensions.Validation;Microsoft.Extensions.WebEncoders;Microsoft.Net.Http.Headers;
+      System.Security.Cryptography.Pkcs;System.Security.Cryptography.Xml
+    </_AspNetCoreShipped>
+  </PropertyGroup>
+
+  <Target Name="CopyA2AShippedAssemblies" AfterTargets="Build">
+    <ItemGroup>
+      <_AspNetCoreName Include="$(_AspNetCoreShipped)" />
+      <A2AShippedAssemblies Include="@(_AspNetCoreName->'$(_AspNetCorePack)%(Identity).dll')" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)a2a\1.0.0-preview4\lib\net10.0\A2A.dll" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)a2a.aspnetcore\1.0.0-preview4\lib\net10.0\A2A.AspNetCore.dll" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)a2a.grpc\1.0.0-preview4\lib\net10.0\A2A.Grpc.dll" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)grpc.aspnetcore.server\2.84.0\lib\net10.0\Grpc.AspNetCore.Server.dll" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)grpc.core.api\2.84.0\lib\netstandard2.1\Grpc.Core.Api.dll" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)grpc.net.common\2.84.0\lib\net8.0\Grpc.Net.Common.dll" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)grpc.net.client\2.84.0\lib\net8.0\Grpc.Net.Client.dll" />
+      <A2AShippedAssemblies Include="$(NuGetPackageRoot)google.api.commonprotos\2.17.0\lib\netstandard2.0\Google.Api.CommonProtos.dll" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(A2AShippedAssemblies.Identity)')" Text="A2A shipped assembly not found: %(A2AShippedAssemblies.Identity)" />
+    <Copy SourceFiles="@(A2AShippedAssemblies)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

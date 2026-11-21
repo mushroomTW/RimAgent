@@ -44,6 +44,7 @@
 | 確認／執行／自動／完整權限 | 標題列模式選單 | `CommandGateTests`、`AutoModeTests` |
 | 預覽確認與捨棄 | 變更遊戲狀態的工具呼叫後出現的預覽 | `CommandGateTests`；遊戲內 `PendingUiCheck`；截圖 |
 | 失敗連鎖保護 | 已確認的多個命令中有一項失敗 | `CommandGateTests` |
+| 失敗迴圈守衛 | 同一句裡同一個工具一再回同樣的錯誤 | `FailureLoopGuardTests` |
 | 本局不再詢問 | 預覽上的勾選；黑名單工具不提供 | `CommandGateTests`、`ToolGuardTests` |
 | MCP 呼叫審查 | 啟用 MCP 伺服器後呼叫其工具 | `McpTests` |
 
@@ -71,12 +72,15 @@
 | 網頁搜尋（SearXNG／MCP） | 模組設定 | `WebAndMemoryTests` |
 | MCP 伺服器 | `AgentPack/MCP/servers.json` | `McpTests` |
 | 執行紀錄 | 模組設定「記錄 Agent 運行過程」 | `RunLogTests`、`RunLogStatsTests` |
+| A2A 伺服器（JSON-RPC、gRPC） | 模組設定進階「讓其他 AI agent 與 RimAgent 對話」；Agent 卡片在 `http://localhost:<埠>/.well-known/agent-card.json` | `A2AServerHostTests`；遊戲內：開啟後以 A2A 用戶端送 `SendMessage`（JSON-RPC 與 gRPC 各一次），任務應出現在對話視窗並以 `[A2A]` 標示 |
+| 工具使用統計、常用工具包預載、失敗經驗 | 自動；統計存在 `<存檔資料夾>/RimAgent/tool-usage.json` | `ToolUsageStatsTests` |
 
 ## 載入與相容
 
 | 功能 | 怎麼操作到 | 證明 |
 | --- | --- | --- |
 | 出貨組件都能載入、沒有重複的 MEAI | 啟動遊戲 | 建置期 `CheckShippingRules`；遊戲內 `StartupTests` |
+| A2A/ 出貨組件剛好夠用、不與遊戲／框架重複 | 建置 `RimAgent.A2A`（Release） | `A2AShippingTests` |
 | SmashTools 初始化與主執行緒派送 | 啟動遊戲 | 遊戲內 `SmashToolsTests` |
 | 讀檔後狀態還原 | 讀取存檔 | 遊戲內 `ReloadCheck` |
 | Unity 訊息方法會被呼叫 | — | `UnityMessageMethodTests` |

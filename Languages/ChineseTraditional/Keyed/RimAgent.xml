@@ -102,6 +102,13 @@
   <RimAgent.Settings.UseLocalSearch>改用自己電腦上的 SearXNG（大部分人不用開）</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>需先啟動已開啟 JSON 輸出的 SearXNG 服務。保持關閉即可免本機設定，使用 Parallel 匿名免費方案。</RimAgent.Settings.UseLocalSearchTip>
   <RimAgent.Settings.SearxngUrl>SearXNG 服務網址</RimAgent.Settings.SearxngUrl>
+  <RimAgent.Settings.A2AHeader>讓其他 AI agent 與 RimAgent 對話（A2A）</RimAgent.Settings.A2AHeader>
+  <RimAgent.Settings.A2AServer>在這台電腦上開 A2A 伺服器</RimAgent.Settings.A2AServer>
+  <RimAgent.Settings.A2AServerTip>其他 agent（例如寫程式的助理或其他遊戲 agent）可以透過 A2A 協定，用 JSON-RPC 或 gRPC 下指令給 RimAgent。只有這台電腦上的程式連得進來。遠端指令照你的權限與確認模式執行。</RimAgent.Settings.A2AServerTip>
+  <RimAgent.Settings.A2APort>連接埠（gRPC 用 {0}）</RimAgent.Settings.A2APort>
+  <RimAgent.Settings.A2ARunning>執行中。Agent 卡片：{0}</RimAgent.Settings.A2ARunning>
+  <RimAgent.Settings.A2AFailed>無法啟動：{0}</RimAgent.Settings.A2AFailed>
+  <RimAgent.Settings.A2AApplyOnClose>關閉設定視窗後啟動。</RimAgent.Settings.A2AApplyOnClose>
   <RimAgent.Settings.Memory>記住事情</RimAgent.Settings.Memory>
   <RimAgent.Settings.MemoryTip>允許 Agent 在本存檔中讀取、寫入、編輯與刪除最多 30 個記憶檔。</RimAgent.Settings.MemoryTip>
   <RimAgent.Settings.Agents>派小幫手</RimAgent.Settings.Agents>

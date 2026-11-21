@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using RimAgent.A2A;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using RimAgent.UI;
@@ -63,12 +64,22 @@ public partial class RimAgentMod : Mod
     private static bool _showPermissionList;
     private bool _showAdvanced;
 
+    // TextFieldNumeric 需要跨幀保留輸入中的文字。
+    private static string _a2aPortBuffer;
+
     private Vector2 _settingsScrollPosition = Vector2.zero;
     private float _settingsHeight = 960f;
 
     public RimAgentMod(ModContentPack content) : base(content)
     {
         Settings = GetSettings<RimAgentSettings>();
+        A2AServerController.Apply(content.RootDir, Settings.a2aServer, Settings.a2aPort);
+    }
+
+    public override void WriteSettings()
+    {
+        base.WriteSettings();
+        A2AServerController.Apply(Content.RootDir, Settings.a2aServer, Settings.a2aPort);
     }
 
     public override string SettingsCategory()
@@ -161,7 +172,32 @@ public partial class RimAgentMod : Mod
             Settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), Settings.searxngUrl ?? string.Empty);
         }
 
+        DrawA2ASettings(listing);
         DrawRunLogSettings(listing);
+    }
+
+    private static void DrawA2ASettings(Listing_Standard listing)
+    {
+        listing.Gap();
+        listing.Label("RimAgent.Settings.A2AHeader".Translate());
+        listing.GapLine();
+        listing.CheckboxLabeled("RimAgent.Settings.A2AServer".Translate(), ref Settings.a2aServer, "RimAgent.Settings.A2AServerTip".Translate());
+        if (!Settings.a2aServer) return;
+        Rect portRow = listing.GetRect(28f);
+        Widgets.Label(portRow.LeftHalf(), "RimAgent.Settings.A2APort".Translate(Settings.a2aPort + 1));
+        Widgets.TextFieldNumeric(portRow.RightHalf(), ref Settings.a2aPort, ref _a2aPortBuffer, RimAgentSettings.MinA2APort, RimAgentSettings.MaxA2APort);
+        if (A2AServerController.LastError is { } error)
+        {
+            listing.Label("RimAgent.Settings.A2AFailed".Translate(error));
+        }
+        else if (A2AServerController.RunningPort > 0)
+        {
+            listing.Label("RimAgent.Settings.A2ARunning".Translate("http://localhost:" + A2AServerController.RunningPort + "/.well-known/agent-card.json"));
+        }
+        else
+        {
+            listing.Label("RimAgent.Settings.A2AApplyOnClose".Translate());
+        }
     }
 
     private static void DrawDecisionSection(Listing_Standard listing)

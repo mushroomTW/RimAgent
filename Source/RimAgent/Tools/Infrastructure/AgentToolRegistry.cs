@@ -61,6 +61,7 @@ public sealed class AgentToolRegistry
     private readonly ConfirmationGate _gate;
     private readonly IRiskChecker _classifier;
     private readonly PlayerInterjections _interjections;
+    private readonly FailureLoopGuard _loopGuard;
     private readonly AgentActivityTracker _activity;
 
     public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, undo: null, gate: null)
@@ -73,7 +74,7 @@ public sealed class AgentToolRegistry
     }
 
 #pragma warning disable S107 // Tool registry aggregates all domain tool implementations
-    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, IRiskChecker classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null, Func<bool> layoutsEnabled = null)
+    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, IRiskChecker classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null, Func<bool> layoutsEnabled = null, FailureLoopGuard loopGuard = null)
 #pragma warning restore S107
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -82,6 +83,7 @@ public sealed class AgentToolRegistry
         _gate = gate;
         _classifier = classifier;
         _interjections = interjections;
+        _loopGuard = loopGuard;
         _activity = activity;
 
         Register(new ObserveTools(world, gate), transcript);
@@ -259,7 +261,7 @@ public sealed class AgentToolRegistry
             Category = category,
             Risk = risk,
             Pack = ToolPacks.PackOf(function.Name, category),
-            Tool = new LoggingAIFunction(function, transcript, _world, category, risk, _gate, _classifier, Outputs, _interjections, activity: _activity)
+            Tool = new LoggingAIFunction(function, transcript, _world, category, risk, _gate, _classifier, Outputs, _interjections, activity: _activity, loopGuard: _loopGuard)
         });
     }
 }
