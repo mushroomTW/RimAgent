@@ -10,6 +10,7 @@ using RimAgent.Agent;
 using RimAgent.Tools;
 using RimAgent.UI;
 using RimLLM_Framework;
+using RimLLM_Framework.Mod;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -28,14 +29,14 @@ public partial class RimAgentMod : Mod
     private const float SubIndent = 28f;
     private const string FrameworkPackageId = "GreenMushroom.RimLLMFramework";
 
-    private static readonly Color Gold = new(0.94f, 0.78f, 0.45f);
+    private static readonly Color Gold = RimLLMUIStyle.Gold;
     private static readonly Color Green = new(0.44f, 0.75f, 0.45f);
     private static readonly Color Yellow = new(0.88f, 0.72f, 0.31f);
     private static readonly Color Red = new(0.88f, 0.42f, 0.37f);
     private static readonly Color Dim = new(0.66f, 0.67f, 0.69f);
     private static readonly Color PanelFill = new(1f, 1f, 1f, 0.05f);
-    private static readonly Color SelectedFill = new(0.94f, 0.78f, 0.45f, 0.16f);
-    private static readonly Color PanelBorder = new(0.4f, 0.41f, 0.43f);
+    private static readonly Color SelectedFill = RimLLMUIStyle.SelectedFill;
+    private static readonly Color PanelBorder = RimLLMUIStyle.PanelBorder;
 
     private static readonly ToolCategory[] Categories = Enum.GetValues<ToolCategory>();
 
@@ -115,8 +116,7 @@ public partial class RimAgentMod : Mod
         {
             var row = new Rect(nav.x + 4f, y, nav.width - 8f, NavRowHeight);
             bool selected = tab == _tab;
-            if (selected) Widgets.DrawBoxSolid(row, new Color(Gold.r, Gold.g, Gold.b, 0.15f));
-            else if (Mouse.IsOver(row)) Widgets.DrawBoxSolid(row, new Color(1f, 1f, 1f, 0.06f));
+            RimLLMUIStyle.DrawNavSelection(row, selected);
             Text.Anchor = TextAnchor.MiddleLeft;
             GUI.color = selected ? Gold : Dim;
             Widgets.Label(new Rect(row.x + 10f, row.y, row.width - 10f, row.height), ("RimAgent.Settings.Tab." + tab).Translate());
