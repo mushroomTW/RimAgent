@@ -51,6 +51,7 @@ The agent uses tools to inspect the current map and execute authorized actions. 
 ---
 
 ## Highlights
+- **Agent-to-Agent (A2A):** Other AI agents on the same computer, such as a coding assistant, can send instructions to RimAgent over the A2A protocol (JSON-RPC or gRPC).
 
 - **82 Tools:** Comprehensive capabilities to inspect colony state, issue real-time orders, search the web, and manage dual-scope memories (global and save-specific).
 - **Four execution modes:** Select from strict step-by-step confirmation, routine actions with major action gating, automated AI safety classification (Auto mode), or unrestricted autonomous execution.
@@ -92,6 +93,7 @@ Drag the window title bar to move it, or drag the lower-right corner to resize i
 ### Context Management & Run History
 
 > **Context Compaction:**
+>
 > 1. **Auto-fold:** Prior to each model invocation, Agent Framework estimates total history tokens. When reaching a configured threshold (configurable from 30% to 95%, default 60% with reserved output headroom) of the smallest known context limit among the chosen model and fallback entries, older tool outputs are folded automatically without additional LLM calls. If no limit is known, auto-fold is skipped.
 > 2. **History Trimming:** Stored model message history exceeding 120 messages is pruned back to approximately 60 messages to preserve memory; visible transcript logs remain untouched.
 > 3. **Deep Semantic Compact:** Trigger `/compact` at any time to invoke a dedicated model summarization pass, condensing extended dialogue history into an actionable summary.
@@ -100,6 +102,7 @@ Drag the window title bar to move it, or drag the lower-right corner to resize i
 > Enable **Record Agent runs** in mod settings to log all instructions, tool invocations, safety assessments, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. Off by default; retains up to 500 runs or 16 MiB. A shortcut button in settings opens the log directory directly.
 
 > **Prompt & Extensibility Architecture:**
+>
 > - `AgentPack/Prompts/`: Houses built-in system prompts.
 > - `AgentPack/Skills/`: Holds optional skills (ships with fourteen built-in skills: eight heuristic gameplay skills for raid defense, defense building, food security, mood management, work assignment, medical triage, seasonal prep, and colony progression; plus six ending questlines: ship launch, journey offer, archonexus, royal ascent, void, and mechhive). Requests contain only a skill index; full skill texts are loaded on demand via `read_skill`.
 > - `AgentPack/Agents/`: Contains subagent definitions (includes a default read-only reconnaissance agent, `scout`).
@@ -162,6 +165,18 @@ Major actions are determined by static risk metadata on each tool (including tra
 
 ---
 
+## Agent-to-Agent (A2A)
+
+RimAgent can act as an [A2A](https://a2a-protocol.org/) server, so other AI agents can send it instructions and read its replies.
+
+- **Enable it:** Turn on **A2A server** in mod settings. It starts after you close the settings window. It is off by default.
+- **Endpoints:** The agent card is at `http://localhost:47120/.well-known/agent-card.json`. JSON-RPC is served at `http://localhost:47120/a2a`, and gRPC on the next port, `47121`. You can change the port in mod settings.
+- **Local only:** The server listens on this computer only and rejects requests whose `Host` header is not local.
+- **Same rules as the player:** Remote instructions follow your current permissions and execution mode. In Confirm mode, orders that change the game wait for you to confirm them in game.
+- **Long instructions:** An instruction can take minutes of game time. Send it with `returnImmediately` and poll `GetTask`; `CancelTask` stops it.
+
+---
+
 ## What It Can Do
 
 All 16 tool categories except Save are enabled by default and can be toggled individually in mod settings, or simultaneously with Allow All / Deny All. The selected execution mode governs how commands are evaluated and run.
@@ -188,18 +203,23 @@ All 16 tool categories except Save are enabled by default and can be toggled ind
 ### Core Subsystems
 
 #### Web Search
+
 `web_search` connects out-of-the-box to [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) anonymously without requiring an API key or local setup. To use a local provider, enable **Use local SearXNG** in RimAgent settings and specify its URL (`http://127.0.0.1:8888` by default, with JSON output enabled; see [free-web-search](https://github.com/vksco/free-web-search)). Local queries aggregate Google, DuckDuckGo, and Qwant while filtering out Bing results. Search queries exit the game environment and strictly adhere to the active execution mode policy.
 
 #### Save Checkpoints & Automatic Recovery
+
 The Save category is off by default. When enabled, RimAgent creates a safe daily checkpoint (`RimAgent-<colony>-<tick>`) once per in-game day provided no hostiles, bleeding/downed colonists, or active fires are on the map, retaining the newest 5 checkpoints. `list_saves` displays checkpoints and autosaves belonging to the current colony (correlated via an internal colony identifier). If proactive care is enabled, the death of a colonist initiates an autonomous evaluation where the agent decides whether to invoke `load_save` to revert to an earlier save, passing lessons learned into the reloaded timeline. Each save can be reloaded up to 3 times, after which older saves are locked to enforce permanent consequences. Loading an older save purges newer checkpoints. Reload counts persist until the game process exits. Note that Commitment mode prohibits save/reload interventions.
 
 #### Dual-Scope Memory Architecture
+
 Memory management utilizes Agent Framework's `FileMemoryProvider` across two scopes determined by filename prefixes:
+
 - **Global Memory:** Files prefixed with `global_` are persisted in `Memory/global-memory.json` within the RimAgent data folder. These files are shared across all saves, making them ideal for standing player preferences, playstyles, and colony rules (`global_preferences.md` by convention).
 - **Save Memory:** All other memory files are serialized directly into the RimWorld save file. New games start with clean save memory, and loading an older save restores memories from that point in time.
 - **Index & Constraints:** Each turn automatically injects a unified index summarizing filenames and descriptions from both scopes; the agent retrieves full contents on demand. Each scope allows up to 30 files of 4,000 characters each; filenames are limited to 60 characters and descriptions are truncated to 200 characters single-line.
 
 #### Subagent Collaboration
+
 Subagents follow the hermes-agent `delegate_task` paradigm. Subagents are defined in `AgentPack/Agents/<name>/AGENT.md` using YAML frontmatter to declare permitted tool categories, `read_only` status, and optional `reasoning` levels.
 The primary agent can delegate up to four distinct task briefs per invocation. Each brief executes in an isolated context with its own prompt, tool pack, and assigned model, returning only its final summary report to the primary agent's history. Read-only subagents execute concurrently in parallel; state-altering subagents run sequentially. Subagents inherit only tool categories enabled in global mod settings, and all actions remain bound by the current execution mode, confirmation gates, proactive budget limits, undo stacks, and run logs. The default `scout` subagent provides comprehensive read-only reconnaissance across all categories.
 
