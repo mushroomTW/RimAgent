@@ -261,12 +261,8 @@ public partial class RimAgentMod : Mod
         }
         if (Settings.decisionEnabled && DrawDecisionSettings(listing))
         {
-            listing.CheckboxLabeled("RimAgent.Settings.DecisionAnswerChoices".Translate(), ref Settings.decisionAnswerChoices,
-                "RimAgent.Settings.DecisionAnswerChoicesTip".Translate());
             listing.CheckboxLabeled("RimAgent.Settings.DecisionTriageUpkeep".Translate(), ref Settings.decisionTriageUpkeep,
                 "RimAgent.Settings.DecisionTriageUpkeepTip".Translate());
-            listing.CheckboxLabeled("RimAgent.Settings.DecisionPreloadPacks".Translate(), ref Settings.decisionPreloadPacks,
-                "RimAgent.Settings.DecisionPreloadPacksTip".Translate());
             listing.Gap(6f);
             DrawDecisionRoutingSettings(listing);
         }

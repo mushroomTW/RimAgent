@@ -145,19 +145,19 @@ public class FailureLoopGuardTests
 {
     private readonly List<string> _notices = [];
 
-    private FailureLoopGuard Guard(double? stuck) => new((_, _) => Task.FromResult(stuck), _notices.Add);
+    private FailureLoopGuard Guard() => new(_notices.Add);
 
     [SetUp]
     public void Clear() => _notices.Clear();
 
     [Test]
-    public async Task RedirectsOnceAtTheThresholdWhenTheJudgeAgrees()
+    public void RedirectsOnceAtTheThreshold()
     {
-        FailureLoopGuard guard = Guard(0.9);
-        guard.Reset("build a wall");
+        FailureLoopGuard guard = Guard();
+        guard.Reset();
 
         string[] notes = new string[FailureLoopGuard.Threshold * 2];
-        for (int i = 0; i < notes.Length; i++) notes[i] = await guard.ObserveAsync("build", ToolText.Error("cell (" + i + ", 4) is blocked"), CancellationToken.None);
+        for (int i = 0; i < notes.Length; i++) notes[i] = guard.Observe("build", ToolText.Error("cell (" + i + ", 4) is blocked"));
 
         Assert.That(notes.Take(FailureLoopGuard.Threshold - 1), Is.All.Null);
         Assert.That(notes[FailureLoopGuard.Threshold - 1], Does.Contain("<loop_guard>"));
@@ -166,59 +166,39 @@ public class FailureLoopGuardTests
     }
 
     [Test]
-    public async Task NoRedirectWhenTheJudgeSaysProgress()
+    public void RedirectsWithoutAskingTheDecisionModel()
     {
-        FailureLoopGuard guard = Guard(0.2);
-        guard.Reset("x");
+        var guard = Guard();
+        guard.Reset();
         string note = null;
-        for (int i = 0; i < FailureLoopGuard.Threshold; i++) note = await guard.ObserveAsync("build", ToolText.Error("blocked"), CancellationToken.None);
-        Assert.That(note, Is.Null);
-    }
-
-    [Test]
-    public async Task AsksTheJudgeOnlyOncePerFailure()
-    {
-        int asked = 0;
-        var guard = new FailureLoopGuard((_, _) => { asked++; return Task.FromResult<double?>(0.2); }, _notices.Add);
-        guard.Reset("x");
-        for (int i = 0; i < FailureLoopGuard.Threshold * 3; i++) await guard.ObserveAsync("build", ToolText.Error("blocked"), CancellationToken.None);
-        Assert.That(asked, Is.EqualTo(1));
-    }
-
-    [Test]
-    public async Task RedirectsWithoutAJudge()
-    {
-        var guard = new FailureLoopGuard(judge: null, _notices.Add);
-        guard.Reset("x");
-        string note = null;
-        for (int i = 0; i < FailureLoopGuard.Threshold; i++) note = await guard.ObserveAsync("build", ToolText.Error("blocked"), CancellationToken.None);
+        for (int i = 0; i < FailureLoopGuard.Threshold; i++) note = guard.Observe("build", ToolText.Error("blocked"));
         Assert.That(note, Does.Contain("<loop_guard>"));
     }
 
     [Test]
-    public async Task DifferentErrorsAndSuccessesDoNotCount()
+    public void DifferentErrorsAndSuccessesDoNotCount()
     {
-        FailureLoopGuard guard = Guard(0.9);
-        guard.Reset("x");
+        FailureLoopGuard guard = Guard();
+        guard.Reset();
         string[] results = [ToolText.Error("blocked"), "ok", ToolText.Error("no material"), ToolText.Error("blocked"), "ok"];
-        foreach (string r in results) Assert.That(await guard.ObserveAsync("build", r, CancellationToken.None), Is.Null);
+        foreach (string r in results) Assert.That(guard.Observe("build", r), Is.Null);
     }
 
     [Test]
-    public async Task ResetStartsANewInstruction()
+    public void ResetStartsANewInstruction()
     {
-        FailureLoopGuard guard = Guard(0.9);
-        guard.Reset("first");
-        for (int i = 0; i < FailureLoopGuard.Threshold - 1; i++) await guard.ObserveAsync("build", ToolText.Error("blocked"), CancellationToken.None);
-        guard.Reset("second");
-        Assert.That(await guard.ObserveAsync("build", ToolText.Error("blocked"), CancellationToken.None), Is.Null);
+        FailureLoopGuard guard = Guard();
+        guard.Reset();
+        for (int i = 0; i < FailureLoopGuard.Threshold - 1; i++) guard.Observe("build", ToolText.Error("blocked"));
+        guard.Reset();
+        Assert.That(guard.Observe("build", ToolText.Error("blocked")), Is.Null);
     }
 
     [Test]
     public async Task LoggingFunctionAppendsTheRedirectToTheMainAgentsToolResult()
     {
-        var guard = new FailureLoopGuard(judge: null, _notices.Add);
-        guard.Reset("x");
+        var guard = Guard();
+        guard.Reset();
         AIFunction inner = AIFunctionFactory.Create(() => ToolText.Error("blocked"), "build");
         var tool = new LoggingAIFunction(inner, new AgentTranscript(), new FakeGameWorld(), ToolCategory.Observe, ToolRisk.Query, gate: null, loopGuard: guard);
 

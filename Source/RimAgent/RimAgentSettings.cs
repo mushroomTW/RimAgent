@@ -35,9 +35,7 @@ public class RimAgentSettings : ModSettings
 
     public ReasoningLevel decisionFallbackReasoning = ReasoningLevel.Auto;
     public float decisionRoutingMinConfidence = 0.6f;                // 0 到 1
-    public bool decisionAnswerChoices = true;
     public bool decisionTriageUpkeep = true;
-    public bool decisionPreloadPacks = true;
 
     /// <summary>模型槽的「跟隨 Agent」值。不含冒號，真實模型識別碼都是「供應商:模型」，撞不到。</summary>
     public const string FollowAgentModel = "=agent";
@@ -185,9 +183,7 @@ public class RimAgentSettings : ModSettings
         decisionModel = fresh.decisionModel;
         decisionFallbackReasoning = fresh.decisionFallbackReasoning;
         decisionRoutingMinConfidence = fresh.decisionRoutingMinConfidence;
-        decisionAnswerChoices = fresh.decisionAnswerChoices;
         decisionTriageUpkeep = fresh.decisionTriageUpkeep;
-        decisionPreloadPacks = fresh.decisionPreloadPacks;
         useLocalSearch = fresh.useLocalSearch;
         searxngUrl = fresh.searxngUrl;
         autonomousCooldownMinutes = fresh.autonomousCooldownMinutes;
@@ -346,9 +342,7 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref decisionFallbackReasoning, "decisionFallbackReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref decisionRoutingMinConfidence, "decisionRoutingMinConfidence", 0.6f);
         decisionRoutingMinConfidence = UnityEngine.Mathf.Clamp01(decisionRoutingMinConfidence);
-        Scribe_Values.Look(ref decisionAnswerChoices, "decisionAnswerChoices", defaultValue: true);
         Scribe_Values.Look(ref decisionTriageUpkeep, "decisionTriageUpkeep", defaultValue: true);
-        Scribe_Values.Look(ref decisionPreloadPacks, "decisionPreloadPacks", defaultValue: true);
     }
 
     public ToolPermissions ToPermissions()

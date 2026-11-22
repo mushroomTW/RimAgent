@@ -58,8 +58,7 @@ public partial class RimAgentGameComponent
             bool dialogLeft = choices.Any(c => c.Id.StartsWith(ChoiceTools.DialogIdPrefix, StringComparison.OrdinalIgnoreCase));
             if (!fresh && (!dialogLeft || DateTime.UtcNow < _nextDialogRetryAt)) return;
             _nextDialogRetryAt = DateTime.UtcNow.AddSeconds(DialogRetrySeconds);
-            // 傳快照：代答後要拿「原本有哪些抉擇」比對剩下的，不能被即時清單改掉。
-            _ = RunChoiceGuardedAsync(session, [.. choices], Find.TickManager.TicksGame, ToConfig(settings));
+            _ = RunChoiceGuardedAsync(session, Find.TickManager.TicksGame, ToConfig(settings));
         }
         catch (Exception ex)
         {
@@ -92,12 +91,8 @@ public partial class RimAgentGameComponent
             AutonomousTrigger.EmergencyMedical => "the downed or bleeding colonist",
             AutonomousTrigger.MentalBreak => "the colonist near a mental break",
             AutonomousTrigger.FoodShortage => "the food shortage",
-            AutonomousTrigger.Cold => "the dangerous temperatures",
-            AutonomousTrigger.BedShortage => "the colonists without beds",
-            AutonomousTrigger.OutdoorsBed => "the beds outdoors",
-            AutonomousTrigger.PowerOutage => "the power outage",
-            AutonomousTrigger.Research => "the missing research project",
-            AutonomousTrigger.LowMood => "the low moods",
+            AutonomousTrigger.Alert => "the game alerts",
+            AutonomousTrigger.CriticalAlert => "the critical game alerts",
             AutonomousTrigger.Raid => "the ongoing raid",
             AutonomousTrigger.RaidEnded => "the raid cleanup",
             _ => trigger.ToString(),
@@ -158,16 +153,12 @@ public partial class RimAgentGameComponent
         });
     }
 
-    private Task RunChoiceGuardedAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int tick, AutonomousConfig config)
+    private Task RunChoiceGuardedAsync(ColonyAgentSession session, int tick, AutonomousConfig config)
     {
         return _runner.RunGuardedAsync(async (generation, token) =>
         {
             try
             {
-                HashSet<string> answered = await AnswerChoicesWithSystemOneAsync(session, choices, generation, token);
-                if (!_runner.IsCurrent(generation)) return;
-                bool leftover = _autoWorld.GetPendingChoices().Any(c => choices.Any(o => o.Id == c.Id) && !answered.Contains(c.Id));
-                if (answered.Count > 0 && !leftover) return;
                 await RunAutonomousAsync(new AutonomousRunContext(session, AutonomousTrigger.Choice, tick, config, Signals: null, Detail: null), generation, token);
             }
             catch (Exception ex)
@@ -175,59 +166,6 @@ public partial class RimAgentGameComponent
                 WarnOnce("RimAgent choice run failed: " + ex.Message);
             }
         });
-    }
-
-    /// <summary>System One 代答須與主 LLM 同樣能免確認按選項；自動模式另經風險分類器放行。</summary>
-    private async Task<HashSet<string>> AnswerChoicesWithSystemOneAsync(ColonyAgentSession session, IReadOnlyList<PendingChoiceInfo> choices, int generation, CancellationToken cancellationToken)
-    {
-        var answered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        RimAgentSettings settings = RimAgentMod.Settings;
-        if (settings == null || !settings.decisionAnswerChoices) return answered;
-        AgentMode mode = session.Mode;
-        bool autoMode = mode == AgentMode.Auto;
-        bool allowed = mode == AgentMode.Autonomous || autoMode
-            || (mode == AgentMode.Execute && !settings.confirmAutonomousMajor);
-        if (!allowed) return answered;
-
-        string colonyState = DecisionAutonomousTriage.DescribeSignals(GatherSignals());
-        IReadOnlyList<ChoiceDecision> decisions = await ChoiceResponder.DecideAsync(choices, colonyState, cancellationToken);
-        if (!_runner.IsCurrent(generation)) return answered;
-        string authorization = autoMode ? AutonomousPrompts.Build(_pack?.Autonomous, AutonomousTrigger.Choice) : null;
-        foreach (ChoiceDecision decision in decisions)
-        {
-            if (!await ProcessSystemOneChoiceAsync(session, decision, answered, authorization, autoMode, generation, cancellationToken)) return answered;
-        }
-        return answered;
-    }
-
-    private async Task<bool> ProcessSystemOneChoiceAsync(
-        ColonyAgentSession session, ChoiceDecision decision, HashSet<string> answered, string authorization, bool autoMode, int generation, CancellationToken cancellationToken)
-    {
-        PendingChoiceInfo choice = decision.Choice;
-        // 前一個代答可能已讓這個抉擇消失（同一串對話框）：只答還在的。
-        if (!_autoWorld.GetPendingChoices().Any(c => string.Equals(c.Id, choice.Id, StringComparison.OrdinalIgnoreCase))) return true;
-        string preview = string.Create(CultureInfo.InvariantCulture, $"would answer \"{choice.Title}\" with option {decision.Option.Number}: {decision.Option.Text}.");
-        if (autoMode)
-        {
-            RiskVerdict verdict = await session.ClassifyRiskAsync(new RiskQuestion
-            {
-                Instruction = authorization ?? string.Empty,
-                ToolName = "choose_option",
-                Arguments = System.Text.Json.JsonSerializer.Serialize(new { choiceId = choice.Id, option = decision.Option.Number }),
-                Preview = preview
-            }, cancellationToken);
-            if (!_runner.IsCurrent(generation)) return false;
-            if (verdict == null || verdict.ShouldReject) return true;
-        }
-        CommandResult result = _autoWorld.ChooseOption(choice.Id, decision.Option.Number);
-        if (!result.Success) return true;
-        answered.Add(choice.Id);
-        string chosen = string.IsNullOrEmpty(result.Message) ? decision.Option.Text : result.Message;
-        session.DecisionReports.Add($"Answered \"{choice.Title}\" with \"{chosen}\".");
-        string notice = $"System One answered \"{choice.Title}\" with \"{chosen}\" (confidence {ToolText.Pct((float)decision.Confidence)}).";
-        session.Transcript.Add(new TranscriptEntry { Kind = TranscriptKind.Notice, Text = notice });
-        LogSystemOne("choice", notice);
-        return true;
     }
 
     /// <summary>決策模型不可用時回傳 false（照常叫主 LLM）。</summary>
@@ -342,13 +280,13 @@ public partial class RimAgentGameComponent
 
     internal static string FormatRetryDetail(AutonomousTrigger trigger, int attempt, AutonomousSignals signals)
     {
-        if (attempt <= 1) return null;
+        bool alert = trigger is AutonomousTrigger.Alert or AutonomousTrigger.CriticalAlert;
+        if (attempt <= 1) return alert ? "Active alerts: " + signals.Alerts : null;
         string diagnostic = trigger switch
         {
             AutonomousTrigger.Fire =>
                 string.Create(CultureInfo.InvariantCulture, $"active fires. There are still {signals.FireCount} fire(s) burning after previous orders. Check if assigned colonists are drafting/extinguishing, or assign more colonists."),
-            AutonomousTrigger.Cold =>
-                string.Create(CultureInfo.InvariantCulture, $"hypothermia risks. {signals.ColdColonistCount} colonist(s) remain dangerously cold. Check indoor heaters, fuel/power, or warm clothing."),
+            AutonomousTrigger.Alert or AutonomousTrigger.CriticalAlert => "alerts that are still active: " + signals.Alerts + ".",
             AutonomousTrigger.EmergencyMedical =>
                 string.Create(CultureInfo.InvariantCulture, $"medical emergencies. {signals.DownedOrBleedingCount} colonist(s) remain downed or bleeding. Ensure doctors are prioritized and medicine is accessible."),
             AutonomousTrigger.FoodShortage =>

@@ -68,6 +68,32 @@ public class DecisionRoutingTests
         Assert.That(_fakeDecision.EvaluateCount, Is.EqualTo(1));
     }
 
+    [TestCase("好")]
+    [TestCase("繼續")]
+    [TestCase("ok, go")]
+    public async Task ShortFollowUpReusesThePreviousLevel(string followUp)
+    {
+        _fakeDecision.ReplyRoute("high", 0.85);
+        var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
+        await router.ResolveAsync("plan a killbox at the north entrance");
+
+        DecisionRoute route = await router.ResolveAsync(followUp);
+
+        Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.High));
+        Assert.That(_fakeDecision.EvaluateCount, Is.EqualTo(1), "延續上一句的短句不再問決策模型");
+    }
+
+    [Test]
+    public async Task ShortInstructionWithoutAPreviousLevelStillAsks()
+    {
+        _fakeDecision.ReplyRoute("low", 0.85);
+        var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
+
+        await router.ResolveAsync("好");
+
+        Assert.That(_fakeDecision.EvaluateCount, Is.EqualTo(1));
+    }
+
     [Test]
     public async Task UnknownLevelFallsBackToConfiguredFallback()
     {

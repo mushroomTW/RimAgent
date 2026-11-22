@@ -72,7 +72,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         // 行動紀錄與失敗紀錄都存工具本身的結果。子代理的工具不取，免得話被子代理吃掉。
         bool mainAgent = _transcript.CurrentAgent.Length == 0;
         string redirect = mainAgent && _loopGuard != null
-            ? await _loopGuard.ObserveAsync(Name, result?.ToString(), cancellationToken).ConfigureAwait(false)
+            ? _loopGuard.Observe(Name, result?.ToString())
             : null;
         string interjection = mainAgent ? _interjections?.TakeAll() : null;
         if (redirect == null && interjection == null) return result;

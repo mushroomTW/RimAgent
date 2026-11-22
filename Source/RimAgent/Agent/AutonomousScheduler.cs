@@ -18,14 +18,11 @@ public enum AutonomousTrigger
     Fire,
     /// <summary>出現新的抉擇信件或對話框；由 GameComponent 在 Update 偵測，不經排程器。</summary>
     Choice,
-    // 以下為基地狀況：條件成立就代表基地在慢慢壞掉，不會有人死亡也不會響警報，
-    // 但不處理就會累積成前面那些應急事件。
-    Cold,
-    BedShortage,
-    OutdoorsBed,
-    PowerOutage,
-    Research,
-    LowMood,
+    // 以下為遊戲警報（右下角那排提示）：判斷規則跟著遊戲與其他模組走，不自己重寫。
+    /// <summary>非紅色警報：基地在慢慢壞掉，先由決策模型篩過要不要叫主模型。</summary>
+    Alert,
+    /// <summary>紅色（Critical）警報：跟襲擊、火災一樣直接叫主模型。</summary>
+    CriticalAlert,
     // 以下由 GameComponent 在 Update 起跑，不經排程器（需開啟存檔權限）。
     /// <summary>有殖民者死亡：由模型決定要不要讀檔重來。</summary>
     ColonistDied,
@@ -41,12 +38,10 @@ public struct AutonomousSignals
     public int ColonistCount { get; set; }
     public int DownedOrBleedingCount { get; set; }
     public int FireCount { get; set; }
-    public int ColdColonistCount { get; set; }
-    public int BedlessCount { get; set; }
-    public int OutdoorsBedCount { get; set; }
-    public int LowMoodCount { get; set; }
-    public bool HasActiveResearch { get; set; }
-    public bool AnyWorkingPower { get; set; }
+    public int AlertCount { get; set; }
+    public int CriticalAlertCount { get; set; }
+    /// <summary>目前的警報標題，給模型看；「[Critical] 標題; 標題」。</summary>
+    public string Alerts { get; set; }
 }
 
 /// <summary>排程器設定（單位皆為 tick；2500 tick＝1 遊戲小時，60000 tick＝1 天）。</summary>
@@ -63,7 +58,7 @@ public struct AutonomousConfig
     public bool OnFoodShortage { get; set; }
     public bool OnEmergencyMedical { get; set; }
     public bool OnFire { get; set; }
-    /// <summary>基地狀況（受寒、沒床、露宿、停電、停研、心情低落）共用一組開關。</summary>
+    /// <summary>遊戲警報（一般與紅色）共用一組開關。</summary>
     public bool OnUpkeep { get; set; }
 }
 
@@ -88,11 +83,7 @@ public sealed class AutonomousScheduler : IExposable
 
     public const float FoodWarningPerColonist = 8f;
 
-    public const float LowMoodThreshold = 0.5f;
-
-    public const int MinColonistsForResearch = 2;
-
-    private const int WatcherCount = (int)AutonomousTrigger.LowMood + 1;
+    private const int WatcherCount = (int)AutonomousTrigger.CriticalAlert + 1;
 
     private long _windowStartTick;
     private bool _windowOpen;
@@ -230,15 +221,12 @@ public sealed class AutonomousScheduler : IExposable
         list.Clear();
         Flag(list, AutonomousTrigger.EmergencyMedical, config.OnEmergencyMedical, signals.DownedOrBleedingCount > 0);
         Flag(list, AutonomousTrigger.Fire, config.OnFire, signals.FireCount > 0);
-        Flag(list, AutonomousTrigger.Cold, config.OnUpkeep, signals.ColdColonistCount > 0);
-        Flag(list, AutonomousTrigger.BedShortage, config.OnUpkeep, signals.BedlessCount > 0);
-        Flag(list, AutonomousTrigger.OutdoorsBed, config.OnUpkeep, signals.OutdoorsBedCount > 0);
-        Flag(list, AutonomousTrigger.PowerOutage, config.OnUpkeep, signals.ColonistCount > 0 && !signals.AnyWorkingPower);
-        Flag(list, AutonomousTrigger.Research, config.OnUpkeep, signals.ColonistCount >= MinColonistsForResearch && !signals.HasActiveResearch);
+        // 警報層級用數量：多出一個新警報就算惡化，立刻叫，不等重試退避。
+        list.Add(new Condition { Trigger = AutonomousTrigger.CriticalAlert, Enabled = config.OnUpkeep, Level = signals.CriticalAlertCount });
         Flag(list, AutonomousTrigger.MentalBreak, config.OnMentalBreak, signals.NearMentalBreakCount > 0);
         // 缺糧是分級的：偏緊就準備，掉到危急要再叫一次。
         list.Add(new Condition { Trigger = AutonomousTrigger.FoodShortage, Enabled = config.OnFoodShortage, Level = foodTier });
-        Flag(list, AutonomousTrigger.LowMood, config.OnUpkeep, signals.LowMoodCount > 0);
+        list.Add(new Condition { Trigger = AutonomousTrigger.Alert, Enabled = config.OnUpkeep, Level = signals.AlertCount });
         return list;
     }
 

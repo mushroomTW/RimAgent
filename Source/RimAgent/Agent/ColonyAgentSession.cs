@@ -51,8 +51,6 @@ public sealed partial class ColonyAgentSession
     private readonly Func<string, bool?> _visionLookup;
     private readonly Func<string, int?> _outputLimitLookup;
     private readonly DecisionReasoningRouter _router;
-    private readonly DecisionToolPackSelector _packSelector;
-    private readonly IRiskChecker _classifier;
 
     /// <summary>摘要用的原始 client：不經工具迴圈包裝，壓縮呼叫不會觸發工具執行。</summary>
     private readonly IChatClient _summarizer;
@@ -60,7 +58,6 @@ public sealed partial class ColonyAgentSession
     private readonly AgentMemoryStore _memory;
     private readonly PlayerInterjections _interjections = new();
     private readonly FailureLoopGuard _loopGuard;
-    private readonly IDecisionService _decisionService;
     private readonly Func<string> _instructions;
     private AgentSession _session;
     private string _serializedSession;
@@ -108,7 +105,7 @@ public sealed partial class ColonyAgentSession
         _memory = memory ?? new AgentMemoryStore();
         _instructions = instructions;
         IRiskChecker classifier = CreateRiskChecker(
-            classifierClient ?? innerClient, classifierModel, classifierPrompt, routing, decisionRiskCriteria, decisionService);
+            classifierClient ?? innerClient, classifierModel, classifierPrompt, routing, decisionRiskCriteria, decisionService, () => History);
 
         _router = router ?? new DecisionReasoningRouter(
             decisionService,
@@ -116,12 +113,7 @@ public sealed partial class ColonyAgentSession
             () => RimAgentMod.Settings,
             () => History);
 
-        _packSelector = new DecisionToolPackSelector(
-            decisionService,
-            () => DecisionServiceFactory.Create());
-        _classifier = classifier;
-        _decisionService = decisionService;
-        _loopGuard = new FailureLoopGuard(JudgeStuckAsync, NotifyStuck);
+        _loopGuard = new FailureLoopGuard(NotifyStuck);
 
         _registry = new AgentToolRegistry(world, Transcript, Undo, ConfirmGate, mcp, classifier, _memory, useLocalSearch, searxngUrl, skillsProvider, _interjections, Activity,
             layoutsEnabled: () => RimAgentMod.Settings?.layouts ?? true, loopGuard: _loopGuard);
@@ -159,7 +151,8 @@ public sealed partial class ColonyAgentSession
         Func<string> classifierPrompt,
         ModelRouting routing,
         Func<string> decisionRiskCriteria,
-        IDecisionService decisionService)
+        IDecisionService decisionService,
+        Func<IReadOnlyList<ChatMessage>> history)
     {
         // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
         var fallbackClassifier = new RiskClassifier(
@@ -173,7 +166,8 @@ public sealed partial class ColonyAgentSession
             decisionService,
             fallbackClassifier,
             decisionRiskCriteria,
-            () => DecisionServiceFactory.Create());
+            () => DecisionServiceFactory.Create(),
+            history);
     }
 
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
@@ -273,15 +267,7 @@ public sealed partial class ColonyAgentSession
 
     public bool ReasoningRouting { get; set; }
 
-    public bool PreloadToolPacks { get; set; }
-
     public DecisionReports DecisionReports { get; } = new();
-
-    /// <summary>用自動模式同一個風險分類器判定一個不經主 LLM 的動作（System One 代答抉擇用）。</summary>
-    internal Task<RiskVerdict> ClassifyRiskAsync(RiskQuestion question, CancellationToken cancellationToken = default)
-    {
-        return _classifier.ClassifyAsync(question, cancellationToken);
-    }
 
     /// <summary>
     /// 優先使用的模型（"供應商:模型"）；空白代表交給框架備援鏈。每句指令組請求時讀取，由 GameComponent 從設定同步。

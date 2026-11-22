@@ -25,32 +25,12 @@ public sealed partial class ColonyAgentSession
         _tokenUsage.ResetModel();
 
         PreloadFrequentToolPacks();
-        // 分流與預載工具包各問一次 System One，兩者互不相依，同時送出。
-        Task<DecisionRoute> routing = ReasoningRouting
-            ? _router.ResolveAsync(text, cancellationToken)
-            : null;
-        Task<IReadOnlyList<string>> preload = PreloadToolPacks ? SelectToolPacksAsync(text, cancellationToken) : null;
-
-        if (routing != null)
+        if (ReasoningRouting)
         {
-            DecisionRoute route = await routing.ConfigureAwait(false);
+            DecisionRoute route = await _router.ResolveAsync(text, cancellationToken).ConfigureAwait(false);
             if (route.Reasoning != ReasoningLevel.Auto)
             {
                 effectiveReasoning = route.Reasoning;
-            }
-        }
-        if (preload != null)
-        {
-            IReadOnlyList<string> packs = await preload.ConfigureAwait(false);
-            if (packs.Count > 0)
-            {
-                lock (_loadedPacks) _loadedPacks.UnionWith(packs);
-                Transcript.Add(new TranscriptEntry
-                {
-                    Kind = TranscriptKind.Notice,
-                    Text = "System One preloaded tool packs: " + string.Join(", ", packs) + ".",
-                    InstructionId = Transcript.CurrentInstructionId
-                });
             }
         }
 
@@ -74,15 +54,6 @@ public sealed partial class ColonyAgentSession
             Text = "Preloaded frequently used tool packs: " + string.Join(", ", added) + ".",
             InstructionId = Transcript.CurrentInstructionId
         });
-    }
-
-    private Task<IReadOnlyList<string>> SelectToolPacksAsync(string text, CancellationToken cancellationToken)
-    {
-        List<string> loaded = LoadedPacks();
-        List<ToolPacks.Pack> candidates = [.. _registry.SelectForMainAgent(_permissions(), loaded).Packs
-            .Where(p => !loaded.Contains(p.Id))];
-        if (candidates.Count == 0) return Task.FromResult<IReadOnlyList<string>>([]);
-        return _packSelector.SelectAsync(DecisionReasoningRouter.Describe(text, History), candidates, cancellationToken);
     }
 
     internal RimLLMChatOptions CreateRunOptions(ReasoningLevel? reasoningOverride = null)

@@ -51,7 +51,7 @@ public class AutonomousRunnerTests
 
     private static AutonomousSignals ActiveFire()
     {
-        return new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 1, HasActiveResearch = true, AnyWorkingPower = true, FireCount = 1 };
+        return new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 1, FireCount = 1 };
     }
 
     private AutonomousRunRequest Request(ColonyAgentSession session, AutonomousTrigger trigger = AutonomousTrigger.Fire, int tick = 0)

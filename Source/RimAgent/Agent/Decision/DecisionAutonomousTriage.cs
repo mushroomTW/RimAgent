@@ -40,8 +40,7 @@ public sealed class DecisionAutonomousTriage
 
     public static bool IsTriaged(AutonomousTrigger trigger)
     {
-        return trigger is AutonomousTrigger.Cold or AutonomousTrigger.BedShortage or AutonomousTrigger.OutdoorsBed
-            or AutonomousTrigger.PowerOutage or AutonomousTrigger.Research or AutonomousTrigger.LowMood;
+        return trigger == AutonomousTrigger.Alert;
     }
 
     /// <returns>分流裁決結果；不需分流或無服務時回傳 null。</returns>
@@ -107,10 +106,9 @@ public sealed class DecisionAutonomousTriage
         float perColonist = s.ColonistCount > 0 ? s.FoodNutrition / s.ColonistCount : 0f;
         return string.Format(CultureInfo.InvariantCulture,
             "Colony: {0} colonists, food {1:0.#} nutrition ({2:0.#} per colonist), hostiles {3}, downed or bleeding {4}, fires {5}, " +
-            "near mental break {6}, low mood {7}, cold {8}, without bed {9}, bed outdoors {10}, power {11}, research {12}.",
+            "near mental break {6}. Alerts: {7}.",
             s.ColonistCount, s.FoodNutrition, perColonist, s.HostileCount, s.DownedOrBleedingCount, s.FireCount,
-            s.NearMentalBreakCount, s.LowMoodCount, s.ColdColonistCount, s.BedlessCount, s.OutdoorsBedCount,
-            s.AnyWorkingPower ? "on" : "off", s.HasActiveResearch ? "running" : "none");
+            s.NearMentalBreakCount, string.IsNullOrEmpty(s.Alerts) ? "none" : s.Alerts);
     }
 
     private IDecisionService ResolveService()

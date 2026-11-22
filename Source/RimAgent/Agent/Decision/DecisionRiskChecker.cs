@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
 
 namespace RimAgent.Agent;
 
@@ -18,6 +19,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
     private readonly Func<IDecisionService> _serviceFactory;
     private readonly IRiskChecker _fallback;
     private readonly Func<string> _criteriaProvider;
+    private readonly Func<IReadOnlyList<ChatMessage>> _historyProvider;
     private readonly InstructionCache<RiskVerdict> _verdictCache = new();
     private IDecisionService _service;
     // 判準與解析結果放同一個不可變物件整個換掉，避免並行時讀到新判準配舊計畫。
@@ -30,8 +32,10 @@ public sealed class DecisionRiskChecker : IRiskChecker
         IDecisionService decisionService = null,
         IRiskChecker fallback = null,
         Func<string> decisionRiskCriteria = null,
-        Func<IDecisionService> serviceFactory = null)
+        Func<IDecisionService> serviceFactory = null,
+        Func<IReadOnlyList<ChatMessage>> historyProvider = null)
     {
+        _historyProvider = historyProvider;
         _decisionService = decisionService;
         _serviceFactory = serviceFactory;
         _fallback = fallback;
@@ -63,7 +67,8 @@ public sealed class DecisionRiskChecker : IRiskChecker
             return await FallbackAsync(question, cacheKey, decisionAttempted: false, cancellationToken).ConfigureAwait(false);
         }
 
-        string state = RiskClassifier.Describe(question);
+        // 前幾句的授權（「之後拆牆都不用問」）只在對話裡，不在這一句的原話。
+        string state = DecisionReasoningRouter.DescribeHistory(_historyProvider?.Invoke()) + RiskClassifier.Describe(question);
         DecisionResult result;
         try
         {

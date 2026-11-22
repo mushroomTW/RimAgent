@@ -41,11 +41,7 @@ internal sealed partial class RimWorldGameWorld
     {
         public int ColonistCount;
         public int NearMentalBreak;
-        public int LowMood;
         public int DownedOrBleeding;
-        public int ColdColonists;
-        public int Bedless;
-        public int OutdoorsBed;
 
         public void AccumulateColonists(List<Pawn> colonists)
         {
@@ -61,21 +57,11 @@ internal sealed partial class RimWorldGameWorld
             // 每 500 tick 跑一次，外層抓到例外就整次作廢：其他模組的 pawn 一丟例外自主模式就停擺。
             // 逐個隔離，全部讀完才一起計入，壞掉的那一位整個不算，不留半套計數。
             bool nearBreak;
-            bool low;
             bool downed;
-            bool cold;
-            bool noBed;
-            bool bedOutdoors;
             try
             {
-                // 兩個心情門檻不疊加：快崩潰的算崩潰事件，不然同一件事報兩次。
                 nearBreak = IsNearMentalBreak(pawn);
-                low = !nearBreak && IsLowMood(pawn);
                 downed = IsMedicalEmergency(pawn);
-                cold = IsInDangerousTemperature(pawn);
-                Building_Bed bed = pawn.ownership?.OwnedBed;
-                noBed = bed == null;
-                bedOutdoors = !noBed && IsOutdoors(bed.GetRoom());
             }
             catch (Exception ex)
             {
@@ -84,35 +70,13 @@ internal sealed partial class RimWorldGameWorld
             }
             ColonistCount++;
             if (nearBreak) NearMentalBreak++;
-            if (low) LowMood++;
             if (downed) DownedOrBleeding++;
-            if (cold) ColdColonists++;
-            if (noBed) Bedless++;
-            if (bedOutdoors) OutdoorsBed++;
-        }
-
-        private static bool IsInDangerousTemperature(Pawn pawn)
-        {
-            if (pawn.health?.hediffSet == null) return false;
-            return !pawn.SafeTemperatureRange().Includes(pawn.AmbientTemperature);
-        }
-
-        private static bool IsOutdoors(Room room)
-        {
-            return room == null || room.PsychologicallyOutdoors;
-        }
-
-        private static bool IsLowMood(Pawn pawn)
-        {
-            Need_Mood mood = pawn.needs?.mood;
-            return mood != null && mood.CurLevel < Agent.AutonomousScheduler.LowMoodThreshold;
         }
     }
 
     /// <summary>
     /// 自主排程器每 500 tick 要的數字，不建完整快照（GetOverview／GetResources 會為每個威脅與資源配置物件）。
-    /// 除了應急訊號，也收「基地狀況」（受寒、沒床、露宿、停電、心情、停研），
-    /// 讓排程器自己看出需要保養，不必為了問一句「沒事嗎」而燒一次模型呼叫。
+    /// 除了應急訊號，也收遊戲目前的警報，讓排程器看出基地在慢慢壞掉。
     /// </summary>
     internal static Agent.AutonomousSignals GetAutonomousSignals()
     {
@@ -120,14 +84,14 @@ internal sealed partial class RimWorldGameWorld
         int hostileCount = 0;
         float foodNutrition = 0f;
         int fireCount = 0;
-        bool anyPower = false;
         var accumulator = new ColonistSignalsAccumulator();
+        List<(string Label, bool Critical)> alerts = [.. ActiveAlerts().Select(a => (a.Label.ToString(), a.Priority == AlertPriority.Critical))];
 
         if (maps != null)
         {
             for (int m = 0; m < maps.Count; m++)
             {
-                AccumulateMapSignals(maps[m], ref hostileCount, ref foodNutrition, ref fireCount, ref anyPower, ref accumulator);
+                AccumulateMapSignals(maps[m], ref hostileCount, ref foodNutrition, ref fireCount, ref accumulator);
             }
         }
 
@@ -139,60 +103,21 @@ internal sealed partial class RimWorldGameWorld
             ColonistCount = accumulator.ColonistCount,
             DownedOrBleedingCount = accumulator.DownedOrBleeding,
             FireCount = fireCount,
-            ColdColonistCount = accumulator.ColdColonists,
-            BedlessCount = accumulator.Bedless,
-            OutdoorsBedCount = accumulator.OutdoorsBed,
-            LowMoodCount = accumulator.LowMood,
-            // 1.6 的 ResearchManager 同時只有一個 currentProj，沒有 activeProjects 清單。
-            HasActiveResearch = Find.ResearchManager != null && Find.ResearchManager.GetProject() != null,
-            AnyWorkingPower = anyPower
+            AlertCount = alerts.Count(a => !a.Critical),
+            CriticalAlertCount = alerts.Count(a => a.Critical),
+            Alerts = string.Join("; ", alerts.Select(a => (a.Critical ? "[Critical] " : string.Empty) + a.Label))
         };
     }
 
-    private static void AccumulateMapSignals(Map map, ref int hostileCount, ref float foodNutrition, ref int fireCount, ref bool anyPower, ref ColonistSignalsAccumulator accumulator)
+    private static void AccumulateMapSignals(Map map, ref int hostileCount, ref float foodNutrition, ref int fireCount, ref ColonistSignalsAccumulator accumulator)
     {
         if (map == null) return;
-        // 地圖層的讀數不包 try：讀一半就把食物、電力當 0 會造成假警報，寧可整次作廢。
+        // 地圖層的讀數不包 try：讀一半就把食物當 0 會造成假警報，寧可整次作廢。
         // 會跑到其他模組程式的攻擊目標已在 CountHostiles 裡逐個隔離。
         hostileCount += CountHostiles(map);
         foodNutrition += map.resourceCounter.TotalHumanEdibleNutrition;
         fireCount += FireCount(map);
-        if (!anyPower && HasWorkingPower(map)) anyPower = true;
-        int bedlessBefore = accumulator.Bedless;
         accumulator.AccumulateColonists(map.mapPawns.FreeColonistsSpawned);
-        // 床蓋好之後殖民者要等到去睡覺才會認領；只看認領的話，床已經夠了訊號仍報沒床，
-        // 排程器就會在問題其實已解決時重試。同一張地圖上還沒人認領的床位先抵掉沒床的人。
-        int mapBedless = accumulator.Bedless - bedlessBefore;
-        if (mapBedless > 0) accumulator.Bedless -= Math.Min(mapBedless, FreeColonistBedSlots(map));
-    }
-
-    /// <summary>殖民者可以睡、還沒被認領的床位數（雙人床算兩位；不含囚犯、奴隸、醫療與嬰兒床）。</summary>
-    private static int FreeColonistBedSlots(Map map)
-    {
-        int free = 0;
-        foreach (Building building in map.listerBuildings.allBuildingsColonist)
-        {
-            if (building is not Building_Bed bed || !bed.def.building.bed_humanlike) continue;
-            if (!bed.ForColonists || bed.Medical || bed.ForHumanBabies) continue;
-            free += Math.Max(0, bed.SleepingSlotsCount - bed.OwnersForReading.Count);
-        }
-        return free;
-    }
-
-    private static bool HasWorkingPower(Map map)
-    {
-        PowerNetManager manager = map.powerNetManager;
-        if (manager == null) return false;
-        List<PowerNet> nets = [.. manager.AllNetsListForReading];
-        for (int i = 0; i < nets.Count; i++)
-        {
-            List<CompPowerTrader> comps = nets[i].powerComps;
-            for (int c = 0; c < comps.Count; c++)
-            {
-                if (comps[c].PowerOn) return true;
-            }
-        }
-        return false;
     }
 
     /// <summary>
@@ -283,10 +208,15 @@ internal sealed partial class RimWorldGameWorld
 
     #pragma warning restore S3011
 
-    public IReadOnlyList<AlertInfo> GetAlerts()
+    private static IEnumerable<Alert> ActiveAlerts()
     {
         if (ActiveAlertsField?.GetValue(Find.Alerts) is not IEnumerable<Alert> alerts) return [];
-        return [.. alerts.Where(a => a != null && a.Active).Select(a => new AlertInfo
+        return [.. alerts.Where(a => a != null && a.Active)];
+    }
+
+    public IReadOnlyList<AlertInfo> GetAlerts()
+    {
+        return [.. ActiveAlerts().Select(a => new AlertInfo
         {
             Label = a.Label,
             Priority = a.Priority.ToString()

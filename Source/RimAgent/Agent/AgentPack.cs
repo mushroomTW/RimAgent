@@ -39,8 +39,6 @@ public sealed class AgentPack
     public string DecisionRiskCriteria { get; set; } = string.Empty;
     /// <summary>缺檔時目標審計回傳 null。</summary>
     public string DecisionGoalCriteria { get; set; } = string.Empty;
-    /// <summary>缺檔時抉擇照舊交給主 LLM。</summary>
-    public string DecisionChoiceCriteria { get; set; } = string.Empty;
     /// <summary>缺檔時照舊叫主 LLM。</summary>
     public string DecisionTriageCriteria { get; set; } = string.Empty;
     /// <summary>缺檔時該輪自主任務跳過。</summary>
@@ -78,7 +76,6 @@ public static class AgentPackLoader
             pack.ClassifierPrompt = ReadFile(promptsDir, "RiskClassifier.md");
             pack.DecisionRiskCriteria = ReadFile(promptsDir, "DecisionRisk.md");
             pack.DecisionGoalCriteria = ReadFile(promptsDir, "DecisionGoal.md");
-            pack.DecisionChoiceCriteria = ReadFile(promptsDir, "DecisionChoice.md");
             pack.DecisionTriageCriteria = ReadFile(promptsDir, "DecisionTriage.md");
             LoadAutonomous(pack, promptsDir);
             pack.Subagents = LoadSubagents(Path.Combine(rootDir, "Agents"));

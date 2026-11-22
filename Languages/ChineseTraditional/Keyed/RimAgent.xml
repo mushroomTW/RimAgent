@@ -132,7 +132,7 @@
   <RimAgent.Settings.SlotReasoningTip>只套用在這一格的思考強度；預設＝沿用框架預設。</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.DecisionModelHeader>小模型細節</RimAgent.Settings.DecisionModelHeader>
   <RimAgent.Settings.DecisionEnabled>使用小模型輔助</RimAgent.Settings.DecisionEnabled>
-  <RimAgent.Settings.DecisionEnabledTip>關閉後不再呼叫決策模型：風險判定改用分類器，思考強度分流改用備援思考強度，日常自動調速固定用「加速」，代答抉擇、篩選基地狀況、預載工具包與目標審計都停用，交給主模型處理。</RimAgent.Settings.DecisionEnabledTip>
+  <RimAgent.Settings.DecisionEnabledTip>關閉後不再呼叫決策模型：風險判定改用分類器，思考強度分流改用備援思考強度，日常自動調速固定用「加速」，篩選遊戲警報與目標審計都停用，交給主模型處理。</RimAgent.Settings.DecisionEnabledTip>
   <RimAgent.Settings.DecisionProvider>用哪家 AI：</RimAgent.Settings.DecisionProvider>
   <RimAgent.Settings.DecisionProviderTip>用於 Auto 模式風險判定等結構化快速判定的決策模型。供應商與模型沿用 RimLLM Framework 的決策設定；不想讓本模組使用決策模型時選「不使用」。</RimAgent.Settings.DecisionProviderTip>
   <RimAgent.Settings.DecisionProviderNone>不使用決策模型</RimAgent.Settings.DecisionProviderNone>
@@ -152,12 +152,8 @@
   <RimAgent.Settings.DecisionFallbackReasoning>備援思考強度：</RimAgent.Settings.DecisionFallbackReasoning>
   <RimAgent.Settings.DecisionFallbackReasoningTip>決策模型把握不足或無法使用時的思考強度。「預設」就是不指定，沿用模型本身的設定。</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>分流最小信心門檻：{0}</RimAgent.Settings.DecisionMinConfidence>
-  <RimAgent.Settings.DecisionAnswerChoices>自己回覆簡單的事件選項</RimAgent.Settings.DecisionAnswerChoices>
-  <RimAgent.Settings.DecisionAnswerChoicesTip>開啟背景照顧時，決策模型有把握、且目前模式本來就允許免確認回答時，自己回覆抉擇信件與對話框（自動模式另經風險檢查）。需要選地圖或世界目標、或沒把握的抉擇仍交給主模型。每次代答都會顯示在對話中並轉告主模型。</RimAgent.Settings.DecisionAnswerChoicesTip>
   <RimAgent.Settings.DecisionTriageUpkeep>先判斷小問題要不要叫醒 Agent</RimAgent.Settings.DecisionTriageUpkeep>
-  <RimAgent.Settings.DecisionTriageUpkeepTip>因受寒、沒床、露宿、停電、停研或心情低落叫醒主模型前，先由決策模型判斷上一輪是否已在處理；是的話等一小時再看。襲擊、火災、急救、精神崩潰、缺糧與定期巡檢一律照跑。</RimAgent.Settings.DecisionTriageUpkeepTip>
-  <RimAgent.Settings.DecisionPreloadPacks>先幫 Agent 準備工具</RimAgent.Settings.DecisionPreloadPacks>
-  <RimAgent.Settings.DecisionPreloadPacksTip>每句指令由決策模型先載入主模型可能用到的工具包，省下一步 load_toolpack。沒預載到的包主模型仍可自行載入。</RimAgent.Settings.DecisionPreloadPacksTip>
+  <RimAgent.Settings.DecisionTriageUpkeepTip>因遊戲的一般警報叫醒主模型前，先由決策模型判斷這些警報是否無害、或上一輪是否已在處理；是的話等一小時再看。紅色警報、襲擊、火災、急救、精神崩潰、缺糧與定期巡檢一律照跑。</RimAgent.Settings.DecisionTriageUpkeepTip>
   <RimAgent.Settings.DecisionMinConfidenceTip>決策模型替每句指令挑思考強度；把握低於這個門檻時不採用，改用下面的強度。</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.Mode.Autonomous>完整權限</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>已啟用的工具（包括 MCP）不經確認直接執行。主動照顧另由模組設定開關；工具類別開關仍生效。</RimAgent.Settings.Mode.AutonomousDesc>

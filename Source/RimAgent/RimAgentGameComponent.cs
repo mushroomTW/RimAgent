@@ -91,11 +91,6 @@ public partial class RimAgentGameComponent : GameComponent
         set => _goalAuditor = value;
     }
     private DateTime _goalNextRunAt;
-    private DecisionChoiceResponder _choiceResponder;
-    private DecisionChoiceResponder ChoiceResponder => _choiceResponder ??= new DecisionChoiceResponder(
-        decisionService: null,
-        criteriaProvider: () => _pack?.DecisionChoiceCriteria,
-        serviceFactory: () => DecisionServiceFactory.Create());
     private DecisionAutonomousTriage _triage;
     private DecisionAutonomousTriage Triage => _triage ??= new DecisionAutonomousTriage(
         decisionService: null,
@@ -211,7 +206,6 @@ public partial class RimAgentGameComponent : GameComponent
             {
                 _session.Reasoning = RimAgentMod.Settings.reasoning;
                 _session.ReasoningRouting = RimAgentMod.Settings.reasoningRouting;
-                _session.PreloadToolPacks = RimAgentMod.Settings.decisionPreloadPacks;
                 _session.PreferredModel = RimAgentMod.Settings.agentModel;
                 _session.SyncAutoCompact(RimAgentMod.Settings.autoCompact, RimAgentMod.Settings.autoCompactThreshold);
             }
@@ -516,7 +510,6 @@ public partial class RimAgentGameComponent : GameComponent
             });
         session.Reasoning = settings.reasoning;
         session.ReasoningRouting = settings.reasoningRouting;
-        session.PreloadToolPacks = settings.decisionPreloadPacks;
         session.ConfirmAutonomousMajor = () => settings.confirmAutonomousMajor;
         if (settings.ClearAgentModelIfMissing(UI.Window_Agent.ConfiguredModels())) settings.Write();
         session.PreferredModel = settings.agentModel;

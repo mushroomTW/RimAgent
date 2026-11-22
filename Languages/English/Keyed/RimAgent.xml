@@ -132,7 +132,7 @@
   <RimAgent.Settings.SlotReasoningTip>Reasoning level for this role only; Auto keeps the framework default.</RimAgent.Settings.SlotReasoningTip>
   <RimAgent.Settings.DecisionModelHeader>Helper model details</RimAgent.Settings.DecisionModelHeader>
   <RimAgent.Settings.DecisionEnabled>Use the helper model</RimAgent.Settings.DecisionEnabled>
-  <RimAgent.Settings.DecisionEnabledTip>When off, the decision model is never called: risk checks use the classifier, reasoning routing uses the fallback reasoning level, daily auto time speed always uses "fast", and answering choices, upkeep triage, tool pack preloading and goal audits are disabled and left to the main model.</RimAgent.Settings.DecisionEnabledTip>
+  <RimAgent.Settings.DecisionEnabledTip>When off, the decision model is never called: risk checks use the classifier, reasoning routing uses the fallback reasoning level, daily auto time speed always uses "fast", and alert triage and goal audits are disabled and left to the main model.</RimAgent.Settings.DecisionEnabledTip>
   <RimAgent.Settings.DecisionProvider>Which AI service:</RimAgent.Settings.DecisionProvider>
   <RimAgent.Settings.DecisionProviderTip>Decision model used for fast structured checks such as Auto-mode risk review. The provider and model come from RimLLM Framework's decision settings; choose "Don't use" to stop RimAgent from using the decision model.</RimAgent.Settings.DecisionProviderTip>
   <RimAgent.Settings.DecisionProviderNone>Don't use the decision model</RimAgent.Settings.DecisionProviderNone>
@@ -152,12 +152,8 @@
   <RimAgent.Settings.DecisionFallbackReasoning>Fallback reasoning:</RimAgent.Settings.DecisionFallbackReasoning>
   <RimAgent.Settings.DecisionFallbackReasoningTip>Reasoning level used when the decision model is unsure or unavailable. Default leaves it to the model.</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>Routing min confidence: {0}</RimAgent.Settings.DecisionMinConfidence>
-  <RimAgent.Settings.DecisionAnswerChoices>Answer simple event choices itself</RimAgent.Settings.DecisionAnswerChoices>
-  <RimAgent.Settings.DecisionAnswerChoicesTip>With background care on, the decision model answers choice letters and dialogs by itself when it is confident and the current mode would let the agent answer without confirmation (Auto mode also asks the risk check). Choices that need a map or world target, or that it is unsure about, still go to the main model. Every answer is shown in the chat and passed to the main model.</RimAgent.Settings.DecisionAnswerChoicesTip>
   <RimAgent.Settings.DecisionTriageUpkeep>Decide whether small problems need the Agent</RimAgent.Settings.DecisionTriageUpkeep>
-  <RimAgent.Settings.DecisionTriageUpkeepTip>Before waking the main model for cold, missing beds, beds outdoors, power outages, idle research or low mood, the decision model checks whether the last run already put a fix in motion. If so, it waits an hour and checks again. Raids, fires, medical emergencies, mental breaks, food shortages and regular check-ins always run.</RimAgent.Settings.DecisionTriageUpkeepTip>
-  <RimAgent.Settings.DecisionPreloadPacks>Get tools ready for the Agent</RimAgent.Settings.DecisionPreloadPacks>
-  <RimAgent.Settings.DecisionPreloadPacksTip>For each instruction, the decision model loads the tool packs it expects the main model to need, saving a load_toolpack step. Packs it misses can still be loaded by the main model.</RimAgent.Settings.DecisionPreloadPacksTip>
+  <RimAgent.Settings.DecisionTriageUpkeepTip>Before waking the main model for the game's non-critical alerts, the decision model checks whether they are harmless or the last run already put a fix in motion. If so, it waits an hour and checks again. Critical (red) alerts, raids, fires, medical emergencies, mental breaks, food shortages and regular check-ins always run.</RimAgent.Settings.DecisionTriageUpkeepTip>
   <RimAgent.Settings.DecisionMinConfidenceTip>The decision model picks a reasoning level for each instruction; below this confidence its pick is ignored and the level below is used.</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.Mode.Autonomous>Full access</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>Enabled tools, including MCP, run without confirmation. Proactive care is controlled separately in mod settings; category switches still apply.</RimAgent.Settings.Mode.AutonomousDesc>

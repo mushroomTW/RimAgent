@@ -41,6 +41,9 @@ public sealed class DecisionReasoningRouter
     private readonly Func<RimAgentSettings> _settingsProvider;
     private readonly Func<IReadOnlyList<ChatMessage>> _historyProvider;
     private IDecisionService _service;
+    private DecisionRoute _last;
+
+    public const int ShortFollowUpChars = 8;
 
     public DecisionReasoningRouter(
         IDecisionService decisionService = null,
@@ -61,6 +64,17 @@ public sealed class DecisionReasoningRouter
         ReasoningLevel fallbackReasoning = settings?.decisionFallbackReasoning ?? ReasoningLevel.Auto;
         float minConfidence = settings != null ? settings.decisionRoutingMinConfidence : 0.6f;
 
+        DecisionRoute last = _last;
+        if (last != null && IsShortFollowUp(request))
+        {
+            return new DecisionRoute
+            {
+                Reasoning = last.Reasoning,
+                Confidence = last.Confidence,
+                Reason = "Short follow-up; reused the previous reasoning level."
+            };
+        }
+
         IDecisionService service = _decisionService ?? ResolveService();
         if (service == null)
             return FallbackRoute(fallbackReasoning, "Decision model service is unavailable or not configured.");
@@ -69,9 +83,18 @@ public sealed class DecisionReasoningRouter
             "How much reasoning effort does the colony agent need to carry out this instruction well?", Levels);
         string state = Describe(request, _historyProvider?.Invoke());
 
-        return await EvaluateAndRoute(service, state, DecisionPlan.Of(question), fallbackReasoning, minConfidence, ct);
+        DecisionRoute route = await EvaluateAndRoute(service, state, DecisionPlan.Of(question), fallbackReasoning, minConfidence, ct);
+        _last = route.IsFallback ? null : route;
+        return route;
     }
     #pragma warning restore VSTHRD202
+
+    /// <summary>「好」「繼續」這類短句是在延續上一句，難度跟上一句一樣，不值得多問一次決策模型。</summary>
+    internal static bool IsShortFollowUp(string request)
+    {
+        string text = request?.Trim() ?? string.Empty;
+        return text.Length > 0 && text.Length <= ShortFollowUpChars;
+    }
 
     private static async Task<DecisionRoute> EvaluateAndRoute(IDecisionService service, string state, DecisionPlan plan, ReasoningLevel fallbackReasoning, float minConfidence, CancellationToken ct)
     {
@@ -135,9 +158,16 @@ public sealed class DecisionReasoningRouter
 
     public static string Describe(string request, IEnumerable<ChatMessage> history = null)
     {
+        var sb = new StringBuilder(DescribeHistory(history));
+        sb.Append("<instruction>\n").Append(Escape(request?.Trim() ?? string.Empty)).Append("\n</instruction>");
+        return sb.ToString();
+    }
+
+    /// <summary>最近幾回合對話（玩家原話與 Agent 回覆截頭尾）；思考強度分流與風險審查共用。</summary>
+    public static string DescribeHistory(IEnumerable<ChatMessage> history)
+    {
         var sb = new StringBuilder();
         AppendRecentHistory(sb, history);
-        sb.Append("<instruction>\n").Append(Escape(request?.Trim() ?? string.Empty)).Append("\n</instruction>");
         return sb.ToString();
     }
 

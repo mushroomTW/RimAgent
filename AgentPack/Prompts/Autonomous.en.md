@@ -34,29 +34,13 @@ Food reserves are low.
 
 An event or dialog is waiting for a decision.
 
-## Cold
+## Alert
 
-A colonist is exposed to dangerous temperatures.
+The game is showing alerts about the colony. The active alerts are listed below. Handle the ones that need attention; ignore the ones that are harmless right now.
 
-## BedShortage
+## CriticalAlert
 
-Some colonists have no bed.
-
-## OutdoorsBed
-
-Some beds are outdoors.
-
-## PowerOutage
-
-Nothing is currently running on power.
-
-## Research
-
-No research project is active.
-
-## LowMood
-
-Some colonists have low mood.
+The game is showing a critical (red) alert. The active alerts are listed below; deal with the critical ones first.
 
 ## Interval
 

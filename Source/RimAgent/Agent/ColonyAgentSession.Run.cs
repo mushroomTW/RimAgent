@@ -169,7 +169,7 @@ public sealed partial class ColonyAgentSession
         // 句內分類器判定快取不跨指令，下一句重來。
         ResetInstructionCaches();
         int instructionId = Transcript.BeginInstruction();
-        _loopGuard.Reset(text);
+        _loopGuard.Reset();
         RunLogRecord runLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
         {
             Instruction = RunLogRecord.Limit(options.DisplayText ?? text),
@@ -399,32 +399,6 @@ public sealed partial class ColonyAgentSession
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // 統計寫不進去不影響指令；下一句照常累積，下次寫入成功時一併存下。
-        }
-    }
-
-    /// <summary>失敗迴圈守衛的判斷：問 System One 主 Agent 是否卡住；決策模型不可用時回傳 null（守衛改用門檻直接判定）。</summary>
-    private async Task<double?> JudgeStuckAsync(string state, CancellationToken cancellationToken)
-    {
-        IDecisionService service = _decisionService ?? DecisionServiceFactory.Create();
-        if (service == null) return null;
-        DecisionQuestion question = DecisionQuestion.Noul(
-            "stuck",
-            "Is the agent stuck repeating an approach that keeps failing, without making progress toward the instruction?",
-            "The same failure keeps coming back and the attempts do not change anything that matters.",
-            "The attempts are making progress, or each failure teaches something that the next attempt uses.");
-        try
-        {
-            DecisionResult result = await service.EvaluateAsync(state, DecisionPlan.Of(question), cancellationToken).ConfigureAwait(false);
-            return result != null && result.TryGet("stuck", out DecisionAnswer answer) ? answer?.Probability : null;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            DecisionDiagnostics.Warn(nameof(FailureLoopGuard), ex);
-            return null;
         }
     }
 

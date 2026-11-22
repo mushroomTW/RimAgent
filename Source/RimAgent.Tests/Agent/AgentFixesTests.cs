@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
 using NUnit.Framework;
 using RimAgent.Agent;
 
@@ -74,6 +75,23 @@ public class AgentFixesTests
         UndoFrame kept = stack.Pop();
         Assert.That(kept, Is.Not.Null);
         Assert.That(kept.Priorities, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task RiskReviewSeesEarlierAuthorizationInTheConversation()
+    {
+        var service = new FakeDecisionService().Reply(0.05, 0.95, "reversible_colony_change");
+        IReadOnlyList<ChatMessage> history =
+        [
+            new(ChatRole.User, "From now on you can deconstruct walls without asking me."),
+            new(ChatRole.Assistant, "Understood.")
+        ];
+        var checker = new DecisionRiskChecker(service, fallback: null, () => "## risk\ncustom", historyProvider: () => history);
+
+        await checker.ClassifyAsync(new RiskQuestion { Instruction = "open up the storeroom", ToolName = "deconstruct", Arguments = "a=1", Preview = "preview" }, CancellationToken.None);
+
+        Assert.That(service.ReceivedStates[0], Does.Contain("deconstruct walls without asking me").And.Contain("open up the storeroom"),
+            "授權常在前幾句，只看這一句的原話會多問玩家");
     }
 
     [TestCase("irreversible_colony_change")]

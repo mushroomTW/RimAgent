@@ -38,7 +38,7 @@ public class AutonomousSchedulerTests
     /// <summary>通電＋研究中：隔離火災訊號，不被停電／停研條件搶先。</summary>
     private static AutonomousSignals ActiveBase()
     {
-        return new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+        return new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3 };
     }
 
     private static AutonomousSignals ActiveFire()
@@ -176,10 +176,10 @@ public class AutonomousSchedulerTests
     {
         // 人均 10：警戒線 8 以下才算偏緊，10 不算。
         Assert.That(_scheduler.Evaluate(0, Calm(), _config), Is.EqualTo(AutonomousTrigger.None));
-        var tight = new AutonomousSignals { FoodNutrition = 3 * 7f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+        var tight = new AutonomousSignals { FoodNutrition = 3 * 7f, ColonistCount = 3 };
         Assert.That(_scheduler.Evaluate(500, tight, _config), Is.EqualTo(AutonomousTrigger.FoodShortage), "偏緊就叫醒，不等餓死");
         // 繼續惡化到危急要再叫一次。
-        var starving = new AutonomousSignals { FoodNutrition = 3 * 2f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+        var starving = new AutonomousSignals { FoodNutrition = 3 * 2f, ColonistCount = 3 };
         Assert.That(_scheduler.Evaluate(1000, starving, _config), Is.EqualTo(AutonomousTrigger.FoodShortage), "分級變差要立刻再叫");
         // 補回來了就恢復正常，下次再缺才重新算。
         Assert.That(_scheduler.Evaluate(1500, Calm(), _config), Is.EqualTo(AutonomousTrigger.None));
@@ -187,34 +187,32 @@ public class AutonomousSchedulerTests
     }
 
     [Test]
-    public void UpkeepConditionsFireAndShareOneSwitch()
+    public void GameAlertsFireAndShareOneSwitch()
     {
         _config.OnUpkeep = true;
-        _config.OnFire = true;
-        _config.OnEmergencyMedical = true;
-        var cases = new[]
-        {
-            Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, ColdColonistCount = 1 }, AutonomousTrigger.Cold),
-            Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, BedlessCount = 2 }, AutonomousTrigger.BedShortage),
-            Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, OutdoorsBedCount = 1 }, AutonomousTrigger.OutdoorsBed),
-            // 停電與停研互斥不了：沒電就會停研，先給它通電，兩者各測一次。
-            Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, HasActiveResearch = true }, AutonomousTrigger.PowerOutage),
-            Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AnyWorkingPower = true }, AutonomousTrigger.Research),
-            Tuple.Create(new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AnyWorkingPower = true, HasActiveResearch = true, LowMoodCount = 2 }, AutonomousTrigger.LowMood)
-        };
-        foreach (var c in cases)
-        {
-            _scheduler.Reset();
-            Assert.That(_scheduler.Evaluate(0, c.Item1, _config), Is.EqualTo(c.Item2));
-        }
+        var alert = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AlertCount = 1 };
+        var critical = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AlertCount = 1, CriticalAlertCount = 1 };
+
+        Assert.That(_scheduler.Evaluate(0, alert, _config), Is.EqualTo(AutonomousTrigger.Alert));
+        _scheduler.Reset();
+        Assert.That(_scheduler.Evaluate(0, critical, _config), Is.EqualTo(AutonomousTrigger.CriticalAlert), "紅色警報排在一般警報前面");
+    }
+
+    [Test]
+    public void ANewAlertFiresAgainWithoutWaitingForTheRetry()
+    {
+        _config.OnUpkeep = true;
+        _config.CooldownTicks = 0;
+        Assert.That(_scheduler.Evaluate(0, new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AlertCount = 1 }, _config), Is.EqualTo(AutonomousTrigger.Alert));
+        Assert.That(_scheduler.Evaluate(100, new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AlertCount = 1 }, _config), Is.EqualTo(AutonomousTrigger.None), "同一批警報等重試");
+        Assert.That(_scheduler.Evaluate(200, new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AlertCount = 2 }, _config), Is.EqualTo(AutonomousTrigger.Alert), "多一個警報就是新狀況");
     }
 
     [Test]
     public void UpkeepSwitchOffSilencesBaseConditions()
     {
         _config.OnUpkeep = false;
-        // 沒有通電、沒在研究、又受寒又沒床：全都不該叫。
-        var bad = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, ColdColonistCount = 2, BedlessCount = 2 };
+        var bad = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AlertCount = 4, CriticalAlertCount = 1 };
         Assert.That(_scheduler.Evaluate(0, bad, _config), Is.EqualTo(AutonomousTrigger.None));
         Assert.That(_scheduler.Evaluate(20000, bad, _config), Is.EqualTo(AutonomousTrigger.Interval), "只剩定期巡視");
     }
@@ -227,25 +225,21 @@ public class AutonomousSchedulerTests
     public void TurningASwitchOffThenOnStartsAFreshCount()
     {
         _config.OnUpkeep = true;
-        var cold = new AutonomousSignals
-        {
-            FoodNutrition = 100f, ColonistCount = 3,
-            AnyWorkingPower = true, HasActiveResearch = true, ColdColonistCount = 1
-        };
+        var cold = new AutonomousSignals { FoodNutrition = 100f, ColonistCount = 3, AlertCount = 1 };
         // 耗盡三次並放棄。
-        Assert.That(_scheduler.Evaluate(0, cold, _config), Is.EqualTo(AutonomousTrigger.Cold));
-        Assert.That(_scheduler.Evaluate(2500, cold, _config), Is.EqualTo(AutonomousTrigger.Cold));
-        Assert.That(_scheduler.Evaluate(7500, cold, _config), Is.EqualTo(AutonomousTrigger.Cold));
+        Assert.That(_scheduler.Evaluate(0, cold, _config), Is.EqualTo(AutonomousTrigger.Alert));
+        Assert.That(_scheduler.Evaluate(2500, cold, _config), Is.EqualTo(AutonomousTrigger.Alert));
+        Assert.That(_scheduler.Evaluate(7500, cold, _config), Is.EqualTo(AutonomousTrigger.Alert));
         _scheduler.Evaluate(8000, cold, _config);
-        Assert.That(_scheduler.TakeGiveUps(), Is.EqualTo([AutonomousTrigger.Cold]));
+        Assert.That(_scheduler.TakeGiveUps(), Is.EqualTo([AutonomousTrigger.Alert]));
 
-        // 玩家關掉再開；受寒還沒解決。
+        // 玩家關掉再開；警報還在。
         _config.OnUpkeep = false;
         _scheduler.Evaluate(9000, cold, _config);
         _config.OnUpkeep = true;
         _scheduler.Evaluate(10000, cold, _config);
 
-        Assert.That(_scheduler.Evaluate(20000, cold, _config), Is.EqualTo(AutonomousTrigger.Cold),
+        Assert.That(_scheduler.Evaluate(20000, cold, _config), Is.EqualTo(AutonomousTrigger.Alert),
             "重新開啟後要從頭算次數");
     }
 
@@ -345,8 +339,8 @@ public class AutonomousSchedulerTests
     [Test]
     public void DismissedConditionStillFiresWhenItGetsWorse()
     {
-        var tight = new AutonomousSignals { FoodNutrition = 3 * 7f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
-        var starving = new AutonomousSignals { FoodNutrition = 3 * 2f, ColonistCount = 3, HasActiveResearch = true, AnyWorkingPower = true };
+        var tight = new AutonomousSignals { FoodNutrition = 3 * 7f, ColonistCount = 3 };
+        var starving = new AutonomousSignals { FoodNutrition = 3 * 2f, ColonistCount = 3 };
         Assert.That(_scheduler.Evaluate(0, tight, _config), Is.EqualTo(AutonomousTrigger.FoodShortage));
 
         _scheduler.Dismiss(AutonomousTrigger.FoodShortage, 0);
@@ -556,9 +550,9 @@ public class AutonomousRetryDetailTests
     [Test]
     public void InitialAttemptReturnsNull()
     {
-        var signals = new AutonomousSignals { FireCount = 2, ColdColonistCount = 1 };
+        var signals = new AutonomousSignals { FireCount = 2 };
         Assert.That(RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Fire, 1, signals), Is.Null);
-        Assert.That(RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Cold, 0, signals), Is.Null);
+        Assert.That(RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.MentalBreak, 0, signals), Is.Null);
     }
 
     [Test]
@@ -567,7 +561,7 @@ public class AutonomousRetryDetailTests
         var signals = new AutonomousSignals
         {
             FireCount = 3,
-            ColdColonistCount = 2,
+            Alerts = "Need colonist beds",
             DownedOrBleedingCount = 1,
             FoodNutrition = 12f,
             ColonistCount = 3
@@ -576,8 +570,10 @@ public class AutonomousRetryDetailTests
         string fireDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Fire, 2, signals);
         Assert.That(fireDetail, Does.Contain("retry #2").And.Contain("3 fire(s) burning"));
 
-        string coldDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Cold, 3, signals);
-        Assert.That(coldDetail, Does.Contain("retry #3").And.Contain("2 colonist(s) remain dangerously cold"));
+        string alertDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Alert, 3, signals);
+        Assert.That(alertDetail, Does.Contain("retry #3").And.Contain("Need colonist beds"));
+        Assert.That(RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Alert, 1, signals), Is.EqualTo("Active alerts: Need colonist beds"),
+            "第一次也要告訴主模型是哪些警報");
 
         string medDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.EmergencyMedical, 2, signals);
         Assert.That(medDetail, Does.Contain("retry #2").And.Contain("1 colonist(s) remain downed or bleeding"));
@@ -585,7 +581,7 @@ public class AutonomousRetryDetailTests
         string foodDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.FoodShortage, 2, signals);
         Assert.That(foodDetail, Does.Contain("retry #2").And.Contain("4.0 nutrition"));
 
-        string fallbackDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.Research, 2, signals);
-        Assert.That(fallbackDetail, Does.Contain("retry #2").And.Contain("condition: Research."));
+        string fallbackDetail = RimAgentGameComponent.FormatRetryDetail(AutonomousTrigger.MentalBreak, 2, signals);
+        Assert.That(fallbackDetail, Does.Contain("retry #2").And.Contain("condition: MentalBreak."));
     }
 }

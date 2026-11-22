@@ -83,58 +83,6 @@ internal sealed partial class MapWorldTests
         TestHelpers.AssertNone(failures, "set_time_assignment");
     }
 
-    /// <summary>剛蓋好、還沒人認領的床要抵掉沒床的人：殖民者去睡覺前，排程器不該一直以為床不夠。</summary>
-    [Test]
-    public void UnclaimedBedOffsetsBedlessColonists()
-    {
-        if (TestHelpers.SkipWithoutMap(nameof(UnclaimedBedOffsetsBedlessColonists))) return;
-        Map map = Find.CurrentMap;
-        int before = RimWorldGameWorld.GetAutonomousSignals().BedlessCount;
-        if (before == 0)
-        {
-            TestHelpers.Skip(nameof(UnclaimedBedOffsetsBedlessColonists), "no colonist is short of a bed");
-            return;
-        }
-        // 單人床 1x2、雙人床 2x2，朝北都放得進一塊 2x2。只挑完全沒東西的格子：
-        // 生成建築預設會把格子上的植物、汙物直接刪掉，事後無法復原。
-        CellRect? found = FindFreeRect(map, 2, c => c.Standable(map) && c.GetThingList(map).Count == 0);
-        if (found == null)
-        {
-            TestHelpers.Skip(nameof(UnclaimedBedOffsetsBedlessColonists), "no empty 2x2 area near the colonists");
-            return;
-        }
-        var cell = new IntVec3(found.Value.minX, 0, found.Value.minZ);
-        var failures = new List<string>();
-        CheckBed(map, cell, ThingDefOf.Bed, configure: null, Math.Max(0, before - 1), before, "unclaimed single bed", failures);
-        CheckBed(map, cell, ThingDefOf.Bed, b => b.Medical = true, before, before, "medical bed", failures);
-        CheckBed(map, cell, ThingDefOf.Bed, b => b.ForPrisoners = true, before, before, "prisoner bed", failures);
-        ThingDef doubleBed = DefDatabase<ThingDef>.GetNamedSilentFail("DoubleBed");
-        if (doubleBed != null) CheckBed(map, cell, doubleBed, configure: null, Math.Max(0, before - 2), before, "unclaimed double bed", failures);
-        TestHelpers.AssertNone(failures, "bedless signal");
-    }
-
-#pragma warning disable S107 // 私有輔助方法，參數皆為床檢查相關，無需重構
-    /// <summary>生成一張床（可再設定用途），比對沒床人數是否符合預期，再拆掉。</summary>
-    private static void CheckBed(Map map, IntVec3 cell, ThingDef def, Action<Building_Bed> configure, int expected, int before,
-        string label, List<string> failures)
-    {
-        var bed = (Building_Bed)ThingMaker.MakeThing(def, GenStuff.DefaultStuffFor(def));
-        bed.SetFaction(Faction.OfPlayer);
-        try
-        {
-            GenSpawn.Spawn(bed, cell, map, Rot4.North);
-            configure?.Invoke(bed);
-            int after = RimWorldGameWorld.GetAutonomousSignals().BedlessCount;
-            if (after != expected) failures.Add(string.Create(CultureInfo.InvariantCulture, $"{label}: bedless {before} -> {after}, expected {expected}"));
-        }
-        finally
-        {
-            if (!bed.Destroyed) bed.Destroy();
-        }
-    }
-
-#pragma warning restore S107
-
     [Test]
     public void SetTimeSpeedWritesTickManager()
     {
