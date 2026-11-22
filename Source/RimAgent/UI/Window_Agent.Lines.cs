@@ -67,21 +67,21 @@ public partial class Window_Agent
 
     private void AppendLines(IReadOnlyList<TranscriptEntry> entries, int from, float width)
     {
+        // 收合的群組之後才出現待確認的工具：前面已略過的列要重建才會跟著展開。
+        if (from > 0 && PendingRevealsCollapsedGroup(entries, from))
+        {
+            RebuildLines(entries, width);
+            return;
+        }
         for (int i = Math.Max(0, from); i < entries.Count; i++)
         {
             TranscriptEntry entry = entries[i];
             // 每句 User 紀錄開啟新回合（插話屬於進行中的回合）；第一行上面不畫分隔線。
             bool turnStart = entry.Kind == TranscriptKind.User && !entry.Interjection && _lines.Count > 0;
             bool collapsed = false;
-            if (entry.Kind == TranscriptKind.Tool)
+            if (entry.Kind is TranscriptKind.Tool or TranscriptKind.Reasoning)
             {
-                collapsed = !TrackToolGroup(entry, PreviousIsTool(entries, i), width);
-            }
-            else if (entry.Kind == TranscriptKind.Reasoning && _groupFirst != null)
-            {
-                // 推理模型每步都有思考：夾在工具之間的思考算進同一個工具群組，群組收合時一起藏起來，
-                // 不然每一步都會把「已執行 N 個工具」切成一組。
-                collapsed = !IsGroupExpanded(_groupFirst);
+                collapsed = !TrackToolGroup(entries, i, width);
             }
             else
             {
@@ -92,41 +92,74 @@ public partial class Window_Agent
         _linesEntryCount = entries.Count;
     }
 
-    internal static bool PreviousIsTool(IReadOnlyList<TranscriptEntry> entries, int index)
+    /// <summary>思考與工具呼叫連在一起時收成同一段「過程」，只顯示一行摘要，回覆才是視覺重心。</summary>
+    internal static bool ContinuesProcess(IReadOnlyList<TranscriptEntry> entries, int index)
     {
-        for (int j = index - 1; j >= 0; j--)
+        return index > 0 && entries[index - 1].Kind is TranscriptKind.Tool or TranscriptKind.Reasoning;
+    }
+
+    /// <summary>從 start 起連續的思考與工具裡，有沒有等玩家確認的工具。</summary>
+    internal static bool ProcessHasPending(IReadOnlyList<TranscriptEntry> entries, int start)
+    {
+        for (int j = start; j < entries.Count && entries[j].Kind is TranscriptKind.Tool or TranscriptKind.Reasoning; j++)
         {
-            if (entries[j].Kind == TranscriptKind.Reasoning) continue;
-            return entries[j].Kind == TranscriptKind.Tool;
+            if (IsPendingConfirmation(entries[j])) return true;
         }
         return false;
     }
 
+    private static bool IsPendingConfirmation(TranscriptEntry entry)
+    {
+        return entry.Kind == TranscriptKind.Tool && entry.Result?.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal) == true;
+    }
+
+    private bool PendingRevealsCollapsedGroup(IReadOnlyList<TranscriptEntry> entries, int from)
+    {
+        return _groupFirst != null && !_groupPending && !_groupExpanded.ContainsKey(_groupFirst)
+               && entries[from].Kind is TranscriptKind.Tool or TranscriptKind.Reasoning
+               && ContinuesProcess(entries, from) && ProcessHasPending(entries, from);
+    }
+
     private string _toolGroupToggleTip;
 
-    private bool TrackToolGroup(TranscriptEntry entry, bool continuesPrevious, float width)
+    private bool TrackToolGroup(IReadOnlyList<TranscriptEntry> entries, int index, float width)
     {
-        if (!continuesPrevious || _groupFirst == null)
+        TranscriptEntry entry = entries[index];
+        if (!ContinuesProcess(entries, index) || _groupFirst == null)
         {
             _groupFirst = entry;
             _groupCount = 0;
             _groupFailed = 0;
-            _groupPending = false;
+            _groupThoughts = 0;
+            _groupReviewed = false;
+            _groupToolNames.Clear();
+            // 先往後看：待確認的工具若排在後面，前面的思考在建列時就得展開。
+            _groupPending = ProcessHasPending(entries, index);
             _groupHeaderIndex = -1;
         }
-        _groupCount++;
-        if (entry.Failed) _groupFailed++;
-        if (entry.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) _groupPending = true;
+        if (entry.Kind == TranscriptKind.Reasoning)
+        {
+            _groupThoughts++;
+        }
+        else
+        {
+            _groupCount++;
+            if (entry.Failed) _groupFailed++;
+            if (IsPendingConfirmation(entry)) _groupPending = true;
+            if (!_groupToolNames.Contains(entry.ToolName)) _groupToolNames.Add(entry.ToolName);
+            if (ReviewedByDecisionModel(entry)) _groupReviewed = true;
+        }
 
         bool expanded = IsGroupExpanded(_groupFirst);
-        string text = GroupHeaderText(_groupCount, _groupFailed, expanded);
+        string text = GroupHeaderText(_groupThoughts, _groupCount, _groupFailed, _groupToolNames, expanded);
         var header = new TranscriptLine
         {
             Kind = LineKind.ToolGroupHeader,
             Text = text,
             PlainText = text.StripTags(),
             GroupFirst = _groupFirst,
-            Height = MeasureRichHeight(text, width)
+            Reviewed = _groupReviewed,
+            Height = MeasureRichHeight(text, _groupReviewed ? width - ShieldReserve : width)
         };
         if (_groupHeaderIndex < 0)
         {
@@ -148,10 +181,20 @@ public partial class Window_Agent
         return ReferenceEquals(first, _groupFirst) && _groupPending;
     }
 
-    private static string GroupHeaderText(int count, int failed, bool expanded)
+    private const int MaxNamedTools = 3;
+
+    private static string GroupHeaderText(int thoughts, int count, int failed, List<string> toolNames, bool expanded)
     {
         string arrow = ColorTagPrefix + SubTextHex + ">" + (expanded ? "▾" : "▸") + ColorTagCloseSpace;
-        string summary = ColorTagPrefix + TextHex + ">" + "RimAgent.ToolGroup.Summary".Translate(count) + ColorTagClose;
+        var parts = new List<string>();
+        if (thoughts > 0) parts.Add(ColorTagPrefix + ReasoningHex + ">" + "RimAgent.Tag.Reasoning".Translate() + ColorTagClose);
+        if (count > 0)
+        {
+            string names = string.Join(", ", toolNames.Take(MaxNamedTools)) + (toolNames.Count > MaxNamedTools ? ", …" : string.Empty);
+            parts.Add(ColorTagPrefix + TextHex + ">" + "RimAgent.ToolGroup.Summary".Translate(count) + ColorTagClose
+                + " " + ColorTagPrefix + SubTextHex + ">" + EscapeRichText(names) + ColorTagClose);
+        }
+        string summary = string.Join(ColorTagPrefix + SubTextHex + "> · " + ColorTagClose, parts);
         if (failed > 0)
         {
             summary += " " + ColorTagPrefix + EmergencyHex + ">" + "RimAgent.ToolGroup.Failed".Translate(failed) + ColorTagClose;
@@ -191,7 +234,8 @@ public partial class Window_Agent
             }
             else
             {
-                line.Height = MeasureRichHeight(text, width);
+                line.Reviewed = kind == LineKind.ToolHeader && ReviewedByDecisionModel(entry);
+                line.Height = MeasureRichHeight(text, line.Reviewed ? width - ShieldReserve : width);
             }
             into.Add(line);
             total += line.Height + EntryGap + (turnStart ? TurnGap : 0f);
@@ -238,7 +282,6 @@ public partial class Window_Agent
 
     private bool IsToolExpanded(TranscriptEntry entry)
     {
-        if (entry.Kind == TranscriptKind.Reasoning) return _toolExpanded.TryGetValue(entry, out bool open) && open;
         if (entry.Kind != TranscriptKind.Tool) return false;
         if (_toolExpanded.TryGetValue(entry, out bool expanded)) return expanded;
         return entry.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
@@ -276,7 +319,7 @@ public partial class Window_Agent
                 break;
 
             case TranscriptKind.Reasoning:
-                foreach (var line in RenderReasoning(entry, toolExpanded)) yield return line;
+                foreach (var line in RenderReasoning(entry)) yield return line;
                 break;
 
             case TranscriptKind.Error:
@@ -380,19 +423,10 @@ public partial class Window_Agent
         }
     }
 
-    private static IEnumerable<(string Text, LineKind Kind)> RenderReasoning(TranscriptEntry entry, bool expanded)
+    private static IEnumerable<(string Text, LineKind Kind)> RenderReasoning(TranscriptEntry entry)
     {
-        string arrow = ColorTagPrefix + SubTextHex + ">" + (expanded ? "▾" : "▸") + ColorTagCloseSpace;
-        string header = arrow + ColorTagPrefix + ReasoningHex + ">" + "RimAgent.Tag.Reasoning".Translate() + ColorTagClose;
-        if (!string.IsNullOrEmpty(entry.Agent))
-        {
-            header += " " + ColorTagPrefix + SubTextHex + ">[" + EscapeRichText(entry.Agent) + "]" + ColorTagClose;
-        }
-        yield return (header, LineKind.ToolHeader);
-        if (expanded)
-        {
-            yield return (ColorTagPrefix + SubTextHex + ">" + EscapeRichText(entry.Text) + ColorTagClose, LineKind.Text);
-        }
+        string agent = string.IsNullOrEmpty(entry.Agent) ? string.Empty : "[" + EscapeRichText(entry.Agent) + "] ";
+        yield return (ColorTagPrefix + ReasoningHex + ">" + agent + "<i>" + EscapeRichText(entry.Text) + "</i>" + ColorTagClose, LineKind.Text);
     }
 
     internal static string ToolCategoryHex(ToolCategory category)

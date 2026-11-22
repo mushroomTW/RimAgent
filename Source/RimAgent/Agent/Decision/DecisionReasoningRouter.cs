@@ -11,23 +11,30 @@ using Microsoft.Extensions.AI;
 
 namespace RimAgent.Agent;
 
-/// <summary>一句指令分流後的結果：要用哪個思考強度。模型一律沿用 Agent 視窗選的那一個。</summary>
+/// <summary>一句指令的思考強度：決策模型直接挑選；信心不足或不可用時用備援強度。模型一律沿用 Agent 視窗選的那一個。</summary>
 public sealed class DecisionRoute
 {
-    public string CategoryId { get; init; } = string.Empty;
     public ReasoningLevel Reasoning { get; init; }
     public double Confidence { get; init; }
     public string Reason { get; init; } = string.Empty;
-    public bool IsFallback => string.IsNullOrEmpty(CategoryId);
+    public bool IsFallback { get; init; }
 }
 
 public sealed class DecisionReasoningRouter
 {
-    public const string QuestionId = "category";
+    public const string QuestionId = "reasoning";
     public const int UserTextHeadChars = 600;
     public const int ReplyHeadChars = 300;
     public const int ReplyTailChars = 300;
     public const int MaxHistoryTurns = 3;
+
+    private static readonly Dictionary<string, string> Levels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["off"] = "No deliberation: a direct lookup or a reply to small talk.",
+        ["low"] = "Light: a routine order or a question answered by one or two observations.",
+        ["medium"] = "Moderate: several steps, such as planning a build or reassigning work.",
+        ["high"] = "Deep: risky or far-reaching decisions, combat, or long multi-step plans."
+    };
 
     private readonly IDecisionService _decisionService;
     private readonly Func<IDecisionService> _serviceFactory;
@@ -48,37 +55,25 @@ public sealed class DecisionReasoningRouter
     }
 
     #pragma warning disable VSTHRD202 // 保留 async：讀設定與建題目的例外要放進 Task，不在呼叫當下同步拋出。
-    public async Task<DecisionRoute> ResolveAsync(
-        string request,
-        IReadOnlyList<DecisionRouteCategory> categories,
-        CancellationToken ct = default)
+    public async Task<DecisionRoute> ResolveAsync(string request, CancellationToken ct = default)
     {
         RimAgentSettings settings = _settingsProvider?.Invoke();
-        // 設定頁可在模型呼叫期間改類別；先複製一份，await 回來後只使用這份快照。
-        List<DecisionRouteCategory> activeCategories = SnapshotCategories(categories ?? settings?.decisionCategories);
         ReasoningLevel fallbackReasoning = settings?.decisionFallbackReasoning ?? ReasoningLevel.Auto;
         float minConfidence = settings != null ? settings.decisionRoutingMinConfidence : 0.6f;
-
-        if (activeCategories.Count == 0)
-            return FallbackRoute(fallbackReasoning, "No categories configured.");
-
-        var options = BuildCategoryOptions(activeCategories);
-        if (options.Count == 0)
-            return FallbackRoute(fallbackReasoning, "No valid category options available.");
 
         IDecisionService service = _decisionService ?? ResolveService();
         if (service == null)
             return FallbackRoute(fallbackReasoning, "Decision model service is unavailable or not configured.");
 
-        var question = DecisionQuestion.Choice(QuestionId, "Classify the instruction into the most appropriate category.", options);
-        var plan = DecisionPlan.Of(question);
+        var question = DecisionQuestion.Choice(QuestionId,
+            "How much reasoning effort does the colony agent need to carry out this instruction well?", Levels);
         string state = Describe(request, _historyProvider?.Invoke());
 
-        return await EvaluateAndRoute(service, state, plan, fallbackReasoning, minConfidence, activeCategories, ct);
+        return await EvaluateAndRoute(service, state, DecisionPlan.Of(question), fallbackReasoning, minConfidence, ct);
     }
     #pragma warning restore VSTHRD202
 
-    private static async Task<DecisionRoute> EvaluateAndRoute(IDecisionService service, string state, DecisionPlan plan, ReasoningLevel fallbackReasoning, float minConfidence, List<DecisionRouteCategory> activeCategories, CancellationToken ct)
+    private static async Task<DecisionRoute> EvaluateAndRoute(IDecisionService service, string state, DecisionPlan plan, ReasoningLevel fallbackReasoning, float minConfidence, CancellationToken ct)
     {
         DecisionResult result;
         try
@@ -94,9 +89,9 @@ public sealed class DecisionReasoningRouter
             return FallbackRoute(fallbackReasoning, "Decision model evaluation failed: " + ex.Message);
         }
 
-        if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || string.IsNullOrWhiteSpace(answer?.Value))
+        if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || !TryParseLevel(answer?.Value, out ReasoningLevel level))
         {
-            return FallbackRoute(fallbackReasoning, "Decision model returned no category answer.");
+            return FallbackRoute(fallbackReasoning, "Decision model returned no reasoning level.");
         }
 
         double confidence = answer.Confidence ?? answer.Probability ?? 0d;
@@ -106,70 +101,30 @@ public sealed class DecisionReasoningRouter
                 string.Create(CultureInfo.InvariantCulture, $"Decision confidence {confidence:F2} is below threshold {minConfidence:F2}."));
         }
 
-        string selectedId = answer.Value.Trim();
-        DecisionRouteCategory matched = FindMatchedCategory(activeCategories, selectedId);
-        if (matched == null)
-        {
-            return FallbackRoute(fallbackReasoning, $"Selected category '{selectedId}' not found in categories.");
-        }
-
         return new DecisionRoute
         {
-            CategoryId = matched.Id,
-            Reasoning = ResolveReasoningLevel(matched, fallbackReasoning),
+            Reasoning = level,
             Confidence = confidence,
-            Reason = string.Create(CultureInfo.InvariantCulture, $"Routed to category '{matched.Id}' with confidence {confidence:F2}.")
+            Reason = string.Create(CultureInfo.InvariantCulture, $"Decision model chose '{level}' with confidence {confidence:F2}.")
         };
     }
 
-    private static Dictionary<string, string> BuildCategoryOptions(List<DecisionRouteCategory> categories)
+    private static bool TryParseLevel(string value, out ReasoningLevel level)
     {
-        // 與 FindMatchedCategory 一致用 OrdinalIgnoreCase；重複或僅大小寫不同的 id 以先出現者為準，避免 ToDictionary 擲例外。
-        var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (DecisionRouteCategory cat in categories)
-        {
-            if (string.IsNullOrWhiteSpace(cat.Id) || string.IsNullOrWhiteSpace(cat.Description)) continue;
-            options.TryAdd(cat.Id.Trim(), cat.Description.Trim());
-        }
-        return options;
-    }
-
-    private static DecisionRouteCategory FindMatchedCategory(List<DecisionRouteCategory> categories, string selectedId)
-    {
-        return categories.FirstOrDefault(c =>
-            string.Equals(c.Id?.Trim(), selectedId, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static ReasoningLevel ResolveReasoningLevel(DecisionRouteCategory matched, ReasoningLevel fallbackReasoning)
-    {
-        return matched.Reasoning != ReasoningLevel.Auto ? matched.Reasoning : fallbackReasoning;
+        level = ReasoningLevel.Auto;
+        string key = value?.Trim();
+        return !string.IsNullOrEmpty(key) && Levels.ContainsKey(key) && Enum.TryParse(key, ignoreCase: true, out level);
     }
 
     private static DecisionRoute FallbackRoute(ReasoningLevel fallbackReasoning, string reason)
     {
         return new DecisionRoute
         {
-            CategoryId = string.Empty,
             Reasoning = fallbackReasoning,
             Confidence = 0,
-            Reason = reason
+            Reason = reason,
+            IsFallback = true
         };
-    }
-
-    private static List<DecisionRouteCategory> SnapshotCategories(IReadOnlyList<DecisionRouteCategory> source)
-    {
-        var copy = new List<DecisionRouteCategory>();
-        if (source == null) return copy;
-        foreach (DecisionRouteCategory category in source)
-        {
-            if (category == null) continue;
-            copy.Add(new DecisionRouteCategory(
-                category.Id,
-                category.Name,
-                category.Description,
-                category.Reasoning));
-        }
-        return copy;
     }
 
     private IDecisionService ResolveService()

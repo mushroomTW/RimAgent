@@ -105,6 +105,8 @@ public partial class Window_Agent : Window
         public TranscriptEntry Entry;
         /// <summary>ToolGroupHeader 專用：這組的第一筆工具紀錄，同時是展開狀態的鍵。</summary>
         public TranscriptEntry GroupFirst;
+        /// <summary>工具摘要列或群組摘要列後面畫盾牌：決策模型審過這次（或這組裡的）工具呼叫。</summary>
+        public bool Reviewed;
         public bool TurnStart;
         public RimLLM_Framework.Mod.RimLLMMarkdownTable Table;
     }
@@ -156,6 +158,9 @@ public partial class Window_Agent : Window
     private int _groupHeaderIndex = -1;
     private int _groupCount;
     private int _groupFailed;
+    private int _groupThoughts;
+    private bool _groupReviewed;
+    private readonly List<string> _groupToolNames = [];
     private bool _groupPending;
 
     private readonly List<TranscriptLine> _lines = [];
@@ -178,7 +183,6 @@ public partial class Window_Agent : Window
     private string _workingText;
     private readonly TextCache<bool> _jumpLabel = new();
     private string _toolToggleTip;
-    private string _reasoningToggleTip;
     private float _workingHeight;
     private float _workingHeightWidth = -1f;
     private string _workingHeightText;

@@ -15,6 +15,7 @@
   <RimAgent.ToolGroup.Summary>已执行 {0} 个工具</RimAgent.ToolGroup.Summary>
   <RimAgent.ToolGroup.Failed>{0} 个失败</RimAgent.ToolGroup.Failed>
   <RimAgent.ToolGroup.ToggleTip>点一下展开或收合这一串工具调用。</RimAgent.ToolGroup.ToggleTip>
+  <RimAgent.Tool.ReviewedTip>决策模型已审查这次工具调用的风险。</RimAgent.Tool.ReviewedTip>
   <RimAgent.Tool.ToggleTip>点一下显示或隐藏参数与结果；对话文字可直接拖选复制，工具行可按右键复制。</RimAgent.Tool.ToggleTip>
   <RimAgent.Scroll.Latest>↓ 回到最新</RimAgent.Scroll.Latest>
   <RimAgent.Scroll.NewMessages>↓ 有新消息</RimAgent.Scroll.NewMessages>
@@ -102,8 +103,8 @@
   <RimAgent.Settings.UseLocalSearch>改用自己电脑上的 SearXNG（大部分人不用开）</RimAgent.Settings.UseLocalSearch>
   <RimAgent.Settings.UseLocalSearchTip>需先启动已开启 JSON 输出的 SearXNG 服务。保持关闭即可免本地设置，使用 Parallel 匿名免费方案。</RimAgent.Settings.UseLocalSearchTip>
   <RimAgent.Settings.SearxngUrl>SearXNG 服务网址</RimAgent.Settings.SearxngUrl>
-  <RimAgent.Settings.A2AHeader>让其他 AI agent 与 RimAgent 对话（A2A）</RimAgent.Settings.A2AHeader>
-  <RimAgent.Settings.A2AServer>在这台电脑上开 A2A 服务器</RimAgent.Settings.A2AServer>
+  <RimAgent.Settings.A2AHeader>A2A：让其他 AI agent 连进来</RimAgent.Settings.A2AHeader>
+  <RimAgent.Settings.A2AServer>开启 A2A 服务器（仅限本机）</RimAgent.Settings.A2AServer>
   <RimAgent.Settings.A2AServerTip>其他 agent（例如写程序的助手或其他游戏 agent）可以通过 A2A 协议，用 JSON-RPC 或 gRPC 下指令给 RimAgent。只有这台电脑上的程序连得进来。远程指令按你的权限与确认模式执行。</RimAgent.Settings.A2AServerTip>
   <RimAgent.Settings.A2APort>端口（gRPC 用 {0}）</RimAgent.Settings.A2APort>
   <RimAgent.Settings.A2ARunning>运行中。Agent 卡片：{0}</RimAgent.Settings.A2ARunning>
@@ -115,8 +116,6 @@
   <RimAgent.Settings.AgentsTip>允许 Agent 把自足的任务交给 AgentPack/Agents 里的子代理（delegate_task）。子代理仍只拿得到这里允许的工具类别，命令按当前模式把关。</RimAgent.Settings.AgentsTip>
   <RimAgent.Settings.Save>存档读档</RimAgent.Settings.Save>
   <RimAgent.Settings.SaveTip>殖民地安全时每个游戏日存一份检查点（只保留最新 5 份），并允许 Agent 存档（save_game）与读回这一局的检查点或自动存档（load_save）。开启主动照顾时，殖民者死亡后由 Agent 决定要不要读档。每份存档最多读回 3 次，之后接受损失。硬核模式无法读档。</RimAgent.Settings.SaveTip>
-  <RimAgent.Settings.ShowAdvanced>高级设置（一般玩家不用动，改坏了点最下面「恢复默认」）</RimAgent.Settings.ShowAdvanced>
-  <RimAgent.Settings.ShowAdvancedTip>模型分工、决策模型与分流、上下文压缩和运行记录。</RimAgent.Settings.ShowAdvancedTip>
   <RimAgent.Settings.ModelRolesHeader>不同工作用哪个 AI</RimAgent.Settings.ModelRolesHeader>
   <RimAgent.Settings.SubagentModel>派出去的小帮手：</RimAgent.Settings.SubagentModel>
   <RimAgent.Settings.SubagentModelTip>没有在下方单独指定模型的子代理使用的模型与思考强度。AGENT.md 写了 reasoning 的子代理以它为准。</RimAgent.Settings.SubagentModelTip>
@@ -131,8 +130,8 @@
   <RimAgent.Settings.CompactModel>整理旧对话：</RimAgent.Settings.CompactModel>
   <RimAgent.Settings.CompactModelTip>/compact 摘要较旧历史时使用的模型与思考强度，通常用便宜的模型就够。</RimAgent.Settings.CompactModelTip>
   <RimAgent.Settings.SlotReasoningTip>只作用于这一格的思考强度；默认＝沿用框架默认。</RimAgent.Settings.SlotReasoningTip>
-  <RimAgent.Settings.DecisionModelHeader>快速判断小帮手的细节</RimAgent.Settings.DecisionModelHeader>
-  <RimAgent.Settings.DecisionEnabled>使用快速判断小帮手</RimAgent.Settings.DecisionEnabled>
+  <RimAgent.Settings.DecisionModelHeader>小模型细节</RimAgent.Settings.DecisionModelHeader>
+  <RimAgent.Settings.DecisionEnabled>使用小模型辅助</RimAgent.Settings.DecisionEnabled>
   <RimAgent.Settings.DecisionEnabledTip>关闭后不再调用决策模型：风险判定改用分类器，思考强度分流改用备用思考强度，日常自动调速固定用「加速」，代答抉择、筛选基地状况、预载工具包与目标审计都停用，交给主模型处理。</RimAgent.Settings.DecisionEnabledTip>
   <RimAgent.Settings.DecisionProvider>用哪家 AI：</RimAgent.Settings.DecisionProvider>
   <RimAgent.Settings.DecisionProviderTip>用于 Auto 模式风险判定等结构化快速判定的决策模型。供应商与模型沿用 RimLLM Framework 的决策设置；不想让本模组使用决策模型时选“不使用”。</RimAgent.Settings.DecisionProviderTip>
@@ -151,7 +150,7 @@
   <RimAgent.Settings.DecisionTestNoAnswer>模型没有返回答案。</RimAgent.Settings.DecisionTestNoAnswer>
   <RimAgent.Settings.DecisionDefault>默认（沿用框架设置）</RimAgent.Settings.DecisionDefault>
   <RimAgent.Settings.DecisionFallbackReasoning>备援思考强度：</RimAgent.Settings.DecisionFallbackReasoning>
-  <RimAgent.Settings.DecisionFallbackReasoningTip>置信度过低或决策模型不可用时所使用的思考强度。</RimAgent.Settings.DecisionFallbackReasoningTip>
+  <RimAgent.Settings.DecisionFallbackReasoningTip>决策模型把握不足或无法使用时的思考强度。“默认”就是不指定，沿用模型本身的设置。</RimAgent.Settings.DecisionFallbackReasoningTip>
   <RimAgent.Settings.DecisionMinConfidence>分流最小置信度门槛：{0}</RimAgent.Settings.DecisionMinConfidence>
   <RimAgent.Settings.DecisionAnswerChoices>自己回复简单的事件选项</RimAgent.Settings.DecisionAnswerChoices>
   <RimAgent.Settings.DecisionAnswerChoicesTip>开启后台照顾时，决策模型有把握、且当前模式本来就允许免确认回答时，自己回复抉择信件与对话框（自动模式另经风险检查）。需要选地图或世界目标、或没把握的抉择仍交给主模型。每次代答都会显示在对话中并转告主模型。</RimAgent.Settings.DecisionAnswerChoicesTip>
@@ -159,18 +158,10 @@
   <RimAgent.Settings.DecisionTriageUpkeepTip>因受寒、没床、露宿、停电、停研或心情低落唤醒主模型前，先由决策模型判断上一轮是否已在处理；是的话等一小时再看。袭击、火灾、急救、精神崩溃、缺粮与定期巡检一律照跑。</RimAgent.Settings.DecisionTriageUpkeepTip>
   <RimAgent.Settings.DecisionPreloadPacks>先帮 Agent 准备工具</RimAgent.Settings.DecisionPreloadPacks>
   <RimAgent.Settings.DecisionPreloadPacksTip>每句指令由决策模型先载入主模型可能用到的工具包，省下一步 load_toolpack。没预载到的包主模型仍可自行载入。</RimAgent.Settings.DecisionPreloadPacksTip>
-  <RimAgent.Settings.DecisionMinConfidenceTip>分类置信度低于此门槛的指令将退回使用备援思考强度。</RimAgent.Settings.DecisionMinConfidenceTip>
-  <RimAgent.Settings.DecisionCategoriesHeader>分流类别</RimAgent.Settings.DecisionCategoriesHeader>
-  <RimAgent.Settings.DecisionCategoryAdd>新增</RimAgent.Settings.DecisionCategoryAdd>
-  <RimAgent.Settings.DecisionCategoryAddCustom>新增自定义类别</RimAgent.Settings.DecisionCategoryAddCustom>
-  <RimAgent.Settings.DecisionCategoryCustomName>自定义类别 {0}</RimAgent.Settings.DecisionCategoryCustomName>
-  <RimAgent.Settings.DecisionCategoryRestore>恢复：{0}（{1}）</RimAgent.Settings.DecisionCategoryRestore>
-  <RimAgent.Settings.DecisionCategoriesReset>重设默认</RimAgent.Settings.DecisionCategoriesReset>
-  <RimAgent.Settings.DecisionCategoryDelete>删除</RimAgent.Settings.DecisionCategoryDelete>
-  <RimAgent.Settings.CategoryReasoning>思考强度：</RimAgent.Settings.CategoryReasoning>
+  <RimAgent.Settings.DecisionMinConfidenceTip>决策模型替每句指令挑思考强度；把握低于这个门槛时不采用，改用下面的强度。</RimAgent.Settings.DecisionMinConfidenceTip>
   <RimAgent.Settings.Mode.Autonomous>完整权限</RimAgent.Settings.Mode.Autonomous>
   <RimAgent.Settings.Mode.AutonomousDesc>已启用的工具（包括 MCP）不经确认直接执行。主动照顾由模组设置单独开关；工具类别开关仍然生效。</RimAgent.Settings.Mode.AutonomousDesc>
-  <RimAgent.Settings.AutonomousCare>让 Agent 自己看家</RimAgent.Settings.AutonomousCare>
+  <RimAgent.Settings.AutonomousCare>开启自动看家</RimAgent.Settings.AutonomousCare>
   <RimAgent.Settings.AutonomousCareTip>按事件与定期巡查主动处理殖民地，仍遵守当前执行模式和工具类别开关。</RimAgent.Settings.AutonomousCareTip>
   <RimAgent.Settings.AutoTimeSpeed>没事的时候自动快进</RimAgent.Settings.AutoTimeSpeed>
   <RimAgent.Settings.AutoTimeSpeedTip>开启后，没有敌人、火灾与急诊时自动加速（要开几倍由决策模型判断，没设置决策模型就用加速）；一出事立刻降回正常。你自己改速度或暂停时不会介入，改速度后 5 分钟内也不会调整。Agent 运行中不会调整。默认关闭。</RimAgent.Settings.AutoTimeSpeedTip>
@@ -255,6 +246,8 @@
   <RimAgent.ContextPanel.CompactUnknown>自动压缩门槛 {0}%；模型上限未知，不会自动压缩。</RimAgent.ContextPanel.CompactUnknown>
   <RimAgent.ContextPanel.NoteScaled>总量是供应商回报的真实值。不带 ~ 的类别是由供应商用量推回的精确值；带 ~ 的依字符估算，再分摊剩余的真实总量。</RimAgent.ContextPanel.NoteScaled>
   <RimAgent.ContextPanel.NoteEstimated>供应商尚未回报 token；带 ~ 的类别是依字符估算的近似值。</RimAgent.ContextPanel.NoteEstimated>
+  <RimAgent.ContextPanel.Part.Messages>消息</RimAgent.ContextPanel.Part.Messages>
+  <RimAgent.ContextPanel.Part.DeferredPacks>未加载的工具包</RimAgent.ContextPanel.Part.DeferredPacks>
   <RimAgent.ContextPanel.Part.SystemPrompt>系统提示</RimAgent.ContextPanel.Part.SystemPrompt>
   <RimAgent.ContextPanel.Part.Tools>工具定义</RimAgent.ContextPanel.Part.Tools>
   <RimAgent.ContextPanel.Part.ToolPacks>工具包索引</RimAgent.ContextPanel.Part.ToolPacks>
@@ -280,31 +273,35 @@
   <RimAgent.Settings.MemoryDesc>在这个存档里记笔记</RimAgent.Settings.MemoryDesc>
   <RimAgent.Settings.AgentsDesc>把工作分给其他 AI 做</RimAgent.Settings.AgentsDesc>
   <RimAgent.Settings.SaveDesc>有人死了可以读档重来</RimAgent.Settings.SaveDesc>
-  <RimAgent.Settings.ReadyTitle>可以用了！点下方工具栏的 Agent 按钮开始聊天</RimAgent.Settings.ReadyTitle>
-  <RimAgent.Settings.ReadyDetail>使用的 AI 模型：{0}</RimAgent.Settings.ReadyDetail>
-  <RimAgent.Settings.NotReadyTitle>还差一步：Agent 还没有可用的 AI 模型</RimAgent.Settings.NotReadyTitle>
-  <RimAgent.Settings.NotReadyDetail>到 RimLLM Framework 填好 AI 密钥、选好模型就能用了。</RimAgent.Settings.NotReadyDetail>
+  <RimAgent.Settings.ReadyTitle>已就绪</RimAgent.Settings.ReadyTitle>
+  <RimAgent.Settings.ReadyDetail>模型：{0}。点下方工具栏的 Agent 按钮开始。</RimAgent.Settings.ReadyDetail>
+  <RimAgent.Settings.NotReadyTitle>尚未设置 AI 模型</RimAgent.Settings.NotReadyTitle>
+  <RimAgent.Settings.NotReadyDetail>到 RimLLM Framework 填入密钥并选择模型。</RimAgent.Settings.NotReadyDetail>
   <RimAgent.Settings.GoToFramework>去 RimLLM Framework 设置 →</RimAgent.Settings.GoToFramework>
   <RimAgent.Settings.GoShort>前往 →</RimAgent.Settings.GoShort>
   <RimAgent.Settings.FrameworkNotFound>找不到 RimLLM Framework 的设置页，请确认它已启用。</RimAgent.Settings.FrameworkNotFound>
-  <RimAgent.Settings.Section1Title>Agent 可以动哪些东西？</RimAgent.Settings.Section1Title>
-  <RimAgent.Settings.Section1Hint>选一个就好。不确定就选「推荐」。</RimAgent.Settings.Section1Hint>
-  <RimAgent.Settings.Preset.LookOnly>只看不动</RimAgent.Settings.Preset.LookOnly>
-  <RimAgent.Settings.Preset.LookOnlyDesc>只会查看、回答问题。\n不会改你的殖民地。</RimAgent.Settings.Preset.LookOnlyDesc>
-  <RimAgent.Settings.Preset.Recommended>帮我管家</RimAgent.Settings.Preset.Recommended>
-  <RimAgent.Settings.Preset.RecommendedDesc>可以盖东西、排工作、看病、打仗。\n不碰电脑上的外部程序。</RimAgent.Settings.Preset.RecommendedDesc>
-  <RimAgent.Settings.Preset.All>全部交给它</RimAgent.Settings.Preset.All>
-  <RimAgent.Settings.Preset.AllDesc>什么都能做，\n包括外部程序（MCP）。</RimAgent.Settings.Preset.AllDesc>
+  <RimAgent.Settings.Tab.General>常规</RimAgent.Settings.Tab.General>
+  <RimAgent.Settings.Tab.Automation>自动化</RimAgent.Settings.Tab.Automation>
+  <RimAgent.Settings.Tab.Connections>连接</RimAgent.Settings.Tab.Connections>
+  <RimAgent.Settings.Tab.Advanced>高级</RimAgent.Settings.Tab.Advanced>
+  <RimAgent.Settings.Section1Title>权限</RimAgent.Settings.Section1Title>
+  <RimAgent.Settings.Section1Hint>Agent 能操作的范围。不确定就选“推荐”。</RimAgent.Settings.Section1Hint>
+  <RimAgent.Settings.Preset.LookOnly>只看</RimAgent.Settings.Preset.LookOnly>
+  <RimAgent.Settings.Preset.LookOnlyDesc>回答问题，不改动殖民地。</RimAgent.Settings.Preset.LookOnlyDesc>
+  <RimAgent.Settings.Preset.Recommended>管家</RimAgent.Settings.Preset.Recommended>
+  <RimAgent.Settings.Preset.RecommendedDesc>建造、排班、医疗、战斗。</RimAgent.Settings.Preset.RecommendedDesc>
+  <RimAgent.Settings.Preset.All>全权</RimAgent.Settings.Preset.All>
+  <RimAgent.Settings.Preset.AllDesc>管家＋外部程序（MCP）。</RimAgent.Settings.Preset.AllDesc>
   <RimAgent.Settings.PresetTagRecommended>推荐</RimAgent.Settings.PresetTagRecommended>
-  <RimAgent.Settings.PresetCustomNote>你自己调过了，目前是「自定义」。点上面任一张卡可以换回方案。</RimAgent.Settings.PresetCustomNote>
+  <RimAgent.Settings.PresetCustomNote>已自定义。点任一张卡可换回预设方案。</RimAgent.Settings.PresetCustomNote>
   <RimAgent.Settings.PermissionListShow>自己一项一项选（可以不用看）</RimAgent.Settings.PermissionListShow>
   <RimAgent.Settings.PermissionListHide>收起列表</RimAgent.Settings.PermissionListHide>
   <RimAgent.Settings.PermissionGroupGreen>绿色：只是看看，很安全</RimAgent.Settings.PermissionGroupGreen>
   <RimAgent.Settings.PermissionGroupYellow>黄色：会改游戏，但你可以自己改回来</RimAgent.Settings.PermissionGroupYellow>
   <RimAgent.Settings.PermissionGroupRed>红色：影响比较大，开之前想一下</RimAgent.Settings.PermissionGroupRed>
-  <RimAgent.Settings.Section2Title>要不要让 Agent 自己看家？</RimAgent.Settings.Section2Title>
-  <RimAgent.Settings.Section2Hint>关着：你叫它，它才做事。开着：出事时（袭击、火灾、有人受伤）它会自己处理。</RimAgent.Settings.Section2Hint>
-  <RimAgent.Settings.AutonomousCareDesc>不在电脑前也能帮你看着殖民地。</RimAgent.Settings.AutonomousCareDesc>
+  <RimAgent.Settings.Section2Title>自动看家</RimAgent.Settings.Section2Title>
+  <RimAgent.Settings.Section2Hint>袭击、火灾、有人受伤时，不用你开口就自己处理。</RimAgent.Settings.Section2Hint>
+  <RimAgent.Settings.AutonomousCareDesc>仍遵守权限设置。</RimAgent.Settings.AutonomousCareDesc>
   <RimAgent.Settings.ConfirmAutonomousMajorDesc>例如买卖、释放囚犯、手术、拆除、攻击。新手建议勾选。</RimAgent.Settings.ConfirmAutonomousMajorDesc>
   <RimAgent.Settings.AutoTimeSpeedDesc>一有敌人、火灾或有人要急救，就会马上变回正常速度。</RimAgent.Settings.AutoTimeSpeedDesc>
   <RimAgent.Settings.CooldownQuestion>它多久可以自己动一次手？</RimAgent.Settings.CooldownQuestion>
@@ -312,14 +309,12 @@
   <RimAgent.Settings.CooldownEvery>每 {0} 分钟</RimAgent.Settings.CooldownEvery>
   <RimAgent.Settings.CooldownHint>按游戏内时间计算。次数越少，花的 AI 费用越少。</RimAgent.Settings.CooldownHint>
   <RimAgent.Settings.CooldownCustom>目前是 {0} 分钟。</RimAgent.Settings.CooldownCustom>
-  <RimAgent.Settings.Section3Title>快速判断小帮手</RimAgent.Settings.Section3Title>
-  <RimAgent.Settings.Section3Hint>用一个便宜又快的 AI 处理小事（要不要确认、要不要快进），让 Agent 反应更快、更省钱。\n需要先在 RimLLM Framework 的「决策」分页设置决策模型才能用。</RimAgent.Settings.Section3Hint>
-  <RimAgent.Settings.DecisionEnabledDesc>关掉也能玩，只是会慢一点、多花一点钱。</RimAgent.Settings.DecisionEnabledDesc>
-  <RimAgent.Settings.HideAdvanced>收起高级设置</RimAgent.Settings.HideAdvanced>
+  <RimAgent.Settings.Section3Title>小模型辅助</RimAgent.Settings.Section3Title>
+  <RimAgent.Settings.Section3Hint>用便宜、快速的决策模型处理确认、快进等小判断，响应更快也更省钱。需先在 RimLLM Framework 的“决策”分页设置。</RimAgent.Settings.Section3Hint>
+  <RimAgent.Settings.DecisionEnabledDesc>关掉也能用，只是较慢、较贵。</RimAgent.Settings.DecisionEnabledDesc>
   <RimAgent.Settings.ResetDefaults>恢复默认</RimAgent.Settings.ResetDefaults>
   <RimAgent.Settings.ResetDefaultsConfirm>要把这一页的设置全部恢复成默认吗？\n\nAgent 窗口里选的模型和执行模式不会变。</RimAgent.Settings.ResetDefaultsConfirm>
   <RimAgent.Tag.Reasoning>思考</RimAgent.Tag.Reasoning>
-  <RimAgent.Reasoning.ToggleTip>点一下显示或隐藏模型这一步的思考内容；右键可复制这一行。</RimAgent.Reasoning.ToggleTip>
   <RimAgent.Undo.Button>撤销</RimAgent.Undo.Button>
   <RimAgent.Undo.Tip>撤销上一句指令改的工作设置</RimAgent.Undo.Tip>
 

@@ -31,14 +31,39 @@ public partial class Window_Agent
             ["UserMessages"] = new Color(0.35f, 0.60f, 0.95f),
             ["AssistantMessages"] = new Color(0.55f, 0.78f, 1f),
             ["ToolCalls"] = new Color(0.65f, 0.68f, 0.72f),
-            ["ToolResults"] = new Color(0.45f, 0.48f, 0.52f)
+            ["ToolResults"] = new Color(0.45f, 0.48f, 0.52f),
+            ["Messages"] = new Color(0.35f, 0.60f, 0.95f),
+            ["DeferredPacks"] = new Color(0.32f, 0.34f, 0.38f)
         };
         private static readonly Color FreeColor = new(0.20f, 0.23f, 0.27f);
+        private static readonly string[] MessageKeys = ["UserMessages", "AssistantMessages", "ToolCalls", "ToolResults"];
+        private bool _messagesExpanded;
 
         private readonly ColonyAgentSession _session;
         private IReadOnlyList<ColonyAgentSession.ContextPart> _parts = [];
         private float _nextRefresh;
         private static int _closedFrame = -1;
+
+        private IReadOnlyList<ColonyAgentSession.ContextPart>? _viewSource;
+        private long? _viewTotal;
+        private long _viewUsed;
+        private List<ColonyAgentSession.ContextPart> _viewGrouped = [];
+        private List<ColonyAgentSession.ContextPart> _viewMessages = [];
+        private List<ColonyAgentSession.ContextPart> _viewDeferred = [];
+
+        // IMGUI 每幀會呼叫好幾次；只在明細或真實總數變了才重算。
+        private void RefreshView(long? total)
+        {
+            if (ReferenceEquals(_viewSource, _parts) && _viewTotal == total) return;
+            _viewSource = _parts;
+            _viewTotal = total;
+            IReadOnlyList<ColonyAgentSession.ContextPart> all = ColonyAgentSession.ReconcileParts(_parts, total);
+            List<ColonyAgentSession.ContextPart> parts = [.. all.Where(p => !p.Deferred)];
+            _viewUsed = parts.Sum(p => p.Tokens);
+            _viewMessages = [.. parts.Where(p => MessageKeys.Contains(p.Key))];
+            _viewGrouped = GroupMessages(parts, _viewMessages);
+            _viewDeferred = [.. all.Where(p => p.Deferred && p.Count > 0)];
+        }
 
         public static bool ClosedThisFrame => _closedFrame == Time.frameCount;
 
@@ -92,8 +117,8 @@ public partial class Window_Agent
             if (!EnsureSessionAndRefresh()) return;
 
             ColonyAgentSession.ContextStatus status = _session.GetContextStatus();
-            IReadOnlyList<ColonyAgentSession.ContextPart> parts = ColonyAgentSession.ReconcileParts(_parts, status.ProjectedInputTokens);
-            long used = status.ProjectedInputTokens ?? parts.Sum(p => p.Tokens);
+            RefreshView(status.ProjectedInputTokens);
+            long used = status.ProjectedInputTokens ?? _viewUsed;
             long? window = status.ContextWindow;
 
             DrawRoundedBox(inRect, BgColor, BorderColor, WindowRadius);
@@ -102,9 +127,13 @@ public partial class Window_Agent
 
             y = DrawUsageOverview(y, width, used, window);
 
-            y = DrawUsageBar(y, width, parts, used, window, status);
+            y = DrawUsageBar(y, width, _viewGrouped, used, window, status);
 
-            y = DrawPartsDetail(y, width, parts, used, window);
+            y = DrawPartsDetail(y, width, _viewGrouped, _viewMessages, used, window);
+            foreach (ColonyAgentSession.ContextPart deferred in _viewDeferred)
+            {
+                y = DrawRow(y, width, PartColors[deferred.Key], PartLabel(deferred), deferred.Tokens, window: null, exact: false);
+            }
 
             y += 6f;
             Widgets.DrawBoxSolid(new Rect(Pad, y, width, 1f), DividerColor);
@@ -200,12 +229,32 @@ public partial class Window_Agent
             return y + BarHeight + 12f;
         }
 
-        private static float DrawPartsDetail(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> parts, long used, long? window)
+        /// <summary>玩家訊息、Agent 回覆、工具呼叫與結果合成一列「訊息」，排在最前；其餘照原順序。</summary>
+        private static List<ColonyAgentSession.ContextPart> GroupMessages(IReadOnlyList<ColonyAgentSession.ContextPart> parts, List<ColonyAgentSession.ContextPart> messages)
+        {
+            List<ColonyAgentSession.ContextPart> grouped = [.. parts.Where(p => !MessageKeys.Contains(p.Key))];
+            grouped.Insert(0, new ColonyAgentSession.ContextPart("Messages", messages.Sum(p => p.Tokens), exact: messages.All(p => p.Exact)));
+            return grouped;
+        }
+
+        private float DrawPartsDetail(float y, float width, IReadOnlyList<ColonyAgentSession.ContextPart> grouped, IReadOnlyList<ColonyAgentSession.ContextPart> messages, long used, long? window)
         {
             Text.Font = GameFont.Small;
-            foreach (ColonyAgentSession.ContextPart part in parts)
+            foreach (ColonyAgentSession.ContextPart part in grouped)
             {
-                y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), part.Tokens, window, part.Exact);
+                if (part.Key != "Messages")
+                {
+                    y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), part.Tokens, window, part.Exact);
+                    continue;
+                }
+                var header = new Rect(Pad, y, width, RowHeight);
+                y = DrawRow(y, width, PartColors[part.Key], (_messagesExpanded ? "▾ " : "▸ ") + PartLabel(part), part.Tokens, window, part.Exact);
+                if (Widgets.ButtonInvisible(header)) _messagesExpanded = !_messagesExpanded;
+                if (!_messagesExpanded) continue;
+                foreach (ColonyAgentSession.ContextPart sub in messages)
+                {
+                    y = DrawRow(y, width, PartColors[sub.Key], PartLabel(sub), sub.Tokens, window, sub.Exact, indent: 16f);
+                }
             }
             if (window is > 0)
             {
@@ -214,9 +263,9 @@ public partial class Window_Agent
             return y;
         }
 
-        private static float DrawRow(float y, float width, Color color, string label, long tokens, long? window, bool exact)
+        private static float DrawRow(float y, float width, Color color, string label, long tokens, long? window, bool exact, float indent = 0f)
         {
-            var row = new Rect(Pad, y, width, RowHeight);
+            var row = new Rect(Pad + indent, y, width - indent, RowHeight);
             var swatch = new Rect(row.x, row.y + 6f, 10f, 10f);
             DrawRoundedBox(swatch, color, Color.clear, 2f);
             GUI.color = new Color(0.90f, 0.93f, 0.96f);

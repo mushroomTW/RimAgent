@@ -52,7 +52,6 @@ public partial class RimAgentMod : Mod
     /// <summary>主動照顧多久可以出手一次（遊戲分鐘）；0＝隨時。</summary>
     private static readonly int[] CooldownChoices = [0, 10, 30, 60];
     private const string DecisionDefaultKey = "RimAgent.Settings.DecisionDefault";
-    private const string CustomIdPrefix = "custom_";
 
     // 設定頁每個 IMGUI 事件都會重畫：權限名稱、說明與提示快取起來，免得每幀翻譯。
     private static string[] _permissionLabels;
@@ -60,9 +59,15 @@ public partial class RimAgentMod : Mod
     private static string[] _permissionTips;
     private static LoadedLanguage _permissionLanguage;
 
-    // 權限清單與進階設定預設收合；只在本次遊戲期間記住，不寫入設定檔。
+    // 權限清單預設收合、分頁停在「一般」；只在本次遊戲期間記住，不寫入設定檔。
     private static bool _showPermissionList;
-    private bool _showAdvanced;
+    private SettingsTab _tab;
+
+    private enum SettingsTab { General, Automation, Connections, Advanced }
+
+    private const float NavWidth = 150f;
+    private const float NavRowHeight = 34f;
+    private const float FooterHeight = 52f;
 
     // TextFieldNumeric 需要跨幀保留輸入中的文字。
     private static string _a2aPortBuffer;
@@ -91,6 +96,43 @@ public partial class RimAgentMod : Mod
 
     public override void DoSettingsWindowContents(Rect inRect)
     {
+        var nav = new Rect(inRect.x, inRect.y, NavWidth, inRect.height - FooterHeight);
+        DrawNav(nav);
+        var body = new Rect(nav.xMax + 16f, inRect.y, inRect.width - NavWidth - 16f, inRect.height - FooterHeight);
+        DrawTab(body);
+
+        var footer = new Listing_Standard();
+        footer.Begin(new Rect(inRect.x, inRect.yMax - FooterHeight, inRect.width, FooterHeight));
+        DrawFooter(footer);
+        footer.End();
+    }
+
+    private void DrawNav(Rect nav)
+    {
+        Widgets.DrawBoxSolid(nav, new Color(1f, 1f, 1f, 0.03f));
+        float y = nav.y + 6f;
+        foreach (SettingsTab tab in Enum.GetValues<SettingsTab>())
+        {
+            var row = new Rect(nav.x + 4f, y, nav.width - 8f, NavRowHeight);
+            bool selected = tab == _tab;
+            if (selected) Widgets.DrawBoxSolid(row, new Color(Gold.r, Gold.g, Gold.b, 0.15f));
+            else if (Mouse.IsOver(row)) Widgets.DrawBoxSolid(row, new Color(1f, 1f, 1f, 0.06f));
+            Text.Anchor = TextAnchor.MiddleLeft;
+            GUI.color = selected ? Gold : Dim;
+            Widgets.Label(new Rect(row.x + 10f, row.y, row.width - 10f, row.height), ("RimAgent.Settings.Tab." + tab).Translate());
+            GUI.color = Color.white;
+            Text.Anchor = TextAnchor.UpperLeft;
+            if (Widgets.ButtonInvisible(row) && !selected)
+            {
+                _tab = tab;
+                _settingsScrollPosition = Vector2.zero;
+            }
+            y += NavRowHeight + 2f;
+        }
+    }
+
+    private void DrawTab(Rect inRect)
+    {
         Rect viewRect = new(0f, 0f, inRect.width - 24f, _settingsHeight);
         Widgets.BeginScrollView(inRect, ref _settingsScrollPosition, viewRect);
 
@@ -101,16 +143,38 @@ public partial class RimAgentMod : Mod
         listing.maxOneColumn = true;
         listing.Begin(viewRect);
 
-        DrawReadyCard(listing);
+        switch (_tab)
+        {
+            case SettingsTab.General:
+                DrawReadyCard(listing);
+                DrawSectionHeader(listing, "RimAgent.Settings.Section1Title".Translate(), "RimAgent.Settings.Section1Hint".Translate());
+                DrawPresetCards(listing);
+                DrawPermissionList(listing);
+                DrawModelRoles(listing);
+                break;
+            case SettingsTab.Automation:
+                DrawAutomation(listing);
+                break;
+            case SettingsTab.Connections:
+                DrawA2ASettings(listing);
+                DrawWebSearch(listing);
+                break;
+            case SettingsTab.Advanced:
+                DrawAdvanced(listing);
+                break;
+        }
 
-        DrawSectionHeader(listing, 1, "RimAgent.Settings.Section1Title".Translate(), "RimAgent.Settings.Section1Hint".Translate());
-        DrawPresetCards(listing);
-        DrawPermissionList(listing);
+        listing.End();
+        _settingsHeight = Mathf.Max(listing.CurHeight + 24f, inRect.height);
+        Widgets.EndScrollView();
+    }
 
-        DrawSectionHeader(listing, 2, "RimAgent.Settings.Section2Title".Translate(), "RimAgent.Settings.Section2Hint".Translate());
+    private static void DrawAutomation(Listing_Standard listing)
+    {
+        DrawSectionHeader(listing, "RimAgent.Settings.Section2Title".Translate(), "RimAgent.Settings.Section2Hint".Translate());
         DrawAutonomousCare(listing);
 
-        DrawSectionHeader(listing, 3, "RimAgent.Settings.Section3Title".Translate(), "RimAgent.Settings.Section3Hint".Translate());
+        DrawSectionHeader(listing, "RimAgent.Settings.Section3Title".Translate(), "RimAgent.Settings.Section3Hint".Translate());
         // 決策模型沒設定好時開關變灰、點不動，下方說明原因並給前往按鈕；存檔裡的值不動，設定好後照原值生效。
         DecisionAvailability decision = DecisionServiceFactory.GetAvailability();
         bool decisionReady = IsDecisionReady(decision);
@@ -119,28 +183,11 @@ public partial class RimAgentMod : Mod
             "RimAgent.Settings.DecisionEnabledDesc".Translate(), "RimAgent.Settings.DecisionEnabledTip".Translate(), 0f, !decisionReady);
         if (decisionReady) Settings.decisionEnabled = decisionOn;
         if (!decisionReady || decisionOn) DrawDecisionStatus(listing, decision);
-
-        listing.Gap(20f);
-        if (DrawExpandButton(listing, _showAdvanced, "RimAgent.Settings.ShowAdvanced".Translate(), "RimAgent.Settings.HideAdvanced".Translate(),
-            "RimAgent.Settings.ShowAdvancedTip".Translate()))
-        {
-            _showAdvanced = !_showAdvanced;
-        }
-        if (_showAdvanced) DrawAdvanced(listing);
-
-        DrawFooter(listing);
-
-        listing.End();
-        _settingsHeight = Mathf.Max(listing.CurHeight + 24f, inRect.height);
-        Widgets.EndScrollView();
+        DrawDecisionSection(listing);
     }
 
     private static void DrawAdvanced(Listing_Standard listing)
     {
-        DrawModelRoles(listing);
-
-        DrawDecisionSection(listing);
-
         listing.Gap();
         listing.Label("RimAgent.Settings.CompactionHeader".Translate());
         listing.GapLine();
@@ -161,6 +208,11 @@ public partial class RimAgentMod : Mod
         listing.GapLine();
         listing.CheckboxLabeled("RimAgent.Settings.ImageInput".Translate(), ref Settings.imageInput, "RimAgent.Settings.ImageInputTip".Translate());
 
+        DrawRunLogSettings(listing);
+    }
+
+    private static void DrawWebSearch(Listing_Standard listing)
+    {
         listing.Gap();
         listing.Label("RimAgent.Settings.WebSearchHeader".Translate());
         listing.GapLine();
@@ -171,9 +223,6 @@ public partial class RimAgentMod : Mod
             listing.Label("RimAgent.Settings.SearxngUrl".Translate());
             Settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), Settings.searxngUrl ?? string.Empty);
         }
-
-        DrawA2ASettings(listing);
-        DrawRunLogSettings(listing);
     }
 
     private static void DrawA2ASettings(Listing_Standard listing)
@@ -319,7 +368,6 @@ public partial class RimAgentMod : Mod
 
     private static void DrawFooter(Listing_Standard listing)
     {
-        listing.Gap(16f);
         listing.GapLine();
         Rect row = listing.GetRect(30f);
         const float ResetWidth = 130f;

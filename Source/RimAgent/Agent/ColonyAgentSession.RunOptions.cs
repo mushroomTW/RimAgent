@@ -27,7 +27,7 @@ public sealed partial class ColonyAgentSession
         PreloadFrequentToolPacks();
         // 分流與預載工具包各問一次 System One，兩者互不相依，同時送出。
         Task<DecisionRoute> routing = ReasoningRouting
-            ? _router.ResolveAsync(text, RimAgentMod.Settings?.decisionCategories, cancellationToken)
+            ? _router.ResolveAsync(text, cancellationToken)
             : null;
         Task<IReadOnlyList<string>> preload = PreloadToolPacks ? SelectToolPacksAsync(text, cancellationToken) : null;
 

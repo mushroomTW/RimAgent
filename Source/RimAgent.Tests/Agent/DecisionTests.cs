@@ -49,15 +49,15 @@ public sealed class FakeDecisionService : IDecisionService
         return this;
     }
 
-    public FakeDecisionService ReplyRoute(string category, double confidence)
+    public FakeDecisionService ReplyRoute(string level, double confidence)
     {
         _responses.Enqueue((state, plan) =>
         {
             var answers = new Dictionary<string, DecisionAnswer>(StringComparer.Ordinal)
             {
-                ["category"] = new DecisionAnswer
+                [DecisionReasoningRouter.QuestionId] = new DecisionAnswer
                 {
-                    Value = category,
+                    Value = level,
                     Confidence = confidence,
                     Probability = confidence
                 }

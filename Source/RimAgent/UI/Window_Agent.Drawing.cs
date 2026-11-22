@@ -40,6 +40,45 @@ public partial class Window_Agent
         GUI.color = oldColor;
     }
 
+    private static Texture2D _shieldTex;
+
+    /// <summary>盾牌外框：上緣平、兩側直到一半，再收成底部尖端。程式產生，免得多出貨一張圖。</summary>
+    private static Texture2D ShieldTex => _shieldTex ??= BuildShieldTex(32);
+
+    private static Texture2D BuildShieldTex(int size)
+    {
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+        var pixels = new Color[size * size];
+        const float Stroke = 0.13f;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size * 2f - 1f;
+                float v = 1f - (y + 0.5f) / size;
+                bool outer = InShield(u, v, 0f);
+                bool inner = InShield(u, v, Stroke);
+                pixels[y * size + x] = new Color(1f, 1f, 1f, outer && !inner ? 1f : 0f);
+            }
+        }
+        texture.SetPixels(pixels);
+        texture.Apply();
+        return texture;
+    }
+
+    private static bool InShield(float u, float v, float inset)
+    {
+        const float Top = 0.06f;
+        if (v < Top + inset || v > 0.98f - inset * 1.4f) return false;
+        float t = Mathf.InverseLerp(0.45f, 0.98f - inset * 1.4f, v);
+        float halfWidth = (0.82f - inset) * (1f - t * t);
+        return Mathf.Abs(u) <= halfWidth;
+    }
+
     private static Texture2D GetRoundedTex(Dictionary<int, Texture2D> cache, int r, bool ring)
     {
         if (cache.TryGetValue(r, out Texture2D cached)) return cached;

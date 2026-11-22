@@ -89,6 +89,29 @@ public class ContextMeterTests
     }
 
     [Test]
+    public void ReconcileLeavesDeferredToolPacksOutOfTheTotal()
+    {
+        IReadOnlyList<ColonyAgentSession.ContextPart> parts =
+        [
+            new("SystemPrompt", 500),
+            new("DeferredPacks", 2000, count: 3, deferred: true)
+        ];
+        IReadOnlyList<ColonyAgentSession.ContextPart> shown = ColonyAgentSession.ReconcileParts(parts, 1000);
+        Assert.That(shown[0].Tokens, Is.EqualTo(1000));
+        Assert.That(shown[1].Tokens, Is.EqualTo(2000));
+    }
+
+    [Test]
+    public void BreakdownReportsUnloadedToolPacksSeparately()
+    {
+        ColonyAgentSession session = new(new ScriptedChatClient(), new FakeGameWorld(), () => ToolPermissions.All, 8) { PreferredModel = "Test:model" };
+        ColonyAgentSession.ContextPart deferred = session.GetContextBreakdown().Single(p => p.Key == "DeferredPacks");
+        Assert.That(deferred.Deferred, Is.True);
+        Assert.That(deferred.Count, Is.GreaterThan(0));
+        Assert.That(deferred.Tokens, Is.GreaterThan(0));
+    }
+
+    [Test]
     public void PanelBudgetMatchesTheTriggerBudget()
     {
         ColonyAgentSession session = new(new ScriptedChatClient(), new FakeGameWorld(), () => ToolPermissions.For(ToolCategory.Observe), 8,

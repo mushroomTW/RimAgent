@@ -33,7 +33,6 @@ public class RimAgentSettings : ModSettings
     public string decisionProvider = string.Empty;
     public string decisionModel = string.Empty;
 
-    public List<DecisionRouteCategory> decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
     public ReasoningLevel decisionFallbackReasoning = ReasoningLevel.Auto;
     public float decisionRoutingMinConfidence = 0.6f;                // 0 到 1
     public bool decisionAnswerChoices = true;
@@ -184,7 +183,6 @@ public class RimAgentSettings : ModSettings
         decisionEnabled = fresh.decisionEnabled;
         decisionProvider = fresh.decisionProvider;
         decisionModel = fresh.decisionModel;
-        decisionCategories = fresh.decisionCategories;
         decisionFallbackReasoning = fresh.decisionFallbackReasoning;
         decisionRoutingMinConfidence = fresh.decisionRoutingMinConfidence;
         decisionAnswerChoices = fresh.decisionAnswerChoices;
@@ -345,8 +343,6 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref decisionEnabled, "decisionEnabled", defaultValue: true);
         Scribe_Values.Look(ref decisionProvider, "decisionProvider", string.Empty);
         Scribe_Values.Look(ref decisionModel, "decisionModel", string.Empty);
-        Scribe_Collections.Look(ref decisionCategories, "decisionCategories", LookMode.Deep);
-        if (decisionCategories == null) decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
         Scribe_Values.Look(ref decisionFallbackReasoning, "decisionFallbackReasoning", ReasoningLevel.Auto);
         Scribe_Values.Look(ref decisionRoutingMinConfidence, "decisionRoutingMinConfidence", 0.6f);
         decisionRoutingMinConfidence = UnityEngine.Mathf.Clamp01(decisionRoutingMinConfidence);

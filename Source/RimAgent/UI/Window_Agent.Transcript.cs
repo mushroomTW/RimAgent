@@ -234,7 +234,7 @@ public partial class Window_Agent
             }
             if (Widgets.ButtonInvisible(lineRect)) clickedGroup = line.GroupFirst;
         }
-        Widgets.Label(lineRect, line.Text);
+        DrawLabelWithShield(lineRect, line);
     }
 
     private static void DrawTableLine(Rect lineRect, TranscriptLine line, bool mouseOnJump)
@@ -252,13 +252,44 @@ public partial class Window_Agent
             {
                 Widgets.DrawHighlight(lineRect);
                 if (_toolToggleTip == null) _toolToggleTip = "RimAgent.Tool.ToggleTip".Translate();
-                if (_reasoningToggleTip == null) _reasoningToggleTip = "RimAgent.Reasoning.ToggleTip".Translate();
-                // 思考列共用工具摘要列的展開與右鍵複製，但說明不能講「參數與結果」。
-                TooltipHandler.TipRegion(lineRect, line.Entry?.Kind == TranscriptKind.Reasoning ? _reasoningToggleTip : _toolToggleTip);
+                TooltipHandler.TipRegion(lineRect, _toolToggleTip);
             }
             if (Widgets.ButtonInvisible(lineRect)) clickedTool = line.Entry;
         }
-        Widgets.Label(lineRect, line.Text);
+        DrawLabelWithShield(lineRect, line);
+    }
+
+    private const float ShieldSize = 14f;
+    /// <summary>有盾牌的列，文字少這麼寬再量高與換行，盾牌才不會壓到字。</summary>
+    internal const float ShieldReserve = ShieldSize + 6f;
+    private string _shieldTip;
+
+    /// <summary>自動模式下由決策模型審過風險的工具呼叫；決策模型失敗改用規則分類器時（來源 fallback）不算。</summary>
+    internal static bool ReviewedByDecisionModel(TranscriptEntry entry)
+    {
+        return entry is { Kind: TranscriptKind.Tool } && entry.RiskCheckSource == "decision";
+    }
+
+    private void DrawLabelWithShield(Rect lineRect, TranscriptLine line)
+    {
+        if (!line.Reviewed)
+        {
+            Widgets.Label(lineRect, line.Text);
+            return;
+        }
+        Widgets.Label(new Rect(lineRect.x, lineRect.y, lineRect.width - ShieldReserve, lineRect.height), line.Text);
+        Rect icon = ShieldRect(lineRect, Text.CalcSize(line.PlainText).x, Text.LineHeight);
+        GUI.color = ToolTextColor;
+        GUI.DrawTexture(icon, ShieldTex);
+        GUI.color = Color.white;
+        TooltipHandler.TipRegion(icon, _shieldTip ??= "RimAgent.Tool.ReviewedTip".Translate());
+    }
+
+    /// <summary>單行時緊跟在文字後面；換行時放在第一行右側預留的空白裡。</summary>
+    internal static Rect ShieldRect(Rect lineRect, float singleLineTextWidth, float lineHeight)
+    {
+        float textWidth = Mathf.Min(singleLineTextWidth, lineRect.width - ShieldReserve);
+        return new Rect(lineRect.x + textWidth + 6f, lineRect.y + (lineHeight - ShieldSize) / 2f, ShieldSize, ShieldSize);
     }
 
     private static void DrawDefaultLine(Rect lineRect, TranscriptLine line)

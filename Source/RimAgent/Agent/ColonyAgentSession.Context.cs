@@ -73,13 +73,16 @@ public sealed partial class ColonyAgentSession
         public readonly int Count;
         /// <summary>數字由供應商回報的用量推回；否則為字元數估算。</summary>
         public readonly bool Exact;
+        /// <summary>還沒載入的工具包：不在這一輪送出的上下文裡，只顯示載入後會佔多少。</summary>
+        public readonly bool Deferred;
 
-        public ContextPart(string key, long tokens, int count = 0, bool exact = false)
+        public ContextPart(string key, long tokens, int count = 0, bool exact = false, bool deferred = false)
         {
             Key = key;
             Tokens = tokens;
             Count = count;
             Exact = exact;
+            Deferred = deferred;
         }
     }
 
@@ -104,11 +107,20 @@ public sealed partial class ColonyAgentSession
         string memory = null;
         if (permissions.Allows(ToolCategory.Memory)) memory = MemoryTools.Instructions + "\n\n" + _memory.Index;
 
-        long toolTokens = 0;
-        foreach (AITool tool in tools)
+        long toolTokens = tools.Sum(EstimateToolTokens);
+        var loaded = new HashSet<AITool>(tools);
+        var deferred = new HashSet<AITool>();
+        int deferredPacks = 0;
+        foreach (var pack in selected.PackTools.Values)
         {
-            toolTokens += EstimateTokens(tool.Name) + EstimateTokens(tool.Description);
-            if (tool is AIFunctionDeclaration function) toolTokens += EstimateTokens(function.JsonSchema.GetRawText());
+            bool unloaded = false;
+            foreach (AITool tool in pack)
+            {
+                if (loaded.Contains(tool)) continue;
+                unloaded = true;
+                deferred.Add(tool);
+            }
+            if (unloaded) deferredPacks++;
         }
 
         HistoryTally user = new(), assistant = new(), calls = new(), results = new();
@@ -134,19 +146,27 @@ public sealed partial class ColonyAgentSession
             user.ToPart("UserMessages", userCount),
             assistant.ToPart("AssistantMessages", 0),
             calls.ToPart("ToolCalls", calls.Items),
-            results.ToPart("ToolResults", 0)
+            results.ToPart("ToolResults", 0),
+            new ContextPart("DeferredPacks", deferred.Sum(EstimateToolTokens), deferredPacks, deferred: true)
         ];
+    }
+
+    private static long EstimateToolTokens(AITool tool)
+    {
+        long tokens = EstimateTokens(tool.Name) + EstimateTokens(tool.Description);
+        if (tool is AIFunctionDeclaration function) tokens += EstimateTokens(function.JsonSchema.GetRawText());
+        return tokens;
     }
 
     /// <summary>精確的部分照原值；真實總數與精確部分的差額，按比例分給估算的部分。</summary>
     internal static IReadOnlyList<ContextPart> ReconcileParts(IReadOnlyList<ContextPart> parts, long? realTotal)
     {
         if (!realTotal.HasValue) return parts;
-        long exact = parts.Where(p => p.Exact).Sum(p => p.Tokens);
-        long estimated = parts.Where(p => !p.Exact).Sum(p => p.Tokens);
+        long exact = parts.Where(p => p.Exact && !p.Deferred).Sum(p => p.Tokens);
+        long estimated = parts.Where(p => !p.Exact && !p.Deferred).Sum(p => p.Tokens);
         if (estimated <= 0) return parts;
         double scale = Math.Max(0, realTotal.Value - exact) / (double)estimated;
-        return [.. parts.Select(p => p.Exact ? p : new ContextPart(p.Key, (long)Math.Round(p.Tokens * scale, MidpointRounding.ToEven), p.Count))];
+        return [.. parts.Select(p => p.Exact || p.Deferred ? p : new ContextPart(p.Key, (long)Math.Round(p.Tokens * scale, MidpointRounding.ToEven), p.Count))];
     }
 
     private sealed class HistoryTally

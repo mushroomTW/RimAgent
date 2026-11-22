@@ -149,121 +149,19 @@ public partial class RimAgentMod
         listing.Gap(6f);
     }
 
-    /// <summary>自訂分類的識別碼必須唯一；刪除中間項目後不能再用清單長度 + 1。</summary>
-    internal static string NextCustomCategoryId(IReadOnlyList<DecisionRouteCategory> categories)
-    {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (categories != null)
-        {
-            foreach (string id in categories.Where(c => c != null && !string.IsNullOrWhiteSpace(c.Id)).Select(c => c.Id.Trim())) used.Add(id);
-        }
-        int number = 1;
-        while (used.Contains(CustomIdPrefix + number.ToString(CultureInfo.InvariantCulture))) number++;
-        return CustomIdPrefix + number.ToString(CultureInfo.InvariantCulture);
-    }
-
     private static void DrawDecisionRoutingSettings(Listing_Standard listing)
     {
-        DrawReasoningRow(
-            listing,
-            "RimAgent.Settings.DecisionFallbackReasoning".Translate(),
-            () => Settings.decisionFallbackReasoning,
-            v => Settings.decisionFallbackReasoning = v,
-            "RimAgent.Settings.DecisionFallbackReasoningTip".Translate());
-
         listing.Label(
             "RimAgent.Settings.DecisionMinConfidence".Translate(Settings.decisionRoutingMinConfidence.ToString("P0", CultureInfo.CurrentCulture)),
             -1f,
             "RimAgent.Settings.DecisionMinConfidenceTip".Translate());
         Settings.decisionRoutingMinConfidence = listing.Slider(Settings.decisionRoutingMinConfidence, 0f, 1f);
 
-        listing.Gap(6f);
-
-        Rect catHeader = listing.GetRect(28f);
-        const float ActionButtonWidth = 90f;
-        Rect resetRect = new(catHeader.xMax - ActionButtonWidth, catHeader.y, ActionButtonWidth, 26f);
-        Rect addRect = new(resetRect.x - ActionButtonWidth - 6f, catHeader.y, ActionButtonWidth, 26f);
-        Widgets.Label(new Rect(catHeader.x, catHeader.y + 3f, addRect.x - catHeader.x - 8f, 24f), "RimAgent.Settings.DecisionCategoriesHeader".Translate());
-
-        if (Widgets.ButtonText(addRect, "RimAgent.Settings.DecisionCategoryAdd".Translate()))
-        {
-            ShowAddCategoryMenu();
-        }
-
-        if (Widgets.ButtonText(resetRect, "RimAgent.Settings.DecisionCategoriesReset".Translate()))
-        {
-            Settings.decisionCategories = DecisionRouteCategory.CreateDefaultCategories();
-        }
-
-        listing.Gap(4f);
-
-        DrawCategoryList(listing);
-    }
-
-    private static void ShowAddCategoryMenu()
-    {
-        var options = new List<FloatMenuOption>
-        {
-            new("RimAgent.Settings.DecisionCategoryAddCustom".Translate(), () =>
-            {
-                string id = NextCustomCategoryId(Settings.decisionCategories);
-                int nextNum = 1;
-                if (id.Length > CustomIdPrefix.Length && int.TryParse(id[CustomIdPrefix.Length..], CultureInfo.InvariantCulture, out nextNum))
-                {
-                    Settings.decisionCategories.Add(new DecisionRouteCategory(
-                        id,
-                        "RimAgent.Settings.DecisionCategoryCustomName".Translate(nextNum),
-                        "Custom category description"));
-                }
-            })
-        };
-
-        foreach (DecisionRouteCategory builtIn in DecisionRouteCategory.CreateDefaultCategories()
-            .Where(b => !Settings.decisionCategories.Any(c => c != null && string.Equals(c.Id, b.Id, StringComparison.OrdinalIgnoreCase))))
-        {
-            DecisionRouteCategory captured = builtIn;
-            options.Add(new FloatMenuOption("RimAgent.Settings.DecisionCategoryRestore".Translate(captured.Name, captured.Id), () =>
-            {
-                Settings.decisionCategories.Add(captured);
-            }));
-        }
-
-        Find.WindowStack.Add(new FloatMenu(options));
-    }
-
-    /// <summary>逐一列出分類與各自的思考強度；刪除留到迴圈結束後才執行。</summary>
-    private static void DrawCategoryList(Listing_Standard listing)
-    {
-        DecisionRouteCategory toDelete = null;
-        for (int i = 0; i < Settings.decisionCategories.Count; i++)
-        {
-            DecisionRouteCategory cat = Settings.decisionCategories[i];
-            Rect row = listing.GetRect(24f);
-            const float DeleteBtnWidth = 50f;
-            Rect delRect = new(row.xMax - DeleteBtnWidth, row.y, DeleteBtnWidth, 22f);
-            Rect titleRect = new(row.x, row.y + 2f, row.width - DeleteBtnWidth - 6f, 20f);
-
-            Text.Font = GameFont.Tiny;
-            string displayName = string.IsNullOrEmpty(cat.Name) ? cat.Id : cat.Name;
-            Widgets.Label(titleRect, $"{displayName} ({cat.Id})");
-            Text.Font = GameFont.Small;
-
-            if (Widgets.ButtonText(delRect, "RimAgent.Settings.DecisionCategoryDelete".Translate()))
-            {
-                toDelete = cat;
-            }
-
-            DrawReasoningRow(
-                listing,
-                "  " + "RimAgent.Settings.CategoryReasoning".Translate(),
-                () => cat.Reasoning,
-                v => cat.Reasoning = v,
-                cat.Description);
-        }
-
-        if (toDelete != null)
-        {
-            Settings.decisionCategories.Remove(toDelete);
-        }
+        DrawReasoningRow(
+            listing,
+            "RimAgent.Settings.DecisionFallbackReasoning".Translate(),
+            () => Settings.decisionFallbackReasoning,
+            v => Settings.decisionFallbackReasoning = v,
+            "RimAgent.Settings.DecisionFallbackReasoningTip".Translate());
     }
 }

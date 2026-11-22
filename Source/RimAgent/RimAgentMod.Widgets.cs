@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -16,19 +15,14 @@ namespace RimAgent;
 
 public partial class RimAgentMod
 {
-    private static void DrawSectionHeader(Listing_Standard listing, int number, string title, string hint)
+    private static void DrawSectionHeader(Listing_Standard listing, string title, string hint)
     {
         listing.Gap(18f);
         Rect row = listing.GetRect(30f);
-        var badge = new Rect(row.x, row.y + 3f, 24f, 24f);
-        Widgets.DrawBoxSolid(badge, Gold);
-        Text.Anchor = TextAnchor.MiddleCenter;
-        GUI.color = new Color(0.12f, 0.12f, 0.12f);
-        Widgets.Label(new Rect(badge.x, badge.y + 1f, badge.width, badge.height), number.ToString(CultureInfo.InvariantCulture));
         Text.Font = GameFont.Medium;
         Text.Anchor = TextAnchor.MiddleLeft;
         GUI.color = Gold;
-        Widgets.Label(new Rect(badge.xMax + 10f, row.y, row.width - badge.width - 10f, row.height), title);
+        Widgets.Label(row, title);
         GUI.color = Color.white;
         Text.Anchor = TextAnchor.UpperLeft;
         Text.Font = GameFont.Small;

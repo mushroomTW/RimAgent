@@ -13,7 +13,7 @@ public class ContextBreakdownTests
     private static readonly string[] _contextParts =
     [
         "SystemPrompt", "Tools", "ToolPacks", "Subagents", "Memory",
-        "UserMessages", "AssistantMessages", "ToolCalls", "ToolResults"
+        "UserMessages", "AssistantMessages", "ToolCalls", "ToolResults", "DeferredPacks"
     ];
 
     [Test]

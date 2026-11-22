@@ -23,8 +23,6 @@ public class DecisionRoutingTests
     private RimAgentSettings _settings;
     private RimAgentSettings _originalSettings;
 
-    private static readonly string[] _defaultCategories = ["observe", "routine", "build", "risky"];
-    private static readonly string[] _customIds = ["custom_1", "custom_3", "custom_5"];
 
     [SetUp]
     public void SetUp()
@@ -32,7 +30,6 @@ public class DecisionRoutingTests
         typeof(Prefs).GetField("data", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
             ?.SetValue(null, new PrefsData());
         RegisterTypeInGenTypes(typeof(RimAgentSettings));
-        RegisterTypeInGenTypes(typeof(DecisionRouteCategory));
         _world = new FakeGameWorld();
         _client = new ScriptedChatClient();
         _permissions = ToolPermissions.For(ToolCategory.Observe, ToolCategory.Work);
@@ -40,38 +37,7 @@ public class DecisionRoutingTests
         _settings = new RimAgentSettings
         {
             decisionFallbackReasoning = ReasoningLevel.Low,
-            decisionRoutingMinConfidence = 0.6f,
-            decisionCategories =
-            [
-                new DecisionRouteCategory
-                {
-                    Id = "observe",
-                    Name = "查詢解釋",
-                    Description = "Read colony state and explain.",
-                    Reasoning = ReasoningLevel.Off
-                },
-                new DecisionRouteCategory
-                {
-                    Id = "routine",
-                    Name = "日常維護",
-                    Description = "Routine maintenance and work priorities.",
-                    Reasoning = ReasoningLevel.Auto
-                },
-                new DecisionRouteCategory
-                {
-                    Id = "build",
-                    Name = "建造生產",
-                    Description = "Construct, deconstruct, and bills.",
-                    Reasoning = ReasoningLevel.High
-                },
-                new DecisionRouteCategory
-                {
-                    Id = "risky",
-                    Name = "高風險規劃",
-                    Description = "Combat, trade, medical, surgery.",
-                    Reasoning = ReasoningLevel.High
-                }
-            ]
+            decisionRoutingMinConfidence = 0.6f
         };
 
         _originalSettings = RimAgentMod.Settings;
@@ -89,30 +55,40 @@ public class DecisionRoutingTests
     }
 
     [Test]
-    public async Task CategoryMatchedRoutesToConfiguredReasoning()
+    public async Task DecisionModelChoosesTheReasoningLevel()
     {
-        _fakeDecision.ReplyRoute("build", 0.85);
+        _fakeDecision.ReplyRoute("high", 0.85);
         var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
 
-        DecisionRoute route = await router.ResolveAsync("build a wall around our crops", _settings.decisionCategories);
+        DecisionRoute route = await router.ResolveAsync("build a wall around our crops");
 
         Assert.That(route.IsFallback, Is.False);
-        Assert.That(route.CategoryId, Is.EqualTo("build"));
         Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.High));
         Assert.That(route.Confidence, Is.EqualTo(0.85));
         Assert.That(_fakeDecision.EvaluateCount, Is.EqualTo(1));
     }
 
     [Test]
-    public async Task ConfidenceBelowThresholdFallsBackToConfiguredFallback()
+    public async Task UnknownLevelFallsBackToConfiguredFallback()
     {
-        _fakeDecision.ReplyRoute("build", 0.45); // threshold is 0.60
+        _fakeDecision.ReplyRoute("build", 0.95);
         var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
 
-        DecisionRoute route = await router.ResolveAsync("maybe do some construction", _settings.decisionCategories);
+        DecisionRoute route = await router.ResolveAsync("build a wall");
 
         Assert.That(route.IsFallback, Is.True);
-        Assert.That(route.CategoryId, Is.Empty);
+        Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.Low));
+    }
+
+    [Test]
+    public async Task ConfidenceBelowThresholdFallsBackToConfiguredFallback()
+    {
+        _fakeDecision.ReplyRoute("high", 0.45); // threshold is 0.60
+        var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
+
+        DecisionRoute route = await router.ResolveAsync("maybe do some construction");
+
+        Assert.That(route.IsFallback, Is.True);
         Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.Low));
         Assert.That(route.Reason, Does.Contain("below threshold"));
     }
@@ -121,10 +97,10 @@ public class DecisionRoutingTests
     [SetCulture("de-DE")]
     public async Task ReasonUsesInvariantNumbersUnderCommaDecimalCulture()
     {
-        _fakeDecision.ReplyRoute("build", 0.45);
+        _fakeDecision.ReplyRoute("high", 0.45);
         var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
 
-        DecisionRoute route = await router.ResolveAsync("maybe do some construction", _settings.decisionCategories);
+        DecisionRoute route = await router.ResolveAsync("maybe do some construction");
 
         Assert.That(route.Reason, Does.Contain("0.45").And.Contain("0.60"));
     }
@@ -135,10 +111,9 @@ public class DecisionRoutingTests
         _fakeDecision.Throw(new InvalidOperationException("API timeout"));
         var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
 
-        DecisionRoute route = await router.ResolveAsync("build a wooden door", _settings.decisionCategories);
+        DecisionRoute route = await router.ResolveAsync("build a wooden door");
 
         Assert.That(route.IsFallback, Is.True);
-        Assert.That(route.CategoryId, Is.Empty);
         Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.Low));
         Assert.That(route.Reason, Does.Contain("Decision model evaluation failed"));
     }
@@ -148,33 +123,17 @@ public class DecisionRoutingTests
     {
         var router = new DecisionReasoningRouter(decisionService: null, serviceFactory: null, settingsProvider: () => _settings);
 
-        DecisionRoute route = await router.ResolveAsync("examine power grid", _settings.decisionCategories);
+        DecisionRoute route = await router.ResolveAsync("examine power grid");
 
         Assert.That(route.IsFallback, Is.True);
-        Assert.That(route.CategoryId, Is.Empty);
         Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.Low));
         Assert.That(route.Reason, Does.Contain("unavailable"));
     }
 
     [Test]
-    public async Task NoCategoriesConfiguredFallsBackWithoutCallingDecisionService()
-    {
-        _settings.decisionCategories.Clear();
-        var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
-
-        DecisionRoute route = await router.ResolveAsync("observe the colony", _settings.decisionCategories);
-
-        Assert.That(route.IsFallback, Is.True);
-        Assert.That(route.CategoryId, Is.Empty);
-        Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.Low));
-        Assert.That(route.Reason, Does.Contain("No categories configured"));
-        Assert.That(_fakeDecision.EvaluateCount, Is.EqualTo(0));
-    }
-
-    [Test]
     public async Task RoutingKeepsPreferredModelAndAppliesRoutedReasoning()
     {
-        _fakeDecision.ReplyRoute("build", 0.95);
+        _fakeDecision.ReplyRoute("high", 0.95);
         var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
         var session = new ColonyAgentSession(
             _client,
@@ -217,88 +176,12 @@ public class DecisionRoutingTests
     }
 
     [Test]
-    public void SettingsExposeDataRoundTripPreservesCustomCategoriesAndRoutingFields()
-    {
-        string tempFile = Path.Combine(Path.GetTempPath(), "RimAgentSettings_RoundTrip_" + Guid.NewGuid() + ".xml");
-        try
-        {
-            var original = new RimAgentSettings
-            {
-                reasoningRouting = true,
-                decisionFallbackReasoning = ReasoningLevel.High,
-                decisionRoutingMinConfidence = 0.78f,
-                decisionCategories =
-                [
-                    new DecisionRouteCategory
-                    {
-                        Id = "scouting",
-                        Name = "斥候偵察",
-                        Description = "Scout the external world and neighbors.",
-                        Reasoning = ReasoningLevel.Medium
-                    },
-                    new DecisionRouteCategory
-                    {
-                        Id = "risky",
-                        Name = "危險動作",
-                        Description = "Surgery and risky maneuvers.",
-                        Reasoning = ReasoningLevel.High
-                    }
-                ]
-            };
-
-            Scribe.saver.InitSaving(tempFile, "SettingsBlock");
-            try
-            {
-                ModSettings s = original;
-                Scribe_Deep.Look(ref s, "ModSettings");
-            }
-            finally
-            {
-                Scribe.saver.FinalizeSaving();
-            }
-
-            RimAgentSettings loaded = null;
-            Scribe.loader.InitLoading(tempFile);
-            try
-            {
-                Scribe_Deep.Look(ref loaded, "ModSettings");
-            }
-            finally
-            {
-                Scribe.loader.FinalizeLoading();
-            }
-
-            Assert.That(loaded, Is.Not.Null);
-            Assert.That(loaded.reasoningRouting, Is.True);
-            Assert.That(loaded.decisionFallbackReasoning, Is.EqualTo(ReasoningLevel.High));
-            Assert.That(loaded.decisionRoutingMinConfidence, Is.EqualTo(0.78f).Within(0.001f));
-            Assert.That(loaded.decisionCategories, Has.Count.EqualTo(2));
-
-            DecisionRouteCategory cat0 = loaded.decisionCategories[0];
-            Assert.That(cat0.Id, Is.EqualTo("scouting"));
-            Assert.That(cat0.Name, Is.EqualTo("斥候偵察"));
-            Assert.That(cat0.Description, Is.EqualTo("Scout the external world and neighbors."));
-            Assert.That(cat0.Reasoning, Is.EqualTo(ReasoningLevel.Medium));
-
-            DecisionRouteCategory cat1 = loaded.decisionCategories[1];
-            Assert.That(cat1.Id, Is.EqualTo("risky"));
-            Assert.That(cat1.Name, Is.EqualTo("危險動作"));
-            Assert.That(cat1.Description, Is.EqualTo("Surgery and risky maneuvers."));
-            Assert.That(cat1.Reasoning, Is.EqualTo(ReasoningLevel.High));
-        }
-        finally
-        {
-            if (File.Exists(tempFile)) File.Delete(tempFile);
-        }
-    }
-
-    [Test]
-    public void SettingsExposeDataMissingXmlRestoresDefaultCategories()
+    public void LegacyCategoriesInSettingsAreIgnored()
     {
         string tempFile = Path.Combine(Path.GetTempPath(), "RimAgentSettings_Missing_" + Guid.NewGuid() + ".xml");
         try
         {
-            File.WriteAllText(tempFile, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<SettingsBlock>\n  <ModSettings Class=\"RimAgent.RimAgentSettings\">\n    <mode>Confirm</mode>\n  </ModSettings>\n</SettingsBlock>");
+            File.WriteAllText(tempFile, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<SettingsBlock>\n  <ModSettings Class=\"RimAgent.RimAgentSettings\">\n    <mode>Confirm</mode>\n    <decisionCategories><li><Id>observe</Id><Name>查詢解釋</Name></li></decisionCategories>\n  </ModSettings>\n</SettingsBlock>");
 
             RimAgentSettings loaded = null;
             Scribe.loader.InitLoading(tempFile);
@@ -312,9 +195,6 @@ public class DecisionRoutingTests
             }
 
             Assert.That(loaded, Is.Not.Null);
-            Assert.That(loaded.decisionCategories, Is.Not.Null);
-            Assert.That(loaded.decisionCategories, Has.Count.EqualTo(4));
-            Assert.That(loaded.decisionCategories.Select(c => c.Id), Is.EqualTo(_defaultCategories));
             Assert.That(loaded.reasoningRouting, Is.False);
             Assert.That(loaded.decisionFallbackReasoning, Is.EqualTo(ReasoningLevel.Auto));
             Assert.That(loaded.decisionRoutingMinConfidence, Is.EqualTo(0.6f).Within(0.001f));
@@ -412,22 +292,6 @@ public class DecisionRoutingTests
     }
 
     [Test]
-    public async Task DecisionRouterSnapshotsCategoriesBeforeAwaitingTheModel()
-    {
-        _fakeDecision.YieldBeforeResult = true;
-        _fakeDecision.ReplyRoute("build", 0.92);
-        var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
-        List<DecisionRouteCategory> live = _settings.decisionCategories;
-
-        Task<DecisionRoute> pending = router.ResolveAsync("build a wall", live);
-        live.Clear(); // 模擬玩家在模型回應前清空分類
-        DecisionRoute route = await pending;
-
-        Assert.That(route.CategoryId, Is.EqualTo("build"), "await 前已送出的分類快照不應被後續設定變更影響");
-        Assert.That(route.Reasoning, Is.EqualTo(ReasoningLevel.High));
-    }
-
-    [Test]
     public void AuxiliarySlotsFollowTheCurrentAgentModel()
     {
         _settings.agentModel = "provider:agent";
@@ -474,7 +338,7 @@ public class DecisionRoutingTests
     [Test]
     public async Task ContextWindowUsesPreferredModelWhileRoutingReasoning()
     {
-        _fakeDecision.ReplyRoute("build", 0.92);
+        _fakeDecision.ReplyRoute("high", 0.92);
         var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
         string lookedUpModel = null;
         var session = new ColonyAgentSession(
@@ -498,26 +362,6 @@ public class DecisionRoutingTests
 
         Assert.That(lookedUpModel, Is.EqualTo("provider:manual"), "思考強度分流不換模型，上下文視窗要查玩家選的模型");
         Assert.That(status.ContextWindow, Is.EqualTo(321000));
-    }
-
-    [Test]
-    public void CustomCategoryIdStaysUniqueAfterDeletingAMiddleCategory()
-    {
-        var categories = new List<DecisionRouteCategory>
-        {
-            new("custom_2", "two", "description"),
-            new("custom_4", "four", "description")
-        };
-
-        string first = RimAgentMod.NextCustomCategoryId(categories);
-        categories.Add(new DecisionRouteCategory(first, "new", "description"));
-        string second = RimAgentMod.NextCustomCategoryId(categories);
-        categories.Add(new DecisionRouteCategory(second, "new", "description"));
-        string third = RimAgentMod.NextCustomCategoryId(categories);
-
-        Assert.That(new[] { first, second, third }, Is.EqualTo(_customIds));
-        Assert.That(categories.Select(c => c.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
-            Is.EqualTo(categories.Count));
     }
 
     private static void RegisterTypeInGenTypes(Type type)

@@ -56,6 +56,29 @@ public class A2AShippingTests
         Assert.That(missing, Is.Empty, "Add these to the A2A whitelist in RimAgent.A2A.csproj.");
     }
 
+    /// <summary>
+    /// RimWorld 啟動時讀取所有型別的欄位型別（<c>StaticConstructorOnStartupUtility.ReportProbablyMissingAttributes</c>），
+    /// 那時 A2A/ 的解析器還沒註冊，欄位型別來自 RimAgent.A2A 就會 TypeLoadException。編譯器為方法群組轉換產生的快取欄位也算。
+    /// </summary>
+    [Test]
+    public void RimAgentHasNoFieldsTypedFromA2AAssemblies()
+    {
+        var offenders = new List<string>();
+        foreach (Type type in typeof(RimAgent.RimAgentMod).Assembly.GetTypes())
+        {
+            foreach (System.Reflection.FieldInfo field in type.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static |
+                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly))
+            {
+                if (Mentions(field.FieldType)) offenders.Add(type.FullName + "." + field.Name);
+            }
+        }
+        Assert.That(offenders, Is.Empty);
+
+        bool Mentions(Type t) => _shipped.ContainsKey(t.Assembly.GetName().Name!)
+            || (t.HasElementType && Mentions(t.GetElementType()!))
+            || (t.IsGenericType && t.GetGenericArguments().Any(Mentions));
+    }
+
     [Test]
     public void EveryShippedAssemblyIsReachableFromRimAgentA2A()
     {
