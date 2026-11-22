@@ -121,6 +121,7 @@ public static class DefLookupKind
     public const string Terrain = "terrain";
     public const string Research = "research";
     public const string Hediff = "hediff";
+    public const string Mod = "mod";
 
     public static readonly IReadOnlyList<string> All = [Thing, Terrain, Research, Hediff];
 }

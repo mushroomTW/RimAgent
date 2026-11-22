@@ -513,7 +513,7 @@ public partial class RimAgentGameComponent : GameComponent
         session.ConfirmAutonomousMajor = () => settings.confirmAutonomousMajor;
         if (settings.ClearAgentModelIfMissing(UI.Window_Agent.ConfiguredModels())) settings.Write();
         session.PreferredModel = settings.agentModel;
-        _expansions = ExpansionsLine();
+        _expansions = (ExpansionsLine() + "\n\n" + ModsLine()).Trim();
         session.SubagentExpansions = _expansions;
         session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
         session.ToolUsage = SharedToolUsage.Value;
@@ -553,6 +553,16 @@ public partial class RimAgentGameComponent : GameComponent
     {
         return AgentPromptComposer.FormatExpansions(ModLister.AllExpansions
             .Select(e => (e.defName, e.isCore, e.Status == RimWorld.ExpansionStatus.Active))
+            .ToList());
+    }
+
+    /// <summary>只有材質、翻譯的模組不改玩法，不列。</summary>
+    private static string ModsLine()
+    {
+        return AgentPromptComposer.FormatMods(LoadedModManager.RunningModsListForReading
+            .Where(m => !m.IsOfficialMod && !RimAgentMod.IsOwnOrFramework(m.PackageId))
+            .Where(m => m.AllDefs.Any() || m.Patches.Any() || m.assemblies.loadedAssemblies.Count > 0)
+            .Select(m => m.Name)
             .ToList());
     }
 }

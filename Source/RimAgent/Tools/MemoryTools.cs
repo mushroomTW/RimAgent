@@ -28,6 +28,7 @@ internal static class MemoryTools
         "- When `global_preferences.md` is listed in the memory index, read it before acting on orders it may affect.\n" +
         "- Save only durable facts or preferences that will help later turns, or that the player asks you to remember. Never store secrets or raw web pages.\n" +
         "- Use short descriptive file names and include a description so the index stays useful. Update files instead of creating duplicates.\n" +
+        "- When you learn that a mod changes how the game works (a new requirement, a mechanic that differs from vanilla, a workaround that worked), save it to global memory as `global_mod_<mod name>.md`, one file per mod, with the mod's name in the description. Before acting in an area such a file covers, read it; ignore files for mods that are not in the active mods list.\n" +
         "- Colony facts can go stale; verify them with observation tools before relying on them.\n" +
         "- Limits: 30 files and 4,000 characters per file, counted separately in each scope.";
 

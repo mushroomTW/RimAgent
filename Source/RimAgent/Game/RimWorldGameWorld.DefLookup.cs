@@ -30,6 +30,12 @@ internal sealed partial class RimWorldGameWorld
     {
         string key = kind ?? string.Empty;
         if (_lookupCatalogs.TryGetValue(key, out IReadOnlyList<DefInfo> cached)) return cached;
+        if (string.Equals(key, DefLookupKind.Mod, StringComparison.OrdinalIgnoreCase))
+        {
+            List<DefInfo> mods = [.. LoadedModManager.RunningModsListForReading.Select(m => new DefInfo(m.PackageIdPlayerFacing, m.Name))];
+            _lookupCatalogs[key] = mods;
+            return mods;
+        }
         IEnumerable<Def> defs = key.ToLowerInvariant() switch
         {
             // 藍圖、框架與屍體會讓名稱比對出一堆同名候選（「muffalo corpse」），不收。
@@ -49,6 +55,7 @@ internal sealed partial class RimWorldGameWorld
 
     public DefLookupInfo LookupDef(string kind, string defName)
     {
+        if (string.Equals(kind, DefLookupKind.Mod, StringComparison.OrdinalIgnoreCase)) return LookupMod(defName);
         Def def = (kind ?? string.Empty).ToLowerInvariant() switch
         {
             DefLookupKind.Thing => DefDatabase<ThingDef>.GetNamedSilentFail(defName),
@@ -62,6 +69,10 @@ internal sealed partial class RimWorldGameWorld
         // 用材料做的東西沒給材料時，部分數值算不出來；資訊卡同樣以預設材料顯示。
         ThingDef stuff = def is ThingDef { MadeFromStuff: true } made ? GenStuff.DefaultStuffFor(made) : null;
         var facts = new List<string>();
+        if (def.modContentPack is { IsOfficialMod: false } source)
+        {
+            facts.Add($"Added by the mod {source.Name}; vanilla knowledge may not apply.");
+        }
         if (stuff != null) facts.Add($"Stats assume the default material {stuff.label ?? stuff.defName}.");
         switch (def)
         {

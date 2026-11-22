@@ -28,6 +28,13 @@ public partial class RimAgentMod : Mod
     private const float OpenFolderButtonWidth = 110f;
     private const float SubIndent = 28f;
     private const string FrameworkPackageId = "GreenMushroom.RimLLMFramework";
+    private const string OwnPackageId = "GreenMushroom.RimAgent";
+
+    internal static bool IsOwnOrFramework(string packageId)
+    {
+        return string.Equals(packageId, OwnPackageId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(packageId, FrameworkPackageId, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static readonly Color Gold = RimLLMUIStyle.Gold;
     private static readonly Color Green = new(0.44f, 0.75f, 0.45f);

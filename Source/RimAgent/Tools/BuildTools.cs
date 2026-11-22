@@ -603,16 +603,16 @@ public sealed class BuildTools
     private const int MaxDescriptionChars = 800;
 
     [AgentTool("lookup_def", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Game encyclopedia, including modded content: looks up an item, weapon, apparel, building, plant, animal, floor, research project or health condition by name or defName. Reports its description and info-card stats; how to get it (recipes with workbench, ingredients, skill and research; harvest, mining, animals, traders); what it is an ingredient of or used to build; research status, prerequisites and unlocks; hediff stages and lethality. Buildables also get size and rotation, cost, ground support needed (heavy, medium or light), builder skill, placement rules, ship part, power and interaction cell: use it before planning a layout.")]
+    [Description("Game encyclopedia, including modded content: looks up an item, weapon, apparel, building, plant, animal, floor, research project or health condition by name or defName. Reports its description and info-card stats; how to get it (recipes with workbench, ingredients, skill and research; harvest, mining, animals, traders); what it is an ingredient of or used to build; research status, prerequisites and unlocks; hediff stages and lethality. Buildables also get size and rotation, cost, ground support needed (heavy, medium or light), builder skill, placement rules, ship part, power and interaction cell: use it before planning a layout. With kind=mod it describes an active mod by name or packageId: what it adds and which game code it patches, to learn how it changes the game.")]
     public string LookupDef(
         [Description("Name or defName, e.g. \"component\", \"ship reactor\", \"Ship_Engine\", \"plague\", \"microelectronics\".")] string name,
-        [Description("Optional: thing, terrain, research or hediff to narrow the search. Empty searches all four.")] string kind = "",
+        [Description("Optional: thing, terrain, research or hediff to narrow the search, or mod to look up a mod. Empty searches the first four.")] string kind = "",
         [Description("Optional: a stat group to show in full, named as listed under \"More stat groups\", or \"all\". Empty shows the main groups.")] string detail = "")
     {
         string wanted = (kind ?? string.Empty).Trim().ToLowerInvariant();
-        if (wanted.Length > 0 && !DefLookupKind.All.Contains(wanted, StringComparer.Ordinal))
+        if (wanted.Length > 0 && wanted != DefLookupKind.Mod && !DefLookupKind.All.Contains(wanted, StringComparer.Ordinal))
         {
-            return ToolText.Error($"unknown kind \"{kind}\"; use {string.Join(", ", DefLookupKind.All)} or leave it empty.");
+            return ToolText.Error($"unknown kind \"{kind}\"; use {string.Join(", ", DefLookupKind.All)}, {DefLookupKind.Mod} or leave it empty.");
         }
 
         // 各種類的目錄合併後一起比對，名稱層級（精確 → 前綴 → 包含）才是全域的；再以參考對回種類。

@@ -307,6 +307,24 @@ public class AgentPackTests
     }
 
     [Test]
+    public void FormatModsListsNamesAndTellsModelToTrustTheGame()
+    {
+        string line = AgentPromptComposer.FormatMods(["Combat Extended", "Dub's Bad Hygiene"]);
+        Assert.That(line, Does.StartWith("Mods active: Combat Extended, Dub's Bad Hygiene."));
+        Assert.That(line, Does.Contain("trust the game").And.Contain("kind=mod"));
+        Assert.That(AgentPromptComposer.FormatMods([]), Is.Empty);
+    }
+
+    [Test]
+    public void FormatModsCapsLengthAndCountsTheRest()
+    {
+        List<string> names = [.. Enumerable.Range(0, 500).Select(i => "Mod number " + i)];
+        string line = AgentPromptComposer.FormatMods(names);
+        Assert.That(line.Length, Is.LessThan(AgentPromptComposer.MaxModsChars + 400));
+        Assert.That(line, Does.Match(@"\(\+\d+ more\)"));
+    }
+
+    [Test]
     public void ComposeWithSkillIndexWithAllEmptyLayersReturnsCoreOnly()
     {
         string text = AgentPromptComposer.ComposeWithSkillIndex("CORE", "  ", conduct: null, skills: null);

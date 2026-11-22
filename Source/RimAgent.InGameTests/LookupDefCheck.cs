@@ -26,7 +26,8 @@ internal static class LookupDefCheck
         ("MicroelectronicsBasics", "research", ["(MicroelectronicsBasics), research", "Status:", "Prerequisites:", "Unlocks:"]),
         ("Plague", "hediff", ["(Plague), hediff", "Lethal at severity 1", "builds immunity", "Can be tended"]),
         ("WoodPlankFloor", "terrain", ["(WoodPlankFloor), terrain", "Building:", "Size: 1x1"]),
-        ("Gun_AssaultRifle", EmptyKind, ["(Gun_AssaultRifle), thing", "Stats:"])
+        ("Gun_AssaultRifle", EmptyKind, ["(Gun_AssaultRifle), thing", "Stats:"]),
+        ("GreenMushroom.RimAgent", "mod", ["(GreenMushroom.RimAgent), mod", "Adds ", "Harmony patches"])
     ];
 
     public static List<string> Run(RimWorldGameWorld world, bool logReplies)
@@ -48,6 +49,7 @@ internal static class LookupDefCheck
                 failures.Add($"{name} lacks '{want}'");
             }
         }
+        if (tools.LookupDef("ComponentIndustrial", ThingKind).Contains("Added by the mod", StringComparison.Ordinal)) failures.Add("vanilla def tagged as modded");
         if (!tools.LookupDef("Gun_AssaultRifle", EmptyKind, "all").Contains("Stats:", StringComparison.Ordinal)) failures.Add("detail=all has no stats");
         foreach (string error in world.TakeNewGameErrors()) failures.Add("game error: " + error);
         return failures;

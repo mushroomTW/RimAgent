@@ -65,6 +65,27 @@ public static class AgentPromptComposer
         return line;
     }
 
+    public const int MaxModsChars = 1500;
+
+    /// <summary>模組清單整場遊戲不變，不破壞前綴快取；超過上限只列前面的名稱並附剩餘數量。</summary>
+    public static string FormatMods(IReadOnlyList<string> modNames)
+    {
+        if (modNames == null || modNames.Count == 0) return string.Empty;
+        var shown = new List<string>();
+        int length = 0;
+        foreach (string name in modNames)
+        {
+            if (length + name.Length + 2 > MaxModsChars) break;
+            shown.Add(name);
+            length += name.Length + 2;
+        }
+        string list = string.Join(", ", shown);
+        if (shown.Count < modNames.Count) list += $" (+{modNames.Count - shown.Count} more)";
+        return "Mods active: " + list + ". Mods can change vanilla rules, mechanics, costs and needs, so your RimWorld knowledge may not apply. " +
+               "When tool results, menus, alerts or lookup_def disagree with what you expect, trust the game and adapt. " +
+               "lookup_def with kind=mod shows what a mod adds and which game code it patches.";
+    }
+
     private static void AppendSkillIndex(StringBuilder sb, IReadOnlyList<AgentSkill> skills)
     {
         if (skills == null || skills.Count == 0) return;
@@ -82,7 +103,7 @@ public static class AgentPromptComposer
             if (!TryAppendSkillEntry(section, entry)) omitted++;
         }
         if (section.Length == 0) return;
-        sb.Append("\n\nAvailable skills (names and descriptions only; use read_skill to load the full text when relevant):\n")
+        sb.Append("\n\nAvailable skills (names and descriptions only; use read_skill to load the full text when relevant; they are written for vanilla RimWorld, so mods can make parts of them wrong):\n")
             .Append(TrimTrailingWhitespace(section.ToString()));
         if (omitted > 0) sb.Append("\n[").Append(omitted).Append(" further skill(s) omitted: over budget]");
     }
