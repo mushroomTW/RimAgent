@@ -196,14 +196,12 @@ public partial class RimAgentGameComponent
         if (RimAgentMod.Settings?.recordRuns != true) return;
         try
         {
-            _session?.RunLogSink?.Invoke(new RunLogRecord
+            _session?.RunLogs?.Note(new RunLogHeader
             {
                 Source = "system_one",
                 Mode = _session.Mode.ToString(),
-                Instruction = kind,
-                Outcome = RunLogRecord.Limit(text),
-                FinishedUtc = DateTime.UtcNow
-            });
+                Instruction = kind
+            }, text);
         }
         catch (Exception ex)
         {

@@ -99,7 +99,7 @@ Drag the window title bar to move it, or drag the lower-right corner to resize i
 > 3. **Deep Semantic Compact:** Trigger `/compact` at any time to invoke a dedicated model summarization pass, condensing extended dialogue history into an actionable summary.
 
 > **Run History Logging:**
-> Enable **Record Agent runs** in mod settings to log all instructions, tool invocations, safety assessments, and outcomes to `RimWorld save data/RimAgent/RimAgent-runs.jsonl`. Off by default; retains up to 500 runs or 16 MiB. A shortcut button in settings opens the log directory directly.
+> Enable **Record Agent runs** in mod settings to log all instructions, tool invocations, safety assessments, and outcomes to `RimWorld save data/RimAgent/runs/`: `index.jsonl` has one summary line per run, and each run has its own file with one event per line, written as it happens. Off by default; retains up to 50,000 runs. A shortcut button in settings opens the log directory directly.
 
 > **Prompt & Extensibility Architecture:**
 >

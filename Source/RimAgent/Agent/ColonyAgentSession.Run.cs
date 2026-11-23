@@ -173,20 +173,21 @@ public sealed partial class ColonyAgentSession
         _runOptions.BeginRun();
         Interlocked.Exchange(ref _instructionTokens, 0);
         _tokenBudgetReached = false;
-        RunLogRecord runLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
-        {
-            Instruction = RunLogRecord.Limit(options.DisplayText ?? text),
-            Mode = Mode.ToString(),
-            Source = DetermineRunSource(options.GoalRun, options.Autonomous),
-            Autonomous = options.AutonomousInfo
-        } : null;
-        _activeRunLog = runLog;
         string runOutcome = "finished";
         AddUserTranscriptEntryIfEcho(echo, options.DisplayText, text, instructionId, options.Autonomous, options.GoalRun);
         options.OnAccepted?.Invoke();
         Undo.BeginFrame();
         ConfirmGate.BeginToolBudget(options.MaxToolSteps, options.Autonomous, ConfirmAutonomousMajor?.Invoke() == true);
         ApplyRunStepLimit(options.MaxToolSteps);
+        // 緊接 try 才開檔：中間若有例外就沒人關檔。
+        BeginRunLog(new RunLogHeader
+        {
+            InstructionId = instructionId,
+            Instruction = options.DisplayText ?? text,
+            Mode = Mode.ToString(),
+            Source = DetermineRunSource(options.GoalRun, options.Autonomous),
+            Autonomous = options.AutonomousInfo
+        });
 
         try
         {
@@ -211,9 +212,8 @@ public sealed partial class ColonyAgentSession
         }
         finally
         {
-            TryWriteRunLog(runLog, instructionId, runOutcome);
+            EndRunLog(runOutcome);
             RecordToolUsage(instructionId);
-            _activeRunLog = null;
             ConfirmGate.EndToolBudget();
             ApplyRunStepLimit(overrideSteps: null);
             PrepareSaveSnapshot();
@@ -397,41 +397,96 @@ public sealed partial class ColonyAgentSession
     private bool RanTools(int instructionId) =>
         Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId);
 
-    /// <summary>主 Agent 與子代理的模型回應都記進執行紀錄；並行的子代理會同時呼叫，所以上鎖。</summary>
-    private void RecordModelResponse(ChatResponse response)
+    private void RecordModelResponse(string agent, ChatResponse response)
     {
         UsageDetails usage = response?.Usage;
         Interlocked.Add(ref _instructionTokens, usage?.TotalTokenCount ?? (usage?.InputTokenCount ?? 0) + (usage?.OutputTokenCount ?? 0));
-        RunLogRecord log = _activeRunLog;
-        if (log == null) return;
-        lock (log)
+        WriteRunLog(log => log.AddModelResponse(agent, response));
+    }
+
+    private void RecordTranscriptEntry(TranscriptEntry entry, bool updated)
+    {
+        WriteRunLog(log =>
         {
-            log.AddModelResponse(response);
+            if (updated) log.UpdateTool(entry);
+            else log.AddEntry(entry);
+        });
+        // 原始引數只給紀錄用，寫完就放掉；等待確認的要留到核准後寫進確認那份紀錄。
+        if (updated || RunLoggingEnabled?.Invoke() != true ||
+            entry.Result?.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal) != true)
+        {
+            entry.ArgumentValues = null;
         }
     }
 
-    private void TryWriteRunLog(RunLogRecord record, int instructionId, string outcome)
+    private void BeginRunLog(RunLogHeader header)
     {
-        if (record == null) return;
+        _activeRunLog = null;
+        if (RunLoggingEnabled?.Invoke() != true || RunLogs == null) return;
         try
         {
-            record.FinishedUtc = DateTime.UtcNow;
-            record.CaptureTranscript(Transcript.Snapshot(), instructionId);
-            record.Outcome = outcome;
-            RunLogSink?.Invoke(record);
+            _activeRunLog = RunLogs.Start(header);
         }
         catch (Exception ex)
         {
-            // 紀錄失敗不影響遊戲指令，但至少提醒玩家一次。
-            if (_runLogWarningShown) return;
-            _runLogWarningShown = true;
-            Transcript.Add(new TranscriptEntry
-            {
-                Kind = TranscriptKind.Notice,
-                Text = "Run log could not be written: " + ex.Message,
-                InstructionId = instructionId
-            });
+            WarnRunLog(ex, header.InstructionId);
         }
+    }
+
+    private void EndRunLog(string outcome)
+    {
+        WriteRunLog(log => log.End(outcome));
+        _activeRunLog = null;
+    }
+
+    private void NoteRunLog(RunLogHeader header, string outcome)
+    {
+        if (RunLoggingEnabled?.Invoke() != true || RunLogs == null) return;
+        try
+        {
+            RunLogs.Note(header, outcome);
+        }
+        catch (Exception ex)
+        {
+            WarnRunLog(ex, header.InstructionId);
+        }
+    }
+
+    private void WriteRunLog(Action<RunLog> write)
+    {
+        RunLog log = _activeRunLog;
+        if (log == null) return;
+        try
+        {
+            // 玩家中途關掉紀錄：就此收尾，之後的內容不再寫。
+            if (RunLoggingEnabled?.Invoke() != true)
+            {
+                _activeRunLog = null;
+                log.End("recording_disabled");
+                return;
+            }
+            write(log);
+        }
+        catch (Exception ex)
+        {
+            // 先清掉再提醒：提醒本身也會進 Transcript，不能再寫回壞掉的紀錄。
+            _activeRunLog = null;
+            log.Abort();
+            WarnRunLog(ex, log.Header.InstructionId);
+        }
+    }
+
+    private void WarnRunLog(Exception ex, int instructionId)
+    {
+        // 紀錄失敗不影響遊戲指令，但至少提醒玩家一次。
+        if (_runLogWarningShown) return;
+        _runLogWarningShown = true;
+        Transcript.Add(new TranscriptEntry
+        {
+            Kind = TranscriptKind.Notice,
+            Text = "Run log could not be written: " + ex.Message,
+            InstructionId = instructionId
+        });
     }
 
     private void RecordToolUsage(int instructionId)

@@ -289,8 +289,8 @@ public partial class RimAgentMod : Mod
             "RimAgent.Settings.RecordRunsTip".Translate());
         if (Settings.recordRuns)
         {
-            string logFolder = Path.Combine(GenFilePaths.SaveDataFolderPath, "RimAgent");
-            string logPath = Path.Combine(logFolder, "RimAgent-runs.jsonl");
+            string logFolder = Path.Combine(RunLogWriter.DefaultFolder, RunLogWriter.FolderName);
+            string logPath = Path.Combine(logFolder, RunLogWriter.IndexName);
             Rect logRow = listing.GetRect(28f);
             Rect openRect = new(logRow.xMax - OpenFolderButtonWidth, logRow.y, OpenFolderButtonWidth, 26f);
             Rect pathRect = new(logRow.x, logRow.y + 3f, openRect.x - logRow.x - 8f, 24f);

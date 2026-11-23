@@ -16,7 +16,7 @@ namespace RimAgent.InGameTests;
 
 /// <summary>
 /// 自主任務重試時機的資料收集（不是測試，不斷言）：在 quicktest 地圖開自主模式讓真模型跑，
-/// 每 <see cref="SampleTicks"/> 記一行施工進度、排程器訊號與重試表，事後與 RimAgent-runs.jsonl 的
+/// 每 <see cref="SampleTicks"/> 記一行施工進度、排程器訊號與重試表，事後與 runs/index.jsonl 的
 /// 觸發／嘗試次數／tick 對照，回答「重試時前一次的施工是否還沒完成」。
 /// 只有隔離環境的 Config 資料夾裡有 <see cref="MarkerFileName"/> 才啟動（run_test_cycle 的 seed_config 帶入），
 /// 平常跑測試時完全不動。需要同時 seed 玩家的 RimAgent 設定（模型照玩家的走，模式與紀錄開關由這裡打開）與框架的供應商設定和金鑰檔。

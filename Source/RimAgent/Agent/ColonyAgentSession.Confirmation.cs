@@ -34,12 +34,13 @@ public sealed partial class ColonyAgentSession
             throw new AgentBusyException();
         }
         int instructionId = Transcript.CurrentInstructionId;
-        RunLogRecord confirmLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
+        BeginRunLog(new RunLogHeader
         {
-            Instruction = RunLogRecord.Limit(text),
+            InstructionId = instructionId,
+            Instruction = text,
             Mode = Mode.ToString(),
             Source = "confirmation"
-        } : null;
+        });
         string goalObjective = _pendingGoalObjective;
         string confirmOutcome = "confirmation_failed";
         try
@@ -74,7 +75,7 @@ public sealed partial class ColonyAgentSession
         }
         finally
         {
-            TryWriteRunLog(confirmLog, instructionId, confirmOutcome);
+            EndRunLog(confirmOutcome);
             Volatile.Write(ref _busy, 0);
         }
     }
@@ -109,13 +110,13 @@ public sealed partial class ColonyAgentSession
             Text = "Pending confirmation discarded.",
             InstructionId = Transcript.CurrentInstructionId
         });
-        RunLogRecord discardLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
+        NoteRunLog(new RunLogHeader
         {
-            Instruction = RunLogRecord.Limit(instruction),
+            InstructionId = instructionId,
+            Instruction = instruction,
             Mode = Mode.ToString(),
             Source = "confirmation"
-        } : null;
-        TryWriteRunLog(discardLog, instructionId, "discarded");
+        }, "discarded");
     }
 
     private string BuildGoalConfirmationReport(string summary, int instructionId)
@@ -125,7 +126,7 @@ public sealed partial class ColonyAgentSession
             e.InstructionId == instructionId && e.Kind == TranscriptKind.Tool))
         {
             lines.Add(entry.ToolName + " (" + entry.Arguments + "): " +
-                (entry.Failed ? "failed: " : string.Empty) + RunLogRecord.Limit(entry.Result));
+                (entry.Failed ? "failed: " : string.Empty) + ToolText.TruncateField(entry.Result, 500));
         }
         string report = string.Join('\n', lines);
         return report.Length <= 4000 ? report : report[..4000] + "…";

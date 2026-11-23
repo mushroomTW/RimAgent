@@ -103,6 +103,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
             ToolCategory = _category,
             ToolRisk = _risk,
             Arguments = FormatArguments(arguments),
+            ArgumentValues = arguments,
             InstructionId = _transcript.CurrentInstructionId,
             Agent = _transcript.CurrentAgent
         };

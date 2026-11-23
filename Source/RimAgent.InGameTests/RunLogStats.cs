@@ -11,34 +11,33 @@ using System.Text.RegularExpressions;
 namespace RimAgent.InGameTests;
 
 /// <summary>
-/// 運行紀錄（RimAgent-runs.jsonl）統計：工具成功率、常見失敗原因、依模型與版本比較。
+/// 運行紀錄（runs/index.jsonl 與各句的事件檔）統計：工具成功率、常見失敗原因、依模型與版本比較。
 /// 純字串邏輯，讀檔與顯示由呼叫端（開發模式按鈕）處理。只隨開發伴隨模組出貨；單元測試以連結方式編進 RimAgent.Tests。
-/// 停止／取消造成的中斷不算工具失敗（舊紀錄沒有 Cancelled 欄位時，以例外名稱判斷）。
-/// 每筆紀錄的 TranscriptSteps 只保留最後幾十步，各工具明細只涵蓋保留下來的步驟；
-/// 新版紀錄的 ToolCalls/ToolFailures/ToolCancellations 才是整句的完整計數。
+/// 停止／取消造成的中斷不算工具失敗。
 /// </summary>
 internal static partial class RunLogStats
 {
 
-    /// <summary>把 jsonl 各行整理成統計報表；無法解析的行略過。</summary>
-    /// <param name="lines">紀錄檔的每一行。</param>
-    /// <param name="version">只算 ModVersion 含此字串的紀錄；null 或空白表示全部。</param>
+    /// <summary>把索引各行整理成統計報表；無法解析的行略過。</summary>
+    /// <param name="index">索引檔的每一行。</param>
+    /// <param name="readRun">依索引的 file 欄位讀該句事件檔的各行。</param>
+    /// <param name="version">只算 ver 含此字串的紀錄；null 或空白表示全部。</param>
     /// <param name="top">各表最多列幾行。</param>
     /// <returns>報表文字；沒有符合的紀錄時回傳說明。</returns>
-    public static string Format(IEnumerable<string> lines, string? version = null, int top = 15)
+    public static string Format(IEnumerable<string> index, Func<string, IEnumerable<string>> readRun, string? version = null, int top = 15)
     {
-        List<JsonElement> runs = Load(lines, version);
+        List<JsonElement> runs = [.. Load(index).Where(r => Str(r, "t") == "end" && (string.IsNullOrWhiteSpace(version) || Str(r, "ver").Contains(version, StringComparison.Ordinal)))];
         if (runs.Count == 0) return "No matching runs.";
 
         var sb = new StringBuilder();
         AppendOverview(sb, runs);
-        AppendTools(sb, runs, top);
+        AppendTools(sb, runs, readRun, top);
         AppendGroup(sb, "by model", runs, RunModels);
-        AppendGroup(sb, "by mod version", runs, r => Str(r, "ModVersion") is { Length: > 0 } v ? v : "(unknown)");
+        AppendGroup(sb, "by mod version", runs, r => Str(r, "ver") is { Length: > 0 } v ? v : "(unknown)");
         return sb.ToString().TrimEnd();
     }
 
-    private static List<JsonElement> Load(IEnumerable<string> lines, string? version)
+    private static List<JsonElement> Load(IEnumerable<string> lines)
     {
         var runs = new List<JsonElement>();
         foreach (string line in lines)
@@ -55,7 +54,6 @@ internal static partial class RunLogStats
                 // 寫到一半被截斷的行（遊戲當掉時）不影響其他紀錄。
                 continue;
             }
-            if (!string.IsNullOrWhiteSpace(version) && !Str(run, "ModVersion").Contains(version, StringComparison.Ordinal)) continue;
             runs.Add(run);
         }
         return runs;
@@ -63,43 +61,38 @@ internal static partial class RunLogStats
 
     private static void AppendOverview(StringBuilder sb, List<JsonElement> runs)
     {
-        sb.Append(runs.Count).Append(" runs, ").Append(Head(Str(runs[0], "StartedUtc"), 16))
-          .Append(" ~ ").Append(Head(Str(runs[^1], "StartedUtc"), 16)).AppendLine();
+        sb.Append(runs.Count).Append(" runs, ").Append(Head(Str(runs[0], "ts"), 16))
+          .Append(" ~ ").Append(Head(Str(runs[^1], "ts"), 16)).AppendLine();
         sb.Append("outcomes: ").AppendJoin(", ", runs
-            .GroupBy(r => Str(r, "Outcome"), StringComparer.Ordinal)
+            .GroupBy(r => Str(r, "outcome"), StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .Select(g => g.Key + " " + g.Count().ToString(CultureInfo.InvariantCulture))).AppendLine();
-        int calls = 0, fails = 0, cancels = 0;
-        foreach (JsonElement run in runs)
-        {
-            (int c, int f, int x) = RunCounts(run);
-            calls += c;
-            fails += f;
-            cancels += x;
-        }
+        long calls = runs.Sum(r => Long(r, "calls"));
+        long fails = runs.Sum(r => Long(r, "fail"));
+        long cancels = runs.Sum(r => Long(r, "cancel"));
         sb.Append("tool calls ").Append(calls).Append(", failed ").Append(fails)
           .Append(" (").Append(Pct(fails, calls).Trim()).Append("), cancelled ").Append(cancels).AppendLine();
     }
 
-    private static void AppendTools(StringBuilder sb, List<JsonElement> runs, int top)
+    private static void AppendTools(StringBuilder sb, List<JsonElement> runs, Func<string, IEnumerable<string>> readRun, int top)
     {
         var total = new Dictionary<string, int>(StringComparer.Ordinal);
         var failed = new Dictionary<string, int>(StringComparer.Ordinal);
         var durations = new Dictionary<string, List<long>>(StringComparer.Ordinal);
         var reasons = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);
-        foreach (JsonElement step in runs.SelectMany(ToolSteps))
+        foreach (JsonElement step in runs.SelectMany(r => ToolSteps(Str(r, "file"), readRun)))
         {
-            if (IsCancelled(step)) continue;
-            string name = Str(step, "Tool");
+            if (Bool(step, "cancelled")) continue;
+            string name = Str(step, "tool");
             Bump(total, name);
-            long ms = Long(step, "DurationMs");
+            long ms = Long(step, "ms");
             if (ms > 0) GetOrAdd(durations, name, () => []).Add(ms);
-            if (!Bool(step, "Failed")) continue;
+            if (Bool(step, "ok")) continue;
             Bump(failed, name);
-            Bump(GetOrAdd(reasons, name, () => new Dictionary<string, int>(StringComparer.Ordinal)), NormalizeError(Str(step, "Result")));
+            Bump(GetOrAdd(reasons, name, () => new Dictionary<string, int>(StringComparer.Ordinal)), NormalizeError(Str(step, "result")));
         }
 
-        sb.AppendLine().AppendLine("== tools (kept steps only, cancellations excluded)");
+        sb.AppendLine().AppendLine("== tools (cancellations excluded)");
         sb.AppendLine(CultureInfo.InvariantCulture, $"{"tool",-28}{"calls",6}{"fail",6}{"fail%",8}{"avg ms",8}");
         foreach ((string name, int n) in Top(total, top))
         {
@@ -125,47 +118,25 @@ internal static partial class RunLogStats
         sb.AppendLine(CultureInfo.InvariantCulture, $"{"",-32}{"runs",5}{"calls",7}{"fail%",8}{"finished",10}{"avg in tok",12}");
         foreach (IGrouping<string, JsonElement> group in runs.GroupBy(key, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
-            int calls = 0, fails = 0;
-            foreach (JsonElement run in group)
-            {
-                (int c, int f, _) = RunCounts(run);
-                calls += c;
-                fails += f;
-            }
+            long calls = group.Sum(r => Long(r, "calls"));
+            long fails = group.Sum(r => Long(r, "fail"));
             int count = group.Count();
-            int finished = group.Count(r => Str(r, "Outcome") is "finished" or "goal_reported_complete");
-            long tokens = group.Sum(long (JsonElement r) => Array(r, "ModelSteps").Sum(long (JsonElement m) => Long(m, "InputTokens"))) / count;
+            int finished = group.Count(r => Str(r, "outcome") is "finished" or "goal_reported_complete");
+            long tokens = group.Sum(r => Long(r, "in")) / count;
             sb.AppendLine(CultureInfo.InvariantCulture, $"{Head(group.Key, 31),-32}{count,5}{calls,7}{Pct(fails, calls),8}{Pct(finished, count),10}{tokens,12}");
         }
     }
 
-    /// <summary>整句的工具呼叫、失敗、取消數；舊紀錄沒有計數欄位時改由保留的步驟推算。</summary>
-    private static (int Calls, int Failed, int Cancelled) RunCounts(JsonElement run)
+    /// <summary>同一個 call 可能寫多行（子代理跑完才有結果），以最後一行為準。</summary>
+    private static IEnumerable<JsonElement> ToolSteps(string file, Func<string, IEnumerable<string>> readRun)
     {
-        if (run.TryGetProperty("ToolCalls", out JsonElement calls) && calls.ValueKind == JsonValueKind.Number)
-        {
-            return (calls.GetInt32(), (int)Long(run, "ToolFailures"), (int)Long(run, "ToolCancellations"));
-        }
-        List<JsonElement> steps = [.. ToolSteps(run)];
-        int cancelled = steps.Count(IsCancelled);
-        int failed = steps.Count(s => Bool(s, "Failed") && !IsCancelled(s));
-        return (steps.Count, failed, cancelled);
-    }
-
-    private static IEnumerable<JsonElement> ToolSteps(JsonElement run)
-    {
-        return Array(run, "TranscriptSteps").Where(s => Str(s, "Tool").Length > 0);
-    }
-
-    private static bool IsCancelled(JsonElement step)
-    {
-        return Bool(step, "Cancelled") || CancelPattern.IsMatch(Str(step, "Result"));
+        if (file.Length == 0) return [];
+        return Load(readRun(file)).Where(e => Str(e, "t") == "tool").GroupBy(e => Long(e, "call")).Select(g => g.Last());
     }
 
     private static string RunModels(JsonElement run)
     {
-        string models = string.Join(", ", Array(run, "ModelSteps").Select(m => Str(m, "Model")).Where(m => m.Length > 0)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        string models = string.Join(", ", Array(run, "models").Select(m => m.GetString()));
         return models.Length > 0 ? models : "(unknown)";
     }
 
@@ -176,7 +147,7 @@ internal static partial class RunLogStats
         return Head(Digits.Replace(first, "N"), 110);
     }
 
-    private static string Pct(int part, int whole)
+    private static string Pct(long part, long whole)
     {
         return whole == 0 ? "-" : (part * 100.0 / whole).ToString("0.0", CultureInfo.InvariantCulture) + "%";
     }
@@ -223,8 +194,6 @@ internal static partial class RunLogStats
         return e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.Array ? v.EnumerateArray() : Enumerable.Empty<JsonElement>();
     }
 
-    [GeneratedRegex(@"^(TaskCanceledException|OperationCanceledException)\b", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex CancelPattern { get; }
     [GeneratedRegex(@"\d+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Digits { get; }
 }

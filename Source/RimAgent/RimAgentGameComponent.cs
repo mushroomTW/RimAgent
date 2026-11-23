@@ -100,7 +100,13 @@ public partial class RimAgentGameComponent : GameComponent
     private readonly Dictionary<AutonomousTrigger, (string Reply, int Tick)> _lastAutoReplies = new();
     private readonly HashSet<AutonomousTrigger> _triageNoticed = new();
     private int _goalGeneration;
-    private RunLogWriter _runLogWriter;
+    // 每次讀檔都換新的元件，索引筆數與檔案鎖要整個程序共用一份。
+    private static readonly Lazy<RunLogWriter> SharedRunLogs =
+        new(() => new RunLogWriter(RunLogWriter.DefaultFolder)
+        {
+            ModVersion = LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.ModVersion ?? string.Empty,
+            GameTick = CurrentTick
+        });
     /// <summary>統計跨存檔共用同一個檔案；讀檔重建會話時沿用同一個實例，免得兩份各自覆寫。</summary>
     private static readonly Lazy<ToolUsageStats> SharedToolUsage =
         new(() => new ToolUsageStats(System.IO.Path.Combine(RunLogWriter.DefaultFolder, ToolUsageStats.FileName)));
@@ -123,7 +129,7 @@ public partial class RimAgentGameComponent : GameComponent
     }
 
     /// <summary>目前的遊戲 tick；任務期間玩家退回主選單時沒有遊戲可讀，回傳 null。</summary>
-    private static int? CurrentTick() => Current.Game != null ? Find.TickManager.TicksGame : null;
+    private static int? CurrentTick() => Current.Game?.tickManager?.TicksGame;
 
     /// <summary>目前活著的元件；新局／讀檔會建立新的元件，舊的得由這裡找到並收掉。</summary>
     private static RimAgentGameComponent _live;
@@ -519,18 +525,7 @@ public partial class RimAgentGameComponent : GameComponent
         session.InstructionTokenBudget = () => settings.instructionTokenLimitK * 1000L;
         session.ToolUsage = SharedToolUsage.Value;
         session.RunLoggingEnabled = () => settings.recordRuns;
-        session.RunLogSink = record =>
-        {
-            if (!settings.recordRuns) return;
-            if (_runLogWriter == null)
-            {
-                _runLogWriter = new RunLogWriter(RunLogWriter.DefaultFolder)
-                {
-                    ModVersion = LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.ModVersion ?? string.Empty
-                };
-            }
-            _runLogWriter.Append(record);
-        };
+        session.RunLogs = SharedRunLogs.Value;
         return session;
     }
 

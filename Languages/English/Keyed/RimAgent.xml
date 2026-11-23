@@ -230,7 +230,7 @@
   <RimAgent.Settings.RunLogPath>Log file: {0}</RimAgent.Settings.RunLogPath>
   <RimAgent.Settings.OpenLogFolder>Open folder</RimAgent.Settings.OpenLogFolder>
   <RimAgent.Settings.OpenLogFolderFailed>Could not open the log folder: {0}</RimAgent.Settings.OpenLogFolderFailed>
-  <RimAgent.Settings.RecordRunsTip>Writes instructions, model response summaries, tool arguments, and results to a separate JSONL file under RimWorld save data/RimAgent/RimAgent-runs.jsonl. Limited to 500 runs or 16 MiB; older records are removed. The file may contain player input and tool arguments. Internal reasoning that the model does not expose is unavailable.</RimAgent.Settings.RecordRunsTip>
+  <RimAgent.Settings.RecordRunsTip>Writes instructions, model response summaries, tool arguments, and results as they happen to RimWorld save data/RimAgent/runs: index.jsonl has one summary line per run, plus one event file per run. Limited to 50,000 runs; older records are removed. The files may contain player input and tool arguments. Internal reasoning that the model does not expose is unavailable.</RimAgent.Settings.RecordRunsTip>
   <RimAgent.Context.CompactOn>Model history: {0} messages; auto-fold threshold: {1}% of context window.</RimAgent.Context.CompactOn>
   <RimAgent.Context.CompactOff>Model history: {0} messages; auto-fold is off.</RimAgent.Context.CompactOff>
   <RimAgent.Context.WindowKnown>Model context limit: {0} tokens.</RimAgent.Context.WindowKnown>

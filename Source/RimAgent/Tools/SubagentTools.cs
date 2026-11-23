@@ -28,6 +28,7 @@ public sealed class SubagentTools
     public const int MaxTasks = 4;
 
     private readonly IChatClient _client;
+    private readonly Action<string, ChatResponse> _responseObserved;
     private readonly AgentToolRegistry _registry;
     private readonly AgentTranscript _transcript;
     private readonly Func<IReadOnlyList<AgentSubagent>> _subagents;
@@ -41,7 +42,7 @@ public sealed class SubagentTools
     public SubagentTools(IChatClient client, AgentToolRegistry registry, AgentTranscript transcript,
         Func<IReadOnlyList<AgentSubagent>> subagents, Func<ToolPermissions> permissions,
         Func<string, string> model = null, Func<ReasoningLevel> reasoning = null,
-        Func<int?> remainingBudget = null, Action<ChatResponse> responseObserved = null, Func<string, int> maxOutputFor = null)
+        Func<int?> remainingBudget = null, Action<string, ChatResponse> responseObserved = null, Func<string, int> maxOutputFor = null)
 #pragma warning restore S107
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -55,7 +56,8 @@ public sealed class SubagentTools
         _reasoning = reasoning;
         _remainingBudget = remainingBudget;
         _maxOutputFor = maxOutputFor;
-        _client = responseObserved == null ? client : new ObservingChatClient(client, responseObserved);
+        _client = client;
+        _responseObserved = responseObserved;
         Function = AIFunctionFactory.Create(
             typeof(SubagentTools).GetMethod(nameof(DelegateTask)), this, ToolName, description: null, serializerOptions: null);
     }
@@ -207,7 +209,8 @@ public sealed class SubagentTools
         };
         try
         {
-            ChatResponse response = await _client.AsMainThreadFunctionInvokingClient(steps)
+            IChatClient client = _responseObserved == null ? _client : new ObservingChatClient(_client, r => _responseObserved(subagent.Name, r));
+            ChatResponse response = await client.AsMainThreadFunctionInvokingClient(steps)
                 .GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             if (response.WereToolsStripped())
                 return ToolText.Error("subagent " + subagent.Name + " could not use tools because the selected provider does not support tool calling; its report was discarded.");

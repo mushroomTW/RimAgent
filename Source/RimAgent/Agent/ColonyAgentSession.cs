@@ -70,12 +70,12 @@ public sealed partial class ColonyAgentSession
     private bool _snapshotWarningShown;
     private int _busy;
     private int _maxSteps;
-    private RunLogRecord _activeRunLog;
+    private RunLog _activeRunLog;
     private bool _runLogWarningShown;
 
     /// <summary>可選的獨立執行紀錄；預設不記錄，由遊戲設定決定。</summary>
     public Func<bool> RunLoggingEnabled { get; set; }
-    public Action<RunLogRecord> RunLogSink { get; set; }
+    public RunLogWriter RunLogs { get; set; }
 
     public ToolUsageStats ToolUsage { get; set; }
 
@@ -105,7 +105,7 @@ public sealed partial class ColonyAgentSession
         ArgumentNullException.ThrowIfNull(permissions);
         _permissions = permissions;
 
-        Transcript = new AgentTranscript();
+        Transcript = new AgentTranscript { Observer = RecordTranscriptEntry };
         Undo = new WorkUndoStack();
         ConfirmGate = new ConfirmationGate(mode);
         _world = world;
@@ -131,7 +131,7 @@ public sealed partial class ColonyAgentSession
         _contextWindowLookup = contextWindowLookup ?? RimLLMProvider.GetContextWindow;
         _visionLookup = visionLookup ?? RimLLMProvider.SupportsVision;
         _outputLimitLookup = outputLimitLookup ?? RimLLMProvider.GetMaxOutputTokens;
-        _tokenUsage.ResponseObserved = RecordModelResponse;
+        _tokenUsage.ResponseObserved = response => RecordModelResponse(string.Empty, response);
         // 附圖在 FICC 之內：每次模型呼叫前都看得到這一輪最新的工具結果。讀圖要排到主線程。
         _images = new ImageAttachingChatClient(
             new ThinkingActivityClient(_tokenUsage, Activity, Transcript),

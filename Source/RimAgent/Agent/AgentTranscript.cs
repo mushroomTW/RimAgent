@@ -47,6 +47,8 @@ public sealed class TranscriptEntry
     public ToolCategory ToolCategory { get; set; }
     public ToolRisk ToolRisk { get; set; }
     public string Arguments { get; set; } = string.Empty;
+    /// <summary>原始引數，執行紀錄才能存成結構化 JSON；不存檔。</summary>
+    public IDictionary<string, object> ArgumentValues { get; set; }
     public string Result { get; set; } = string.Empty;
     public bool Failed { get; set; }
     /// <summary>因停止或取消而中斷（也算 <see cref="Failed"/>），統計成功率時應與工具本身的失敗分開。</summary>
@@ -78,6 +80,9 @@ public sealed class AgentTranscript
     private int _epoch;
     // 子代理與主 Agent 共用同一組工具實例，靠呼叫流程上的 AsyncLocal 分辨是誰呼叫的；並行的子代理各有一份。
     private readonly AsyncLocal<string> _agent = new();
+
+    /// <summary>新增或更新項目後呼叫（第二個參數為 true 代表更新既有項目）；在鎖外呼叫，可能來自任何執行緒。</summary>
+    public Action<TranscriptEntry, bool> Observer { get; set; }
 
     public int Version
     {
@@ -175,6 +180,7 @@ public sealed class AgentTranscript
             }
             _version++;
         }
+        Observer?.Invoke(entry, false);
     }
 
     /// <summary>既有項目內容改變時遞增 Epoch，要求 UI 全量重建，避免確認執行後仍顯示舊的預覽結果。</summary>
@@ -191,6 +197,7 @@ public sealed class AgentTranscript
                 _epoch++;
             }
         }
+        Observer?.Invoke(entry, true);
     }
 
     /// <summary>這句指令以哪種錯誤結束；沒出錯回傳 null（自主任務遇到設定類錯誤時據此暫停）。</summary>

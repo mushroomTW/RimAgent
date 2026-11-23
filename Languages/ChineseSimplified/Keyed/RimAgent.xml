@@ -230,7 +230,7 @@
   <RimAgent.Settings.RunLogPath>日志文件：{0}</RimAgent.Settings.RunLogPath>
   <RimAgent.Settings.OpenLogFolder>打开文件夹</RimAgent.Settings.OpenLogFolder>
   <RimAgent.Settings.OpenLogFolderFailed>无法打开日志文件夹：{0}</RimAgent.Settings.OpenLogFolderFailed>
-  <RimAgent.Settings.RecordRunsTip>将指令、模型回复摘要、工具参数与结果写入独立 JSONL：RimWorld 存档文件夹/RimAgent/RimAgent-runs.jsonl。最多 500 条或 16 MiB，较旧记录会移除。文件可能包含玩家输入与工具参数；不包含模型未提供的内部推理。</RimAgent.Settings.RecordRunsTip>
+  <RimAgent.Settings.RecordRunsTip>将指令、模型回复摘要、工具参数与结果实时写入 RimWorld 存档文件夹/RimAgent/runs：index.jsonl 每句一行摘要，每句另有一个事件文件。最多 50,000 条，较旧记录会移除。文件可能包含玩家输入与工具参数；不包含模型未提供的内部推理。</RimAgent.Settings.RecordRunsTip>
   <RimAgent.Context.CompactOn>模型历史 {0} 条；自动折叠门槛为模型窗口的 {1}%。</RimAgent.Context.CompactOn>
   <RimAgent.Context.CompactOff>模型历史 {0} 条；自动折叠已关闭。</RimAgent.Context.CompactOff>
   <RimAgent.Context.WindowKnown>模型上下文上限：{0} token。</RimAgent.Context.WindowKnown>
