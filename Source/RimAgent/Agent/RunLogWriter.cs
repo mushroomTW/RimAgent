@@ -48,6 +48,7 @@ public sealed class RunLog
     private readonly SortedSet<string> _models = new(StringComparer.Ordinal);
     private StreamWriter _stream;
     private string _lastModelText;
+    private string _reasoning;
     private int _steps;
     private long _inputTokens;
     private long _outputTokens;
@@ -73,6 +74,26 @@ public sealed class RunLog
     }
 
     public RunLogHeader Header { get; }
+
+    /// <summary>這句實際用的思考強度；<paramref name="route"/> 是自動分流的結果，固定強度時為 null。</summary>
+    public void AddReasoning(ReasoningLevel level, DecisionRoute route)
+    {
+        lock (_gate)
+        {
+            if (_stream == null) return;
+            _reasoning = level.ToString();
+            Write(new
+            {
+                t = "reasoning",
+                at = Elapsed(),
+                level = _reasoning,
+                auto = route != null,
+                fallback = route?.IsFallback,
+                confidence = route?.Confidence,
+                reason = NullIfEmpty(Limit(route?.Reason))
+            });
+        }
+    }
 
     public void AddModelResponse(string agent, ChatResponse response)
     {
@@ -191,6 +212,7 @@ public sealed class RunLog
                 outcome,
                 secs = Elapsed(),
                 models = _models,
+                reasoning = _reasoning,
                 steps = _steps,
                 @in = _inputTokens,
                 @out = _outputTokens,
@@ -398,7 +420,7 @@ public sealed class RunLogWriter
     /// <summary>正常結束時最後一行就是索引內容；當機的沒有結尾，由已寫出的事件補出同樣的欄位。</summary>
     private static string Summarize(string path, string file)
     {
-        string first = null, last = null;
+        string first = null, last = null, reasoning = null;
         var tools = new Dictionary<int, JsonObject>();
         var models = new SortedSet<string>(StringComparer.Ordinal);
         int steps = 0;
@@ -416,6 +438,9 @@ public sealed class RunLogWriter
                 {
                     case "tool":
                         tools[(int)e["call"]] = e;
+                        break;
+                    case "reasoning":
+                        reasoning = (string)e["level"];
                         break;
                     case "model":
                         steps++;
@@ -450,6 +475,7 @@ public sealed class RunLogWriter
             outcome = "crashed",
             secs,
             models,
+            reasoning,
             steps,
             @in = input,
             @out = output,

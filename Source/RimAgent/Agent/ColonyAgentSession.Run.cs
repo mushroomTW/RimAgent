@@ -524,6 +524,7 @@ public sealed partial class ColonyAgentSession
 
     public void Clear()
     {
+        _router.Reset();
         if (IsBusy) throw new InvalidOperationException("Cannot clear while RimAgent is working.");
         // 丟棄 AF session（含歷史），下一次 SendAsync 重建；復原堆疊與等待中的確認一併作廢，對話歸零後「上一句」已無所指。
         _session = null;

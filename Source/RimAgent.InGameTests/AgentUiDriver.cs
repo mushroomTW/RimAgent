@@ -2,6 +2,7 @@ using System.Collections;
 using System.IO;
 using DevTools.Testing;
 using RimAgent.UI;
+using RimAgent.Agent;
 using UnityEngine;
 using Verse;
 
@@ -74,6 +75,20 @@ internal sealed class AgentUiDriverTests
         while (capture.MoveNext()) yield return capture.Current;
         Expect.IsTrue(Find.WindowStack.IsOpen<Window_BenchmarkProgress>(), "進度視窗應已開啟");
         Find.WindowStack.TryRemove(typeof(Window_BenchmarkProgress), doCloseSound: false);
+    }
+
+    [Test]
+    public static IEnumerator BenchmarkStartRenders()
+    {
+        bool hadScore = BenchmarkComponent.Scores.Remove((null, ReasoningLevel.Medium), out BenchmarkScore saved);
+        BenchmarkComponent.Scores[(null, ReasoningLevel.Medium)] = new BenchmarkScore(12, 14, 88, 9, 1860f, 868_926, 35_417, "sample");
+        Find.WindowStack.Add(new Window_BenchmarkStart(tier: null));
+        IEnumerator capture = AgentUiDriver.CaptureProof("benchmark-start");
+        while (capture.MoveNext()) yield return capture.Current;
+        Expect.IsTrue(Find.WindowStack.IsOpen<Window_BenchmarkStart>(), "開跑視窗應已開啟");
+        Find.WindowStack.TryRemove(typeof(Window_BenchmarkStart), doCloseSound: false);
+        BenchmarkComponent.Scores.Remove((null, ReasoningLevel.Medium));
+        if (hadScore) BenchmarkComponent.Scores[(null, ReasoningLevel.Medium)] = saved;
     }
 
     [Test]

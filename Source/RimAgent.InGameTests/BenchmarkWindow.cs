@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using RimAgent.Agent;
 using UnityEngine;
 using Verse;
 
@@ -16,6 +17,8 @@ internal enum BenchmarkState
     /// <summary>模型服務出錯，不算進通過率。</summary>
     Invalid
 }
+
+internal sealed record BenchmarkScore(int Passed, int Total, int Tools, int Failures, float Seconds, long Input, long Output, string Model);
 
 /// <summary>進度列表的一列；由 benchmark 更新，視窗只讀。</summary>
 internal sealed class BenchmarkRow
@@ -80,7 +83,7 @@ internal sealed class Window_BenchmarkProgress : Window
         int passed = _rows.Count(r => r.State == BenchmarkState.Passed);
 
         Text.Font = GameFont.Medium;
-        Widgets.Label(new Rect(inRect.x, inRect.y, inRect.width - 30f, 34f), "RimAgent.Benchmark.Title".Translate());
+        Widgets.Label(new Rect(inRect.x, inRect.y, inRect.width - 30f, 34f), "RimAgent.Benchmark.Title".Translate() + "  " + "RimAgent.Reasoning.Status".Translate(BenchmarkComponent.ReasoningLabel(BenchmarkComponent.Reasoning)));
         Text.Font = GameFont.Small;
 
         Rect bar = new(inRect.x, inRect.y + 38f, inRect.width, 24f);
@@ -135,5 +138,79 @@ internal sealed class Window_BenchmarkProgress : Window
         Widgets.Label(new Rect(rect.xMax - 80f, rect.y, 80f, rect.height), time);
         Text.WordWrap = true;
         Text.Anchor = TextAnchor.UpperLeft;
+    }
+}
+
+/// <summary>開跑前的確認：說明會動到什麼，並選這一輪的思考強度。</summary>
+internal sealed class Window_BenchmarkStart : Window
+{
+    private readonly string _tier;
+    private ReasoningLevel _level = Usable(BenchmarkComponent.Reasoning) ? BenchmarkComponent.Reasoning : ReasoningLevel.Medium;
+
+    public Window_BenchmarkStart(string tier)
+    {
+        _tier = tier;
+        doCloseX = true;
+        forcePause = true;
+        absorbInputAroundWindow = true;
+        closeOnAccept = false;
+    }
+
+    public override Vector2 InitialSize => new(640f, 340f);
+
+    public override void DoWindowContents(Rect inRect)
+    {
+        Text.Font = GameFont.Medium;
+        Widgets.Label(new Rect(inRect.x, inRect.y, inRect.width - 30f, 34f),
+            "RimAgent.Benchmark.Title".Translate() + "  " + ("RimAgent.Benchmark.Tier." + (_tier ?? "all")).Translate());
+        Text.Font = GameFont.Small;
+
+        Rect buttons = new(inRect.x, inRect.yMax - 36f, inRect.width, 36f);
+        Rect reasoning = new(inRect.x, buttons.y - 50f, inRect.width, 34f);
+        Rect label = new(inRect.x, reasoning.y - 28f, inRect.width, 26f);
+        Widgets.Label(new Rect(inRect.x, inRect.y + 42f, inRect.width, label.y - inRect.y - 46f), "RimAgent.Benchmark.Confirm".Translate());
+        Widgets.Label(label, "RimAgent.Reasoning.Status".Translate(BenchmarkComponent.ReasoningLabel(_level)));
+        DrawReasoning(reasoning);
+
+        if (Widgets.ButtonText(buttons.LeftHalf().ContractedBy(4f, 0f), "CancelButton".Translate())) Close();
+        if (Widgets.ButtonText(buttons.RightHalf().ContractedBy(4f, 0f), "RimAgent.Benchmark.Start".Translate()))
+        {
+            Close();
+            BenchmarkComponent.Start(_tier, _level);
+        }
+    }
+
+    private static bool Usable(ReasoningLevel level) => level != BenchmarkComponent.Routing || DecisionServiceFactory.CanUseDecisionModel();
+
+    /// <summary>一排思考強度按鈕，附上該強度最近一輪的成績。</summary>
+    private void DrawReasoning(Rect rect)
+    {
+        const float gap = 4f;
+        ReasoningLevel[] levels = [BenchmarkComponent.Routing, .. Enum.GetValues<ReasoningLevel>()];
+        float width = (rect.width - gap * (levels.Length - 1)) / levels.Length;
+        Rect button = new(rect.x, rect.y, width, rect.height);
+        foreach (ReasoningLevel level in levels)
+        {
+            string label = BenchmarkComponent.ReasoningLabel(level);
+            string tip = "RimAgent.Benchmark.ReasoningTip".Translate();
+            if (BenchmarkComponent.Scores.TryGetValue((_tier, level), out BenchmarkScore score))
+            {
+                label += string.Create(CultureInfo.InvariantCulture, $" {score.Passed}/{score.Total}");
+                tip += "\n\n" + "RimAgent.Benchmark.Score".Translate(
+                    score.Model,
+                    ("RimAgent.Benchmark.Tier." + (_tier ?? "all")).Translate(),
+                    score.Tools.ToString(CultureInfo.InvariantCulture) + " / " + score.Failures.ToString(CultureInfo.InvariantCulture),
+                    TimeSpan.FromSeconds(score.Seconds).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture),
+                    score.Input.ToString("N0", CultureInfo.InvariantCulture),
+                    score.Output.ToString("N0", CultureInfo.InvariantCulture));
+            }
+            bool usable = Usable(level);
+            if (level == BenchmarkComponent.Routing)
+                tip = (usable ? "RimAgent.Reasoning.RoutingTip" : "RimAgent.Benchmark.RoutingUnavailable").Translate() + "\n\n" + tip;
+            if (Widgets.ButtonText(button, label, active: usable)) _level = level;
+            if (_level == level) Widgets.DrawBox(button, 2, BaseContent.YellowTex);
+            TooltipHandler.TipRegion(button, tip);
+            button.x += width + gap;
+        }
     }
 }

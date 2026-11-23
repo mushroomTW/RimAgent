@@ -25,15 +25,17 @@ public sealed partial class ColonyAgentSession
         _tokenUsage.ResetModel();
 
         PreloadFrequentToolPacks();
+        DecisionRoute route = null;
         if (ReasoningRouting)
         {
-            DecisionRoute route = await _router.ResolveAsync(text, cancellationToken).ConfigureAwait(false);
+            route = await _router.ResolveAsync(text, cancellationToken).ConfigureAwait(false);
             if (route.Reasoning != ReasoningLevel.Auto)
             {
                 effectiveReasoning = route.Reasoning;
             }
         }
 
+        WriteRunLog(log => log.AddReasoning(effectiveReasoning ?? Reasoning, route));
         return CreateRunOptions(effectiveReasoning, PreferredModel);
     }
 

@@ -20,9 +20,9 @@ namespace RimAgent.InGameTests;
 /// 真模型 benchmark：在同一張地圖上依序下一組固定指令，每題前清空對話，跑完依遊戲狀態自動判分，
 /// 輸出成功率、工具呼叫與失敗數、耗時，用來比較模型與 RimAgent 版本。不是測試，不斷言。
 /// 只有隔離環境的 Config 有 <see cref="MarkerFileName"/> 才啟動；模型照 seed 進來的玩家設定，
-/// 標記檔根節點可帶 model="供應商:模型" 覆寫。結果附加到 SaveData/RimAgent/Benchmark.jsonl，
+/// 標記檔根節點可帶 model="供應商:模型"、reasoning="強度" 覆寫；思考強度不沿用玩家設定，預設為中，Routing 是自動。結果附加到 SaveData/RimAgent/Benchmark.jsonl，
 /// 最後一行 Log "[RimAgent.InGameTests] Benchmark DONE" 彙總。
-/// 也可在開發模式的除錯動作「RimAgent」分類手動起跑（全部、基本或高難度題），用目前的模型設定，跑完還原。
+/// 也可在開發模式的除錯動作「RimAgent」分類手動起跑（全部、基本或高難度題），用目前的模型設定與開跑時選的思考強度，跑完還原。
 /// </summary>
 public sealed partial class BenchmarkComponent : GameComponent
 {
@@ -304,6 +304,27 @@ public sealed partial class BenchmarkComponent : GameComponent
             Window_BenchmarkProgress.Show(_rows);
     }
 
+    /// <summary>這一輪（或上一輪）的思考強度，也是下一輪的預選。</summary>
+    internal static ReasoningLevel Reasoning { get; private set; } = ReasoningLevel.Medium;
+
+    /// <summary>「自動」：由決策模型逐題挑選。</summary>
+    internal const ReasoningLevel Routing = (ReasoningLevel)(-1);
+
+    internal static string ReasoningLabel(ReasoningLevel level) =>
+        (level == Routing ? "RimAgent.Reasoning.Routing" : RimAgentMod.ReasoningKey(level)).Translate();
+
+    private static string ReasoningName => Reasoning == Routing ? nameof(Routing) : Reasoning.ToString();
+
+    /// <summary>這次開遊戲以來各級別（null 表示全部）、各思考強度最近一輪的成績。</summary>
+    internal static Dictionary<(string Tier, ReasoningLevel Level), BenchmarkScore> Scores { get; } = [];
+
+    internal static void Start(string tier, ReasoningLevel level)
+    {
+        if (_running) return;
+        Reasoning = level;
+        _ = RunAsync(tier, isolated: false);
+    }
+
     private static List<BenchmarkRow> CreateRows(IEnumerable<BenchTask> tasks) =>
         [.. tasks.Select(t => new BenchmarkRow { Id = t.Id, Tier = t.Tier, Instruction = t.Instruction })];
 
@@ -349,7 +370,7 @@ public sealed partial class BenchmarkComponent : GameComponent
     private static void DebugRunHard() => ConfirmAndRun(Hard);
 
     /// <summary>
-    /// 開發模式按鈕手動起跑：題目會清空對話、在地圖上放藍圖與區域、生成敵人，所以先確認；
+    /// 開發模式按鈕手動起跑：題目會清空對話、在地圖上放藍圖與區域、生成敵人，所以先確認並選思考強度；
     /// 跑完還原暫時改動的設定與時間流速（隔離環境用標記檔起跑時不需要還原）。
     /// </summary>
     private static void ConfirmAndRun(string tier)
@@ -359,19 +380,19 @@ public sealed partial class BenchmarkComponent : GameComponent
             Messages.Message("RimAgent.Benchmark.AlreadyRunning".Translate(), MessageTypeDefOf.RejectInput, historical: false);
             return;
         }
-        Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(
-            "RimAgent.Benchmark.Confirm".Translate(),
-            () => _ = RunAsync(tier, isolated: false), destructive: true));
+        Find.WindowStack.Add(new Window_BenchmarkStart(tier));
     }
 
     /// <param name="tier">只跑這一級的題目；null 表示全部。</param>
-    /// <param name="isolated">由隔離環境的標記檔起跑：讀標記檔的模型覆寫，跑完不還原設定。</param>
+    /// <param name="isolated">由隔離環境的標記檔起跑：讀標記檔的模型與思考強度覆寫，跑完不還原設定。</param>
     private static async Task RunAsync(string tier, bool isolated)
     {
         if (_running) return;
         _running = true;
         RimAgentSettings settings = RimAgentMod.Settings;
         string savedModel = settings?.agentModel;
+        ReasoningLevel savedReasoning = settings?.reasoning ?? ReasoningLevel.Auto;
+        bool savedRouting = settings?.reasoningRouting ?? false;
         AgentMode savedMode = settings?.mode ?? AgentMode.Confirm;
         bool savedCare = settings?.autonomousCare ?? false;
         bool savedRecord = settings?.recordRuns ?? false;
@@ -455,6 +476,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["run"] = runId,
                 ["modVersion"] = modVersion,
                 ["model"] = model,
+                ["reasoning"] = ReasoningName,
                 ["note"] = "summary",
                 ["passed"] = passedByTier.Values.Sum(),
                 ["total"] = tasks.Length - invalidByTier.Values.Sum(),
@@ -474,6 +496,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["tick"] = startTick
             };
             Append(resultPath, summary);
+            Scores[(tier, Reasoning)] = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model);
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary));
             if (!isolated)
             {
@@ -494,6 +517,8 @@ public sealed partial class BenchmarkComponent : GameComponent
             if (!isolated && settings != null)
             {
                 settings.agentModel = savedModel;
+                settings.reasoning = savedReasoning;
+                settings.reasoningRouting = savedRouting;
                 settings.mode = savedMode;
                 settings.autonomousCare = savedCare;
                 settings.recordRuns = savedRecord;
@@ -512,9 +537,15 @@ public sealed partial class BenchmarkComponent : GameComponent
     {
         if (isolated)
         {
-            string modelOverride = ModelOverridePattern.Match(await File.ReadAllTextAsync(MarkerPath)).Groups["model"].Value;
+            string marker = await File.ReadAllTextAsync(MarkerPath);
+            string modelOverride = ModelOverridePattern.Match(marker).Groups["model"].Value;
             if (modelOverride.Length > 0) settings.agentModel = modelOverride;
+            string level = ReasoningOverridePattern.Match(marker).Groups["level"].Value;
+            if (level.Length > 0) Reasoning = level.Equals(nameof(Routing), StringComparison.OrdinalIgnoreCase) ? Routing : Enum.Parse<ReasoningLevel>(level, ignoreCase: true);
         }
+        settings.reasoningRouting = Reasoning == Routing;
+        // 自動的備援若是「預設」會退回這個強度，不能用玩家殘留的設定。
+        settings.reasoning = settings.reasoningRouting ? ReasoningLevel.Medium : Reasoning;
         settings.mode = AgentMode.Autonomous;
         settings.autonomousCare = false;
         settings.recordRuns = true;
@@ -523,9 +554,9 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
-    private readonly record struct ModelUsage(long Steps, long Input, long Output)
+    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning)
     {
-        public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output);
+        public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output, other.Reasoning ?? Reasoning);
     }
 
     /// <summary>取這題的運行紀錄摘要；摘要還沒寫出（例如寫檔失敗）時為 0。</summary>
@@ -537,7 +568,8 @@ public sealed partial class BenchmarkComponent : GameComponent
             JsonElement e = line.RootElement;
             return e.GetProperty("ts").GetDateTime() < startedUtc
                 ? default
-                : new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64());
+                : new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64(),
+                    e.TryGetProperty("reasoning", out JsonElement reasoning) ? reasoning.GetString() : null);
         }
         catch (Exception ex)
         {
@@ -557,6 +589,8 @@ public sealed partial class BenchmarkComponent : GameComponent
         {
             ["task"] = task.Id,
             ["tier"] = task.Tier,
+            ["reasoning"] = ReasoningName,
+            ["reasoningUsed"] = usage.Reasoning,
             ["ok"] = failure == null,
             ["invalid"] = invalid,
             ["attempts"] = attempts,
@@ -922,4 +956,7 @@ public sealed partial class BenchmarkComponent : GameComponent
     private static partial Regex DigitPattern { get; }
     [GeneratedRegex("model=\"(?<model>[^\"]+)\"", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex ModelOverridePattern { get; }
+
+    [GeneratedRegex("reasoning=\"(?<level>[A-Za-z]+)\"", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ReasoningOverridePattern { get; }
 }

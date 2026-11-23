@@ -99,6 +99,31 @@ public class RunLogTests
     }
 
     [Test]
+    public async Task RoutedReasoningIsRecorded()
+    {
+        var decision = new FakeDecisionService();
+        decision.ReplyRoute("high", 0.95);
+        var session = new ColonyAgentSession(new ScriptedChatClient().Reply("ok").Reply("ok"), new FakeGameWorld(), () => ToolPermissions.All, 8,
+            router: new DecisionReasoningRouter(decision, settingsProvider: () => new RimAgentSettings()))
+        {
+            RunLoggingEnabled = () => true,
+            RunLogs = new RunLogWriter(_folder),
+            ReasoningRouting = true
+        };
+
+        await session.SendAsync("build a sandstone wall");
+        session.ReasoningRouting = false;
+        session.Reasoning = ReasoningLevel.Low;
+        await session.SendAsync("build a sandstone wall");
+
+        JsonElement[] index = Index(session.RunLogs);
+        Assert.That(index.Select(l => Str(l, "reasoning")), Is.EqualTo((string[])["High", "Low"]));
+        JsonElement routed = Events(session.RunLogs, index[0]).Single(e => Str(e, "t") == "reasoning");
+        Assert.That(routed.GetProperty("auto").GetBoolean(), Is.True);
+        Assert.That(routed.GetProperty("confidence").GetDouble(), Is.EqualTo(0.95).Within(0.001));
+    }
+
+    [Test]
     public void NotesDoNotEvictRuns()
     {
         var writer = new RunLogWriter(_folder) { MaxRuns = 3 };
@@ -200,7 +225,7 @@ public class RunLogTests
 
         JsonElement line = Index(session.RunLogs).Single();
         Assert.That(Str(line, "outcome"), Is.EqualTo("recording_disabled"));
-        Assert.That(Events(session.RunLogs, line).Select(e => Str(e, "t")), Is.EqualTo((string[])["run", "model", "end"]));
+        Assert.That(Events(session.RunLogs, line).Select(e => Str(e, "t")), Is.EqualTo((string[])["run", "reasoning", "model", "end"]));
     }
 
     [Test]
@@ -251,9 +276,9 @@ public class RunLogTests
         Assert.That(line.GetProperty("in").GetInt64(), Is.EqualTo(1234));
         Assert.That(line.GetProperty("calls").GetInt32(), Is.EqualTo(1));
         JsonElement[] events = Events(session.RunLogs, line);
-        Assert.That(events.Select(e => Str(e, "t")), Is.EqualTo((string[])["run", "model", "tool", "model", "end"]), string.Join(Environment.NewLine, events));
-        JsonElement tool = events[2];
-        Assert.That(tool.GetProperty("n").GetInt32(), Is.EqualTo(events[1].GetProperty("n").GetInt32()));
+        Assert.That(events.Select(e => Str(e, "t")), Is.EqualTo((string[])["run", "reasoning", "model", "tool", "model", "end"]), string.Join(Environment.NewLine, events));
+        JsonElement tool = events[3];
+        Assert.That(tool.GetProperty("n").GetInt32(), Is.EqualTo(events[2].GetProperty("n").GetInt32()));
         Assert.That(Str(tool.GetProperty("args"), "assignments"), Is.EqualTo("Ali:doctor=1"));
         Assert.That(tool.GetProperty("ok").GetBoolean(), Is.True);
         Assert.That(Str(tool, "result"), Does.Contain("priority"));

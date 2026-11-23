@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   真模型 benchmark 的啟動標記（Benchmark.cs）。根節點可加 model="供應商:模型" 覆寫要測的模型，
-  不加則照 seed 進來的玩家設定。
+  不加則照 seed 進來的玩家設定；也可加 reasoning 屬性（Auto、Off、Low、Medium、High，
+  或 Routing 由決策模型逐題挑選）
+  指定思考強度，不加為 Medium。
   run_test_cycle 的 seed_config 要同時帶入：
     1. 本檔
     2. 玩家 Config 裡的 Mod_RimAgent_RimAgentMod.xml（模式與自主照顧由 benchmark 在記憶體裡改）

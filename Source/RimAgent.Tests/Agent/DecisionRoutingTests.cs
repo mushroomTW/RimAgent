@@ -181,6 +181,20 @@ public class DecisionRoutingTests
     }
 
     [Test]
+    public async Task ClearedConversationDoesNotReuseThePreviousLevel()
+    {
+        _fakeDecision.ReplyRoute("high", 0.95);
+        var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);
+        var session = new ColonyAgentSession(_client, _world, () => _permissions, maxSteps: 8, router: router) { ReasoningRouting = true };
+
+        await session.BuildRunOptionsAsync("build a sandstone wall");
+        session.Clear();
+        await session.BuildRunOptionsAsync("yes");
+
+        Assert.That(_fakeDecision.EvaluateCount, Is.EqualTo(2));
+    }
+
+    [Test]
     public async Task RoutingOffNeverInvokesDecisionModel()
     {
         var router = new DecisionReasoningRouter(_fakeDecision, settingsProvider: () => _settings);

@@ -90,6 +90,9 @@ public sealed class DecisionReasoningRouter
     #pragma warning restore VSTHRD202
 
     /// <summary>「好」「繼續」這類短句是在延續上一句，難度跟上一句一樣，不值得多問一次決策模型。</summary>
+    /// <summary>清空對話後，短句不再是上一句的後續。</summary>
+    internal void Reset() => _last = null;
+
     internal static bool IsShortFollowUp(string request)
     {
         string text = request?.Trim() ?? string.Empty;

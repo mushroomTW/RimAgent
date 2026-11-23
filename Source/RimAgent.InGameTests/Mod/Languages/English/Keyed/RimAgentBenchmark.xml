@@ -4,6 +4,11 @@
   <RimAgent.Benchmark.Confirm>The RimAgent benchmark clears the agent conversation, gives the agent full access and changes this map (zones, blueprints, spawned enemies). The game stays paused while it runs, and each task is stopped after 10 minutes. Use a throwaway save. Start?</RimAgent.Benchmark.Confirm>
   <RimAgent.Benchmark.Done>RimAgent benchmark: {0}/{1} passed. Details: {2}</RimAgent.Benchmark.Done>
   <RimAgent.Benchmark.NoRun>No benchmark has been run yet.</RimAgent.Benchmark.NoRun>
+  <RimAgent.Benchmark.Start>Start</RimAgent.Benchmark.Start>
+  <RimAgent.Benchmark.RoutingUnavailable>The decision model is not available. Enable it in the settings first.</RimAgent.Benchmark.RoutingUnavailable>
+  <RimAgent.Benchmark.Tier.all>All</RimAgent.Benchmark.Tier.all>
+  <RimAgent.Benchmark.ReasoningTip>Reasoning level for the next run. Load the same save before each run so results can be compared.</RimAgent.Benchmark.ReasoningTip>
+  <RimAgent.Benchmark.Score>Last run: {0}, tasks: {1}\nTools / failures: {2}\nTime: {3}\nTokens in: {4}, out: {5}</RimAgent.Benchmark.Score>
   <RimAgent.Benchmark.Title>RimAgent benchmark</RimAgent.Benchmark.Title>
   <RimAgent.Benchmark.Progress>{0}/{1} done, {2} passed, {3} failed, {4} invalid</RimAgent.Benchmark.Progress>
   <RimAgent.Benchmark.Column.Task>Task</RimAgent.Benchmark.Column.Task>

@@ -4,6 +4,11 @@
   <RimAgent.Benchmark.Confirm>RimAgent 基准测试会清空 Agent 对话、给予完整权限，并改动当前地图（区域、蓝图、生成敌人）。运行期间游戏保持暂停，每题最多 10 分钟。请使用可丢弃的存档。要开始吗？</RimAgent.Benchmark.Confirm>
   <RimAgent.Benchmark.Done>RimAgent 基准测试：通过 {0}/{1} 题。详细结果：{2}</RimAgent.Benchmark.Done>
   <RimAgent.Benchmark.NoRun>还没有运行过基准测试。</RimAgent.Benchmark.NoRun>
+  <RimAgent.Benchmark.Start>开始运行</RimAgent.Benchmark.Start>
+  <RimAgent.Benchmark.RoutingUnavailable>决策模型无法使用，请先在设置中启用。</RimAgent.Benchmark.RoutingUnavailable>
+  <RimAgent.Benchmark.Tier.all>全部</RimAgent.Benchmark.Tier.all>
+  <RimAgent.Benchmark.ReasoningTip>下一轮的思考强度。每轮开始前读取同一个存档，成绩才能比较。</RimAgent.Benchmark.ReasoningTip>
+  <RimAgent.Benchmark.Score>最近一轮：{0}，题目：{1}\n工具／失败：{2}\n时间：{3}\n输入 token：{4}，输出：{5}</RimAgent.Benchmark.Score>
   <RimAgent.Benchmark.Title>RimAgent 基准测试</RimAgent.Benchmark.Title>
   <RimAgent.Benchmark.Progress>已完成 {0}/{1}，通过 {2}，失败 {3}，无效 {4}</RimAgent.Benchmark.Progress>
   <RimAgent.Benchmark.Column.Task>题目</RimAgent.Benchmark.Column.Task>

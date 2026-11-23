@@ -4,6 +4,11 @@
   <RimAgent.Benchmark.Confirm>RimAgent 基準測試會清空 Agent 對話、給予完整權限，並改動目前地圖（區域、藍圖、生成敵人）。執行期間遊戲保持暫停，每題最多 10 分鐘。請使用可捨棄的存檔。要開始嗎？</RimAgent.Benchmark.Confirm>
   <RimAgent.Benchmark.Done>RimAgent 基準測試：通過 {0}/{1} 題。詳細結果：{2}</RimAgent.Benchmark.Done>
   <RimAgent.Benchmark.NoRun>還沒有執行過基準測試。</RimAgent.Benchmark.NoRun>
+  <RimAgent.Benchmark.Start>開始執行</RimAgent.Benchmark.Start>
+  <RimAgent.Benchmark.RoutingUnavailable>決策模型無法使用，請先在設定中啟用。</RimAgent.Benchmark.RoutingUnavailable>
+  <RimAgent.Benchmark.Tier.all>全部</RimAgent.Benchmark.Tier.all>
+  <RimAgent.Benchmark.ReasoningTip>下一輪的思考強度。每輪開始前讀取同一個存檔，成績才能比較。</RimAgent.Benchmark.ReasoningTip>
+  <RimAgent.Benchmark.Score>最近一輪：{0}，題目：{1}\n工具／失敗：{2}\n時間：{3}\n輸入 token：{4}，輸出：{5}</RimAgent.Benchmark.Score>
   <RimAgent.Benchmark.Title>RimAgent 基準測試</RimAgent.Benchmark.Title>
   <RimAgent.Benchmark.Progress>已完成 {0}/{1}，通過 {2}，失敗 {3}，無效 {4}</RimAgent.Benchmark.Progress>
   <RimAgent.Benchmark.Column.Task>題目</RimAgent.Benchmark.Column.Task>
