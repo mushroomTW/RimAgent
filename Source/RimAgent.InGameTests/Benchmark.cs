@@ -6,9 +6,11 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using LudeonTK;
 using RimAgent.Agent;
+using RimAgent.Tools;
 using RimWorld;
 using Verse;
 
@@ -26,6 +28,8 @@ public sealed partial class BenchmarkComponent : GameComponent
 {
     public const string MarkerFileName = "RimAgentBenchmark.xml";
     private const string LogPrefix = TestHelpers.LogPrefix + "Benchmark ";
+    /// <summary>模型可能一直重試或等待；超過就取消這題，後面的題目照常跑。</summary>
+    private static readonly TimeSpan TaskTimeout = TimeSpan.FromMinutes(10);
     private const int MaxReplyChars = 300;
 
     private bool _started;
@@ -274,6 +278,7 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     public override void GameComponentUpdate()
     {
+        UpdateRunningRow();
         if (_started || Current.ProgramState != ProgramState.Playing || Find.CurrentMap == null || !Enabled) return;
         // 等 RimAgent 自己的初始化跑完再送指令。
         if (_readyAt < 0f) _readyAt = UnityEngine.Time.realtimeSinceStartup + 5f;
@@ -284,6 +289,54 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     /// <summary>同一時間只跑一輪：題目共用同一個會話與地圖。</summary>
     private static bool _running;
+
+    /// <summary>這一輪（或上一輪）的進度；視窗關掉後仍可再打開查看。</summary>
+    private static List<BenchmarkRow> _rows = [];
+    private static ColonyAgentSession _session;
+    private static int _seenVersion = -1;
+
+    [DebugAction("RimAgent", "Benchmark: show progress", allowedGameStates = AllowedGameStates.Playing)]
+    private static void DebugShowProgress()
+    {
+        if (_rows.Count == 0)
+            Messages.Message("RimAgent.Benchmark.NoRun".Translate(), MessageTypeDefOf.RejectInput, historical: false);
+        else
+            Window_BenchmarkProgress.Show(_rows);
+    }
+
+    private static List<BenchmarkRow> CreateRows(IEnumerable<BenchTask> tasks) =>
+        [.. tasks.Select(t => new BenchmarkRow { Id = t.Id, Tier = t.Tier, Instruction = t.Instruction })];
+
+    /// <summary>截圖檢查用：涵蓋四種狀態。</summary>
+    internal static List<BenchmarkRow> SampleRows()
+    {
+        List<BenchmarkRow> rows = CreateRows(Tasks);
+        for (int i = 0; i < 4; i++) Finish(rows[i], i == 2 ? "timed out after 10 min" : null, 8, i, 63f * i);
+        rows[4].State = BenchmarkState.Running;
+        rows[4].StartedAt = UnityEngine.Time.realtimeSinceStartup;
+        return rows;
+    }
+
+    private static void Finish(BenchmarkRow row, string failure, int tools, int failures, float seconds)
+    {
+        row.State = failure == null ? BenchmarkState.Passed : BenchmarkState.Failed;
+        row.Detail = failure;
+        row.Tools = tools;
+        row.Failures = failures;
+        row.Seconds = seconds;
+    }
+
+    /// <summary>進行中那一題的工具數即時更新；對話沒變就不重數。</summary>
+    private static void UpdateRunningRow()
+    {
+        BenchmarkRow row = _running ? _rows.Find(x => x.State == BenchmarkState.Running) : null;
+        AgentTranscript transcript = row == null ? null : _session?.Transcript;
+        if (transcript == null || transcript.Version == _seenVersion) return;
+        _seenVersion = transcript.Version;
+        List<TranscriptEntry> tools = [.. transcript.Snapshot().Where(e => e.Kind == TranscriptKind.Tool)];
+        row.Tools = tools.Count;
+        row.Failures = tools.Count(t => t.Failed && !t.Cancelled);
+    }
 
     [DebugAction("RimAgent", "Benchmark: all tasks", allowedGameStates = AllowedGameStates.PlayingOnMap)]
     private static void DebugRunAll() => ConfirmAndRun(tier: null);
@@ -302,11 +355,11 @@ public sealed partial class BenchmarkComponent : GameComponent
     {
         if (_running)
         {
-            Messages.Message("RimAgent benchmark is already running.", MessageTypeDefOf.RejectInput, historical: false);
+            Messages.Message("RimAgent.Benchmark.AlreadyRunning".Translate(), MessageTypeDefOf.RejectInput, historical: false);
             return;
         }
         Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(
-            "RimAgent benchmark clears the agent conversation, gives the agent full access and changes this map (zones, blueprints, spawned enemies). The game stays paused while it runs. Use a throwaway save. Start?",
+            "RimAgent.Benchmark.Confirm".Translate(),
             () => _ = RunAsync(tier, isolated: false), destructive: true));
     }
 
@@ -321,6 +374,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         AgentMode savedMode = settings?.mode ?? AgentMode.Confirm;
         bool savedCare = settings?.autonomousCare ?? false;
         bool savedRecord = settings?.recordRuns ?? false;
+        bool savedTime = settings?.ToPermissions().Allows(ToolCategory.Time) ?? true;
         TimeSpeed savedSpeed = Find.TickManager?.CurTimeSpeed ?? TimeSpeed.Normal;
         try
         {
@@ -344,10 +398,17 @@ public sealed partial class BenchmarkComponent : GameComponent
             int totalTools = 0;
             int totalFailures = 0;
             BenchTask[] tasks = [.. Tasks.Where(t => tier == null || t.Tier == tier)];
-            foreach (BenchTask task in tasks)
+            _session = session;
+            _rows = CreateRows(tasks);
+            if (!isolated) Window_BenchmarkProgress.Show(_rows);
+            for (int i = 0; i < tasks.Length; i++)
             {
+                BenchTask task = tasks[i];
+                _rows[i].State = BenchmarkState.Running;
+                _rows[i].StartedAt = UnityEngine.Time.realtimeSinceStartup;
                 (string failure, List<TranscriptEntry> tools, float seconds, string reply) = await RunTaskAsync(session, task);
                 int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply);
+                Finish(_rows[i], failure, tools.Count, failures, seconds);
                 totalTools += tools.Count;
                 totalFailures += failures;
                 if (failure == null) passedByTier[task.Tier]++;
@@ -372,7 +433,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary));
             if (!isolated)
             {
-                Messages.Message($"RimAgent benchmark: {summary["passed"]}/{summary["total"]} passed. Details: {resultPath}", MessageTypeDefOf.NeutralEvent, historical: false);
+                Messages.Message("RimAgent.Benchmark.Done".Translate(passedByTier.Values.Sum(), tasks.Length, resultPath), MessageTypeDefOf.NeutralEvent, historical: false);
             }
         }
         catch (Exception ex)
@@ -381,12 +442,18 @@ public sealed partial class BenchmarkComponent : GameComponent
         }
         finally
         {
+            _session = null;
+            foreach (BenchmarkRow row in _rows.Where(x => x.State == BenchmarkState.Running))
+            {
+                Finish(row, "aborted", row.Tools, row.Failures, UnityEngine.Time.realtimeSinceStartup - row.StartedAt);
+            }
             if (!isolated && settings != null)
             {
                 settings.agentModel = savedModel;
                 settings.mode = savedMode;
                 settings.autonomousCare = savedCare;
                 settings.recordRuns = savedRecord;
+                settings.allowByCategory[(int)ToolCategory.Time] = savedTime;
                 if (Find.TickManager != null) Find.TickManager.CurTimeSpeed = savedSpeed;
             }
             _running = false;
@@ -407,6 +474,8 @@ public sealed partial class BenchmarkComponent : GameComponent
         settings.mode = AgentMode.Autonomous;
         settings.autonomousCare = false;
         settings.recordRuns = true;
+        // 模型能解除暫停的話，地圖會跟著時間變，還會以一倍速等上好幾分鐘。
+        settings.allowByCategory[(int)ToolCategory.Time] = false;
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
@@ -432,14 +501,19 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     private static async Task<(string failure, List<TranscriptEntry> tools, float seconds, string reply)> RunTaskAsync(ColonyAgentSession session, BenchTask task)
     {
-        session.Clear();
-        Map map = Find.CurrentMap;
+        Map map = Current.Game?.CurrentMap;
+        if (map == null || RimAgentGameComponent.Instance?.Session != session)
+        {
+            return ("the game was closed or reloaded", [], 0f, null);
+        }
         string failure = null;
         string reply = null;
         float seconds = 0f;
         List<TranscriptEntry> tools = [];
         try
         {
+            session.Clear();
+            Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
             string setupError = task.Setup?.Invoke(map);
             if (setupError != null)
             {
@@ -450,9 +524,10 @@ public sealed partial class BenchmarkComponent : GameComponent
                 Dictionary<string, int> before = task.Measure(map);
                 int transcriptStart = session.Transcript.Snapshot().Count;
                 float startedAt = UnityEngine.Time.realtimeSinceStartup;
+                using var timeout = new CancellationTokenSource(TaskTimeout);
                 try
                 {
-                    reply = await session.SendAsync(task.Instruction);
+                    reply = await session.SendAsync(task.Instruction, cancellationToken: timeout.Token);
                 }
                 catch (Exception ex)
                 {
@@ -460,6 +535,8 @@ public sealed partial class BenchmarkComponent : GameComponent
                 }
                 seconds = UnityEngine.Time.realtimeSinceStartup - startedAt;
                 failure = task.Check(before, task.Measure(Find.CurrentMap), reply);
+                if (timeout.IsCancellationRequested)
+                    failure = Fails(string.Create(CultureInfo.InvariantCulture, $"timed out after {TaskTimeout.TotalMinutes:0} min"), failure);
                 tools = [.. session.Transcript.Snapshot().Skip(transcriptStart).Where(e => e.Kind == TranscriptKind.Tool)];
             }
         }

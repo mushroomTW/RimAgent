@@ -172,6 +172,23 @@ public class RunLogTests
     }
 
     [Test]
+    public void MalformedEventLinesDoNotBlockCrashRecovery()
+    {
+        var first = new RunLogWriter(_folder);
+        RunLog log = first.Start(new RunLogHeader { Source = "player", InstructionId = 1 });
+        log.AddEntry(new TranscriptEntry { Kind = TranscriptKind.Tool, ToolName = "t", InstructionId = 1 });
+        log.Abort();
+        string active = Directory.GetFiles(Path.Combine(first.Folder, "active")).Single();
+        File.AppendAllText(active, "{\"t\":\"tool\"}\n{\"t\":\"tool\",\"call\":\"x\"}\n{\"t\":5}\n");
+
+        var next = new RunLogWriter(_folder);
+        next.Start(new RunLogHeader { Source = "player" }).End("finished");
+
+        Assert.That(Index(next).Single(l => Str(l, "outcome") == "crashed").GetProperty("calls").GetInt32(), Is.EqualTo(1));
+        Assert.That(Directory.GetFiles(Path.Combine(next.Folder, "active")), Is.Empty);
+    }
+
+    [Test]
     public async Task TurningLoggingOffMidRunStopsWriting()
     {
         FakeGameWorld world = WorldWithAlice();

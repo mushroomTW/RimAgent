@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <RimAgent.Benchmark.AlreadyRunning>RimAgent 基准测试已在运行中。</RimAgent.Benchmark.AlreadyRunning>
+  <RimAgent.Benchmark.Confirm>RimAgent 基准测试会清空 Agent 对话、给予完整权限，并改动当前地图（区域、蓝图、生成敌人）。运行期间游戏保持暂停，每题最多 10 分钟。请使用可丢弃的存档。要开始吗？</RimAgent.Benchmark.Confirm>
+  <RimAgent.Benchmark.Done>RimAgent 基准测试：通过 {0}/{1} 题。详细结果：{2}</RimAgent.Benchmark.Done>
+  <RimAgent.Benchmark.NoRun>还没有运行过基准测试。</RimAgent.Benchmark.NoRun>
+  <RimAgent.Benchmark.Title>RimAgent 基准测试</RimAgent.Benchmark.Title>
+  <RimAgent.Benchmark.Progress>已完成 {0}/{1}，通过 {2}，失败 {3}</RimAgent.Benchmark.Progress>
+  <RimAgent.Benchmark.Column.Task>题目</RimAgent.Benchmark.Column.Task>
+  <RimAgent.Benchmark.Column.Status>状态</RimAgent.Benchmark.Column.Status>
+  <RimAgent.Benchmark.Column.Tools>工具／失败</RimAgent.Benchmark.Column.Tools>
+  <RimAgent.Benchmark.Column.Time>时间</RimAgent.Benchmark.Column.Time>
+  <RimAgent.Benchmark.Tier.basic>[基本]</RimAgent.Benchmark.Tier.basic>
+  <RimAgent.Benchmark.Tier.hard>[困难]</RimAgent.Benchmark.Tier.hard>
+  <RimAgent.Benchmark.State.Pending>等待中</RimAgent.Benchmark.State.Pending>
+  <RimAgent.Benchmark.State.Running>运行中</RimAgent.Benchmark.State.Running>
+  <RimAgent.Benchmark.State.Passed>通过</RimAgent.Benchmark.State.Passed>
+  <RimAgent.Benchmark.State.Failed>失败</RimAgent.Benchmark.State.Failed>
+  <RimAgent.Benchmark.Task.stockpile>储存区</RimAgent.Benchmark.Task.stockpile>
+  <RimAgent.Benchmark.Task.rice_field>水稻田</RimAgent.Benchmark.Task.rice_field>
+  <RimAgent.Benchmark.Task.research_bench>研究台</RimAgent.Benchmark.Task.research_bench>
+  <RimAgent.Benchmark.Task.wood_room>木造小房间</RimAgent.Benchmark.Task.wood_room>
+  <RimAgent.Benchmark.Task.research_priority>研究优先级</RimAgent.Benchmark.Task.research_priority>
+  <RimAgent.Benchmark.Task.cut_trees>砍树</RimAgent.Benchmark.Task.cut_trees>
+  <RimAgent.Benchmark.Task.food_report>食物存量汇报</RimAgent.Benchmark.Task.food_report>
+  <RimAgent.Benchmark.Task.two_room_house>两房建筑</RimAgent.Benchmark.Task.two_room_house>
+  <RimAgent.Benchmark.Task.freezer>冷冻库</RimAgent.Benchmark.Task.freezer>
+  <RimAgent.Benchmark.Task.corn_storage>玉米储存</RimAgent.Benchmark.Task.corn_storage>
+  <RimAgent.Benchmark.Task.kitchen_bills>厨房工作单</RimAgent.Benchmark.Task.kitchen_bills>
+  <RimAgent.Benchmark.Task.injured_care>伤患照护</RimAgent.Benchmark.Task.injured_care>
+  <RimAgent.Benchmark.Task.daily_schedule>作息安排</RimAgent.Benchmark.Task.daily_schedule>
+  <RimAgent.Benchmark.Task.defend>防御</RimAgent.Benchmark.Task.defend>
+</LanguageData>

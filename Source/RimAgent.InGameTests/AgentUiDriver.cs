@@ -67,6 +67,16 @@ internal static class AgentUiDriver
 internal sealed class AgentUiDriverTests
 {
     [Test]
+    public static IEnumerator BenchmarkProgressRenders()
+    {
+        Window_BenchmarkProgress.Show(BenchmarkComponent.SampleRows());
+        IEnumerator capture = AgentUiDriver.CaptureProof("benchmark-progress");
+        while (capture.MoveNext()) yield return capture.Current;
+        Expect.IsTrue(Find.WindowStack.IsOpen<Window_BenchmarkProgress>(), "進度視窗應已開啟");
+        Find.WindowStack.TryRemove(typeof(Window_BenchmarkProgress), doCloseSound: false);
+    }
+
+    [Test]
     public static IEnumerator AgentWindowOpensRendersAndCloses()
     {
         AgentUiDriver.CloseAgentWindow();

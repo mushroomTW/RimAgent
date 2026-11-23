@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <RimAgent.Benchmark.AlreadyRunning>The RimAgent benchmark is already running.</RimAgent.Benchmark.AlreadyRunning>
+  <RimAgent.Benchmark.Confirm>The RimAgent benchmark clears the agent conversation, gives the agent full access and changes this map (zones, blueprints, spawned enemies). The game stays paused while it runs, and each task is stopped after 10 minutes. Use a throwaway save. Start?</RimAgent.Benchmark.Confirm>
+  <RimAgent.Benchmark.Done>RimAgent benchmark: {0}/{1} passed. Details: {2}</RimAgent.Benchmark.Done>
+  <RimAgent.Benchmark.NoRun>No benchmark has been run yet.</RimAgent.Benchmark.NoRun>
+  <RimAgent.Benchmark.Title>RimAgent benchmark</RimAgent.Benchmark.Title>
+  <RimAgent.Benchmark.Progress>{0}/{1} done, {2} passed, {3} failed</RimAgent.Benchmark.Progress>
+  <RimAgent.Benchmark.Column.Task>Task</RimAgent.Benchmark.Column.Task>
+  <RimAgent.Benchmark.Column.Status>Status</RimAgent.Benchmark.Column.Status>
+  <RimAgent.Benchmark.Column.Tools>Tools / failed</RimAgent.Benchmark.Column.Tools>
+  <RimAgent.Benchmark.Column.Time>Time</RimAgent.Benchmark.Column.Time>
+  <RimAgent.Benchmark.Tier.basic>[Basic]</RimAgent.Benchmark.Tier.basic>
+  <RimAgent.Benchmark.Tier.hard>[Hard]</RimAgent.Benchmark.Tier.hard>
+  <RimAgent.Benchmark.State.Pending>Pending</RimAgent.Benchmark.State.Pending>
+  <RimAgent.Benchmark.State.Running>Running</RimAgent.Benchmark.State.Running>
+  <RimAgent.Benchmark.State.Passed>Passed</RimAgent.Benchmark.State.Passed>
+  <RimAgent.Benchmark.State.Failed>Failed</RimAgent.Benchmark.State.Failed>
+  <RimAgent.Benchmark.Task.stockpile>Stockpile</RimAgent.Benchmark.Task.stockpile>
+  <RimAgent.Benchmark.Task.rice_field>Rice field</RimAgent.Benchmark.Task.rice_field>
+  <RimAgent.Benchmark.Task.research_bench>Research bench</RimAgent.Benchmark.Task.research_bench>
+  <RimAgent.Benchmark.Task.wood_room>Wooden room</RimAgent.Benchmark.Task.wood_room>
+  <RimAgent.Benchmark.Task.research_priority>Research priority</RimAgent.Benchmark.Task.research_priority>
+  <RimAgent.Benchmark.Task.cut_trees>Cut trees</RimAgent.Benchmark.Task.cut_trees>
+  <RimAgent.Benchmark.Task.food_report>Food report</RimAgent.Benchmark.Task.food_report>
+  <RimAgent.Benchmark.Task.two_room_house>Two-room house</RimAgent.Benchmark.Task.two_room_house>
+  <RimAgent.Benchmark.Task.freezer>Freezer</RimAgent.Benchmark.Task.freezer>
+  <RimAgent.Benchmark.Task.corn_storage>Corn storage</RimAgent.Benchmark.Task.corn_storage>
+  <RimAgent.Benchmark.Task.kitchen_bills>Kitchen bills</RimAgent.Benchmark.Task.kitchen_bills>
+  <RimAgent.Benchmark.Task.injured_care>Injured care</RimAgent.Benchmark.Task.injured_care>
+  <RimAgent.Benchmark.Task.daily_schedule>Daily schedule</RimAgent.Benchmark.Task.daily_schedule>
+  <RimAgent.Benchmark.Task.defend>Defense</RimAgent.Benchmark.Task.defend>
+</LanguageData>

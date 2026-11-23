@@ -388,7 +388,7 @@ public sealed class RunLogWriter
                 string file = name[..split] + DaySeparator + name[(split + 1)..];
                 ArchiveLocked(file, Summarize(path, file));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception)
             {
                 // 一個收不了不影響其他的，下次啟動再試。
             }
@@ -409,20 +409,27 @@ public sealed class RunLogWriter
             first ??= line;
             last = line;
             JsonObject e = Parse(line);
-            secs = (double?)e["at"] ?? secs;
-            switch ((string)e["t"])
+            try
             {
-                case "tool":
-                    tools[(int)e["call"]] = e;
-                    break;
-                case "model":
-                    steps++;
-                    input += (long?)e["in"] ?? 0;
-                    output += (long?)e["out"] ?? 0;
-                    if ((string)e["model"] is { } model) models.Add(model);
-                    break;
-                default:
-                    break;
+                secs = (double?)e["at"] ?? secs;
+                switch ((string)e["t"])
+                {
+                    case "tool":
+                        tools[(int)e["call"]] = e;
+                        break;
+                    case "model":
+                        steps++;
+                        input += (long?)e["in"] ?? 0;
+                        output += (long?)e["out"] ?? 0;
+                        if ((string)e["model"] is { } model) models.Add(model);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or NullReferenceException)
+            {
+                // 欄位缺漏或型別不符的行：略過，其餘照算。
             }
         }
         if (last != null && last.StartsWith(EndPrefix, StringComparison.Ordinal) && Parse(last).Count > 0) return last;
