@@ -170,6 +170,9 @@ public sealed partial class ColonyAgentSession
         ResetInstructionCaches();
         int instructionId = Transcript.BeginInstruction();
         _loopGuard.Reset();
+        _runOptions.BeginRun();
+        Interlocked.Exchange(ref _instructionTokens, 0);
+        _tokenBudgetReached = false;
         RunLogRecord runLog = RunLoggingEnabled?.Invoke() == true ? new RunLogRecord
         {
             Instruction = RunLogRecord.Limit(options.DisplayText ?? text),
@@ -230,7 +233,7 @@ public sealed partial class ColonyAgentSession
             InstructionId = instructionId,
             ToolsStripped = IsToolsStripped(response)
         });
-        if (hitStepLimit)
+        if (hitStepLimit && !_tokenBudgetReached)
         {
             Transcript.Add(new TranscriptEntry
             {
@@ -295,6 +298,7 @@ public sealed partial class ColonyAgentSession
         runOutcome = ex is OperationCanceledException ? "cancelled" : "error";
         // 失敗那句可能只做了一半，但做了的部分仍該能復原；空框會被 EndFrame 丟掉。
         Undo.EndFrame(text + " (failed)");
+        KeepInterruptedSteps(runOutcome);
         AgentErrorKind errorKind = Classify(ex);
         if (!(cancellationToken.IsCancellationRequested && errorKind == AgentErrorKind.Cancelled))
         {
@@ -307,6 +311,36 @@ public sealed partial class ColonyAgentSession
             });
         }
         return null;
+    }
+
+    /// <summary>
+    /// AF 只在整句成功時存歷史；中斷前已執行的工具若不留下，下一句會以為什麼都沒做過而重做。
+    /// 不用 AF 的 <c>RequirePerServiceCallChatHistoryPersistence</c>：它在模型回應後就存，中斷時會留下沒有結果的工具呼叫，供應商會拒收。
+    /// </summary>
+    private void KeepInterruptedSteps(string outcome)
+    {
+        if (_session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return;
+        List<ChatMessage> history = provider.GetMessages(_session);
+        IReadOnlyList<ChatMessage> sent = _runOptions.LastRequest;
+        if (sent.Count <= history.Count) return;
+        List<ChatMessage> added = [.. sent.Skip(history.Count), .. _runOptions.UnsentStep()];
+        if (!added.Any(m => m.Role == ChatRole.Tool)) return;
+
+        added.Add(new ChatMessage(ChatRole.Assistant,
+            "[This run was interrupted (" + outcome + ") before it finished. Steps above with a result did run; check the current state before repeating anything.]"));
+        provider.SetMessages(_session, [.. history, .. added]);
+    }
+
+    /// <summary>把迴圈上限設為下一步：MEAI 讓這一步的工具跑完，再拿掉工具要模型收尾，不會留下沒執行的呼叫。</summary>
+    private void EndRunIfOverTokenBudget(int steps, ChatResponse response)
+    {
+        if (!response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Any()) return;
+        long budget = InstructionTokenBudget?.Invoke() ?? 0;
+        if (budget <= 0 || _invoking == null || Interlocked.Read(ref _instructionTokens) < budget) return;
+        if (_invoking.MaximumIterationsPerRequest <= steps) return;
+        _invoking.MaximumIterationsPerRequest = steps;
+        _tokenBudgetReached = true;
+        NotifyStuck("This instruction reached the token limit set in the mod settings, so RimAgent is wrapping up.");
     }
 
     private static string DetermineRunSource(bool goalRun, bool autonomous)
@@ -333,29 +367,41 @@ public sealed partial class ColonyAgentSession
         }
         catch (Exception ex) when (Classify(ex) == AgentErrorKind.ContextTooLong)
         {
-            // 工具若已經執行，整句重跑可能造成重複副作用；只允許尚未呼叫工具的請求自動重試。
-            if (Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId))
-            {
-                throw;
-            }
+            if (RanTools(instructionId)) throw;
             // 供應商仍可能因 schema、推理 token 或既有舊存檔超出視窗。
-            // 重建 AF session 後僅重試一次目前指令，避免玩家卡死在每句都失敗的狀態。
-            _session = await _agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
-            Transcript.Add(new TranscriptEntry
+            // 先摘要重試，仍太長才重建 AF session，避免玩家卡死在每句都失敗的狀態。
+            if (await TrySummarizeHistoryAsync(cancellationToken).ConfigureAwait(false))
             {
-                Kind = TranscriptKind.Notice,
-                Text = "Conversation context was too long; older model history was cleared and this instruction was retried.",
-                InstructionId = instructionId
-            });
-            return await _agent
-                .RunAsync(modelText, _session, new ChatClientAgentRunOptions(options), cancellationToken)
-                .ConfigureAwait(false);
+                try
+                {
+                    return await RetryAsync("summarized").ConfigureAwait(false);
+                }
+                catch (Exception retry) when (Classify(retry) == AgentErrorKind.ContextTooLong && !RanTools(instructionId))
+                {
+                    // 往下清空歷史。
+                }
+            }
+            _session = await _agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
+            return await RetryAsync("cleared").ConfigureAwait(false);
+        }
+
+        Task<AgentResponse> RetryAsync(string action)
+        {
+            _runOptions.BeginRun();
+            NotifyStuck("Conversation context was too long; older model history was " + action + " and this instruction was retried.");
+            return _agent.RunAsync(modelText, _session, new ChatClientAgentRunOptions(options), cancellationToken);
         }
     }
+
+    /// <summary>工具若已經執行，整句重跑可能造成重複副作用；只允許尚未呼叫工具的請求自動重試。</summary>
+    private bool RanTools(int instructionId) =>
+        Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId);
 
     /// <summary>主 Agent 與子代理的模型回應都記進執行紀錄；並行的子代理會同時呼叫，所以上鎖。</summary>
     private void RecordModelResponse(ChatResponse response)
     {
+        UsageDetails usage = response?.Usage;
+        Interlocked.Add(ref _instructionTokens, usage?.TotalTokenCount ?? (usage?.InputTokenCount ?? 0) + (usage?.OutputTokenCount ?? 0));
         RunLogRecord log = _activeRunLog;
         if (log == null) return;
         lock (log)

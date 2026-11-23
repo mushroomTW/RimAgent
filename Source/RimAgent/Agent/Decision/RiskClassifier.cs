@@ -37,7 +37,8 @@ public sealed class RiskVerdict
 public sealed class RiskClassifier : IRiskChecker
 {
     public const float Temperature = 0f;
-    public const int MaxOutputTokens = 150;
+    /// <summary>答案只有一小段 JSON；預設就會思考的模型把思考算進上限，太小會沒有答案而被當成失敗、全部拒絕。</summary>
+    public const int MaxOutputTokens = ModelSlots.ReasoningOutputFloor;
 
     private readonly IChatClient _client;
     private readonly Func<string> _modelProvider;

@@ -1,6 +1,7 @@
 #nullable disable
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -67,17 +68,75 @@ public sealed partial class ColonyAgentSession
     /// <summary>記下工具迴圈最近一步實際使用的 ChatOptions；掛在迴圈內側，因為迴圈可能中途換成複本（ConversationId 改變、最後一輪剝除工具）。load_toolpack 靠它改 options.Tools，迴圈下一步重讀（或複製）後新清單才生效。</summary>
     private sealed class RunOptionsCapture : DelegatingChatClient
     {
+        private readonly Action<int, ChatResponse> _responseObserved;
+        private readonly ConcurrentDictionary<string, object> _results = new(StringComparer.Ordinal);
+        private ChatResponse _lastResponse;
         private ChatOptions _current;
+        private List<ChatMessage> _lastRequest;
+        private int _steps;
 
-        public RunOptionsCapture(IChatClient innerClient) : base(innerClient) { }
+        public RunOptionsCapture(IChatClient innerClient, Action<int, ChatResponse> responseObserved) : base(innerClient)
+        {
+            _responseObserved = responseObserved;
+        }
 
-        public override Task<ChatResponse> GetResponseAsync(
+        /// <summary>最近一次送出的完整訊息；工具迴圈只在結果到齊後才送出，所以呼叫與結果必定成對。</summary>
+        public IReadOnlyList<ChatMessage> LastRequest => Volatile.Read(ref _lastRequest) ?? [];
+
+        /// <summary>還沒送回模型的那一步：呼叫與已有的結果，缺的補上說明，讓呼叫與結果成對。</summary>
+        public IReadOnlyList<ChatMessage> UnsentStep()
+        {
+            ChatResponse response = Volatile.Read(ref _lastResponse);
+            if (response == null) return [];
+            List<FunctionCallContent> calls = [.. response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>()];
+            if (calls.Count == 0) return [];
+            return [.. response.Messages, new ChatMessage(ChatRole.Tool, [.. calls.Select(c => (AIContent)new FunctionResultContent(
+                c.CallId, _results.TryGetValue(c.CallId, out object result) ? result : "Interrupted: no result; this call may or may not have run."))])];
+        }
+
+        public void RecordToolResults(FunctionInvokingChatClient invoking)
+        {
+            var inner = invoking.FunctionInvoker;
+            invoking.FunctionInvoker = async (context, cancellationToken) =>
+            {
+                try
+                {
+                    object result = inner == null
+                        ? await context.Function.InvokeAsync(context.Arguments, cancellationToken).ConfigureAwait(false)
+                        : await inner(context, cancellationToken).ConfigureAwait(false);
+                    _results[context.CallContent.CallId] = result;
+                    return result;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _results[context.CallContent.CallId] = "Error: " + ex.Message;
+                    throw;
+                }
+            };
+        }
+
+        public void BeginRun()
+        {
+            Volatile.Write(ref _lastResponse, null);
+            _results.Clear();
+            Volatile.Write(ref _lastRequest, null);
+            Volatile.Write(ref _steps, 0);
+        }
+
+        public override async Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
             ChatOptions options = null,
             CancellationToken cancellationToken = default)
         {
+            List<ChatMessage> sent = [.. messages];
             Volatile.Write(ref _current, options);
-            return base.GetResponseAsync(messages, options, cancellationToken);
+            Volatile.Write(ref _lastRequest, sent);
+            Volatile.Write(ref _lastResponse, null);
+            _results.Clear();
+            ChatResponse response = await base.GetResponseAsync(sent, options, cancellationToken).ConfigureAwait(false);
+            Volatile.Write(ref _lastResponse, response);
+            _responseObserved(Interlocked.Increment(ref _steps), response);
+            return response;
         }
 
         public void AddTools(IEnumerable<AITool> tools)

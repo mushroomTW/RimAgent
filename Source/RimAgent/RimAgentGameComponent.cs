@@ -516,6 +516,7 @@ public partial class RimAgentGameComponent : GameComponent
         _expansions = (ExpansionsLine() + "\n\n" + ModsLine()).Trim();
         session.SubagentExpansions = _expansions;
         session.SyncAutoCompact(settings.autoCompact, settings.autoCompactThreshold);
+        session.InstructionTokenBudget = () => settings.instructionTokenLimitK * 1000L;
         session.ToolUsage = SharedToolUsage.Value;
         session.RunLoggingEnabled = () => settings.recordRuns;
         session.RunLogSink = record =>

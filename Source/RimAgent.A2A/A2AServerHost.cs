@@ -5,9 +5,11 @@ using A2A;
 using A2A.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 
 namespace RimAgent.A2A;
 
@@ -41,6 +43,7 @@ public static class A2AServerHost
 
         WebApplication app = builder.Build();
         app.UseHostFiltering();
+        app.Use(RejectCrossSiteAsync);
         app.MapA2A(JsonRpcPath);
         app.MapWellKnownAgentCard(card);
         app.MapGrpcService<A2AGrpcService>();
@@ -54,6 +57,26 @@ public static class A2AServerHost
             throw;
         }
         return new RunningServer(app);
+    }
+
+    /// <summary>
+    /// Host 檢查擋不住跨站請求：網頁可對 localhost 送 text/plain 的 POST 而不觸發 CORS 預檢，A2A.AspNetCore 1.0.0-preview4 又不檢查內容型別。
+    /// 瀏覽器的跨站 POST 一定帶 Origin，agent 用戶端不帶。
+    /// </summary>
+    private static Task RejectCrossSiteAsync(HttpContext context, RequestDelegate next)
+    {
+        HttpRequest request = context.Request;
+        if (!StringValues.IsNullOrEmpty(request.Headers.Origin))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        }
+        if (HttpMethods.IsPost(request.Method) && request.Path.StartsWithSegments(JsonRpcPath, StringComparison.OrdinalIgnoreCase) && !request.HasJsonContentType())
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return Task.CompletedTask;
+        }
+        return next(context);
     }
 
     public static AgentCard CreateCard(int httpPort, int grpcPort, string version) => new()

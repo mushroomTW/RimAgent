@@ -104,6 +104,12 @@ public class RimAgentSettings : ModSettings
     public bool autoCompact = true;
     public int autoCompactThreshold = DefaultAutoCompactThreshold;
 
+    public const int DefaultInstructionTokenLimitK = 5000;
+    public const int MaxInstructionTokenLimitK = 20000;
+
+    /// <summary>單句指令的 token 上限（千）；0 為不限。</summary>
+    public int instructionTokenLimitK = DefaultInstructionTokenLimitK;
+
     public bool recordRuns = false;
 
     public float windowRectX = -1f;
@@ -192,6 +198,7 @@ public class RimAgentSettings : ModSettings
         autoTimeSpeed = fresh.autoTimeSpeed;
         autoCompact = fresh.autoCompact;
         autoCompactThreshold = fresh.autoCompactThreshold;
+        instructionTokenLimitK = fresh.instructionTokenLimitK;
         recordRuns = fresh.recordRuns;
         layouts = fresh.layouts;
         imageInput = fresh.imageInput;
@@ -297,12 +304,14 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref imageInput, "imageInput", defaultValue: false);
         Scribe_Values.Look(ref autoCompact, "autoCompact", defaultValue: true);
         Scribe_Values.Look(ref autoCompactThreshold, "autoCompactPercent", DefaultAutoCompactThreshold);
+        Scribe_Values.Look(ref instructionTokenLimitK, "instructionTokenLimitK", DefaultInstructionTokenLimitK);
         Scribe_Values.Look(ref recordRuns, "recordRuns", defaultValue: false);
         Scribe_Values.Look(ref windowRectX, "windowRectX", -1f);
         Scribe_Values.Look(ref windowRectY, "windowRectY", -1f);
         Scribe_Values.Look(ref windowRectWidth, "windowRectWidth", 620f);
         Scribe_Values.Look(ref windowRectHeight, "windowRectHeight", 460f);
         // 壞存檔可能帶著範圍外的值：讀回後夾取，免得自動壓縮永不觸發或過度積極。
+        instructionTokenLimitK = UnityEngine.Mathf.Clamp(instructionTokenLimitK, 0, MaxInstructionTokenLimitK);
         autoCompactThreshold = UnityEngine.Mathf.Clamp(autoCompactThreshold, MinAutoCompactThreshold, MaxAutoCompactThreshold);
     }
 

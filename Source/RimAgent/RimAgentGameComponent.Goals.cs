@@ -399,7 +399,8 @@ public partial class RimAgentGameComponent
         _goalBlockerKey = decision.BlockerKey;
         _goalNeedsVerification = true;
         _goalAuditNote = audit.Reason;
-        if (decision.Pause)
+        // 宣稱完成的回合不經過回合上限判斷，被否決後要在這裡補上。
+        if (decision.Pause || decision.Turns >= GoalProgress.MaxTurns)
         {
             _goalPaused = true;
             DetermineGoalPauseDetails(decision, reply, objective, out _goalPauseReason, out string pauseNotice);

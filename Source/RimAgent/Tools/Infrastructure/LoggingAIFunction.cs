@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -20,7 +21,7 @@ namespace RimAgent.Tools;
 /// 遊戲沒在進行（讀檔中、回到主選單）時不碰工具直接回錯誤；
 /// 工具回傳後把這段期間遊戲記錄的錯誤附在結果後面，模型才知道命令雖然「成功」但遊戲隨即噴錯。
 /// </summary>
-internal sealed class LoggingAIFunction : DelegatingAIFunction
+internal sealed partial class LoggingAIFunction : DelegatingAIFunction
 {
     private const int MaxGameErrorsAppended = 5;
 
@@ -78,6 +79,12 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
         if (redirect == null && interjection == null) return result;
         return (result?.ToString() ?? string.Empty) + redirect + (interjection == null ? null : FormatInterjection(interjection));
     }
+
+    /// <summary>玩家插話與守衛提示以標籤附在工具結果後面；工具內容（網頁、MCP、遊戲內名稱）自帶同名標籤就能冒充玩家。</summary>
+    internal static string NeutralizeTrustedTags(string text) => TrustedTag.Replace(text ?? string.Empty, "&lt;$1");
+
+    [GeneratedRegex(@"<(\s*(?:/\s*)?(?:player_message|loop_guard)\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex TrustedTag { get; }
 
     private static string FormatInterjection(string text)
     {
@@ -144,7 +151,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
 
     private string RecordResult(object result, AIFunctionArguments arguments, TranscriptEntry entry, string callKey)
     {
-        string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), store: Outputs);
+        string text = ToolOutputLimit.Apply(NeutralizeTrustedTags(AppendGameErrors(result?.ToString() ?? string.Empty)), store: Outputs);
         entry.Result = text;
         entry.Failed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
         bool isPreview = text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
@@ -217,7 +224,7 @@ internal sealed class LoggingAIFunction : DelegatingAIFunction
             {
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
             }
-            string text = ToolOutputLimit.Apply(AppendGameErrors(result?.ToString() ?? string.Empty), store: Outputs);
+            string text = ToolOutputLimit.Apply(NeutralizeTrustedTags(AppendGameErrors(result?.ToString() ?? string.Empty)), store: Outputs);
             _transcript.UpdateToolResult(entry, text, text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal));
             return text;
         }

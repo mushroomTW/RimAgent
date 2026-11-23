@@ -222,6 +222,9 @@
   <RimAgent.Settings.AutoCompactTip>When model history exceeds the threshold, older tool results are folded automatically before each request at no extra model cost; once history reaches twice the threshold, the oldest complete turns are dropped until it is back within the threshold (the visible log is kept). Manual /compact runs a separate LLM summary and is not affected by this switch.</RimAgent.Settings.AutoCompactTip>
   <RimAgent.Settings.AutoCompactThreshold>Tidy up at {0}% of the AI's memory limit</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>Uses the framework's model context limit and estimated history tokens. Auto-fold is unavailable when the limit is unknown.</RimAgent.Settings.AutoCompactThresholdTip>
+  <RimAgent.Settings.InstructionTokenLimit>One instruction may use at most {0}k tokens</RimAgent.Settings.InstructionTokenLimit>
+  <RimAgent.Settings.InstructionTokenLimitNone>One instruction: no token limit</RimAgent.Settings.InstructionTokenLimitNone>
+  <RimAgent.Settings.InstructionTokenLimitTip>When one instruction (including subagents) reaches this many tokens, RimAgent finishes the current step and reports. 0 means no limit.</RimAgent.Settings.InstructionTokenLimitTip>
   <RimAgent.Settings.RunLogHeader>Debug log</RimAgent.Settings.RunLogHeader>
   <RimAgent.Settings.RecordRuns>Write everything the Agent does to a file (only for bug reports)</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>Log file: {0}</RimAgent.Settings.RunLogPath>

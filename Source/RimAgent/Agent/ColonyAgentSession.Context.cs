@@ -278,11 +278,20 @@ public sealed partial class ColonyAgentSession
     {
         if (index == null || !AutoCompactEnabled) return false;
         long? budget = CompactionBudget(GetContextWindow(), AutoCompactThreshold);
-        if (!budget.HasValue) return false;
-        // IncludedTokenCount 才是不含排除群組、實際會送進模型的量；TotalTokenCount 會把排除內容也算進去。
-        long measure = _tokenUsage.Meter.Project(index.GetIncludedMessages()) ?? index.IncludedTokenCount;
-        return measure >= budget.Value;
+        return budget.HasValue && MeasureIncluded(index) >= budget.Value;
     }
+
+    internal bool AutoCompactTargetReached(CompactionMessageIndex index)
+    {
+        long? budget = CompactionBudget(GetContextWindow(), AutoCompactThreshold);
+        return !budget.HasValue || MeasureIncluded(index) <= budget.Value * AutoCompactTargetPercent / 100;
+    }
+
+    private const int AutoCompactTargetPercent = 70;
+
+    // IncludedTokenCount 才是不含排除群組、實際會送進模型的量；TotalTokenCount 會把排除內容也算進去。
+    private long MeasureIncluded(CompactionMessageIndex index) =>
+        _tokenUsage.Meter.Project(index.GetIncludedMessages()) ?? index.IncludedTokenCount;
 
     private int? GetContextWindow()
     {
@@ -393,15 +402,7 @@ public sealed partial class ColonyAgentSession
                 AddNotice("Nothing to compact: model history is empty.");
                 return null;
             }
-#pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
-            var strategy = new SummarizationCompactionStrategy(
-                _summarizer,
-                CompactionTriggers.Always,
-                ManualSummaryPreservedGroups,
-                summarizationPrompt: null,
-                target: null);
-            IList<ChatMessage> after = [.. (await CompactionProvider.CompactAsync(strategy, before, logger: null, cancellationToken).ConfigureAwait(false))];
-#pragma warning restore MAAI001
+            List<ChatMessage> after = await SummarizeAsync(before, cancellationToken).ConfigureAwait(false);
             // 摘要只會把多組折成一則，不可能變多；一樣多代表沒折到
             // （歷史太短，或策略吞掉了摘要失敗），誠實回報而不是謊稱成功。
             if (after.Count >= before.Count)
@@ -433,6 +434,39 @@ public sealed partial class ColonyAgentSession
             compacting.Dispose();
             PrepareSaveSnapshot();
             Volatile.Write(ref _busy, 0);
+        }
+    }
+
+#pragma warning disable MAAI001 // 同建構式：AF 1.21 壓縮 API 評估中，鎖定版本並以回歸測試保護。
+    private async Task<List<ChatMessage>> SummarizeAsync(List<ChatMessage> before, CancellationToken cancellationToken)
+    {
+        var strategy = new SummarizationCompactionStrategy(
+            _summarizer,
+            CompactionTriggers.Always,
+            ManualSummaryPreservedGroups,
+            summarizationPrompt: null,
+            target: null);
+        return [.. (await CompactionProvider.CompactAsync(strategy, before, logger: null, cancellationToken).ConfigureAwait(false))];
+    }
+#pragma warning restore MAAI001
+
+    /// <summary>供應商回報超出視窗時先折成摘要；摘要也失敗（歷史太短或摘要本身超出視窗）才丟掉歷史。</summary>
+    private async Task<bool> TrySummarizeHistoryAsync(CancellationToken cancellationToken)
+    {
+        if (_session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return false;
+        List<ChatMessage> before = [.. provider.GetMessages(_session)];
+        if (before.Count == 0) return false;
+        try
+        {
+            List<ChatMessage> after = await SummarizeAsync(before, cancellationToken).ConfigureAwait(false);
+            if (after.Count >= before.Count) return false;
+            provider.SetMessages(_session, after);
+            _tokenUsage.Reset();
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return false;
         }
     }
 

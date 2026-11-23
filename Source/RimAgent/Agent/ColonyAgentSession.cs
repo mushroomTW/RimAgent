@@ -2,6 +2,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -60,6 +62,8 @@ public sealed partial class ColonyAgentSession
     private readonly FailureLoopGuard _loopGuard;
     private readonly Func<string> _instructions;
     private AgentSession _session;
+    private long _instructionTokens;
+    private bool _tokenBudgetReached;
     private string _serializedSession;
     /// <summary>每句指令結束時備妥的存檔內容；存檔直接取用，不在主線程序列化，也不因忙碌而漏存。</summary>
     private string _saveSnapshot;
@@ -74,6 +78,9 @@ public sealed partial class ColonyAgentSession
     public Action<RunLogRecord> RunLogSink { get; set; }
 
     public ToolUsageStats ToolUsage { get; set; }
+
+    /// <summary>單句指令（含子代理）的 token 上限；0 為不限。</summary>
+    public Func<long> InstructionTokenBudget { get; set; }
 
     /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
     /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
@@ -134,9 +141,10 @@ public sealed partial class ColonyAgentSession
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
         IChatClient compacting = new ChatClientBuilder(_images).UseAIContextProviders(_compaction).Build();
 #pragma warning restore MAAI001
-        _runOptions = new RunOptionsCapture(new MessageIsolatingChatClient(compacting));
+        _runOptions = new RunOptionsCapture(new MessageIsolatingChatClient(compacting), EndRunIfOverTokenBudget);
         var invokingClient = _runOptions.AsMainThreadFunctionInvokingClient(maxSteps);
         _invoking = invokingClient as FunctionInvokingChatClient;
+        if (_invoking != null) _runOptions.RecordToolResults(_invoking);
         _toolPackLoader = CreateToolPackLoader(world);
         _scriptRunner = CreateScriptRunner();
         _summarizer = new ModelSlotChatClient(innerClient, routing?.CompactModel, routing?.CompactReasoning);
@@ -171,12 +179,44 @@ public sealed partial class ColonyAgentSession
     }
 
 #pragma warning disable MAAI001 // AF 1.21 將壓縮 API 標記為評估中；已鎖定相依版本並以回歸測試保護。
-    /// <summary>只折疊送出請求裡較舊的工具輸出。掛在工具迴圈內側（ChatClientBuilder 層）才會每一步送出前都折疊；掛在 ChatClientAgentOptions 只在指令邊界執行，工具迴圈內不會觸發（見 AF Agent_Step18 說明）。只改送出的內容，不動 session 內存的歷史；觸發條件讀即時設定，設定頁調整下一句生效。</summary>
+    /// <summary>折到門檻以下一段距離才停：AF 預設剛好低於門檻就停，之後每幾步又折一次，每次都改動前綴而失去提示快取。只折疊送出請求裡較舊的工具輸出。掛在工具迴圈內側（ChatClientBuilder 層）才會每一步送出前都折疊；掛在 ChatClientAgentOptions 只在指令邊界執行，工具迴圈內不會觸發（見 AF Agent_Step18 說明）。只改送出的內容，不動 session 內存的歷史；觸發條件讀即時設定，設定頁調整下一句生效。</summary>
     private CompactionProvider CreateCompaction()
     {
         return new CompactionProvider(new ToolResultCompactionStrategy(
             ShouldAutoCompact,
-            AutoFoldPreservedGroups));
+            AutoFoldPreservedGroups,
+            AutoCompactTargetReached)
+        {
+            ToolCallFormatter = FoldToolGroup
+        });
+    }
+
+    private const int FoldedArgumentChars = 120;
+    private const int FoldedResultChars = 300;
+
+    [GeneratedRegex(@"full output saved as [^\s,]+", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex SavedOutput { get; }
+
+    /// <summary>AF 1.28 的預設格式把完整結果原文照搬成文字，折疊後大小幾乎不變，所以自訂並截短。</summary>
+    internal static string FoldToolGroup(CompactionMessageGroup group)
+    {
+        Dictionary<string, string> results = new(StringComparer.Ordinal);
+        foreach (FunctionResultContent result in group.Messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>())
+        {
+            results[result.CallId] = result.Result?.ToString() ?? string.Empty;
+        }
+        var sb = new StringBuilder("[Tool Calls] (older results shortened; look things up again if the details matter, but do not repeat commands that already ran)");
+        foreach (FunctionCallContent call in group.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>())
+        {
+            string arguments = call.Arguments == null ? string.Empty
+                : string.Join(", ", call.Arguments.Select(a => a.Key + "=" + a.Value));
+            string result = results.GetValueOrDefault(call.CallId, string.Empty);
+            string shown = ToolText.TruncateField(result, FoldedResultChars);
+            sb.Append('\n').Append(call.Name).Append('(').Append(ToolText.TruncateField(arguments, FoldedArgumentChars)).Append("): ").Append(shown);
+            Match saved = SavedOutput.Match(result);
+            if (saved.Success && !shown.Contains(saved.Value, StringComparison.Ordinal)) sb.Append(" [").Append(saved.Value).Append(", read it with read_tool_output]");
+        }
+        return sb.ToString();
     }
 #pragma warning restore MAAI001
 

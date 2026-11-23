@@ -222,6 +222,9 @@
   <RimAgent.Settings.AutoCompactTip>模型历史超过门槛则数时，每次请求前自动折叠较旧的工具输出，不多花模型调用；历史达门槛两倍时，从最旧的完整对话轮开始舍弃，裁回门槛以内（可见对话记录不受影响）。手动 /compact 另走一次 LLM 摘要，不受此开关影响。</RimAgent.Settings.AutoCompactTip>
   <RimAgent.Settings.AutoCompactThreshold>到 AI 记忆上限的 {0}% 时整理</RimAgent.Settings.AutoCompactThreshold>
   <RimAgent.Settings.AutoCompactThresholdTip>根据框架提供的模型窗口上限与历史 token 估算值触发；上限未知时不自动折叠。</RimAgent.Settings.AutoCompactThresholdTip>
+  <RimAgent.Settings.InstructionTokenLimit>单句指令最多使用 {0}k token</RimAgent.Settings.InstructionTokenLimit>
+  <RimAgent.Settings.InstructionTokenLimitNone>单句指令不限 token</RimAgent.Settings.InstructionTokenLimitNone>
+  <RimAgent.Settings.InstructionTokenLimitTip>一句指令（含子代理）用到这个数量时，RimAgent 做完当前这一步就收尾汇报。0 为不限。</RimAgent.Settings.InstructionTokenLimitTip>
   <RimAgent.Settings.RunLogHeader>调试记录</RimAgent.Settings.RunLogHeader>
   <RimAgent.Settings.RecordRuns>把 Agent 做的每件事记到文件（反馈问题时才需要）</RimAgent.Settings.RecordRuns>
   <RimAgent.Settings.RunLogPath>日志文件：{0}</RimAgent.Settings.RunLogPath>

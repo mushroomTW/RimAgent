@@ -204,6 +204,11 @@ public partial class RimAgentMod : Mod
             listing.Label("RimAgent.Settings.AutoCompactThreshold".Translate(Settings.autoCompactThreshold), -1f, "RimAgent.Settings.AutoCompactThresholdTip".Translate());
             Settings.autoCompactThreshold = Mathf.RoundToInt(listing.Slider(Settings.autoCompactThreshold, RimAgentSettings.MinAutoCompactThreshold, RimAgentSettings.MaxAutoCompactThreshold));
         }
+        TaggedString tokenLimit = Settings.instructionTokenLimitK == 0
+            ? "RimAgent.Settings.InstructionTokenLimitNone".Translate()
+            : "RimAgent.Settings.InstructionTokenLimit".Translate(Settings.instructionTokenLimitK);
+        listing.Label(tokenLimit, -1f, "RimAgent.Settings.InstructionTokenLimitTip".Translate());
+        Settings.instructionTokenLimitK = Mathf.RoundToInt(listing.Slider(Settings.instructionTokenLimitK, 0f, RimAgentSettings.MaxInstructionTokenLimitK) / 100f) * 100;
 
         listing.Gap();
         listing.Label("RimAgent.Settings.LayoutsHeader".Translate());

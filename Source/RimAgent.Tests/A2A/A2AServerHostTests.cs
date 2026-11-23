@@ -40,6 +40,25 @@ public class A2AServerHostTests
         await _server.DisposeAsync();
     }
 
+    /// <summary>瀏覽器頁面能不經預檢送出 text/plain 的跨站 POST，Host 又是 localhost；不擋的話任何網頁都能指揮殖民地。</summary>
+    [TestCase("text/plain", null)]
+    [TestCase("application/json", "https://evil.example")]
+    [TestCase("text/plain", "https://evil.example")]
+    public async Task CrossSiteBrowserRequestsAreRejected(string contentType, string origin)
+    {
+        using var http = new HttpClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"http://localhost:{_httpPort}/a2a");
+        request.Content = new StringContent(
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\",\"params\":{\"message\":{\"messageId\":\"m1\",\"role\":\"ROLE_USER\",\"parts\":[{\"text\":\"x\"}]}}}",
+            System.Text.Encoding.UTF8, contentType);
+        if (origin != null) request.Headers.Add("Origin", origin);
+
+        using HttpResponseMessage response = await http.SendAsync(request);
+
+        Assert.That((int)response.StatusCode, Is.InRange(400, 499));
+        Assert.That(_received, Is.Empty);
+    }
+
     [Test]
     public async Task JsonRpcSendMessageRunsTheInstructionAndCompletesTheTask()
     {
