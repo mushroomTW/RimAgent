@@ -98,6 +98,35 @@ public class RunReliabilityTests
     }
 
     [Test]
+    public async Task StoppingDuringTheSummaryKeepsTheHistory()
+    {
+        using var cts = new System.Threading.CancellationTokenSource();
+        for (int i = 0; i < 6; i++) _client.Reply("answer " + i);
+        _client.Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
+               .Throw(new RimLLMException(LLMError.Cancelled, "stopped")).Do(cts.Cancel);
+        ColonyAgentSession session = NewSession();
+        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i);
+
+        Assert.That(await session.SendAsync("newest", cancellationToken: cts.Token), Is.Null);
+
+        Assert.That(session.History.Any(m => m.Text == "question 0"), Is.True, "停止不可清空歷史");
+        Assert.That(session.Transcript.Snapshot().Any(e => e.Text?.Contains("was cleared", StringComparison.Ordinal) == true), Is.False);
+    }
+
+    [Test]
+    public async Task SummaryTimeoutFallsBackToClearingTheHistory()
+    {
+        for (int i = 0; i < 6; i++) _client.Reply("answer " + i);
+        _client.Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
+               .Throw(new TaskCanceledException("timeout"))
+               .Reply("done");
+        ColonyAgentSession session = NewSession();
+        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i);
+
+        Assert.That(await session.SendAsync("newest"), Is.EqualTo("done"));
+    }
+
+    [Test]
     public async Task InterruptionDuringTheFirstToolStepKeepsWhatRan()
     {
         using var cts = new System.Threading.CancellationTokenSource();

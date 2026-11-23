@@ -459,12 +459,14 @@ public sealed partial class ColonyAgentSession
         try
         {
             List<ChatMessage> after = await SummarizeAsync(before, cancellationToken).ConfigureAwait(false);
+            // 摘要策略會吞掉失敗，也可能吞掉取消；停止時不可往下清空歷史。
+            cancellationToken.ThrowIfCancellationRequested();
             if (after.Count >= before.Count) return false;
             provider.SetMessages(_session, after);
             _tokenUsage.Reset();
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             return false;
         }
