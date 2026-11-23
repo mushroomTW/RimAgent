@@ -60,11 +60,20 @@
     <ProjectReference Include="..\RimAgent\RimAgent.csproj">
       <Private>false</Private>
     </ProjectReference>
+    <!-- 遞移的專案參考不沿用 Private=false，會複製進 Assemblies/；遊戲掃描型別時缺它的相依而報錯。 -->
+    <ProjectReference Include="..\RimAgent.A2A\RimAgent.A2A.csproj">
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
 
   <Target Name="CheckDevTools" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(DevToolsDll)')"
            Text="DevTools 1.7 DLL not found at '$(DevToolsDll)'. Pass -p:DevToolsDll=&lt;path to DevTools.dll&gt;" />
+  </Target>
+
+  <Target Name="CheckNoA2ACopy" AfterTargets="Build">
+    <Error Condition="Exists('$(TargetDir)RimAgent.A2A.dll')"
+           Text="RimAgent.A2A.dll must not be in the test mod's Assemblies; delete it and keep its ProjectReference Private=false." />
   </Target>
 
   <Target Name="CopyDevToolsForDevelopment" AfterTargets="Build">
