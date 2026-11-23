@@ -143,6 +143,64 @@ internal sealed partial class MapWorldTests
         TestHelpers.AssertNone(failures, "place_blueprint");
     }
 
+    /// <summary>操作點上有石塊時，錯誤要講出那一格與石塊 id；石塊沒有儲存區收時要看得出來；benchmark 還原要清掉新增的區域與標記。</summary>
+    [Test]
+    public void BlockedInteractionCellNamesTheCellAndChunkStorageIsChecked()
+    {
+        const string name = nameof(BlockedInteractionCellNamesTheCellAndChunkStorageIsChecked);
+        if (TestHelpers.SkipWithoutMap(name)) return;
+        Map map = Find.CurrentMap;
+        ThingDef bench = DefDatabase<ThingDef>.GetNamed("SimpleResearchBench");
+        CellRect? found = FindFreeRect(map, 6, c => !c.Fogged(map) && c.Standable(map) && map.zoneManager.ZoneAt(c) == null
+            && c.SupportsStructureType(map, TerrainAffordanceDefOf.Medium) && c.GetThingList(map).TrueForAll(t => t is Plant && !t.def.plant.IsTree));
+        if (found == null)
+        {
+            TestHelpers.Skip(name, "no empty visible 6x6 area");
+            return;
+        }
+        IntVec3 center = found.Value.CenterCell;
+        IntVec3 spot = ThingUtility.InteractionCellWhenAt(bench, center, Rot4.North, map);
+        var failures = new List<string>();
+        var dumping = new List<Zone>();
+        Pawn pawn = map.mapPawns.FreeColonistsSpawned.FirstOrDefault();
+        var existing = new Zone_Stockpile(StorageSettingsPreset.DefaultStockpile, map.zoneManager);
+        map.zoneManager.RegisterZone(existing);
+        IntVec3 corner = found.Value.Min;
+        existing.AddCell(corner);
+        dumping.Add(existing);
+        TimeAssignmentDef hour = pawn?.timetable?.times[0];
+        var snapshot = new BenchmarkSnapshot(map);
+        Thing chunk = GenSpawn.Spawn(DefDatabase<ThingDef>.GetNamed("ChunkGranite"), spot, map);
+        try
+        {
+            string message = _world.TryPlaceBlueprint(bench.defName, center.x, center.z, 0, "WoodLog", checkOnly: true).Message ?? string.Empty;
+            if (!message.Contains($"({spot.x},{spot.z}) blocked by ", StringComparison.Ordinal) || !message.Contains($"#{chunk.thingIDNumber}", StringComparison.Ordinal))
+                failures.Add("interaction cell not named: " + message);
+
+            bool others = map.haulDestinationManager.AllHaulDestinationsListForReading.Any(d => d.HaulDestinationEnabled && d.Accepts(chunk));
+            if (!others && _world.WithoutStorage([chunk.thingIDNumber]).Count == 0) failures.Add("reported storage although none accepts the chunk");
+            var zone = new Zone_Stockpile(StorageSettingsPreset.DumpingStockpile, map.zoneManager);
+            map.zoneManager.RegisterZone(zone);
+            zone.AddCell(center);
+            dumping.Add(zone);
+            if (_world.WithoutStorage([chunk.thingIDNumber]).Count > 0) failures.Add("dumping stockpile not seen as storage");
+            map.designationManager.AddDesignation(new Designation(chunk, DesignationDefOf.Haul));
+            existing.Delete();
+            pawn?.timetable?.SetAssignment(0, hour == TimeAssignmentDefOf.Joy ? TimeAssignmentDefOf.Work : TimeAssignmentDefOf.Joy);
+            snapshot.Restore();
+            if (map.zoneManager.ZoneAt(corner) != existing) failures.Add("deleted zone not restored");
+            if (pawn?.timetable?.times[0] != hour) failures.Add("schedule not restored");
+            if (map.zoneManager.AllZones.Contains(zone)) failures.Add("new zone not removed");
+            if (map.designationManager.DesignationOn(chunk, DesignationDefOf.Haul) != null) failures.Add("new designation not removed");
+        }
+        finally
+        {
+            foreach (Zone zone in dumping.Where(map.zoneManager.AllZones.Contains)) zone.Delete();
+            if (!chunk.Destroyed) chunk.Destroy();
+        }
+        TestHelpers.AssertNone(failures, "interaction cell and chunk storage");
+    }
+
     /// <summary>
     /// 多格建築的藍圖：place_blueprint 回報的佔格與原版藍圖的 OccupiedRect 一致（四個朝向都驗）；
     /// 再往它身上放別的建築時，失敗原因列出占用者的 id 與範圍。結束後拆掉藍圖。

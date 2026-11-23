@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using RimAgent.Game;
 using RimAgent.Tools;
@@ -243,5 +244,36 @@ public class TargetResolverTests
         // 瑞典文的負號是 U+2212；送給模型的座標必須是 ASCII 的 -1，模型才能照抄回工具參數。
         var bounds = new MapBounds { Width = 10, Height = 10 };
         Assert.That(TargetResolver.CheckCell(-1, 0, bounds), Does.Contain("cell (-1,0)"));
+    }
+
+    [TestCase("simple research bench", "SimpleResearchBench")]
+    [TestCase("corn", null)]
+    [TestCase("research bench", null)]
+    public void SameNameIgnoringSpacesBeatsPartialMatches(string input, string expected)
+    {
+        List<DefInfo> defs = [new("AncientSimpleResearchBench", "遠古基礎研究台"), new("SimpleResearchBench", "基礎研究台"), new("Plant_Fibercorn", "纖維稈"), new("Plant_Corn", "玉米"), new("RawCorn", "玉米粒")];
+        Result<DefInfo> result = DefResolver.Resolve(input, defs, "thing");
+        Assert.That(result.Success ? result.Value.DefName : null, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void DefPrefixIsIgnoredOnlyWhenAsked()
+    {
+        List<DefInfo> plants = [new("Plant_Fibercorn", "纖維稈"), new("Plant_Corn", "玉米")];
+        Assert.That(DefResolver.Resolve("corn", plants, "growable plant", defPrefix: "Plant_").Value.DefName, Is.EqualTo("Plant_Corn"));
+    }
+
+    [Test]
+    public void ParametersDescribedAsOptionalHaveDefaults()
+    {
+        var optional = new System.Text.RegularExpressions.Regex("^Optional|[Ee]mpty (=|keeps|buys|sells|picks|allows|disallows|lists|string matches)|leave it empty|ignored for");
+        string[] missing = [.. typeof(DefResolver).Assembly.GetTypes()
+            .SelectMany(t => t.GetMethods())
+            .Where(m => m.IsDefined(typeof(AgentToolAttribute), inherit: false))
+            .SelectMany(m => m.GetParameters().Select(p => (m, p)))
+            .Where(x => !x.p.HasDefaultValue
+                && x.p.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false).Cast<System.ComponentModel.DescriptionAttribute>().Any(d => optional.IsMatch(d.Description)))
+            .Select(x => x.m.Name + "." + x.p.Name)];
+        Assert.That(missing, Is.Empty);
     }
 }

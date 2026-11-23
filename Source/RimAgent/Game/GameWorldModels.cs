@@ -197,6 +197,14 @@ public sealed class CommandResult : Result<string>
 
     public string Message => Value ?? string.Empty;
 
+    /// <summary>放置失敗是因為位置；換個地方可能就放得下（研究、材料等失敗不算）。</summary>
+    public bool PlacementRefused { get; private init; }
+
+    public static CommandResult RefusePlacement(string message)
+    {
+        return new CommandResult(success: false, message) { PlacementRefused = true };
+    }
+
     public static new CommandResult Ok(string message = "")
     {
         return new CommandResult(success: true, message);

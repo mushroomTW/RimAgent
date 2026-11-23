@@ -66,7 +66,7 @@ public sealed class BuildTools
         int z1,
         int x2,
         int z2,
-        [Description("Only names or defNames containing this text, e.g. \"steel\"; empty = all.")] string filter)
+        [Description("Only names or defNames containing this text, e.g. \"steel\"; empty = all.")] string filter = "")
     {
         DesignationKind dk = ParseKind(kind);
         if (dk == null) return ToolText.Error($"unknown kind \"{kind}\". Use {KindList}.");
@@ -92,11 +92,24 @@ public sealed class BuildTools
     {
         int marked = 0, skipped = 0, notApplicable = 0;
         var failures = new List<string>();
+        var wanted = new List<ThingInfo>();
         foreach (ThingInfo t in targets)
         {
+            int before = marked + skipped;
             ApplyDesignationTarget(dk, t, ref marked, ref skipped, ref notApplicable, failures);
+            if (marked + skipped > before) wanted.Add(t);
         }
-        return FormatDesignateSummary(dk, targets.Count, marked, skipped, notApplicable, failures, omitted);
+        return FormatDesignateSummary(dk, targets.Count, marked, skipped, notApplicable, failures, omitted) + NoStorageNote(dk, wanted);
+    }
+
+    private string NoStorageNote(DesignationKind dk, List<ThingInfo> wanted)
+    {
+        if (dk.Name != "haul" || wanted.Count == 0) return string.Empty;
+        HashSet<int> without = [.. _world.WithoutStorage([.. wanted.Select(t => t.Id)])];
+        List<ThingInfo> stuck = [.. wanted.Where(t => without.Contains(t.Id))];
+        if (stuck.Count == 0) return string.Empty;
+        string labels = string.Join(", ", stuck.Select(t => t.Label).Distinct(StringComparer.Ordinal).Take(3));
+        return string.Create(CultureInfo.InvariantCulture, $" Warning: no storage accepts {stuck.Count} of them ({labels}), so nobody will haul those and waiting will not help: allow them in a stockpile first (add_zone, set_zone_filter), or build elsewhere.");
     }
 
     private void ApplyDesignationTarget(DesignationKind dk, ThingInfo t, ref int marked, ref int skipped, ref int notApplicable, List<string> failures)
@@ -191,10 +204,10 @@ public sealed class BuildTools
         [Description("One of the shapes listed in the tool description.")] string shape,
         int x,
         int z,
-        [Description("Line end or opposite corner; ignored for single.")] int x2,
-        [Description("Line end or opposite corner; ignored for single.")] int z2,
-        [Description("0 north, 1 east, 2 south, 3 west (doors, beds). Also turns non-square buildings: east/west swaps width and depth. Otherwise 0.")] int rotation,
-        [Description("Material, e.g. \"wood\", \"granite blocks\"; empty = default.")] string stuff)
+        [Description("Line end or opposite corner; ignored for single.")] int x2 = -1,
+        [Description("Line end or opposite corner; ignored for single.")] int z2 = -1,
+        [Description("0 north, 1 east, 2 south, 3 west (doors, beds). Also turns non-square buildings: east/west swaps width and depth. Otherwise 0.")] int rotation = 0,
+        [Description("Material, e.g. \"wood\", \"granite blocks\"; empty = default.")] string stuff = "")
 #pragma warning restore S107
     {
         if (string.Equals(shape?.Trim(), "layout", StringComparison.OrdinalIgnoreCase)) return PlaceLayout(building, x, z, rotation, stuff);
@@ -233,7 +246,11 @@ public sealed class BuildTools
         // 先檢查每一格都放得下（含同一次呼叫裡大型建築彼此重疊），任何一格不行就一個都不放，
         // 避免只蓋出半道牆或缺角的房間卻回報成功。
         var validation = ValidateAllCells(cells, rotation, info, bounds, large, def, stuffDefName);
-        if (validation.failures.Count > 0) return BuildPlaceValidationError(what, cells, validation);
+        if (validation.failures.Count > 0)
+        {
+            string fits = large && validation.refusedByPlace && cells.Count == 1 ? NearbyFits(def.Value.DefName, cells[0], rotation, stuffDefName, bounds) : string.Empty;
+            return BuildPlaceValidationError(what, cells, validation) + fits;
+        }
 
         var placedCells = new List<(int X, int Z)>();
         var lateFailures = new List<string>();
@@ -243,7 +260,29 @@ public sealed class BuildTools
         return $"Placed {placedCells.Count} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
     }
 
-    private static string BuildPlaceValidationError(string what, List<(int X, int Z)> cells, (bool success, List<string> failures) validation)
+    private const int NearbyRadius = 3;
+    private const int MaxNearbyFits = 5;
+
+    private string NearbyFits(string defName, (int X, int Z) center, int rotation, string stuffDefName, MapBounds bounds)
+    {
+        int[] offsets = [.. Enumerable.Range(-NearbyRadius, 2 * NearbyRadius + 1)];
+        // 一格只列一個朝向（優先要求的那個），名額留給不同的格子。
+        List<string> fits = [.. (from dx in offsets
+                                 from dz in offsets
+                                 orderby dx * dx + dz * dz
+                                 let cx = center.X + dx
+                                 let cz = center.Z + dz
+                                 where TargetResolver.CheckCell(cx, cz, bounds) == null
+                                 let fit = Enumerable.Range(0, 4).OrderBy(r => r == rotation ? 0 : 1).Select(r => (int?)r)
+                                     .FirstOrDefault(r => _world.TryPlaceBlueprint(defName, cx, cz, r.Value, stuffDefName, checkOnly: true).Success)
+                                 where fit != null
+                                 select string.Create(CultureInfo.InvariantCulture, $"({cx},{cz}) rotation {fit}")).Take(MaxNearbyFits)];
+        return fits.Count == 0
+            ? string.Create(CultureInfo.InvariantCulture, $" No cell within {NearbyRadius} fits in any rotation.")
+            : " Nearby centers that fit (check they are on the right side of your walls): " + string.Join("; ", fits) + ".";
+    }
+
+    private static string BuildPlaceValidationError(string what, List<(int X, int Z)> cells, (bool refusedByPlace, List<string> failures) validation)
     {
         return ToolText.Error($"placed nothing: {validation.failures.Count} of {cells.Count} {what} blueprint(s) cannot go there. "
             + string.Join("; ", validation.failures.Take(5)) + (validation.failures.Count > 5 ? string.Create(CultureInfo.InvariantCulture, $"; and {validation.failures.Count - 5} more") : string.Empty)
@@ -256,15 +295,16 @@ public sealed class BuildTools
             + "these were refused after the check: " + string.Join("; ", lateFailures.Take(5)) + ".");
     }
 
-    private (bool success, List<string> failures) ValidateAllCells(List<(int X, int Z)> cells, int rotation, BuildingInfo info, MapBounds bounds, bool large, Result<DefInfo> def, string stuffDefName)
+    private (bool refusedByPlace, List<string> failures) ValidateAllCells(List<(int X, int Z)> cells, int rotation, BuildingInfo info, MapBounds bounds, bool large, Result<DefInfo> def, string stuffDefName)
     {
         var failures = new List<string>();
         var claimed = new HashSet<(int X, int Z)>();
+        bool refusedByPlace = false;
         foreach ((int cx, int cz) in cells)
         {
-            ValidatePlaceCell(cx, cz, rotation, info, bounds, claimed, failures, large, def, stuffDefName);
+            refusedByPlace |= ValidatePlaceCell(cx, cz, rotation, info, bounds, claimed, failures, large, def, stuffDefName);
         }
-        return (failures.Count == 0, failures);
+        return (refusedByPlace, failures);
     }
 
     private void PlaceAllCells(List<(int X, int Z)> cells, string defName, int rotation, string stuffDefName, List<(int X, int Z)> placedCells, List<string> lateFailures)
@@ -278,21 +318,22 @@ public sealed class BuildTools
     }
 
 #pragma warning disable S107 // 私有驗證輔助方法，參數皆為放置檢查相關，無需重構
-    private void ValidatePlaceCell(int cx, int cz, int rotation, BuildingInfo info, MapBounds bounds, HashSet<(int X, int Z)> claimed, List<string> failures, bool large, Result<DefInfo> def, string stuffDefName)
+    private bool ValidatePlaceCell(int cx, int cz, int rotation, BuildingInfo info, MapBounds bounds, HashSet<(int X, int Z)> claimed, List<string> failures, bool large, Result<DefInfo> def, string stuffDefName)
     {
         string cell = ToolText.Cell(cx, cz) + (large ? " (would cover " + OccupiedRect(cx, cz, rotation, info) + ")" : string.Empty);
         if (TargetResolver.CheckCell(cx, cz, bounds) != null)
         {
             failures.Add($"{ToolText.Cell(cx, cz)}: outside the map");
-            return;
+            return true;
         }
         if (large && !Claim(claimed, OccupiedRect(cx, cz, rotation, info)))
         {
             failures.Add($"{cell}: overlaps another blueprint of this call");
-            return;
+            return true;
         }
         CommandResult check = _world.TryPlaceBlueprint(def.Value.DefName, cx, cz, rotation, stuffDefName, checkOnly: true);
         if (!check.Success) failures.Add($"{cell}: {check.Message}");
+        return check.PlacementRefused;
     }
 #pragma warning restore S107
 
@@ -320,9 +361,14 @@ public sealed class BuildTools
         IReadOnlyList<LayoutInfo> layouts = _world.Layouts;
         if (layouts.Count == 0) return ToolText.Error("no room layouts are installed.");
 
-        if (string.IsNullOrWhiteSpace(layout)) return ListLayouts(layouts);
+        if (string.IsNullOrWhiteSpace(layout)) return ListLayouts(layouts, MaxListedDescription);
         Result<DefInfo> chosen = ResolveLayout(layout, layouts);
-        if (!chosen.Success) return chosen.Error + " Layouts: " + string.Join("; ", layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} {l.Width}x{l.Height}"))) + ".";
+        if (!chosen.Success)
+        {
+            List<LayoutInfo> hits = [.. layouts.Where(l => new[] { l.DefName, l.Label, l.Description }.Any(s => s.Contains(layout.Trim(), StringComparison.OrdinalIgnoreCase)))];
+            if (hits.Count > 0) return chosen.Error + "\n" + ListLayouts(hits, int.MaxValue);
+            return chosen.Error + " Layouts: " + string.Join("; ", layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} {l.Width}x{l.Height}"))) + ".";
+        }
 
         if (rotation < 0 || rotation > 3) return ToolText.Error("rotation must be 0 (north), 1 (east), 2 (south) or 3 (west).");
         Result<LayoutMaterials> materials = ResolveLayoutMaterials(stuff);
@@ -418,10 +464,15 @@ public sealed class BuildTools
         }
     }
 
-    private static string ListLayouts(IReadOnlyList<LayoutInfo> layouts)
+    private const int MaxListedDescription = 80;
+
+    // 一個房型一行：read_tool_output 的 find 以行為單位，全部擠成一行就只找得到第一個。
+    private static string ListLayouts(IReadOnlyList<LayoutInfo> layouts, int maxDescription)
     {
-        return "Layouts (size, then what it is): " + string.Join("; ",
-            layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}") + (l.Description.Length > 0 ? ": " + l.Description : string.Empty))) + ".";
+        string cut = layouts.Any(l => l.Description.Length > maxDescription) ? "; descriptions are shortened" : string.Empty;
+        return "Layouts (size, then what it is" + cut + "):\n" + string.Join("\n",
+            layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}")
+                + (l.Description.Length > 0 ? ": " + ToolText.TruncateField(l.Description, maxDescription) : string.Empty)));
     }
 
     private CommandResult PlaceLayoutPiece(LayoutPiece piece, string replacement, BuildingInfo info, bool checkOnly, out bool usedOwnStuff)
@@ -827,6 +878,10 @@ public sealed class BuildTools
         {
             return Result<List<(int X, int Z)>>.Fail(ToolText.Error($"unknown shape \"{shape}\". Use single, line, fill, outline or layout."));
         }
+        if (x2 < 0 || z2 < 0)
+        {
+            return Result<List<(int X, int Z)>>.Fail(ToolText.Error($"{kind} needs x2 and z2: the line's end or the opposite corner."));
+        }
         if (kind == "line" && x != x2 && z != z2)
         {
             return Result<List<(int X, int Z)>>.Fail(ToolText.Error("a line must be straight: keep x or z the same at both ends."));
@@ -876,7 +931,7 @@ public sealed class BuildTools
         [Description("Rectangle corner z.")] int z1,
         [Description("Opposite corner x.")] int x2,
         [Description("Opposite corner z.")] int z2,
-        [Description("Only items whose defName or label contains this text, e.g. \"steel\" or \"corpse\". Empty string matches everything.")] string filter)
+        [Description("Only items whose defName or label contains this text, e.g. \"steel\" or \"corpse\". Empty string matches everything.")] string filter = "")
     {
         CellRectSpec? area = null;
         bool wholeMap = x1 == -1 && z1 == -1 && x2 == -1 && z2 == -1;

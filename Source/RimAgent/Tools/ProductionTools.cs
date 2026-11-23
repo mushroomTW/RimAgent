@@ -25,7 +25,7 @@ public sealed class ProductionTools
     [AgentTool("list_bills", ToolCategory.Production, ToolRisk.Query)]
     [Description("Lists the work tables that take bills (id, cell) with their numbered bills and repeat counts; give a table to show just that one. Bill numbers shift when a bill is deleted, so list again right before delete_bill.")]
     public string ListBills(
-        [Description("Work table id or name; empty lists every work table.")] string table)
+        [Description("Work table id or name; empty lists every work table.")] string table = "")
     {
         if (string.IsNullOrWhiteSpace(table)) return ListAllBills();
         Result<WorkTableInfo> target = ResolveTable(table, _world.GetWorkTables());

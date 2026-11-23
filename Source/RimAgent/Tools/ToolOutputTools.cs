@@ -31,8 +31,8 @@ internal sealed class ToolOutputTools
     [Description("Reads a capped tool result saved under an id such as out_3: a slice from a character offset, or with find, only the lines containing that text.")]
     public string ReadToolOutput(
         [Description("Id from the omission note, e.g. \"out_3\".")] string id,
-        [Description("Character offset to start from; the note gives where the omitted part begins.")] int offset,
-        [Description("Optional text; returns matching lines with their offsets instead of a slice.")] string find)
+        [Description("Character offset to start from; the note gives where the omitted part begins.")] int offset = 0,
+        [Description("Optional text; returns matching lines with their offsets instead of a slice.")] string find = "")
     {
         if (!Store.TryGet(id, out string text))
         {

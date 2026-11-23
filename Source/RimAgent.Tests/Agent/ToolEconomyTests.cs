@@ -208,4 +208,13 @@ public class FailureLoopGuardTests
         Assert.That(last?.ToString(), Does.StartWith(ToolText.ErrorPrefix + "blocked"));
         Assert.That(last?.ToString(), Does.Contain("<loop_guard>"));
     }
+
+    [Test]
+    public async Task MissingArgumentsAreAllNamedInsteadOfThrowing()
+    {
+        AIFunction inner = AIFunctionFactory.Create((string caravan, string option, string note = "") => caravan + option + note, "send_caravan");
+        var tool = new LoggingAIFunction(inner, new AgentTranscript(), new FakeGameWorld(), ToolCategory.Observe, ToolRisk.Query, gate: null);
+        object result = await tool.InvokeAsync(new AIFunctionArguments());
+        Assert.That(result.ToString(), Does.StartWith("Error: missing argument(s): caravan, option."));
+    }
 }

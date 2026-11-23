@@ -47,9 +47,9 @@ public sealed partial class TradeTools
     [Description("Buys from and sells to one trader in a single deal at the game's prices; goods and silver change hands at once. Take the trader id and exact item names from list_traders. Silver settles the deal automatically, so list goods only.")]
     public string ExecuteTrade(
         [Description("Trader id in square brackets from list_traders.")] string trader,
-        [Description("Goods to buy as \"name x count\", comma-separated, e.g. \"medicine x12, component x4\"; empty buys nothing.")] string buys,
-        [Description("Goods to sell as \"name x count\", comma-separated, e.g. \"steel x100, corn x50\"; empty sells nothing.")] string sells,
-        [Description("Negotiator name, nickname or id; empty picks the colonist with the highest Social skill.")] string negotiator)
+        [Description("Goods to buy as \"name x count\", comma-separated, e.g. \"medicine x12, component x4\"; empty buys nothing.")] string buys = "",
+        [Description("Goods to sell as \"name x count\", comma-separated, e.g. \"steel x100, corn x50\"; empty sells nothing.")] string sells = "",
+        [Description("Negotiator name, nickname or id; empty picks the colonist with the highest Social skill.")] string negotiator = "")
     {
         Result<List<ParsedLine>> buyLines = ParseTradeList(buys, "buys");
         if (!buyLines.Success) return buyLines.Error;

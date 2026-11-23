@@ -200,7 +200,7 @@ public sealed class WorkTools
     [AgentTool("list_work_priorities", ToolCategory.Work, ToolRisk.Query)]
     [Description("Lists work priorities for one colonist or everyone: 0 disabled, 1 highest, 4 lowest, \"incapable\" when the colonist cannot do that work.")]
     public string ListWorkPriorities(
-        [Description("Colonist name, nickname or id, or \"all\" for everyone.")] string colonist)
+        [Description("Colonist name, nickname or id, or \"all\" for everyone.")] string colonist = "all")
     {
         Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonist, _world.GetColonists());
         if (!pawns.Success) return pawns.Error;

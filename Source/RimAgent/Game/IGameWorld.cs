@@ -74,6 +74,7 @@ public interface IGameWorld
     CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority);
     CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName);
     CommandResult AddDesignationOnCell(int x, int z, string designationDefName);
+    IReadOnlyCollection<int> WithoutStorage(IReadOnlyCollection<int> thingIds);
     CommandResult AddDesignationOnThing(int thingId, string designationDefName);
     CommandResult RemoveDesignationOnCell(int x, int z, string designationDefName);
     CommandResult RemoveDesignationOnThing(int thingId, string designationDefName);

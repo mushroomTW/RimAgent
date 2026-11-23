@@ -47,7 +47,7 @@ public sealed class ZoneTools
         [Description("Rectangle corner z.")] int z1,
         [Description("Opposite corner x.")] int x2,
         [Description("Opposite corner z.")] int z2,
-        [Description("Plant to grow: name or defName, e.g. \"rice\" or \"Plant_Rice\"; growing zones only. Empty keeps the game's default.")] string plant)
+        [Description("Plant to grow: name or defName, e.g. \"rice\" or \"Plant_Rice\"; growing zones only. Empty keeps the game's default.")] string plant = "")
     {
         string canonical = CanonicalKind(kind);
         if (canonical == null) return ToolText.Error($"unknown zone kind \"{kind}\". Use stockpile or growing.");
@@ -62,7 +62,7 @@ public sealed class ZoneTools
         string plantDef = string.Empty;
         if (!string.IsNullOrWhiteSpace(plant))
         {
-            Result<DefInfo> match = DefResolver.Resolve(plant, _world.GrowablePlants, "growable plant");
+            Result<DefInfo> match = DefResolver.Resolve(plant, _world.GrowablePlants, "growable plant", defPrefix: "Plant_");
             if (!match.Success) return match.Error;
             plantDef = match.Value.DefName;
         }
@@ -96,8 +96,8 @@ public sealed class ZoneTools
     [Description("Allows and/or disallows items in a stockpile's storage filter, e.g. allow \"corn, rice\", disallow \"steel\". Name at least one item on either side.")]
     public string SetZoneFilter(
         [Description("Zone id in square brackets from list_zones, or its label.")] string zone,
-        [Description("Items to allow, comma-separated; empty allows nothing new.")] string allow,
-        [Description("Items to disallow, comma-separated; empty disallows nothing.")] string disallow)
+        [Description("Items to allow, comma-separated; empty allows nothing new.")] string allow = "",
+        [Description("Items to disallow, comma-separated; empty disallows nothing.")] string disallow = "")
     {
         Result<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
         if (!target.Success) return target.Error;

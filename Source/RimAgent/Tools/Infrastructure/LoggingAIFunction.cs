@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -137,8 +138,18 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         }
     }
 
+    /// <summary>缺必填參數時 MEAI 丟的 ArgumentException 一次只說一個，也不說這個工具要哪些。</summary>
+    private string MissingArguments(AIFunctionArguments arguments)
+    {
+        if (!JsonSchema.TryGetProperty("required", out JsonElement required) || required.ValueKind != JsonValueKind.Array) return null;
+        string[] names = [.. required.EnumerateArray().Select(r => r.GetString())];
+        string[] missing = [.. names.Where(n => !arguments.ContainsKey(n))];
+        return missing.Length == 0 ? null : ToolText.Error($"missing argument(s): {string.Join(", ", missing)}. {Name} always needs: {string.Join(", ", names)} (pass \"\" for text that may be empty).");
+    }
+
     private ValueTask<object> InvokeThroughGateAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
+        if (MissingArguments(arguments) is { } missing) return new ValueTask<object>(missing);
         if (_gate != null && RequiresExplicitConfirmation)
         {
             return new ValueTask<object>(InvokeExplicitConfirmationAsync(arguments, cancellationToken));

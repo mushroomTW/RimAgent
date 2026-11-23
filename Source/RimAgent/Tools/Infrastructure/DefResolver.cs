@@ -15,7 +15,7 @@ public static partial class DefResolver
     private const int MinWordLength = 3;
     private const string NoMatchPrefix = "no ";
 
-    public static Result<DefInfo> Resolve(string input, IReadOnlyList<DefInfo> candidates, string kindLabel)
+    public static Result<DefInfo> Resolve(string input, IReadOnlyList<DefInfo> candidates, string kindLabel, string defPrefix = "")
     {
         string needle = (input ?? string.Empty).Trim();
         if (needle.Length == 0)
@@ -29,6 +29,12 @@ public static partial class DefResolver
         List<DefInfo> exactLabel = [.. candidates.Where(c => string.Equals(c.Label, needle, StringComparison.OrdinalIgnoreCase))];
         if (exactLabel.Count == 1) return Result<DefInfo>.Ok(exactLabel[0]);
         if (exactLabel.Count > 1) return Ambiguous(needle, exactLabel, kindLabel);
+
+        // 「simple research bench」要的是 SimpleResearchBench，不是也含這幾個字的 AncientSimpleResearchBench；
+        // 有 defPrefix 時「corn」要的是 Plant_Corn，不是 Plant_Fibercorn；混合清單不能拿掉前綴，否則會蓋掉 RawCorn。
+        string compactExact = Compact(needle);
+        List<DefInfo> sameName = [.. candidates.Where(c => IsSameCompactName(c, compactExact, Compact(defPrefix)))];
+        if (sameName.Count == 1) return Result<DefInfo>.Ok(sameName[0]);
 
         List<DefInfo> prefix = [.. candidates.Where(c => StartsWith(c.DefName, needle) || StartsWith(c.Label, needle))];
         if (prefix.Count == 1) return Result<DefInfo>.Ok(prefix[0]);
@@ -46,6 +52,14 @@ public static partial class DefResolver
         if (compact.Count > 1) return Ambiguous(needle, compact, kindLabel);
 
         return Result<DefInfo>.Fail($"Error: {NoMatchPrefix}{kindLabel} matches \"{needle}\".{Closest(needle, compacted)}");
+    }
+
+    private static bool IsSameCompactName(DefInfo candidate, string compactNeedle, string compactPrefix)
+    {
+        if (compactNeedle.Length == 0) return false;
+        return string.Equals(Compact(candidate.DefName), compactNeedle, StringComparison.OrdinalIgnoreCase)
+            || (compactPrefix.Length > 0 && string.Equals(Compact(candidate.DefName), compactPrefix + compactNeedle, StringComparison.OrdinalIgnoreCase))
+            || string.Equals(Compact(candidate.Label), compactNeedle, StringComparison.OrdinalIgnoreCase);
     }
 
     private static List<DefInfo> TryMatchContains(IReadOnlyList<DefInfo> candidates, string needle)

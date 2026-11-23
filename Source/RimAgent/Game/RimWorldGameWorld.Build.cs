@@ -31,6 +31,17 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok();
     }
 
+    public IReadOnlyCollection<int> WithoutStorage(IReadOnlyCollection<int> thingIds)
+    {
+        HashSet<int> ids = [.. thingIds];
+        // 擁有者的判準與 StoreUtility.TryFindBestBetterStoreCellFor 相同：屬於別人的貨架不會拿來放。
+        List<IHaulDestination> destinations = [.. Map.haulDestinationManager.AllHaulDestinationsListForReading
+            .Where(d => d.HaulDestinationEnabled && (d is not Thing owner || owner.Faction == Faction.OfPlayer))];
+        return [.. Map.listerThings.AllThings
+            .Where(t => ids.Contains(t.thingIDNumber) && !destinations.Exists(d => d.Accepts(t)))
+            .Select(t => t.thingIDNumber)];
+    }
+
     public CommandResult AddDesignationOnThing(int thingId, string designationDefName)
     {
         Map map = Map;
@@ -109,9 +120,29 @@ internal sealed partial class RimWorldGameWorld
         {
             string reason = string.IsNullOrEmpty(report.Reason) ? "cannot place there" : report.Reason;
             if (reason == "SpaceAlreadyOccupied".Translate().ToString()) reason += DescribeBlockers(def, cell, rot, map, stuff);
-            return CommandResult.Fail(reason);
+            else reason += DescribeInteractionBlockers(def, report, cell, rot, map);
+            return CommandResult.RefusePlacement(reason);
         }
         return null;
+    }
+
+    /// <summary>遊戲只說「操作點被擋」，不說操作點在哪一格；模型會去清錯東西。</summary>
+    private static string DescribeInteractionBlockers(BuildableDef def, AcceptanceReport report, IntVec3 center, Rot4 rot, Map map)
+    {
+        if (def is not ThingDef thingDef || !thingDef.hasInteractionCell) return string.Empty;
+        AcceptanceReport interaction = GenConstruct.InteractionCellStandable(thingDef, center, rot, map);
+        if (interaction.Accepted || interaction.Reason != report.Reason) return string.Empty;
+        IEnumerable<string> cells = ThingUtility.InteractionCellsWhenAt(thingDef, center, rot, map).Select(c =>
+        {
+            string cell = string.Create(CultureInfo.InvariantCulture, $"({c.x},{c.z})");
+            if (!c.InBounds(map)) return cell + " outside the map";
+            string[] blockers = [.. c.GetThingList(map)
+                .Where(t => (t.def.entityDefToBuild?.passability ?? t.def.passability) != Traversability.Standable || t.def == thingDef || t.def.entityDefToBuild == thingDef)
+                .Take(MaxBlockersListed)
+                .Select(t => string.Create(CultureInfo.InvariantCulture, $"{t.LabelNoCount} #{t.thingIDNumber}"))];
+            return blockers.Length == 0 ? cell : cell + " blocked by " + string.Join(", ", blockers);
+        });
+        return " (interaction cell for this rotation: " + string.Join("; ", cells) + ")";
     }
 
     private const int MaxBlockersListed = 4;

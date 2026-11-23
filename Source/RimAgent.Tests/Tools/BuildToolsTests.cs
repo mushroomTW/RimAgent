@@ -206,6 +206,49 @@ public class BuildToolsTests
     }
 
     [Test]
+    public void LayoutListHasOneShortLineEachAndSearchShowsFullDescriptions()
+    {
+        AddTinyLayout();
+        string tail = new string('x', 300) + " cold store";
+        _world.LayoutList.Add(new LayoutInfo { DefName = "RimAgent_A", Label = "alpha", Description = tail, Width = 13, Height = 13 });
+        _world.LayoutList.Add(new LayoutInfo { DefName = "RimAgent_B", Label = "beta", Description = "b", Width = 13, Height = 13 });
+
+        string list = _tools.PlaceBlueprint("", "layout", 10, 10);
+        Assert.That(list.Split('\n'), Has.Length.EqualTo(4));
+        Assert.That(list, Does.Not.Contain("cold store"));
+        Assert.That(_tools.PlaceBlueprint("cold store", "layout", 10, 10), Does.StartWith("Error:").And.Contain(tail).And.Not.Contain("beta"));
+    }
+
+    [Test]
+    public void HaulMarksWarnWhenNoStorageAcceptsThem()
+    {
+        _world.Things.Add(new ThingInfo { Id = 901, Label = "limestone chunk", DefName = "ChunkLimestone", Kind = ThingKind.Item, X = 40, Z = 40 });
+        Assert.That(_tools.DesignateArea("haul", false, 40, 40, 40, 40), Does.Not.Contain("no storage"));
+        _world.NoStorageFor.Add(901);
+        Assert.That(_tools.DesignateArea("haul", false, 40, 40, 40, 40), Does.Contain("already marked").And.Contain("no storage accepts 1 of them (limestone chunk)"));
+    }
+
+    [Test]
+    public void BlockedLargeBuildingListsNearbyCentersThatFit()
+    {
+        _world.BlockedCells[(41, 44)] = "interaction spot blocked";
+        _world.BuildingInfos["Bed"] = new BuildingInfo { DefName = "Bed", Width = 1, Height = 2 };
+        Assert.That(_tools.PlaceBlueprint("bed", "single", 41, 44), Does.Contain("interaction spot blocked").And.Contain("(40,44) rotation 0").And.Not.Contain("rotation 1"));
+        _world.BlockedCells.Clear();
+        _world.BlockedStuff[("Bed", string.Empty)] = "cannot be made of that";
+        Assert.That(_tools.PlaceBlueprint("bed", "single", 41, 44), Does.StartWith("Error:").And.Not.Contain("within 3"));
+        Assert.That(_world.Blueprints, Is.Empty);
+    }
+
+    [Test]
+    public void LineWithoutSecondCornerIsRefused()
+    {
+        Assert.That(_tools.PlaceBlueprint("wall", "line", 3, 3), Does.StartWith("Error:").And.Contain("needs x2 and z2"));
+        Assert.That(_tools.PlaceBlueprint("wall", "fill", 120, 110), Does.StartWith("Error:").And.Contain("needs x2 and z2"));
+        Assert.That(_world.Blueprints, Is.Empty);
+    }
+
+    [Test]
     public void LayoutWithEmptyNameListsLayouts()
     {
         AddTinyLayout();

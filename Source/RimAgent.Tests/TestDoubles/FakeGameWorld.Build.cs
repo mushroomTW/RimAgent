@@ -18,6 +18,10 @@ internal sealed partial class FakeGameWorld
         return CommandResult.Ok();
     }
 
+    public HashSet<int> NoStorageFor { get; } = [];
+
+    public IReadOnlyCollection<int> WithoutStorage(IReadOnlyCollection<int> thingIds) => [.. thingIds.Where(NoStorageFor.Contains)];
+
     public CommandResult AddDesignationOnThing(int thingId, string designationDefName)
     {
         Calls.Add(string.Create(CultureInfo.InvariantCulture, $"AddDesignationOnThing({thingId},{designationDefName})"));
@@ -78,7 +82,7 @@ internal sealed partial class FakeGameWorld
     {
         // 只檢查的呼叫不記進 Calls，既有測試對實際放置順序的斷言不受影響。
         if (!checkOnly) Calls.Add(string.Create(CultureInfo.InvariantCulture, $"TryPlaceBlueprint({buildableDefName},{x},{z},{rotation},{stuffDefName})"));
-        if (BlockedCells.TryGetValue((x, z), out string reason)) return CommandResult.Fail(reason);
+        if (BlockedCells.TryGetValue((x, z), out string reason)) return CommandResult.RefusePlacement(reason);
         if (BlockedStuff.TryGetValue((buildableDefName, stuffDefName ?? string.Empty), out string stuffReason)) return CommandResult.Fail(stuffReason);
         if (checkOnly) return CommandResult.Ok();
         Blueprints.Add((buildableDefName, x, z, rotation, stuffDefName));

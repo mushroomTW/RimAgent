@@ -49,7 +49,7 @@ public sealed class MedicalTools
     [AgentTool("get_health", ToolCategory.Medical, ToolRisk.Query)]
     [Description("Shows injuries, diseases, bleeding, missing body parts and pending operations for the given colonists, each with tending status. Check it before schedule_surgery.")]
     public string GetHealth(
-        [Description("Colonist names or ids separated by commas, or \"all\" for everyone.")] string colonists)
+        [Description("Colonist names or ids separated by commas, or \"all\" for everyone.")] string colonists = "all")
     {
         Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
         if (!pawns.Success) return pawns.Error;
@@ -122,7 +122,7 @@ public sealed class MedicalTools
     public string ScheduleSurgery(
         [Description("Colonist name, nickname or id.")] string colonist,
         [Description("Surgery name, e.g. \"remove body part\".")] string surgery,
-        [Description("Body part, e.g. \"left lung\". Required for surgeries that target a part; leave it empty to have the tool list the candidate parts. Ignored by surgeries that need no part.")] string part)
+        [Description("Body part, e.g. \"left lung\". Required for surgeries that target a part; leave it empty to have the tool list the candidate parts. Ignored by surgeries that need no part.")] string part = "")
     {
         Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
         if (!pawn.Success) return pawn.Error;

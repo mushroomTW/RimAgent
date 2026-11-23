@@ -173,7 +173,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             Id = "freezer",
             Tier = Hard,
             Instruction = "空調研究已經完成。在殖民者附近用木頭規劃一間內部至少 3x3 的冷凍庫：四面牆、一扇門、"
-                + "牆上裝一台冷氣，並在房間裡面設一個儲存區。",
+                + "牆上裝一台冷氣，並在房間裡面劃一個儲存區（區域，不是貨架）。",
             Setup = map => ClearBlueprints(map) ?? FinishResearch("Electricity", "AirConditioning"),
             Measure = map => new()
             {
@@ -397,6 +397,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0 };
             int totalTools = 0;
             int totalFailures = 0;
+            var total = default(ModelUsage);
             BenchTask[] tasks = [.. Tasks.Where(t => tier == null || t.Tier == tier)];
             _session = session;
             _rows = CreateRows(tasks);
@@ -406,8 +407,11 @@ public sealed partial class BenchmarkComponent : GameComponent
                 BenchTask task = tasks[i];
                 _rows[i].State = BenchmarkState.Running;
                 _rows[i].StartedAt = UnityEngine.Time.realtimeSinceStartup;
+                DateTime startedUtc = DateTime.UtcNow;
                 (string failure, List<TranscriptEntry> tools, float seconds, string reply) = await RunTaskAsync(session, task);
-                int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply);
+                ModelUsage usage = ReadUsage(folder, startedUtc);
+                total = new ModelUsage(total.Steps + usage.Steps, total.Input + usage.Input, total.Output + usage.Output);
+                int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage);
                 Finish(_rows[i], failure, tools.Count, failures, seconds);
                 totalTools += tools.Count;
                 totalFailures += failures;
@@ -427,7 +431,10 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["hardPassed"] = passedByTier[Hard],
                 ["hardTotal"] = tasks.Count(t => t.Tier == Hard),
                 ["toolCalls"] = totalTools,
-                ["toolFailures"] = totalFailures
+                ["toolFailures"] = totalFailures,
+                ["steps"] = total.Steps,
+                ["in"] = total.Input,
+                ["out"] = total.Output
             };
             Append(resultPath, summary);
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary));
@@ -479,8 +486,31 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
+    private readonly record struct ModelUsage(long Steps, long Input, long Output);
+
+    /// <summary>取這題的運行紀錄摘要；摘要還沒寫出（例如寫檔失敗）時為 0。</summary>
+    private static ModelUsage ReadUsage(string folder, DateTime startedUtc)
+    {
+        try
+        {
+            using JsonDocument line = JsonDocument.Parse(File.ReadLines(Path.Combine(folder, "runs", "index.jsonl")).Last());
+            JsonElement e = line.RootElement;
+            return e.GetProperty("ts").GetDateTime() < startedUtc
+                ? default
+                : new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64());
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogPrefix + "usage not read: " + ex.Message);
+            return default;
+        }
+    }
+
+    private static IEnumerable<Thing> PlannedBuildings(Map map) =>
+        map.listerThings.AllThings.Where(t => t is Blueprint or Frame && t.Faction == Faction.OfPlayer);
+
     /// <summary>把單題結果寫進結果檔與日誌；回傳這題失敗的工具呼叫數（取消不算）。</summary>
-    private static int RecordTaskResult(string resultPath, BenchTask task, string failure, List<TranscriptEntry> tools, float seconds, string reply)
+    private static int RecordTaskResult(string resultPath, BenchTask task, string failure, List<TranscriptEntry> tools, float seconds, string reply, ModelUsage usage)
     {
         int failures = tools.Count(t => t.Failed && !t.Cancelled);
         Append(resultPath, new Dictionary<string, object>
@@ -491,6 +521,9 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["detail"] = failure ?? string.Empty,
             ["tools"] = tools.Count,
             ["toolFailures"] = failures,
+            ["steps"] = usage.Steps,
+            ["in"] = usage.Input,
+            ["out"] = usage.Output,
             ["toolNames"] = string.Join(',', tools.Select(t => t.ToolName)),
             ["seconds"] = Math.Round(seconds, 1, MidpointRounding.ToEven),
             ["reply"] = Short(reply)
@@ -510,10 +543,12 @@ public sealed partial class BenchmarkComponent : GameComponent
         string reply = null;
         float seconds = 0f;
         List<TranscriptEntry> tools = [];
+        BenchmarkSnapshot snapshot = null;
         try
         {
             session.Clear();
             Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
+            snapshot = new BenchmarkSnapshot(map);
             string setupError = task.Setup?.Invoke(map);
             if (setupError != null)
             {
@@ -548,9 +583,22 @@ public sealed partial class BenchmarkComponent : GameComponent
         }
         finally
         {
-            task.Cleanup?.Invoke(map);
+            TryCleanUp(task.Id, () => task.Cleanup?.Invoke(map));
+            TryCleanUp(task.Id, () => snapshot?.Restore());
         }
         return (failure, tools, seconds, reply);
+    }
+
+    private static void TryCleanUp(string taskId, Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogPrefix + taskId + " cleanup: " + ex);
+        }
     }
 
     private static int Delta(Dictionary<string, int> before, Dictionary<string, int> after, string key)
@@ -663,7 +711,7 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     private static string ClearBlueprints(Map map)
     {
-        foreach (Thing blueprint in map.listerThings.AllThings.Where(t => t is Blueprint && t.Faction == Faction.OfPlayer).ToList())
+        foreach (Thing blueprint in PlannedBuildings(map).ToList())
         {
             blueprint.Destroy(DestroyMode.Cancel);
         }
