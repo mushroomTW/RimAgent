@@ -5,7 +5,7 @@
   <RimAgent.Benchmark.Done>RimAgent 基準測試：通過 {0}/{1} 題。詳細結果：{2}</RimAgent.Benchmark.Done>
   <RimAgent.Benchmark.NoRun>還沒有執行過基準測試。</RimAgent.Benchmark.NoRun>
   <RimAgent.Benchmark.Title>RimAgent 基準測試</RimAgent.Benchmark.Title>
-  <RimAgent.Benchmark.Progress>已完成 {0}/{1}，通過 {2}，失敗 {3}</RimAgent.Benchmark.Progress>
+  <RimAgent.Benchmark.Progress>已完成 {0}/{1}，通過 {2}，失敗 {3}，無效 {4}</RimAgent.Benchmark.Progress>
   <RimAgent.Benchmark.Column.Task>題目</RimAgent.Benchmark.Column.Task>
   <RimAgent.Benchmark.Column.Status>狀態</RimAgent.Benchmark.Column.Status>
   <RimAgent.Benchmark.Column.Tools>工具／失敗</RimAgent.Benchmark.Column.Tools>
@@ -16,6 +16,7 @@
   <RimAgent.Benchmark.State.Running>執行中</RimAgent.Benchmark.State.Running>
   <RimAgent.Benchmark.State.Passed>通過</RimAgent.Benchmark.State.Passed>
   <RimAgent.Benchmark.State.Failed>失敗</RimAgent.Benchmark.State.Failed>
+  <RimAgent.Benchmark.State.Invalid>無效</RimAgent.Benchmark.State.Invalid>
   <RimAgent.Benchmark.Task.stockpile>儲存區</RimAgent.Benchmark.Task.stockpile>
   <RimAgent.Benchmark.Task.rice_field>水稻田</RimAgent.Benchmark.Task.rice_field>
   <RimAgent.Benchmark.Task.research_bench>研究台</RimAgent.Benchmark.Task.research_bench>

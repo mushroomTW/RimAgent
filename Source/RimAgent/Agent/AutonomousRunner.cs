@@ -12,6 +12,7 @@ namespace RimAgent.Agent;
 internal sealed class AutonomousRunner
 {
     public const int ConfigurationErrorHoldTicks = 60000;
+    public const int RateLimitHoldTicks = 5000;
 
     private readonly AutonomousScheduler _scheduler;
     private readonly Func<int?> _currentTick;
@@ -133,7 +134,18 @@ internal sealed class AutonomousRunner
         if (used > 0 || !stopped) _scheduler.RecordRun(finishTick, used, request.Config);
         _scheduler.RecordRunFinished(request.Trigger, finishTick);
 
-        if (transcript.ErrorKindOf(instructionId) != AgentErrorKind.Configuration) return;
+        AgentErrorKind? error = transcript.ErrorKindOf(instructionId);
+        if (error == AgentErrorKind.RateLimited)
+        {
+            HoldUntilTick = request.Tick + RateLimitHoldTicks;
+            transcript.Add(new TranscriptEntry
+            {
+                Kind = TranscriptKind.Notice,
+                Text = "Autonomous tasks are paused for two in-game hours: the model provider's quota or rate limit was reached."
+            });
+            return;
+        }
+        if (error != AgentErrorKind.Configuration) return;
         // 這類錯誤幾秒內不會自己好，照常重觸發只會連續失敗。
         HoldUntilTick = request.Tick + ConfigurationErrorHoldTicks;
         _warn("RimAgent autonomous tasks paused for one in-game day after a provider configuration error.");

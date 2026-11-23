@@ -5,7 +5,7 @@
   <RimAgent.Benchmark.Done>RimAgent benchmark: {0}/{1} passed. Details: {2}</RimAgent.Benchmark.Done>
   <RimAgent.Benchmark.NoRun>No benchmark has been run yet.</RimAgent.Benchmark.NoRun>
   <RimAgent.Benchmark.Title>RimAgent benchmark</RimAgent.Benchmark.Title>
-  <RimAgent.Benchmark.Progress>{0}/{1} done, {2} passed, {3} failed</RimAgent.Benchmark.Progress>
+  <RimAgent.Benchmark.Progress>{0}/{1} done, {2} passed, {3} failed, {4} invalid</RimAgent.Benchmark.Progress>
   <RimAgent.Benchmark.Column.Task>Task</RimAgent.Benchmark.Column.Task>
   <RimAgent.Benchmark.Column.Status>Status</RimAgent.Benchmark.Column.Status>
   <RimAgent.Benchmark.Column.Tools>Tools / failed</RimAgent.Benchmark.Column.Tools>
@@ -16,6 +16,7 @@
   <RimAgent.Benchmark.State.Running>Running</RimAgent.Benchmark.State.Running>
   <RimAgent.Benchmark.State.Passed>Passed</RimAgent.Benchmark.State.Passed>
   <RimAgent.Benchmark.State.Failed>Failed</RimAgent.Benchmark.State.Failed>
+  <RimAgent.Benchmark.State.Invalid>Invalid</RimAgent.Benchmark.State.Invalid>
   <RimAgent.Benchmark.Task.stockpile>Stockpile</RimAgent.Benchmark.Task.stockpile>
   <RimAgent.Benchmark.Task.rice_field>Rice field</RimAgent.Benchmark.Task.rice_field>
   <RimAgent.Benchmark.Task.research_bench>Research bench</RimAgent.Benchmark.Task.research_bench>

@@ -140,7 +140,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "food_report",
-            Instruction = "告訴我殖民地目前的食物存量大概能撐幾天。只要回答，不要下任何指令。",
+            Instruction = "告訴我殖民地目前的食物存量大概能撐幾天。可以查詢，但不要改變殖民地的任何東西。",
             Measure = _ => new(),
             Check = (_, _, reply) => reply != null && DigitPattern.IsMatch(reply) ? null : "reply has no number"
         };
@@ -307,19 +307,20 @@ public sealed partial class BenchmarkComponent : GameComponent
     private static List<BenchmarkRow> CreateRows(IEnumerable<BenchTask> tasks) =>
         [.. tasks.Select(t => new BenchmarkRow { Id = t.Id, Tier = t.Tier, Instruction = t.Instruction })];
 
-    /// <summary>截圖檢查用：涵蓋四種狀態。</summary>
+    /// <summary>截圖檢查用：涵蓋五種狀態。</summary>
     internal static List<BenchmarkRow> SampleRows()
     {
         List<BenchmarkRow> rows = CreateRows(Tasks);
         for (int i = 0; i < 4; i++) Finish(rows[i], i == 2 ? "timed out after 10 min" : null, 8, i, 63f * i);
+        Finish(rows[5], "model service error", 2, 0, 90f, invalid: true);
         rows[4].State = BenchmarkState.Running;
         rows[4].StartedAt = UnityEngine.Time.realtimeSinceStartup;
         return rows;
     }
 
-    private static void Finish(BenchmarkRow row, string failure, int tools, int failures, float seconds)
+    private static void Finish(BenchmarkRow row, string failure, int tools, int failures, float seconds, bool invalid = false)
     {
-        row.State = failure == null ? BenchmarkState.Passed : BenchmarkState.Failed;
+        row.State = failure == null ? BenchmarkState.Passed : invalid ? BenchmarkState.Invalid : BenchmarkState.Failed;
         row.Detail = failure;
         row.Tools = tools;
         row.Failures = failures;
@@ -395,6 +396,7 @@ public sealed partial class BenchmarkComponent : GameComponent
 
             ColonyAgentSession session = agent.Session;
             var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0 };
+            var invalidByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0 };
             int totalTools = 0;
             int totalFailures = 0;
             var total = default(ModelUsage);
@@ -402,20 +404,50 @@ public sealed partial class BenchmarkComponent : GameComponent
             _session = session;
             _rows = CreateRows(tasks);
             if (!isolated) Window_BenchmarkProgress.Show(_rows);
+            // 開跑時就取：中途讀了別的檔，成績仍屬於這張地圖。
+            string seed = Find.World?.info?.seedString ?? string.Empty;
+            string biome = Find.CurrentMap?.Biome?.defName ?? string.Empty;
+            int startTick = Current.Game?.tickManager?.TicksGame ?? 0;
+            int configurationErrors = 0;
             for (int i = 0; i < tasks.Length; i++)
             {
                 BenchTask task = tasks[i];
+                if (configurationErrors >= MaxConfigurationErrors)
+                {
+                    invalidByTier[task.Tier]++;
+                    const string skipped = "skipped: the model provider keeps failing";
+                    RecordTaskResult(resultPath, task, skipped, [], 0f, null, default, invalid: true, attempts: 0);
+                    Finish(_rows[i], skipped, 0, 0, 0f, invalid: true);
+                    continue;
+                }
                 _rows[i].State = BenchmarkState.Running;
                 _rows[i].StartedAt = UnityEngine.Time.realtimeSinceStartup;
                 DateTime startedUtc = DateTime.UtcNow;
-                (string failure, List<TranscriptEntry> tools, float seconds, string reply) = await RunTaskAsync(session, task);
+                TaskOutcome outcome = await RunTaskAsync(session, task);
                 ModelUsage usage = ReadUsage(folder, startedUtc);
-                total = new ModelUsage(total.Steps + usage.Steps, total.Input + usage.Input, total.Output + usage.Output);
-                int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage);
-                Finish(_rows[i], failure, tools.Count, failures, seconds);
+                int attempts = 1;
+                // 金鑰、餘額、模型不存在這類錯誤等 30 秒也不會好。
+                if (outcome.ServiceError is { ErrorKind: not AgentErrorKind.Configuration })
+                {
+                    TaskOutcome first = outcome;
+                    attempts++;
+                    Log.Warning(LogPrefix + task.Id + " retrying after model service error: " + outcome.ServiceError.Text);
+                    await Task.Delay(ServiceRetryDelay);
+                    startedUtc = DateTime.UtcNow;
+                    outcome = await RunTaskAsync(session, task);
+                    usage = usage.Plus(ReadUsage(folder, startedUtc));
+                    outcome = outcome with { Tools = [.. first.Tools, .. outcome.Tools], Seconds = first.Seconds + outcome.Seconds };
+                }
+                (string failure, List<TranscriptEntry> tools, float seconds, string reply, TranscriptEntry serviceError) = outcome;
+                bool invalid = serviceError != null;
+                configurationErrors = serviceError?.ErrorKind == AgentErrorKind.Configuration ? configurationErrors + 1 : 0;
+                total = total.Plus(usage);
+                int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage, invalid, attempts);
+                Finish(_rows[i], failure, tools.Count, failures, UnityEngine.Time.realtimeSinceStartup - _rows[i].StartedAt, invalid);
                 totalTools += tools.Count;
                 totalFailures += failures;
                 if (failure == null) passedByTier[task.Tier]++;
+                else if (invalid) invalidByTier[task.Tier]++;
             }
 
             var summary = new Dictionary<string, object>
@@ -425,22 +457,27 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["model"] = model,
                 ["note"] = "summary",
                 ["passed"] = passedByTier.Values.Sum(),
-                ["total"] = tasks.Length,
+                ["total"] = tasks.Length - invalidByTier.Values.Sum(),
+                ["invalid"] = invalidByTier.Values.Sum(),
                 ["basicPassed"] = passedByTier[Basic],
-                ["basicTotal"] = tasks.Count(t => t.Tier == Basic),
+                ["basicTotal"] = tasks.Count(t => t.Tier == Basic) - invalidByTier[Basic],
                 ["hardPassed"] = passedByTier[Hard],
-                ["hardTotal"] = tasks.Count(t => t.Tier == Hard),
+                ["hardTotal"] = tasks.Count(t => t.Tier == Hard) - invalidByTier[Hard],
                 ["toolCalls"] = totalTools,
                 ["toolFailures"] = totalFailures,
                 ["steps"] = total.Steps,
                 ["in"] = total.Input,
-                ["out"] = total.Output
+                ["out"] = total.Output,
+                // 地圖不同，難度就不同：兩輪要比較得先確認這幾項相同。
+                ["seed"] = seed,
+                ["biome"] = biome,
+                ["tick"] = startTick
             };
             Append(resultPath, summary);
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary));
             if (!isolated)
             {
-                Messages.Message("RimAgent.Benchmark.Done".Translate(passedByTier.Values.Sum(), tasks.Length, resultPath), MessageTypeDefOf.NeutralEvent, historical: false);
+                Messages.Message("RimAgent.Benchmark.Done".Translate(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), resultPath), MessageTypeDefOf.NeutralEvent, historical: false);
             }
         }
         catch (Exception ex)
@@ -486,7 +523,10 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
-    private readonly record struct ModelUsage(long Steps, long Input, long Output);
+    private readonly record struct ModelUsage(long Steps, long Input, long Output)
+    {
+        public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output);
+    }
 
     /// <summary>取這題的運行紀錄摘要；摘要還沒寫出（例如寫檔失敗）時為 0。</summary>
     private static ModelUsage ReadUsage(string folder, DateTime startedUtc)
@@ -510,7 +550,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         map.listerThings.AllThings.Where(t => t is Blueprint or Frame && t.Faction == Faction.OfPlayer);
 
     /// <summary>把單題結果寫進結果檔與日誌；回傳這題失敗的工具呼叫數（取消不算）。</summary>
-    private static int RecordTaskResult(string resultPath, BenchTask task, string failure, List<TranscriptEntry> tools, float seconds, string reply, ModelUsage usage)
+    private static int RecordTaskResult(string resultPath, BenchTask task, string failure, List<TranscriptEntry> tools, float seconds, string reply, ModelUsage usage, bool invalid, int attempts)
     {
         int failures = tools.Count(t => t.Failed && !t.Cancelled);
         Append(resultPath, new Dictionary<string, object>
@@ -518,6 +558,8 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["task"] = task.Id,
             ["tier"] = task.Tier,
             ["ok"] = failure == null,
+            ["invalid"] = invalid,
+            ["attempts"] = attempts,
             ["detail"] = failure ?? string.Empty,
             ["tools"] = tools.Count,
             ["toolFailures"] = failures,
@@ -528,19 +570,31 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["seconds"] = Math.Round(seconds, 1, MidpointRounding.ToEven),
             ["reply"] = Short(reply)
         });
-        Log.Message(LogPrefix + string.Create(CultureInfo.InvariantCulture, $"{task.Tier}/{task.Id}: {(failure == null ? "PASS" : "FAIL " + failure)} tools={tools.Count} failed={failures} {seconds:0}s"));
+        Log.Message(LogPrefix + string.Create(CultureInfo.InvariantCulture, $"{task.Tier}/{task.Id}: {(failure == null ? "PASS" : (invalid ? "INVALID " : "FAIL ") + failure)} tools={tools.Count} failed={failures} {seconds:0}s"));
         return failures;
     }
 
-    private static async Task<(string failure, List<TranscriptEntry> tools, float seconds, string reply)> RunTaskAsync(ColonyAgentSession session, BenchTask task)
+    private const int MaxConfigurationErrors = 2;
+    private static readonly TimeSpan ServiceRetryDelay = TimeSpan.FromSeconds(30);
+
+    /// <param name="ServiceError">模型服務出錯（逾時、額度、設定）以致沒做完；不是模型不會做，不算進通過率。</param>
+    private sealed record TaskOutcome(string Failure, List<TranscriptEntry> Tools, float Seconds, string Reply, TranscriptEntry ServiceError);
+
+    /// <summary>只看讓指令結束的錯誤（沒有回覆）；途中的錯誤（例如壓縮失敗）之後仍跑完的不算。</summary>
+    private static TranscriptEntry FindServiceError(string reply, IEnumerable<TranscriptEntry> entries) =>
+        reply == null && entries.LastOrDefault(e => e.Kind == TranscriptKind.Error) is
+            { ErrorKind: AgentErrorKind.Configuration or AgentErrorKind.Transient or AgentErrorKind.RateLimited } error ? error : null;
+
+    private static async Task<TaskOutcome> RunTaskAsync(ColonyAgentSession session, BenchTask task)
     {
         Map map = Current.Game?.CurrentMap;
         if (map == null || RimAgentGameComponent.Instance?.Session != session)
         {
-            return ("the game was closed or reloaded", [], 0f, null);
+            return new TaskOutcome("the game was closed or reloaded", [], 0f, null, null);
         }
         string failure = null;
         string reply = null;
+        TranscriptEntry serviceError = null;
         float seconds = 0f;
         List<TranscriptEntry> tools = [];
         BenchmarkSnapshot snapshot = null;
@@ -572,7 +626,10 @@ public sealed partial class BenchmarkComponent : GameComponent
                 failure = task.Check(before, task.Measure(Find.CurrentMap), reply);
                 if (timeout.IsCancellationRequested)
                     failure = Fails(string.Create(CultureInfo.InvariantCulture, $"timed out after {TaskTimeout.TotalMinutes:0} min"), failure);
-                tools = [.. session.Transcript.Snapshot().Skip(transcriptStart).Where(e => e.Kind == TranscriptKind.Tool)];
+                List<TranscriptEntry> added = [.. session.Transcript.Snapshot().Skip(transcriptStart)];
+                tools = [.. added.Where(e => e.Kind == TranscriptKind.Tool)];
+                if (failure != null && !timeout.IsCancellationRequested) serviceError = FindServiceError(reply, added);
+                if (serviceError != null) failure = "model service error: " + serviceError.Text + "; " + failure;
             }
         }
         catch (Exception ex)
@@ -586,7 +643,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             TryCleanUp(task.Id, () => task.Cleanup?.Invoke(map));
             TryCleanUp(task.Id, () => snapshot?.Restore());
         }
-        return (failure, tools, seconds, reply);
+        return new TaskOutcome(failure, tools, seconds, reply, serviceError);
     }
 
     private static void TryCleanUp(string taskId, Action action)

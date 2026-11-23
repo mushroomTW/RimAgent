@@ -23,7 +23,7 @@ public sealed class ProductionTools
     }
 
     [AgentTool("list_bills", ToolCategory.Production, ToolRisk.Query)]
-    [Description("Lists the work tables that take bills (id, cell) with their numbered bills and repeat counts; give a table to show just that one. Bill numbers shift when a bill is deleted, so list again right before delete_bill.")]
+    [Description("Lists the work tables that take bills (id, cell) with their numbered bills and repeat counts; give a table to show just that one. Also lists the recipe defNames each table can make now (shortened when listing every table). Bill numbers shift when a bill is deleted, so list again right before delete_bill.")]
     public string ListBills(
         [Description("Work table id or name; empty lists every work table.")] string table = "")
     {
@@ -32,7 +32,7 @@ public sealed class ProductionTools
         if (!target.Success) return target.Error;
 
         List<BillInfo> bills = [.. _world.GetBills(target.Value.Id)];
-        if (bills.Count == 0) return $"{target.Value.Label} has no bills.";
+        if (bills.Count == 0) return $"{target.Value.Label} has no bills.{Recipes(target.Value.Id, MaxRecipesOneTable)}";
 
         var sb = new StringBuilder();
         sb.Append("Bills on ").Append(target.Value.Label).Append(':').AppendLine();
@@ -41,7 +41,18 @@ public sealed class ProductionTools
             sb.Append('[').Append(b.Index).Append("] ").Append(b.Label);
             sb.Append(" (").Append(b.Repeat).Append(')').AppendLine();
         }
-        return sb.ToString().Trim();
+        return sb.ToString().Trim() + Recipes(target.Value.Id, MaxRecipesOneTable);
+    }
+
+    private const int MaxRecipesOneTable = 80;
+    private const int MaxRecipesPerTable = 12;
+
+    private string Recipes(int tableId, int max)
+    {
+        List<DefInfo> recipes = [.. _world.GetTableRecipes(tableId).Where(r => r.Note.Length == 0)];
+        if (recipes.Count == 0) return string.Empty;
+        string more = recipes.Count > max ? string.Create(CultureInfo.InvariantCulture, $" and {recipes.Count - max} more (list_bills with this table shows all)") : string.Empty;
+        return "\nrecipes for add_bill: " + string.Join(", ", recipes.Take(max).Select(r => $"{r.DefName} ({r.Label})")) + more;
     }
 
     private string ListAllBills()
@@ -51,8 +62,16 @@ public sealed class ProductionTools
 
         var sb = new StringBuilder();
         sb.Append(tables.Count == 1 ? "1 work table:" : tables.Count.ToString(CultureInfo.InvariantCulture) + " work tables:").AppendLine();
+        // 相同的工作台只列一次配方。
+        var tablesByRecipes = new Dictionary<string, List<int>>(StringComparer.Ordinal);
         foreach (WorkTableInfo t in tables)
         {
+            string recipes = Recipes(t.Id, MaxRecipesPerTable);
+            if (recipes.Length > 0)
+            {
+                if (!tablesByRecipes.TryGetValue(recipes, out List<int> ids)) tablesByRecipes[recipes] = ids = [];
+                ids.Add(t.Id);
+            }
             sb.Append('[').Append(t.Id).Append("] ").Append(t.Label);
             sb.Append(" at (").Append(t.X).Append(',').Append(t.Z).Append(')');
             List<BillInfo> bills = [.. _world.GetBills(t.Id)];
@@ -66,6 +85,10 @@ public sealed class ProductionTools
             {
                 sb.Append("  [").Append(b.Index).Append("] ").Append(b.Label).Append(" (").Append(b.Repeat).Append(')').AppendLine();
             }
+        }
+        foreach (KeyValuePair<string, List<int>> group in tablesByRecipes)
+        {
+            sb.Append(string.Join(", ", group.Value.Select(id => string.Create(CultureInfo.InvariantCulture, $"[{id}]")))).Append(' ').AppendLine(group.Key.TrimStart('\n'));
         }
         return sb.ToString().Trim();
     }

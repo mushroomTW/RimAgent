@@ -81,6 +81,8 @@ public sealed class DefInfo
 
     public string DefName { get; set; } = string.Empty;
     public string Label { get; set; } = string.Empty;
+    /// <summary>同名候選的區別（例如 plant、item）；空白就不顯示。</summary>
+    public string Note { get; set; } = string.Empty;
 }
 
 public sealed class LayoutInfo

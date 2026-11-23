@@ -206,6 +206,16 @@ public sealed partial class ColonyAgentSession
         return (response.RawRepresentation as ChatResponse)?.WereToolsStripped() == true;
     }
 
+    // 框架包裝例外時只複製狀態碼，旗標留在內層，所以整條鏈都要看。
+    private static bool IsBalanceExhausted(Exception ex)
+    {
+        for (Exception current = ex; current != null; current = current.InnerException)
+        {
+            if (current is RimLLMException { IsBalanceExhausted: true }) return true;
+        }
+        return false;
+    }
+
     internal static AgentErrorKind Classify(Exception ex)
     {
         if (ex is OperationCanceledException) return AgentErrorKind.Cancelled;
@@ -215,6 +225,9 @@ public sealed partial class ColonyAgentSession
             if (current is not RimLLMException rim) continue;
             switch (rim.Error)
             {
+                // 供應商的 429 限流等一下就恢復；餘額用完、402 與框架自己的每日預算（沒有狀態碼）仍要玩家處理。
+                case LLMError.QuotaExceeded when rim.HttpStatusCode == 429 && !IsBalanceExhausted(ex):
+                    return AgentErrorKind.RateLimited;
                 case LLMError.InvalidKey:
                 case LLMError.QuotaExceeded:
                 case LLMError.ProviderOffline:

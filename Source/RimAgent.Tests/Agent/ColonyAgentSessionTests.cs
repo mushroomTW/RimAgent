@@ -334,6 +334,18 @@ public class ColonyAgentSessionTests
         Assert.That(session.IsBusy, Is.False);
     }
 
+    [TestCase(429, false, AgentErrorKind.RateLimited)]
+    [TestCase(429, true, AgentErrorKind.Configuration)]
+    [TestCase(402, false, AgentErrorKind.Configuration)]
+    [TestCase(null, false, AgentErrorKind.Configuration)]
+    public void QuotaErrorsDistinguishRateLimitFromEmptyBalance(int? status, bool exhausted, AgentErrorKind expected)
+    {
+        var quota = new RimLLMException(LLMError.QuotaExceeded, "quota") { HttpStatusCode = status, IsBalanceExhausted = exhausted };
+        Assert.That(ColonyAgentSession.Classify(quota), Is.EqualTo(expected));
+        Assert.That(ColonyAgentSession.Classify(new RimLLMException(LLMError.Unknown, "all failed", quota) { HttpStatusCode = status }), Is.EqualTo(expected));
+        Assert.That(ColonyAgentSession.Classify(new RimLLMException(LLMError.QuotaExceeded, "wrapped", quota) { HttpStatusCode = status }), Is.EqualTo(expected));
+    }
+
     [Test]
     public async Task FallbackChainFailureIsClassifiedByItsInnerCause()
     {

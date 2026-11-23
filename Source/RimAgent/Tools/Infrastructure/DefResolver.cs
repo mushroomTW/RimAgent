@@ -113,7 +113,7 @@ public static partial class DefResolver
 
     private static Result<DefInfo> Ambiguous(string needle, List<DefInfo> matches, string kindLabel)
     {
-        string listed = string.Join(", ", matches.Take(MaxListedCandidates).Select(m => $"{m.DefName} ({m.Label})"));
+        string listed = string.Join(", ", matches.Take(MaxListedCandidates).Select(m => $"{m.DefName} ({m.Label}{(m.Note.Length > 0 ? ", " + m.Note : string.Empty)})"));
         string more = matches.Count > MaxListedCandidates ? string.Create(CultureInfo.InvariantCulture, $" and {matches.Count - MaxListedCandidates} more") : string.Empty;
         return Result<DefInfo>.Fail($"Error: \"{needle}\" matches several {kindLabel}s: {listed}{more}. Use the exact defName.");
     }

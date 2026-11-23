@@ -12,7 +12,9 @@ internal enum BenchmarkState
     Pending,
     Running,
     Passed,
-    Failed
+    Failed,
+    /// <summary>模型服務出錯，不算進通過率。</summary>
+    Invalid
 }
 
 /// <summary>進度列表的一列；由 benchmark 更新，視窗只讀。</summary>
@@ -37,6 +39,7 @@ internal sealed class Window_BenchmarkProgress : Window
 
     private static readonly Color RunningColor = new(1f, 0.85f, 0.3f);
     private static readonly Color PassedColor = new(0.45f, 0.9f, 0.45f);
+    private static readonly Color InvalidColor = new(0.75f, 0.6f, 0.9f);
     private static readonly Color FailedColor = new(1f, 0.45f, 0.4f);
 
     private readonly IReadOnlyList<BenchmarkRow> _rows;
@@ -72,7 +75,8 @@ internal sealed class Window_BenchmarkProgress : Window
 
     public override void DoWindowContents(Rect inRect)
     {
-        int done = _rows.Count(r => r.State is BenchmarkState.Passed or BenchmarkState.Failed);
+        int done = _rows.Count(r => r.State is BenchmarkState.Passed or BenchmarkState.Failed or BenchmarkState.Invalid);
+        int failed = _rows.Count(r => r.State == BenchmarkState.Failed);
         int passed = _rows.Count(r => r.State == BenchmarkState.Passed);
 
         Text.Font = GameFont.Medium;
@@ -82,7 +86,7 @@ internal sealed class Window_BenchmarkProgress : Window
         Rect bar = new(inRect.x, inRect.y + 38f, inRect.width, 24f);
         Widgets.FillableBar(bar, _rows.Count == 0 ? 0f : (float)done / _rows.Count);
         Text.Anchor = TextAnchor.MiddleCenter;
-        Widgets.Label(bar, "RimAgent.Benchmark.Progress".Translate(done, _rows.Count, passed, done - passed));
+        Widgets.Label(bar, "RimAgent.Benchmark.Progress".Translate(done, _rows.Count, passed, failed, done - passed - failed));
         Text.Anchor = TextAnchor.UpperLeft;
 
         Rect header = new(inRect.x, bar.yMax + 6f, inRect.width - 16f, HeaderHeight);
@@ -105,6 +109,7 @@ internal sealed class Window_BenchmarkProgress : Window
             BenchmarkState.Running => RunningColor,
             BenchmarkState.Passed => PassedColor,
             BenchmarkState.Failed => FailedColor,
+            BenchmarkState.Invalid => InvalidColor,
             _ => Color.gray
         };
         bool started = row.State != BenchmarkState.Pending;

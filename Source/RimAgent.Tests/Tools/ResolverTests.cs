@@ -257,6 +257,13 @@ public class TargetResolverTests
     }
 
     [Test]
+    public void AmbiguousCandidatesShowTheirNote()
+    {
+        List<DefInfo> defs = [new("RawCorn", "玉米") { Note = "item" }, new("Plant_Corn", "玉米") { Note = "plant" }];
+        Assert.That(DefResolver.Resolve("玉米", defs, "thing").Error, Does.Contain("RawCorn (玉米, item), Plant_Corn (玉米, plant)"));
+    }
+
+    [Test]
     public void DefPrefixIsIgnoredOnlyWhenAsked()
     {
         List<DefInfo> plants = [new("Plant_Fibercorn", "纖維稈"), new("Plant_Corn", "玉米")];

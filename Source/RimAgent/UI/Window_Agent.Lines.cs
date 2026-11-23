@@ -469,7 +469,7 @@ public partial class Window_Agent
         {
             AgentErrorKind.Cancelled => (string)"RimAgent.Error.Cancelled".Translate(),
             AgentErrorKind.Configuration => (string)"RimAgent.Error.Configuration".Translate(entry.Text),
-            AgentErrorKind.Transient => (string)"RimAgent.Error.Transient".Translate(entry.Text),
+            AgentErrorKind.Transient or AgentErrorKind.RateLimited => (string)"RimAgent.Error.Transient".Translate(entry.Text),
             AgentErrorKind.ContextTooLong => (string)"RimAgent.Error.ContextTooLong".Translate(),
             _ => (string)"RimAgent.Error.Unknown".Translate(entry.Text),
         };

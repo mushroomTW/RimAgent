@@ -143,6 +143,44 @@ internal sealed partial class MapWorldTests
         TestHelpers.AssertNone(failures, "place_blueprint");
     }
 
+    /// <summary>整塊都不能種時，錯誤建議的第一個矩形要真的能種。</summary>
+    [Test]
+    public void RefusedGrowingZoneSuggestsAUsableRectangle()
+    {
+        const string name = nameof(RefusedGrowingZoneSuggestsAUsableRectangle);
+        if (TestHelpers.SkipWithoutMap(name)) return;
+        Map map = Find.CurrentMap;
+        var designator = new Designator_ZoneAdd_Growing();
+        CellRect? found = FindFreeRect(map, 6, c => map.zoneManager.ZoneAt(c) == null && designator.CanDesignateCell(c).Accepted);
+        if (found == null)
+        {
+            TestHelpers.Skip(name, "no growable 6x6 area");
+            return;
+        }
+        var snapshot = new BenchmarkSnapshot(map);
+        var failures = new List<string>();
+        try
+        {
+            CellRect r = found.Value.ContractedBy(2);
+            var rect = new CellRectSpec(r.minX, r.minZ, r.maxX, r.maxZ);
+            _world.AddZone("Stockpile", rect, string.Empty);
+            CommandResult refused = _world.AddZone("Growing", rect, string.Empty);
+            System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(refused.Message, @"usable cells: \((\d+),(\d+)\)-\((\d+),(\d+)\)", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
+            if (refused.Success || !m.Success) failures.Add("no suggestion: " + refused.Message);
+            else
+            {
+                int N(int i) => int.Parse(m.Groups[i].Value, System.Globalization.CultureInfo.InvariantCulture);
+                CommandResult added = _world.AddZone("Growing", new CellRectSpec(N(1), N(2), N(3), N(4)), string.Empty);
+                if (!added.Success) failures.Add("suggested rectangle refused: " + added.Message);
+            }
+        }
+        finally
+        {
+            snapshot.Restore();
+        }
+        TestHelpers.AssertNone(failures, "growing zone suggestion");
+    }
+
     /// <summary>操作點上有石塊時，錯誤要講出那一格與石塊 id；石塊沒有儲存區收時要看得出來；benchmark 還原要清掉新增的區域與標記。</summary>
     [Test]
     public void BlockedInteractionCellNamesTheCellAndChunkStorageIsChecked()

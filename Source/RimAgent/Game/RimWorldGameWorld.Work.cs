@@ -60,7 +60,7 @@ internal sealed partial class RimWorldGameWorld
         // 屠宰、火化、熔煉等配方沒有單一產物，改用配方名稱，否則這類工作單無法新增。
         return [.. table.def.AllRecipes
             .Where(r => r.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(r.workerClass))
-            .Select(r => new DefInfo(r.defName, r.ProducedThingDef?.label ?? r.label))];
+            .Select(r => new DefInfo(r.defName, r.ProducedThingDef?.label ?? r.label) { Note = r.AvailableNow ? string.Empty : "unavailable now" })];
     }
 
     public CommandResult AddBill(int tableId, string recipeDefName, int count)

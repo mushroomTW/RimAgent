@@ -75,7 +75,7 @@ internal sealed partial class RimWorldGameWorld
         string skippedText = skipped.Count == 0
             ? string.Empty
             : " Skipped " + string.Join("; ", skipped.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Value} cell{(p.Value == 1 ? "" : "s")} ({p.Key})")).ToArray()) + ".";
-        if (cells.Count == 0) return CommandResult.Fail($"no cell in {rect} can hold a {kind.ToLowerInvariant()} zone.{skippedText}");
+        if (cells.Count == 0) return CommandResult.Fail($"no cell in {rect} can hold a {kind.ToLowerInvariant()} zone.{skippedText}{NearbyZoneRects(map, rect, designator, plant)}");
 
         // 與原版拖曳相同：不相連的格子各自成區，避免單一區域被切成不連通的幾塊。
         var added = new List<string>();
@@ -140,6 +140,54 @@ internal sealed partial class RimWorldGameWorld
         }
         skipped = reasons;
         return cells;
+    }
+
+    private const int ZoneSearchRadius = 25;
+    private const int MaxZoneSuggestionSide = 20;
+
+    /// <summary>整塊都不能畫時，列出附近同樣大小、可用格最多的矩形；inspect_area 只給肥沃格數，模型無從得知在哪。</summary>
+    private static string NearbyZoneRects(Map map, CellRectSpec rect, Designator_ZoneAdd designator, ThingDef plant)
+    {
+        int width = Math.Min(rect.MaxX - rect.MinX + 1, MaxZoneSuggestionSide), height = Math.Min(rect.MaxZ - rect.MinZ + 1, MaxZoneSuggestionSide);
+        var center = new IntVec3((rect.MinX + rect.MaxX) / 2, 0, (rect.MinZ + rect.MaxZ) / 2);
+        CellRect area = CellRect.CenteredOn(center, ZoneSearchRadius).ClipInsideMap(map);
+        if (area.Width < width || area.Height < height) return string.Empty;
+
+        // 二維前綴和：每個候選矩形的可用格數都是常數時間。
+        int[,] sum = new int[area.Width + 1, area.Height + 1];
+        for (int x = 0; x < area.Width; x++)
+        {
+            for (int z = 0; z < area.Height; z++)
+            {
+                var cell = new IntVec3(area.minX + x, 0, area.minZ + z);
+                int usable = map.zoneManager.ZoneAt(cell) == null && designator.CanDesignateCell(cell).Accepted
+                    && (plant == null || map.fertilityGrid.FertilityAt(cell) >= plant.plant.fertilityMin) ? 1 : 0;
+                sum[x + 1, z + 1] = usable + sum[x, z + 1] + sum[x + 1, z] - sum[x, z];
+            }
+        }
+
+        var found = new List<(CellRect Rect, int Cells)>();
+        IEnumerable<(CellRect Rect, int Cells)> ranked =
+            (from x in Enumerable.Range(0, area.Width - width + 1)
+             from z in Enumerable.Range(0, area.Height - height + 1)
+             let cells = sum[x + width, z + height] - sum[x, z + height] - sum[x + width, z] + sum[x, z]
+             where cells * 2 >= width * height
+             let candidate = new CellRect(area.minX + x, area.minZ + z, width, height)
+             orderby cells descending, candidate.CenterCell.DistanceToSquared(center)
+             select (candidate, cells));
+        foreach ((CellRect Rect, int Cells) option in ranked)
+        {
+            if (found.Exists(f => f.Rect.Overlaps(option.Rect))) continue;
+            found.Add(option);
+            if (found.Count == 3) break;
+        }
+        return found.Count == 0
+            ? string.Create(CultureInfo.InvariantCulture, $" No mostly usable {width}x{height} rectangle within {ZoneSearchRadius} cells; try a smaller one or look farther away.")
+            : " Nearby rectangles with usable cells: " + string.Join("; ", found.Select(f =>
+                string.Create(CultureInfo.InvariantCulture, $"({f.Rect.minX},{f.Rect.minZ})-({f.Rect.maxX},{f.Rect.maxZ}) {f.Cells} of {width * height}"))) + "."
+                + (width < rect.MaxX - rect.MinX + 1 || height < rect.MaxZ - rect.MinZ + 1
+                    ? string.Create(CultureInfo.InvariantCulture, $" These are smaller than you asked for (capped at {MaxZoneSuggestionSide} per side); combine several.")
+                    : string.Empty);
     }
 
     private static List<List<IntVec3>> SplitContiguous(List<IntVec3> cells)

@@ -48,7 +48,7 @@ internal sealed partial class RimWorldGameWorld
             _ => null
         };
         if (defs == null) return [];
-        List<DefInfo> catalog = [.. defs.Select(d => new DefInfo(d.defName, d.label))];
+        List<DefInfo> catalog = [.. defs.Select(d => new DefInfo(d.defName, d.label) { Note = d is ThingDef t ? t.category.ToString().ToLowerInvariant() : string.Empty })];
         _lookupCatalogs[key] = catalog;
         return catalog;
     }

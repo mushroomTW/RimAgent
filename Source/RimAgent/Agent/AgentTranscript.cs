@@ -26,7 +26,9 @@ public enum AgentErrorKind
     Configuration,
     Transient,
     ContextTooLong,
-    Unknown
+    Unknown,
+    /// <summary>供應商 429 配額限流；分不出每分鐘或每日，自主任務短暫停頓後再試。</summary>
+    RateLimited
 }
 
 public sealed class TranscriptEntry

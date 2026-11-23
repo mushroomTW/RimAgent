@@ -5,7 +5,7 @@
   <RimAgent.Benchmark.Done>RimAgent 基准测试：通过 {0}/{1} 题。详细结果：{2}</RimAgent.Benchmark.Done>
   <RimAgent.Benchmark.NoRun>还没有运行过基准测试。</RimAgent.Benchmark.NoRun>
   <RimAgent.Benchmark.Title>RimAgent 基准测试</RimAgent.Benchmark.Title>
-  <RimAgent.Benchmark.Progress>已完成 {0}/{1}，通过 {2}，失败 {3}</RimAgent.Benchmark.Progress>
+  <RimAgent.Benchmark.Progress>已完成 {0}/{1}，通过 {2}，失败 {3}，无效 {4}</RimAgent.Benchmark.Progress>
   <RimAgent.Benchmark.Column.Task>题目</RimAgent.Benchmark.Column.Task>
   <RimAgent.Benchmark.Column.Status>状态</RimAgent.Benchmark.Column.Status>
   <RimAgent.Benchmark.Column.Tools>工具／失败</RimAgent.Benchmark.Column.Tools>
@@ -16,6 +16,7 @@
   <RimAgent.Benchmark.State.Running>运行中</RimAgent.Benchmark.State.Running>
   <RimAgent.Benchmark.State.Passed>通过</RimAgent.Benchmark.State.Passed>
   <RimAgent.Benchmark.State.Failed>失败</RimAgent.Benchmark.State.Failed>
+  <RimAgent.Benchmark.State.Invalid>无效</RimAgent.Benchmark.State.Invalid>
   <RimAgent.Benchmark.Task.stockpile>储存区</RimAgent.Benchmark.Task.stockpile>
   <RimAgent.Benchmark.Task.rice_field>水稻田</RimAgent.Benchmark.Task.rice_field>
   <RimAgent.Benchmark.Task.research_bench>研究台</RimAgent.Benchmark.Task.research_bench>

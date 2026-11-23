@@ -243,6 +243,16 @@ public class AutonomousRunnerTests
     }
 
     [Test]
+    public async Task RateLimitPausesBriefly()
+    {
+        _client.Throw(new RimLLMException(LLMError.QuotaExceeded, "quota") { HttpStatusCode = 429 });
+
+        await RunAsync(Request(NewSession(), tick: 1000));
+
+        Assert.That(_runner.HoldUntilTick, Is.EqualTo(1000 + AutonomousRunner.RateLimitHoldTicks));
+    }
+
+    [Test]
     public async Task TransientErrorDoesNotPause()
     {
         _client.Throw(new RimLLMException(LLMError.Timeout, "slow"));

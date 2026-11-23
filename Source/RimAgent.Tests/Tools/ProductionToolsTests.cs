@@ -54,10 +54,18 @@ public class ProductionToolsTests
     }
 
     [Test]
+    public void IdenticalTablesShareOneRecipeListWithoutUnavailableRecipes()
+    {
+        foreach (int id in new[] { 501, 502 }) _world.TableRecipes[id] = [new DefInfo("MakeA", "a"), new DefInfo("MakeB", "b") { Note = "unavailable now" }];
+        string text = _tools.ListBills();
+        Assert.That(text, Does.Contain("[501], [502] recipes for add_bill: MakeA (a)").And.Not.Contain("MakeB"));
+    }
+
+    [Test]
     public void ListsBillsWithRepeatCounts()
     {
         Assert.That(_tools.ListBills("502"), Does.Contain("Bills on Butcher table:").And.Contain("[1] Butcher creature (2x)"));
-        Assert.That(_tools.ListBills("501"), Is.EqualTo("Fueled smithy has no bills."));
+        Assert.That(_tools.ListBills("501"), Does.StartWith("Fueled smithy has no bills.").And.Contain("recipes for add_bill: "));
     }
 
     [Test]
