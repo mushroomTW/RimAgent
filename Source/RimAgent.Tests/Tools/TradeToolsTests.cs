@@ -381,7 +381,7 @@ public class TradeToolsTests
     }
 
     [Test]
-    public async Task ExecuteTradeIsRejectedWithoutClassifierInAuto()
+    public async Task ExecuteTradeFollowsClassifierInAuto()
     {
         SeedColonyStock();
         _world.Traders.Add(MakeOrbitalShip());
@@ -404,9 +404,9 @@ public class TradeToolsTests
         TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
         Assert.That(tool.ToolName, Is.EqualTo("execute_trade"));
         Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
-        Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
-        Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+        Assert.That(tool.RiskCheck, Is.EqualTo("low"));
+        Assert.That(tool.Result, Does.Not.StartWith(ToolText.ErrorPrefix));
+        Assert.That(classifier.CallCount, Is.EqualTo(1));
         Assert.That(session.HasPendingConfirmation, Is.False);
     }
 }

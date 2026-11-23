@@ -819,7 +819,7 @@ public class ColonyAgentSessionTests
     }
 
     [Test]
-    public async Task IrreversibleBlacklistedToolsAreNeverRememberedForTheSession()
+    public async Task IrreversibleToolsCanBeRememberedForTheSession()
     {
         _permissions.Set(ToolCategory.Trade, value: true);
         _client.CallTool("form_caravan", new { colonists = "Bob", tile = 4600 })
@@ -829,12 +829,12 @@ public class ColonyAgentSessionTests
         var session = new ColonyAgentSession(_client, _world, () => _permissions, 8, () => AgentMode.Confirm);
 
         await session.SendAsync("send Bob north");
-        Assert.That(session.ConfirmGate.CanRememberPending, Is.False, "YOLO 黑名單上的工具不提供「不再問」");
+        Assert.That(session.ConfirmGate.CanRememberPending, Is.True);
         await session.ConfirmAsync(rememberForSession: true);
 
         await session.SendAsync("now send Ali south");
 
-        Assert.That(session.HasPendingConfirmation, Is.True);
+        Assert.That(session.HasPendingConfirmation, Is.False);
     }
 
     [Test]

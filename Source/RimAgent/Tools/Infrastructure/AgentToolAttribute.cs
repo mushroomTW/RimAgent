@@ -26,7 +26,7 @@ public enum ToolCategory
 
 /// <summary>
 /// 工具的靜態風險，依可逆性分級。確認模式只放行 Query；執行模式擋 Confirm；
-/// 自動模式由分類器逐次判斷（不看此標記），黑名單工具除外（直接拒絕，不問分類器）。
+/// 自動模式由分類器逐次判斷（不看此標記）。
 /// </summary>
 public enum ToolRisk
 {

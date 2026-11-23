@@ -263,17 +263,9 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         return preview;
     }
 
-    /// <summary>自動模式：黑名單直接擋、預覽 → 分類 → 執行或擋下。工具的預覽分支不碰世界，靠 CommandGateTests 鎖住。</summary>
+    /// <summary>自動模式：預覽 → 分類 → 執行或擋下。工具的預覽分支不碰世界，靠 CommandGateTests 鎖住。</summary>
     private async Task<object> InvokeClassifiedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
-        // 高危黑名單在自動模式永遠是高風險：直接拒絕，不必再燒一次分類器模型。
-        if (AgentToolRegistry.IsHighRiskBlacklisted(Name))
-        {
-            entry.RiskCheck = "high";
-            return ToolText.Error("safety review rejected " + Name + " (high): " +
-                "this tool is on the high-risk blacklist and never runs in Auto mode. " +
-                "Do not retry it unchanged.");
-        }
         object previewResult = await InvokePreviewAsync(arguments, cancellationToken);
         string preview = previewResult?.ToString() ?? string.Empty;
         // 沒走到閘門（參數錯、目標不存在）就沒有可判定的命令，原樣回給模型。

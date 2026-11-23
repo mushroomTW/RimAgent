@@ -93,7 +93,7 @@ public class SurgeryToolsTests
     }
 
     [Test]
-    public async Task ScheduleSurgeryIsRejectedWithoutClassifierInAuto()
+    public async Task ScheduleSurgeryFollowsClassifierInAuto()
     {
         var client = new ScriptedChatClient();
         var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
@@ -112,9 +112,9 @@ public class SurgeryToolsTests
         TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
         Assert.That(tool.ToolName, Is.EqualTo("schedule_surgery"));
         Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Medical));
-        Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
-        Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+        Assert.That(tool.RiskCheck, Is.EqualTo("low"));
+        Assert.That(tool.Result, Does.Not.StartWith(ToolText.ErrorPrefix));
+        Assert.That(classifier.CallCount, Is.EqualTo(1));
         Assert.That(session.HasPendingConfirmation, Is.False);
     }
 }

@@ -513,15 +513,6 @@ public class WorldToolsTests
         }
     }
 
-    [Test]
-    public void SendingAndSettlingCaravansAreHighRiskBlacklisted()
-    {
-        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("send_caravan"), Is.True);
-        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("settle_caravan"), Is.True);
-        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("set_caravan_movement"), Is.False);
-        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("list_caravans"), Is.False);
-    }
-
     // ---- 解析與格式 ----
 
     [Test]

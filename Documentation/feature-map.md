@@ -45,7 +45,7 @@
 | 預覽確認與捨棄 | 變更遊戲狀態的工具呼叫後出現的預覽 | `CommandGateTests`；遊戲內 `PendingUiCheck`；截圖 |
 | 失敗連鎖保護 | 已確認的多個命令中有一項失敗 | `CommandGateTests` |
 | 失敗迴圈守衛 | 同一句裡同一個工具一再回同樣的錯誤 | `FailureLoopGuardTests` |
-| 本局不再詢問 | 預覽上的勾選；黑名單工具不提供 | `CommandGateTests`、`ToolGuardTests` |
+| 本局不再詢問 | 預覽上的勾選；MCP 與通用按鈕工具不提供 | `CommandGateTests`、`ToolGuardTests` |
 | MCP 呼叫審查 | 啟用 MCP 伺服器後呼叫其工具 | `McpTests` |
 
 ## 自主營運與目標

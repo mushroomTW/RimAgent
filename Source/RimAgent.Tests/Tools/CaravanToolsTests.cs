@@ -49,8 +49,6 @@ public class CaravanToolsTests
         Assert.That(registry.RiskOf("plan_caravan"), Is.EqualTo(ToolRisk.Query));
         Assert.That(registry.RiskOf("form_caravan"), Is.EqualTo(ToolRisk.Confirm));
         Assert.That(registry.RiskOf("cancel_forming_caravan"), Is.EqualTo(ToolRisk.Safe));
-        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("form_caravan"), Is.True);
-        Assert.That(AgentToolRegistry.IsHighRiskBlacklisted("plan_caravan"), Is.False);
     }
 
     // ---- plan_caravan ----
@@ -286,7 +284,7 @@ public class CaravanToolsTests
     }
 
     [Test]
-    public async Task FormCaravanIsRejectedWithoutClassifierInAuto()
+    public async Task FormCaravanFollowsClassifierInAuto()
     {
         var client = new ScriptedChatClient();
         var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
@@ -305,10 +303,10 @@ public class CaravanToolsTests
         TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
         Assert.That(tool.ToolName, Is.EqualTo("form_caravan"));
         Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Trade));
-        Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
-        Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
-        Assert.That(_world.Calls, Is.Empty);
+        Assert.That(tool.RiskCheck, Is.EqualTo("low"));
+        Assert.That(tool.Result, Does.Not.StartWith(ToolText.ErrorPrefix));
+        Assert.That(classifier.CallCount, Is.EqualTo(1));
+        Assert.That(_world.Calls, Is.Not.Empty);
         Assert.That(session.HasPendingConfirmation, Is.False);
     }
 

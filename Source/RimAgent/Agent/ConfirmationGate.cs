@@ -161,14 +161,12 @@ public sealed class ConfirmationGate
     /// <summary>
     /// MCP 以使用者權限執行本機程式，每次的 server／tool／args 都可能不同，
     /// 記住「工具名稱」等於對之後所有外部呼叫放行，因此永遠不記。
-    /// 高危黑名單上的重大不可逆操作同理：那份清單的意思是「絕不免確認執行」，
-    /// 一顆按鍵不該把它整場遊戲關掉；通用按鈕通道每次按的東西都不同，也不記。
+    /// 通用按鈕通道每次按的東西都不同，也不記。
     /// </summary>
     private static bool CanRememberForSession(string toolName)
     {
         return !string.IsNullOrEmpty(toolName)
             && !string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
-            && !AgentToolRegistry.IsHighRiskBlacklisted(toolName)
             && !AgentToolRegistry.IsGenericActionTool(toolName);
     }
 

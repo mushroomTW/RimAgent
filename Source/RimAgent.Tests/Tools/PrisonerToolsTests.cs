@@ -104,7 +104,7 @@ public class PrisonerToolsTests
     }
 
     [Test]
-    public async Task SetInteractionIsRejectedWithoutClassifierInAuto()
+    public async Task SetInteractionFollowsClassifierInAuto()
     {
         var client = new ScriptedChatClient();
         var classifier = new ScriptedChatClient().Reply("{\"risk\":\"low\",\"authorized\":true}");
@@ -123,9 +123,9 @@ public class PrisonerToolsTests
         TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
         Assert.That(tool.ToolName, Is.EqualTo("set_prisoner_interaction"));
         Assert.That(tool.ToolCategory, Is.EqualTo(ToolCategory.Prisoner));
-        Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
-        Assert.That(classifier.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
+        Assert.That(tool.RiskCheck, Is.EqualTo("low"));
+        Assert.That(tool.Result, Does.Not.StartWith(ToolText.ErrorPrefix));
+        Assert.That(classifier.CallCount, Is.EqualTo(1));
         Assert.That(session.HasPendingConfirmation, Is.False);
     }
 }

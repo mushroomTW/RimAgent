@@ -293,32 +293,6 @@ public class ModelCallOptimizationTests
     }
 
     [Test]
-    public async Task BlacklistedCommandSkipsClassifierInAuto()
-    {
-        _permissions.Set(ToolCategory.Trade, value: true);
-        _world.Traders.Add(new TraderInfo
-        {
-            Kind = TraderInfo.OrbitalKind, Id = "PassingShip_1", Name = "Starweaver", Faction = "Outlanders", Silver = 1200,
-            Goods = [new TradeGoodsInfo { DefName = "ComponentSpacer", Label = "spacer component", Count = 8, MarketValue = 55 }]
-        });
-        var agentClient = new ScriptedChatClient();
-        var classifierClient = new ScriptedChatClient();
-        agentClient.CallTool("execute_trade", new { trader = "PassingShip_1", buys = "spacer component x4", sells = "", negotiator = "Ali" })
-                   .Reply("rejected.");
-        var session = new ColonyAgentSession(agentClient, _world, () => _permissions, 8,
-            () => AgentMode.Auto, instructions: null, mcp: null, classifierClient, classifierPrompt: () => "prompt");
-
-        await session.SendAsync("buy 4 spacer components");
-
-        Assert.That(classifierClient.CallCount, Is.EqualTo(0), "黑名單不燒分類器模型");
-        Assert.That(_world.Calls, Is.Empty);
-        Assert.That(session.HasPendingConfirmation, Is.False);
-        TranscriptEntry tool = session.Transcript.Snapshot().Single(e => e.Kind == TranscriptKind.Tool);
-        Assert.That(tool.RiskCheck, Is.EqualTo("high"));
-        Assert.That(tool.Result, Does.StartWith(ToolText.ErrorPrefix).And.Contain("blacklist"));
-    }
-
-    [Test]
     public async Task QueryCacheInvalidatedAfterCommand()
     {
         _client.CallTool("list_colonists", new { })

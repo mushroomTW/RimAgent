@@ -193,23 +193,6 @@ public sealed class AgentToolRegistry
         return [.. WithOutputReader(Allowed(scoped).Where(t => !readOnly || t.Risk == ToolRisk.Query)).Select(t => t.Tool)];
     }
 
-    private static readonly HashSet<string> HighRiskBlacklistedToolNames = new(StringComparer.Ordinal)
-    {
-        "execute_trade",
-        "form_caravan",
-        "release_prisoner",
-        "schedule_surgery",
-        "send_caravan",
-        "set_prisoner_interaction",
-        "settle_caravan"
-    };
-
-    /// <summary>高危黑名單（重大不可逆操作）：自動模式直接拒絕，也不能記成「本局不再問」。</summary>
-    public static bool IsHighRiskBlacklisted(string name)
-    {
-        return !string.IsNullOrEmpty(name) && HighRiskBlacklistedToolNames.Contains(name);
-    }
-
     /// <summary>
     /// 通用按鈕通道：它們只是「按下某個按鈕／某個右鍵選項／回答某個對話」的通道，
     /// 同一個工具可能執行無害操作，也可能啟動飛船、自毀或吞噬神經強化器；不能因工具名稱固定就整場放行。
