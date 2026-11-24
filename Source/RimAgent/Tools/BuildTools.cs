@@ -202,10 +202,10 @@ public sealed class BuildTools
     public string PlaceBlueprint(
         [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
         [Description("One of the shapes listed in the tool description.")] string shape,
-        int x,
-        int z,
-        [Description("Line end or opposite corner; ignored for single.")] int x2 = -1,
-        [Description("Line end or opposite corner; ignored for single.")] int z2 = -1,
+        [Description("line: one end; fill/outline: one corner (not the center); single/layout: center cell.")] int x,
+        [Description("Same point as x.")] int z,
+        [Description("line: other end; fill/outline: opposite corner; ignored for single/layout.")] int x2 = -1,
+        [Description("Same point as x2.")] int z2 = -1,
         [Description("0 north, 1 east, 2 south, 3 west (doors, beds). Also turns non-square buildings: east/west swaps width and depth. Otherwise 0.")] int rotation = 0,
         [Description("Material, e.g. \"wood\", \"granite blocks\"; empty = default.")] string stuff = "")
 #pragma warning restore S107
@@ -250,7 +250,7 @@ public sealed class BuildTools
         if (validation.failures.Count > 0)
         {
             string fits = large && validation.refusedByPlace && cells.Count == 1 ? NearbyFits(def.Value.DefName, cells[0], rotation, stuffDefName, bounds) : string.Empty;
-            return BuildPlaceValidationError(what, cells, validation) + fits;
+            return BuildPlaceValidationError(what, cells, validation) + fits + WeakGroundNote(info, cells, rotation, bounds);
         }
 
         var placedCells = new List<(int X, int Z)>();
@@ -275,7 +275,7 @@ public sealed class BuildTools
             + string.Create(CultureInfo.InvariantCulture, $". Sides: north z={maxZ}, south z={minZ}, west x={minX}, east x={maxX}.");
     }
 
-    private const int MaxAmbiguousShown = 2;
+    private const int MaxAmbiguousShown = 4;
     private const int NearbyRadius = 3;
     private const int MaxNearbyFits = 5;
 
@@ -296,6 +296,29 @@ public sealed class BuildTools
         return fits.Count == 0
             ? string.Create(CultureInfo.InvariantCulture, $" No cell within {NearbyRadius} fits in any rotation.")
             : " Nearby centers that fit (check they are on the right side of your walls): " + string.Join("; ", fits) + ".";
+    }
+
+    private const int FirmGroundRadius = 24;
+
+    /// <summary>承重不足時給出附近撐得住的最大一塊地；只說「需要中型」的話，模型會去砍樹或試鋪地板。</summary>
+    private string WeakGroundNote(BuildingInfo info, List<(int X, int Z)> cells, int rotation, MapBounds bounds)
+    {
+        if (info == null || !Enum.TryParse(info.TerrainAffordance, ignoreCase: true, out GroundSupport needed)) return string.Empty;
+        List<CellRectSpec> covered = [.. cells.Select(c => OccupiedRect(c.X, c.Z, rotation, info))];
+        if (covered.Any(r => !bounds.Contains(r.MinX, r.MinZ) || !bounds.Contains(r.MaxX, r.MaxZ))) return string.Empty;
+        // 整塊讀一次：GetCells 每次呼叫都會重算房間資訊。
+        var span = new CellRectSpec(covered.Min(r => r.MinX), covered.Min(r => r.MinZ), covered.Max(r => r.MaxX), covered.Max(r => r.MaxZ));
+        HashSet<(int X, int Z)> weak = [.. _world.GetCells(span).Where(c => !c.Fogged && c.Support < needed).Select(c => (c.X, c.Z))];
+        if (!weak.Any(c => covered.Any(r => c.X >= r.MinX && c.X <= r.MaxX && c.Z >= r.MinZ && c.Z <= r.MaxZ))) return string.Empty;
+
+        (int x, int z) = cells[0];
+        var area = new CellRectSpec(
+            Math.Max(0, x - FirmGroundRadius), Math.Max(0, z - FirmGroundRadius),
+            Math.Min(bounds.Width - 1, x + FirmGroundRadius), Math.Min(bounds.Height - 1, z + FirmGroundRadius));
+        string note = $" The ground here is too weak (needs {info.TerrainAffordance} support); cutting plants does not change that. ";
+        return note + (ObserveTools.LargestBuildable(area, _world.GetCells(area), needed, info.Width, info.Height) is CellRectSpec site
+            ? string.Create(CultureInfo.InvariantCulture, $"Largest buildable rectangle within {FirmGroundRadius} cells that holds it: {ObserveTools.SiteText(site)}.")
+            : string.Create(CultureInfo.InvariantCulture, $"Nothing within {FirmGroundRadius} cells holds it."));
     }
 
     private static string BuildPlaceValidationError(string what, List<(int X, int Z)> cells, (bool refusedByPlace, List<string> failures) validation)
@@ -685,7 +708,7 @@ public sealed class BuildTools
         // 各種類的目錄合併後一起比對，名稱層級（精確 → 前綴 → 包含）才是全域的；再以參考對回種類。
         var kindOf = new Dictionary<DefInfo, string>();
         List<DefInfo> candidates = CollectLookupCandidates(wanted, kindOf);
-        Result<DefInfo> def = DefResolver.Resolve(name, candidates, wanted.Length > 0 ? wanted : "def", string.Empty, out IReadOnlyList<DefInfo> ambiguous);
+        Result<DefInfo> def = DefResolver.Resolve(name, candidates, wanted.Length > 0 ? wanted : "def", string.Empty, out IReadOnlyList<DefInfo> ambiguous, abbreviations: true);
         if (def.Success) return DescribeDef(def.Value, kindOf[def.Value], detail);
         if (ambiguous.Count is 0 or > MaxAmbiguousShown) return def.Error;
         return string.Create(CultureInfo.InvariantCulture, $"\"{name.Trim()}\" matches {ambiguous.Count}; use the exact defName elsewhere.\n\n")

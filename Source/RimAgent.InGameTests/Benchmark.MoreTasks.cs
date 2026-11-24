@@ -315,6 +315,10 @@ public sealed partial class BenchmarkComponent
             int hediffs = map.mapPawns.FreeColonistsSpawned.Sum(p => p.health.hediffSet.hediffs.Count);
             int pawns = map.mapPawns.AllPawnsSpawned.Count;
             int zones = map.zoneManager.AllZones.Count;
+            int[] terrain = [.. map.AllCells.Select(c => (int)c.GetTerrain(map).shortHash)];
+            int home = map.areaManager.Home.TrueCount;
+            int marks = map.designationManager.AllDesignations.Count();
+            int settled = map.listerThings.AllThings.Count(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Building);
             var snapshot = new BenchmarkSnapshot(map);
             try
             {
@@ -339,6 +343,9 @@ public sealed partial class BenchmarkComponent
             if (problem == null && Items(map).Where(t => t.def == ThingDefOf.Silver || t.def == ThingDefOf.ComponentIndustrial).Sum(t => t.stackCount) != silver) problem = "silver or components changed";
             if (problem == null && map.mapPawns.FreeColonistsSpawned.Sum(p => p.BillStack.Bills.Count) != bills) problem = "operations left behind";
             if (problem == null && map.mapPawns.FreeColonistsSpawned.Sum(p => p.health.hediffSet.hediffs.Count) != hediffs) problem = "health changed";
+            if (problem == null && !map.AllCells.Select(c => (int)c.GetTerrain(map).shortHash).SequenceEqual(terrain)) problem = "terrain changed";
+            if (problem == null && task.Tier == Survey && map.listerThings.AllThings.Count(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Building) != settled) problem = "plants, items or buildings changed";
+            if (problem == null && task.Tier == Survey && (map.areaManager.Home.TrueCount != home || map.designationManager.AllDesignations.Count() != marks)) problem = "home area or marks changed";
             if (problem != null) failed++;
             Log.Message(LogPrefix + "SelfCheck " + task.Id + ": " + (problem ?? (task.Solve == null ? "ok" : "ok, solved")));
         }

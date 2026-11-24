@@ -59,8 +59,6 @@ public sealed partial class BenchmarkComponent : GameComponent
         public string Id;
         public string Tier = Basic;
         public string Instruction;
-        /// <summary>要先看地形再動手；比較勘查工具時只跑這些題目。</summary>
-        public bool Survey;
         /// <summary>自我檢查用的參考解，不經模型。</summary>
         public Func<IGameWorld, CommandResult> Solve;
         /// <summary>送出指令前佈置場景；回傳 null 表示成功，否則為無法佈置的原因（該題記為無效、不送指令）。</summary>
@@ -79,14 +77,14 @@ public sealed partial class BenchmarkComponent : GameComponent
         ResearchPriorityTask(), CutTreesTask(), FoodReportTask(), TwoRoomHouseTask(),
         FreezerTask(), CornStorageTask(), KitchenBillsTask(), InjuredCareTask(),
         DailyScheduleTask(), DefendTask(), SetResearchTask(), TameAnimalTask(),
-        RecruitPrisonerTask(), SurgeryTask(), DeleteTask(), TradeTask()
+        RecruitPrisonerTask(), SurgeryTask(), DeleteTask(), TradeTask(),
+        SurveyRichSoilTask(), SurveyWallGapTask(), SurveyFirmGroundTask(), SurveyClearGroundTask()
     ];
 
     private static BenchTask StockpileTask() =>
         new()
         {
             Id = "stockpile",
-            Survey = true,
             Instruction = "在殖民者附近建立一個大約 6x6 的儲存區。",
             Measure = map => new() { [CellsKey] = ZoneCells<Zone_Stockpile>(map, _ => true) },
             Check = (before, after, _) => Delta(before, after, CellsKey) >= 20 ? null : string.Create(CultureInfo.InvariantCulture, $"stockpile cells +{Delta(before, after, CellsKey)}, need +20")
@@ -96,7 +94,6 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "rice_field",
-            Survey = true,
             Instruction = "在殖民者附近開一塊至少 30 格的水稻田。",
             Measure = map => new() { [CellsKey] = ZoneCells<Zone_Growing>(map, z => z.GetPlantDefToGrow()?.defName == "Plant_Rice") },
             Check = (before, after, _) => Delta(before, after, CellsKey) >= 25 ? null : string.Create(CultureInfo.InvariantCulture, $"rice zone cells +{Delta(before, after, CellsKey)}, need +25")
@@ -106,7 +103,6 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "research_bench",
-            Survey = true,
             Instruction = "在殖民者附近放一張簡易研究台的藍圖。",
             Measure = map => new() { [BenchesKey] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench", StringComparison.Ordinal)) },
             Check = (before, after, _) => Delta(before, after, BenchesKey) >= 1 ? null : "no new research bench blueprint"
@@ -116,7 +112,6 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "wood_room",
-            Survey = true,
             Instruction = "在殖民者附近的空地上，用木頭規劃一間內部 5x5 的小房間藍圖（四面牆加一扇門）。",
             Setup = ClearBlueprints,
             Measure = map => new()
@@ -162,7 +157,6 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "two_room_house",
-            Survey = true,
             Tier = Hard,
             Instruction = "在殖民者附近的空地上，用木頭規劃一棟有兩個房間的建築，兩間房共用一面牆、各有一扇門："
                 + "一間是放兩張床的臥室，另一間是放一張簡易研究台的研究室。",
@@ -189,7 +183,6 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "freezer",
-            Survey = true,
             Tier = Hard,
             Instruction = "空調研究已經完成。在殖民者附近用木頭規劃一間內部至少 3x3 的冷凍庫：四面牆、一扇門、"
                 + "牆上裝一台冷氣，並在房間裡面劃一個儲存區（區域，不是貨架）。",
@@ -210,7 +203,6 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "corn_storage",
-            Survey = true,
             Tier = Hard,
             Instruction = "在殖民者附近開一塊至少 30 格的玉米田，並在附近建一個專門放收成玉米的儲存區："
                 + "這個儲存區要能放玉米，但不能放鋼鐵和木材。",
@@ -353,17 +345,20 @@ public sealed partial class BenchmarkComponent : GameComponent
     private const string InspectTool = "inspect_area";
     private const string ScreenshotTool = "take_screenshot";
 
+    private const int SurveyRounds = 3;
+
     /// <summary>這一輪唯一可用的勘查工具；null 表示不限制。</summary>
     private static string _surveyTool;
 
     /// <summary>
-    /// 同樣的題目各跑一輪，一輪只給 inspect_area，一輪只給 take_screenshot；
-    /// 兩輪都藏 get_map_overview，它也能看地形，留著就比不出差別。
+    /// 同樣的題目輪流只給 inspect_area 或只給 take_screenshot，各跑 <see cref="SurveyRounds"/> 輪，每輪對調先後；
+    /// 都藏 get_map_overview，它也能看地形，留著就比不出差別。
     /// </summary>
     private static async Task CompareSurveyAsync(bool isolated)
     {
-        var scores = new List<string>();
-        foreach (string tool in new[] { InspectTool, ScreenshotTool })
+        var scores = new Dictionary<string, BenchmarkScore>(StringComparer.Ordinal);
+        string[] order = [InspectTool, ScreenshotTool];
+        foreach (string tool in Enumerable.Range(0, SurveyRounds).SelectMany(i => i % 2 == 0 ? order : order.Reverse()))
         {
             _surveyTool = tool;
             RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", tool == InspectTool ? ScreenshotTool : InspectTool };
@@ -377,10 +372,16 @@ public sealed partial class BenchmarkComponent : GameComponent
                 _surveyTool = null;
                 RimAgentSettings.HiddenTools = System.Collections.Frozen.FrozenSet<string>.Empty;
             }
-            if (s == null) return;
-            scores.Add(string.Create(CultureInfo.InvariantCulture, $"{tool} {s.Passed}/{s.Total}, tools {s.Tools} (failed {s.Failures}), {s.Seconds:0}s, in {s.Input}, out {s.Output}"));
+            if (s == null)
+            {
+                Log.Warning(LogPrefix + "SURVEY stopped early: a " + tool + " round did not finish");
+                break;
+            }
+            scores[tool] = scores.TryGetValue(tool, out BenchmarkScore sum) ? sum.Plus(s) : s;
         }
-        string result = string.Join(" | ", scores);
+        if (scores.Count == 0) return;
+        string result = string.Join(" | ", scores.Select(p => string.Create(CultureInfo.InvariantCulture,
+            $"{p.Key} {p.Value.Passed}/{p.Value.Total}, looked {p.Value.SurveyCalls}x, tools {p.Value.Tools} (failed {p.Value.Failures}), {p.Value.Seconds:0}s, in {p.Value.Input}, out {p.Value.Output}")));
         Log.Warning(LogPrefix + "SURVEY DONE: " + result);
         if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyDone".Translate(result), MessageTypeDefOf.NeutralEvent, historical: false);
     }
@@ -391,7 +392,7 @@ public sealed partial class BenchmarkComponent : GameComponent
     /// <summary>截圖檢查用：涵蓋五種狀態。</summary>
     internal static List<BenchmarkRow> SampleRows()
     {
-        List<BenchmarkRow> rows = CreateRows(Tasks);
+        List<BenchmarkRow> rows = CreateRows(Tasks.Where(t => t.Tier != Survey));
         for (int i = 0; i < 4; i++) Finish(rows[i], i == 2 ? "timed out after 10 min" : null, 8, i, 63f * i);
         Finish(rows[5], "model service error", 2, 0, 90f, invalid: true);
         rows[4].State = BenchmarkState.Running;
@@ -446,7 +447,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.WindowStack.Add(new Window_BenchmarkStart(tier));
     }
 
-    /// <param name="tier">只跑這一級的題目；null 表示全部。</param>
+    /// <param name="tier">只跑這一級的題目；null 表示勘查專用題以外的全部。</param>
     /// <param name="isolated">由隔離環境的標記檔起跑：讀標記檔的模型與思考強度覆寫，跑完不還原設定。</param>
     /// <returns>沒跑完時為 null。</returns>
     private static async Task<BenchmarkScore> RunAsync(string tier, bool isolated)
@@ -487,12 +488,12 @@ public sealed partial class BenchmarkComponent : GameComponent
             string model = string.IsNullOrWhiteSpace(settings.agentModel) ? "(framework default)" : settings.agentModel;
 
             ColonyAgentSession session = agent.Session;
-            var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0 };
-            var invalidByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0 };
+            var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0 };
+            var invalidByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0 };
             int totalTools = 0;
             int totalFailures = 0;
             var total = default(ModelUsage);
-            BenchTask[] tasks = [.. Tasks.Where(t => tier == null || t.Tier == tier || (tier == Survey && t.Survey))];
+            BenchTask[] tasks = [.. Tasks.Where(t => tier == null ? t.Tier != Survey : t.Tier == tier)];
             _session = session;
             _rows = CreateRows(tasks);
             if (!isolated) Window_BenchmarkProgress.Show(_rows);
@@ -501,6 +502,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             string biome = Find.CurrentMap?.Biome?.defName ?? string.Empty;
             int startTick = Current.Game?.tickManager?.TicksGame ?? 0;
             int configurationErrors = 0;
+            int surveyCalls = 0;
             for (int i = 0; i < tasks.Length; i++)
             {
                 BenchTask task = tasks[i];
@@ -538,6 +540,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 Finish(_rows[i], failure, tools.Count, failures, UnityEngine.Time.realtimeSinceStartup - _rows[i].StartedAt, invalid);
                 totalTools += tools.Count;
                 totalFailures += failures;
+                surveyCalls += tools.Count(t => t.ToolName == _surveyTool);
                 if (failure == null) passedByTier[task.Tier]++;
                 else if (invalid) invalidByTier[task.Tier]++;
             }
@@ -559,6 +562,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["hardTotal"] = tasks.Count(t => t.Tier == Hard) - invalidByTier[Hard],
                 ["toolCalls"] = totalTools,
                 ["toolFailures"] = totalFailures,
+                ["surveyCalls"] = surveyCalls,
                 ["steps"] = total.Steps,
                 ["in"] = total.Input,
                 ["out"] = total.Output,
@@ -569,7 +573,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["tick"] = startTick
             };
             Append(resultPath, summary);
-            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model);
+            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model, surveyCalls);
             // 勘查比較的兩輪不是同一組條件，不能當成這個強度的成績。
             if (_surveyTool == null) Scores[(tier, Reasoning)] = score;
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary, RunLogWriter.Json));

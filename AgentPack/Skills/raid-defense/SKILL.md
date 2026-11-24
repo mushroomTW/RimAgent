@@ -5,6 +5,8 @@ description: Hostiles on the map (raid, siege, sappers, manhunter pack, mechanoi
 
 # Raid defense
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 Orders land seconds late: win by positioning and let the colonists' own AI do the shooting. Pause with set_time_speed before a batch of orders when the enemy is already close.
 
 ## 1. Size up

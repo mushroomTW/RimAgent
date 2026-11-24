@@ -5,6 +5,8 @@ description: Void endings (Anomaly DLC): raise the monolith, study entities, ent
 
 # Void endings
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 ## 1. Monolith levels
 find_things for the monolith, then list_gizmos on it: the status text and the disabled reason always say what the next level needs. Activating asks for a colonist as targetId. Each level brings stronger entities, so prepare before pressing it.
 - The first two activations only need a colonist.

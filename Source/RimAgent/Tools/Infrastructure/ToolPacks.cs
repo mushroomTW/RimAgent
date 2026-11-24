@@ -35,6 +35,7 @@ internal static class ToolPacks
         new Pack("animal", "list, tame and train animals, animal areas"),
         new Pack("trade", "traders, trading, caravans and the world map (travel, settle)"),
         new Pack("prisoner", "prisoners: interaction mode and release"),
+        new Pack("interact", "press a thing's command buttons (gizmos) or run a colonist's right-click menu option, for anything no other tool does"),
         new Pack("memory_edit", "write, edit and delete memory files (reading is always available)"),
         new Pack("mcp", "list and call tools on configured MCP servers")
     ];
@@ -57,9 +58,15 @@ internal static class ToolPacks
         "file_memory_write", "file_memory_delete", "file_memory_replace", "file_memory_replace_lines"
     };
 
+    private static readonly HashSet<string> InteractTools = new(StringComparer.Ordinal)
+    {
+        "list_gizmos", "use_gizmo", "list_right_click_menu", "use_right_click_option"
+    };
+
     public static string PackOf(string toolName, ToolCategory category)
     {
         if (MemoryEditTools.Contains(toolName)) return "memory_edit";
+        if (InteractTools.Contains(toolName)) return "interact";
         return ByCategory.TryGetValue(category, out string pack) ? pack : null;
     }
 }

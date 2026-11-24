@@ -5,6 +5,8 @@ description: Archonexus ending (Ideology DLC): grow wealth, move the colony acro
 
 # Archonexus ending
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 ## 1. Getting the quest
 The storyteller offers it once colony wealth reaches about 150,000 (get_colony_overview shows wealth). There are three cycles; each is one quest and each new colony starts over with almost nothing.
 

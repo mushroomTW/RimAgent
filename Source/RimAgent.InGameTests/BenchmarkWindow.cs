@@ -18,7 +18,11 @@ internal enum BenchmarkState
     Invalid
 }
 
-internal sealed record BenchmarkScore(int Passed, int Total, int Tools, int Failures, float Seconds, long Input, long Output, string Model);
+internal sealed record BenchmarkScore(int Passed, int Total, int Tools, int Failures, float Seconds, long Input, long Output, string Model, int SurveyCalls)
+{
+    public BenchmarkScore Plus(BenchmarkScore other) => new(Passed + other.Passed, Total + other.Total, Tools + other.Tools, Failures + other.Failures,
+        Seconds + other.Seconds, Input + other.Input, Output + other.Output, Model, SurveyCalls + other.SurveyCalls);
+}
 
 /// <summary>進度列表的一列；由 benchmark 更新，視窗只讀。</summary>
 internal sealed class BenchmarkRow

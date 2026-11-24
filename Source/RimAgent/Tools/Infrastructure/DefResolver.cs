@@ -21,7 +21,8 @@ public static partial class DefResolver
     }
 
     /// <param name="ambiguous">名稱對到多個時的所有候選；其他結果為空。</param>
-    public static Result<DefInfo> Resolve(string input, IReadOnlyList<DefInfo> candidates, string kindLabel, string defPrefix, out IReadOnlyList<DefInfo> ambiguous)
+    /// <param name="abbreviations">接受省略中間字詞的 defName；會動手的工具不要開，免得做到別的東西上。</param>
+    public static Result<DefInfo> Resolve(string input, IReadOnlyList<DefInfo> candidates, string kindLabel, string defPrefix, out IReadOnlyList<DefInfo> ambiguous, bool abbreviations = false)
     {
         ambiguous = [];
         string needle = (input ?? string.Empty).Trim();
@@ -57,6 +58,14 @@ public static partial class DefResolver
         List<DefInfo> compact = TryMatchCompact(compacted, needle);
         if (compact.Count == 1) return Result<DefInfo>.Ok(compact[0]);
         if (compact.Count > 1) return Ambiguous(needle, compact, kindLabel, out ambiguous);
+
+        // 「wood floor」要的是 WoodPlankFloor：首尾字詞相同、中間省略，且只有一個這樣的才算。
+        string[] parts = abbreviations ? SplitWords(needle) : [];
+        if (parts.Length > 1)
+        {
+            List<DefInfo> abbreviated = [.. candidates.Where(c => IsAbbreviation(parts, SplitWords(c.DefName)))];
+            if (abbreviated.Count == 1) return Result<DefInfo>.Ok(abbreviated[0]);
+        }
 
         return Result<DefInfo>.Fail($"Error: {NoMatchPrefix}{kindLabel} matches \"{needle}\".{Closest(needle, compacted)}");
     }
@@ -124,6 +133,20 @@ public static partial class DefResolver
         string listed = string.Join(", ", matches.Take(MaxListedCandidates).Select(m => $"{m.DefName} ({m.Label}{(m.Note.Length > 0 ? ", " + m.Note : string.Empty)})"));
         string more = matches.Count > MaxListedCandidates ? string.Create(CultureInfo.InvariantCulture, $" and {matches.Count - MaxListedCandidates} more") : string.Empty;
         return Result<DefInfo>.Fail($"Error: \"{needle}\" matches several {kindLabel}s: {listed}{more}. Use the exact defName.");
+    }
+
+    private static string[] SplitWords(string text) => [.. Words.Matches(text).Select(m => m.Value.ToLowerInvariant())];
+
+    /// <summary>首尾字詞相同，其餘依序出現。</summary>
+    private static bool IsAbbreviation(string[] parts, string[] words)
+    {
+        if (words.Length < parts.Length || words[0] != parts[0] || words[^1] != parts[^1]) return false;
+        int next = 0;
+        foreach (string word in words)
+        {
+            if (next < parts.Length && word == parts[next]) next++;
+        }
+        return next == parts.Length;
     }
 
     private static bool StartsWith(string text, string prefix)

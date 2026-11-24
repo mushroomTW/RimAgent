@@ -5,6 +5,8 @@ description: Building defenses before raids come: choke points, kill boxes, sand
 
 # Defense building
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 Raids grow with colony wealth. Build defenses one step ahead of wealth, not after a raid breaks in.
 
 ## 1. Read the ground

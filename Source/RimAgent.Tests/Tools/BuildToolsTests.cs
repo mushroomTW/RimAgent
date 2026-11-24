@@ -230,6 +230,24 @@ public class BuildToolsTests
     }
 
     [Test]
+    public void WeakGroundPointsAtFirmGround()
+    {
+        for (int x = 10; x <= 70; x++)
+            for (int z = 10; z <= 75; z++)
+                if (x is < 30 or > 34 || z is < 50 or > 53) _world.LightOnlyCells.Add((x, z));
+        _world.BlockedCells[(41, 44)] = "needs medium ground";
+        _world.BuildingInfos["Bed"] = new BuildingInfo { DefName = "Bed", Width = 1, Height = 2, TerrainAffordance = "Medium" };
+        Assert.That(_tools.PlaceBlueprint("bed", "single", 41, 44), Does.Contain("too weak (needs Medium support)").And.Contain("cells that holds it: (30,50)-(34,53), 5x4"));
+        _world.BuildingInfos["Bed"].Width = 6;
+        Assert.That(_tools.PlaceBlueprint("bed", "single", 41, 44), Does.Contain("Nothing within 24 cells holds it"), "矩形裝不下就不能說放得下");
+        _world.BuildingInfos["Bed"].Width = 1;
+        Assert.That(_tools.PlaceBlueprint("bed", "single", -1, 0), Does.StartWith("Error:").And.Not.Contain("too weak"), "地圖外的格子不能讀");
+        Assert.That(_tools.PlaceBlueprint("bed", "single", 5, _world.GetMapBounds().Height - 1), Does.Not.Contain("too weak"));
+        _world.BuildingInfos["Bed"].TerrainAffordance = "Light";
+        Assert.That(_tools.PlaceBlueprint("bed", "single", 41, 44), Does.Not.Contain("too weak"));
+    }
+
+    [Test]
     public void BlockedLargeBuildingListsNearbyCentersThatFit()
     {
         _world.BlockedCells[(41, 44)] = "interaction spot blocked";
@@ -569,12 +587,12 @@ public class BuildToolsTests
     }
 
     [Test]
-    public void LookupShowsBothDefsWhenTheNameMatchesTwo()
+    public void LookupShowsAllDefsWhenTheNameMatchesFew()
     {
         _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = "RawCorn", Label = "corn" });
         _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = "Plant_Corn", Label = "corn" });
         Assert.That(_tools.LookupDef("corn"), Does.StartWith("\"corn\" matches 2").And.Contain("corn (RawCorn)").And.Contain("corn (Plant_Corn)"));
-        _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = "Meal_Corn", Label = "corn" });
+        foreach (string more in new[] { "Meal_Corn", "Corn_B", "Corn_C" }) _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = more, Label = "corn" });
         Assert.That(_tools.LookupDef("corn"), Does.StartWith("Error:").And.Contain("Use the exact defName"));
     }
 

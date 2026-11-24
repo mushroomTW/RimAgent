@@ -104,6 +104,17 @@ public class DefResolverTests
     }
 
     [Test]
+    public void AbbreviatedNameResolvesOnlyWhenUnique()
+    {
+        DefInfo[] defs = [new("AncientWoodPlankFloor", "a"), new("BurnedWoodPlankFloor", "b"), new("WoodPlankFloor", "c")];
+
+        Assert.That(DefResolver.Resolve("wood floor", defs, "terrain", "", out _, abbreviations: true).Value?.DefName, Is.EqualTo("WoodPlankFloor"));
+        Assert.That(DefResolver.Resolve("wood floor", defs, "terrain").Success, Is.False, "會動手的工具不用縮寫比對");
+        Assert.That(DefResolver.Resolve("wo floor", defs, "terrain", "", out _, abbreviations: true).Success, Is.False, "要整個字詞");
+        Assert.That(DefResolver.Resolve("wood floor", [.. defs, new("WoodTileFloor", "tiles")], "terrain", "", out _, abbreviations: true).Success, Is.False);
+    }
+
+    [Test]
     public void NoMatchSuggestsClosestByWords()
     {
         var defs = new[]

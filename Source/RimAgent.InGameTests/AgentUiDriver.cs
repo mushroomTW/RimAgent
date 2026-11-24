@@ -81,7 +81,7 @@ internal sealed class AgentUiDriverTests
     public static IEnumerator BenchmarkStartRenders()
     {
         bool hadScore = BenchmarkComponent.Scores.Remove((null, ReasoningLevel.Medium), out BenchmarkScore saved);
-        BenchmarkComponent.Scores[(null, ReasoningLevel.Medium)] = new BenchmarkScore(12, 14, 88, 9, 1860f, 868_926, 35_417, "sample");
+        BenchmarkComponent.Scores[(null, ReasoningLevel.Medium)] = new BenchmarkScore(12, 14, 88, 9, 1860f, 868_926, 35_417, "sample", 0);
         Find.WindowStack.Add(new Window_BenchmarkStart(tier: null));
         IEnumerator capture = AgentUiDriver.CaptureProof("benchmark-start");
         while (capture.MoveNext()) yield return capture.Current;

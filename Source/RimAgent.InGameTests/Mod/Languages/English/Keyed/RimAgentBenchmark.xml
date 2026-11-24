@@ -42,6 +42,10 @@
   <RimAgent.Benchmark.Task.surgery>Surgery</RimAgent.Benchmark.Task.surgery>
   <RimAgent.Benchmark.Task.delete>Delete zone and bill</RimAgent.Benchmark.Task.delete>
   <RimAgent.Benchmark.Task.trade>Trade</RimAgent.Benchmark.Task.trade>
+  <RimAgent.Benchmark.Task.survey_rich_soil>Survey: zone the rich soil</RimAgent.Benchmark.Task.survey_rich_soil>
+  <RimAgent.Benchmark.Task.survey_wall_gap>Survey: close the wall gap</RimAgent.Benchmark.Task.survey_wall_gap>
+  <RimAgent.Benchmark.Task.survey_firm_ground>Survey: find firm ground</RimAgent.Benchmark.Task.survey_firm_ground>
+  <RimAgent.Benchmark.Task.survey_clear_ground>Survey: find clear ground</RimAgent.Benchmark.Task.survey_clear_ground>
   <RimAgent.Benchmark.Tier.survey>[Survey comparison]</RimAgent.Benchmark.Tier.survey>
   <RimAgent.Benchmark.SurveyDone>RimAgent survey tool comparison: {0}</RimAgent.Benchmark.SurveyDone>
   <RimAgent.Benchmark.SurveyNeedsImages>The current model does not accept images, so take_screenshot cannot be compared.</RimAgent.Benchmark.SurveyNeedsImages>

@@ -466,10 +466,10 @@ public sealed class ObserveTools
         return sb.ToString().Trim();
     }
 
-    private static string SiteText(CellRectSpec site) =>
+    internal static string SiteText(CellRectSpec site) =>
         string.Create(CultureInfo.InvariantCulture, $"{site}, {site.MaxX - site.MinX + 1}x{site.MaxZ - site.MinZ + 1}");
 
-    private static CellRectSpec? LargestBuildable(CellRectSpec area, IReadOnlyList<CellInfo> cells, GroundSupport support)
+    internal static CellRectSpec? LargestBuildable(CellRectSpec area, IReadOnlyList<CellInfo> cells, GroundSupport support, int width = 1, int height = 1)
     {
         HashSet<(int X, int Z)> free = [.. cells
             .Where(c => !c.Fogged && !c.NoBuildEdge && c.Support >= support && !c.Things.Any(t => t.Kind is ThingKind.Building or ThingKind.Mineable))
@@ -481,11 +481,13 @@ public sealed class ObserveTools
             for (int i = 0; i < heights.Length; i++) heights[i] = free.Contains((area.MinX + i, z)) ? heights[i] + 1 : 0;
             for (int left = 0; left < heights.Length; left++)
             {
-                int height = heights[left];
-                for (int right = left; right < heights.Length && (height = Math.Min(height, heights[right])) > 0; right++)
+                int tall = heights[left];
+                for (int right = left; right < heights.Length && (tall = Math.Min(tall, heights[right])) > 0; right++)
                 {
-                    if (best is not CellRectSpec b || (right - left + 1) * height > b.CellCount)
-                        best = new CellRectSpec(area.MinX + left, z - height + 1, area.MinX + right, z);
+                    int wide = right - left + 1;
+                    bool fits = (wide >= width && tall >= height) || (wide >= height && tall >= width);
+                    if (fits && (best is not CellRectSpec b || wide * tall > b.CellCount))
+                        best = new CellRectSpec(area.MinX + left, z - tall + 1, area.MinX + right, z);
                 }
             }
         }

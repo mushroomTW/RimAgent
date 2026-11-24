@@ -5,6 +5,8 @@ description: Mechhive ending (Odyssey DLC): build and fly a gravship, follow the
 
 # Mechhive ending
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 ## 1. Build a gravship
 - A grav engine comes from a quest (list_quests). A colonist inspects it first (its button in list_gizmos, targetId = the colonist); that unlocks the research and substructure. To move it, use its install or reinstall button with targetX and targetZ. Research BasicGravtech, then StandardGravtech and AdvancedGravtech (get_research_status).
 - Parts stand on Substructure floor (place_blueprint, shape fill, close to the engine): PilotConsole, SmallThruster, ChemfuelTank, GravFieldExtender. Later LargeThruster, LargeChemfuelTank, GravcorePowerCell and SignalJammer. lookup_def gives each size and rule.

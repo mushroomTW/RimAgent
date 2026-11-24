@@ -5,6 +5,8 @@ description: Royal ascent ending (Royalty DLC): earn a Count title from the Empi
 
 # Royal ascent ending
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 ## 1. Title first
 The offer comes from about day 35 and repeats about every 22 days, but needs a colonist titled Count or higher.
 - list_colonists shows each colonist's title and honor. get_colony_overview shows goodwill with the Empire: never let it turn hostile.

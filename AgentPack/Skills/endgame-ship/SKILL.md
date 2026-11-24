@@ -5,6 +5,8 @@ description: Ending by building and launching the starship: research chain, part
 
 # Ship launch ending
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 ## 1. Research (set_research, get_research_status)
 Electricity → MicroelectronicsBasics → MultiAnalyzer (hi-tech research bench) → Fabrication (needs a multi-analyzer next to the bench) → AdvancedFabrication → ShipBasics → ShipCryptosleep, ShipComputerCore, ShipSensorCluster, ShipReactor, ShipEngine.
 AdvancedFabrication lets a fabrication bench make advanced components (ComponentSpacer); start that bill early: the bottleneck.

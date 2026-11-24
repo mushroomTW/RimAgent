@@ -226,6 +226,26 @@ public class FailureLoopGuardTests
     }
 
     [Test]
+    public async Task RectangleStartAcceptsNumberedNames()
+    {
+        AIFunction inner = AIFunctionFactory.Create((int x, int z, int x2 = -1) => $"{x},{z},{x2}", "place_blueprint");
+        var tool = new LoggingAIFunction(inner, new AgentTranscript(), new FakeGameWorld(), ToolCategory.Observe, ToolRisk.Query, gate: null);
+        object result = await tool.InvokeAsync(new AIFunctionArguments { ["x1"] = 110, ["z1"] = 111, ["x2"] = 119 });
+        Assert.That(result.ToString(), Is.EqualTo("110,111,119"));
+
+        inner = AIFunctionFactory.Create((int x1, int z1) => $"{x1},{z1}", "inspect_area");
+        tool = new LoggingAIFunction(inner, new AgentTranscript(), new FakeGameWorld(), ToolCategory.Observe, ToolRisk.Query, gate: null);
+        Assert.That((await tool.InvokeAsync(new AIFunctionArguments { ["x"] = 1, ["z"] = 2 })).ToString(), Is.EqualTo("1,2"));
+    }
+
+    [Test]
+    public void InteractToolsAreInAPack()
+    {
+        foreach (string name in new[] { "list_gizmos", "use_gizmo", "list_right_click_menu", "use_right_click_option" })
+            Assert.That(ToolPacks.PackOf(name, ToolCategory.Build), Is.EqualTo("interact"), name);
+    }
+
+    [Test]
     public async Task MissingArgumentsAreAllNamedInsteadOfThrowing()
     {
         AIFunction inner = AIFunctionFactory.Create((string caravan, string option, string note = "") => caravan + option + note, "send_caravan");

@@ -42,6 +42,10 @@
   <RimAgent.Benchmark.Task.surgery>安排手術</RimAgent.Benchmark.Task.surgery>
   <RimAgent.Benchmark.Task.delete>刪除區域與工作單</RimAgent.Benchmark.Task.delete>
   <RimAgent.Benchmark.Task.trade>商隊買賣</RimAgent.Benchmark.Task.trade>
+  <RimAgent.Benchmark.Task.survey_rich_soil>勘查：劃出肥沃地</RimAgent.Benchmark.Task.survey_rich_soil>
+  <RimAgent.Benchmark.Task.survey_wall_gap>勘查：補牆缺口</RimAgent.Benchmark.Task.survey_wall_gap>
+  <RimAgent.Benchmark.Task.survey_firm_ground>勘查：找承重地</RimAgent.Benchmark.Task.survey_firm_ground>
+  <RimAgent.Benchmark.Task.survey_clear_ground>勘查：找空地</RimAgent.Benchmark.Task.survey_clear_ground>
   <RimAgent.Benchmark.Tier.survey>[勘查比較]</RimAgent.Benchmark.Tier.survey>
   <RimAgent.Benchmark.SurveyDone>RimAgent 勘查工具比較：{0}</RimAgent.Benchmark.SurveyDone>
   <RimAgent.Benchmark.SurveyNeedsImages>目前的模型不接受圖片，無法比較 take_screenshot。</RimAgent.Benchmark.SurveyNeedsImages>

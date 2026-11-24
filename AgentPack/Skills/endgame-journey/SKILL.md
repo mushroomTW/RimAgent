@@ -5,6 +5,8 @@ description: Ending by reaching a ready-made ship far away (the journey offer qu
 
 # Journey offer ending
 
+Gizmo and right-click tools: load_toolpack interact first.
+
 The offer arrives as a quest about 20 days into the game and is accepted on its own. Unlike endgame-ship, the ship already exists and nothing has to be researched.
 
 1. list_quests for the details; list_world_objects for the ship's tile.

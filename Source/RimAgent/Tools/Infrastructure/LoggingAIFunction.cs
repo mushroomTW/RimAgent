@@ -97,6 +97,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         AIFunctionArguments arguments,
         CancellationToken cancellationToken)
     {
+        NormalizeRectangleStart(arguments);
         var entry = new TranscriptEntry
         {
             Kind = TranscriptKind.Tool,
@@ -135,6 +136,17 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
             entry.DurationMs = stopwatch.ElapsedMilliseconds;
             _gate?.EndInvocation();
             _transcript.Add(entry);
+        }
+    }
+
+    /// <summary>有的工具矩形起點叫 x1、z1，有的叫 x、z，模型常混用；改成這個工具的名字。</summary>
+    private void NormalizeRectangleStart(AIFunctionArguments arguments)
+    {
+        if (!JsonSchema.TryGetProperty("properties", out JsonElement properties)) return;
+        foreach ((string name, string alias) in new[] { ("x", "x1"), ("z", "z1"), ("x1", "x"), ("z1", "z") })
+        {
+            if (!properties.TryGetProperty(name, out _) || properties.TryGetProperty(alias, out _) || arguments.ContainsKey(name)) continue;
+            if (arguments.Remove(alias, out object value)) arguments[name] = value;
         }
     }
 
