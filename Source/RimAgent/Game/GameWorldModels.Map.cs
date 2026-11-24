@@ -147,6 +147,8 @@ public sealed class CellInfo
     /// <summary>地面（地基優先，否則地形）能承載的最重建築等級；迷霧格為 <see cref="GroundSupport.None"/>。</summary>
     public GroundSupport Support { get; set; }
     public bool Fogged { get; set; }
+    /// <summary>太靠近地圖邊緣，遊戲不准建造。</summary>
+    public bool NoBuildEdge { get; set; }
     public ZoneInfo Zone { get; set; }
     public RoomInfo Room { get; set; }
     public IReadOnlyList<ThingInfo> Things { get; set; } = [];

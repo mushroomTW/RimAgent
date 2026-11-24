@@ -36,6 +36,7 @@
 
   <!-- 運行紀錄統計只隨開發伴隨模組出貨，不進正式 DLL；以連結編進測試，免得測試專案參考整個伴隨模組。 -->
   <ItemGroup>
+    <Compile Include="..\RimAgent.InGameTests\RoomPlan.cs" Link="Linked\RoomPlan.cs" />
     <Compile Include="..\RimAgent.InGameTests\RunLogStats.cs" Link="Linked\RunLogStats.cs" />
   </ItemGroup>
 

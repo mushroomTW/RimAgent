@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using RimAgent.Tools;
@@ -27,7 +28,7 @@ public sealed partial class ToolUsageStats
     private const int MaxSignatureChars = 160;
     private const int MaxArgumentChars = 160;
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private readonly System.Threading.Lock _lock = new();
     private readonly string? _path;

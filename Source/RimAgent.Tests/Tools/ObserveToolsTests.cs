@@ -348,6 +348,31 @@ public partial class ObserveToolsTests
     }
 
     [Test]
+    public void AreaReportsTheLargestBuildableRectangle()
+    {
+        for (int x = 20; x <= 26; x++)
+        {
+            _world.Cells[(x, 22)] = new CellInfo { X = x, Z = 22, Terrain = "mud", Walkable = true, Support = GroundSupport.None };
+        }
+        _world.Things.Add(new ThingInfo { Id = 900, Label = "wall", X = 20, Z = 24, Kind = ThingKind.Building });
+        Assert.That(_tools.InspectArea(20, 20, 26, 26), Does.Contain("Largest buildable rectangle: (21,23)-(26,26), 6x4 (east-west x north-south), holds heavy buildings"));
+        Assert.That(_tools.InspectArea(20, 22, 26, 22), Does.Contain("Largest buildable rectangle: none"));
+    }
+
+    [Test]
+    public void LargestBuildableRectangleSkipsTheMapEdgeAndStatesItsSupport()
+    {
+        for (int z = 20; z <= 23; z++)
+        {
+            _world.Cells[(20, z)] = new CellInfo { X = 20, Z = z, Terrain = "soil", Walkable = true, Support = GroundSupport.Heavy, NoBuildEdge = true };
+            _world.LightOnlyCells.Add((22, z));
+            _world.LightOnlyCells.Add((23, z));
+        }
+        Assert.That(_tools.InspectArea(20, 20, 23, 23), Does.Contain(
+            "Largest buildable rectangle: (21,20)-(23,23), 3x4 (east-west x north-south), holds light buildings only; for heavy buildings: (21,20)-(21,23), 1x4"));
+    }
+
+    [Test]
     public void CellInfoDefaultsAndOutOfBounds()
     {
         string text = _tools.InspectArea(20, 20, 20, 20);

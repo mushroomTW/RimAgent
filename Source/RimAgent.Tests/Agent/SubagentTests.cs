@@ -166,6 +166,26 @@ public class SubagentTests
     }
 
     [Test]
+    public void HiddenToolsAreGoneForMainAgentScriptsAndSubagents()
+    {
+        var registry = new AgentToolRegistry(_world, new AgentTranscript());
+        var permissions = new ToolPermissions { Hidden = new HashSet<string>(System.StringComparer.Ordinal) { "inspect_area" } };
+        permissions.Set(ToolCategory.Observe, value: true);
+
+        IEnumerable<AITool>[] lists =
+        [
+            registry.SelectForMainAgent(permissions, loadedPacks: null).Advertised,
+            registry.Select(permissions),
+            registry.SelectForSubagent(permissions, [ToolCategory.Observe], readOnly: true)
+        ];
+        foreach (IEnumerable<AITool> tools in lists)
+        {
+            Assert.That(tools.Select(t => t.Name), Does.Not.Contain("inspect_area").And.Contain("get_map_overview"));
+        }
+        Assert.That(registry.Select(ToolPermissions.All).Select(t => t.Name), Does.Contain("inspect_area"));
+    }
+
+    [Test]
     public async Task SubagentToolOutputStoreIsIsolatedFromTheMainAgent()
     {
         for (int i = 0; i < 200; i++)

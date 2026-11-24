@@ -36,4 +36,13 @@
   <RimAgent.Benchmark.Task.injured_care>傷患照護</RimAgent.Benchmark.Task.injured_care>
   <RimAgent.Benchmark.Task.daily_schedule>作息安排</RimAgent.Benchmark.Task.daily_schedule>
   <RimAgent.Benchmark.Task.defend>防禦</RimAgent.Benchmark.Task.defend>
+  <RimAgent.Benchmark.Task.set_research>切換研究</RimAgent.Benchmark.Task.set_research>
+  <RimAgent.Benchmark.Task.tame_animal>馴服動物</RimAgent.Benchmark.Task.tame_animal>
+  <RimAgent.Benchmark.Task.recruit_prisoner>招募囚犯</RimAgent.Benchmark.Task.recruit_prisoner>
+  <RimAgent.Benchmark.Task.surgery>安排手術</RimAgent.Benchmark.Task.surgery>
+  <RimAgent.Benchmark.Task.delete>刪除區域與工作單</RimAgent.Benchmark.Task.delete>
+  <RimAgent.Benchmark.Task.trade>商隊買賣</RimAgent.Benchmark.Task.trade>
+  <RimAgent.Benchmark.Tier.survey>[勘查比較]</RimAgent.Benchmark.Tier.survey>
+  <RimAgent.Benchmark.SurveyDone>RimAgent 勘查工具比較：{0}</RimAgent.Benchmark.SurveyDone>
+  <RimAgent.Benchmark.SurveyNeedsImages>目前的模型不接受圖片，無法比較 take_screenshot。</RimAgent.Benchmark.SurveyNeedsImages>
 </LanguageData>

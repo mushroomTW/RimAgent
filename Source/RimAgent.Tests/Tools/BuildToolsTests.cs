@@ -187,6 +187,7 @@ public class BuildToolsTests
     {
         string text = _tools.PlaceBlueprint("wall", "outline", 10, 10, 13, 12, 0, "");
         Assert.That(text, Does.StartWith("Placed 10 wall blueprint(s) from (10,10) to (13,12) (outline)."));
+        Assert.That(text, Does.EndWith(" Outer size 4x3 (east-west x north-south), interior 2x1. Sides: north z=12, south z=10, west x=10, east x=13."));
         Assert.That(_world.Blueprints.Exists(b => b.X == 11 && b.Z == 11), Is.False, "內部不放");
         Assert.That(_world.Blueprints.Exists(b => b.X == 12 && b.Z == 11), Is.False);
     }
@@ -565,6 +566,16 @@ public class BuildToolsTests
         Assert.That(text, Does.Contain("Size: 1x1 (x by z, facing north). Rotation does not change the footprint."));
         Assert.That(text, Does.Contain("Cost: none"));
         Assert.That(text, Does.Not.Contain("center cell"));
+    }
+
+    [Test]
+    public void LookupShowsBothDefsWhenTheNameMatchesTwo()
+    {
+        _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = "RawCorn", Label = "corn" });
+        _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = "Plant_Corn", Label = "corn" });
+        Assert.That(_tools.LookupDef("corn"), Does.StartWith("\"corn\" matches 2").And.Contain("corn (RawCorn)").And.Contain("corn (Plant_Corn)"));
+        _world.AddLookup(new DefLookupInfo { Kind = DefLookupKind.Thing, DefName = "Meal_Corn", Label = "corn" });
+        Assert.That(_tools.LookupDef("corn"), Does.StartWith("Error:").And.Contain("Use the exact defName"));
     }
 
     [Test]

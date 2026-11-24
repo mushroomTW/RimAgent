@@ -126,6 +126,7 @@ internal sealed partial class RimWorldGameWorld
             Walkable = c.Walkable(map),
             Support = fogged ? GroundSupport.None : SupportAt(c, map),
             Fogged = fogged,
+            NoBuildEdge = c.InNoBuildEdgeArea(map),
             Zone = zone != null ? ToZone(zone) : null,
             Room = ToRoom(c.GetRoom(map), rooms),
             // 迷霧裡的東西玩家看不到，工具也不透露。藍圖不是 Building（KindOf 會濾掉），

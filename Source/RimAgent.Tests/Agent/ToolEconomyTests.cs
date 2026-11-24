@@ -41,6 +41,22 @@ public class ToolUsageStatsTests
     }
 
     [Test]
+    public void SavedFileKeepsChineseAndSymbolsReadable()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "rimagent-usage-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            new ToolUsageStats(path).Record([Tool("build", failed: true, result: "木牆+門放不下"), Tool("build", args: "{\"x\":1}")], ToolPacks.PackOf);
+            string json = File.ReadAllText(path);
+            Assert.That(json, Does.Contain("木牆+門放不下").And.Not.Contain("\\u"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Test]
     public void PersistsAcrossInstances()
     {
         string path = Path.Combine(Path.GetTempPath(), "rimagent-usage-" + Guid.NewGuid().ToString("N") + ".json");

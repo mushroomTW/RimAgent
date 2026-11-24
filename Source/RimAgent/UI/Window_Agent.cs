@@ -16,6 +16,7 @@ using Verse;
 namespace RimAgent.UI;
 
 #pragma warning disable S101 // RimWorld Window 類別命名慣例
+[StaticConstructorOnStartup]
 public partial class Window_Agent : Window
 {
     private const string ColorTagPrefix = "<color=#";

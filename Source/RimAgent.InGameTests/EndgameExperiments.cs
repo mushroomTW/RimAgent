@@ -142,7 +142,7 @@ public abstract class EndgameExperimentBase : GameComponent
         WriteTranscript();
         Done = true;
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
-        Log.Message(LogPrefix + "done: " + JsonSerializer.Serialize(summary));
+        Log.Message(LogPrefix + "done: " + JsonSerializer.Serialize(summary, RunLogWriter.Json));
     }
 
     protected void Note(string note)
@@ -166,7 +166,7 @@ public abstract class EndgameExperimentBase : GameComponent
                 ["args"] = e.Arguments,
                 ["result"] = e.Result,
                 ["failed"] = e.Failed
-            }));
+            }, RunLogWriter.Json));
             File.WriteAllLines(Path.ChangeExtension(_timelinePath, extension: null) + "-transcript.jsonl", lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
         catch (Exception ex)
@@ -180,7 +180,7 @@ public abstract class EndgameExperimentBase : GameComponent
         try
         {
             line["realSeconds"] = Time.realtimeSinceStartup - StartRealtime;
-            File.AppendAllText(_timelinePath, JsonSerializer.Serialize(line) + "\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.AppendAllText(_timelinePath, JsonSerializer.Serialize(line, RunLogWriter.Json) + "\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
         catch (Exception ex)
         {

@@ -17,6 +17,13 @@ public static partial class DefResolver
 
     public static Result<DefInfo> Resolve(string input, IReadOnlyList<DefInfo> candidates, string kindLabel, string defPrefix = "")
     {
+        return Resolve(input, candidates, kindLabel, defPrefix, out _);
+    }
+
+    /// <param name="ambiguous">名稱對到多個時的所有候選；其他結果為空。</param>
+    public static Result<DefInfo> Resolve(string input, IReadOnlyList<DefInfo> candidates, string kindLabel, string defPrefix, out IReadOnlyList<DefInfo> ambiguous)
+    {
+        ambiguous = [];
         string needle = (input ?? string.Empty).Trim();
         if (needle.Length == 0)
         {
@@ -28,7 +35,7 @@ public static partial class DefResolver
 
         List<DefInfo> exactLabel = [.. candidates.Where(c => string.Equals(c.Label, needle, StringComparison.OrdinalIgnoreCase))];
         if (exactLabel.Count == 1) return Result<DefInfo>.Ok(exactLabel[0]);
-        if (exactLabel.Count > 1) return Ambiguous(needle, exactLabel, kindLabel);
+        if (exactLabel.Count > 1) return Ambiguous(needle, exactLabel, kindLabel, out ambiguous);
 
         // 「simple research bench」要的是 SimpleResearchBench，不是也含這幾個字的 AncientSimpleResearchBench；
         // 有 defPrefix 時「corn」要的是 Plant_Corn，不是 Plant_Fibercorn；混合清單不能拿掉前綴，否則會蓋掉 RawCorn。
@@ -38,18 +45,18 @@ public static partial class DefResolver
 
         List<DefInfo> prefix = [.. candidates.Where(c => StartsWith(c.DefName, needle) || StartsWith(c.Label, needle))];
         if (prefix.Count == 1) return Result<DefInfo>.Ok(prefix[0]);
-        if (prefix.Count > 1) return Ambiguous(needle, prefix, kindLabel);
+        if (prefix.Count > 1) return Ambiguous(needle, prefix, kindLabel, out ambiguous);
 
         List<DefInfo> contains = TryMatchContains(candidates, needle);
         if (contains.Count == 1) return Result<DefInfo>.Ok(contains[0]);
-        if (contains.Count > 1) return Ambiguous(needle, contains, kindLabel);
+        if (contains.Count > 1) return Ambiguous(needle, contains, kindLabel, out ambiguous);
 
         // 忽略空白、底線、連字號再比一次：非英文遊戲的 label 是在地語言，英文只能對 defName，
         // 模型常把 SimpleResearchBench 寫成 "research bench"、Plant_Rice 寫成 "plant rice"。
         List<KeyValuePair<DefInfo, string>> compacted = [.. candidates.Select(c => new KeyValuePair<DefInfo, string>(c, Compact(c.DefName) + "\n" + Compact(c.Label)))];
         List<DefInfo> compact = TryMatchCompact(compacted, needle);
         if (compact.Count == 1) return Result<DefInfo>.Ok(compact[0]);
-        if (compact.Count > 1) return Ambiguous(needle, compact, kindLabel);
+        if (compact.Count > 1) return Ambiguous(needle, compact, kindLabel, out ambiguous);
 
         return Result<DefInfo>.Fail($"Error: {NoMatchPrefix}{kindLabel} matches \"{needle}\".{Closest(needle, compacted)}");
     }
@@ -111,8 +118,9 @@ public static partial class DefResolver
         return new string([.. text.Where(ch => ch != ' ' && ch != '_' && ch != '-')]);
     }
 
-    private static Result<DefInfo> Ambiguous(string needle, List<DefInfo> matches, string kindLabel)
+    private static Result<DefInfo> Ambiguous(string needle, List<DefInfo> matches, string kindLabel, out IReadOnlyList<DefInfo> ambiguous)
     {
+        ambiguous = matches;
         string listed = string.Join(", ", matches.Take(MaxListedCandidates).Select(m => $"{m.DefName} ({m.Label}{(m.Note.Length > 0 ? ", " + m.Note : string.Empty)})"));
         string more = matches.Count > MaxListedCandidates ? string.Create(CultureInfo.InvariantCulture, $" and {matches.Count - MaxListedCandidates} more") : string.Empty;
         return Result<DefInfo>.Fail($"Error: \"{needle}\" matches several {kindLabel}s: {listed}{more}. Use the exact defName.");

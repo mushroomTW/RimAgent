@@ -193,7 +193,7 @@ public sealed class RetryExperimentComponent : GameComponent
             }).ToList()
         };
         if (note != null) line["note"] = note;
-        return JsonSerializer.Serialize(line);
+        return JsonSerializer.Serialize(line, RunLogWriter.Json);
     }
 
     private static bool AutoRunning(RimAgentGameComponent agent) =>

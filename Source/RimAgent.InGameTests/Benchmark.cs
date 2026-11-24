@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using LudeonTK;
 using RimAgent.Agent;
+using RimAgent.Game;
 using RimAgent.Tools;
 using RimWorld;
 using Verse;
@@ -21,7 +22,7 @@ namespace RimAgent.InGameTests;
 /// 真模型 benchmark：在同一張地圖上依序下一組固定指令，每題前清空對話，跑完依遊戲狀態自動判分，
 /// 輸出成功率、工具呼叫與失敗數、耗時，用來比較模型與 RimAgent 版本。不是測試，不斷言。
 /// 只有隔離環境的 Config 有 <see cref="MarkerFileName"/> 才啟動；模型照 seed 進來的玩家設定，
-/// 標記檔根節點可帶 model="供應商:模型"、reasoning="強度" 覆寫；思考強度不沿用玩家設定，預設為中，Routing 是自動。結果附加到 SaveData/RimAgent/Benchmark.jsonl，
+/// 標記檔根節點可帶 model="供應商:模型"、reasoning="強度" 覆寫，survey="true" 只比較勘查工具，selfcheck="true" 不叫模型只檢查題目；思考強度不沿用玩家設定，預設為中，Routing 是自動。結果附加到 SaveData/RimAgent/Benchmark.jsonl，
 /// 最後一行 Log "[RimAgent.InGameTests] Benchmark DONE" 彙總。
 /// 也可在開發模式的除錯動作「RimAgent」分類手動起跑（全部、基本或高難度題），用目前的模型設定與開跑時選的思考強度，跑完還原。
 /// </summary>
@@ -58,7 +59,11 @@ public sealed partial class BenchmarkComponent : GameComponent
         public string Id;
         public string Tier = Basic;
         public string Instruction;
-        /// <summary>送出指令前佈置場景；回傳 null 表示成功，否則為無法佈置的原因（該題記為失敗、不送指令）。</summary>
+        /// <summary>要先看地形再動手；比較勘查工具時只跑這些題目。</summary>
+        public bool Survey;
+        /// <summary>自我檢查用的參考解，不經模型。</summary>
+        public Func<IGameWorld, CommandResult> Solve;
+        /// <summary>送出指令前佈置場景；回傳 null 表示成功，否則為無法佈置的原因（該題記為無效、不送指令）。</summary>
         public Func<Map, string> Setup;
         /// <summary>判分後還原會影響後續題目的狀態。</summary>
         public Action<Map> Cleanup;
@@ -73,13 +78,15 @@ public sealed partial class BenchmarkComponent : GameComponent
         StockpileTask(), RiceFieldTask(), ResearchBenchTask(), WoodRoomTask(),
         ResearchPriorityTask(), CutTreesTask(), FoodReportTask(), TwoRoomHouseTask(),
         FreezerTask(), CornStorageTask(), KitchenBillsTask(), InjuredCareTask(),
-        DailyScheduleTask(), DefendTask()
+        DailyScheduleTask(), DefendTask(), SetResearchTask(), TameAnimalTask(),
+        RecruitPrisonerTask(), SurgeryTask(), DeleteTask(), TradeTask()
     ];
 
     private static BenchTask StockpileTask() =>
         new()
         {
             Id = "stockpile",
+            Survey = true,
             Instruction = "在殖民者附近建立一個大約 6x6 的儲存區。",
             Measure = map => new() { [CellsKey] = ZoneCells<Zone_Stockpile>(map, _ => true) },
             Check = (before, after, _) => Delta(before, after, CellsKey) >= 20 ? null : string.Create(CultureInfo.InvariantCulture, $"stockpile cells +{Delta(before, after, CellsKey)}, need +20")
@@ -89,6 +96,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "rice_field",
+            Survey = true,
             Instruction = "在殖民者附近開一塊至少 30 格的水稻田。",
             Measure = map => new() { [CellsKey] = ZoneCells<Zone_Growing>(map, z => z.GetPlantDefToGrow()?.defName == "Plant_Rice") },
             Check = (before, after, _) => Delta(before, after, CellsKey) >= 25 ? null : string.Create(CultureInfo.InvariantCulture, $"rice zone cells +{Delta(before, after, CellsKey)}, need +25")
@@ -98,6 +106,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "research_bench",
+            Survey = true,
             Instruction = "在殖民者附近放一張簡易研究台的藍圖。",
             Measure = map => new() { [BenchesKey] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench", StringComparison.Ordinal)) },
             Check = (before, after, _) => Delta(before, after, BenchesKey) >= 1 ? null : "no new research bench blueprint"
@@ -107,16 +116,19 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "wood_room",
+            Survey = true,
             Instruction = "在殖民者附近的空地上，用木頭規劃一間內部 5x5 的小房間藍圖（四面牆加一扇門）。",
+            Setup = ClearBlueprints,
             Measure = map => new()
             {
                 [WallsKey] = CountBuildTargets(map, d => d == ThingDefOf.Wall),
-                [DoorsKey] = CountBuildTargets(map, d => d.IsDoor)
+                [DoorsKey] = CountBuildTargets(map, d => d.IsDoor),
+                ["rooms5x5"] = PlannedRooms(map).Count(r => r.IsRectangle(5, 5) && Cells(map, d => d.IsDoor).Any(r.Border.Contains))
             },
             Check = (before, after, _) =>
-                Delta(before, after, WallsKey) >= 16 && Delta(before, after, DoorsKey) >= 1
+                Delta(before, after, WallsKey) >= 16 && Delta(before, after, DoorsKey) >= 1 && Delta(before, after, "rooms5x5") >= 1
                     ? null
-                    : string.Create(CultureInfo.InvariantCulture, $"walls +{Delta(before, after, WallsKey)} (need +16), doors +{Delta(before, after, DoorsKey)} (need +1)")
+                    : string.Create(CultureInfo.InvariantCulture, $"walls +{Delta(before, after, WallsKey)} (need +16), doors +{Delta(before, after, DoorsKey)} (need +1), enclosed 5x5 rooms with a door +{Delta(before, after, "rooms5x5")} (need +1)")
         };
 
     private static BenchTask ResearchPriorityTask() =>
@@ -150,6 +162,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "two_room_house",
+            Survey = true,
             Tier = Hard,
             Instruction = "在殖民者附近的空地上，用木頭規劃一棟有兩個房間的建築，兩間房共用一面牆、各有一扇門："
                 + "一間是放兩張床的臥室，另一間是放一張簡易研究台的研究室。",
@@ -160,11 +173,15 @@ public sealed partial class BenchmarkComponent : GameComponent
                 [DoorsKey] = CountBuildTargets(map, d => d.IsDoor),
                 ["beds"] = CountBuildTargets(map, IsRealBed),
                 ["benches"] = CountBuildTargets(map, d => d.defName.Contains("ResearchBench", StringComparison.Ordinal)),
+                ["bedroomNextToLab"] = RoomPlan.BedroomLabPairs(
+                    PlannedRooms(map), Cells(map, d => d.IsDoor), Cells(map, IsRealBed),
+                    Cells(map, d => d.defName.Contains("ResearchBench", StringComparison.Ordinal))),
                 ["spread"] = WallBounds(map) is CellRect r ? Math.Max(r.Width, r.Height) : 0
             },
             Check = (before, after, _) => Fails(
                 Need(after, before, "woodWalls", 20), Need(after, before, DoorsKey, 2),
                 Need(after, before, "beds", 2), Need(after, before, "benches", 1),
+                Delta(before, after, "bedroomNextToLab") >= 1 ? null : "no enclosed bedroom (2 beds) and lab (bench) sharing a wall with a door each",
                 after["spread"] <= 20 ? null : string.Create(CultureInfo.InvariantCulture, $"walls spread over {after["spread"]} cells (max 20, not one building)"))
         };
 
@@ -172,6 +189,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "freezer",
+            Survey = true,
             Tier = Hard,
             Instruction = "空調研究已經完成。在殖民者附近用木頭規劃一間內部至少 3x3 的冷凍庫：四面牆、一扇門、"
                 + "牆上裝一台冷氣，並在房間裡面劃一個儲存區（區域，不是貨架）。",
@@ -192,6 +210,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         new()
         {
             Id = "corn_storage",
+            Survey = true,
             Tier = Hard,
             Instruction = "在殖民者附近開一塊至少 30 格的玉米田，並在附近建一個專門放收成玉米的儲存區："
                 + "這個儲存區要能放玉米，但不能放鋼鐵和木材。",
@@ -285,7 +304,11 @@ public sealed partial class BenchmarkComponent : GameComponent
         if (_readyAt < 0f) _readyAt = UnityEngine.Time.realtimeSinceStartup + 5f;
         if (UnityEngine.Time.realtimeSinceStartup < _readyAt) return;
         _started = true;
-        _ = RunAsync(tier: null, isolated: true);
+        string text = File.ReadAllText(MarkerPath);
+        XElement marker = string.IsNullOrWhiteSpace(text) ? null : XDocument.Parse(text).Root;
+        if ((bool?)marker?.Attribute("selfcheck") == true) SelfCheck();
+        else if ((bool?)marker?.Attribute("survey") == true) _ = CompareSurveyAsync(isolated: true);
+        else _ = RunAsync(tier: null, isolated: true);
     }
 
     /// <summary>同一時間只跑一輪：題目共用同一個會話與地圖。</summary>
@@ -323,7 +346,43 @@ public sealed partial class BenchmarkComponent : GameComponent
     {
         if (_running) return;
         Reasoning = level;
-        _ = RunAsync(tier, isolated: false);
+        _ = tier == Survey ? CompareSurveyAsync(isolated: false) : RunAsync(tier, isolated: false);
+    }
+
+    internal const string Survey = "survey";
+    private const string InspectTool = "inspect_area";
+    private const string ScreenshotTool = "take_screenshot";
+
+    /// <summary>這一輪唯一可用的勘查工具；null 表示不限制。</summary>
+    private static string _surveyTool;
+
+    /// <summary>
+    /// 同樣的題目各跑一輪，一輪只給 inspect_area，一輪只給 take_screenshot；
+    /// 兩輪都藏 get_map_overview，它也能看地形，留著就比不出差別。
+    /// </summary>
+    private static async Task CompareSurveyAsync(bool isolated)
+    {
+        var scores = new List<string>();
+        foreach (string tool in new[] { InspectTool, ScreenshotTool })
+        {
+            _surveyTool = tool;
+            RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", tool == InspectTool ? ScreenshotTool : InspectTool };
+            BenchmarkScore s;
+            try
+            {
+                s = await RunAsync(Survey, isolated);
+            }
+            finally
+            {
+                _surveyTool = null;
+                RimAgentSettings.HiddenTools = System.Collections.Frozen.FrozenSet<string>.Empty;
+            }
+            if (s == null) return;
+            scores.Add(string.Create(CultureInfo.InvariantCulture, $"{tool} {s.Passed}/{s.Total}, tools {s.Tools} (failed {s.Failures}), {s.Seconds:0}s, in {s.Input}, out {s.Output}"));
+        }
+        string result = string.Join(" | ", scores);
+        Log.Warning(LogPrefix + "SURVEY DONE: " + result);
+        if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyDone".Translate(result), MessageTypeDefOf.NeutralEvent, historical: false);
     }
 
     private static List<BenchmarkRow> CreateRows(IEnumerable<BenchTask> tasks) =>
@@ -370,6 +429,9 @@ public sealed partial class BenchmarkComponent : GameComponent
     [DebugAction("RimAgent", "Benchmark: hard tasks", allowedGameStates = AllowedGameStates.PlayingOnMap)]
     private static void DebugRunHard() => ConfirmAndRun(Hard);
 
+    [DebugAction("RimAgent", "Benchmark: inspect_area vs take_screenshot", allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    private static void DebugRunSurvey() => ConfirmAndRun(Survey);
+
     /// <summary>
     /// 開發模式按鈕手動起跑：題目會清空對話、在地圖上放藍圖與區域、生成敵人，所以先確認並選思考強度；
     /// 跑完還原暫時改動的設定與時間流速（隔離環境用標記檔起跑時不需要還原）。
@@ -386,9 +448,10 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     /// <param name="tier">只跑這一級的題目；null 表示全部。</param>
     /// <param name="isolated">由隔離環境的標記檔起跑：讀標記檔的模型與思考強度覆寫，跑完不還原設定。</param>
-    private static async Task RunAsync(string tier, bool isolated)
+    /// <returns>沒跑完時為 null。</returns>
+    private static async Task<BenchmarkScore> RunAsync(string tier, bool isolated)
     {
-        if (_running) return;
+        if (_running) return null;
         _running = true;
         RimAgentSettings settings = RimAgentMod.Settings;
         string savedModel = settings?.agentModel;
@@ -405,9 +468,16 @@ public sealed partial class BenchmarkComponent : GameComponent
             if (settings == null || agent == null)
             {
                 Log.Warning(LogPrefix + $"FAIL not started: settings={settings != null}, component={agent != null}");
-                return;
+                return null;
             }
             await ApplyBenchmarkSettingsAsync(settings, isolated);
+            // 標記檔可能換了模型，所以套用設定後才看。
+            if (_surveyTool != null && !agent.Session.ImageInputEnabled)
+            {
+                Log.Warning(LogPrefix + "FAIL survey: the model does not accept images");
+                if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyNeedsImages".Translate(), MessageTypeDefOf.RejectInput, historical: false);
+                return null;
+            }
 
             string folder = RunLogWriter.DefaultFolder;
             Directory.CreateDirectory(folder);
@@ -422,7 +492,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             int totalTools = 0;
             int totalFailures = 0;
             var total = default(ModelUsage);
-            BenchTask[] tasks = [.. Tasks.Where(t => tier == null || t.Tier == tier)];
+            BenchTask[] tasks = [.. Tasks.Where(t => tier == null || t.Tier == tier || (tier == Survey && t.Survey))];
             _session = session;
             _rows = CreateRows(tasks);
             if (!isolated) Window_BenchmarkProgress.Show(_rows);
@@ -460,8 +530,8 @@ public sealed partial class BenchmarkComponent : GameComponent
                     usage = usage.Plus(ReadUsage(folder, startedUtc));
                     outcome = outcome with { Tools = [.. first.Tools, .. outcome.Tools], Seconds = first.Seconds + outcome.Seconds };
                 }
-                (string failure, List<TranscriptEntry> tools, float seconds, string reply, TranscriptEntry serviceError) = outcome;
-                bool invalid = serviceError != null;
+                (string failure, List<TranscriptEntry> tools, float seconds, string reply, TranscriptEntry serviceError, bool setupFailed) = outcome;
+                bool invalid = serviceError != null || setupFailed;
                 configurationErrors = serviceError?.ErrorKind == AgentErrorKind.Configuration ? configurationErrors + 1 : 0;
                 total = total.Plus(usage);
                 int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage, invalid, attempts);
@@ -478,6 +548,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["modVersion"] = modVersion,
                 ["model"] = model,
                 ["reasoning"] = ReasoningName,
+                ["surveyTool"] = _surveyTool,
                 ["note"] = "summary",
                 ["passed"] = passedByTier.Values.Sum(),
                 ["total"] = tasks.Length - invalidByTier.Values.Sum(),
@@ -498,16 +569,20 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["tick"] = startTick
             };
             Append(resultPath, summary);
-            Scores[(tier, Reasoning)] = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model);
-            Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary));
+            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model);
+            // 勘查比較的兩輪不是同一組條件，不能當成這個強度的成績。
+            if (_surveyTool == null) Scores[(tier, Reasoning)] = score;
+            Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary, RunLogWriter.Json));
             if (!isolated)
             {
                 Messages.Message("RimAgent.Benchmark.Done".Translate(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), resultPath), MessageTypeDefOf.NeutralEvent, historical: false);
             }
+            return score;
         }
         catch (Exception ex)
         {
             Log.Warning(LogPrefix + "FAIL exception: " + ex);
+            return null;
         }
         finally
         {
@@ -595,6 +670,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["task"] = task.Id,
             ["tier"] = task.Tier,
             ["reasoning"] = ReasoningName,
+            ["surveyTool"] = _surveyTool,
             ["reasoningUsed"] = usage.Reasoning,
             ["modelsUsed"] = usage.Models ?? [],
             ["ok"] = failure == null,
@@ -617,8 +693,9 @@ public sealed partial class BenchmarkComponent : GameComponent
     private const int MaxConfigurationErrors = 2;
     private static readonly TimeSpan ServiceRetryDelay = TimeSpan.FromSeconds(30);
 
+    /// <param name="SetupFailed">這張地圖佈置不出場景，沒送指令，不算進通過率。</param>
     /// <param name="ServiceError">模型服務出錯（逾時、額度、設定）以致沒做完；不是模型不會做，不算進通過率。</param>
-    private sealed record TaskOutcome(string Failure, List<TranscriptEntry> Tools, float Seconds, string Reply, TranscriptEntry ServiceError);
+    private sealed record TaskOutcome(string Failure, List<TranscriptEntry> Tools, float Seconds, string Reply, TranscriptEntry ServiceError, bool SetupFailed = false);
 
     /// <summary>只看讓指令結束的錯誤（沒有回覆）；途中的錯誤（例如壓縮失敗）之後仍跑完的不算。</summary>
     private static TranscriptEntry FindServiceError(string reply, IEnumerable<TranscriptEntry> entries) =>
@@ -633,6 +710,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             return new TaskOutcome("the game was closed or reloaded", [], 0f, null, null);
         }
         string failure = null;
+        bool setupFailed = false;
         string reply = null;
         TranscriptEntry serviceError = null;
         float seconds = 0f;
@@ -646,6 +724,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             string setupError = task.Setup?.Invoke(map);
             if (setupError != null)
             {
+                setupFailed = true;
                 failure = "setup: " + setupError;
             }
             else
@@ -685,7 +764,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             TryCleanUp(task.Id, () => task.Cleanup?.Invoke(map));
             TryCleanUp(task.Id, () => snapshot?.Restore());
         }
-        return new TaskOutcome(failure, tools, seconds, reply, serviceError);
+        return new TaskOutcome(failure, tools, seconds, reply, serviceError, setupFailed);
     }
 
     private static void TryCleanUp(string taskId, Action action)
@@ -725,6 +804,24 @@ public sealed partial class BenchmarkComponent : GameComponent
         CellRect interior = walls.ContractedBy(1);
         return BuildTargets(map, d => d.defName == "Cooler")
             .Count(t => walls.Contains(t.Position) && !interior.Contains(t.Position));
+    }
+
+    private static List<(int X, int Z)> Cells(Map map, Func<ThingDef, bool> predicate)
+    {
+        return [.. BuildTargets(map, predicate).Select(t => (t.Position.x, t.Position.z))];
+    }
+
+    private static List<RoomPlan.Room> PlannedRooms(Map map)
+    {
+        List<(int X, int Z)> barriers = Cells(map, d => d.IsDoor || d.Fillage == FillCategory.Full);
+        if (WallBounds(map) is CellRect bounds)
+        {
+            // 山壁也能當房間的牆。
+            barriers.AddRange(bounds.ExpandedBy(1).Cells
+                .Where(c => c.InBounds(map) && c.Filled(map))
+                .Select(c => (c.x, c.z)));
+        }
+        return RoomPlan.Enclosed(barriers);
     }
 
     private static IEnumerable<Thing> BuildTargets(Map map, Func<ThingDef, bool> predicate)
@@ -951,7 +1048,7 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     private static void Append(string path, Dictionary<string, object> line)
     {
-        File.AppendAllText(path, JsonSerializer.Serialize(line) + "\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.AppendAllText(path, JsonSerializer.Serialize(line, RunLogWriter.Json) + "\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
     private static string Short(string text)

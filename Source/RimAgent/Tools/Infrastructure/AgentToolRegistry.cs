@@ -1,6 +1,7 @@
 ﻿#nullable disable
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -33,6 +34,9 @@ public sealed class ToolPermissions
         foreach (ToolCategory category in enabled) permissions.Set(category, value: true);
         return permissions;
     }
+
+    /// <summary>類別允許也不給的個別工具。</summary>
+    public IReadOnlySet<string> Hidden { get; init; } = FrozenSet<string>.Empty;
 
     public bool Allows(ToolCategory category)
     {
@@ -177,14 +181,14 @@ public sealed class AgentToolRegistry
     private IEnumerable<Entry> Allowed(ToolPermissions permissions)
     {
         ArgumentNullException.ThrowIfNull(permissions);
-        return _tools.Where(t => permissions.Allows(t.Category));
+        return _tools.Where(t => permissions.Allows(t.Category) && !permissions.Hidden.Contains(t.Name));
     }
 
     /// <summary>子代理專用版本；輸出儲存由 <see cref="SubagentTools"/> 在每次任務的呼叫流程上指定。</summary>
     public IList<AITool> SelectForSubagent(ToolPermissions permissions, IReadOnlyList<ToolCategory> categories, bool readOnly)
     {
         ArgumentNullException.ThrowIfNull(permissions);
-        var scoped = new ToolPermissions();
+        var scoped = new ToolPermissions { Hidden = permissions.Hidden };
         foreach (ToolCategory category in categories ?? [])
         {
             scoped.Set(category, permissions.Allows(category));

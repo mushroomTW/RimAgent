@@ -354,10 +354,13 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref decisionTriageUpkeep, "decisionTriageUpkeep", defaultValue: true);
     }
 
+    /// <summary>benchmark 比較工具時暫時藏起來的工具；不存檔。</summary>
+    internal static IReadOnlySet<string> HiddenTools { get; set; } = System.Collections.Frozen.FrozenSet<string>.Empty;
+
     public ToolPermissions ToPermissions()
     {
         EnsureAllows();
-        var permissions = new ToolPermissions();
+        var permissions = new ToolPermissions { Hidden = HiddenTools };
         for (int i = 0; i < CategoryKeys.Length; i++)
         {
             permissions.Set((ToolCategory)i, allowByCategory[i]);

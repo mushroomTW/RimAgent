@@ -178,6 +178,9 @@ public class AgentFixesTests
 
             Assert.That(File.Exists(path), Is.True);
             Assert.That(Directory.GetFiles(dir).Select(Path.GetFileName), Is.EquivalentTo(["global.json"]));
+
+            GlobalMemoryFile.Save(path, new List<AgentMemoryEntry> { new() { name = "global_a.md", content = "殖民地+1" } });
+            Assert.That(File.ReadAllText(path), Does.Contain("殖民地+1"), "玩家會直接看這個檔案");
         }
         finally
         {

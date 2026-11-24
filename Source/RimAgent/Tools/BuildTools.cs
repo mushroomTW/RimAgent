@@ -197,7 +197,7 @@ public sealed class BuildTools
     }
 
     [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
-    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = one material for walls, doors and furniture, or set each part: \"walls=granite blocks; floor=fine granite tile; furniture=steel\" (any material or floor in the game, modded ones too; omitted parts keep the layout's own); an empty building lists the layouts). To build a room (bedroom, kitchen, workshop, storage, etc.), use a layout by default: list them and pick the closest fit; draw walls with outline only when the player asks for a specific size or shape, or no layout fits. Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. All or nothing: if any cell (or any part of a layout) is refused, nothing is placed and the reasons are listed; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. Max 400 cells per call.")]
+    [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = one material for walls, doors and furniture, or set each part: \"walls=granite blocks; floor=fine granite tile; furniture=steel\" (any material or floor in the game, modded ones too; omitted parts keep the layout's own); an empty building lists the layouts). To build a room (bedroom, kitchen, workshop, storage, etc.), use a layout by default: list them and pick the closest fit; draw walls with outline only when the player asks for a specific size or shape, or no layout fits. Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. All or nothing: if any cell (or any part of a layout) is refused, nothing is placed and the reasons are listed; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. North is larger z, east is larger x. Max 400 cells per call.")]
 #pragma warning disable S107 // Tool parameters are discovered via reflection and exposed as LLM function schema
     public string PlaceBlueprint(
         [Description("Name or defName, e.g. \"wall\", \"door\", \"solar generator\".")] string building,
@@ -228,7 +228,8 @@ public sealed class BuildTools
         string blocked = ToolText.Blocked(_gate, $"would place {cells.Value.Count} {what} blueprint(s) {where}.");
         if (blocked != null) return blocked;
 
-        return PlaceAndReport(def, cells.Value, rotation, stuffDefName, what, where);
+        bool outline = string.Equals(shape.Trim(), "outline", StringComparison.OrdinalIgnoreCase);
+        return PlaceAndReport(def, cells.Value, rotation, stuffDefName, what, where, outline);
     }
 
     private static string WhereText(List<(int X, int Z)> cells, int x, int z, int x2, int z2, string shape)
@@ -238,7 +239,7 @@ public sealed class BuildTools
             : $"from {ToolText.Cell(x, z)} to {ToolText.Cell(x2, z2)} ({shape.Trim().ToLowerInvariant()})";
     }
 
-    private string PlaceAndReport(Result<DefInfo> def, List<(int X, int Z)> cells, int rotation, string stuffDefName, string what, string where)
+    private string PlaceAndReport(Result<DefInfo> def, List<(int X, int Z)> cells, int rotation, string stuffDefName, string what, string where, bool outline)
     {
         MapBounds bounds = _world.GetMapBounds();
         BuildingInfo info = _world.GetBuildingInfo(def.Value.DefName);
@@ -257,9 +258,24 @@ public sealed class BuildTools
         PlaceAllCells(cells, def.Value.DefName, rotation, stuffDefName, placedCells, lateFailures);
         if (lateFailures.Count > 0) return BuildPlaceLateFailureError(what, cells, placedCells, lateFailures, where);
 
-        return $"Placed {placedCells.Count} {what} blueprint(s) {where}." + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
+        return $"Placed {placedCells.Count} {what} blueprint(s) {where}."
+            + (outline ? OutlineNote(placedCells) : string.Empty)
+            + (large ? FootprintNote(info, placedCells, rotation) : string.Empty);
     }
 
+    /// <summary>外框與內部的大小、四側座標：模型常少算一圈牆，或把 z 較大的一側當成南邊。</summary>
+    private static string OutlineNote(List<(int X, int Z)> cells)
+    {
+        int minX = cells.Min(c => c.X), maxX = cells.Max(c => c.X), minZ = cells.Min(c => c.Z), maxZ = cells.Max(c => c.Z);
+        int width = maxX - minX + 1, height = maxZ - minZ + 1;
+        return string.Create(CultureInfo.InvariantCulture, $" Outer size {width}x{height} (east-west x north-south), ")
+            + (width > 2 && height > 2
+                ? string.Create(CultureInfo.InvariantCulture, $"interior {width - 2}x{height - 2}")
+                : "no interior")
+            + string.Create(CultureInfo.InvariantCulture, $". Sides: north z={maxZ}, south z={minZ}, west x={minX}, east x={maxX}.");
+    }
+
+    private const int MaxAmbiguousShown = 2;
     private const int NearbyRadius = 3;
     private const int MaxNearbyFits = 5;
 
@@ -669,11 +685,17 @@ public sealed class BuildTools
         // 各種類的目錄合併後一起比對，名稱層級（精確 → 前綴 → 包含）才是全域的；再以參考對回種類。
         var kindOf = new Dictionary<DefInfo, string>();
         List<DefInfo> candidates = CollectLookupCandidates(wanted, kindOf);
-        Result<DefInfo> def = DefResolver.Resolve(name, candidates, wanted.Length > 0 ? wanted : "def");
-        if (!def.Success) return def.Error;
-        string resolvedKind = kindOf[def.Value];
-        DefLookupInfo info = _world.LookupDef(resolvedKind, def.Value.DefName);
-        if (info == null) return ToolText.Error($"no data for {def.Value.DefName}.");
+        Result<DefInfo> def = DefResolver.Resolve(name, candidates, wanted.Length > 0 ? wanted : "def", string.Empty, out IReadOnlyList<DefInfo> ambiguous);
+        if (def.Success) return DescribeDef(def.Value, kindOf[def.Value], detail);
+        if (ambiguous.Count is 0 or > MaxAmbiguousShown) return def.Error;
+        return string.Create(CultureInfo.InvariantCulture, $"\"{name.Trim()}\" matches {ambiguous.Count}; use the exact defName elsewhere.\n\n")
+            + string.Join("\n\n", ambiguous.Select(d => DescribeDef(d, kindOf[d], detail)));
+    }
+
+    private string DescribeDef(DefInfo def, string resolvedKind, string detail)
+    {
+        DefLookupInfo info = _world.LookupDef(resolvedKind, def.DefName);
+        if (info == null) return ToolText.Error($"no data for {def.DefName}.");
 
         var sb = new System.Text.StringBuilder();
         sb.Append(info.Label).Append(" (").Append(info.DefName).Append("), ").AppendLine(resolvedKind);

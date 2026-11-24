@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace RimAgent.Agent;
@@ -14,7 +15,7 @@ public static class GlobalMemoryFile
     public const string FileName = "global-memory.json";
     public const string PreservedSuffix = ".invalid.txt";
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
-    private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>讀取全域記憶；<paramref name="warning"/> 非 null 代表檔案讀不了（原檔已改名保留）。</summary>
     public static AgentMemoryStore Load(string path, out string warning)

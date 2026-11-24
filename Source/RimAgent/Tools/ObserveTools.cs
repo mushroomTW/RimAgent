@@ -386,7 +386,7 @@ public sealed class ObserveTools
     }
 
     [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, how heavy a building the ground holds, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, how many cells hold heavy, medium or only light buildings (ship parts and most large buildings need heavy under every cell), obstacles (buildings, rock, trees, items), and the zones and rooms overlapping it.")]
+    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, how heavy a building the ground holds, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, how many cells hold heavy, medium or only light buildings (ship parts and most large buildings need heavy under every cell), obstacles (buildings, rock, trees, items), the largest rectangle free of buildings, rock, the unbuildable map edge and ground too weak to build on, with the heaviest buildings all of it holds, and the largest one for heavy buildings (plants and items inside are fine; use it to pick a building site in one call on a large area), and the zones and rooms overlapping it.")]
     public string InspectArea(
         [Description("Rectangle corner x.")] int x1,
         [Description("Rectangle corner z.")] int z1,
@@ -437,6 +437,20 @@ public sealed class ObserveTools
         }
         sb.AppendLine();
 
+        sb.Append("Largest buildable rectangle: ");
+        if (LargestBuildable(area, cells, GroundSupport.Light) is CellRectSpec site)
+        {
+            GroundSupport weakest = cells.Where(c => c.X >= site.MinX && c.X <= site.MaxX && c.Z >= site.MinZ && c.Z <= site.MaxZ).Min(c => c.Support);
+            sb.Append(SiteText(site)).Append(" (east-west x north-south), holds ").Append(SupportText(weakest));
+            if (weakest != GroundSupport.Heavy)
+                sb.Append("; for heavy buildings: ").Append(LargestBuildable(area, cells, GroundSupport.Heavy) is CellRectSpec heavy ? SiteText(heavy) : "none");
+        }
+        else
+        {
+            sb.Append("none");
+        }
+        sb.AppendLine();
+
         sb.Append("Zones: ");
         List<IGrouping<int, CellInfo>> zones = [.. cells.Where(c => c.Zone != null).GroupBy(c => c.Zone.Id)];
         sb.Append(zones.Count == 0
@@ -450,6 +464,32 @@ public sealed class ObserveTools
             ? "none"
             : string.Join("; ", rooms.Select(g => Room(g.First().Room) + $" ({g.Count()} cells inside)")));
         return sb.ToString().Trim();
+    }
+
+    private static string SiteText(CellRectSpec site) =>
+        string.Create(CultureInfo.InvariantCulture, $"{site}, {site.MaxX - site.MinX + 1}x{site.MaxZ - site.MinZ + 1}");
+
+    private static CellRectSpec? LargestBuildable(CellRectSpec area, IReadOnlyList<CellInfo> cells, GroundSupport support)
+    {
+        HashSet<(int X, int Z)> free = [.. cells
+            .Where(c => !c.Fogged && !c.NoBuildEdge && c.Support >= support && !c.Things.Any(t => t.Kind is ThingKind.Building or ThingKind.Mineable))
+            .Select(c => (c.X, c.Z))];
+        CellRectSpec? best = null;
+        var heights = new int[area.MaxX - area.MinX + 1];
+        for (int z = area.MinZ; z <= area.MaxZ; z++)
+        {
+            for (int i = 0; i < heights.Length; i++) heights[i] = free.Contains((area.MinX + i, z)) ? heights[i] + 1 : 0;
+            for (int left = 0; left < heights.Length; left++)
+            {
+                int height = heights[left];
+                for (int right = left; right < heights.Length && (height = Math.Min(height, heights[right])) > 0; right++)
+                {
+                    if (best is not CellRectSpec b || (right - left + 1) * height > b.CellCount)
+                        best = new CellRectSpec(area.MinX + left, z - height + 1, area.MinX + right, z);
+                }
+            }
+        }
+        return best;
     }
 
     private static string SupportText(GroundSupport support) => support switch
