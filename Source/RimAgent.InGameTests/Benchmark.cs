@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using LudeonTK;
 using RimAgent.Agent;
 using RimAgent.Tools;
@@ -490,6 +491,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["steps"] = total.Steps,
                 ["in"] = total.Input,
                 ["out"] = total.Output,
+                ["modelsUsed"] = total.Models ?? [],
                 // 地圖不同，難度就不同：兩輪要比較得先確認這幾項相同。
                 ["seed"] = seed,
                 ["biome"] = biome,
@@ -537,11 +539,12 @@ public sealed partial class BenchmarkComponent : GameComponent
     {
         if (isolated)
         {
-            string marker = await File.ReadAllTextAsync(MarkerPath);
-            string modelOverride = ModelOverridePattern.Match(marker).Groups["model"].Value;
-            if (modelOverride.Length > 0) settings.agentModel = modelOverride;
-            string level = ReasoningOverridePattern.Match(marker).Groups["level"].Value;
-            if (level.Length > 0) Reasoning = level.Equals(nameof(Routing), StringComparison.OrdinalIgnoreCase) ? Routing : Enum.Parse<ReasoningLevel>(level, ignoreCase: true);
+            string text = await File.ReadAllTextAsync(MarkerPath);
+            XElement marker = string.IsNullOrWhiteSpace(text) ? null : XDocument.Parse(text).Root;
+            string modelOverride = (string)marker?.Attribute("model");
+            if (!string.IsNullOrEmpty(modelOverride)) settings.agentModel = modelOverride;
+            string level = (string)marker?.Attribute("reasoning");
+            if (!string.IsNullOrEmpty(level)) Reasoning = level.Equals(nameof(Routing), StringComparison.OrdinalIgnoreCase) ? Routing : Enum.Parse<ReasoningLevel>(level, ignoreCase: true);
         }
         settings.reasoningRouting = Reasoning == Routing;
         // 自動的備援若是「預設」會退回這個強度，不能用玩家殘留的設定。
@@ -554,9 +557,10 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
-    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning)
+    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning, string[] Models)
     {
-        public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output, other.Reasoning ?? Reasoning);
+        public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output, other.Reasoning ?? Reasoning,
+            [.. (Models ?? []).Union(other.Models ?? [], StringComparer.Ordinal)]);
     }
 
     /// <summary>取這題的運行紀錄摘要；摘要還沒寫出（例如寫檔失敗）時為 0。</summary>
@@ -569,7 +573,8 @@ public sealed partial class BenchmarkComponent : GameComponent
             return e.GetProperty("ts").GetDateTime() < startedUtc
                 ? default
                 : new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64(),
-                    e.TryGetProperty("reasoning", out JsonElement reasoning) ? reasoning.GetString() : null);
+                    e.TryGetProperty("reasoning", out JsonElement reasoning) ? reasoning.GetString() : null,
+                    e.TryGetProperty("models", out JsonElement models) ? [.. models.EnumerateArray().Select(m => m.GetString())] : null);
         }
         catch (Exception ex)
         {
@@ -591,6 +596,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["tier"] = task.Tier,
             ["reasoning"] = ReasoningName,
             ["reasoningUsed"] = usage.Reasoning,
+            ["modelsUsed"] = usage.Models ?? [],
             ["ok"] = failure == null,
             ["invalid"] = invalid,
             ["attempts"] = attempts,
@@ -664,6 +670,8 @@ public sealed partial class BenchmarkComponent : GameComponent
                 tools = [.. added.Where(e => e.Kind == TranscriptKind.Tool)];
                 if (failure != null && !timeout.IsCancellationRequested) serviceError = FindServiceError(reply, added);
                 if (serviceError != null) failure = "model service error: " + serviceError.Text + "; " + failure;
+                else if (failure != null && !timeout.IsCancellationRequested && reply == null && added.LastOrDefault(e => e.Kind == TranscriptKind.Error) is { } error)
+                    failure = "ended by error: " + error.Text + "; " + failure;
             }
         }
         catch (Exception ex)
@@ -954,9 +962,4 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     [GeneratedRegex("[0-9０-９]", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex DigitPattern { get; }
-    [GeneratedRegex("model=\"(?<model>[^\"]+)\"", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex ModelOverridePattern { get; }
-
-    [GeneratedRegex("reasoning=\"(?<level>[A-Za-z]+)\"", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex ReasoningOverridePattern { get; }
 }

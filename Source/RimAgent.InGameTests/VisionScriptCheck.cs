@@ -127,14 +127,14 @@ public sealed class VisionScriptCheckComponent : GameComponent
             failures.Add("screenshot: " + shot.Error);
             return;
         }
-        byte[] jpeg = null;
-        for (int attempt = 0; attempt < 40 && jpeg == null; attempt++)
+        byte[] jpeg = [];
+        for (int attempt = 0; attempt < 40 && jpeg.Length == 0; attempt++)
         {
             await Task.Delay(100);
             byte[] png = world.ReadScreenshotFile(shot.FilePath);
-            if (png != null) jpeg = ModelImageEncoder.FromEncoded(png);
+            jpeg = ModelImageEncoder.FromEncoded(png);
         }
-        if (jpeg == null)
+        if (jpeg.Length == 0)
         {
             failures.Add("screenshot: could not read " + shot.FilePath);
             return;
@@ -145,7 +145,7 @@ public sealed class VisionScriptCheckComponent : GameComponent
         if (Math.Max(width, height) > ModelImageEncoder.MaxEdge) failures.Add(string.Create(CultureInfo.InvariantCulture, $"screenshot: {width}x{height} exceeds {ModelImageEncoder.MaxEdge}"));
 
         string outside = Path.Combine(TestHelpers.RimAgentContent.RootDir, "About", "Preview.png");
-        if (world.ReadScreenshotFile(outside) != null) failures.Add("screenshot: read a PNG outside the screenshot folder");
+        if (world.ReadScreenshotFile(outside).Length > 0) failures.Add("screenshot: read a PNG outside the screenshot folder");
     }
 
     /// <summary>剪貼簿 DIB（BGR、由下往上）轉 JPEG 要保住尺寸與顏色；超過上限的大圖要等比縮小。</summary>

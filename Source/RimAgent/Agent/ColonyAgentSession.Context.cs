@@ -326,11 +326,11 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>讀檔在背景執行緒；解碼、縮圖與 JPEG 編碼要用 Unity API，排回主線程。檔案還沒寫完時回傳 null。</summary>
+    /// <summary>讀檔在背景執行緒；解碼、縮圖與 JPEG 編碼要用 Unity API，排回主線程。檔案還沒寫完時回傳空陣列。</summary>
     private static async Task<byte[]> LoadScreenshotForModelAsync(IGameWorld world, string path)
     {
         byte[] png = await Task.Run(() => world.ReadScreenshotFile(path)).ConfigureAwait(false);
-        if (png == null) return null;
+        if (png.Length == 0) return png;
         return await RimLLM_Framework.Core.RimLLMDispatcher.EnqueueOnMainThreadAsync(() => ModelImageEncoder.FromEncoded(png)).ConfigureAwait(false);
     }
 

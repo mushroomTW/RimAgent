@@ -47,12 +47,12 @@ internal sealed partial class FakeGameWorld
         return CommandResult.Ok();
     }
 
-    /// <summary>ReadScreenshotFile 依路徑回傳的檔案內容；沒設定的路徑回傳 null（模擬尚未寫完）。</summary>
+    /// <summary>ReadScreenshotFile 依路徑回傳的檔案內容；沒設定的路徑回傳空陣列（模擬尚未寫完）。</summary>
     public Dictionary<string, byte[]> ScreenshotImages { get; } = new Dictionary<string, byte[]>();
 
     public byte[] ReadScreenshotFile(string filePath)
     {
         Calls.Add($"ReadScreenshotFile({filePath})");
-        return ScreenshotImages.TryGetValue(filePath ?? string.Empty, out byte[] image) ? image : null;
+        return ScreenshotImages.TryGetValue(filePath ?? string.Empty, out byte[] image) ? image : [];
     }
 }

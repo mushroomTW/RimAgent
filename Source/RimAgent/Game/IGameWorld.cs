@@ -177,7 +177,7 @@ public interface IGameWorld
     MapSurvey GetMapSurvey();
     /// <summary>
     /// 讀取遊戲截圖資料夾中的 PNG 原始檔，可在背景執行緒呼叫（解碼與縮圖由呼叫端排回主線程）。
-    /// 檔案不在截圖資料夾或尚未寫完時回傳 null（截圖在該幀渲染完才寫出，呼叫端可稍後重試）。
+    /// 檔案不在截圖資料夾或尚未寫完時回傳空陣列（截圖在該幀渲染完才寫出，呼叫端可稍後重試）。
     /// </summary>
     byte[] ReadScreenshotFile(string filePath);
 

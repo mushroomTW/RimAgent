@@ -80,13 +80,13 @@ public sealed class MapViewCheckComponent : GameComponent
             failures.Add($"{name}: {shot.Error}");
             return;
         }
-        byte[] png = null;
-        for (int attempt = 0; attempt < 40 && png == null; attempt++)
+        byte[] png = [];
+        for (int attempt = 0; attempt < 40 && png.Length == 0; attempt++)
         {
             await Task.Delay(100);
             png = world.ReadScreenshotFile(shot.FilePath);
         }
-        if (png == null)
+        if (png.Length == 0)
         {
             failures.Add($"{name}: no PNG at {shot.FilePath}");
             return;

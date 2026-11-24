@@ -99,6 +99,18 @@ public class ImageAttachingTests
     }
 
     [Test]
+    public async Task UnfinishedScreenshotIsRetriedInsteadOfSentEmpty()
+    {
+        int loads = 0;
+        var client = Create(enabled: true, _ => Task.FromResult(++loads < 3 ? [] : Image));
+
+        List<ChatMessage> sent = [.. await client.AttachAsync(TurnWithScreenshot(), CancellationToken.None)];
+
+        Assert.That(loads, Is.EqualTo(3));
+        Assert.That(sent.SelectMany(m => m.Contents).OfType<DataContent>().Select(c => c.Data.ToArray()), Is.EqualTo((byte[][])[Image]));
+    }
+
+    [Test]
     public async Task PlayerImagesAttachToTheCurrentInstructionWithoutTouchingHistory()
     {
         var client = Create(enabled: true, _ => Task.FromResult<byte[]>(null));

@@ -53,7 +53,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         _failedPaths.Clear();
     }
 
-    /// <param name="load">讀取並縮圖（須排到主線程）；尚未寫完回傳 null。</param>
+    /// <param name="load">讀取並縮圖（須排到主線程）；尚未寫完回傳空陣列。</param>
     public ImageAttachingChatClient(IChatClient innerClient, Func<bool> enabled, Func<string, Task<byte[]>> load)
         : base(innerClient)
     {
@@ -195,7 +195,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         for (int attempt = 0; attempt < MaxLoadAttempts; attempt++)
         {
             byte[] image = await _load(path).ConfigureAwait(false);
-            if (image != null)
+            if (image is { Length: > 0 })
             {
                 if (_cache.Count >= MaxCachedImages) _cache.Clear();
                 _cache[path] = image;
