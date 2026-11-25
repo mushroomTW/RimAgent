@@ -398,6 +398,41 @@ public partial class ObserveToolsTests
     }
 
     [Test]
+    public void InspectAreaSaysWhereACompactPatchLies()
+    {
+        var world = new FakeGameWorld();
+        for (int x = 4; x <= 6; x++)
+        {
+            for (int z = 2; z <= 3; z++) world.Cells[(x, z)] = new CellInfo { X = x, Z = z, Terrain = "rich soil", Walkable = true, Support = GroundSupport.Heavy };
+        }
+        var tools = new ObserveTools(world);
+
+        Assert.That(tools.InspectArea(0, 0, 9, 9), Does.Contain("rich soil 6 filling (4,2)-(6,3)"));
+        world.Cells.Remove((4, 2));
+        Assert.That(tools.InspectArea(0, 0, 9, 9), Does.Contain("rich soil 5 within (4,2)-(6,3)"));
+        world.Cells[(0, 0)] = new CellInfo { X = 0, Z = 0, Terrain = "rich soil", Walkable = true };
+        world.Cells[(9, 9)] = new CellInfo { X = 9, Z = 9, Terrain = "rich soil", Walkable = true };
+        Assert.That(tools.InspectArea(0, 0, 9, 9), Does.Contain("rich soil 7 |"), "散布的不列外框");
+    }
+
+    [Test]
+    public void FindThingsPointsTerrainSearchesToInspectArea()
+    {
+        var tools = new ObserveTools(new FakeGameWorld());
+        Assert.That(tools.FindThings("terrain", "rich"), Does.Contain("inspect_area"));
+        Assert.That(tools.FindThings("any", "no such thing"), Does.Contain("inspect_area"));
+        Assert.That(tools.FindThings("plant", "rich soil"), Does.Contain("inspect_area"));
+    }
+
+    [Test]
+    public void InspectAreaKeepsFoggedTerrainPositionsHidden()
+    {
+        var world = new FakeGameWorld();
+        for (int x = 4; x <= 6; x++) world.Cells[(x, 2)] = new CellInfo { X = x, Z = 2, Terrain = "rich soil", Fogged = true };
+        Assert.That(new ObserveTools(world).InspectArea(0, 0, 9, 9), Does.Contain("rich soil 3 |"));
+    }
+
+    [Test]
     public void InspectAreaSummarisesTerrainObstaclesZonesAndRooms()
     {
         _world.UnwalkableCells.Add((7, 7));
@@ -411,7 +446,7 @@ public partial class ObserveToolsTests
 
         string text = _tools.InspectArea(9, 9, 5, 5);
 
-        Assert.That(text, Does.Contain("Area (5,5)-(9,9): 25 cells | terrain: soil 24, marsh 1 | fertile (>=70%): 24 | roofed: 1 | not walkable: 1"));
+        Assert.That(text, Does.Contain("Area (5,5)-(9,9): 25 cells | terrain: soil 24, marsh 1 filling (7,7)-(7,7) | fertile (>=70%): 24 | roofed: 1 | not walkable: 1"));
         // 兩顆礦石與一棵樹在範圍內；(40,40) 那顆不在。
         Assert.That(text, Does.Contain("Obstacles: 2 — [1] compacted steel (MineableSteel) at (5,5); [3] oak tree (Plant_TreeOak) at (6,5) harvestable"));
         Assert.That(text, Does.Contain("Zones: [50] Stockpile 1 (Stockpile, 1 cells inside)"));

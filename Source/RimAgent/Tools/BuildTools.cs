@@ -213,9 +213,15 @@ public sealed class BuildTools
         if (string.Equals(shape?.Trim(), "layout", StringComparison.OrdinalIgnoreCase)) return PlaceLayout(building, x, z, rotation, stuff);
 
         Result<DefInfo> def = DefResolver.Resolve(building, _world.Buildables, "buildable");
-        if (!def.Success) return def.Error;
-
         Result<string> stuffResult = ResolveStuffDefName(stuff);
+        if (SplitMaterial(building) is var (bare, material))
+        {
+            if (stuffResult.Success && stuffResult.Value.Length > 0 && stuffResult.Value != material)
+                return ToolText.Error($"building \"{building}\" names {material} but stuff is {stuffResult.Value}; use building \"{bare.DefName}\" and one stuff.");
+            def = Result<DefInfo>.Ok(bare);
+            if (stuffResult.Success) stuffResult = Result<string>.Ok(material);
+        }
+        if (!def.Success) return def.Error;
         if (!stuffResult.Success) return stuffResult.Error;
         string stuffDefName = stuffResult.Value;
 
@@ -999,6 +1005,22 @@ public sealed class BuildTools
         if (!r.Success) return ToolText.Error(r.Message);
         return (forbidden ? "Forbade " : "Allowed ") + r.Message + ".";
     }
+
+    /// <summary>「wood wall」拆成材料與建築；要先於名稱比對，英文版會直接對到 Wall 而丟掉材料。</summary>
+    private (DefInfo Building, string StuffDefName)? SplitMaterial(string building)
+    {
+        string name = (building ?? string.Empty).Trim();
+        int space = name.IndexOf(' ', StringComparison.Ordinal);
+        if (space < 0 || _world.Buildables.Any(b => IsNamed(b, name))) return null;
+        string bare = name[(space + 1)..].Trim();
+        List<DefInfo> matches = [.. _world.Buildables.Where(b => IsNamed(b, bare))];
+        if (matches.Count != 1 || _world.GetBuildingInfo(matches[0].DefName) is not { StuffCount: > 0 }) return null;
+        Result<string> material = ResolveStuffDefName(name[..space]);
+        return material.Success ? (matches[0], material.Value) : null;
+    }
+
+    private static bool IsNamed(DefInfo def, string name) =>
+        string.Equals(def.DefName, name, StringComparison.OrdinalIgnoreCase) || string.Equals(def.Label, name, StringComparison.OrdinalIgnoreCase);
 
     private Result<string> ResolveStuffDefName(string stuff)
     {

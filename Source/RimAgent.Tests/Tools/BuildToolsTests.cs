@@ -140,6 +140,19 @@ public class BuildToolsTests
         Assert.That(_tools.CancelDesignation("mine", useSelection: false, 0, 0, 10, 10), Does.Contain("No mining marks"));
     }
 
+    [TestCase("墙")]
+    [TestCase("wall")]
+    public void MaterialInTheBuildingNameIsSplitOff(string label)
+    {
+        _world.Buildables = [new DefInfo("Wall", label), new DefInfo("Campfire", "篝火")];
+        _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", StuffCount = 5, Width = 1, Height = 1 };
+        _world.BuildingInfos["Campfire"] = new BuildingInfo { DefName = "Campfire", Width = 1, Height = 1 };
+        Assert.That(_tools.PlaceBlueprint("wood wall", "single", 10, 20, -1, -1, 0, "wood"), Does.StartWith($"Placed 1 {label} (WoodLog)"));
+        Assert.That(_tools.PlaceBlueprint("wood wall", "single", 11, 20), Does.StartWith($"Placed 1 {label} (WoodLog)"));
+        Assert.That(_tools.PlaceBlueprint("wood wall", "single", 12, 20, -1, -1, 0, "steel"), Does.StartWith("Error:"), "材料互相矛盾時不猜");
+        Assert.That(_tools.PlaceBlueprint("wood campfire", "single", 12, 20), Does.Not.Contain("WoodLog"), "不吃材料的建築不報材料");
+    }
+
     [Test]
     public void BlueprintLinePlacesNothingWhenAnyCellIsBlocked()
     {

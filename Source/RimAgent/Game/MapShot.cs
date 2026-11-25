@@ -17,6 +17,9 @@ public sealed class MapShotLayout
 
     private static readonly int[] GridSteps = [5, 10, 25, 50, 100];
 
+    /// <summary>逐格標籤之間至少留這麼多像素，數字才不會連在一起。</summary>
+    private const int MinLabelGapPixels = 4;
+
     private MapShotLayout(CellRectSpec rect, int pixelsPerCell, int gridStep, int leftMargin, int rightMargin, int bottomMargin, int topMargin)
     {
         Rect = rect;
@@ -33,6 +36,9 @@ public sealed class MapShotLayout
     public int CellsHigh => Rect.MaxZ - Rect.MinZ + 1;
     public int PixelsPerCell { get; }
     public int GridStep { get; }
+    /// <summary>放得下時逐格標座標：只有每 5 格一條線時，模型讀圖常差一格。</summary>
+    public int LabelStep => PixelsPerCell >= LabelWidth + MinLabelGapPixels ? 1 : GridStep;
+    private int LabelWidth => DigitFont.TextWidth(Math.Max(Rect.MaxX, 0).ToString(CultureInfo.InvariantCulture));
     public int LeftMargin { get; }
     public int RightMargin { get; }
     public int BottomMargin { get; }
@@ -72,6 +78,7 @@ public static class MapShotOverlay
 
     /// <summary>格線與地圖混色的比例（0-255）；太實會蓋住格子內容，太淡在雪地上看不到。</summary>
     private const int LineAlpha = 150;
+    private const int CellLineAlpha = 50;
 
     private const int TickLength = 3;
 
@@ -108,15 +115,15 @@ public static class MapShotOverlay
         int mapH = layout.MapHeightPx;
         CellRectSpec rect = layout.Rect;
         int ppc = layout.PixelsPerCell;
-        int step = layout.GridStep;
+        int step = layout.LabelStep;
 
         for (int cx = FirstMultiple(rect.MinX, step); cx <= rect.MaxX; cx += step)
         {
             int px = layout.LeftMargin + (cx - rect.MinX) * ppc;
-            for (int y = 0; y < mapH; y++) Blend(image, width, px, layout.BottomMargin + y, LineColor, LineAlpha);
+            for (int y = 0; y < mapH; y++) Blend(image, width, px, layout.BottomMargin + y, LineColor, cx % layout.GridStep == 0 ? LineAlpha : CellLineAlpha);
             for (int t = 1; t <= TickLength; t++) Blend(image, width, px, layout.BottomMargin - t, LineColor, 255);
             string label = cx.ToString(CultureInfo.InvariantCulture);
-            int labelX = Math.Min(px + 1, width - DigitFont.TextWidth(label) - 1);
+            int labelX = Math.Min(px + (step == 1 ? (ppc - DigitFont.TextWidth(label)) / 2 : 1), width - DigitFont.TextWidth(label) - 1);
             DigitFont.Draw(image, width, height, label, labelX, layout.BottomMargin - DigitFont.Padding - DigitFont.GlyphHeight, LabelColor);
         }
     }
@@ -128,15 +135,15 @@ public static class MapShotOverlay
         int mapW = layout.MapWidthPx;
         CellRectSpec rect = layout.Rect;
         int ppc = layout.PixelsPerCell;
-        int step = layout.GridStep;
+        int step = layout.LabelStep;
 
         for (int cz = FirstMultiple(rect.MinZ, step); cz <= rect.MaxZ; cz += step)
         {
             int py = layout.BottomMargin + (cz - rect.MinZ) * ppc;
-            for (int x = 0; x < mapW; x++) Blend(image, width, layout.LeftMargin + x, py, LineColor, LineAlpha);
+            for (int x = 0; x < mapW; x++) Blend(image, width, layout.LeftMargin + x, py, LineColor, cz % layout.GridStep == 0 ? LineAlpha : CellLineAlpha);
             for (int t = 1; t <= TickLength; t++) Blend(image, width, layout.LeftMargin - t, py, LineColor, 255);
             string label = cz.ToString(CultureInfo.InvariantCulture);
-            int labelY = Math.Min(py + 1, height - DigitFont.GlyphHeight - 1);
+            int labelY = Math.Min(py + (step == 1 ? (ppc - DigitFont.GlyphHeight) / 2 : 1), height - DigitFont.GlyphHeight - 1);
             DigitFont.Draw(image, width, height, label, layout.LeftMargin - DigitFont.Padding - DigitFont.TextWidth(label), labelY, LabelColor);
         }
     }

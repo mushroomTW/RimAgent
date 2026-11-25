@@ -285,7 +285,7 @@ public sealed class ObserveTools
     {
         if (!TryParseKind(kind, out ThingKind parsedKind))
         {
-            return ToolText.Error($"unknown kind \"{kind}\". Use any, mineable, plant, building, item or pawn.");
+            return ToolText.Error($"unknown kind \"{kind}\". Use any, mineable, plant, building, item or pawn. Terrain is not an object: inspect_area lists it.");
         }
 
         var query = new ThingQuery
@@ -307,7 +307,7 @@ public sealed class ObserveTools
         {
             string where = query.Area.HasValue ? $" in {query.Area.Value}" : " on the map";
             string what = string.IsNullOrEmpty(query.LabelContains) ? kind : $"{kind} matching \"{query.LabelContains}\"";
-            return $"No {what} found{where}.";
+            return $"No {what} found{where}." + " Terrain is not an object: inspect_area lists it.";
         }
 
         var sb = new StringBuilder();
@@ -385,8 +385,18 @@ public sealed class ObserveTools
                (r.Outdoors ? "outdoors" : "indoors");
     }
 
+    /// <summary>散布整塊區域的外框沒有用處，只列得出位置的；少了位置，模型會一小塊一小塊反覆查。</summary>
+    private static string PatchText(List<CellInfo> all, int total)
+    {
+        List<CellInfo> patch = [.. all.Where(c => !c.Fogged)];
+        if (patch.Count == 0) return string.Empty;
+        var box = new CellRectSpec(patch.Min(c => c.X), patch.Min(c => c.Z), patch.Max(c => c.X), patch.Max(c => c.Z));
+        if (box.CellCount == all.Count) return " filling " + box;
+        return box.CellCount * 2 <= total ? " within " + box : string.Empty;
+    }
+
     [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, how heavy a building the ground holds, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain, fertile and roofed cell counts, cells that are not walkable, how many cells hold heavy, medium or only light buildings (ship parts and most large buildings need heavy under every cell), obstacles (buildings, rock, trees, items), the largest rectangle free of buildings, rock, the unbuildable map edge and ground too weak to build on, with the heaviest buildings all of it holds, and the largest one for heavy buildings (plants and items inside are fine; use it to pick a building site in one call on a large area), and the zones and rooms overlapping it.")]
+    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, how heavy a building the ground holds, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain (and where each compact patch lies), fertile and roofed cell counts, cells that are not walkable, how many cells hold heavy, medium or only light buildings (ship parts and most large buildings need heavy under every cell), obstacles (buildings, rock, trees, items), the largest rectangle free of buildings, rock, the unbuildable map edge and ground too weak to build on, with the heaviest buildings all of it holds, and the largest one for heavy buildings (plants and items inside are fine; use it to pick a building site in one call on a large area), and the zones and rooms overlapping it.")]
     public string InspectArea(
         [Description("Rectangle corner x.")] int x1,
         [Description("Rectangle corner z.")] int z1,
@@ -405,7 +415,7 @@ public sealed class ObserveTools
         sb.Append(" | terrain: ").AppendJoin(", ", cells
             .GroupBy(c => c.Terrain, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
-            .Select(g => $"{g.Key} {g.Count()}"));
+            .Select((g, i) => $"{g.Key} {g.Count()}" + (i == 0 ? string.Empty : PatchText([.. g], cells.Count))));
         sb.Append(" | fertile (>=").Append(ToolText.Pct(FertileThreshold)).Append("): ").Append(cells.Count(c => c.Fertility >= FertileThreshold));
         int roofed = cells.Count(c => !string.IsNullOrEmpty(c.Roof));
         sb.Append(" | roofed: ").Append(roofed);
@@ -538,8 +548,15 @@ public sealed class ObserveTools
         MapShotLayout layout = info.Layout;
         if (layout == null) return saved;
 
-        return saved + Environment.NewLine
-            + string.Create(CultureInfo.InvariantCulture, $"Map view of {layout.Rect}, north up, {layout.PixelsPerCell} px per cell. Yellow lines run along the west edge of cells whose x is a multiple of {layout.GridStep} ")
+        string view = string.Create(CultureInfo.InvariantCulture, $"Map view of {layout.Rect}, north up, {layout.PixelsPerCell} px per cell. Terrain colors blend about a third of a cell across their edges. ");
+        if (layout.LabelStep == 1)
+        {
+            return saved + Environment.NewLine + view
+                + string.Create(CultureInfo.InvariantCulture, $"Every cell is boxed by yellow lines, stronger every {layout.GridStep}; the number below a column is its x and the number left of a row is its z.");
+        }
+
+        return saved + Environment.NewLine + view
+            + string.Create(CultureInfo.InvariantCulture, $"Yellow lines run along the west edge of cells whose x is a multiple of {layout.GridStep} ")
             + string.Create(CultureInfo.InvariantCulture, $"and the south edge of cells whose z is a multiple of {layout.GridStep}; the number beside each line is that x (bottom margin) or z (left margin).");
     }
 

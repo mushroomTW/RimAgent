@@ -352,16 +352,25 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     /// <summary>
     /// 同樣的題目輪流只給 inspect_area 或只給 take_screenshot，各跑 <see cref="SurveyRounds"/> 輪，每輪對調先後；
-    /// 都藏 get_map_overview，它也能看地形，留著就比不出差別。
+    /// 都藏 get_map_overview 與 find_things，它們也能看地形或列出牆的座標，留著就不必勘查。每輪換地點，同一輪兩個工具用同一處。
     /// </summary>
     private static async Task CompareSurveyAsync(bool isolated)
     {
+        List<IntVec3> sites = Find.CurrentMap == null ? [] : FindSites(Find.CurrentMap, SurveyRounds);
+        if (sites.Count < SurveyRounds)
+        {
+            string problem = string.Create(CultureInfo.InvariantCulture, $"SURVEY not started: {sites.Count} open {SiteSize}x{SiteSize} sites, need {SurveyRounds}");
+            Log.Warning(LogPrefix + problem);
+            if (!isolated) Messages.Message(problem, MessageTypeDefOf.RejectInput, historical: false);
+            return;
+        }
         var scores = new Dictionary<string, BenchmarkScore>(StringComparer.Ordinal);
         string[] order = [InspectTool, ScreenshotTool];
-        foreach (string tool in Enumerable.Range(0, SurveyRounds).SelectMany(i => i % 2 == 0 ? order : order.Reverse()))
+        foreach ((int round, string tool) in Enumerable.Range(0, SurveyRounds).SelectMany(i => (i % 2 == 0 ? order : order.Reverse()).Select(t => (i, t))))
         {
             _surveyTool = tool;
-            RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", tool == InspectTool ? ScreenshotTool : InspectTool };
+            _fixedSite = sites[round];
+            RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", "find_things", tool == InspectTool ? ScreenshotTool : InspectTool };
             BenchmarkScore s;
             try
             {
@@ -370,6 +379,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             finally
             {
                 _surveyTool = null;
+                _fixedSite = null;
                 RimAgentSettings.HiddenTools = System.Collections.Frozen.FrozenSet<string>.Empty;
             }
             if (s == null)
@@ -381,7 +391,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         }
         if (scores.Count == 0) return;
         string result = string.Join(" | ", scores.Select(p => string.Create(CultureInfo.InvariantCulture,
-            $"{p.Key} {p.Value.Passed}/{p.Value.Total}, looked {p.Value.SurveyCalls}x, tools {p.Value.Tools} (failed {p.Value.Failures}), {p.Value.Seconds:0}s, in {p.Value.Input}, out {p.Value.Output}")));
+            $"{p.Key} {p.Value.Passed}/{p.Value.Total}, {p.Value.PassedByLooking} of them after looking, looked {p.Value.SurveyCalls}x, tools {p.Value.Tools} (failed {p.Value.Failures}), {p.Value.Seconds:0}s, in {p.Value.Input}, out {p.Value.Output}")));
         Log.Warning(LogPrefix + "SURVEY DONE: " + result);
         if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyDone".Translate(result), MessageTypeDefOf.NeutralEvent, historical: false);
     }
@@ -503,6 +513,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             int startTick = Current.Game?.tickManager?.TicksGame ?? 0;
             int configurationErrors = 0;
             int surveyCalls = 0;
+            int passedByLooking = 0;
             for (int i = 0; i < tasks.Length; i++)
             {
                 BenchTask task = tasks[i];
@@ -541,6 +552,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 totalTools += tools.Count;
                 totalFailures += failures;
                 surveyCalls += tools.Count(t => t.ToolName == _surveyTool);
+                if (failure == null && tools.Any(t => t.ToolName == _surveyTool && !t.Failed && !t.Cancelled)) passedByLooking++;
                 if (failure == null) passedByTier[task.Tier]++;
                 else if (invalid) invalidByTier[task.Tier]++;
             }
@@ -563,6 +575,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["toolCalls"] = totalTools,
                 ["toolFailures"] = totalFailures,
                 ["surveyCalls"] = surveyCalls,
+                ["passedByLooking"] = passedByLooking,
                 ["steps"] = total.Steps,
                 ["in"] = total.Input,
                 ["out"] = total.Output,
@@ -573,7 +586,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["tick"] = startTick
             };
             Append(resultPath, summary);
-            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model, surveyCalls);
+            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model, surveyCalls, passedByLooking);
             // 勘查比較的兩輪不是同一組條件，不能當成這個強度的成績。
             if (_surveyTool == null) Scores[(tier, Reasoning)] = score;
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary, RunLogWriter.Json));

@@ -35,6 +35,34 @@ public class MapShotTests
     }
 
     [Test]
+    public void EveryCellIsLabelledOnlyWhenNumbersFit()
+    {
+        Assert.That(MapShotLayout.For(new CellRectSpec(121, 121, 136, 136)).LabelStep, Is.EqualTo(1));
+        MapShotLayout wide = MapShotLayout.For(new CellRectSpec(0, 0, 249, 249));
+        Assert.That(wide.LabelStep, Is.EqualTo(wide.GridStep));
+    }
+
+    [Test]
+    public void EveryCellGetsAFaintLineAndALabelInsideItsColumn()
+    {
+        var rect = new CellRectSpec(121, 121, 136, 136);
+        MapShotLayout layout = MapShotLayout.For(rect);
+        byte[] image = MapShotOverlay.Compose(new byte[layout.MapWidthPx * layout.MapHeightPx * 4], layout);
+
+        int LineX(int x) => layout.LeftMargin + (x - rect.MinX) * layout.PixelsPerCell;
+        (byte r, byte g, byte b, byte a) faint = Pixel(image, layout, LineX(123), layout.BottomMargin + 2);
+        (byte r, byte g, byte b, byte a) strong = Pixel(image, layout, LineX(125), layout.BottomMargin + 2);
+        Assert.That(faint.r, Is.GreaterThan(0).And.LessThan(strong.r));
+        (byte, byte, byte, byte) white = (255, 255, 255, 255);
+        for (int x = rect.MinX; x <= rect.MaxX; x++)
+        {
+            bool At(int px) => Enumerable.Range(0, layout.BottomMargin - 3).Any(y => Pixel(image, layout, px, y) == white);
+            Assert.That(Enumerable.Range(LineX(x), layout.PixelsPerCell).Any(At), Is.True, "label for " + x);
+            Assert.That(At(LineX(x)), Is.False, "labels of neighbouring columns must not touch");
+        }
+    }
+
+    [Test]
     public void WideStripUsesTheLongSideForScale()
     {
         MapShotLayout layout = MapShotLayout.For(new CellRectSpec(0, 0, 299, 19));

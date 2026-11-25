@@ -14,6 +14,8 @@ public sealed partial class BenchmarkComponent
     private const int SiteSize = 16;
 
     private static CellRect _site;
+    /// <summary>比較勘查工具時這一輪指定的地點；null 表示自己找最近的。</summary>
+    private static IntVec3? _fixedSite;
     private static readonly List<(IntVec3 Cell, TerrainDef Terrain)> _siteTerrain = [];
     private static readonly List<(Thing Thing, IntVec3 Cell, Rot4 Rotation)> _siteThings = [];
     private static readonly List<Thing> _siteWalls = [];
@@ -128,14 +130,8 @@ public sealed partial class BenchmarkComponent
     /// <summary>找離殖民者最近的天然空地，先收起上面的植物與物品，結束後放回。</summary>
     private static bool TryPrepareSite(Map map)
     {
-        Pawn colonist = map.mapPawns.FreeColonistsSpawned.FirstOrDefault();
-        if (colonist == null) return false;
-        IntVec3 center = colonist.Position;
-        IntVec3 corner = map.AllCells
-            .Where(c => c.x >= 12 && c.z >= 12 && c.x + SiteSize + 12 < map.Size.x && c.z + SiteSize + 12 < map.Size.z)
-            .OrderBy(c => (c - center).LengthHorizontalSquared)
-            .FirstOrDefault(c => new CellRect(c.x, c.z, SiteSize, SiteSize).Cells.All(cell => IsOpen(map, cell)));
-        if (corner == default) return false;
+        IntVec3 corner = _fixedSite ?? FindSites(map, 1).FirstOrDefault();
+        if (corner == default || !IsSite(map, corner)) return false;
         _homeBefore = [.. map.areaManager.Home.ActiveCells];
         _site = new CellRect(corner.x, corner.z, SiteSize, SiteSize);
         foreach (IntVec3 cell in _site)
@@ -150,10 +146,32 @@ public sealed partial class BenchmarkComponent
         return true;
     }
 
+    /// <summary>離殖民者最近、彼此不重疊的空地，最多 <paramref name="count"/> 塊。</summary>
+    private static List<IntVec3> FindSites(Map map, int count)
+    {
+        Pawn colonist = map.mapPawns.FreeColonistsSpawned.FirstOrDefault();
+        if (colonist == null) return [];
+        IntVec3 center = colonist.Position;
+        IEnumerable<IntVec3> corners = map.AllCells
+            .Where(c => c.x >= 12 && c.z >= 12 && c.x + SiteSize + 12 < map.Size.x && c.z + SiteSize + 12 < map.Size.z)
+            .OrderBy(c => (c - center).LengthHorizontalSquared)
+            .Where(c => IsSite(map, c));
+        var sites = new List<IntVec3>();
+        foreach (IntVec3 c in corners.Where(c => sites.All(s => Math.Abs(s.x - c.x) >= SiteSize || Math.Abs(s.z - c.z) >= SiteSize)))
+        {
+            sites.Add(c);
+            if (sites.Count >= count) break;
+        }
+        return sites;
+    }
+
+    private static bool IsSite(Map map, IntVec3 corner) =>
+        new CellRect(corner.x, corner.z, SiteSize, SiteSize).Cells.All(cell => IsOpen(map, cell));
+
     private static bool IsOpen(Map map, IntVec3 cell) =>
         !cell.Fogged(map) && cell.GetTerrain(map) is { natural: true, IsWater: false } && map.terrainGrid.UnderTerrainAt(cell) == null
         && !cell.Roofed(map) && map.zoneManager.ZoneAt(cell) == null
-        && cell.GetThingList(map).All(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Filth);
+        && cell.GetThingList(map).All(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Filth or ThingCategory.Pawn);
 
     private static void SetSiteTerrain(Map map, string outside, string inside, CellRect patch)
     {
