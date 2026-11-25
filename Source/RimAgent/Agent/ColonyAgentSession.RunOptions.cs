@@ -88,11 +88,7 @@ public sealed partial class ColonyAgentSession
         ModelSlots.ApplyReasoning(options, reasoningOverride ?? Reasoning);
         // 思考下限不能蓋過模型上限或視窗預留量，超過會被拒絕或擠爆視窗。
         options.MaxOutputTokens = Math.Min(options.MaxOutputTokens.Value, outputBudget);
-        if (!string.IsNullOrWhiteSpace(modelToUse)
-            && !string.Equals(modelToUse, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal))
-        {
-            options.ModelId = modelToUse.Trim();
-        }
+        ModelSlots.ApplyModel(options, modelToUse);
         options.Instructions = ComposeRunInstructions(permissions, subagents, packs);
         return options;
     }

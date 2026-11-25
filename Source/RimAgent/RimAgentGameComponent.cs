@@ -508,6 +508,8 @@ public partial class RimAgentGameComponent : GameComponent
             subagentsProvider: () => _pack?.Subagents,
             routing: new ModelRouting
             {
+                // 沒有另外指定時分類器只是跟著主模型走，失敗時仍要有備援，否則自動模式整個停擺。
+                ClassifierPinned = () => !RimAgentSettings.IsModelSentinel(settings.classifierModel?.Trim()),
                 ClassifierReasoning = () => settings.classifierReasoning,
                 CompactModel = () => settings.ResolveModelSlot(settings.compactModel, _session?.CurrentAgentModel),
                 CompactReasoning = () => settings.compactReasoning,
@@ -517,7 +519,7 @@ public partial class RimAgentGameComponent : GameComponent
         session.Reasoning = settings.reasoning;
         session.ReasoningRouting = settings.reasoningRouting;
         session.ConfirmAutonomousMajor = () => settings.confirmAutonomousMajor;
-        if (settings.ClearAgentModelIfMissing(UI.Window_Agent.ConfiguredModels())) settings.Write();
+        if (settings.ClearMissingModels(UI.Window_Agent.ConfiguredModels())) settings.Write();
         session.PreferredModel = settings.agentModel;
         _expansions = (ExpansionsLine() + "\n\n" + ModsLine()).Trim();
         session.SubagentExpansions = _expansions;

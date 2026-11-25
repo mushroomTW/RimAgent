@@ -56,11 +56,11 @@
   <RimAgent.NoFunctionCalling>None of the models in your RimLLM Framework fallback chain supports tool calling, so the agent cannot act. Adjust the chain in RimLLM Framework's mod settings.</RimAgent.NoFunctionCalling>
   <RimAgent.NoProvider>RimLLM Framework has no usable provider: {0}. Configure one in RimLLM Framework's mod settings.</RimAgent.NoProvider>
   <RimAgent.FrameworkNotInitialized>RimLLM Framework did not initialize. Check the debug log for errors when RimLLM Framework was loading.</RimAgent.FrameworkNotInitialized>
-  <RimAgent.FrameworkTooOld>The installed RimLLM Framework is too old for RimAgent. Update it to a version from 2026-09-12 or later.</RimAgent.FrameworkTooOld>
+  <RimAgent.FrameworkTooOld>The installed RimLLM Framework is too old for RimAgent. Update it to a version from 2026-11-24 or later.</RimAgent.FrameworkTooOld>
 
   <!-- Errors -->
   <RimAgent.Error.Cancelled>Stopped.</RimAgent.Error.Cancelled>
-  <RimAgent.Error.Configuration>The LLM provider refused the request ({0}). Check the API key, credit and fallback chain in RimLLM Framework's mod settings.</RimAgent.Error.Configuration>
+  <RimAgent.Error.Configuration>The LLM provider refused the request ({0}). Check the API key, credit and fallback chain in RimLLM Framework's mod settings, or pick another model in the Agent window.</RimAgent.Error.Configuration>
   <RimAgent.Error.Transient>The request did not get through ({0}). Try again in a moment.</RimAgent.Error.Transient>
   <RimAgent.Error.ContextTooLong>The conversation is too long for the model. Press Clear and start again.</RimAgent.Error.ContextTooLong>
   <RimAgent.Error.Unknown>Something went wrong: {0}</RimAgent.Error.Unknown>
@@ -176,7 +176,7 @@
   <RimAgent.Model.DefaultTip>Use the RimLLM Framework fallback chain.</RimAgent.Model.DefaultTip>
   <RimAgent.Model.FollowAgent>Default (agent's current model)</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, this role follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
-  <RimAgent.Model.Tip>Preferred model: {0}&#10;If it fails, the framework falls back along its fallback chain.</RimAgent.Model.Tip>
+  <RimAgent.Model.Tip>Uses: {0}&#10;If it fails, no other model is tried. Pick Fallback to use the fallback chain.</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>Default</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>

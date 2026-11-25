@@ -11,10 +11,22 @@ public class AgentModelResidueTests
     {
         var settings = new RimAgentSettings { agentModel = "OpenRouter:nvidia/nemotron-3-super-120b-a12b" };
 
-        bool cleared = settings.ClearAgentModelIfMissing(["OpenRouter:nvidia/nemotron-3.5-super-vl:free", "OpenRouter:google/gemma-4-26b-a4b-it:free"]);
+        bool cleared = settings.ClearMissingModels(["OpenRouter:nvidia/nemotron-3.5-super-vl:free", "OpenRouter:google/gemma-4-26b-a4b-it:free"]);
 
         Assert.That(cleared, Is.True);
         Assert.That(settings.agentModel, Is.Empty);
+    }
+
+    [Test]
+    public void MissingSlotModelsFollowAgentAgain()
+    {
+        var settings = new RimAgentSettings { subagentModel = "P:gone", classifierModel = "P:gone", compactModel = string.Empty };
+
+        Assert.That(settings.ClearMissingModels(["P:here"]), Is.True);
+        Assert.That(settings.subagentModel, Is.EqualTo(RimAgentSettings.FollowAgentModel));
+        Assert.That(settings.classifierModel, Is.EqualTo(RimAgentSettings.FollowAgentModel));
+        Assert.That(settings.compactModel, Is.Empty, "選 Fallback 的保持不變");
+        Assert.That(settings.ClearMissingModels(["P:here"]), Is.False);
     }
 
     [Test]
@@ -22,7 +34,7 @@ public class AgentModelResidueTests
     {
         var settings = new RimAgentSettings { agentModel = " openrouter:google/gemma-4-26b-a4b-it:free " };
 
-        bool cleared = settings.ClearAgentModelIfMissing(["OpenRouter:google/gemma-4-26b-a4b-it:free"]);
+        bool cleared = settings.ClearMissingModels(["OpenRouter:google/gemma-4-26b-a4b-it:free"]);
 
         Assert.That(cleared, Is.False);
         Assert.That(settings.agentModel, Is.EqualTo(" openrouter:google/gemma-4-26b-a4b-it:free "));
@@ -33,8 +45,8 @@ public class AgentModelResidueTests
     {
         var settings = new RimAgentSettings { agentModel = "OpenRouter:x" };
 
-        Assert.That(settings.ClearAgentModelIfMissing([]), Is.False);
-        Assert.That(settings.ClearAgentModelIfMissing(configuredModels: null), Is.False);
+        Assert.That(settings.ClearMissingModels([]), Is.False);
+        Assert.That(settings.ClearMissingModels(configuredModels: null), Is.False);
         Assert.That(settings.agentModel, Is.EqualTo("OpenRouter:x"));
     }
 }

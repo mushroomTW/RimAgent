@@ -17,7 +17,7 @@
 **RimWorld 1.7** &nbsp;·&nbsp; **82 項工具** &nbsp;·&nbsp; **主動照顧** &nbsp;·&nbsp; **支援 MCP 擴充**
 
 [![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#先決條件)
-[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.20.1-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
+[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.11.24.2-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512bd4.svg?style=flat)](#建置)
 
 </div>
@@ -33,7 +33,7 @@
 ### 先決條件
 
 - **RimWorld 1.7**
-- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)**（版本需求 **2026.10.20.1 或更高**，以支援原生工具呼叫與決策模型）
+- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)**（版本需求 **2026.11.24.2 或更高**，以支援原生工具呼叫與決策模型）
 - **模組載入順序：** `RimAgent` 必須排列於 `RimLLM Framework` **之後**載入。
 
 > [!IMPORTANT]
@@ -68,7 +68,7 @@
 
 ### 控制介面與互動設計
 
-- **模式與模型選單：** 在 Agent 視窗的下拉選單中可即時切換執行**模式**、模型**推理強度**與**模型**；游標停在模式名稱上方可查看行為說明與安全提示。模型清單會帶入 RimLLM Framework 備援鏈中的項目，所選模型將優先用於處理玩家指令與自主任務；選擇 **Fallback** 則循序套用備援鏈。
+- **模式與模型選單：** 在 Agent 視窗的下拉選單中可即時切換執行**模式**、模型**推理強度**與**模型**；游標停在模式名稱上方可查看行為說明與安全提示。模型清單會帶入 RimLLM Framework 備援鏈中的項目，所選模型用於處理玩家指令與自主任務，失敗時不改用其他模型；選擇 **Fallback** 則循序套用備援鏈。
 - **模型分工配置：** 其他模型呼叫可在模組進階設定中的**模型分工**（參考 hermes-agent 的 auxiliary 模型設計）個別指定：子代理（共用一格）、自動模式分類器與 `/compact` 摘要可分別指定模型（**默認（Agent 當前模型）**、**Fallback** 或備援鏈條目）與思考強度，預設均沿用 Agent 當前模型。
 - **執行狀態控制：** 指令處理中，**發送**按鈕會自動切換為**停止**。玩家直接下達的指令不設工具呼叫次數上限。
 - **Token 統計與狀態檢視：** 視窗標題列會顯示上一輪模型請求回報的輸入 Token 數；若供應商未提供用量則顯示「輸入 token 未回報」。游標停留可檢視當前模型歷史則數與自動壓縮門檻。
@@ -94,7 +94,7 @@
 
 > **上下文壓縮機制：**
 >
-> 1. **自動折疊（Auto-fold）：** 每次發送請求前，系統會以 Agent Framework 估算模型歷史 Token 數。當達到所選模型與備援鏈中最小已知視窗上限的指定比例（可於 30～95% 間微調，預設 60%，並保留輸出空間）時，系統會自動折疊較舊的工具輸出內容，不增加額外模型呼叫。若模型視窗上限未知，則略過自動折疊。
+> 1. **自動折疊（Auto-fold）：** 每次發送請求前，系統會以 Agent Framework 估算模型歷史 Token 數。當達到目前模型已知視窗上限（選 **Fallback** 時為備援鏈第一個）的指定比例（可於 30～95% 間微調，預設 60%，並保留輸出空間）時，系統會自動折疊較舊的工具輸出內容，不增加額外模型呼叫。若模型視窗上限未知，則略過自動折疊。
 > 2. **歷程修剪（History Trimming）：** 儲存的模型歷史超過 120 則時，會自動裁切至約 60 則，確保記憶體與上下文健康度；前端可見對話紀錄不受影響。
 > 3. **深度語意壓縮（Deep Compact）：** 隨時可透過 `/compact` 主動呼叫模型生成結構化摘要，將長篇歷史凝聚為精準上下文。
 

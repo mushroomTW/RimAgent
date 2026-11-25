@@ -138,7 +138,7 @@ public partial class Window_Agent
         RimAgentSettings settings = RimAgentMod.Settings;
         try
         {
-            if (settings != null && settings.ClearAgentModelIfMissing(ConfiguredModels())) TryWriteSettings(settings);
+            if (settings != null && settings.ClearMissingModels(ConfiguredModels())) TryWriteSettings(settings);
             _capabilityWarning = CheckFunctionCalling() ? null : "RimAgent.NoFunctionCalling".Translate().ToString();
         }
         catch (RimLLMException ex)
@@ -176,6 +176,8 @@ public partial class Window_Agent
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool CheckFunctionCalling()
     {
+        // StrictModel 自框架 2026.11.24.2 起才有：先碰一次，太舊時由 ProbeCapabilities 顯示提示。
+        _ = new RimLLMChatOptions { StrictModel = true };
         string model = RimAgentMod.Settings?.agentModel;
         return RimLLMProvider.GetEffectiveCapabilities(string.IsNullOrWhiteSpace(model) ? null : model.Trim()).SupportsFunctionCalling;
     }

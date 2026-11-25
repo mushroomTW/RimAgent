@@ -237,21 +237,12 @@ public sealed partial class ColonyAgentSession
         return (int)Math.Max(1, cap);
     }
 
-    /// <summary><paramref name="model"/> 為空或哨兵值（跟隨主模型）時查目前的主模型。</summary>
+    /// <summary><paramref name="model"/> 不是具體模型（跟隨主模型或走備援鏈）時查目前的主模型。</summary>
     internal int MaxOutputFor(string model)
     {
-        string resolved = string.IsNullOrWhiteSpace(model)
-            || RimAgentSettings.IsModelSentinel(model.Trim())
-            || string.Equals(model, RimAgentSettings.FollowAgentModel, StringComparison.Ordinal)
-            ? ResolveCurrentModel()
-            : model.Trim();
-        if (resolved == null) return DefaultMaxOutputTokens;
-        List<string> chain;
-        try { chain = RimLLMProvider.GetFallbackChain(); }
-        catch (InvalidOperationException) { chain = []; }
         try
         {
-            return OutputBudgetFor([resolved, .. chain], _contextWindowLookup, _outputLimitLookup);
+            return OutputBudgetFor(OutputCandidates(model, ResolveCurrentModel(), RimLLMProvider.GetFallbackChain), _contextWindowLookup, _outputLimitLookup);
         }
         catch (InvalidOperationException)
         {
@@ -260,7 +251,17 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    /// <summary>框架失敗時會沿備援鏈換模型重送同一份 options，取所有候選中最小的預算，換到誰都不會超過上限。</summary>
+    /// <summary>這份請求可能由誰回答：釘選的模型只有自己。</summary>
+    internal static IEnumerable<string> OutputCandidates(string model, string current, Func<List<string>> fallbackChain)
+    {
+        if (ModelSlots.IsPinned(model)) return [model];
+        List<string> chain;
+        try { chain = fallbackChain(); }
+        catch (InvalidOperationException) { chain = []; }
+        return [current, .. chain];
+    }
+
+    /// <summary>沒指定模型時框架失敗會沿備援鏈換模型重送同一份 options，取所有候選中最小的預算，換到誰都不會超過上限。</summary>
     internal static int OutputBudgetFor(IEnumerable<string> candidates, Func<string, int?> windowLookup, Func<string, int?> limitLookup)
     {
         int? minimum = null;
@@ -337,12 +338,12 @@ public sealed partial class ColonyAgentSession
     /// <summary>目前主模型（"供應商:模型"）：有指定就用它，跟隨框架時是備援鏈第一個；都沒有時為 null。</summary>
     private string ResolveCurrentModel() => ResolveModel(PreferredModel);
 
-    /// <summary>空白或哨兵值時取框架備援鏈的第一個；都沒有時回傳 null。</summary>
+    /// <summary>空白、哨兵值或備援鏈別名時取框架備援鏈的第一個；都沒有時回傳 null。</summary>
     internal static string ResolveModel(string preferred)
     {
         RimAgentSettings settings = RimAgentMod.Settings;
         string model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
-        if (!string.IsNullOrWhiteSpace(model) && !RimAgentSettings.IsModelSentinel(model)) return model.Trim();
+        if (!string.IsNullOrWhiteSpace(model) && !RimAgentSettings.IsModelSentinel(model) && !RimLLMChatOptions.IsFallbackModelId(model.Trim())) return model.Trim();
         List<string> candidates;
         try { candidates = RimLLMProvider.GetFallbackChain(); }
         catch (InvalidOperationException) { candidates = []; }

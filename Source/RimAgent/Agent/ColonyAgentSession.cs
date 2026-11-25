@@ -165,7 +165,7 @@ public sealed partial class ColonyAgentSession
         // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
         var fallbackClassifier = new RiskClassifier(
             new ModelSlotChatClient(classifierClient, model: null, routing?.ClassifierReasoning),
-            classifierModel, classifierPrompt);
+            classifierModel, classifierPrompt, routing?.ClassifierPinned);
 
         // 判準檔在才可能有決策模型路徑；決策模型本身在每次判定時才決定要不要用
         // （玩家可能進遊戲後才去框架設定好，那時下一個命令就該走決策模型）。

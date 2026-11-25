@@ -243,6 +243,16 @@ public class BuildToolsTests
     }
 
     [Test]
+    public void RefusedOutlineDoesNotReadItsInterior()
+    {
+        _world.BlockedCells[(10, 10)] = "blocked";
+        _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", Width = 1, Height = 1, TerrainAffordance = "Heavy" };
+        int before = _world.CellsRead;
+        Assert.That(_tools.PlaceBlueprint("wall", "outline", 10, 10, 60, 60), Does.StartWith("Error:").And.Contain("blocked"));
+        Assert.That(_world.CellsRead, Is.EqualTo(before));
+    }
+
+    [Test]
     public void WeakGroundPointsAtFirmGround()
     {
         for (int x = 10; x <= 70; x++)

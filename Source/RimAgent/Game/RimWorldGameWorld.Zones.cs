@@ -238,9 +238,11 @@ internal sealed partial class RimWorldGameWorld
         if (cell.InNoZoneEdgeArea(map)) return "at the map edge";
         Thing blocker = cell.GetThingList(map).FirstOrDefault(t => !t.def.CanOverlapZones);
         if (blocker != null) return "blocked by " + blocker.LabelNoParenthesis;
-        if (growing) return "not fertile enough";
         TerrainDef terrain = cell.GetTerrain(map);
-        return terrain.passability == Traversability.Impassable ? "impassable terrain: " + terrain.label : "not allowed here";
+        if (terrain.passability == Traversability.Impassable) return "impassable terrain: " + terrain.label;
+        // 門檻同 Designator_ZoneAdd_Growing.CanDesignateCell（1.7）；Ideology 的真菌只會把它調低。
+        float minFertility = ModsConfig.BiotechActive ? 0.5f : ThingDefOf.Plant_Potato.plant.fertilityMin;
+        return growing && cell.GetFertility(map) < minFertility ? "not fertile enough" : "not allowed here";
     }
 
     private static Zone CreateZoneInstance(Map map, bool stockpile, ThingDef plant)

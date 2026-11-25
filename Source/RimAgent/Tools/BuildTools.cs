@@ -312,10 +312,7 @@ public sealed class BuildTools
         if (info == null || !Enum.TryParse(info.TerrainAffordance, ignoreCase: true, out GroundSupport needed)) return string.Empty;
         List<CellRectSpec> covered = [.. cells.Select(c => OccupiedRect(c.X, c.Z, rotation, info))];
         if (covered.Any(r => !bounds.Contains(r.MinX, r.MinZ) || !bounds.Contains(r.MaxX, r.MaxZ))) return string.Empty;
-        // 整塊讀一次：GetCells 每次呼叫都會重算房間資訊。
-        var span = new CellRectSpec(covered.Min(r => r.MinX), covered.Min(r => r.MinZ), covered.Max(r => r.MaxX), covered.Max(r => r.MaxZ));
-        HashSet<(int X, int Z)> weak = [.. _world.GetCells(span).Where(c => !c.Fogged && c.Support < needed).Select(c => (c.X, c.Z))];
-        if (!weak.Any(c => covered.Any(r => c.X >= r.MinX && c.X <= r.MaxX && c.Z >= r.MinZ && c.Z <= r.MaxZ))) return string.Empty;
+        if (!covered.Any(r => HasWeakCell(r, needed))) return string.Empty;
 
         (int x, int z) = cells[0];
         var area = new CellRectSpec(
@@ -325,6 +322,18 @@ public sealed class BuildTools
         return note + (ObserveTools.LargestBuildable(area, _world.GetCells(area), needed, info.Width, info.Height) is CellRectSpec site
             ? string.Create(CultureInfo.InvariantCulture, $"Largest buildable rectangle within {FirmGroundRadius} cells that holds it: {ObserveTools.SiteText(site)}.")
             : string.Create(CultureInfo.InvariantCulture, $"Nothing within {FirmGroundRadius} cells holds it."));
+    }
+
+    private bool HasWeakCell(CellRectSpec rect, GroundSupport needed)
+    {
+        for (int z = rect.MinZ; z <= rect.MaxZ; z++)
+        {
+            for (int x = rect.MinX; x <= rect.MaxX; x++)
+            {
+                if (_world.GetSupport(x, z) < needed) return true;
+            }
+        }
+        return false;
     }
 
     private static string BuildPlaceValidationError(string what, List<(int X, int Z)> cells, (bool refusedByPlace, List<string> failures) validation)

@@ -17,7 +17,7 @@ An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in na
 **RimWorld 1.7** &nbsp;·&nbsp; **82 Tools** &nbsp;·&nbsp; **Proactive Care** &nbsp;·&nbsp; **MCP Extensible**
 
 [![RimWorld 1.7](https://img.shields.io/badge/RimWorld-1.7-10b981.svg?style=flat)](#prerequisites)
-[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.10.20.1-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
+[![RimLLM Framework](https://img.shields.io/badge/RimLLM_Framework-%E2%89%A5_2026.11.24.2-38bdf8.svg?style=flat)](https://github.com/mushroomTW/RimLLM-Framework)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512bd4.svg?style=flat)](#building)
 
 </div>
@@ -33,7 +33,7 @@ An in-game AI agent for RimWorld 1.7. Inspect your colony and issue orders in na
 ### Prerequisites
 
 - **RimWorld 1.7**
-- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.10.20.1 or later**, required for native tool calling and decision models)
+- **[RimLLM Framework](https://github.com/mushroomTW/RimLLM-Framework)** (version **2026.11.24.2 or later**, required for native tool calling and decision models)
 - **Mod load order:** `RimAgent` must be placed and loaded **after** `RimLLM Framework`.
 
 > [!IMPORTANT]
@@ -68,7 +68,7 @@ Drag the window title bar to move it, or drag the lower-right corner to resize i
 
 ### Controls & Model Selection
 
-- **Mode and Model Dropdowns:** Switch execution **mode**, model **reasoning effort**, and active **model** directly from the Agent window. Hover over any mode to view its operational behavior and safety implications. The model list reflects entries in your RimLLM Framework fallback chain; the selected model is prioritized for player commands and autonomous routines, while **Fallback** follows the chain sequentially.
+- **Mode and Model Dropdowns:** Switch execution **mode**, model **reasoning effort**, and active **model** directly from the Agent window. Hover over any mode to view its operational behavior and safety implications. The model list reflects entries in your RimLLM Framework fallback chain; the selected model is used for player commands and autonomous routines with no switch to other models on failure, while **Fallback** follows the chain sequentially.
 - **Model Roles Configuration:** In the advanced section of mod settings (**Model roles**, inspired by hermes-agent auxiliary models), assign specialized models and reasoning levels for subagents (shared slot), the Auto-mode classifier, and `/compact` summaries. Options include **Default (agent's current model)**, **Fallback**, or specific fallback-chain entries. All default to following the agent's current model.
 - **Execution State:** While a request is running, the **Send** button dynamically toggles to **Stop**. Direct player instructions have no configured tool-call limit.
 - **Token Counter & Telemetry:** The title bar displays the input token count reported from the latest model request (or "unavailable" if not reported by the provider). Hovering displays total history count and the auto-compaction threshold.
@@ -94,7 +94,7 @@ Drag the window title bar to move it, or drag the lower-right corner to resize i
 
 > **Context Compaction:**
 >
-> 1. **Auto-fold:** Prior to each model invocation, Agent Framework estimates total history tokens. When reaching a configured threshold (configurable from 30% to 95%, default 60% with reserved output headroom) of the smallest known context limit among the chosen model and fallback entries, older tool outputs are folded automatically without additional LLM calls. If no limit is known, auto-fold is skipped.
+> 1. **Auto-fold:** Prior to each model invocation, Agent Framework estimates total history tokens. When reaching a configured threshold (configurable from 30% to 95%, default 60% with reserved output headroom) of the current model's known context limit (the first fallback entry when **Fallback** is selected), older tool outputs are folded automatically without additional LLM calls. If no limit is known, auto-fold is skipped.
 > 2. **History Trimming:** Stored model message history exceeding 120 messages is pruned back to approximately 60 messages to preserve memory; visible transcript logs remain untouched.
 > 3. **Deep Semantic Compact:** Trigger `/compact` at any time to invoke a dedicated model summarization pass, condensing extended dialogue history into an actionable summary.
 

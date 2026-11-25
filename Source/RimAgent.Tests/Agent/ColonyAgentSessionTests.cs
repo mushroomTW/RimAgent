@@ -1029,6 +1029,58 @@ public class ColonyAgentSessionTests
     }
 
     [Test]
+    public void PickedModelIsPinnedWithoutFallbackChain()
+    {
+        ColonyAgentSession session = NewSession();
+        Assert.That(session.CreateRunOptions().StrictModel, Is.False, "選 Fallback 時照走備援鏈");
+
+        session.PreferredModel = "P:m";
+        Assert.That(session.CreateRunOptions().StrictModel, Is.True);
+
+        session.PreferredModel = "fallback";
+        Assert.That(session.CreateRunOptions().StrictModel, Is.False, "框架的備援鏈別名不能嚴格釘選");
+    }
+
+    [TestCase("P:m", true)]
+    [TestCase("", false)]
+    [TestCase("no-provider", false)]
+    [TestCase(RimAgentSettings.FollowAgentModel, false)]
+    public void ModelSlotPinsOnlyConcreteModel(string model, bool pinned)
+    {
+        var rim = new RimLLMChatOptions();
+        ModelSlots.Apply(rim, model, ReasoningLevel.Auto);
+        Assert.That(rim.StrictModel, Is.EqualTo(pinned));
+
+        var plain = new ChatOptions();
+        ModelSlots.Apply(plain, model, ReasoningLevel.Off);
+        Assert.That(IsStrict(plain), Is.EqualTo(pinned));
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task RiskClassifierPinsOnlyItsOwnModel(bool pinned)
+    {
+        _client.Reply("ok");
+        await new RiskClassifier(_client, () => "P:m", () => "prompt", () => pinned).ClassifyAsync(new RiskQuestion(), default);
+        Assert.That(_client.ReceivedOptions[^1].ModelId, Is.EqualTo("P:m"));
+        Assert.That(IsStrict(_client.ReceivedOptions[^1]), Is.EqualTo(pinned), "只是跟隨主模型時要保留備援");
+    }
+
+    [TestCase("P:big", new[] { "P:big" })]
+    [TestCase("", new[] { "P:now", "P:small" })]
+    [TestCase("fallback", new[] { "P:now", "P:small" })]
+    public void PinnedModelIgnoresFallbackChainLimits(string model, string[] expected)
+    {
+        Assert.That(ColonyAgentSession.OutputCandidates(model, "P:now", () => ["P:small"]), Is.EqualTo(expected));
+    }
+
+    private static bool IsStrict(ChatOptions options)
+    {
+        string key = new RimLLMChatOptions { StrictModel = true }.AdditionalProperties.Keys.Single();
+        return options.AdditionalProperties != null && options.AdditionalProperties.TryGetValue(key, out object value) && value is true;
+    }
+
+    [Test]
     public async Task ComposedInstructionsAreNotPrefixedWithFallbackPreamble()
     {
         _client.Reply("ok");

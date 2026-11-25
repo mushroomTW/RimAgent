@@ -232,13 +232,24 @@ public class RimAgentSettings : ModSettings
         allowByCategory[(int)category] = value;
     }
 
-    public bool ClearAgentModelIfMissing(IReadOnlyCollection<string> configuredModels)
+    public bool ClearMissingModels(IReadOnlyCollection<string> configuredModels)
     {
-        string current = agentModel?.Trim();
-        if (string.IsNullOrEmpty(current) || configuredModels == null || configuredModels.Count == 0) return false;
-        if (configuredModels.Any(model => string.Equals(model?.Trim(), current, StringComparison.OrdinalIgnoreCase))) return false;
-        agentModel = string.Empty;
-        return true;
+        if (configuredModels == null || configuredModels.Count == 0) return false;
+        bool cleared = false;
+        agentModel = Keep(agentModel, string.Empty);
+        subagentModel = Keep(subagentModel, FollowAgentModel);
+        classifierModel = Keep(classifierModel, FollowAgentModel);
+        compactModel = Keep(compactModel, FollowAgentModel);
+        return cleared;
+
+        string Keep(string slot, string replacement)
+        {
+            string current = slot?.Trim();
+            if (string.IsNullOrEmpty(current) || IsModelSentinel(current)) return slot;
+            if (configuredModels.Any(model => string.Equals(model?.Trim(), current, StringComparison.OrdinalIgnoreCase))) return slot;
+            cleared = true;
+            return replacement;
+        }
     }
 
     public UnityEngine.Vector2 WindowSize => new(

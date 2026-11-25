@@ -110,6 +110,13 @@ internal sealed partial class RimWorldGameWorld
         return result;
     }
 
+    public GroundSupport? GetSupport(int x, int z)
+    {
+        Map map = Map;
+        var cell = new IntVec3(x, 0, z);
+        return cell.Fogged(map) ? null : SupportAt(cell, map);
+    }
+
     private static CellInfo ToCell(IntVec3 c, Map map, Dictionary<int, RoomInfo> rooms)
     {
         TerrainDef terrain = c.GetTerrain(map);

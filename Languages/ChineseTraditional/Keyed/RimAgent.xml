@@ -56,11 +56,11 @@
   <RimAgent.NoFunctionCalling>RimLLM Framework 的備援鏈裡沒有任何模型支援工具呼叫，Agent 無法執行操作。請到 RimLLM Framework 的 mod 設定調整備援鏈。</RimAgent.NoFunctionCalling>
   <RimAgent.NoProvider>RimLLM Framework 沒有可用的供應商：{0}。請到 RimLLM Framework 的 mod 設定完成設定。</RimAgent.NoProvider>
   <RimAgent.FrameworkNotInitialized>RimLLM Framework 未完成初始化。請查看除錯記錄中 RimLLM Framework 載入時的錯誤。</RimAgent.FrameworkNotInitialized>
-  <RimAgent.FrameworkTooOld>安裝的 RimLLM Framework 版本太舊，RimAgent 無法使用。請更新到 2026-09-12 之後的版本。</RimAgent.FrameworkTooOld>
+  <RimAgent.FrameworkTooOld>安裝的 RimLLM Framework 版本太舊，RimAgent 無法使用。請更新到 2026-11-24 之後的版本。</RimAgent.FrameworkTooOld>
 
   <!-- 錯誤 -->
   <RimAgent.Error.Cancelled>已停止。</RimAgent.Error.Cancelled>
-  <RimAgent.Error.Configuration>LLM 供應商拒絕了請求（{0}）。請到 RimLLM Framework 的 mod 設定檢查 API 金鑰、額度與備援鏈。</RimAgent.Error.Configuration>
+  <RimAgent.Error.Configuration>LLM 供應商拒絕了請求（{0}）。請到 RimLLM Framework 的 mod 設定檢查 API 金鑰、額度與備援鏈，或在 Agent 視窗改選其他模型。</RimAgent.Error.Configuration>
   <RimAgent.Error.Transient>請求沒有送達（{0}）。請稍後再試。</RimAgent.Error.Transient>
   <RimAgent.Error.ContextTooLong>對話已超過模型的長度上限。請按「清除對話」重新開始。</RimAgent.Error.ContextTooLong>
   <RimAgent.Error.Unknown>發生錯誤：{0}</RimAgent.Error.Unknown>
@@ -176,7 +176,7 @@
   <RimAgent.Model.DefaultTip>依 RimLLM Framework 的備援鏈選擇模型。</RimAgent.Model.DefaultTip>
   <RimAgent.Model.FollowAgent>默認（Agent 當前模型）</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>跟著 Agent 視窗當前選的模型走；在那邊換模型，這裡會自動跟上，不必分開設定。Agent 視窗是 Fallback 時，這一格也走備援鏈。</RimAgent.Model.FollowAgentTip>
-  <RimAgent.Model.Tip>優先使用：{0}&#10;失敗時由框架依備援鏈改用其他模型。</RimAgent.Model.Tip>
+  <RimAgent.Model.Tip>使用：{0}&#10;失敗時不改用其他模型；要用備援鏈請選 Fallback。</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>預設</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>關閉</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>

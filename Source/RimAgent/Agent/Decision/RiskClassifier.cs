@@ -43,13 +43,15 @@ public sealed class RiskClassifier : IRiskChecker
     private readonly IChatClient _client;
     private readonly Func<string> _modelProvider;
     private readonly Func<string> _systemPrompt;
+    private readonly Func<bool> _pinned;
     private readonly InstructionCache<RiskVerdict> _verdictCache = new();
 
-    public RiskClassifier(IChatClient client, Func<string> modelProvider = null, Func<string> systemPrompt = null)
+    public RiskClassifier(IChatClient client, Func<string> modelProvider = null, Func<string> systemPrompt = null, Func<bool> pinned = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _modelProvider = modelProvider;
         _systemPrompt = systemPrompt;
+        _pinned = pinned;
     }
 
     public async Task<RiskVerdict> ClassifyAsync(RiskQuestion question, CancellationToken cancellationToken)
@@ -73,15 +75,12 @@ public sealed class RiskClassifier : IRiskChecker
                 new(ChatRole.System, prompt),
                 new(ChatRole.User, Describe(question))
             };
-            string preferredModel = _modelProvider?.Invoke()?.Trim();
             var options = new ChatOptions
             {
                 Temperature = Temperature,
-                MaxOutputTokens = MaxOutputTokens,
-                ModelId = string.IsNullOrWhiteSpace(preferredModel) || RimAgentSettings.IsModelSentinel(preferredModel)
-                    ? null
-                    : preferredModel
+                MaxOutputTokens = MaxOutputTokens
             };
+            ModelSlots.ApplyModel(options, _modelProvider?.Invoke(), _pinned?.Invoke() ?? true);
             ChatResponse response = await _client.GetResponseAsync(messages, options, cancellationToken);
             text = response?.Text ?? string.Empty;
         }

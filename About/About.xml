@@ -3,7 +3,7 @@
   <name>RimAgent</name>
   <author>mushroomTW</author>
   <packageId>GreenMushroom.RimAgent</packageId>
-  <modVersion>2026.11.25.5</modVersion>
+  <modVersion>2026.11.25.6</modVersion>
   <url>https://github.com/mushroomTW/RimAgent</url>
   <supportedVersions>
     <li>1.7</li>
@@ -12,7 +12,7 @@
 
 Open the Agent window and issue commands in natural language. RimAgent inspects the colony through 82 specialized tools, executes only authorized game actions, and logs every invocation.
 
-Requires RimLLM Framework 2026.10.20.1 or later (must be loaded before RimAgent). Configure model providers, API credentials, models, and fallback chains in RimLLM Framework; RimAgent provides colony tools and category permission controls.
+Requires RimLLM Framework 2026.11.24.2 or later (must be loaded before RimAgent). Configure model providers, API credentials, models, and fallback chains in RimLLM Framework; RimAgent provides colony tools and category permission controls.
 
 Key Capabilities:
 • 82 Colony Tools across 16 Categories: Observation (including colonist thoughts, needs, off-screen top-down map renders with a whole-map summary, and screenshots), Work priorities and schedules (with an Undo button), Build (designations and blueprints), Combat, Trade, Medical, Prisoners, Animals, Zones, Production, Time, MCP, Web search, Memory, Subagents, and Save checkpoints.

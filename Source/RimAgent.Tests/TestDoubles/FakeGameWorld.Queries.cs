@@ -187,8 +187,17 @@ internal sealed partial class FakeGameWorld
         };
     }
 
+    public GroundSupport? GetSupport(int x, int z)
+    {
+        CellInfo cell = GetCell(x, z);
+        return cell.Fogged ? null : cell.Support;
+    }
+
+    public int CellsRead { get; private set; }
+
     public IReadOnlyList<CellInfo> GetCells(CellRectSpec rect)
     {
+        CellsRead += rect.CellCount;
         var result = new List<CellInfo>();
         for (int z = rect.MinZ; z <= rect.MaxZ; z++)
         {

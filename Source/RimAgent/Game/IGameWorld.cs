@@ -37,6 +37,8 @@ public interface IGameWorld
     MapBounds GetMapBounds();
     CellInfo GetCell(int x, int z);
     IReadOnlyList<CellInfo> GetCells(CellRectSpec rect);
+    /// <summary>只查承重，不算房間與物品；迷霧格為 null。</summary>
+    GroundSupport? GetSupport(int x, int z);
     string GetNotReadyReason();
 
     /// <summary>
