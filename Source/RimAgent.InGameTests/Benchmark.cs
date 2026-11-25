@@ -523,6 +523,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             int startTick = Current.Game?.tickManager?.TicksGame ?? 0;
             int configurationErrors = 0;
             int surveyCalls = 0;
+            int? unknownCalls = 0;
             int passedByLooking = 0;
             for (int i = 0; i < tasks.Length; i++)
             {
@@ -559,9 +560,10 @@ public sealed partial class BenchmarkComponent : GameComponent
                 total = total.Plus(usage);
                 int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage, invalid, attempts);
                 Finish(_rows[i], failure, tools.Count, failures, UnityEngine.Time.realtimeSinceStartup - _rows[i].StartedAt, invalid);
-                SaveScreenshots(Path.Combine(folder, "benchmark-shots", runId), task.Id, tools);
+                SaveScreenshots(Path.Combine(folder, RunLogWriter.FolderName, "benchmark-shots", runId), task.Id, tools);
                 totalTools += tools.Count;
                 totalFailures += failures;
+                if (!invalid) unknownCalls += usage.UnknownCalls;
                 if (usage.FallbackSteps > 0) fallbackTasks++;
                 else if (usage.FallbackSteps == 0 && failure == null) passedWithoutFallback++;
                 surveyCalls += tools.Count(t => t.ToolName == _surveyTool);
@@ -587,6 +589,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["hardTotal"] = tasks.Count(t => t.Tier == Hard) - invalidByTier[Hard],
                 ["toolCalls"] = totalTools,
                 ["toolFailures"] = totalFailures,
+                ["unknownCalls"] = unknownCalls,
                 ["surveyCalls"] = surveyCalls,
                 ["passedByLooking"] = passedByLooking,
                 ["steps"] = total.Steps,
@@ -667,10 +670,10 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
-    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning, string[] Models, int? FallbackSteps, string AnswerModel)
+    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning, string[] Models, int? FallbackSteps, string[] StepModels, int? UnknownCalls)
     {
         public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output, other.Reasoning ?? Reasoning,
-            [.. (Models ?? []).Union(other.Models ?? [], StringComparer.Ordinal)], FallbackSteps + other.FallbackSteps, other.AnswerModel ?? AnswerModel);
+            [.. (Models ?? []).Union(other.Models ?? [], StringComparer.Ordinal)], FallbackSteps + other.FallbackSteps, [.. StepModels ?? [], .. other.StepModels ?? []], UnknownCalls + other.UnknownCalls);
     }
 
     /// <summary>取這題的運行紀錄摘要；摘要還沒寫出（例如寫檔失敗）時為 0。</summary>
@@ -681,14 +684,14 @@ public sealed partial class BenchmarkComponent : GameComponent
             using JsonDocument line = JsonDocument.Parse(File.ReadLines(Path.Combine(folder, "runs", "index.jsonl")).Last());
             JsonElement e = line.RootElement;
             if (e.GetProperty("ts").GetDateTime() < startedUtc) return default;
-            List<string> stepModels = ReadStepModels(Path.Combine(folder, "runs", e.GetProperty("file").GetString()));
+            (List<string> stepModels, int? unknownCalls) = ReadSteps(Path.Combine(folder, "runs", e.GetProperty("file").GetString()));
             int? fallbackSteps = expectedModel == null || stepModels.Count == 0
                 ? null
                 : stepModels.Count(m => !string.Equals(m, expectedModel, StringComparison.OrdinalIgnoreCase));
             return new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64(),
                     e.TryGetProperty("reasoning", out JsonElement reasoning) ? reasoning.GetString() : null,
                     e.TryGetProperty("models", out JsonElement models) ? [.. models.EnumerateArray().Select(m => m.GetString())] : null,
-                    fallbackSteps, stepModels.LastOrDefault());
+                    fallbackSteps, [.. stepModels], unknownCalls);
         }
         catch (Exception ex)
         {
@@ -697,32 +700,43 @@ public sealed partial class BenchmarkComponent : GameComponent
         }
     }
 
-    /// <summary>主代理每一步的模型；子代理可以另設模型，不算。讀不到時為空，不影響索引裡的用量。</summary>
-    private static List<string> ReadStepModels(string path)
+    /// <summary>主代理每一步的模型，以及呼叫了沒有的工具幾次（SDK 直接回錯，不會有工具項目）；子代理可以另設模型，不算。讀不到時為空，不影響索引裡的用量。</summary>
+    private static (List<string> Models, int? UnknownCalls) ReadSteps(string path)
     {
         List<string> models = [];
+        int unknown = 0;
+        // 最後一步的呼叫可能是被取消或中斷，有下一步才確定都處理過了。
+        int requested = 0;
+        HashSet<int> executed = [];
+        int executedBefore = 0;
         try
         {
             foreach (string text in File.ReadLines(path))
             {
                 using JsonDocument step = JsonDocument.Parse(text);
                 JsonElement s = step.RootElement;
-                if (s.GetProperty("t").GetString() == "model" && !s.TryGetProperty("agent", out _) && s.TryGetProperty("model", out JsonElement m) && m.GetString() is { } name)
-                    models.Add(name);
+                if (s.TryGetProperty("agent", out _)) continue;
+                string kind = s.GetProperty("t").GetString();
+                if (kind == "tool") executed.Add(s.GetProperty("call").GetInt32());
+                if (kind != "model") continue;
+                unknown += Math.Max(0, requested - (executed.Count - executedBefore));
+                executedBefore = executed.Count;
+                requested = s.TryGetProperty("calls", out JsonElement calls) ? calls.GetArrayLength() : 0;
+                if (s.TryGetProperty("model", out JsonElement m) && m.GetString() is { } name) models.Add(name);
             }
-            return models;
+            return (models, unknown);
         }
         catch (Exception ex)
         {
             Log.Warning(LogPrefix + "step models not read: " + ex.Message);
-            return [];
+            return ([], null);
         }
     }
 
     private static IEnumerable<Thing> PlannedBuildings(Map map) =>
         map.listerThings.AllThings.Where(t => t is Blueprint or Frame && t.Faction == Faction.OfPlayer);
 
-    /// <summary>把單題結果寫進結果檔與日誌；回傳這題失敗的工具呼叫數（取消不算）。</summary>
+    /// <summary>把單題結果寫進結果檔與日誌；回傳這題失敗的工具呼叫數（取消不算，呼叫了沒有的工具另記在 unknownCalls）。</summary>
     private static int RecordTaskResult(string resultPath, BenchTask task, string failure, List<TranscriptEntry> tools, float seconds, string reply, ModelUsage usage, bool invalid, int attempts)
     {
         int failures = tools.Count(t => t.Failed && !t.Cancelled);
@@ -734,7 +748,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["surveyTool"] = _surveyTool,
             ["reasoningUsed"] = usage.Reasoning,
             ["modelsUsed"] = usage.Models ?? [],
-            ["answerModel"] = usage.AnswerModel,
+            ["stepModels"] = usage.StepModels ?? [],
             ["fallbackSteps"] = usage.FallbackSteps,
             ["ok"] = failure == null,
             ["invalid"] = invalid,
@@ -742,6 +756,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["detail"] = failure ?? string.Empty,
             ["tools"] = tools.Count,
             ["toolFailures"] = failures,
+            ["unknownCalls"] = usage.UnknownCalls,
             ["steps"] = usage.Steps,
             ["in"] = usage.Input,
             ["out"] = usage.Output,
@@ -753,7 +768,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         return failures;
     }
 
-    /// <summary>隔離環境的截圖會跟測試存檔一起清掉；留一份在成績旁，才能核對是圖錯還是模型看錯。</summary>
+    /// <summary>隔離環境的截圖會跟測試存檔一起清掉；留一份在運行紀錄裡，備份紀錄時才會一起帶走，才能核對是圖錯還是模型看錯。</summary>
     private static void SaveScreenshots(string folder, string taskId, IEnumerable<TranscriptEntry> tools)
     {
         if (_surveyTool != ScreenshotTool) return;
@@ -765,6 +780,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             {
                 string path = Regex.Match(tool.Result, @"Screenshot saved: (.+\.png) \(", RegexOptions.None, TimeSpan.FromSeconds(1)).Groups[1].Value;
                 if (path.Length == 0) continue;
+                if (!Directory.Exists(folder)) PruneScreenshots(Path.GetDirectoryName(folder));
                 Directory.CreateDirectory(folder);
                 File.Copy(path, Path.Combine(folder, string.Create(CultureInfo.InvariantCulture, $"{taskId}-{index}.png")), overwrite: true);
             }
@@ -773,6 +789,15 @@ public sealed partial class BenchmarkComponent : GameComponent
                 Log.Warning(LogPrefix + "screenshot not kept: " + ex.Message);
             }
         }
+    }
+
+    private const int MaxScreenshotRuns = 20;
+
+    /// <summary>資料夾以開跑時間命名，字典序就是時間序。</summary>
+    private static void PruneScreenshots(string root)
+    {
+        if (!Directory.Exists(root)) return;
+        foreach (string old in Directory.GetDirectories(root).OrderDescending(StringComparer.Ordinal).Skip(MaxScreenshotRuns - 1)) Directory.Delete(old, recursive: true);
     }
 
     private const int MaxConfigurationErrors = 2;

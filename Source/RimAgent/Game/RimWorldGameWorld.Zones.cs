@@ -71,10 +71,8 @@ internal sealed partial class RimWorldGameWorld
             ? (Designator_ZoneAdd)new Designator_ZoneAddStockpile_Resources()
             : new Designator_ZoneAdd_Growing();
 
-        List<IntVec3> cells = CollectZoneCells(map, rect, designator, growing, out Dictionary<string, int> skipped);
-        string skippedText = skipped.Count == 0
-            ? string.Empty
-            : " Skipped " + string.Join("; ", skipped.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Value} cell{(p.Value == 1 ? "" : "s")} ({p.Key})")).ToArray()) + ".";
+        List<IntVec3> cells = CollectZoneCells(map, rect, designator, growing, out Dictionary<string, List<IntVec3>> skipped);
+        string skippedText = SkippedText(skipped);
         if (cells.Count == 0) return CommandResult.Fail($"no cell in {rect} can hold a {kind.ToLowerInvariant()} zone.{skippedText}{NearbyZoneRects(map, rect, designator, plant)}");
 
         // 與原版拖曳相同：不相連的格子各自成區，避免單一區域被切成不連通的幾塊。
@@ -106,10 +104,10 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static List<IntVec3> CollectZoneCells(Map map, CellRectSpec rect, Designator_ZoneAdd designator, bool growing, out Dictionary<string, int> skipped)
+    private static List<IntVec3> CollectZoneCells(Map map, CellRectSpec rect, Designator_ZoneAdd designator, bool growing, out Dictionary<string, List<IntVec3>> skipped)
     {
         var cells = new List<IntVec3>();
-        var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
+        var reasons = new Dictionary<string, List<IntVec3>>(StringComparer.Ordinal);
         for (int x = rect.MinX; x <= rect.MaxX; x++)
         {
             for (int z = rect.MinZ; z <= rect.MaxZ; z++)
@@ -127,15 +125,15 @@ internal sealed partial class RimWorldGameWorld
                 else
                 {
                     AcceptanceReport report = designator.CanDesignateCell(cell);
-                    if (!report.Accepted) why = GetZoneRejectionReason(report, growing);
+                    if (!report.Accepted) why = GetZoneRejectionReason(map, cell, report, growing);
                 }
                 if (why == null)
                 {
                     cells.Add(cell);
                     continue;
                 }
-                reasons.TryGetValue(why, out int count);
-                reasons[why] = count + 1;
+                if (!reasons.TryGetValue(why, out List<IntVec3> at)) reasons[why] = at = [];
+                at.Add(cell);
             }
         }
         skipped = reasons;
@@ -211,10 +209,38 @@ internal sealed partial class RimWorldGameWorld
         return groups;
     }
 
-    private static string GetZoneRejectionReason(AcceptanceReport report, bool growing)
+    private const int MaxSkippedCellsListed = 8;
+    private const int MaxSkipReasonsListed = 6;
+
+    private static string SkippedText(Dictionary<string, List<IntVec3>> skipped)
+    {
+        if (skipped.Count == 0) return string.Empty;
+        List<KeyValuePair<string, List<IntVec3>>> groups = [.. skipped.OrderByDescending(p => p.Value.Count)];
+        int unlisted = groups.Skip(MaxSkipReasonsListed).Sum(p => p.Value.Count);
+        string more = unlisted == 0 ? string.Empty : string.Create(CultureInfo.InvariantCulture, $"; and {unlisted} more for other reasons");
+        return " Skipped " + string.Join("; ", groups.Take(MaxSkipReasonsListed).Select(p => SkippedCells(p.Key, p.Value))) + more + ".";
+    }
+
+    private static string SkippedCells(string reason, List<IntVec3> cells)
+    {
+        CellRect extents = CellRect.FromCellList(cells);
+        string where = cells.Count > MaxSkippedCellsListed
+            ? string.Create(CultureInfo.InvariantCulture, $"within ({extents.minX},{extents.minZ})-({extents.maxX},{extents.maxZ})")
+            : "at " + string.Join(", ", cells.Select(c => string.Create(CultureInfo.InvariantCulture, $"({c.x},{c.z})")));
+        return string.Create(CultureInfo.InvariantCulture, $"{cells.Count} cell{(cells.Count == 1 ? "" : "s")} ({reason}) {where}");
+    }
+
+    private static string GetZoneRejectionReason(Map map, IntVec3 cell, AcceptanceReport report, bool growing)
     {
         if (!string.IsNullOrEmpty(report.Reason)) return report.Reason;
-        return growing ? "not fertile enough, fogged, blocked or at the map edge" : "fogged, blocked or at the map edge";
+        // 迷霧裡的東西不能洩漏。
+        if (cell.Fogged(map)) return "fogged";
+        if (cell.InNoZoneEdgeArea(map)) return "at the map edge";
+        Thing blocker = cell.GetThingList(map).FirstOrDefault(t => !t.def.CanOverlapZones);
+        if (blocker != null) return "blocked by " + blocker.LabelNoParenthesis;
+        if (growing) return "not fertile enough";
+        TerrainDef terrain = cell.GetTerrain(map);
+        return terrain.passability == Traversability.Impassable ? "impassable terrain: " + terrain.label : "not allowed here";
     }
 
     private static Zone CreateZoneInstance(Map map, bool stockpile, ThingDef plant)

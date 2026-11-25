@@ -55,6 +55,71 @@ internal sealed partial class MapWorldTests
         TestHelpers.AssertNone(failures, "mine designation");
     }
 
+    /// <summary>只說跳過幾格的話，模型得刪掉重劃好幾次才找得到是哪一格。</summary>
+    [Test]
+    public void SkippedZoneCellsAreNamed()
+    {
+        if (TestHelpers.SkipWithoutMap(nameof(SkippedZoneCellsAreNamed))) return;
+        Map map = Find.CurrentMap;
+        var designator = new Designator_ZoneAddStockpile_Resources();
+        CellRect? found = FindFreeRect(map, 3, c => map.zoneManager.ZoneAt(c) == null && designator.CanDesignateCell(c).Accepted);
+        if (found == null)
+        {
+            TestHelpers.Skip(nameof(SkippedZoneCellsAreNamed), "no free 3x3 area near the colonists");
+            return;
+        }
+        CellRect rect = found.Value;
+        IntVec3 cell = rect.CenterCell;
+        var failures = new List<string>();
+        List<Zone> before = [.. map.zoneManager.AllZones];
+        Thing wall = GenSpawn.Spawn(ThingMaker.MakeThing(ThingDefOf.Wall, ThingDefOf.WoodLog), cell, map);
+        wall.HitPoints /= 2;
+        var water = new IntVec3(rect.minX, 0, rect.minZ);
+        var fogged = new IntVec3(rect.maxX, 0, rect.maxZ);
+        List<(IntVec3 Cell, TerrainDef Terrain)> terrain = [.. rect.Cells.Select(c => (c, c.GetTerrain(map)))];
+        TerrainDef deep = DefDatabase<TerrainDef>.GetNamed("WaterDeep");
+        TerrainDef concrete = DefDatabase<TerrainDef>.GetNamed("Concrete");
+        try
+        {
+            CommandResult added = _world.AddZone("stockpile", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
+            Expect(added, $"Skipped 1 cell (blocked by {wall.LabelNoParenthesis}) at ({cell.x},{cell.z}).");
+            DeleteNewZones();
+
+            map.terrainGrid.SetTerrain(water, deep);
+            map.fogGrid.Refog(CellRect.SingleCell(fogged));
+            added = _world.AddZone("stockpile", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
+            Expect(added, $"1 cell (impassable terrain: {deep.label}) at ({water.x},{water.z})");
+            Expect(added, $"1 cell (fogged) at ({fogged.x},{fogged.z})");
+            DeleteNewZones();
+
+            map.fogGrid.Unfog(fogged);
+            wall.Destroy();
+            foreach (IntVec3 c in rect) map.terrainGrid.SetTerrain(c, concrete);
+            CommandResult refused = _world.AddZone("growing", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
+            Expect(refused, $"Skipped 9 cells (not fertile enough) within ({rect.minX},{rect.minZ})-({rect.maxX},{rect.maxZ})");
+        }
+        finally
+        {
+            DeleteNewZones();
+            if (!wall.Destroyed) wall.Destroy();
+            if (fogged.Fogged(map)) map.fogGrid.Unfog(fogged);
+            foreach ((IntVec3 c, TerrainDef old) in terrain) map.terrainGrid.SetTerrain(c, old);
+        }
+        TestHelpers.AssertNone(failures, "skipped zone cells");
+
+        void Expect(CommandResult result, FormattableString text)
+        {
+            string expected = text.ToString(CultureInfo.InvariantCulture);
+            string got = result.Message + result.Error;
+            if (!got.Contains(expected, StringComparison.Ordinal)) failures.Add("expected \"" + expected + "\", got: " + got);
+        }
+
+        void DeleteNewZones()
+        {
+            foreach (Zone zone in map.zoneManager.AllZones.Except(before).ToList()) zone.Delete();
+        }
+    }
+
     [Test]
     public void StockpileZoneAddsAndDeletes()
     {
