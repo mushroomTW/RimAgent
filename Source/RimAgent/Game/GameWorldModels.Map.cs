@@ -34,6 +34,8 @@ public sealed class ThingInfo
     public int X { get; set; }
     public int Z { get; set; }
     public int StackCount { get; set; } = 1;
+    /// <summary>佔地超過一格。</summary>
+    public bool MultiCell { get; set; }
     public bool PlayerOwned { get; set; }
     public bool Harvestable { get; set; }
     public bool Wild { get; set; }

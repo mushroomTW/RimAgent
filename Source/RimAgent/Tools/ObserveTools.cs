@@ -355,7 +355,46 @@ public sealed class ObserveTools
     }
 
     private const int MaxObstaclesListed = 10;
+    private const int MinRun = 3;
     private const float FertileThreshold = 0.7f;
+
+    /// <summary>相連成直線的相同建築或礦石併成一段、不帶 id，牆圈才列得完；有標記、被禁止或佔多格的照樣逐個列。最多列 <see cref="MaxObstaclesListed"/> 筆。</summary>
+    private static List<(string Text, int Count)> MergeRuns(List<ThingInfo> things)
+    {
+        var left = new Dictionary<(string Label, string DefName, bool PlayerOwned, int X, int Z), ThingInfo>();
+        foreach (ThingInfo t in things.Where(t => t.Kind is ThingKind.Building or ThingKind.Mineable && !t.MultiCell && !t.Forbidden && t.Designations.Count == 0)) left[Key(t, 0, 0)] = t;
+        var merged = new HashSet<ThingInfo>();
+        var entries = new List<(string Text, int Count)>();
+        foreach (ThingInfo t in things.OrderBy(t => t.Z).ThenBy(t => t.X))
+        {
+            if (merged.Contains(t)) continue;
+            if (entries.Count == MaxObstaclesListed) break;
+            List<ThingInfo> across = Run(t, 1, 0), up = Run(t, 0, 1);
+            List<ThingInfo> run = across.Count >= up.Count ? across : up;
+            if (run.Count < MinRun || run[0] != t)
+            {
+                entries.Add((ToolText.Thing(t), 1));
+                if (run.Count > 0 && run[0] == t) left.Remove(Key(t, 0, 0));
+                continue;
+            }
+            foreach (ThingInfo member in run) left.Remove(Key(member, 0, 0));
+            merged.UnionWith(run);
+            ThingInfo end = run[^1];
+            string owner = string.Empty;
+            if (t.Kind == ThingKind.Building) owner = t.PlayerOwned ? " player-owned" : " not player-owned";
+            entries.Add((string.Create(CultureInfo.InvariantCulture, $"{t.Label} ({t.DefName}) x{run.Count} at {ToolText.Cell(t.X, t.Z)}-{ToolText.Cell(end.X, end.Z)}{owner}"), run.Count));
+        }
+        return entries;
+
+        List<ThingInfo> Run(ThingInfo start, int dx, int dz)
+        {
+            var run = new List<ThingInfo>();
+            while (left.TryGetValue(Key(start, dx * run.Count, dz * run.Count), out ThingInfo next)) run.Add(next);
+            return run;
+        }
+
+        static (string Label, string DefName, bool PlayerOwned, int X, int Z) Key(ThingInfo t, int dx, int dz) => (t.Label, t.DefName, t.PlayerOwned, t.X + dx, t.Z + dz);
+    }
 
     private string DescribeCell(int x, int z)
     {
@@ -396,7 +435,7 @@ public sealed class ObserveTools
     }
 
     [AgentTool("inspect_area", ToolCategory.Observe, ToolRisk.Query)]
-    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, how heavy a building the ground holds, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain (and where each compact patch lies), fertile and roofed cell counts, cells that are not walkable, how many cells hold heavy, medium or only light buildings (ship parts and most large buildings need heavy under every cell), obstacles (buildings, rock, trees, items), the largest rectangle free of buildings, rock, the unbuildable map edge and ground too weak to build on, with the heaviest buildings all of it holds, and the largest one for heavy buildings (plants and items inside are fine; use it to pick a building site in one call on a large area), and the zones and rooms overlapping it.")]
+    [Description("Inspects the map before placing blueprints or a zone. For one cell (both corners the same) it describes terrain and fertility, roof, walkability, how heavy a building the ground holds, its zone, the room around it (id, role, size, extents, temperature, indoors or outdoors) and the objects on it. For a rectangle of up to 50 cells per side (2500 cells; corners are inclusive, so (0,0)-(49,49) is the largest square; a larger one is cropped to its south-west 50x50 part) it summarises the terrain (and where each compact patch lies), fertile and roofed cell counts, cells that are not walkable, how many cells hold heavy, medium or only light buildings (ship parts and most large buildings need heavy under every cell), obstacles (buildings, rock, trees, items; three or more identical one-cell buildings or rocks in a straight line are merged into one range without ids, so a wall with a gap shows as two ranges), the largest rectangle free of buildings, rock, the unbuildable map edge and ground too weak to build on, with the heaviest buildings all of it holds, and the largest one for heavy buildings (plants and items inside are fine; use it to pick a building site in one call on a large area), and the zones and rooms overlapping it.")]
     public string InspectArea(
         [Description("Rectangle corner x.")] int x1,
         [Description("Rectangle corner z.")] int z1,
@@ -441,9 +480,11 @@ public sealed class ObserveTools
         }
         else
         {
+            List<(string Text, int Count)> entries = MergeRuns(obstacles);
             sb.Append(obstacles.Count).Append(" — ")
-              .AppendJoin("; ", obstacles.Take(MaxObstaclesListed).Select(ToolText.Thing));
-            if (obstacles.Count > MaxObstaclesListed) sb.Append("; and ").Append(obstacles.Count - MaxObstaclesListed).Append(" more");
+              .AppendJoin("; ", entries.Select(e => e.Text));
+            int listed = entries.Sum(e => e.Count);
+            if (obstacles.Count > listed) sb.Append("; and ").Append(obstacles.Count - listed).Append(" more");
         }
         sb.AppendLine();
 
@@ -513,7 +554,7 @@ public sealed class ObserveTools
     };
 
     [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Safe)]
-    [Description("Saves a screenshot to disk and returns the file path. When your model accepts images, the image is shown to you right after this result; otherwise only the player can see it. With no rectangle it captures the player's screen as it is, including open windows. With a rectangle it renders that part of the current map from straight above without moving the player's camera, north up, with yellow coordinate lines and x (bottom) / z (left) labels so you can read exact cells; unexplored fog shows as black. The whole map fits in one image (about 4 pixels per cell on a 250x250 map), good for layout and terrain; zoom into about 50x50 cells to see individual walls, doors and furniture. Corners outside the map are clamped, so 0,0,999,999 means the whole map.")]
+    [Description("Saves a screenshot to disk and returns the file path. When your model accepts images, the image is shown to you right after this result; otherwise only the player can see it. With no rectangle it captures the player's screen as it is, including open windows. With a rectangle it renders that part of the current map from straight above without moving the player's camera, north up, with yellow coordinate lines and x (bottom) / z (left) labels for orientation; a cell read off the image is often one or two cells wrong, so confirm exact cells with a text tool, if you have one, before placing anything; unexplored fog shows as black. The whole map fits in one image (about 4 pixels per cell on a 250x250 map), good for layout and terrain; zoom into about 50x50 cells to see individual walls, doors and furniture. Corners outside the map are clamped, so 0,0,999,999 means the whole map.")]
     public string TakeScreenshot(
         [Description("File name without directory or .png; empty uses a timestamped name.")] string name = null,
         [Description("Rectangle corner x; leave all four corners at -1 to capture the player's screen instead.")] int x1 = -1,

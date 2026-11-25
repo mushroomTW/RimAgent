@@ -71,6 +71,7 @@ public sealed class SubagentTools
     /// <summary>在目前權限下至少拿得到一個工具的子代理；拿不到工具的不必列給模型，免得白白委派一次。</summary>
     public IReadOnlyList<AgentSubagent> Available(ToolPermissions permissions)
     {
+        if (permissions.Hidden.Contains(ToolName)) return [];
         return [.. Subagents.Where(s => s != null && _registry.SelectForSubagent(permissions, s.Categories, s.ReadOnly).Count > 0)];
     }
 

@@ -13,6 +13,7 @@ using LudeonTK;
 using RimAgent.Agent;
 using RimAgent.Game;
 using RimAgent.Tools;
+using RimLLM_Framework;
 using RimWorld;
 using Verse;
 
@@ -370,7 +371,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         {
             _surveyTool = tool;
             _fixedSite = sites[round];
-            RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", "find_things", tool == InspectTool ? ScreenshotTool : InspectTool };
+            RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", "find_things", SubagentTools.ToolName, tool == InspectTool ? ScreenshotTool : InspectTool };
             BenchmarkScore s;
             try
             {
@@ -473,6 +474,8 @@ public sealed partial class BenchmarkComponent : GameComponent
         bool savedRecord = settings?.recordRuns ?? false;
         bool savedTime = settings?.ToPermissions().Allows(ToolCategory.Time) ?? true;
         TimeSpeed savedSpeed = Find.TickManager?.CurTimeSpeed ?? TimeSpeed.Normal;
+        ColonyAgentSession statsSession = null;
+        ToolUsageStats savedStats = null;
         try
         {
             RimAgentGameComponent agent = RimAgentGameComponent.Instance;
@@ -498,6 +501,13 @@ public sealed partial class BenchmarkComponent : GameComponent
             string model = string.IsNullOrWhiteSpace(settings.agentModel) ? "(framework default)" : settings.agentModel;
 
             ColonyAgentSession session = agent.Session;
+            statsSession = session;
+            savedStats = session.ToolUsage;
+            string expectedModel = ColonyAgentSession.ResolveModel(settings.agentModel);
+            if (expectedModel == null || RimLLMProvider.GetMaxOutputTokens(expectedModel) == null)
+                Log.Warning(LogPrefix + "output limit unknown for " + (expectedModel ?? "(no model)") + ": refresh the provider's model list in RimLLM Framework settings, or reasoning may use up the default limit");
+            int fallbackTasks = 0;
+            int passedWithoutFallback = 0;
             var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0 };
             var invalidByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0 };
             int totalTools = 0;
@@ -529,7 +539,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 _rows[i].StartedAt = UnityEngine.Time.realtimeSinceStartup;
                 DateTime startedUtc = DateTime.UtcNow;
                 TaskOutcome outcome = await RunTaskAsync(session, task);
-                ModelUsage usage = ReadUsage(folder, startedUtc);
+                ModelUsage usage = ReadUsage(folder, startedUtc, expectedModel);
                 int attempts = 1;
                 // 金鑰、餘額、模型不存在這類錯誤等 30 秒也不會好。
                 if (outcome.ServiceError is { ErrorKind: not AgentErrorKind.Configuration })
@@ -540,7 +550,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                     await Task.Delay(ServiceRetryDelay);
                     startedUtc = DateTime.UtcNow;
                     outcome = await RunTaskAsync(session, task);
-                    usage = usage.Plus(ReadUsage(folder, startedUtc));
+                    usage = usage.Plus(ReadUsage(folder, startedUtc, expectedModel));
                     outcome = outcome with { Tools = [.. first.Tools, .. outcome.Tools], Seconds = first.Seconds + outcome.Seconds };
                 }
                 (string failure, List<TranscriptEntry> tools, float seconds, string reply, TranscriptEntry serviceError, bool setupFailed) = outcome;
@@ -549,8 +559,11 @@ public sealed partial class BenchmarkComponent : GameComponent
                 total = total.Plus(usage);
                 int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage, invalid, attempts);
                 Finish(_rows[i], failure, tools.Count, failures, UnityEngine.Time.realtimeSinceStartup - _rows[i].StartedAt, invalid);
+                SaveScreenshots(Path.Combine(folder, "benchmark-shots", runId), task.Id, tools);
                 totalTools += tools.Count;
                 totalFailures += failures;
+                if (usage.FallbackSteps > 0) fallbackTasks++;
+                else if (usage.FallbackSteps == 0 && failure == null) passedWithoutFallback++;
                 surveyCalls += tools.Count(t => t.ToolName == _surveyTool);
                 if (failure == null && tools.Any(t => t.ToolName == _surveyTool && !t.Failed && !t.Cancelled)) passedByLooking++;
                 if (failure == null) passedByTier[task.Tier]++;
@@ -580,6 +593,10 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["in"] = total.Input,
                 ["out"] = total.Output,
                 ["modelsUsed"] = total.Models ?? [],
+                ["fallbackTasks"] = fallbackTasks,
+                ["passedWithoutFallback"] = passedWithoutFallback,
+                // 上限太小時思考會吃光輸出、換成備援模型，換模型數要對照這個看。
+                ["maxOutputTokens"] = session.MaxOutputFor(settings.agentModel),
                 // 地圖不同，難度就不同：兩輪要比較得先確認這幾項相同。
                 ["seed"] = seed,
                 ["biome"] = biome,
@@ -604,6 +621,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         finally
         {
             _session = null;
+            statsSession?.ToolUsage = savedStats;
             foreach (BenchmarkRow row in _rows.Where(x => x.State == BenchmarkState.Running))
             {
                 Finish(row, "aborted", row.Tools, row.Failures, UnityEngine.Time.realtimeSinceStartup - row.StartedAt);
@@ -649,29 +667,55 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
-    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning, string[] Models)
+    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning, string[] Models, int? FallbackSteps, string AnswerModel)
     {
         public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output, other.Reasoning ?? Reasoning,
-            [.. (Models ?? []).Union(other.Models ?? [], StringComparer.Ordinal)]);
+            [.. (Models ?? []).Union(other.Models ?? [], StringComparer.Ordinal)], FallbackSteps + other.FallbackSteps, other.AnswerModel ?? AnswerModel);
     }
 
     /// <summary>取這題的運行紀錄摘要；摘要還沒寫出（例如寫檔失敗）時為 0。</summary>
-    private static ModelUsage ReadUsage(string folder, DateTime startedUtc)
+    private static ModelUsage ReadUsage(string folder, DateTime startedUtc, string expectedModel)
     {
         try
         {
             using JsonDocument line = JsonDocument.Parse(File.ReadLines(Path.Combine(folder, "runs", "index.jsonl")).Last());
             JsonElement e = line.RootElement;
-            return e.GetProperty("ts").GetDateTime() < startedUtc
-                ? default
-                : new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64(),
+            if (e.GetProperty("ts").GetDateTime() < startedUtc) return default;
+            List<string> stepModels = ReadStepModels(Path.Combine(folder, "runs", e.GetProperty("file").GetString()));
+            int? fallbackSteps = expectedModel == null || stepModels.Count == 0
+                ? null
+                : stepModels.Count(m => !string.Equals(m, expectedModel, StringComparison.OrdinalIgnoreCase));
+            return new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64(),
                     e.TryGetProperty("reasoning", out JsonElement reasoning) ? reasoning.GetString() : null,
-                    e.TryGetProperty("models", out JsonElement models) ? [.. models.EnumerateArray().Select(m => m.GetString())] : null);
+                    e.TryGetProperty("models", out JsonElement models) ? [.. models.EnumerateArray().Select(m => m.GetString())] : null,
+                    fallbackSteps, stepModels.LastOrDefault());
         }
         catch (Exception ex)
         {
             Log.Warning(LogPrefix + "usage not read: " + ex.Message);
             return default;
+        }
+    }
+
+    /// <summary>主代理每一步的模型；子代理可以另設模型，不算。讀不到時為空，不影響索引裡的用量。</summary>
+    private static List<string> ReadStepModels(string path)
+    {
+        List<string> models = [];
+        try
+        {
+            foreach (string text in File.ReadLines(path))
+            {
+                using JsonDocument step = JsonDocument.Parse(text);
+                JsonElement s = step.RootElement;
+                if (s.GetProperty("t").GetString() == "model" && !s.TryGetProperty("agent", out _) && s.TryGetProperty("model", out JsonElement m) && m.GetString() is { } name)
+                    models.Add(name);
+            }
+            return models;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogPrefix + "step models not read: " + ex.Message);
+            return [];
         }
     }
 
@@ -690,6 +734,8 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["surveyTool"] = _surveyTool,
             ["reasoningUsed"] = usage.Reasoning,
             ["modelsUsed"] = usage.Models ?? [],
+            ["answerModel"] = usage.AnswerModel,
+            ["fallbackSteps"] = usage.FallbackSteps,
             ["ok"] = failure == null,
             ["invalid"] = invalid,
             ["attempts"] = attempts,
@@ -705,6 +751,28 @@ public sealed partial class BenchmarkComponent : GameComponent
         });
         Log.Message(LogPrefix + string.Create(CultureInfo.InvariantCulture, $"{task.Tier}/{task.Id}: {(failure == null ? "PASS" : (invalid ? "INVALID " : "FAIL ") + failure)} tools={tools.Count} failed={failures} {seconds:0}s"));
         return failures;
+    }
+
+    /// <summary>隔離環境的截圖會跟測試存檔一起清掉；留一份在成績旁，才能核對是圖錯還是模型看錯。</summary>
+    private static void SaveScreenshots(string folder, string taskId, IEnumerable<TranscriptEntry> tools)
+    {
+        if (_surveyTool != ScreenshotTool) return;
+        int index = 0;
+        foreach (TranscriptEntry tool in tools.Where(t => t.ToolName == ScreenshotTool && !t.Failed))
+        {
+            index++;
+            try
+            {
+                string path = Regex.Match(tool.Result, @"Screenshot saved: (.+\.png) \(", RegexOptions.None, TimeSpan.FromSeconds(1)).Groups[1].Value;
+                if (path.Length == 0) continue;
+                Directory.CreateDirectory(folder);
+                File.Copy(path, Path.Combine(folder, string.Create(CultureInfo.InvariantCulture, $"{taskId}-{index}.png")), overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(LogPrefix + "screenshot not kept: " + ex.Message);
+            }
+        }
     }
 
     private const int MaxConfigurationErrors = 2;
@@ -736,6 +804,8 @@ public sealed partial class BenchmarkComponent : GameComponent
         try
         {
             session.Clear();
+            // 統計會跨題累積，後面的題目會多出預載的工具包與經驗提示，各題就不能比。
+            session.ToolUsage = new ToolUsageStats(null);
             Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
             snapshot = new BenchmarkSnapshot(map);
             string setupError = task.Setup?.Invoke(map);

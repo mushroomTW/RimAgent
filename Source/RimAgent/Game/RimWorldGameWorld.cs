@@ -376,6 +376,7 @@ StringComparer.Ordinal.GetHashCode(("RimAgent:" + part + ":" + who)));
             X = thing.Position.x,
             Z = thing.Position.z,
             StackCount = thing.stackCount,
+            MultiCell = thing.def.size.x > 1 || thing.def.size.z > 1,
             PlayerOwned = thing.Faction == Faction.OfPlayer,
             Harvestable = (thing as Plant)?.HarvestableNow ?? false,
             Wild = thing is Pawn pawn && IsWildAnimal(pawn),

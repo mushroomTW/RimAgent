@@ -335,10 +335,12 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary>目前主模型（"供應商:模型"）：有指定就用它，跟隨框架時是備援鏈第一個；都沒有時為 null。</summary>
-    private string ResolveCurrentModel()
+    private string ResolveCurrentModel() => ResolveModel(PreferredModel);
+
+    /// <summary>空白或哨兵值時取框架備援鏈的第一個；都沒有時回傳 null。</summary>
+    internal static string ResolveModel(string preferred)
     {
         RimAgentSettings settings = RimAgentMod.Settings;
-        string preferred = PreferredModel;
         string model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
         if (!string.IsNullOrWhiteSpace(model) && !RimAgentSettings.IsModelSentinel(model)) return model.Trim();
         List<string> candidates;

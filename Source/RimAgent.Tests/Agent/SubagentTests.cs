@@ -135,7 +135,12 @@ public class SubagentTests
         RimLLMChatOptions offered = NewSession(client, withAgents, AgentMode.Confirm, [Scout]).CreateRunOptions();
         RimLLMChatOptions noPermission = NewSession(client, ToolPermissions.For(ToolCategory.Observe), AgentMode.Confirm, [Scout]).CreateRunOptions();
         RimLLMChatOptions noSubagents = NewSession(client, withAgents, AgentMode.Confirm, []).CreateRunOptions();
+        var hiding = new ToolPermissions { Hidden = new HashSet<string>(StringComparer.Ordinal) { SubagentTools.ToolName } };
+        foreach (ToolCategory category in Enum.GetValues<ToolCategory>()) hiding.Set(category, withAgents.Allows(category));
+        RimLLMChatOptions hidden = NewSession(client, hiding, AgentMode.Confirm, [Scout]).CreateRunOptions();
 
+        Assert.That(hidden.Tools.Select(t => t.Name), Does.Not.Contain(SubagentTools.ToolName));
+        Assert.That(hidden.Instructions, Does.Not.Contain("- scout"));
         Assert.That(offered.Tools.Select(t => t.Name), Does.Contain(SubagentTools.ToolName));
         Assert.That(offered.Instructions, Does.Contain("- scout (read-only; several tasks run in parallel): look around"));
         Assert.That(noPermission.Tools.Select(t => t.Name), Does.Not.Contain(SubagentTools.ToolName));

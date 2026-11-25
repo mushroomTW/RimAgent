@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using RimAgent.Agent;
@@ -451,6 +452,29 @@ public partial class ObserveToolsTests
         Assert.That(text, Does.Contain("Obstacles: 2 — [1] compacted steel (MineableSteel) at (5,5); [3] oak tree (Plant_TreeOak) at (6,5) harvestable"));
         Assert.That(text, Does.Contain("Zones: [50] Stockpile 1 (Stockpile, 1 cells inside)"));
         Assert.That(text, Does.Contain("Rooms: #0 none, 10000 cells").And.Contain("outdoors (24 cells inside)").And.Contain("#12 bedroom").And.Contain("indoors (1 cells inside)"));
+    }
+
+    [Test]
+    public void InspectAreaMergesWallRunsSoTheGapIsVisible()
+    {
+        var world = new FakeGameWorld();
+        int id = 100;
+        for (int x = 2; x <= 8; x++)
+            for (int z = 2; z <= 8; z++)
+            {
+                if ((x is 2 or 8 || z is 2 or 8) && (x, z) != (8, 5))
+                    world.Things.Add(new ThingInfo { Id = id++, DefName = "Wall", Label = "wood wall", Kind = ThingKind.Building, X = x, Z = z, PlayerOwned = true });
+            }
+        world.Things.Add(new ThingInfo { Id = 9, DefName = "Wall", Label = "wood wall", Kind = ThingKind.Building, X = 5, Z = 5, PlayerOwned = true, Designations = ["Deconstruct"] });
+
+        string line = new ObserveTools(world).InspectArea(0, 0, 9, 9).Split(Environment.NewLine).Single(l => l.StartsWith("Obstacles:", StringComparison.Ordinal));
+
+        Assert.That(line, Does.StartWith("Obstacles: 24 — ").And.Not.Contain("more"));
+        Assert.That(line, Does.Contain("x7 at (2,2)-(8,2)").And.Contain("x6 at (2,3)-(2,8)").And.Contain("x5 at (3,8)-(7,8)"));
+        Assert.That(line, Does.Contain("at (8,3) player-owned").And.Contain("at (8,4) player-owned").And.Contain("x3 at (8,6)-(8,8)").And.Not.Contain("(8,5)"), "缺口兩側不能併成一段");
+        foreach (ThingInfo t in world.Things) t.MultiCell = true;
+        Assert.That(new ObserveTools(world).InspectArea(0, 0, 9, 9), Does.Not.Contain(" x7 "), "佔多格的不併，免得看錯佔地");
+        Assert.That(line, Does.Contain("[9] wood wall (Wall) at (5,5) player-owned [marked: Deconstruct]"), "有標記的不併，才看得到標記與 id");
     }
 
     [Test]
