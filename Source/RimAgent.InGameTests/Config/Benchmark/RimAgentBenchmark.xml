@@ -4,6 +4,8 @@
   不加則照 seed 進來的玩家設定；也可加 reasoning 屬性（Auto、Off、Low、Medium、High，
   或 Routing 由決策模型逐題挑選）
   指定思考強度，不加為 Medium。
+  survey="true" 比較 inspect_area 與 take_screenshot，skills="true" 比較開、關技能，selfcheck="true" 只檢查題目不叫模型；
+  比較模式可加 rounds（1 到 10，預設 3）決定每邊跑幾輪，總結附通過率差的 95% 信賴區間。
   run_test_cycle 的 seed_config 要同時帶入：
     1. 本檔
     2. 玩家 Config 裡的 Mod_RimAgent_RimAgentMod.xml（模式與自主照顧由 benchmark 在記憶體裡改）

@@ -80,7 +80,7 @@ internal sealed partial class MapWorldTests
     }
 
     /// <summary>依序嘗試產生任務，取第一個生成後仍待玩家接受的；生成失敗或自動接受的會移除。</summary>
-    private static Quest GenerateManualQuest(params string[] scripts)
+    internal static Quest GenerateManualQuest(params string[] scripts)
     {
         foreach (string name in scripts)
         {

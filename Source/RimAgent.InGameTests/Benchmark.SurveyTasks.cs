@@ -18,7 +18,7 @@ public sealed partial class BenchmarkComponent
     private static IntVec3? _fixedSite;
     private static readonly List<(IntVec3 Cell, TerrainDef Terrain)> _siteTerrain = [];
     private static readonly List<(Thing Thing, IntVec3 Cell, Rot4 Rotation)> _siteThings = [];
-    private static readonly List<Thing> _siteWalls = [];
+    private static readonly List<Thing> _siteBuilt = [];
     private static readonly List<Designation> _siteMarks = [];
     /// <summary>生成玩家的牆會自動擴大居家區；null 表示還沒佈置。</summary>
     private static HashSet<IntVec3> _homeBefore;
@@ -31,6 +31,13 @@ public sealed partial class BenchmarkComponent
 
     /// <summary>每 4 格一根柱子，只少一根，6x6 的空地只有這裡放得下。</summary>
     private static CellRect Opening => Patch(5, 1, 7, 7);
+
+    private static CellRect Outcrop => Patch(4, 4, 6, 6);
+
+    private static IntVec3[] Ore => [new(_site.minX + 7, 0, _site.minZ + 5), new(_site.minX + 7, 0, _site.minZ + 6), new(_site.minX + 8, 0, _site.minZ + 6)];
+
+    /// <summary>溪流橫越第 7 列，只有這一格留著原本的地。</summary>
+    private static IntVec3 Ford => new(_site.minX + 10, 0, _site.minZ + 7);
 
     private static BenchTask SurveyRichSoilTask() => SurveyTask(
         "survey_rich_soil",
@@ -67,14 +74,51 @@ public sealed partial class BenchmarkComponent
             map => new() { [TargetKey] = 0, [OthersKey] = PlannedBuildings(map).Count() },
             0,
             null);
-        task.Check = (_, after, reply) =>
+        task.Check = (_, after, reply) => ReplyNames(after, reply, FirmGround.Min);
+        return task;
+    }
+
+    /// <summary>
+    /// 只問位置的題目：沒放藍圖、回覆寫出了 <paramref name="cell"/>。不算照抄的區域兩角，最多寫兩個不同座標（答案加上範圍的另一角），
+    /// 列出一長串座標碰運氣的算失敗。
+    /// </summary>
+    private static string ReplyNames(Dictionary<string, int> after, string reply, IntVec3 cell)
+    {
+        if (after[OthersKey] > 0) return string.Create(CultureInfo.InvariantCulture, $"placed {after[OthersKey]} blueprint(s)");
+        string named = string.Create(CultureInfo.InvariantCulture, $"({cell.x},{cell.z})");
+        string flat = BenchmarkScoring.FlattenCoordinates(reply);
+        string[] corners = [string.Create(CultureInfo.InvariantCulture, $"({_site.minX},{_site.minZ})"), string.Create(CultureInfo.InvariantCulture, $"({_site.maxX},{_site.maxZ})")];
+        int distinct = BenchmarkScoring.DistinctCells(flat, named, corners);
+        if (distinct > MaxNamedCells) return string.Create(CultureInfo.InvariantCulture, $"reply names {distinct} different cells (max {MaxNamedCells})");
+        return flat.Contains(named, StringComparison.Ordinal) ? null : "reply does not name " + named;
+    }
+
+    private const int MaxNamedCells = 2;
+
+    /// <summary>岩石裡混著鋼鐵礦；整塊標記開採就會標到岩石。</summary>
+    private static BenchTask SurveyOreTask() => SurveyTask(
+        "survey_ore",
+        area => $"{area}裡有一塊岩石，其中混著幾格鋼鐵礦。只把鋼鐵礦標記開採，岩石的其他部分不要標記。",
+        map => SpawnSiteThings(map, Outcrop.Cells, c => ThingMaker.MakeThing(Ore.Contains(c) ? ThingDefOf.MineableSteel : DefDatabase<ThingDef>.GetNamed("Granite"))),
+        map =>
         {
-            if (after[OthersKey] > 0) return string.Create(CultureInfo.InvariantCulture, $"placed {after[OthersKey]} blueprint(s)");
-            string corner = string.Create(CultureInfo.InvariantCulture, $"({FirmGround.minX},{FirmGround.minZ})");
-            return (reply ?? string.Empty).Replace(" ", string.Empty, StringComparison.Ordinal).Replace('，', ',').Replace('（', '(').Replace('）', ')').Contains(corner, StringComparison.Ordinal)
-                ? null
-                : "reply does not name " + corner;
-        };
+            List<IntVec3> marked = [.. _site.Cells.Where(c => map.designationManager.DesignationAt(c, DesignationDefOf.Mine) != null)];
+            int ore = marked.Count(Ore.Contains);
+            return new() { [TargetKey] = ore, [OthersKey] = marked.Count - ore };
+        },
+        3,
+        world => All(Ore.Select(c => world.AddDesignationOnCell(c.x, c.z, DesignationDefOf.Mine.defName))));
+
+    private static BenchTask SurveyFordTask()
+    {
+        BenchTask task = SurveyTask(
+            "survey_ford",
+            area => $"{area}有一條由西往東橫越的深水溪，溪上只有一格是陸地，可以走過去。回覆那一格的座標，寫成 (x,z)；不要放任何藍圖。",
+            map => SetSiteRow(map, "WaterDeep", Ford),
+            map => new() { [TargetKey] = 0, [OthersKey] = PlannedBuildings(map).Count() },
+            0,
+            null);
+        task.Check = (_, after, reply) => ReplyNames(after, reply, Ford);
         return task;
     }
 
@@ -184,21 +228,39 @@ public sealed partial class BenchmarkComponent
         }
     }
 
-    private static void BuildSiteWalls(Map map, IEnumerable<IntVec3> cells)
+    private static void SetSiteRow(Map map, string terrain, IntVec3 gap)
     {
-        foreach (IntVec3 cell in cells.ToList())
+        TerrainDef water = DefDatabase<TerrainDef>.GetNamed(terrain);
+        foreach (IntVec3 cell in _site.Cells.Where(c => c.z == gap.z && c != gap))
+        {
+            _siteTerrain.Add((cell, cell.GetTerrain(map)));
+            map.terrainGrid.SetTerrain(cell, water);
+        }
+    }
+
+    private static void BuildSiteWalls(Map map, IEnumerable<IntVec3> cells) =>
+        SpawnSiteThings(map, cells, _ =>
         {
             Thing wall = ThingMaker.MakeThing(ThingDefOf.Wall, ThingDefOf.WoodLog);
             wall.SetFaction(Faction.OfPlayer);
-            _siteWalls.Add(GenSpawn.Spawn(wall, cell, map));
+            return wall;
+        });
+
+    private static void SpawnSiteThings(Map map, IEnumerable<IntVec3> cells, Func<IntVec3, Thing> make)
+    {
+        foreach (IntVec3 cell in cells.ToList())
+        {
+            // 生成天然岩石會把底下的地改成粗石地，還原時要換回來。
+            _siteTerrain.Add((cell, cell.GetTerrain(map)));
+            _siteBuilt.Add(GenSpawn.Spawn(make(cell), cell, map));
         }
     }
 
     private static void RestoreSite(Map map)
     {
         ClearBlueprints(map);
-        foreach (Thing wall in _siteWalls.Where(w => w.Spawned)) wall.Destroy();
-        _siteWalls.Clear();
+        foreach (Thing wall in _siteBuilt.Where(w => w.Spawned)) wall.Destroy();
+        _siteBuilt.Clear();
         foreach ((IntVec3 cell, TerrainDef terrain) in _siteTerrain) map.terrainGrid.SetTerrain(cell, terrain);
         _siteTerrain.Clear();
         foreach ((Thing thing, IntVec3 cell, Rot4 rotation) in _siteThings) GenSpawn.Spawn(thing, cell, map, rotation);

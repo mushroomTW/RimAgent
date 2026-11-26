@@ -49,4 +49,23 @@
   <RimAgent.Benchmark.Tier.survey>[Survey comparison]</RimAgent.Benchmark.Tier.survey>
   <RimAgent.Benchmark.SurveyDone>RimAgent survey tool comparison: {0}</RimAgent.Benchmark.SurveyDone>
   <RimAgent.Benchmark.SurveyNeedsImages>The current model does not accept images, so take_screenshot cannot be compared.</RimAgent.Benchmark.SurveyNeedsImages>
+  <RimAgent.Benchmark.Task.mine_steel>Mine steel</RimAgent.Benchmark.Task.mine_steel>
+  <RimAgent.Benchmark.Task.deconstruct_wall>Deconstruct wall</RimAgent.Benchmark.Task.deconstruct_wall>
+  <RimAgent.Benchmark.Task.unforbid_wood>Unforbid wood</RimAgent.Benchmark.Task.unforbid_wood>
+  <RimAgent.Benchmark.Task.cancel_cut>Cancel tree cutting</RimAgent.Benchmark.Task.cancel_cut>
+  <RimAgent.Benchmark.Task.animal_area>Animal area</RimAgent.Benchmark.Task.animal_area>
+  <RimAgent.Benchmark.Task.draft_move>Draft and move</RimAgent.Benchmark.Task.draft_move>
+  <RimAgent.Benchmark.Task.wear_hat>Wear a hat</RimAgent.Benchmark.Task.wear_hat>
+  <RimAgent.Benchmark.Task.door_hold_open>Hold door open</RimAgent.Benchmark.Task.door_hold_open>
+  <RimAgent.Benchmark.Task.accept_quest>Accept quest</RimAgent.Benchmark.Task.accept_quest>
+  <RimAgent.Benchmark.Task.survey_ore>Survey: mark ore</RimAgent.Benchmark.Task.survey_ore>
+  <RimAgent.Benchmark.Task.survey_ford>Survey: find the ford</RimAgent.Benchmark.Task.survey_ford>
+  <RimAgent.Benchmark.Task.skill_triage>Skill: triage</RimAgent.Benchmark.Task.skill_triage>
+  <RimAgent.Benchmark.Task.skill_manhunter>Skill: manhunters</RimAgent.Benchmark.Task.skill_manhunter>
+  <RimAgent.Benchmark.Task.skill_new_colonist>Skill: new colonist</RimAgent.Benchmark.Task.skill_new_colonist>
+  <RimAgent.Benchmark.Task.skill_food_runway>Skill: food runway</RimAgent.Benchmark.Task.skill_food_runway>
+  <RimAgent.Benchmark.Task.skill_mood>Skill: mood</RimAgent.Benchmark.Task.skill_mood>
+  <RimAgent.Benchmark.Task.skill_schedule>Skill: schedule</RimAgent.Benchmark.Task.skill_schedule>
+  <RimAgent.Benchmark.Tier.skill>[Skill comparison]</RimAgent.Benchmark.Tier.skill>
+  <RimAgent.Benchmark.SkillsDone>RimAgent with vs without skills: {0}</RimAgent.Benchmark.SkillsDone>
 </LanguageData>

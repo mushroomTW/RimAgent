@@ -43,6 +43,11 @@ public sealed class ToolPermissions
         return _flags[(int)category];
     }
 
+    public bool Allows(ToolCategory category, string tool)
+    {
+        return Allows(category) && !Hidden.Contains(tool);
+    }
+
     public void Set(ToolCategory category, bool value)
     {
         _flags[(int)category] = value;

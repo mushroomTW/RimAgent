@@ -49,4 +49,23 @@
   <RimAgent.Benchmark.Tier.survey>[勘查比较]</RimAgent.Benchmark.Tier.survey>
   <RimAgent.Benchmark.SurveyDone>RimAgent 勘查工具比较：{0}</RimAgent.Benchmark.SurveyDone>
   <RimAgent.Benchmark.SurveyNeedsImages>当前模型不接受图片，无法比较 take_screenshot。</RimAgent.Benchmark.SurveyNeedsImages>
+  <RimAgent.Benchmark.Task.mine_steel>开采钢铁矿</RimAgent.Benchmark.Task.mine_steel>
+  <RimAgent.Benchmark.Task.deconstruct_wall>拆除砖墙</RimAgent.Benchmark.Task.deconstruct_wall>
+  <RimAgent.Benchmark.Task.unforbid_wood>解除禁止木材</RimAgent.Benchmark.Task.unforbid_wood>
+  <RimAgent.Benchmark.Task.cancel_cut>取消砍伐标记</RimAgent.Benchmark.Task.cancel_cut>
+  <RimAgent.Benchmark.Task.animal_area>动物活动区</RimAgent.Benchmark.Task.animal_area>
+  <RimAgent.Benchmark.Task.draft_move>征召并移动</RimAgent.Benchmark.Task.draft_move>
+  <RimAgent.Benchmark.Task.wear_hat>穿上帽子</RimAgent.Benchmark.Task.wear_hat>
+  <RimAgent.Benchmark.Task.door_hold_open>门保持开启</RimAgent.Benchmark.Task.door_hold_open>
+  <RimAgent.Benchmark.Task.accept_quest>接受任务</RimAgent.Benchmark.Task.accept_quest>
+  <RimAgent.Benchmark.Task.survey_ore>勘查：标记矿脉</RimAgent.Benchmark.Task.survey_ore>
+  <RimAgent.Benchmark.Task.survey_ford>勘查：找浅滩</RimAgent.Benchmark.Task.survey_ford>
+  <RimAgent.Benchmark.Task.skill_triage>技能：伤患分级</RimAgent.Benchmark.Task.skill_triage>
+  <RimAgent.Benchmark.Task.skill_manhunter>技能：发狂动物</RimAgent.Benchmark.Task.skill_manhunter>
+  <RimAgent.Benchmark.Task.skill_new_colonist>技能：新殖民者</RimAgent.Benchmark.Task.skill_new_colonist>
+  <RimAgent.Benchmark.Task.skill_food_runway>技能：存粮天数</RimAgent.Benchmark.Task.skill_food_runway>
+  <RimAgent.Benchmark.Task.skill_mood>技能：心情</RimAgent.Benchmark.Task.skill_mood>
+  <RimAgent.Benchmark.Task.skill_schedule>技能：作息</RimAgent.Benchmark.Task.skill_schedule>
+  <RimAgent.Benchmark.Tier.skill>[技能比较]</RimAgent.Benchmark.Tier.skill>
+  <RimAgent.Benchmark.SkillsDone>RimAgent 技能开关比较：{0}</RimAgent.Benchmark.SkillsDone>
 </LanguageData>

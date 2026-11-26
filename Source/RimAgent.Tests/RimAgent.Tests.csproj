@@ -38,6 +38,7 @@
   <ItemGroup>
     <Compile Include="..\RimAgent.InGameTests\RoomPlan.cs" Link="Linked\RoomPlan.cs" />
     <Compile Include="..\RimAgent.InGameTests\RunLogStats.cs" Link="Linked\RunLogStats.cs" />
+    <Compile Include="..\RimAgent.InGameTests\BenchmarkScoring.cs" Link="Linked\BenchmarkScoring.cs" />
   </ItemGroup>
 
   <!-- 1.7 的遊戲組件、Harmony 3.0、框架組件與 SmashTools：直接參考並複製到測試輸出，執行期才找得到。 -->

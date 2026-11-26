@@ -60,6 +60,8 @@ public sealed partial class BenchmarkComponent : GameComponent
         public string Id;
         public string Tier = Basic;
         public string Instruction;
+        /// <summary>技能題該讀的技能。</summary>
+        public string Skill;
         /// <summary>自我檢查用的參考解，不經模型。</summary>
         public Func<IGameWorld, CommandResult> Solve;
         /// <summary>送出指令前佈置場景；回傳 null 表示成功，否則為無法佈置的原因（該題記為無效、不送指令）。</summary>
@@ -79,7 +81,10 @@ public sealed partial class BenchmarkComponent : GameComponent
         FreezerTask(), CornStorageTask(), KitchenBillsTask(), InjuredCareTask(),
         DailyScheduleTask(), DefendTask(), SetResearchTask(), TameAnimalTask(),
         RecruitPrisonerTask(), SurgeryTask(), DeleteTask(), TradeTask(),
-        SurveyRichSoilTask(), SurveyWallGapTask(), SurveyFirmGroundTask(), SurveyClearGroundTask()
+        MineSteelTask(), DeconstructWallTask(), UnforbidWoodTask(), CancelCutTask(), AnimalAreaTask(),
+        DraftMoveTask(), WearHatTask(), DoorHoldOpenTask(), AcceptQuestTask(),
+        SurveyRichSoilTask(), SurveyWallGapTask(), SurveyFirmGroundTask(), SurveyClearGroundTask(), SurveyOreTask(), SurveyFordTask(),
+        SkillTriageTask(), SkillManhunterTask(), SkillNewColonistTask(), SkillFoodRunwayTask(), SkillMoodTask(), SkillScheduleTask()
     ];
 
     private static BenchTask StockpileTask() =>
@@ -151,7 +156,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             Id = "food_report",
             Instruction = "告訴我殖民地目前的食物存量大概能撐幾天。可以查詢，但不要改變殖民地的任何東西。",
             Measure = _ => new(),
-            Check = (_, _, reply) => reply != null && DigitPattern.IsMatch(reply) ? null : "reply has no number"
+            Check = (_, _, reply) => BenchmarkScoring.Days(reply).Any() ? null : "reply gives no number of days"
         };
 
     private static BenchTask TwoRoomHouseTask() =>
@@ -299,8 +304,14 @@ public sealed partial class BenchmarkComponent : GameComponent
         _started = true;
         string text = File.ReadAllText(MarkerPath);
         XElement marker = string.IsNullOrWhiteSpace(text) ? null : XDocument.Parse(text).Root;
-        if ((bool?)marker?.Attribute("selfcheck") == true) SelfCheck();
-        else if ((bool?)marker?.Attribute("survey") == true) _ = CompareSurveyAsync(isolated: true);
+        if ((bool?)marker?.Attribute("selfcheck") == true)
+        {
+            SelfCheck();
+            return;
+        }
+        int rounds = Math.Clamp((int?)marker?.Attribute("rounds") ?? DefaultRounds, 1, MaxRounds);
+        if ((bool?)marker?.Attribute("survey") == true) _ = CompareSurveyAsync(isolated: true, rounds);
+        else if ((bool?)marker?.Attribute("skills") == true) _ = CompareSkillsAsync(isolated: true, rounds);
         else _ = RunAsync(tier: null, isolated: true);
     }
 
@@ -339,63 +350,147 @@ public sealed partial class BenchmarkComponent : GameComponent
     {
         if (_running) return;
         Reasoning = level;
-        _ = tier == Survey ? CompareSurveyAsync(isolated: false) : RunAsync(tier, isolated: false);
+        _ = tier switch
+        {
+            Survey => CompareSurveyAsync(isolated: false, DefaultRounds),
+            SkillTier => CompareSkillsAsync(isolated: false, DefaultRounds),
+            _ => RunAsync(tier, isolated: false)
+        };
     }
 
     internal const string Survey = "survey";
     private const string InspectTool = "inspect_area";
     private const string ScreenshotTool = "take_screenshot";
 
-    private const int SurveyRounds = 3;
+    /// <summary>比較模式每邊跑幾輪；每題成對比較，輪數越多信賴區間越窄。</summary>
+    private const int DefaultRounds = 3;
+    private const int MaxRounds = 10;
 
     /// <summary>這一輪唯一可用的勘查工具；null 表示不限制。</summary>
     private static string _surveyTool;
 
     /// <summary>
-    /// 同樣的題目輪流只給 inspect_area 或只給 take_screenshot，各跑 <see cref="SurveyRounds"/> 輪，每輪對調先後；
+    /// 同樣的題目輪流只給 inspect_area 或只給 take_screenshot，各跑 <paramref name="rounds"/> 輪，每輪對調先後；
     /// 都藏 get_map_overview 與 find_things，它們也能看地形或列出牆的座標，留著就不必勘查。每輪換地點，同一輪兩個工具用同一處。
     /// </summary>
-    private static async Task CompareSurveyAsync(bool isolated)
+    private static async Task CompareSurveyAsync(bool isolated, int rounds)
     {
-        List<IntVec3> sites = Find.CurrentMap == null ? [] : FindSites(Find.CurrentMap, SurveyRounds);
-        if (sites.Count < SurveyRounds)
+        List<IntVec3> sites = Find.CurrentMap == null ? [] : FindSites(Find.CurrentMap, rounds);
+        if (sites.Count < rounds)
         {
-            string problem = string.Create(CultureInfo.InvariantCulture, $"SURVEY not started: {sites.Count} open {SiteSize}x{SiteSize} sites, need {SurveyRounds}");
+            string problem = string.Create(CultureInfo.InvariantCulture, $"SURVEY not started: {sites.Count} open {SiteSize}x{SiteSize} sites, need {rounds}");
             Log.Warning(LogPrefix + problem);
             if (!isolated) Messages.Message(problem, MessageTypeDefOf.RejectInput, historical: false);
             return;
         }
+        (Dictionary<string, BenchmarkScore> scores, Dictionary<string, List<IReadOnlyDictionary<string, bool?>>> outcomes) = await RunArmsAsync(
+            Survey, isolated, rounds, [InspectTool, ScreenshotTool], "SURVEY", (round, tool) =>
+            {
+                _surveyTool = tool;
+                _fixedSite = sites[round];
+                RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", "find_things", SubagentTools.ToolName, tool == InspectTool ? ScreenshotTool : InspectTool };
+            });
+        if (scores.Count == 0) return;
+        string result = string.Join(" | ", scores.Select(p => string.Create(CultureInfo.InvariantCulture,
+            $"{p.Key} {p.Value.Passed}/{p.Value.Total}, {p.Value.PassedByLooking} of them after looking, looked {p.Value.SurveyCalls}x, tools {p.Value.Tools} (failed {p.Value.Failures}), {p.Value.Seconds:0}s, in {p.Value.Input}, out {p.Value.Output}, {PerPass(p.Value)}")))
+            + " | " + Difference(ScreenshotTool, InspectTool, outcomes);
+        Log.Warning(LogPrefix + "SURVEY DONE: " + result);
+        if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyDone".Translate(result), MessageTypeDefOf.NeutralEvent, historical: false);
+    }
+
+    internal const string SkillTier = "skill";
+
+    /// <summary>這一輪藏起 read_skill 與技能索引。</summary>
+    private static bool _skillsHidden;
+
+    /// <summary>
+    /// 技能題輪流開、關技能各跑 <paramref name="rounds"/> 輪，每輪對調先後；指令只描述情況，正確做法只寫在技能裡，
+    /// 兩邊的通過率差就是技能的效用。
+    /// </summary>
+    private static async Task CompareSkillsAsync(bool isolated, int rounds)
+    {
+        (Dictionary<string, BenchmarkScore> scores, Dictionary<string, List<IReadOnlyDictionary<string, bool?>>> outcomes) = await RunArmsAsync(
+            SkillTier, isolated, rounds, [ArmName(false), ArmName(true)], "SKILLS", (_, arm) =>
+            {
+                _skillsHidden = arm == ArmName(true);
+                if (_skillsHidden) RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { SkillTools.ToolName };
+            });
+        if (scores.Count == 0) return;
+        string result = string.Join(" | ", scores.Select(p => string.Create(CultureInfo.InvariantCulture,
+            $"{p.Key} {p.Value.Passed}/{p.Value.Total}, read the expected skill in {p.Value.ExpectedSkillReads}, read_skill {p.Value.SkillReads}x, tools {p.Value.Tools} (failed {p.Value.Failures}), {p.Value.Seconds:0}s, in {p.Value.Input}, out {p.Value.Output}, {PerPass(p.Value)}")))
+            + " | " + Difference(ArmName(false), ArmName(true), outcomes);
+        Log.Warning(LogPrefix + "SKILLS DONE: " + result);
+        if (!isolated) Messages.Message("RimAgent.Benchmark.SkillsDone".Translate(result), MessageTypeDefOf.NeutralEvent, historical: false);
+    }
+
+    /// <summary>兩邊輪流各跑 <paramref name="rounds"/> 輪、每輪對調先後；<paramref name="enter"/> 設定這一輪的那一邊，跑完一律還原。</summary>
+    private static async Task<(Dictionary<string, BenchmarkScore>, Dictionary<string, List<IReadOnlyDictionary<string, bool?>>>)> RunArmsAsync(
+        string tier, bool isolated, int rounds, string[] arms, string label, Action<int, string> enter)
+    {
         var scores = new Dictionary<string, BenchmarkScore>(StringComparer.Ordinal);
-        string[] order = [InspectTool, ScreenshotTool];
-        foreach ((int round, string tool) in Enumerable.Range(0, SurveyRounds).SelectMany(i => (i % 2 == 0 ? order : order.Reverse()).Select(t => (i, t))))
+        var outcomes = new Dictionary<string, List<IReadOnlyDictionary<string, bool?>>>(StringComparer.Ordinal);
+        foreach ((int round, string arm) in Enumerable.Range(0, rounds).SelectMany(i => (i % 2 == 0 ? arms : arms.Reverse()).Select(a => (i, a))))
         {
-            _surveyTool = tool;
-            _fixedSite = sites[round];
-            RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { "get_map_overview", "find_things", SubagentTools.ToolName, tool == InspectTool ? ScreenshotTool : InspectTool };
+            enter(round, arm);
             BenchmarkScore s;
             try
             {
-                s = await RunAsync(Survey, isolated);
+                s = await RunAsync(tier, isolated);
             }
             finally
             {
                 _surveyTool = null;
                 _fixedSite = null;
+                _skillsHidden = false;
                 RimAgentSettings.HiddenTools = System.Collections.Frozen.FrozenSet<string>.Empty;
             }
             if (s == null)
             {
-                Log.Warning(LogPrefix + "SURVEY stopped early: a " + tool + " round did not finish");
+                Log.Warning(LogPrefix + label + " stopped early: a " + arm + " round did not finish");
                 break;
             }
-            scores[tool] = scores.TryGetValue(tool, out BenchmarkScore sum) ? sum.Plus(s) : s;
+            scores[arm] = scores.TryGetValue(arm, out BenchmarkScore sum) ? sum.Plus(s) : s;
+            AddOutcomes(outcomes, arm, s);
         }
-        if (scores.Count == 0) return;
-        string result = string.Join(" | ", scores.Select(p => string.Create(CultureInfo.InvariantCulture,
-            $"{p.Key} {p.Value.Passed}/{p.Value.Total}, {p.Value.PassedByLooking} of them after looking, looked {p.Value.SurveyCalls}x, tools {p.Value.Tools} (failed {p.Value.Failures}), {p.Value.Seconds:0}s, in {p.Value.Input}, out {p.Value.Output}")));
-        Log.Warning(LogPrefix + "SURVEY DONE: " + result);
-        if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyDone".Translate(result), MessageTypeDefOf.NeutralEvent, historical: false);
+        return (scores, outcomes);
     }
+
+    private static string ArmName(bool skillsHidden) => skillsHidden ? "without skills" : "with skills";
+
+    private static string PerPass(BenchmarkScore score) =>
+        score.Passed == 0
+            ? "no passes"
+            : string.Create(CultureInfo.InvariantCulture, $"per pass: in {score.Input / score.Passed}, out {score.Output / score.Passed}, {score.Seconds / score.Passed:0}s");
+
+    /// <summary>
+    /// <paramref name="a"/> 減 <paramref name="b"/> 的通過率差（百分點），以同一輪同一題成對、兩邊都有效的結果做 bootstrap，
+    /// 95% 信賴區間含 0 就是平手：題數少時差一兩題可能只是運氣。
+    /// </summary>
+    private static string Difference(string a, string b, Dictionary<string, List<IReadOnlyDictionary<string, bool?>>> outcomes)
+    {
+        if (!outcomes.TryGetValue(a, out List<IReadOnlyDictionary<string, bool?>> left) || !outcomes.TryGetValue(b, out List<IReadOnlyDictionary<string, bool?>> right))
+            return "difference: one side did not finish";
+        List<int> diffs = [.. left.Zip(right).SelectMany(r => r.First
+            .Where(p => p.Value.HasValue && r.Second.TryGetValue(p.Key, out bool? other) && other.HasValue)
+            .Select(p => (p.Value.Value ? 1 : 0) - (r.Second[p.Key].Value ? 1 : 0)))];
+        if (diffs.Count == 0) return "difference: no valid pairs";
+        (double mean, double low, double high) = BenchmarkScoring.PairedBootstrap(diffs);
+        string verdict = "tied";
+        if (low > 0) verdict = a + " better";
+        else if (high < 0) verdict = b + " better";
+        return string.Create(CultureInfo.InvariantCulture, $"{a} minus {b}: {mean * 100:+0;-0;0} pp (95% CI {low * 100:+0;-0;0} to {high * 100:+0;-0;0}, {diffs.Count} pairs), {verdict}");
+    }
+
+    private static void AddOutcomes(Dictionary<string, List<IReadOnlyDictionary<string, bool?>>> outcomes, string arm, BenchmarkScore score)
+    {
+        if (!outcomes.TryGetValue(arm, out List<IReadOnlyDictionary<string, bool?>> rounds)) outcomes[arm] = rounds = [];
+        rounds.Add(score.Outcomes);
+    }
+
+    /// <summary>這題成功讀過的技能名稱。</summary>
+    private static List<string> SkillsRead(IEnumerable<TranscriptEntry> tools) =>
+        [.. tools.Where(t => t.ToolName == SkillTools.ToolName && !t.Failed && !t.Cancelled)
+            .Select(t => t.ArgumentValues != null && t.ArgumentValues.TryGetValue("skill", out object name) ? Convert.ToString(name, CultureInfo.InvariantCulture) : t.Arguments)];
 
     private static List<BenchmarkRow> CreateRows(IEnumerable<BenchTask> tasks) =>
         [.. tasks.Select(t => new BenchmarkRow { Id = t.Id, Tier = t.Tier, Instruction = t.Instruction })];
@@ -444,6 +539,9 @@ public sealed partial class BenchmarkComponent : GameComponent
     [DebugAction("RimAgent", "Benchmark: inspect_area vs take_screenshot", allowedGameStates = AllowedGameStates.PlayingOnMap)]
     private static void DebugRunSurvey() => ConfirmAndRun(Survey);
 
+    [DebugAction("RimAgent", "Benchmark: with vs without skills", allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    private static void DebugRunSkills() => ConfirmAndRun(SkillTier);
+
     /// <summary>
     /// 開發模式按鈕手動起跑：題目會清空對話、在地圖上放藍圖與區域、生成敵人，所以先確認並選思考強度；
     /// 跑完還原暫時改動的設定與時間流速（隔離環境用標記檔起跑時不需要還原）。
@@ -458,7 +556,7 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.WindowStack.Add(new Window_BenchmarkStart(tier));
     }
 
-    /// <param name="tier">只跑這一級的題目；null 表示勘查專用題以外的全部。</param>
+    /// <param name="tier">只跑這一級的題目；null 表示基本與高難度題（勘查題與技能題只在比較時跑）。</param>
     /// <param name="isolated">由隔離環境的標記檔起跑：讀標記檔的模型與思考強度覆寫，跑完不還原設定。</param>
     /// <returns>沒跑完時為 null。</returns>
     private static async Task<BenchmarkScore> RunAsync(string tier, bool isolated)
@@ -508,12 +606,12 @@ public sealed partial class BenchmarkComponent : GameComponent
                 Log.Warning(LogPrefix + "output limit unknown for " + (expectedModel ?? "(no model)") + ": refresh the provider's model list in RimLLM Framework settings, or reasoning may use up the default limit");
             int fallbackTasks = 0;
             int passedWithoutFallback = 0;
-            var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0 };
-            var invalidByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0 };
+            var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0, [SkillTier] = 0 };
+            var invalidByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0, [SkillTier] = 0 };
             int totalTools = 0;
             int totalFailures = 0;
             var total = default(ModelUsage);
-            BenchTask[] tasks = [.. Tasks.Where(t => tier == null ? t.Tier != Survey : t.Tier == tier)];
+            BenchTask[] tasks = [.. Tasks.Where(t => tier == null ? t.Tier is Basic or Hard : t.Tier == tier)];
             _session = session;
             _rows = CreateRows(tasks);
             if (!isolated) Window_BenchmarkProgress.Show(_rows);
@@ -525,6 +623,12 @@ public sealed partial class BenchmarkComponent : GameComponent
             int surveyCalls = 0;
             int? unknownCalls = 0;
             int passedByLooking = 0;
+            int skillReads = 0;
+            int expectedSkillReads = 0;
+            var taskOutcomes = new Dictionary<string, bool?>(StringComparer.Ordinal);
+            string taskSet = TaskSetHash(tasks);
+            string tierName = tier ?? "all";
+            string previousTaskSet = PreviousTaskSet(resultPath, tierName);
             for (int i = 0; i < tasks.Length; i++)
             {
                 BenchTask task = tasks[i];
@@ -542,20 +646,24 @@ public sealed partial class BenchmarkComponent : GameComponent
                 TaskOutcome outcome = await RunTaskAsync(session, task);
                 ModelUsage usage = ReadUsage(folder, startedUtc, expectedModel);
                 int attempts = 1;
-                // 金鑰、餘額、模型不存在這類錯誤等 30 秒也不會好。
-                if (outcome.ServiceError is { ErrorKind: not AgentErrorKind.Configuration })
+                ModelUsage last = usage;
+                // 金鑰、餘額、模型不存在這類錯誤等 30 秒也不會好。換了備援模型的成績不屬於受測模型，跟服務出錯一樣重跑。
+                if (outcome.ServiceError is { ErrorKind: not AgentErrorKind.Configuration } || usage.FallbackSteps > 0)
                 {
                     TaskOutcome first = outcome;
                     attempts++;
-                    Log.Warning(LogPrefix + task.Id + " retrying after model service error: " + outcome.ServiceError.Text);
+                    Log.Warning(LogPrefix + task.Id + " retrying after " + (outcome.ServiceError != null ? "model service error: " + outcome.ServiceError.Text : "falling back to another model"));
                     await Task.Delay(ServiceRetryDelay);
                     startedUtc = DateTime.UtcNow;
                     outcome = await RunTaskAsync(session, task);
-                    usage = usage.Plus(ReadUsage(folder, startedUtc, expectedModel));
+                    last = ReadUsage(folder, startedUtc, expectedModel);
+                    usage = usage.Plus(last);
                     outcome = outcome with { Tools = [.. first.Tools, .. outcome.Tools], Seconds = first.Seconds + outcome.Seconds };
                 }
                 (string failure, List<TranscriptEntry> tools, float seconds, string reply, TranscriptEntry serviceError, bool setupFailed) = outcome;
-                bool invalid = serviceError != null || setupFailed;
+                bool fellBack = last.FallbackSteps > 0;
+                if (fellBack) failure = "fell back to another model" + (failure == null ? string.Empty : "; " + failure);
+                bool invalid = serviceError != null || setupFailed || fellBack;
                 configurationErrors = serviceError?.ErrorKind == AgentErrorKind.Configuration ? configurationErrors + 1 : 0;
                 total = total.Plus(usage);
                 int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage, invalid, attempts);
@@ -568,6 +676,10 @@ public sealed partial class BenchmarkComponent : GameComponent
                 else if (usage.FallbackSteps == 0 && failure == null) passedWithoutFallback++;
                 surveyCalls += tools.Count(t => t.ToolName == _surveyTool);
                 if (failure == null && tools.Any(t => t.ToolName == _surveyTool && !t.Failed && !t.Cancelled)) passedByLooking++;
+                List<string> read = SkillsRead(tools);
+                skillReads += read.Count;
+                if (task.Skill != null && read.Contains(task.Skill, StringComparer.OrdinalIgnoreCase)) expectedSkillReads++;
+                taskOutcomes[task.Id] = invalid ? null : failure == null;
                 if (failure == null) passedByTier[task.Tier]++;
                 else if (invalid) invalidByTier[task.Tier]++;
             }
@@ -580,6 +692,10 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["reasoning"] = ReasoningName,
                 ["surveyTool"] = _surveyTool,
                 ["note"] = "summary",
+                ["tier"] = tierName,
+                // 題目換了就不能和之前的成績比；判分邏輯的改動不在雜湊裡，要看 modVersion。
+                ["taskSet"] = taskSet,
+                ["sameTaskSetAsPrevious"] = previousTaskSet == null ? null : previousTaskSet == taskSet,
                 ["passed"] = passedByTier.Values.Sum(),
                 ["total"] = tasks.Length - invalidByTier.Values.Sum(),
                 ["invalid"] = invalidByTier.Values.Sum(),
@@ -592,9 +708,16 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["unknownCalls"] = unknownCalls,
                 ["surveyCalls"] = surveyCalls,
                 ["passedByLooking"] = passedByLooking,
+                ["skillsHidden"] = _skillsHidden,
+                // 一般題本來就不需要技能，這裡讀得多代表技能描述把模型引錯了方向。
+                ["skillReads"] = skillReads,
+                ["expectedSkillReads"] = expectedSkillReads,
                 ["steps"] = total.Steps,
                 ["in"] = total.Input,
                 ["out"] = total.Output,
+                ["inPerPass"] = passedByTier.Values.Sum() == 0 ? null : total.Input / passedByTier.Values.Sum(),
+                ["outPerPass"] = passedByTier.Values.Sum() == 0 ? null : total.Output / passedByTier.Values.Sum(),
+                ["secondsPerPass"] = passedByTier.Values.Sum() == 0 ? null : Math.Round(_rows.Sum(r => r.Seconds) / passedByTier.Values.Sum(), 1),
                 ["modelsUsed"] = total.Models ?? [],
                 ["fallbackTasks"] = fallbackTasks,
                 ["passedWithoutFallback"] = passedWithoutFallback,
@@ -606,9 +729,11 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ["tick"] = startTick
             };
             Append(resultPath, summary);
-            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model, surveyCalls, passedByLooking);
-            // 勘查比較的兩輪不是同一組條件，不能當成這個強度的成績。
-            if (_surveyTool == null) Scores[(tier, Reasoning)] = score;
+            if (previousTaskSet != null && previousTaskSet != taskSet)
+                Log.Warning(LogPrefix + "the " + tierName + " task set changed since the last run (" + previousTaskSet + " -> " + taskSet + "): pass rates are not comparable");
+            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model, surveyCalls, passedByLooking, skillReads, expectedSkillReads) { Outcomes = taskOutcomes };
+            // 比較模式的兩輪不是同一組條件，不能當成這個強度的成績。
+            if (_surveyTool == null && tier != SkillTier) Scores[(tier, Reasoning)] = score;
             Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary, RunLogWriter.Json));
             if (!isolated)
             {
@@ -746,6 +871,9 @@ public sealed partial class BenchmarkComponent : GameComponent
             ["tier"] = task.Tier,
             ["reasoning"] = ReasoningName,
             ["surveyTool"] = _surveyTool,
+            ["skillsHidden"] = _skillsHidden,
+            ["expectedSkill"] = task.Skill,
+            ["skillsRead"] = SkillsRead(tools),
             ["reasoningUsed"] = usage.Reasoning,
             ["modelsUsed"] = usage.Models ?? [],
             ["stepModels"] = usage.StepModels ?? [],
@@ -802,6 +930,35 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     private const int MaxConfigurationErrors = 2;
     private static readonly TimeSpan ServiceRetryDelay = TimeSpan.FromSeconds(30);
+
+    /// <summary>題目代號、級別、該讀的技能與佈置前的指令；佈置時才補上的座標與名字不算。</summary>
+    private static string TaskSetHash(IEnumerable<BenchTask> tasks)
+    {
+        string text = string.Join('\n', tasks.Select(t => t.Id + "|" + t.Tier + "|" + t.Skill + "|" + t.Instruction));
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..12];
+    }
+
+    /// <summary>同一級別上一輪總結的題組雜湊；沒有或讀不到時為 null。</summary>
+    private static string PreviousTaskSet(string resultPath, string tier)
+    {
+        try
+        {
+            if (!File.Exists(resultPath)) return null;
+            foreach (string line in File.ReadLines(resultPath).Reverse())
+            {
+                using JsonDocument doc = JsonDocument.Parse(line);
+                JsonElement e = doc.RootElement;
+                if (e.TryGetProperty("note", out JsonElement note) && note.GetString() == "summary"
+                    && e.TryGetProperty("tier", out JsonElement t) && t.GetString() == tier)
+                    return e.TryGetProperty("taskSet", out JsonElement hash) ? hash.GetString() : null;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or JsonException)
+        {
+            Log.Warning(LogPrefix + "previous task set not read: " + ex.Message);
+        }
+        return null;
+    }
 
     /// <param name="SetupFailed">這張地圖佈置不出場景，沒送指令，不算進通過率。</param>
     /// <param name="ServiceError">模型服務出錯（逾時、額度、設定）以致沒做完；不是模型不會做，不算進通過率。</param>
@@ -1011,8 +1168,7 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     private static bool IsAttackingEnemy(Pawn pawn)
     {
-        IEnumerable<Verse.AI.Job> jobs = new[] { pawn.CurJob }.Concat(pawn.jobs?.jobQueue?.Select(q => q.job) ?? []);
-        return jobs.Any(j => j?.targetA.Thing is Pawn target && _enemies.Contains(target));
+        return Jobs(pawn).Any(j => j.targetA.Thing is Pawn target && _enemies.Contains(target));
     }
 
     // ---- 場景準備與還原 ----
@@ -1168,7 +1324,4 @@ public sealed partial class BenchmarkComponent : GameComponent
         string flat = (text ?? string.Empty).Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", " / ", StringComparison.Ordinal);
         return flat.Length > MaxReplyChars ? flat[..MaxReplyChars] + "…" : flat;
     }
-
-    [GeneratedRegex("[0-9０-９]", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex DigitPattern { get; }
 }

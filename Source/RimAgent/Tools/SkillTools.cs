@@ -14,6 +14,8 @@ namespace RimAgent.Tools;
 /// </summary>
 public sealed class SkillTools
 {
+    public const string ToolName = "read_skill";
+
     private readonly Func<IReadOnlyList<AgentSkill>> _skills;
 
     public SkillTools(Func<IReadOnlyList<AgentSkill>> skills)
@@ -21,7 +23,7 @@ public sealed class SkillTools
         _skills = skills ?? throw new ArgumentNullException(nameof(skills));
     }
 
-    [AgentTool("read_skill", ToolCategory.Observe, ToolRisk.Query)]
+    [AgentTool(ToolName, ToolCategory.Observe, ToolRisk.Query)]
     [Description("Reads the full text of one available skill by name. The system prompt lists only skill names and descriptions; call this when a skill looks relevant to the current instruction.")]
     public string ReadSkill([Description("Skill name exactly as listed in the skills index.")] string skill)
     {

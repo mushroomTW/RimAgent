@@ -18,10 +18,14 @@ internal enum BenchmarkState
     Invalid
 }
 
-internal sealed record BenchmarkScore(int Passed, int Total, int Tools, int Failures, float Seconds, long Input, long Output, string Model, int SurveyCalls, int PassedByLooking)
+internal sealed record BenchmarkScore(int Passed, int Total, int Tools, int Failures, float Seconds, long Input, long Output, string Model, int SurveyCalls, int PassedByLooking, int SkillReads = 0, int ExpectedSkillReads = 0)
 {
     public BenchmarkScore Plus(BenchmarkScore other) => new(Passed + other.Passed, Total + other.Total, Tools + other.Tools, Failures + other.Failures,
-        Seconds + other.Seconds, Input + other.Input, Output + other.Output, Model, SurveyCalls + other.SurveyCalls, PassedByLooking + other.PassedByLooking);
+        Seconds + other.Seconds, Input + other.Input, Output + other.Output, Model, SurveyCalls + other.SurveyCalls, PassedByLooking + other.PassedByLooking,
+        SkillReads + other.SkillReads, ExpectedSkillReads + other.ExpectedSkillReads);
+
+    /// <summary>單輪每題的結果：true 通過、false 失敗、null 無效；比較模式靠它逐題成對。</summary>
+    public IReadOnlyDictionary<string, bool?> Outcomes { get; init; } = new Dictionary<string, bool?>();
 }
 
 /// <summary>進度列表的一列；由 benchmark 更新，視窗只讀。</summary>
