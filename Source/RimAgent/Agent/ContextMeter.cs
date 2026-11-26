@@ -135,7 +135,9 @@ internal sealed class ContextMeter
     /// <summary>圖片等非文字內容估不出 token，兩邊數量不同時差值裡混著它們的真實大小，這一步不分配。</summary>
     private void Attribute(List<AIContent> added, List<AIContent> removed, long total)
     {
-        if (added.Count(IsOpaque) != removed.Count(IsOpaque)) return;
+        int addedOpaque = added.Count(IsOpaque);
+        int removedOpaque = removed.Count(IsOpaque);
+        if (addedOpaque != removedOpaque) return;
         List<AIContent> targets = [.. added.Where(c => !IsOpaque(c) && Estimate(c) > 0)];
         if (targets.Count == 0 || total <= 0) return;
         long weightSum = targets.Sum(Estimate);
@@ -170,9 +172,9 @@ internal sealed class ContextMeter
         foreach (ChatMessage message in messages)
         {
             if (message?.Contents == null) continue;
-            foreach (AIContent content in message.Contents)
+            foreach (AIContent content in message.Contents.Where(c => c != null && seen.Add(c)))
             {
-                if (content != null && seen.Add(content)) list.Add(content);
+                list.Add(content);
             }
         }
         return list;

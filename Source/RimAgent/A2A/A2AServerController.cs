@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -54,7 +55,7 @@ public static class A2AServerController
                 RegisterResolver(_folder!);
                 _server = await StartHostAsync(_folder!, desiredPort).ConfigureAwait(false);
                 Volatile.Write(ref _runningPort, desiredPort);
-                Log.Message("[RimAgent] A2A server listening on http://localhost:" + desiredPort + " (JSON-RPC) and :" + (desiredPort + 1) + " (gRPC).");
+                Log.Message(string.Create(CultureInfo.InvariantCulture, $"[RimAgent] A2A server listening on http://localhost:{desiredPort} (JSON-RPC) and :{desiredPort + 1} (gRPC)."));
             }
             catch (Exception ex)
             {

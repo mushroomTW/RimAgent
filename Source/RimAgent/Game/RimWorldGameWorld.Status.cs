@@ -85,7 +85,7 @@ internal sealed partial class RimWorldGameWorld
         float foodNutrition = 0f;
         int fireCount = 0;
         var accumulator = new ColonistSignalsAccumulator();
-        List<(string Label, bool Critical)> alerts = [.. ActiveAlerts().Select(a => (a.Label.ToString(), a.Priority == AlertPriority.Critical))];
+        List<(string Label, bool Critical)> alerts = [.. ActiveAlerts().Select(a => (a.Label, a.Priority == AlertPriority.Critical))];
 
         if (maps != null)
         {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using RimAgent.Tools;
 
 namespace RimAgent.Agent;
@@ -55,7 +56,7 @@ public sealed class FailureLoopGuard
             if (count != Threshold) return null;
             _redirectedKey = key;
             _redirectedAt = count;
-            return "\n\n<loop_guard>\n" + tool + " has now failed " + count + " times in this instruction with the same error. " +
+            return "\n\n<loop_guard>\n" + tool + " has now failed " + count.ToString(CultureInfo.InvariantCulture) + " times in this instruction with the same error. " +
                    "Repeating it will not help. Change approach: check your assumptions with an observation tool, use a different tool, " +
                    "or stop and tell the player what is blocking you.\n</loop_guard>";
         }

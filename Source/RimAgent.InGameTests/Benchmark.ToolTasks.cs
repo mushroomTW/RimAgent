@@ -79,7 +79,7 @@ public sealed partial class BenchmarkComponent
             Solve = world =>
             {
                 IntVec3 wood = _spawned.First(t => t.def == ThingDefOf.WoodLog).Position;
-                return world.SetForbidden(new CellRectSpec(wood.x, wood.z, wood.x, wood.z), null, forbidden: false);
+                return world.SetForbidden(new CellRectSpec(wood.x, wood.z, wood.x, wood.z), labelContains: null, forbidden: false);
             }
         };
 
@@ -155,20 +155,22 @@ public sealed partial class BenchmarkComponent
                 Delta(before, after, OthersKey) <= 0 ? null : "other colonists were drafted"),
             Solve = world => world.SetDrafted(_mover.thingIDNumber, drafted: true) is { Success: false } draft ? draft : world.OrderMoveTo(_mover.thingIDNumber, _moveTarget.x, _moveTarget.z)
         };
-        task.Setup = map =>
-        {
-            _mover = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.drafter != null && !p.Downed && !p.WorkTagIsDisabled(WorkTags.Violent));
-            if (_mover == null) return "no colonist can be drafted";
-            List<IntVec3> spots = [.. GenRadial.RadialCellsAround(_mover.Position, 10f, useCenter: false)
-                .Where(c => (c - _mover.Position).LengthHorizontalSquared >= 36 && c.InBounds(map) && c.Standable(map) && !c.Fogged(map) && c.GetFirstPawn(map) == null
-                    && map.reachability.CanReach(_mover.Position, c, PathEndMode.OnCell, TraverseParms.For(_mover)))];
-            if (spots.Count == 0) return "no reachable cell near the colonist";
-            _moveTarget = spots[0];
-            task.Instruction = string.Create(CultureInfo.InvariantCulture, $"徵召殖民者 {_mover.LabelShort}，命令這位殖民者移動到 ({_moveTarget.x},{_moveTarget.z})。其他殖民者不要徵召。");
-            return null;
-        };
+        task.Setup = map => SetupDraftMove(map, task);
         task.Cleanup = _ => _mover = null;
         return task;
+    }
+
+    private static string SetupDraftMove(Map map, BenchTask task)
+    {
+        _mover = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.drafter != null && !p.Downed && !p.WorkTagIsDisabled(WorkTags.Violent));
+        if (_mover == null) return "no colonist can be drafted";
+        List<IntVec3> spots = [.. GenRadial.RadialCellsAround(_mover.Position, 10f, useCenter: false)
+            .Where(c => (c - _mover.Position).LengthHorizontalSquared >= 36 && c.InBounds(map) && c.Standable(map) && !c.Fogged(map) && c.GetFirstPawn(map) == null
+                && map.reachability.CanReach(_mover.Position, c, PathEndMode.OnCell, TraverseParms.For(_mover)))];
+        if (spots.Count == 0) return "no reachable cell near the colonist";
+        _moveTarget = spots[0];
+        task.Instruction = string.Create(CultureInfo.InvariantCulture, $"徵召殖民者 {_mover.LabelShort}，命令這位殖民者移動到 ({_moveTarget.x},{_moveTarget.z})。其他殖民者不要徵召。");
+        return null;
     }
 
     /// <summary>挑沒戴帽子的殖民者，穿上不必換掉身上的衣服，還原時只要拿掉帽子。</summary>
@@ -184,28 +186,10 @@ public sealed partial class BenchmarkComponent
                 [TargetKey] = _wearer != null && _hat != null
                     && (_wearer.apparel.WornApparel.Contains(_hat) || (_wearer.CurJobDef == JobDefOf.Wear && _wearer.CurJob.targetA.Thing == _hat)) ? 1 : 0
             },
-            Check = (_, after, _) => after[TargetKey] == 1 ? null : string.Create(CultureInfo.InvariantCulture, $"{_wearer?.LabelShort} is not wearing or going to wear the hat"),
-            Solve = world =>
-            {
-                FloatMenuInfo menu = world.GetFloatMenuOptions(_wearer.thingIDNumber, MapTarget.OfThing(_hat.thingIDNumber));
-                string label = "ForceWear".Translate(_hat.LabelShort, _hat).Resolve();
-                FloatMenuOptionInfo wear = menu.Options.FirstOrDefault(o => !o.Disabled && o.Label.Contains(label, System.StringComparison.Ordinal));
-                return wear == null ? CommandResult.Fail("no wear option: " + menu.Error) : world.UseFloatMenuOption(_wearer.thingIDNumber, MapTarget.OfThing(_hat.thingIDNumber), wear.Number, wear.Label);
-            }
+            Check = (_, after, _) => after[TargetKey] == 1 ? null : $"{_wearer?.LabelShort} is not wearing or going to wear the hat",
+            Solve = SolveWearHat
         };
-        task.Setup = map =>
-        {
-            ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail("Apparel_CowboyHat");
-            if (def == null) return "missing Apparel_CowboyHat";
-            _wearer = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.apparel != null && !p.Downed && !p.Drafted
-                && !p.apparel.WornApparel.Any(a => a.def.apparel.layers.Contains(ApparelLayerDefOf.Overhead)));
-            if (_wearer == null) return "every colonist already wears a hat";
-            _hat = (Apparel)ThingMaker.MakeThing(def, GenStuff.DefaultStuffFor(def));
-            if (!GenPlace.TryPlaceThing(_hat, _wearer.Position, map, ThingPlaceMode.Near)) return "could not place the hat";
-            _hat.SetForbidden(value: false, warnOnFail: false);
-            task.Instruction = $"{_wearer.LabelShort} 旁邊的地上有一頂{_hat.LabelNoCount}。讓 {_wearer.LabelShort} 現在就去把它穿上。";
-            return null;
-        };
+        task.Setup = map => SetupWearHat(map, task);
         task.Cleanup = _ =>
         {
             if (_wearer?.CurJob?.targetA.Thing == _hat) _wearer.jobs.EndCurrentJob(JobCondition.InterruptForced);
@@ -214,6 +198,28 @@ public sealed partial class BenchmarkComponent
             _wearer = null;
         };
         return task;
+    }
+
+    private static CommandResult SolveWearHat(IGameWorld world)
+    {
+        FloatMenuInfo menu = world.GetFloatMenuOptions(_wearer.thingIDNumber, MapTarget.OfThing(_hat.thingIDNumber));
+        string label = "ForceWear".Translate(_hat.LabelShort, _hat).Resolve();
+        FloatMenuOptionInfo wear = menu.Options.FirstOrDefault(o => !o.Disabled && o.Label.Contains(label, System.StringComparison.Ordinal));
+        return wear == null ? CommandResult.Fail("no wear option: " + menu.Error) : world.UseFloatMenuOption(_wearer.thingIDNumber, MapTarget.OfThing(_hat.thingIDNumber), wear.Number, wear.Label);
+    }
+
+    private static string SetupWearHat(Map map, BenchTask task)
+    {
+        ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail("Apparel_CowboyHat");
+        if (def == null) return "missing Apparel_CowboyHat";
+        _wearer = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.apparel != null && !p.Downed && !p.Drafted
+            && !p.apparel.WornApparel.Any(a => a.def.apparel.layers.Contains(ApparelLayerDefOf.Overhead)));
+        if (_wearer == null) return "every colonist already wears a hat";
+        _hat = (Apparel)ThingMaker.MakeThing(def, GenStuff.DefaultStuffFor(def));
+        if (!GenPlace.TryPlaceThing(_hat, _wearer.Position, map, ThingPlaceMode.Near)) return "could not place the hat";
+        _hat.SetForbidden(value: false, warnOnFail: false);
+        task.Instruction = $"{_wearer.LabelShort} 旁邊的地上有一頂{_hat.LabelNoCount}。讓 {_wearer.LabelShort} 現在就去把它穿上。";
+        return null;
     }
 
     private static BenchTask DoorHoldOpenTask() =>
@@ -238,7 +244,7 @@ public sealed partial class BenchmarkComponent
             {
                 string label = "CommandToggleDoorHoldOpen".Translate();
                 GizmoInfo gizmo = world.GetGizmos(_door.thingIDNumber).FirstOrDefault(g => g.Label == label);
-                return gizmo == null ? CommandResult.Fail("no hold open button") : world.UseGizmo(_door.thingIDNumber, gizmo.Number, gizmo.Label, null);
+                return gizmo == null ? CommandResult.Fail("no hold open button") : world.UseGizmo(_door.thingIDNumber, gizmo.Number, gizmo.Label, target: null);
             }
         };
 
@@ -260,14 +266,7 @@ public sealed partial class BenchmarkComponent
                 return world.AcceptQuest(_quest.id, reward, accepter);
             }
         };
-        task.Setup = _ =>
-        {
-            _quest = MapWorldTests.GenerateManualQuest("OpportunitySite_BanditCamp", "TradeRequest");
-            if (_quest == null) return "no manually accepted quest could be generated on this world";
-            if (!QuestUtility.CanAcceptQuest(_quest).Accepted) return "the generated quest cannot be accepted: " + QuestUtility.CanAcceptQuest(_quest).Reason;
-            task.Instruction = $"任務清單裡有一個新任務「{_quest.name}」。接受這個任務；要選獎勵時選第一個。其他任務不要動。";
-            return null;
-        };
+        task.Setup = _ => SetupAcceptQuest(task);
         task.Cleanup = _ =>
         {
             if (_quest == null) return;
@@ -278,6 +277,15 @@ public sealed partial class BenchmarkComponent
         return task;
     }
 
+    private static string SetupAcceptQuest(BenchTask task)
+    {
+        _quest = MapWorldTests.GenerateManualQuest("OpportunitySite_BanditCamp", "TradeRequest");
+        if (_quest == null) return "no manually accepted quest could be generated on this world";
+        if (!QuestUtility.CanAcceptQuest(_quest).Accepted) return "the generated quest cannot be accepted: " + QuestUtility.CanAcceptQuest(_quest).Reason;
+        task.Instruction = $"任務清單裡有一個新任務「{_quest.name}」。接受這個任務；要選獎勵時選第一個。其他任務不要動。";
+        return null;
+    }
+
     /// <summary>在殖民者附近找一排完全空著的格子，依序放上 <paramref name="make"/> 做出的東西（回傳 null 的格子留空）。</summary>
     private static string SpawnRow(Map map, int length, System.Func<int, Thing> make, bool playerOwned, bool forbid = false)
     {
@@ -286,7 +294,7 @@ public sealed partial class BenchmarkComponent
         foreach (IntVec3 start in GenRadial.RadialCellsAround(center, 25f, useCenter: false))
         {
             List<IntVec3> row = [.. Enumerable.Range(0, length).Select(i => start + new IntVec3(i, 0, 0))];
-            if (!row.All(c => c.InBounds(map) && IsOpen(map, c) && c.GetThingList(map).Count == 0)) continue;
+            if (!row.TrueForAll(c => c.InBounds(map) && IsOpen(map, c) && c.GetThingList(map).Count == 0)) continue;
             for (int i = 0; i < length; i++)
             {
                 if (make(i) is not { } thing) continue;

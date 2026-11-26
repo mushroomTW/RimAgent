@@ -21,9 +21,8 @@ public class UnityMessageMethodTests
     [Test]
     public void UnityMessageMethodsAreInstanceMethods()
     {
-        List<Type> behaviours = LoadableTypes(typeof(AgentTranscript).Assembly)
-            .Where(t => typeof(UnityEngine.MonoBehaviour).IsAssignableFrom(t))
-            .ToList();
+        List<Type> behaviours = [.. LoadableTypes(typeof(AgentTranscript).Assembly)
+            .Where(t => typeof(UnityEngine.MonoBehaviour).IsAssignableFrom(t))];
         var staticMessages = new List<string>();
         foreach (Type type in behaviours)
         {
@@ -31,7 +30,7 @@ public class UnityMessageMethodTests
             {
                 MethodInfo method = type.GetMethod(name,
                     BindingFlags.DeclaredOnly | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
-                    null, Type.EmptyTypes, null);
+                    binder: null, Type.EmptyTypes, modifiers: null);
                 if (method != null)
                 {
                     staticMessages.Add(type.FullName + "." + name);

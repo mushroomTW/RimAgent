@@ -145,6 +145,11 @@ public sealed partial class ToolUsageStats
             lesson.FailedArguments = Limit(failed.Arguments, MaxArgumentChars);
             lesson.FixedArguments = Limit(fix.Arguments, MaxArgumentChars);
         }
+        UpdateLessonLifecycle(failuresThisInstruction);
+    }
+
+    private void UpdateLessonLifecycle(HashSet<string> failuresThisInstruction)
+    {
         // 採用之後仍一再犯同樣的錯，代表這條經驗沒有幫助（或已過時），撤下。
         foreach (ToolLesson lesson in _data.Lessons.Where(l => l.Active && l.ActivatedAt > 0 && failuresThisInstruction.Contains(l.Key)))
         {
@@ -191,13 +196,13 @@ public sealed partial class ToolUsageStats
         if (text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal)) text = text[ToolText.ErrorPrefix.Length..];
         int newline = text.IndexOf('\n', StringComparison.Ordinal);
         if (newline >= 0) text = text[..newline];
-        return Limit(Digits().Replace(text.Trim(), "#"), MaxSignatureChars);
+        return Limit(Digits.Replace(text.Trim(), "#"), MaxSignatureChars);
     }
 
     private static string Limit(string? value, int max) => ToolText.TruncateField((value ?? string.Empty).Replace('\n', ' ').Trim(), max);
 
     [GeneratedRegex(@"\d+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex Digits();
+    private static partial Regex Digits { get; }
 
     public sealed class ToolUsageData
     {

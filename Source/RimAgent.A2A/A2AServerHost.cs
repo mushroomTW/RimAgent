@@ -49,7 +49,7 @@ public static class A2AServerHost
         app.MapGrpcService<A2AGrpcService>();
         try
         {
-            await app.StartAsync().ConfigureAwait(false);
+            await app.StartAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {
@@ -111,7 +111,7 @@ public static class A2AServerHost
     {
         public async ValueTask DisposeAsync()
         {
-            await app.StopAsync().ConfigureAwait(false);
+            await app.StopAsync(CancellationToken.None).ConfigureAwait(false);
             await app.DisposeAsync().ConfigureAwait(false);
         }
     }

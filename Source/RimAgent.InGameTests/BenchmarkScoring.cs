@@ -17,7 +17,7 @@ internal static partial class BenchmarkScoring
         reply == null
             ? []
             : DaysPattern.Matches(reply.Normalize(NormalizationForm.FormKC))
-                .Select(m => float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float days) ? days : (float?)null)
+                .Select(m => float.TryParse(m.Groups["days"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float days) ? days : (float?)null)
                 .Where(d => d.HasValue)
                 .Select(d => d!.Value);
 
@@ -47,7 +47,7 @@ internal static partial class BenchmarkScoring
     }
 
     /// <summary>接在「天、日、day」前的數字；只要求有數字的話，回覆裡的殖民者人數也能過關。</summary>
-    [GeneratedRegex(@"([0-9]+(?:\.[0-9]+)?)\s*(?:天|日|days?\b)", RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?<days>[0-9]+(?:\.[0-9]+)?)\s*(?:天|日|days?\b)", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex DaysPattern { get; }
 
     [GeneratedRegex(@"\([0-9]+,[0-9]+\)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]

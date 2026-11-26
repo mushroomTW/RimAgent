@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
@@ -70,12 +72,12 @@ public class RunReliabilityTests
     [Test]
     public async Task ContextOverflowSummarisesInsteadOfForgettingEverything()
     {
-        for (int i = 0; i < 6; i++) _client.Reply("answer " + i);
+        for (int i = 0; i < 6; i++) _client.Reply("answer " + i.ToString(CultureInfo.InvariantCulture));
         _client.Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
                .Reply("SUMMARY OF OLD TURNS")
                .Reply("done");
         ColonyAgentSession session = NewSession();
-        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i.ToString(CultureInfo.InvariantCulture));
 
         Assert.That(await session.SendAsync("newest"), Is.EqualTo("done"));
 
@@ -85,13 +87,13 @@ public class RunReliabilityTests
     [Test]
     public async Task HistoryIsClearedWhenTheSummaryIsStillTooLong()
     {
-        for (int i = 0; i < 6; i++) _client.Reply("answer " + i);
+        for (int i = 0; i < 6; i++) _client.Reply("answer " + i.ToString(CultureInfo.InvariantCulture));
         _client.Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
                .Reply("SUMMARY")
                .Throw(new RimLLMException(LLMError.ContextWindowExceeded, "still too long"))
                .Reply("done");
         ColonyAgentSession session = NewSession();
-        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i.ToString(CultureInfo.InvariantCulture));
 
         Assert.That(await session.SendAsync("newest"), Is.EqualTo("done"));
         Assert.That(session.History.Any(m => m.Text.Contains("SUMMARY", StringComparison.Ordinal)), Is.False);
@@ -101,11 +103,11 @@ public class RunReliabilityTests
     public async Task StoppingDuringTheSummaryKeepsTheHistory()
     {
         using var cts = new System.Threading.CancellationTokenSource();
-        for (int i = 0; i < 6; i++) _client.Reply("answer " + i);
+        for (int i = 0; i < 6; i++) _client.Reply("answer " + i.ToString(CultureInfo.InvariantCulture));
         _client.Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
                .Throw(new RimLLMException(LLMError.Cancelled, "stopped")).Do(cts.Cancel);
         ColonyAgentSession session = NewSession();
-        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i.ToString(CultureInfo.InvariantCulture), cancellationToken: CancellationToken.None);
 
         Assert.That(await session.SendAsync("newest", cancellationToken: cts.Token), Is.Null);
 
@@ -116,12 +118,12 @@ public class RunReliabilityTests
     [Test]
     public async Task SummaryTimeoutFallsBackToClearingTheHistory()
     {
-        for (int i = 0; i < 6; i++) _client.Reply("answer " + i);
+        for (int i = 0; i < 6; i++) _client.Reply("answer " + i.ToString(CultureInfo.InvariantCulture));
         _client.Throw(new RimLLMException(LLMError.ContextWindowExceeded, "too long"))
                .Throw(new TaskCanceledException("timeout"))
                .Reply("done");
         ColonyAgentSession session = NewSession();
-        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i);
+        for (int i = 0; i < 6; i++) await session.SendAsync("question " + i.ToString(CultureInfo.InvariantCulture));
 
         Assert.That(await session.SendAsync("newest"), Is.EqualTo("done"));
     }
@@ -189,7 +191,7 @@ public class RunReliabilityTests
         List<ChatMessage> messages = [new(ChatRole.User, "go")];
         for (int i = 0; i < 25; i++)
         {
-            string id = "c" + i;
+            string id = "c" + i.ToString(CultureInfo.InvariantCulture);
             messages.Add(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(id, "f", new Dictionary<string, object>())]));
             messages.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(id, new string('x', 3600))]));
         }
@@ -224,7 +226,12 @@ public class RunReliabilityTests
     private static async Task<int> RemainingAsync(List<ChatMessage> messages, CompactionStrategy strategy)
     {
         IEnumerable<ChatMessage> kept = await CompactionProvider.CompactAsync(strategy, messages, logger: null, default);
-        return kept.SelectMany(m => m.Contents).Sum(c => c is FunctionResultContent r ? r.Result.ToString().Length : c is TextContent t ? t.Text.Length : 0);
+        return kept.SelectMany(m => m.Contents).Sum(c => c switch
+        {
+            FunctionResultContent r => r.Result.ToString().Length,
+            TextContent t => t.Text.Length,
+            _ => 0
+        });
     }
 #pragma warning restore MAAI001
 

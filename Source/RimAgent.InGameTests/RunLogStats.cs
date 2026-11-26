@@ -17,6 +17,7 @@ namespace RimAgent.InGameTests;
 /// </summary>
 internal static partial class RunLogStats
 {
+    private const string CallsField = "calls";
 
     /// <summary>把索引各行整理成統計報表；無法解析的行略過。</summary>
     /// <param name="index">索引檔的每一行。</param>
@@ -67,7 +68,7 @@ internal static partial class RunLogStats
             .GroupBy(r => Str(r, "outcome"), StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .Select(g => g.Key + " " + g.Count().ToString(CultureInfo.InvariantCulture))).AppendLine();
-        long calls = runs.Sum(r => Long(r, "calls"));
+        long calls = runs.Sum(r => Long(r, CallsField));
         long fails = runs.Sum(r => Long(r, "fail"));
         long cancels = runs.Sum(r => Long(r, "cancel"));
         sb.Append("tool calls ").Append(calls).Append(", failed ").Append(fails)
@@ -93,7 +94,7 @@ internal static partial class RunLogStats
         }
 
         sb.AppendLine().AppendLine("== tools (cancellations excluded)");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"{"tool",-28}{"calls",6}{"fail",6}{"fail%",8}{"avg ms",8}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"{"tool",-28}{CallsField,6}{"fail",6}{"fail%",8}{"avg ms",8}");
         foreach ((string name, int n) in Top(total, top))
         {
             int f = failed.GetValueOrDefault(name);
@@ -115,10 +116,10 @@ internal static partial class RunLogStats
     private static void AppendGroup(StringBuilder sb, string title, List<JsonElement> runs, Func<JsonElement, string> key)
     {
         sb.AppendLine().Append("== ").AppendLine(title);
-        sb.AppendLine(CultureInfo.InvariantCulture, $"{"",-32}{"runs",5}{"calls",7}{"fail%",8}{"finished",10}{"avg in tok",12}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"{"",-32}{"runs",5}{CallsField,7}{"fail%",8}{"finished",10}{"avg in tok",12}");
         foreach (IGrouping<string, JsonElement> group in runs.GroupBy(key, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
-            long calls = group.Sum(r => Long(r, "calls"));
+            long calls = group.Sum(r => Long(r, CallsField));
             long fails = group.Sum(r => Long(r, "fail"));
             int count = group.Count();
             int finished = group.Count(r => Str(r, "outcome") is "finished" or "goal_reported_complete");

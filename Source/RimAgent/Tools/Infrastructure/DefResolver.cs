@@ -60,14 +60,18 @@ public static partial class DefResolver
         if (compact.Count > 1) return Ambiguous(needle, compact, kindLabel, out ambiguous);
 
         // 「wood floor」要的是 WoodPlankFloor：首尾字詞相同、中間省略，且只有一個這樣的才算。
-        string[] parts = abbreviations ? SplitWords(needle) : [];
-        if (parts.Length > 1)
-        {
-            List<DefInfo> abbreviated = [.. candidates.Where(c => IsAbbreviation(parts, SplitWords(c.DefName)))];
-            if (abbreviated.Count == 1) return Result<DefInfo>.Ok(abbreviated[0]);
-        }
+        List<DefInfo> abbreviated = TryMatchAbbreviation(candidates, needle, abbreviations);
+        if (abbreviated.Count == 1) return Result<DefInfo>.Ok(abbreviated[0]);
 
         return Result<DefInfo>.Fail($"Error: {NoMatchPrefix}{kindLabel} matches \"{needle}\".{Closest(needle, compacted)}");
+    }
+
+    private static List<DefInfo> TryMatchAbbreviation(IReadOnlyList<DefInfo> candidates, string needle, bool abbreviations)
+    {
+        if (!abbreviations) return [];
+        string[] parts = SplitWords(needle);
+        if (parts.Length <= 1) return [];
+        return [.. candidates.Where(c => IsAbbreviation(parts, SplitWords(c.DefName)))];
     }
 
     private static bool IsSameCompactName(DefInfo candidate, string compactNeedle, string compactPrefix)

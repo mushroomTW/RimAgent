@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -40,6 +41,10 @@ public class A2AServerHostTests
         await _server.DisposeAsync();
     }
 
+    private string HttpUrl(string path = "") => string.Create(CultureInfo.InvariantCulture, $"http://localhost:{_httpPort}{path}");
+
+    private string GrpcUrl() => string.Create(CultureInfo.InvariantCulture, $"http://localhost:{_grpcPort}");
+
     /// <summary>瀏覽器頁面能不經預檢送出 text/plain 的跨站 POST，Host 又是 localhost；不擋的話任何網頁都能指揮殖民地。</summary>
     [TestCase("text/plain", null)]
     [TestCase("application/json", "https://evil.example")]
@@ -47,7 +52,7 @@ public class A2AServerHostTests
     public async Task CrossSiteBrowserRequestsAreRejected(string contentType, string origin)
     {
         using var http = new HttpClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"http://localhost:{_httpPort}/a2a");
+        using var request = new HttpRequestMessage(HttpMethod.Post, HttpUrl("/a2a"));
         request.Content = new StringContent(
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\",\"params\":{\"message\":{\"messageId\":\"m1\",\"role\":\"ROLE_USER\",\"parts\":[{\"text\":\"x\"}]}}}",
             System.Text.Encoding.UTF8, contentType);
@@ -63,11 +68,11 @@ public class A2AServerHostTests
     public async Task JsonRpcSendMessageRunsTheInstructionAndCompletesTheTask()
     {
         using var http = new HttpClient();
-        var client = new A2AClient(new Uri("http://localhost:" + _httpPort + A2AServerHost.JsonRpcPath), http);
+        var client = new A2AClient(new Uri(HttpUrl(A2AServerHost.JsonRpcPath)), http);
 
         SendMessageResponse response = await client.SendMessageAsync(Request("build a wall"), CancellationToken.None);
 
-        Assert.That(_received, Is.EqualTo(new[] { "build a wall" }));
+        Assert.That(_received, Is.EqualTo((string[])["build a wall"]));
         Assert.That(response.Task, Is.Not.Null);
         Assert.That(response.Task.Status.State, Is.EqualTo(TaskState.Completed));
         Assert.That(response.Task.Status.Message.Parts[0].Text, Is.EqualTo("did: build a wall"));
@@ -76,14 +81,14 @@ public class A2AServerHostTests
     [Test]
     public async Task GrpcSendMessageRunsTheInstructionAndCompletesTheTask()
     {
-        using GrpcChannel channel = GrpcChannel.ForAddress("http://localhost:" + _grpcPort);
+        using GrpcChannel channel = GrpcChannel.ForAddress(GrpcUrl());
         var client = new Protos.A2AService.A2AServiceClient(channel);
         var request = new Protos.SendMessageRequest { Message = new Protos.Message { MessageId = "m1", Role = Protos.Role.User } };
         request.Message.Parts.Add(new Protos.Part { Text = "how many colonists?" });
 
         Protos.SendMessageResponse response = await client.SendMessageAsync(request);
 
-        Assert.That(_received, Is.EqualTo(new[] { "how many colonists?" }));
+        Assert.That(_received, Is.EqualTo((string[])["how many colonists?"]));
         Assert.That(response.Task.Status.State, Is.EqualTo(Protos.TaskState.Completed));
         Assert.That(response.Task.Status.Message.Parts[0].Text, Is.EqualTo("did: how many colonists?"));
 
@@ -96,7 +101,7 @@ public class A2AServerHostTests
     {
         _behavior = (_, _) => throw new InvalidOperationException("RimAgent is busy.");
         using var http = new HttpClient();
-        var client = new A2AClient(new Uri("http://localhost:" + _httpPort + A2AServerHost.JsonRpcPath), http);
+        var client = new A2AClient(new Uri(HttpUrl(A2AServerHost.JsonRpcPath)), http);
 
         SendMessageResponse response = await client.SendMessageAsync(Request("anything"), CancellationToken.None);
 
@@ -117,7 +122,7 @@ public class A2AServerHostTests
             return "unreachable";
         };
         using var http = new HttpClient();
-        var client = new A2AClient(new Uri("http://localhost:" + _httpPort + A2AServerHost.JsonRpcPath), http);
+        var client = new A2AClient(new Uri(HttpUrl(A2AServerHost.JsonRpcPath)), http);
         SendMessageRequest request = Request("dig a long tunnel");
         request.Configuration = new SendMessageConfiguration { ReturnImmediately = true };
 
@@ -148,22 +153,22 @@ public class A2AServerHostTests
             return "unreachable";
         };
         using var http = new HttpClient();
-        var client = new A2AClient(new Uri("http://localhost:" + _httpPort + A2AServerHost.JsonRpcPath), http);
+        var client = new A2AClient(new Uri(HttpUrl(A2AServerHost.JsonRpcPath)), http);
         using var giveUp = new CancellationTokenSource();
 
         Task<SendMessageResponse> blocking = client.SendMessageAsync(Request("long job"), giveUp.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
         await giveUp.CancelAsync();
 
         Assert.That(async () => await blocking, Throws.InstanceOf<OperationCanceledException>());
-        await observedCancel.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await observedCancel.Task.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
     }
 
     [Test]
     public async Task ForeignHostHeaderIsRejected()
     {
         using var http = new HttpClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost:" + _httpPort + "/.well-known/agent-card.json");
+        using var request = new HttpRequestMessage(HttpMethod.Get, HttpUrl("/.well-known/agent-card.json"));
         request.Headers.Host = "evil.example";
 
         using HttpResponseMessage response = await http.SendAsync(request);
@@ -193,7 +198,7 @@ public class A2AServerHostTests
     [Test]
     public async Task GrpcStreamingReportsWorkingThenCompleted()
     {
-        using GrpcChannel channel = GrpcChannel.ForAddress("http://localhost:" + _grpcPort);
+        using GrpcChannel channel = GrpcChannel.ForAddress(GrpcUrl());
         var client = new Protos.A2AService.A2AServiceClient(channel);
         var request = new Protos.SendMessageRequest { Message = new Protos.Message { MessageId = "m2", Role = Protos.Role.User } };
         request.Message.Parts.Add(new Protos.Part { Text = "status" });
@@ -215,11 +220,11 @@ public class A2AServerHostTests
     public async Task AgentCardAdvertisesJsonRpcAndGrpc()
     {
         using var http = new HttpClient();
-        AgentCard card = await new A2ACardResolver(new Uri("http://localhost:" + _httpPort), http).GetAgentCardAsync();
+        AgentCard card = await new A2ACardResolver(new Uri(HttpUrl()), http).GetAgentCardAsync();
 
         Assert.That(card.Name, Is.EqualTo("RimAgent"));
         Assert.That(card.SupportedInterfaces.ConvertAll(i => i.ProtocolBinding),
-            Is.EquivalentTo(new[] { ProtocolBindingNames.JsonRpc, ProtocolBindingNames.Grpc }));
+            Is.EquivalentTo((string[])[ProtocolBindingNames.JsonRpc, ProtocolBindingNames.Grpc]));
     }
 
     private static SendMessageRequest Request(string text) => new()

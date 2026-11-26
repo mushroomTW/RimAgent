@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -80,7 +81,7 @@ public static class AgentPromptComposer
             length += name.Length + 2;
         }
         string list = string.Join(", ", shown);
-        if (shown.Count < modNames.Count) list += $" (+{modNames.Count - shown.Count} more)";
+        if (shown.Count < modNames.Count) list += string.Create(CultureInfo.InvariantCulture, $" (+{modNames.Count - shown.Count} more)");
         return "Mods active: " + list + ". Mods can change vanilla rules, mechanics, costs and needs, so your RimWorld knowledge may not apply. " +
                "When tool results, menus, alerts or lookup_def disagree with what you expect, trust the game and adapt. " +
                "lookup_def with kind=mod shows what a mod adds and which game code it patches.";

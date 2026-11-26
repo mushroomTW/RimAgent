@@ -108,20 +108,7 @@ public sealed partial class ColonyAgentSession
         if (permissions.Allows(ToolCategory.Memory)) memory = MemoryTools.Instructions + "\n\n" + _memory.Index;
 
         long toolTokens = tools.Sum(EstimateToolTokens);
-        var loaded = new HashSet<AITool>(tools);
-        var deferred = new HashSet<AITool>();
-        int deferredPacks = 0;
-        foreach (var pack in selected.PackTools.Values)
-        {
-            bool unloaded = false;
-            foreach (AITool tool in pack)
-            {
-                if (loaded.Contains(tool)) continue;
-                unloaded = true;
-                deferred.Add(tool);
-            }
-            if (unloaded) deferredPacks++;
-        }
+        (long deferredTokens, int deferredPacks) = CountDeferredPacks(tools, selected);
 
         HistoryTally user = new(), assistant = new(), calls = new(), results = new();
         int userCount = 0;
@@ -147,8 +134,26 @@ public sealed partial class ColonyAgentSession
             assistant.ToPart("AssistantMessages", 0),
             calls.ToPart("ToolCalls", calls.Items),
             results.ToPart("ToolResults", 0),
-            new ContextPart("DeferredPacks", deferred.Sum(EstimateToolTokens), deferredPacks, deferred: true)
+            new ContextPart("DeferredPacks", deferredTokens, deferredPacks, deferred: true)
         ];
+    }
+
+    private static (long Tokens, int Packs) CountDeferredPacks(List<AITool> tools, AgentToolRegistry.MainAgentTools selected)
+    {
+        var loaded = new HashSet<AITool>(tools);
+        var deferred = new HashSet<AITool>();
+        int deferredPacks = 0;
+        foreach (var pack in selected.PackTools.Values)
+        {
+            bool unloaded = false;
+            foreach (AITool tool in pack.Where(t => !loaded.Contains(t)))
+            {
+                unloaded = true;
+                deferred.Add(tool);
+            }
+            if (unloaded) deferredPacks++;
+        }
+        return (deferred.Sum(EstimateToolTokens), deferredPacks);
     }
 
     private static long EstimateToolTokens(AITool tool)

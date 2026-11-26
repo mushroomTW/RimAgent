@@ -106,29 +106,8 @@ public sealed partial class BenchmarkComponent
             Id = "surgery",
             Tier = Hard,
             Instruction = "有一位殖民者少了一條腿。找出是誰，替這個人排一個在缺腿的位置安裝木腿（peg leg）的手術。",
-            Setup = map =>
-            {
-                _billsBeforeSurgery = [.. map.mapPawns.FreeColonistsSpawned.SelectMany(p => p.BillStack.Bills)];
-                _amputee = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => Legs(p).Any());
-                if (_amputee == null) return "no colonist with a natural leg";
-                _missingLeg = Legs(_amputee).First();
-                _legHediffs = [.. _amputee.health.hediffSet.hediffs.Where(h => h.Part != null && _missingLeg.GetPartAndAllChildParts().Contains(h.Part))];
-                var missing = (Hediff_MissingPart)HediffMaker.MakeHediff(HediffDefOf.MissingBodyPart, _amputee, _missingLeg);
-                missing.IsFresh = false;
-                _amputee.health.AddHediff(missing, _missingLeg);
-                return null;
-            },
-            Cleanup = map =>
-            {
-                foreach (Pawn pawn in map.mapPawns.FreeColonistsSpawned)
-                {
-                    foreach (Bill bill in pawn.BillStack.Bills.Where(b => !_billsBeforeSurgery.Contains(b)).ToList()) pawn.BillStack.Delete(bill);
-                }
-                if (_amputee == null || _amputee.Destroyed) return;
-                _amputee.health.RestorePart(_missingLeg);
-                foreach (Hediff old in _legHediffs) _amputee.health.hediffSet.AddDirect(old);
-                _amputee = null;
-            },
+            Setup = SetupSurgery,
+            Cleanup = CleanupSurgery,
             Measure = map => new()
             {
                 [TargetKey] = PegLegBills(_amputee).Count(b => b.Part == _missingLeg),
@@ -140,23 +119,38 @@ public sealed partial class BenchmarkComponent
             Solve = world => world.ScheduleSurgery(new SurgeryRequest { PawnId = _amputee.thingIDNumber, RecipeDefName = "InstallPegLeg", BodyPartLabel = _missingLeg.Label })
         };
 
+    private static string SetupSurgery(Map map)
+    {
+        _billsBeforeSurgery = [.. map.mapPawns.FreeColonistsSpawned.SelectMany(p => p.BillStack.Bills)];
+        _amputee = map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => Legs(p).Any());
+        if (_amputee == null) return "no colonist with a natural leg";
+        _missingLeg = Legs(_amputee).First();
+        _legHediffs = [.. _amputee.health.hediffSet.hediffs.Where(h => h.Part != null && _missingLeg.GetPartAndAllChildParts().Contains(h.Part))];
+        var missing = (Hediff_MissingPart)HediffMaker.MakeHediff(HediffDefOf.MissingBodyPart, _amputee, _missingLeg);
+        missing.IsFresh = false;
+        _amputee.health.AddHediff(missing, _missingLeg);
+        return null;
+    }
+
+    private static void CleanupSurgery(Map map)
+    {
+        foreach (BillStack stack in map.mapPawns.FreeColonistsSpawned.Select(pawn => pawn.BillStack))
+        {
+            foreach (Bill bill in stack.Bills.Where(b => !_billsBeforeSurgery.Contains(b)).ToList()) stack.Delete(bill);
+        }
+        if (_amputee == null || _amputee.Destroyed) return;
+        _amputee.health.RestorePart(_missingLeg);
+        foreach (Hediff old in _legHediffs) _amputee.health.hediffSet.AddDirect(old);
+        _amputee = null;
+    }
+
     private static BenchTask DeleteTask() =>
         new()
         {
             Id = "delete",
             Tier = Hard,
             Instruction = $"刪掉叫「{DeletedZoneLabel}」的儲存區，再把爐灶上簡易餐點的工作單刪掉；其他區域與工作單都要留著。",
-            Setup = map =>
-            {
-                _stove = SpawnBuilding(map, "FueledStove");
-                if (_stove is not IBillGiver giver) return "could not place a stove near the colonists";
-                foreach (string recipe in new[] { "CookMealFine", "CookMealSimple", "CookMealLavish" })
-                {
-                    if (DefDatabase<RecipeDef>.GetNamedSilentFail(recipe) is not { } def) return "missing recipe " + recipe;
-                    giver.BillStack.AddBill(def.MakeNewBill());
-                }
-                return AddStockpile(map, KeptZoneLabel) && AddStockpile(map, DeletedZoneLabel) ? null : "no room for the stockpiles";
-            },
+            Setup = SetupDelete,
             Measure = map => new()
             {
                 ["deletedZone"] = map.zoneManager.AllZones.Count(z => z.label == DeletedZoneLabel),
@@ -176,6 +170,18 @@ public sealed partial class BenchmarkComponent
                 return zone.Success ? world.DeleteBill(_stove.thingIDNumber, 2) : zone;
             }
         };
+
+    private static string SetupDelete(Map map)
+    {
+        _stove = SpawnBuilding(map, "FueledStove");
+        if (_stove is not IBillGiver giver) return "could not place a stove near the colonists";
+        foreach (string recipe in new[] { "CookMealFine", "CookMealSimple", "CookMealLavish" })
+        {
+            if (DefDatabase<RecipeDef>.GetNamedSilentFail(recipe) is not { } def) return "missing recipe " + recipe;
+            giver.BillStack.AddBill(def.MakeNewBill());
+        }
+        return AddStockpile(map, KeptZoneLabel) && AddStockpile(map, DeletedZoneLabel) ? null : "no room for the stockpiles";
+    }
 
     private static BenchTask TradeTask() =>
         new()
@@ -280,7 +286,10 @@ public sealed partial class BenchmarkComponent
         // 佈置的銀與買到的東西會併進舊堆，付款也可能先用舊堆。
         foreach ((Thing item, (ThingDef def, IntVec3 cell, int count)) in _itemsBeforeTrade)
         {
-            if (item.Spawned) item.stackCount = count;
+            if (item.Spawned)
+            {
+                item.stackCount = count;
+            }
             else if (def == ThingDefOf.Silver)
             {
                 Thing silver = ThingMaker.MakeThing(def);
@@ -298,6 +307,19 @@ public sealed partial class BenchmarkComponent
     private static int TraderGoods(Func<ThingDef, bool> predicate) =>
         _trader?.trader?.Goods.Where(t => predicate(t.def)).Sum(t => t.stackCount) ?? 0;
 
+    private sealed class SelfCheckState
+    {
+        public int Silver { get; init; }
+        public int Bills { get; init; }
+        public int Hediffs { get; init; }
+        public int Pawns { get; init; }
+        public int Zones { get; init; }
+        public int[] Terrain { get; init; }
+        public int Home { get; init; }
+        public int Marks { get; init; }
+        public int Settled { get; init; }
+    }
+
     /// <summary>
     /// 不叫模型的自我檢查：每題都佈置得起來、什麼都不做不會通過，有參考解的題目做完會通過，還原後沒有殘留。
     /// </summary>
@@ -309,46 +331,66 @@ public sealed partial class BenchmarkComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
         foreach (BenchTask task in Tasks)
         {
-            string problem = null;
-            int silver = Items(map).Where(t => t.def == ThingDefOf.Silver || t.def == ThingDefOf.ComponentIndustrial).Sum(t => t.stackCount);
-            int bills = map.mapPawns.FreeColonistsSpawned.Sum(p => p.BillStack.Bills.Count);
-            int hediffs = map.mapPawns.FreeColonistsSpawned.Sum(p => p.health.hediffSet.hediffs.Count);
-            int pawns = map.mapPawns.AllPawnsSpawned.Count;
-            int zones = map.zoneManager.AllZones.Count;
-            int[] terrain = [.. map.AllCells.Select(c => (int)c.GetTerrain(map).shortHash)];
-            int home = map.areaManager.Home.TrueCount;
-            int marks = map.designationManager.AllDesignations.Count();
-            int settled = map.listerThings.AllThings.Count(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Building);
+            SelfCheckState before = CaptureSelfCheckState(map);
             var snapshot = new BenchmarkSnapshot(map);
-            try
-            {
-                problem = task.Setup?.Invoke(map) is { } setup ? "setup: " + setup : null;
-                if (problem == null)
-                {
-                    Dictionary<string, int> before = task.Measure(map);
-                    if (task.Check(before, task.Measure(map), string.Empty) == null) problem = "passes without doing anything";
-                    CommandResult solved = problem == null ? task.Solve?.Invoke(world) : null;
-                    if (solved is { Success: false }) problem = "solve: " + solved.Message;
-                    else if (solved != null) problem = task.Check(before, task.Measure(map), string.Empty);
-                }
-            }
-            catch (Exception ex)
-            {
-                problem = ex.ToString();
-            }
+            string problem = RunSelfCheckTask(task, map, world);
             TryCleanUp(task.Id, () => task.Cleanup?.Invoke(map));
             TryCleanUp(task.Id, snapshot.Restore);
-            if (problem == null && map.mapPawns.AllPawnsSpawned.Count != pawns) problem = "pawns left behind";
-            if (problem == null && map.zoneManager.AllZones.Count != zones) problem = "zones left behind";
-            if (problem == null && Items(map).Where(t => t.def == ThingDefOf.Silver || t.def == ThingDefOf.ComponentIndustrial).Sum(t => t.stackCount) != silver) problem = "silver or components changed";
-            if (problem == null && map.mapPawns.FreeColonistsSpawned.Sum(p => p.BillStack.Bills.Count) != bills) problem = "operations left behind";
-            if (problem == null && map.mapPawns.FreeColonistsSpawned.Sum(p => p.health.hediffSet.hediffs.Count) != hediffs) problem = "health changed";
-            if (problem == null && !map.AllCells.Select(c => (int)c.GetTerrain(map).shortHash).SequenceEqual(terrain)) problem = "terrain changed";
-            if (problem == null && task.Tier == Survey && map.listerThings.AllThings.Count(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Building) != settled) problem = "plants, items or buildings changed";
-            if (problem == null && task.Tier == Survey && (map.areaManager.Home.TrueCount != home || map.designationManager.AllDesignations.Count() != marks)) problem = "home area or marks changed";
+            problem ??= VerifySelfCheckRestored(task, map, before);
             if (problem != null) failed++;
             Log.Message(LogPrefix + "SelfCheck " + task.Id + ": " + (problem ?? (task.Solve == null ? "ok" : "ok, solved")));
         }
         Log.Warning(LogPrefix + "SelfCheck " + (failed == 0 ? "PASS" : "FAIL " + failed.ToString(System.Globalization.CultureInfo.InvariantCulture)));
     }
+
+    private static SelfCheckState CaptureSelfCheckState(Map map) =>
+        new()
+        {
+            Silver = CountTradeGoods(map),
+            Bills = map.mapPawns.FreeColonistsSpawned.Sum(p => p.BillStack.Bills.Count),
+            Hediffs = map.mapPawns.FreeColonistsSpawned.Sum(p => p.health.hediffSet.hediffs.Count),
+            Pawns = map.mapPawns.AllPawnsSpawned.Count,
+            Zones = map.zoneManager.AllZones.Count,
+            Terrain = [.. map.AllCells.Select(c => (int)c.GetTerrain(map).shortHash)],
+            Home = map.areaManager.Home.TrueCount,
+            Marks = map.designationManager.AllDesignations.Count,
+            Settled = CountSettledThings(map)
+        };
+
+    private static string RunSelfCheckTask(BenchTask task, Map map, RimWorldGameWorld world)
+    {
+        try
+        {
+            if (task.Setup?.Invoke(map) is { } setup) return "setup: " + setup;
+            Dictionary<string, int> before = task.Measure(map);
+            if (task.Check(before, task.Measure(map), string.Empty) == null) return "passes without doing anything";
+            CommandResult solved = task.Solve?.Invoke(world);
+            if (solved is { Success: false }) return "solve: " + solved.Message;
+            return solved != null ? task.Check(before, task.Measure(map), string.Empty) : null;
+        }
+        catch (Exception ex)
+        {
+            return ex.ToString();
+        }
+    }
+
+    private static string VerifySelfCheckRestored(BenchTask task, Map map, SelfCheckState before)
+    {
+        if (map.mapPawns.AllPawnsSpawned.Count != before.Pawns) return "pawns left behind";
+        if (map.zoneManager.AllZones.Count != before.Zones) return "zones left behind";
+        if (CountTradeGoods(map) != before.Silver) return "silver or components changed";
+        if (map.mapPawns.FreeColonistsSpawned.Sum(p => p.BillStack.Bills.Count) != before.Bills) return "operations left behind";
+        if (map.mapPawns.FreeColonistsSpawned.Sum(p => p.health.hediffSet.hediffs.Count) != before.Hediffs) return "health changed";
+        if (!map.AllCells.Select(c => (int)c.GetTerrain(map).shortHash).SequenceEqual(before.Terrain)) return "terrain changed";
+        if (task.Tier != Survey) return null;
+        if (CountSettledThings(map) != before.Settled) return "plants, items or buildings changed";
+        if (map.areaManager.Home.TrueCount != before.Home || map.designationManager.AllDesignations.Count != before.Marks) return "home area or marks changed";
+        return null;
+    }
+
+    private static int CountTradeGoods(Map map) =>
+        Items(map).Where(t => t.def == ThingDefOf.Silver || t.def == ThingDefOf.ComponentIndustrial).Sum(t => t.stackCount);
+
+    private static int CountSettledThings(Map map) =>
+        map.listerThings.AllThings.Count(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Building);
 }

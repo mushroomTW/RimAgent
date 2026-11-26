@@ -10,19 +10,19 @@ internal sealed class ColonyAgentHandler(ColonyInstructionRunner runner) : IAgen
     public async Task ExecuteAsync(RequestContext context, AgentEventQueue eventQueue, CancellationToken cancellationToken)
     {
         var updater = new TaskUpdater(eventQueue, context.TaskId, context.ContextId);
-        await updater.SubmitAsync(null, cancellationToken).ConfigureAwait(false);
+        await updater.SubmitAsync(metadata: null, cancellationToken).ConfigureAwait(false);
         string? text = context.UserText;
         if (string.IsNullOrWhiteSpace(text))
         {
-            await updater.RejectAsync(AgentMessage(context, "The message has no text. Send the instruction as a text part."), null, cancellationToken).ConfigureAwait(false);
+            await updater.RejectAsync(AgentMessage(context, "The message has no text. Send the instruction as a text part."), metadata: null, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         try
         {
-            await updater.StartWorkAsync(null, null, cancellationToken).ConfigureAwait(false);
+            await updater.StartWorkAsync(message: null, metadata: null, cancellationToken).ConfigureAwait(false);
             string reply = await runner(text, cancellationToken).ConfigureAwait(false);
-            await updater.CompleteAsync(AgentMessage(context, reply), null, CancellationToken.None).ConfigureAwait(false);
+            await updater.CompleteAsync(AgentMessage(context, reply), metadata: null, CancellationToken.None).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -31,12 +31,12 @@ internal sealed class ColonyAgentHandler(ColonyInstructionRunner runner) : IAgen
         }
         catch (Exception ex)
         {
-            await updater.FailAsync(AgentMessage(context, ex.Message), null, CancellationToken.None).ConfigureAwait(false);
+            await updater.FailAsync(AgentMessage(context, ex.Message), metadata: null, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
     public async Task CancelAsync(RequestContext context, AgentEventQueue eventQueue, CancellationToken cancellationToken)
-        => await new TaskUpdater(eventQueue, context.TaskId, context.ContextId).CancelAsync(null, cancellationToken).ConfigureAwait(false);
+        => await new TaskUpdater(eventQueue, context.TaskId, context.ContextId).CancelAsync(metadata: null, cancellationToken).ConfigureAwait(false);
 
     private static Message AgentMessage(RequestContext context, string text) => new()
     {

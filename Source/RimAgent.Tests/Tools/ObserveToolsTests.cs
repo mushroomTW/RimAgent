@@ -460,11 +460,15 @@ public partial class ObserveToolsTests
         var world = new FakeGameWorld();
         int id = 100;
         for (int x = 2; x <= 8; x++)
+        {
             for (int z = 2; z <= 8; z++)
             {
                 if ((x is 2 or 8 || z is 2 or 8) && (x, z) != (8, 5))
+                {
                     world.Things.Add(new ThingInfo { Id = id++, DefName = "Wall", Label = "wood wall", Kind = ThingKind.Building, X = x, Z = z, PlayerOwned = true });
+                }
             }
+        }
         world.Things.Add(new ThingInfo { Id = 9, DefName = "Wall", Label = "wood wall", Kind = ThingKind.Building, X = 5, Z = 5, PlayerOwned = true, Designations = ["Deconstruct"] });
 
         string line = new ObserveTools(world).InspectArea(0, 0, 9, 9).Split(Environment.NewLine).Single(l => l.StartsWith("Obstacles:", StringComparison.Ordinal));

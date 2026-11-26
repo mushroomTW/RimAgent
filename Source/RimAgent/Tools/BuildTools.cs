@@ -295,7 +295,7 @@ public sealed class BuildTools
                                  let cx = center.X + dx
                                  let cz = center.Z + dz
                                  where TargetResolver.CheckCell(cx, cz, bounds) == null
-                                 let fit = Enumerable.Range(0, 4).OrderBy(r => r == rotation ? 0 : 1).Select(r => (int?)r)
+                                 let fit = Enumerable.Range(0, 4).OrderBy(r => r == rotation ? 0 : 1).Cast<int?>()
                                      .FirstOrDefault(r => _world.TryPlaceBlueprint(defName, cx, cz, r.Value, stuffDefName, checkOnly: true).Success)
                                  where fit != null
                                  select string.Create(CultureInfo.InvariantCulture, $"({cx},{cz}) rotation {fit}")).Take(MaxNearbyFits)];
@@ -311,8 +311,8 @@ public sealed class BuildTools
     {
         if (info == null || !Enum.TryParse(info.TerrainAffordance, ignoreCase: true, out GroundSupport needed)) return string.Empty;
         List<CellRectSpec> covered = [.. cells.Select(c => OccupiedRect(c.X, c.Z, rotation, info))];
-        if (covered.Any(r => !bounds.Contains(r.MinX, r.MinZ) || !bounds.Contains(r.MaxX, r.MaxZ))) return string.Empty;
-        if (!covered.Any(r => HasWeakCell(r, needed))) return string.Empty;
+        if (covered.Exists(r => !bounds.Contains(r.MinX, r.MinZ) || !bounds.Contains(r.MaxX, r.MaxZ))) return string.Empty;
+        if (!covered.Exists(r => HasWeakCell(r, needed))) return string.Empty;
 
         (int x, int z) = cells[0];
         var area = new CellRectSpec(
@@ -524,7 +524,7 @@ public sealed class BuildTools
     private static string ListLayouts(IReadOnlyList<LayoutInfo> layouts, int maxDescription)
     {
         string cut = layouts.Any(l => l.Description.Length > maxDescription) ? "; descriptions are shortened" : string.Empty;
-        return "Layouts (size, then what it is" + cut + "):\n" + string.Join("\n",
+        return "Layouts (size, then what it is" + cut + "):\n" + string.Join('\n',
             layouts.Select(l => string.Create(CultureInfo.InvariantCulture, $"{l.Label} ({l.DefName}) {l.Width}x{l.Height}")
                 + (l.Description.Length > 0 ? ": " + ToolText.TruncateField(l.Description, maxDescription) : string.Empty)));
     }

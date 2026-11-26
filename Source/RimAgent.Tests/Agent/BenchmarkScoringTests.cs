@@ -14,14 +14,14 @@ public class BenchmarkScoringTests
     [TestCase("撐 2日", 2f)]
     public void Days_ReadsNumberBeforeDayWord(string reply, float expected)
     {
-        Assert.That(BenchmarkScoring.Days(reply), Is.EqualTo(new[] { expected }));
+        Assert.That(BenchmarkScoring.Days(reply), Is.EqualTo((float[])[expected]));
     }
 
     [Test]
     public void Days_IgnoresNumbersNotFollowedByDayWord()
     {
         Assert.That(BenchmarkScoring.Days("3 位殖民者，食物 12 份"), Is.Empty);
-        Assert.That(BenchmarkScoring.Days(null), Is.Empty);
+        Assert.That(BenchmarkScoring.Days(reply: null), Is.Empty);
     }
 
     [Test]
@@ -42,7 +42,7 @@ public class BenchmarkScoringTests
     [Test]
     public void PairedBootstrap_AllSameDifferenceHasZeroWidthInterval()
     {
-        (double mean, double low, double high) = BenchmarkScoring.PairedBootstrap(Enumerable.Repeat(1, 8).ToList());
+        (double mean, double low, double high) = BenchmarkScoring.PairedBootstrap([.. Enumerable.Repeat(1, 8)]);
         Assert.That((mean, low, high), Is.EqualTo((1d, 1d, 1d)));
     }
 

@@ -113,20 +113,7 @@ internal sealed partial class RimWorldGameWorld
             for (int z = rect.MinZ; z <= rect.MaxZ; z++)
             {
                 var cell = new IntVec3(x, 0, z);
-                string why = null;
-                if (!cell.InBounds(map))
-                {
-                    why = "outside the map";
-                }
-                else if (map.zoneManager.ZoneAt(cell) is Zone existing)
-                {
-                    why = $"already in zone \"{existing.label}\"";
-                }
-                else
-                {
-                    AcceptanceReport report = designator.CanDesignateCell(cell);
-                    if (!report.Accepted) why = GetZoneRejectionReason(map, cell, report, growing);
-                }
+                string why = GetCellSkipReason(map, cell, designator, growing);
                 if (why == null)
                 {
                     cells.Add(cell);
@@ -140,6 +127,14 @@ internal sealed partial class RimWorldGameWorld
         return cells;
     }
 
+    private static string GetCellSkipReason(Map map, IntVec3 cell, Designator_ZoneAdd designator, bool growing)
+    {
+        if (!cell.InBounds(map)) return "outside the map";
+        if (map.zoneManager.ZoneAt(cell) is Zone existing) return $"already in zone \"{existing.label}\"";
+        AcceptanceReport report = designator.CanDesignateCell(cell);
+        return report.Accepted ? null : GetZoneRejectionReason(map, cell, report, growing);
+    }
+
     private const int ZoneSearchRadius = 25;
     private const int MaxZoneSuggestionSide = 20;
 
@@ -151,18 +146,7 @@ internal sealed partial class RimWorldGameWorld
         CellRect area = CellRect.CenteredOn(center, ZoneSearchRadius).ClipInsideMap(map);
         if (area.Width < width || area.Height < height) return string.Empty;
 
-        // 二維前綴和：每個候選矩形的可用格數都是常數時間。
-        int[,] sum = new int[area.Width + 1, area.Height + 1];
-        for (int x = 0; x < area.Width; x++)
-        {
-            for (int z = 0; z < area.Height; z++)
-            {
-                var cell = new IntVec3(area.minX + x, 0, area.minZ + z);
-                int usable = map.zoneManager.ZoneAt(cell) == null && designator.CanDesignateCell(cell).Accepted
-                    && (plant == null || map.fertilityGrid.FertilityAt(cell) >= plant.plant.fertilityMin) ? 1 : 0;
-                sum[x + 1, z + 1] = usable + sum[x, z + 1] + sum[x + 1, z] - sum[x, z];
-            }
-        }
+        int[,] sum = BuildUsablePrefixSum(map, area, designator, plant);
 
         var found = new List<(CellRect Rect, int Cells)>();
         IEnumerable<(CellRect Rect, int Cells)> ranked =
@@ -179,13 +163,32 @@ internal sealed partial class RimWorldGameWorld
             found.Add(option);
             if (found.Count == 3) break;
         }
-        return found.Count == 0
-            ? string.Create(CultureInfo.InvariantCulture, $" No mostly usable {width}x{height} rectangle within {ZoneSearchRadius} cells; try a smaller one or look farther away.")
-            : " Nearby rectangles with usable cells: " + string.Join("; ", found.Select(f =>
-                string.Create(CultureInfo.InvariantCulture, $"({f.Rect.minX},{f.Rect.minZ})-({f.Rect.maxX},{f.Rect.maxZ}) {f.Cells} of {width * height}"))) + "."
-                + (width < rect.MaxX - rect.MinX + 1 || height < rect.MaxZ - rect.MinZ + 1
-                    ? string.Create(CultureInfo.InvariantCulture, $" These are smaller than you asked for (capped at {MaxZoneSuggestionSide} per side); combine several.")
-                    : string.Empty);
+        if (found.Count == 0)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $" No mostly usable {width}x{height} rectangle within {ZoneSearchRadius} cells; try a smaller one or look farther away.");
+        }
+        string cappedNote = width < rect.MaxX - rect.MinX + 1 || height < rect.MaxZ - rect.MinZ + 1
+            ? string.Create(CultureInfo.InvariantCulture, $" These are smaller than you asked for (capped at {MaxZoneSuggestionSide} per side); combine several.")
+            : string.Empty;
+        return " Nearby rectangles with usable cells: " + string.Join("; ", found.Select(f =>
+            string.Create(CultureInfo.InvariantCulture, $"({f.Rect.minX},{f.Rect.minZ})-({f.Rect.maxX},{f.Rect.maxZ}) {f.Cells} of {width * height}"))) + "." + cappedNote;
+    }
+
+    // 二維前綴和：每個候選矩形的可用格數都是常數時間。
+    private static int[,] BuildUsablePrefixSum(Map map, CellRect area, Designator_ZoneAdd designator, ThingDef plant)
+    {
+        int[,] sum = new int[area.Width + 1, area.Height + 1];
+        for (int x = 0; x < area.Width; x++)
+        {
+            for (int z = 0; z < area.Height; z++)
+            {
+                var cell = new IntVec3(area.minX + x, 0, area.minZ + z);
+                int usable = map.zoneManager.ZoneAt(cell) == null && designator.CanDesignateCell(cell).Accepted
+                    && (plant == null || map.fertilityGrid.FertilityAt(cell) >= plant.plant.fertilityMin) ? 1 : 0;
+                sum[x + 1, z + 1] = usable + sum[x, z + 1] + sum[x + 1, z] - sum[x, z];
+            }
+        }
+        return sum;
     }
 
     private static List<List<IntVec3>> SplitContiguous(List<IntVec3> cells)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using NUnit.Framework;
 using RimAgent.Agent;
@@ -57,7 +58,7 @@ public class MapShotTests
         for (int x = rect.MinX; x <= rect.MaxX; x++)
         {
             bool At(int px) => Enumerable.Range(0, layout.BottomMargin - 3).Any(y => Pixel(image, layout, px, y) == white);
-            Assert.That(Enumerable.Range(LineX(x), layout.PixelsPerCell).Any(At), Is.True, "label for " + x);
+            Assert.That(Enumerable.Range(LineX(x), layout.PixelsPerCell).Any(At), Is.True, "label for " + x.ToString(CultureInfo.InvariantCulture));
             Assert.That(At(LineX(x)), Is.False, "labels of neighbouring columns must not touch");
         }
     }

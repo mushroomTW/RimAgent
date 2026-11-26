@@ -559,10 +559,9 @@ public partial class RimAgentGameComponent : GameComponent
     /// <summary>只有材質、翻譯的模組不改玩法，不列。</summary>
     private static string ModsLine()
     {
-        return AgentPromptComposer.FormatMods(LoadedModManager.RunningModsListForReading
-            .Where(m => !m.IsOfficialMod && !RimAgentMod.IsOwnOrFramework(m.PackageId))
-            .Where(m => m.AllDefs.Any() || m.Patches.Any() || m.assemblies.loadedAssemblies.Count > 0)
-            .Select(m => m.Name)
-            .ToList());
+        return AgentPromptComposer.FormatMods([.. LoadedModManager.RunningModsListForReading
+            .Where(m => !m.IsOfficialMod && !RimAgentMod.IsOwnOrFramework(m.PackageId)
+                && (m.AllDefs.Any() || m.Patches.Any() || m.assemblies.loadedAssemblies.Count > 0))
+            .Select(m => m.Name)]);
     }
 }

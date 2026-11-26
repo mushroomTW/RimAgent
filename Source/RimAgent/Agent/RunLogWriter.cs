@@ -244,7 +244,7 @@ public sealed class RunLog
 
     private static string Serialize(object value) => JsonSerializer.Serialize(value, RunLogWriter.Json);
 
-    private double Elapsed() => Math.Round((DateTime.UtcNow - _startedUtc).TotalSeconds, 1);
+    private double Elapsed() => Math.Round((DateTime.UtcNow - _startedUtc).TotalSeconds, 1, MidpointRounding.ToEven);
 
     private static string NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 
@@ -405,7 +405,7 @@ public sealed class RunLogWriter
                 new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None).Dispose();
                 // 來源名稱可能含底線（system_one），只換日期後的第一個。
                 string name = Path.GetFileName(path);
-                int split = name.IndexOf('_');
+                int split = name.IndexOf('_', StringComparison.Ordinal);
                 if (split <= 0) continue;
                 string file = name[..split] + DaySeparator + name[(split + 1)..];
                 ArchiveLocked(file, Summarize(path, file));
@@ -420,46 +420,17 @@ public sealed class RunLogWriter
     /// <summary>正常結束時最後一行就是索引內容；當機的沒有結尾，由已寫出的事件補出同樣的欄位。</summary>
     private static string Summarize(string path, string file)
     {
-        string first = null, last = null, reasoning = null;
-        var tools = new Dictionary<int, JsonObject>();
-        var models = new SortedSet<string>(StringComparer.Ordinal);
-        int steps = 0;
-        long input = 0, output = 0;
-        double secs = 0;
+        string first = null, last = null;
+        var state = new CrashSummaryState();
         foreach (string line in File.ReadLines(path, Utf8))
         {
             first ??= line;
             last = line;
-            JsonObject e = Parse(line);
-            try
-            {
-                secs = (double?)e["at"] ?? secs;
-                switch ((string)e["t"])
-                {
-                    case "tool":
-                        tools[(int)e["call"]] = e;
-                        break;
-                    case "reasoning":
-                        reasoning = (string)e["level"];
-                        break;
-                    case "model":
-                        steps++;
-                        input += (long?)e["in"] ?? 0;
-                        output += (long?)e["out"] ?? 0;
-                        if ((string)e["model"] is { } model) models.Add(model);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or NullReferenceException)
-            {
-                // 欄位缺漏或型別不符的行：略過，其餘照算。
-            }
+            state.Apply(Parse(line));
         }
         if (last != null && last.StartsWith(EndPrefix, StringComparison.Ordinal) && Parse(last).Count > 0) return last;
         JsonObject run = Parse(first);
-        int cancelled = tools.Values.Count(IsCancelled);
+        int cancelled = state.Tools.Values.Count(IsCancelled);
         return JsonSerializer.Serialize(new
         {
             t = "end",
@@ -473,16 +444,56 @@ public sealed class RunLogWriter
             ver = run["ver"],
             text = ToolText.TruncateField((string)run["text"], MaxIndexTextChars),
             outcome = "crashed",
-            secs,
-            models,
-            reasoning,
-            steps,
-            @in = input,
-            @out = output,
-            calls = tools.Count,
-            fail = tools.Values.Count(t => (bool?)t["ok"] == false && !IsCancelled(t)),
+            secs = state.Secs,
+            models = state.Models,
+            reasoning = state.Reasoning,
+            steps = state.Steps,
+            @in = state.Input,
+            @out = state.Output,
+            calls = state.Tools.Count,
+            fail = state.Tools.Values.Count(t => (bool?)t["ok"] == false && !IsCancelled(t)),
             cancel = cancelled
         }, Json);
+    }
+
+    private sealed class CrashSummaryState
+    {
+        public Dictionary<int, JsonObject> Tools { get; } = [];
+        public SortedSet<string> Models { get; } = new(StringComparer.Ordinal);
+        public string Reasoning { get; private set; }
+        public int Steps { get; private set; }
+        public long Input { get; private set; }
+        public long Output { get; private set; }
+        public double Secs { get; private set; }
+
+        public void Apply(JsonObject e)
+        {
+            try
+            {
+                Secs = (double?)e["at"] ?? Secs;
+                switch ((string)e["t"])
+                {
+                    case "tool":
+                        Tools[(int)e["call"]] = e;
+                        break;
+                    case "reasoning":
+                        Reasoning = (string)e["level"];
+                        break;
+                    case "model":
+                        Steps++;
+                        Input += (long?)e["in"] ?? 0;
+                        Output += (long?)e["out"] ?? 0;
+                        if ((string)e["model"] is { } model) Models.Add(model);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or NullReferenceException)
+            {
+                // 欄位缺漏或型別不符的行：略過，其餘照算。
+            }
+        }
     }
 
     private static bool IsCancelled(JsonObject tool) => (bool?)tool["cancelled"] == true;

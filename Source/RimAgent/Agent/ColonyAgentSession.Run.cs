@@ -324,7 +324,7 @@ public sealed partial class ColonyAgentSession
         IReadOnlyList<ChatMessage> sent = _runOptions.LastRequest;
         if (sent.Count <= history.Count) return;
         List<ChatMessage> added = [.. sent.Skip(history.Count), .. _runOptions.UnsentStep()];
-        if (!added.Any(m => m.Role == ChatRole.Tool)) return;
+        if (!added.Exists(m => m.Role == ChatRole.Tool)) return;
 
         added.Add(new ChatMessage(ChatRole.Assistant,
             "[This run was interrupted (" + outcome + ") before it finished. Steps above with a result did run; check the current state before repeating anything.]"));

@@ -232,10 +232,9 @@ public class RunLogTests
     public async Task FailureBeforeTheRunStartsLeavesNoOpenLog()
     {
         ColonyAgentSession session = Session(new ScriptedChatClient().Reply("ok"));
-        Assert.ThrowsAsync<InvalidOperationException>(() => session.SendAsync("go", onAccepted: () => throw new InvalidOperationException()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => session.SendAsync("go", onAccepted: () => throw new InvalidOperationException()));
 
         Assert.That(Directory.Exists(session.RunLogs.Folder), Is.False);
-        await Task.CompletedTask;
     }
 
     [Test]
@@ -397,7 +396,7 @@ public class RunLogTests
     public async Task LogWriteFailureDoesNotBreakTheAgentRun()
     {
         // 資料夾路徑被同名檔案占住，建不了資料夾。
-        File.WriteAllText(_folder, "x");
+        await File.WriteAllTextAsync(_folder, "x");
         try
         {
             ColonyAgentSession session = Session(new ScriptedChatClient().Reply("ok"));
@@ -421,7 +420,7 @@ public class RunLogTests
         ColonyAgentSession session = Session(new ScriptedChatClient().Reply("ok").Reply("ok"));
         await session.SendAsync("first");
         // 索引被別的程式獨占：結尾寫不進索引。
-        using (new FileStream(session.RunLogs.IndexPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        await using (new FileStream(session.RunLogs.IndexPath, FileMode.Open, FileAccess.Read, FileShare.None))
         {
             Assert.That(await session.SendAsync("second"), Is.EqualTo("ok"));
         }

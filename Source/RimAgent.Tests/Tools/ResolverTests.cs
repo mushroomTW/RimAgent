@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using RimAgent.Game;
 using RimAgent.Tools;
@@ -146,7 +147,7 @@ public class DefResolverTests
 }
 
 [TestFixture]
-public class TargetResolverTests
+public partial class TargetResolverTests
 {
     private List<ColonistInfo> _colonists;
 
@@ -281,16 +282,18 @@ public class TargetResolverTests
         Assert.That(DefResolver.Resolve("corn", plants, "growable plant", defPrefix: "Plant_").Value.DefName, Is.EqualTo("Plant_Corn"));
     }
 
+    [GeneratedRegex("^Optional|[Ee]mpty (=|keeps|buys|sells|picks|allows|disallows|lists|string matches)|leave it empty|ignored for", RegexOptions.ExplicitCapture)]
+    private static partial Regex OptionalParameterDescriptionRegex { get; }
+
     [Test]
     public void ParametersDescribedAsOptionalHaveDefaults()
     {
-        var optional = new System.Text.RegularExpressions.Regex("^Optional|[Ee]mpty (=|keeps|buys|sells|picks|allows|disallows|lists|string matches)|leave it empty|ignored for");
         string[] missing = [.. typeof(DefResolver).Assembly.GetTypes()
             .SelectMany(t => t.GetMethods())
             .Where(m => m.IsDefined(typeof(AgentToolAttribute), inherit: false))
             .SelectMany(m => m.GetParameters().Select(p => (m, p)))
             .Where(x => !x.p.HasDefaultValue
-                && x.p.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false).Cast<System.ComponentModel.DescriptionAttribute>().Any(d => optional.IsMatch(d.Description)))
+                && x.p.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), inherit: false).Cast<System.ComponentModel.DescriptionAttribute>().Any(d => OptionalParameterDescriptionRegex.IsMatch(d.Description)))
             .Select(x => x.m.Name + "." + x.p.Name)];
         Assert.That(missing, Is.Empty);
     }

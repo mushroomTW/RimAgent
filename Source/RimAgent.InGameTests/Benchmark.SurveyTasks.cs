@@ -73,7 +73,7 @@ public sealed partial class BenchmarkComponent
             map => SetSiteTerrain(map, "MarshyTerrain", "Soil", FirmGround),
             map => new() { [TargetKey] = 0, [OthersKey] = PlannedBuildings(map).Count() },
             0,
-            null);
+            solve: null);
         task.Check = (_, after, reply) => ReplyNames(after, reply, FirmGround.Min);
         return task;
     }
@@ -117,7 +117,7 @@ public sealed partial class BenchmarkComponent
             map => SetSiteRow(map, "WaterDeep", Ford),
             map => new() { [TargetKey] = 0, [OthersKey] = PlannedBuildings(map).Count() },
             0,
-            null);
+            solve: null);
         task.Check = (_, after, reply) => ReplyNames(after, reply, Ford);
         return task;
     }
@@ -134,7 +134,7 @@ public sealed partial class BenchmarkComponent
             return new() { [TargetKey] = square ? inside : 0, [OthersKey] = cells.Count - inside };
         },
         36,
-        world => world.AddZone("Stockpile", Spec(Patch(5, 1, 6, 6)), null));
+        world => world.AddZone("Stockpile", Spec(Patch(5, 1, 6, 6)), plantDefName: null));
 
     private static BenchTask SurveyTask(
         string id,
@@ -198,11 +198,11 @@ public sealed partial class BenchmarkComponent
         IntVec3 center = colonist.Position;
         IEnumerable<IntVec3> corners = map.AllCells
             .Where(c => c.x >= 12 && c.z >= 12 && c.x + SiteSize + 12 < map.Size.x && c.z + SiteSize + 12 < map.Size.z)
-            .OrderBy(c => (c - center).LengthHorizontalSquared)
-            .Where(c => IsSite(map, c));
+            .OrderBy(c => (c - center).LengthHorizontalSquared);
         var sites = new List<IntVec3>();
-        foreach (IntVec3 c in corners.Where(c => sites.All(s => Math.Abs(s.x - c.x) >= SiteSize || Math.Abs(s.z - c.z) >= SiteSize)))
+        foreach (IntVec3 c in corners)
         {
+            if (!IsSite(map, c) || !sites.TrueForAll(s => Math.Abs(s.x - c.x) >= SiteSize || Math.Abs(s.z - c.z) >= SiteSize)) continue;
             sites.Add(c);
             if (sites.Count >= count) break;
         }
@@ -215,7 +215,7 @@ public sealed partial class BenchmarkComponent
     private static bool IsOpen(Map map, IntVec3 cell) =>
         !cell.Fogged(map) && cell.GetTerrain(map) is { natural: true, IsWater: false } && map.terrainGrid.UnderTerrainAt(cell) == null
         && !cell.Roofed(map) && map.zoneManager.ZoneAt(cell) == null
-        && cell.GetThingList(map).All(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Filth or ThingCategory.Pawn);
+        && cell.GetThingList(map).TrueForAll(t => t.def.category is ThingCategory.Plant or ThingCategory.Item or ThingCategory.Filth or ThingCategory.Pawn);
 
     private static void SetSiteTerrain(Map map, string outside, string inside, CellRect patch)
     {

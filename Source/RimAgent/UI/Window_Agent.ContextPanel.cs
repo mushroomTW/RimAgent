@@ -132,7 +132,7 @@ public partial class Window_Agent
             y = DrawPartsDetail(y, width, _viewGrouped, _viewMessages, used, window);
             foreach (ColonyAgentSession.ContextPart deferred in _viewDeferred)
             {
-                y = DrawRow(y, width, PartColors[deferred.Key], PartLabel(deferred), deferred.Tokens, window: null, exact: false);
+                y = DrawRow(RowRect(y, width), PartColors[deferred.Key], PartLabel(deferred), deferred.Tokens, window: null, exact: false);
             }
 
             y += 6f;
@@ -233,7 +233,7 @@ public partial class Window_Agent
         private static List<ColonyAgentSession.ContextPart> GroupMessages(IReadOnlyList<ColonyAgentSession.ContextPart> parts, List<ColonyAgentSession.ContextPart> messages)
         {
             List<ColonyAgentSession.ContextPart> grouped = [.. parts.Where(p => !MessageKeys.Contains(p.Key))];
-            grouped.Insert(0, new ColonyAgentSession.ContextPart("Messages", messages.Sum(p => p.Tokens), exact: messages.All(p => p.Exact)));
+            grouped.Insert(0, new ColonyAgentSession.ContextPart("Messages", messages.Sum(p => p.Tokens), exact: messages.TrueForAll(p => p.Exact)));
             return grouped;
         }
 
@@ -244,28 +244,29 @@ public partial class Window_Agent
             {
                 if (part.Key != "Messages")
                 {
-                    y = DrawRow(y, width, PartColors[part.Key], PartLabel(part), part.Tokens, window, part.Exact);
+                    y = DrawRow(RowRect(y, width), PartColors[part.Key], PartLabel(part), part.Tokens, window, part.Exact);
                     continue;
                 }
                 var header = new Rect(Pad, y, width, RowHeight);
-                y = DrawRow(y, width, PartColors[part.Key], (_messagesExpanded ? "▾ " : "▸ ") + PartLabel(part), part.Tokens, window, part.Exact);
+                y = DrawRow(RowRect(y, width), PartColors[part.Key], (_messagesExpanded ? "▾ " : "▸ ") + PartLabel(part), part.Tokens, window, part.Exact);
                 if (Widgets.ButtonInvisible(header)) _messagesExpanded = !_messagesExpanded;
                 if (!_messagesExpanded) continue;
                 foreach (ColonyAgentSession.ContextPart sub in messages)
                 {
-                    y = DrawRow(y, width, PartColors[sub.Key], PartLabel(sub), sub.Tokens, window, sub.Exact, indent: 16f);
+                    y = DrawRow(RowRect(y, width, indent: 16f), PartColors[sub.Key], PartLabel(sub), sub.Tokens, window, sub.Exact);
                 }
             }
             if (window is > 0)
             {
-                y = DrawRow(y, width, FreeColor, "RimAgent.ContextPanel.Free".Translate(), Math.Max(0, window.Value - used), window, exact: true);
+                y = DrawRow(RowRect(y, width), FreeColor, "RimAgent.ContextPanel.Free".Translate(), Math.Max(0, window.Value - used), window, exact: true);
             }
             return y;
         }
 
-        private static float DrawRow(float y, float width, Color color, string label, long tokens, long? window, bool exact, float indent = 0f)
+        private static Rect RowRect(float y, float width, float indent = 0f) => new(Pad + indent, y, width - indent, RowHeight);
+
+        private static float DrawRow(Rect row, Color color, string label, long tokens, long? window, bool exact)
         {
-            var row = new Rect(Pad + indent, y, width - indent, RowHeight);
             var swatch = new Rect(row.x, row.y + 6f, 10f, 10f);
             DrawRoundedBox(swatch, color, Color.clear, 2f);
             GUI.color = new Color(0.90f, 0.93f, 0.96f);
@@ -278,7 +279,7 @@ public partial class Window_Agent
             Widgets.Label(new Rect(row.xMax - 56f, row.y, 56f, row.height), percent);
             Text.Anchor = TextAnchor.UpperLeft;
             GUI.color = Color.white;
-            return y + RowHeight;
+            return row.yMax;
         }
 
         private static string PartLabel(ColonyAgentSession.ContextPart part)

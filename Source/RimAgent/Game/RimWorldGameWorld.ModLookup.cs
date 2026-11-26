@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -26,14 +27,14 @@ internal sealed partial class RimWorldGameWorld
         if (!string.IsNullOrWhiteSpace(authors)) facts.Add("Authors: " + authors);
 
         List<string> defTypes = [.. mod.AllDefs
-            .GroupBy(d => d.GetType().Name)
+            .GroupBy(d => d.GetType().Name, StringComparer.Ordinal)
             .OrderByDescending(g => g.Count())
             .Take(MaxListedDefTypes)
-            .Select(g => $"{g.Key} {g.Count()}")];
+            .Select(g => string.Create(CultureInfo.InvariantCulture, $"{g.Key} {g.Count()}"))];
         facts.Add(defTypes.Count > 0 ? "Adds defs: " + string.Join(", ", defTypes) : "Adds no defs.");
 
         int xmlPatches = mod.Patches.Count();
-        if (xmlPatches > 0) facts.Add($"XML patches to other defs: {xmlPatches}.");
+        if (xmlPatches > 0) facts.Add(string.Create(CultureInfo.InvariantCulture, $"XML patches to other defs: {xmlPatches}."));
 
         List<string> patched = HarmonyPatchedTypes(mod);
         facts.Add(patched.Count > 0
@@ -71,7 +72,7 @@ internal sealed partial class RimWorldGameWorld
             .OrderByDescending(kv => kv.Value.Count)
             .ThenBy(kv => kv.Key, StringComparer.Ordinal)
             .Take(MaxListedPatchedTypes)
-            .Select(kv => kv.Key + "." + string.Join("/", kv.Value.Take(MaxListedPatchedMethods)) +
-                          (kv.Value.Count > MaxListedPatchedMethods ? $" (+{kv.Value.Count - MaxListedPatchedMethods})" : string.Empty))];
+            .Select(kv => kv.Key + "." + string.Join('/', kv.Value.Take(MaxListedPatchedMethods)) +
+                          (kv.Value.Count > MaxListedPatchedMethods ? string.Create(CultureInfo.InvariantCulture, $" (+{kv.Value.Count - MaxListedPatchedMethods})") : string.Empty))];
     }
 }

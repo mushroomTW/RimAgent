@@ -27,33 +27,52 @@ internal static class RoomPlan
         if (barriers.Count == 0) return rooms;
         HashSet<(int X, int Z)> solid = [.. barriers];
         int minX = solid.Min(c => c.X), maxX = solid.Max(c => c.X), minZ = solid.Min(c => c.Z), maxZ = solid.Max(c => c.Z);
+        var bounds = (minX, maxX, minZ, maxZ);
         var seen = new HashSet<(int X, int Z)>();
         for (int x = minX; x <= maxX; x++)
         {
             for (int z = minZ; z <= maxZ; z++)
             {
                 if (solid.Contains((x, z)) || !seen.Add((x, z))) continue;
-                var room = new Room([(x, z)], []);
-                bool open = false;
-                var queue = new Queue<(int X, int Z)>(room.Cells);
-                while (queue.TryDequeue(out (int X, int Z) cell))
-                {
-                    foreach ((int X, int Z) next in Neighbours(cell))
-                    {
-                        if (solid.Contains(next)) room.Border.Add(next);
-                        else if (next.X < minX || next.X > maxX || next.Z < minZ || next.Z > maxZ) open = true;
-                        else if (seen.Add(next))
-                        {
-                            room.Cells.Add(next);
-                            queue.Enqueue(next);
-                        }
-                    }
-                }
-                if (!open) rooms.Add(room);
+                if (FloodRoom((x, z), solid, seen, bounds) is { } room) rooms.Add(room);
             }
         }
         return rooms;
     }
+
+    private static Room? FloodRoom(
+        (int X, int Z) start,
+        HashSet<(int X, int Z)> solid,
+        HashSet<(int X, int Z)> seen,
+        (int MinX, int MaxX, int MinZ, int MaxZ) bounds)
+    {
+        var room = new Room([start], []);
+        bool open = false;
+        var queue = new Queue<(int X, int Z)>(room.Cells);
+        while (queue.TryDequeue(out (int X, int Z) cell))
+        {
+            foreach ((int X, int Z) next in Neighbours(cell))
+            {
+                if (solid.Contains(next))
+                {
+                    room.Border.Add(next);
+                }
+                else if (IsOutside(next, bounds))
+                {
+                    open = true;
+                }
+                else if (seen.Add(next))
+                {
+                    room.Cells.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+        }
+        return open ? null : room;
+    }
+
+    private static bool IsOutside((int X, int Z) cell, (int MinX, int MaxX, int MinZ, int MaxZ) bounds) =>
+        cell.X < bounds.MinX || cell.X > bounds.MaxX || cell.Z < bounds.MinZ || cell.Z > bounds.MaxZ;
 
     /// <summary>臥室與研究室各自圍起、各有一扇門、共用一面牆。</summary>
     public static int BedroomLabPairs(
@@ -62,7 +81,7 @@ internal static class RoomPlan
         IReadOnlyCollection<(int X, int Z)> beds,
         IReadOnlyCollection<(int X, int Z)> benches)
     {
-        return rooms.Where(bedroom => beds.Count(bedroom.Cells.Contains) >= 2)
+        return rooms.Where(bedroom => beds.Where(bedroom.Cells.Contains).Skip(1).Any())
             .Sum(bedroom => rooms.Count(lab => lab != bedroom && benches.Any(lab.Cells.Contains)
                 && bedroom.Border.Any(c => lab.Border.Contains(c) && !doors.Contains(c))
                 && doors.Any(a => bedroom.Border.Contains(a) && doors.Any(b => b != a && lab.Border.Contains(b)))));

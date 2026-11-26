@@ -36,57 +36,42 @@ public sealed partial class BenchmarkComponent
             Tier = SkillTier,
             Skill = "medical-triage",
             Instruction = "有殖民者受傷了，處理一下。",
-            Setup = map =>
-            {
-                List<Pawn> colonists = [.. map.mapPawns.FreeColonistsSpawned.Where(p => !p.Downed && p.playerSettings != null)];
-                Pawn doctor = colonists.Where(p => !p.WorkTypeIsDisabled(WorkTypeDefOf.Doctor)).MaxBy(MedicineLevel);
-                if (colonists.Count < 2 || doctor == null) return "needs two colonists and a doctor";
-                // 醫術最好的人不能是出血者，否則沒人能替他治療。
-                colonists.Remove(doctor);
-                colonists.Sort((a, b) => MedicineLevel(a).CompareTo(MedicineLevel(b)));
-                _bleeder = colonists[0];
-                _scratched = colonists.Count > 1 ? colonists[1] : doctor;
-                BodyPartRecord torso = _bleeder.RaceProps.body.corePart;
-                for (int i = 0; i < 3; i++)
-                {
-                    Hediff cut = HediffMaker.MakeHediff(HediffDefOf.Cut, _bleeder, torso);
-                    cut.Severity = 6f;
-                    _bleeder.health.AddHediff(cut, torso);
-                }
-                HediffDef scratchDef = DefDatabase<HediffDef>.GetNamedSilentFail("Scratch") ?? HediffDefOf.Cut;
-                Hediff scratch = HediffMaker.MakeHediff(scratchDef, _scratched, _scratched.RaceProps.body.corePart);
-                scratch.Severity = 1f;
-                _scratched.health.AddHediff(scratch, _scratched.RaceProps.body.corePart);
-                // 起點刻意顛倒，什麼都不改不會過。
-                _bleeder.playerSettings.medCare = MedicalCareCategory.HerbalOrWorse;
-                _scratched.playerSettings.medCare = MedicalCareCategory.Best;
-                return null;
-            },
-            Cleanup = map =>
-            {
-                foreach (Pawn pawn in map.mapPawns.FreeColonistsSpawned.Where(p => p.CurJobDef == JobDefOf.TendPatient).ToList()) pawn.jobs.EndCurrentJob(JobCondition.InterruptForced);
-                _bleeder = null;
-                _scratched = null;
-            },
-            Measure = map => new()
-            {
-                ["bleederCare"] = _bleeder?.playerSettings.medCare >= MedicalCareCategory.NormalOrWorse ? 1 : 0,
-                ["scratchCare"] = _scratched?.playerSettings.medCare <= MedicalCareCategory.HerbalOrWorse ? 1 : 0,
-                ["tended"] = map.mapPawns.FreeColonistsSpawned.Any(p => p != _bleeder && Jobs(p).Any(j => j.def == JobDefOf.TendPatient && j.targetA.Thing == _bleeder)) ? 1 : 0
-            },
-            Check = (_, after, _) => Fails(
-                after["bleederCare"] == 1 ? null : $"{_bleeder?.LabelShort} (bleeding heavily) is not on industrial medicine or better",
-                after["scratchCare"] == 1 ? null : $"{_scratched?.LabelShort} (a scratch) is not on herbal medicine or worse",
-                after["tended"] == 1 ? null : $"nobody else was ordered to tend {_bleeder?.LabelShort}"),
-            Solve = world =>
-            {
-                Pawn doctor = Find.CurrentMap.mapPawns.FreeColonistsSpawned.Where(p => p != _bleeder && !p.WorkTypeIsDisabled(WorkTypeDefOf.Doctor)).MaxBy(MedicineLevel);
-                return All([
-                    world.SetMedicalCare(_bleeder.thingIDNumber, nameof(MedicalCareCategory.NormalOrWorse)),
-                    world.SetMedicalCare(_scratched.thingIDNumber, nameof(MedicalCareCategory.HerbalOrWorse)),
-                    world.OrderJob(doctor.thingIDNumber, "tend", _bleeder.thingIDNumber)]);
-            }
+            Setup = SetupSkillTriage,
+            Cleanup = CleanupSkillTriage,
+            Measure = MeasureSkillTriage,
+            Check = CheckSkillTriage,
+            Solve = SolveSkillTriage
         };
+
+    private static void CleanupSkillTriage(Map map)
+    {
+        foreach (Pawn pawn in map.mapPawns.FreeColonistsSpawned.Where(p => p.CurJobDef == JobDefOf.TendPatient).ToList()) pawn.jobs.EndCurrentJob(JobCondition.InterruptForced);
+        _bleeder = null;
+        _scratched = null;
+    }
+
+    private static Dictionary<string, int> MeasureSkillTriage(Map map) =>
+        new()
+        {
+            ["bleederCare"] = _bleeder?.playerSettings.medCare >= MedicalCareCategory.NormalOrWorse ? 1 : 0,
+            ["scratchCare"] = _scratched?.playerSettings.medCare <= MedicalCareCategory.HerbalOrWorse ? 1 : 0,
+            ["tended"] = map.mapPawns.FreeColonistsSpawned.Any(p => p != _bleeder && Jobs(p).Any(j => j.def == JobDefOf.TendPatient && j.targetA.Thing == _bleeder)) ? 1 : 0
+        };
+
+    private static string CheckSkillTriage(Dictionary<string, int> _, Dictionary<string, int> after, string __) =>
+        Fails(
+            after["bleederCare"] == 1 ? null : $"{_bleeder?.LabelShort} (bleeding heavily) is not on industrial medicine or better",
+            after["scratchCare"] == 1 ? null : $"{_scratched?.LabelShort} (a scratch) is not on herbal medicine or worse",
+            after["tended"] == 1 ? null : $"nobody else was ordered to tend {_bleeder?.LabelShort}");
+
+    private static CommandResult SolveSkillTriage(IGameWorld world)
+    {
+        Pawn doctor = Find.CurrentMap.mapPawns.FreeColonistsSpawned.Where(p => p != _bleeder && !p.WorkTypeIsDisabled(WorkTypeDefOf.Doctor)).MaxBy(MedicineLevel);
+        return All([
+            world.SetMedicalCare(_bleeder.thingIDNumber, nameof(MedicalCareCategory.NormalOrWorse)),
+            world.SetMedicalCare(_scratched.thingIDNumber, nameof(MedicalCareCategory.HerbalOrWorse)),
+            world.OrderJob(doctor.thingIDNumber, "tend", _bleeder.thingIDNumber)]);
+    }
 
     /// <summary>raid-defense 第 2 節：發狂的動物要躲進室內，不要迎戰。</summary>
     private static BenchTask SkillManhunterTask() =>
@@ -101,7 +86,7 @@ public sealed partial class BenchmarkComponent
             {
                 RemoveEnemies(map);
                 DestroySpawnedThings();
-                foreach (IntVec3 cell in _shelterRoof) map.roofGrid.SetRoof(cell, null);
+                foreach (IntVec3 cell in _shelterRoof) map.roofGrid.SetRoof(cell, def: null);
                 _shelterRoof.Clear();
             },
             Measure = map => new()
@@ -149,34 +134,63 @@ public sealed partial class BenchmarkComponent
             Solve = world => All(new[] { WorkTypeDefOf.Firefighter, BedRest, _newcomerCraft }
                 .Select(w => world.SetWorkPriority(_newcomer.thingIDNumber, w.defName, 1)))
         };
-        task.Setup = map =>
-        {
-            _newcomer = null;
-            _newcomerCraft = WorkTypeDefOf.Construction;
-            for (int attempt = 0; attempt < 20 && _newcomer == null; attempt++)
-            {
-                // 不產生親屬：丟掉的候選人才不會留下和現有殖民者的關係。
-                Pawn pawn = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Colonist, Faction.OfPlayer, canGeneratePawnRelations: false));
-                if (new[] { WorkTypeDefOf.Firefighter, BedRest, _newcomerCraft }.All(w => !pawn.WorkTypeIsDisabled(w))) _newcomer = pawn;
-                else Find.WorldPawns.PassToWorld(pawn, RimWorld.Planet.PawnDiscardDecideMode.Discard);
-            }
-            if (_newcomer == null) return "could not generate a colonist who can build and fight fires";
-            foreach (SkillRecord skill in _newcomer.skills.skills)
-            {
-                skill.Level = 3;
-                skill.passion = Passion.None;
-            }
-            SkillRecord construction = _newcomer.skills.GetSkill(SkillDefOf.Construction);
-            construction.Level = 14;
-            construction.passion = Passion.Major;
-            GenSpawn.Spawn(_newcomer, NearColonists(map), map);
-            Find.PlaySettings.useWorkPriorities = true;
-            _newcomer.workSettings.EnableAndInitialize();
-            foreach (WorkTypeDef work in DefDatabase<WorkTypeDef>.AllDefs.Where(w => !_newcomer.WorkTypeIsDisabled(w))) _newcomer.workSettings.SetPriority(work, 3);
-            task.Instruction = $"新殖民者 {_newcomer.LabelShort} 剛加入。幫這位殖民者排工作優先級。";
-            return null;
-        };
+        task.Setup = map => SetupSkillNewColonist(map, task);
         return task;
+    }
+
+    private static string SetupSkillTriage(Map map)
+    {
+        List<Pawn> colonists = [.. map.mapPawns.FreeColonistsSpawned.Where(p => !p.Downed && p.playerSettings != null)];
+        Pawn doctor = colonists.Where(p => !p.WorkTypeIsDisabled(WorkTypeDefOf.Doctor)).MaxBy(MedicineLevel);
+        if (colonists.Count < 2 || doctor == null) return "needs two colonists and a doctor";
+        // 醫術最好的人不能是出血者，否則沒人能替他治療。
+        colonists.Remove(doctor);
+        colonists.Sort((a, b) => MedicineLevel(a).CompareTo(MedicineLevel(b)));
+        _bleeder = colonists[0];
+        _scratched = colonists.Count > 1 ? colonists[1] : doctor;
+        BodyPartRecord torso = _bleeder.RaceProps.body.corePart;
+        for (int i = 0; i < 3; i++)
+        {
+            Hediff cut = HediffMaker.MakeHediff(HediffDefOf.Cut, _bleeder, torso);
+            cut.Severity = 6f;
+            _bleeder.health.AddHediff(cut, torso);
+        }
+        HediffDef scratchDef = DefDatabase<HediffDef>.GetNamedSilentFail("Scratch") ?? HediffDefOf.Cut;
+        Hediff scratch = HediffMaker.MakeHediff(scratchDef, _scratched, _scratched.RaceProps.body.corePart);
+        scratch.Severity = 1f;
+        _scratched.health.AddHediff(scratch, _scratched.RaceProps.body.corePart);
+        // 起點刻意顛倒，什麼都不改不會過。
+        _bleeder.playerSettings.medCare = MedicalCareCategory.HerbalOrWorse;
+        _scratched.playerSettings.medCare = MedicalCareCategory.Best;
+        return null;
+    }
+
+    private static string SetupSkillNewColonist(Map map, BenchTask task)
+    {
+        _newcomer = null;
+        _newcomerCraft = WorkTypeDefOf.Construction;
+        for (int attempt = 0; attempt < 20 && _newcomer == null; attempt++)
+        {
+            // 不產生親屬：丟掉的候選人才不會留下和現有殖民者的關係。
+            Pawn pawn = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Colonist, Faction.OfPlayer, canGeneratePawnRelations: false));
+            if (new[] { WorkTypeDefOf.Firefighter, BedRest, _newcomerCraft }.All(w => !pawn.WorkTypeIsDisabled(w))) _newcomer = pawn;
+            else Find.WorldPawns.PassToWorld(pawn, RimWorld.Planet.PawnDiscardDecideMode.Discard);
+        }
+        if (_newcomer == null) return "could not generate a colonist who can build and fight fires";
+        foreach (SkillRecord skill in _newcomer.skills.skills)
+        {
+            skill.Level = 3;
+            skill.passion = Passion.None;
+        }
+        SkillRecord construction = _newcomer.skills.GetSkill(SkillDefOf.Construction);
+        construction.Level = 14;
+        construction.passion = Passion.Major;
+        GenSpawn.Spawn(_newcomer, NearColonists(map), map);
+        Find.PlaySettings.useWorkPriorities = true;
+        _newcomer.workSettings.EnableAndInitialize();
+        foreach (WorkTypeDef work in DefDatabase<WorkTypeDef>.AllDefs.Where(w => !_newcomer.WorkTypeIsDisabled(w))) _newcomer.workSettings.SetPriority(work, 3);
+        task.Instruction = $"新殖民者 {_newcomer.LabelShort} 剛加入。幫這位殖民者排工作優先級。";
+        return null;
     }
 
     /// <summary>food-security：用技能的公式算出存糧天數，不到 5 天要補食物來源。</summary>
@@ -187,31 +201,7 @@ public sealed partial class BenchmarkComponent
             Tier = SkillTier,
             Skill = "food-security",
             Instruction = "食物還夠嗎？告訴我大概還能撐幾天，不夠的話想辦法補。",
-            Setup = map =>
-            {
-                _storedFood.Clear();
-                foreach (Thing food in map.haulDestinationManager.AllGroupsListForReading.SelectMany(g => g.HeldThings).Where(t => t.def.IsNutritionGivingIngestible && t.def.ingestible.HumanEdible).ToList())
-                {
-                    _storedFood.Add((food, food.Position));
-                    food.DeSpawn();
-                }
-                if (!AddStockpile(map, "食物倉庫")) return "no room for a food stockpile";
-                Zone_Stockpile pantry = map.zoneManager.AllZones.OfType<Zone_Stockpile>().Last(z => z.label == "食物倉庫");
-                int colonists = map.mapPawns.FreeColonistsSpawnedCount;
-                float nutrition = ThingDefOf.MealSimple.GetStatValueAbstract(StatDefOf.Nutrition);
-                int meals = (int)System.Math.Ceiling(RunwayDays * colonists * NutritionPerColonistDay / nutrition);
-                foreach (IntVec3 cell in pantry.Cells)
-                {
-                    if (meals <= 0) break;
-                    Thing stack = Stack(ThingDefOf.MealSimple, System.Math.Min(meals, ThingDefOf.MealSimple.stackLimit));
-                    meals -= stack.stackCount;
-                    _spawned.Add(GenSpawn.Spawn(stack, cell, map));
-                }
-                if (meals > 0) return "the food stockpile is too small";
-                map.resourceCounter.UpdateResourceCounts();
-                _runwayDays = map.resourceCounter.TotalHumanEdibleNutrition / (colonists * NutritionPerColonistDay);
-                return null;
-            },
+            Setup = SetupSkillFoodRunway,
             Cleanup = map =>
             {
                 DestroySpawnedThings();
@@ -230,6 +220,32 @@ public sealed partial class BenchmarkComponent
                 new[] { "growing", "hunting", "bills", "workbenches" }.Any(k => Delta(before, after, k) > 0) ? null : "no new food source (field, hunting, cooking bill or workbench)")
         };
 
+    private static string SetupSkillFoodRunway(Map map)
+    {
+        _storedFood.Clear();
+        foreach (Thing food in map.haulDestinationManager.AllGroupsListForReading.SelectMany(g => g.HeldThings).Where(t => t.def.IsNutritionGivingIngestible && t.def.ingestible.HumanEdible).ToList())
+        {
+            _storedFood.Add((food, food.Position));
+            food.DeSpawn();
+        }
+        if (!AddStockpile(map, "食物倉庫")) return "no room for a food stockpile";
+        Zone_Stockpile pantry = map.zoneManager.AllZones.OfType<Zone_Stockpile>().Last(z => z.label == "食物倉庫");
+        int colonists = map.mapPawns.FreeColonistsSpawnedCount;
+        float nutrition = ThingDefOf.MealSimple.GetStatValueAbstract(StatDefOf.Nutrition);
+        int meals = (int)System.Math.Ceiling(RunwayDays * colonists * NutritionPerColonistDay / nutrition);
+        foreach (IntVec3 cell in pantry.Cells)
+        {
+            if (meals <= 0) break;
+            Thing stack = Stack(ThingDefOf.MealSimple, System.Math.Min(meals, ThingDefOf.MealSimple.stackLimit));
+            meals -= stack.stackCount;
+            _spawned.Add(GenSpawn.Spawn(stack, cell, map));
+        }
+        if (meals > 0) return "the food stockpile is too small";
+        map.resourceCounter.UpdateResourceCounts();
+        _runwayDays = map.resourceCounter.TotalHumanEdibleNutrition / (colonists * NutritionPerColonistDay);
+        return null;
+    }
+
     /// <summary>mood-management 第 3 節：沒桌子吃飯要放桌子。</summary>
     private static BenchTask SkillMoodTask()
     {
@@ -242,7 +258,7 @@ public sealed partial class BenchmarkComponent
             Measure = map => new() { ["tables"] = CountBuildTargets(map, d => d.IsTable) },
             Check = (before, after, reply) => Fails(
                 Need(after, before, "tables", 1),
-                reply != null && (reply.Contains('桌') || reply.Contains("table", System.StringComparison.OrdinalIgnoreCase)) ? null : "reply does not name the missing table")
+                reply != null && (reply.Contains('桌', System.StringComparison.Ordinal) || reply.Contains("table", System.StringComparison.OrdinalIgnoreCase)) ? null : "reply does not name the missing table")
         };
         task.Setup = map =>
         {
@@ -297,7 +313,7 @@ public sealed partial class BenchmarkComponent
     {
         List<int> sleep = [.. Enumerable.Range(0, 24).Where(h => timetable.GetAssignment(h) == TimeAssignmentDefOf.Sleep)];
         List<int> joy = [.. Enumerable.Range(0, 24).Where(h => timetable.GetAssignment(h) == TimeAssignmentDefOf.Joy)];
-        return sleep.Count is >= 7 and <= 9 && Enumerable.Range(0, 6).All(sleep.Contains) && joy.Count is >= 1 and <= 2 && joy.All(h => h >= 17);
+        return sleep.Count is >= 7 and <= 9 && Enumerable.Range(0, 6).All(sleep.Contains) && joy.Count is >= 1 and <= 2 && joy.TrueForAll(h => h >= 17);
     }
 
     /// <summary>回覆裡接在「天」旁的數字和技能公式算出的天數差不到 1 天。</summary>

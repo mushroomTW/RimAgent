@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using DevTools.Testing;
@@ -20,9 +21,9 @@ internal sealed class ContextPanelProof
         var tokenizers = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => a.GetName().Name == "Microsoft.ML.Tokenizers")
             .ToList();
-        Expect.IsTrue(tokenizers.Count == 1, "Microsoft.ML.Tokenizers 應只載入一份，實際 " + tokenizers.Count);
+        Expect.IsTrue(tokenizers.Count == 1, "Microsoft.ML.Tokenizers 應只載入一份，實際 " + tokenizers.Count.ToString(CultureInfo.InvariantCulture));
         string location = tokenizers.Count == 1 ? tokenizers[0].Location : string.Empty;
-        Expect.IsTrue(location.IndexOf("RimLLM Framework", StringComparison.OrdinalIgnoreCase) >= 0, "應由框架出貨：" + location);
+        Expect.IsTrue(location.Contains("RimLLM Framework", StringComparison.OrdinalIgnoreCase), "應由框架出貨：" + location);
     }
 
     [Test]

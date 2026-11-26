@@ -237,9 +237,9 @@ public class BuildToolsTests
     public void HaulMarksWarnWhenNoStorageAcceptsThem()
     {
         _world.Things.Add(new ThingInfo { Id = 901, Label = "limestone chunk", DefName = "ChunkLimestone", Kind = ThingKind.Item, X = 40, Z = 40 });
-        Assert.That(_tools.DesignateArea("haul", false, 40, 40, 40, 40), Does.Not.Contain("no storage"));
+        Assert.That(_tools.DesignateArea("haul", useSelection: false, 40, 40, 40, 40), Does.Not.Contain("no storage"));
         _world.NoStorageFor.Add(901);
-        Assert.That(_tools.DesignateArea("haul", false, 40, 40, 40, 40), Does.Contain("already marked").And.Contain("no storage accepts 1 of them (limestone chunk)"));
+        Assert.That(_tools.DesignateArea("haul", useSelection: false, 40, 40, 40, 40), Does.Contain("already marked").And.Contain("no storage accepts 1 of them (limestone chunk)"));
     }
 
     [Test]
@@ -256,8 +256,12 @@ public class BuildToolsTests
     public void WeakGroundPointsAtFirmGround()
     {
         for (int x = 10; x <= 70; x++)
+        {
             for (int z = 10; z <= 75; z++)
+            {
                 if (x is < 30 or > 34 || z is < 50 or > 53) _world.LightOnlyCells.Add((x, z));
+            }
+        }
         _world.BlockedCells[(41, 44)] = "needs medium ground";
         _world.BuildingInfos["Bed"] = new BuildingInfo { DefName = "Bed", Width = 1, Height = 2, TerrainAffordance = "Medium" };
         Assert.That(_tools.PlaceBlueprint("bed", "single", 41, 44), Does.Contain("too weak (needs Medium support)").And.Contain("cells that holds it: (30,50)-(34,53), 5x4"));

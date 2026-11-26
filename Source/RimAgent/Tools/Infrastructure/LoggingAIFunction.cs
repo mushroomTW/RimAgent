@@ -82,9 +82,9 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
     }
 
     /// <summary>玩家插話與守衛提示以標籤附在工具結果後面；工具內容（網頁、MCP、遊戲內名稱）自帶同名標籤就能冒充玩家。</summary>
-    internal static string NeutralizeTrustedTags(string text) => TrustedTag.Replace(text ?? string.Empty, "&lt;$1");
+    internal static string NeutralizeTrustedTags(string text) => TrustedTag.Replace(text ?? string.Empty, "&lt;${tag}");
 
-    [GeneratedRegex(@"<(\s*(?:/\s*)?(?:player_message|loop_guard)\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"<(?<tag>\s*(?:/\s*)?(?:player_message|loop_guard)\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex TrustedTag { get; }
 
     private static string FormatInterjection(string text)

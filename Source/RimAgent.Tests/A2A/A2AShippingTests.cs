@@ -74,8 +74,8 @@ public class A2AShippingTests
         }
         Assert.That(offenders, Is.Empty);
 
-        bool Mentions(Type t) => _shipped.ContainsKey(t.Assembly.GetName().Name!)
-            || (t.HasElementType && Mentions(t.GetElementType()!))
+        bool Mentions(Type t) => _shipped.ContainsKey(t.Assembly.GetName().Name)
+            || (t.HasElementType && Mentions(t.GetElementType()))
             || (t.IsGenericType && t.GetGenericArguments().Any(Mentions));
     }
 

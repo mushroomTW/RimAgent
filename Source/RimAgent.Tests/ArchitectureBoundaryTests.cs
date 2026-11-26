@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -14,12 +15,13 @@ namespace RimAgent.Tests;
 /// 遊戲 API（Verse、RimWorld、UnityEngine、LudeonTK）只出現在 Game/ 與 UI/。
 /// </summary>
 [TestFixture]
-public class ArchitectureBoundaryTests
+public partial class ArchitectureBoundaryTests
 {
-    private static readonly Regex GameApiReference = new(
+    [GeneratedRegex(
         @"\busing\s+(static\s+)?(global::)?(Verse|RimWorld|UnityEngine|LudeonTK)\b" +
         @"|\b(global::)?(Verse|RimWorld|UnityEngine|LudeonTK)\.[A-Z]",
-        RegexOptions.CultureInvariant);
+        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture)]
+    private static partial Regex GameApiReferenceRegex { get; }
 
     [TestCase("Tools")]
     [TestCase("Mcp")]
@@ -32,10 +34,10 @@ public class ArchitectureBoundaryTests
             string[] lines = StripCommentsAndLiterals(File.ReadAllText(file)).Split('\n');
             for (int i = 0; i < lines.Length; i++)
             {
-                Match match = GameApiReference.Match(lines[i]);
+                Match match = GameApiReferenceRegex.Match(lines[i]);
                 if (match.Success)
                 {
-                    violations.Add(Path.GetRelativePath(FindSourceRoot(), file) + ":" + (i + 1) + " " + match.Value.Trim());
+                    violations.Add(Path.GetRelativePath(FindSourceRoot(), file) + ":" + (i + 1).ToString(CultureInfo.InvariantCulture) + " " + match.Value.Trim());
                 }
             }
         }
@@ -52,7 +54,7 @@ public class ArchitectureBoundaryTests
 
         string code = StripCommentsAndLiterals(Source);
 
-        Assert.That(GameApiReference.Matches(code).Select(m => m.Value), Is.EqualTo((string[])["Verse.L"]));
+        Assert.That(GameApiReferenceRegex.Matches(code).Select(m => m.Value), Is.EqualTo((string[])["Verse.L"]));
         Assert.That(code.Split('\n'), Has.Length.EqualTo(3));
     }
 
@@ -63,7 +65,7 @@ public class ArchitectureBoundaryTests
 
         string code = StripCommentsAndLiterals(Source);
 
-        Assert.That(GameApiReference.Matches(code).Select(m => m.Value),
+        Assert.That(GameApiReferenceRegex.Matches(code).Select(m => m.Value),
             Is.EqualTo((string[])["RimWorld.F", "Verse.F", "UnityEngine.T"]));
         Assert.That(code, Has.Length.EqualTo(Source.Length));
     }

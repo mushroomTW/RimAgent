@@ -16,25 +16,25 @@ internal sealed class A2AGrpcService(IA2ARequestHandler handler, AgentCard card)
 {
     public override Task<Protos.SendMessageResponse> SendMessage(Protos.SendMessageRequest request, ServerCallContext context)
         => Call(async () => ProtoJsonBridge.ToProto<Protos.SendMessageResponse>(
-            await handler.SendMessageAsync(ProtoJsonBridge.ToDomain<SendMessageRequest>(request), null, context.CancellationToken).ConfigureAwait(false)));
+            await handler.SendMessageAsync(ProtoJsonBridge.ToDomain<SendMessageRequest>(request), requestContext: null, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task SendStreamingMessage(Protos.SendMessageRequest request, IServerStreamWriter<Protos.StreamResponse> responseStream, ServerCallContext context)
-        => Stream(() => handler.SendStreamingMessageAsync(ProtoJsonBridge.ToDomain<SendMessageRequest>(request), null, context.CancellationToken), responseStream);
+        => Stream(() => handler.SendStreamingMessageAsync(ProtoJsonBridge.ToDomain<SendMessageRequest>(request), requestContext: null, context.CancellationToken), responseStream);
 
     public override Task<Protos.Task> GetTask(Protos.GetTaskRequest request, ServerCallContext context)
         => Call(async () => ProtoJsonBridge.ToProto<Protos.Task>(
-            await handler.GetTaskAsync(ProtoJsonBridge.ToDomain<GetTaskRequest>(request), null, context.CancellationToken).ConfigureAwait(false)));
+            await handler.GetTaskAsync(ProtoJsonBridge.ToDomain<GetTaskRequest>(request), requestContext: null, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task<Protos.ListTasksResponse> ListTasks(Protos.ListTasksRequest request, ServerCallContext context)
         => Call(async () => ProtoJsonBridge.ToProto<Protos.ListTasksResponse>(
-            await handler.ListTasksAsync(ProtoJsonBridge.ToDomain<ListTasksRequest>(request), null, context.CancellationToken).ConfigureAwait(false)));
+            await handler.ListTasksAsync(ProtoJsonBridge.ToDomain<ListTasksRequest>(request), requestContext: null, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task<Protos.Task> CancelTask(Protos.CancelTaskRequest request, ServerCallContext context)
         => Call(async () => ProtoJsonBridge.ToProto<Protos.Task>(
-            await handler.CancelTaskAsync(ProtoJsonBridge.ToDomain<CancelTaskRequest>(request), null, context.CancellationToken).ConfigureAwait(false)));
+            await handler.CancelTaskAsync(ProtoJsonBridge.ToDomain<CancelTaskRequest>(request), requestContext: null, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task SubscribeToTask(Protos.SubscribeToTaskRequest request, IServerStreamWriter<Protos.StreamResponse> responseStream, ServerCallContext context)
-        => Stream(() => handler.SubscribeToTaskAsync(ProtoJsonBridge.ToDomain<SubscribeToTaskRequest>(request), null, context.CancellationToken), responseStream);
+        => Stream(() => handler.SubscribeToTaskAsync(ProtoJsonBridge.ToDomain<SubscribeToTaskRequest>(request), requestContext: null, context.CancellationToken), responseStream);
 
     public override Task<Protos.AgentCard> GetExtendedAgentCard(Protos.GetExtendedAgentCardRequest request, ServerCallContext context)
         => Task.FromResult(ProtoJsonBridge.ToProto<Protos.AgentCard>(card));

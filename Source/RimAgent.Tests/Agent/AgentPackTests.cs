@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using NUnit.Framework;
@@ -318,7 +319,7 @@ public class AgentPackTests
     [Test]
     public void FormatModsCapsLengthAndCountsTheRest()
     {
-        List<string> names = [.. Enumerable.Range(0, 500).Select(i => "Mod number " + i)];
+        List<string> names = [.. Enumerable.Range(0, 500).Select(i => "Mod number " + i.ToString(CultureInfo.InvariantCulture))];
         string line = AgentPromptComposer.FormatMods(names);
         Assert.That(line.Length, Is.LessThan(AgentPromptComposer.MaxModsChars + 400));
         Assert.That(line, Does.Match(@"\(\+\d+ more\)"));

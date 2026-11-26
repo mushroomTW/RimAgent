@@ -52,7 +52,7 @@ public class ContextMeterTests
         var meter = new ContextMeter();
         ChatMessage user = User("hello");
         meter.Observe([user], 1000, "p:a");
-        meter.Observe([user], null, "p:a");
+        meter.Observe([user], realInputTokens: null, "p:a");
         Assert.That(meter.Project([user]), Is.Null, "這次沒回報用量就不能沿用上一次的數字");
 
         meter.Observe([user], 1000, "p:a");
@@ -146,8 +146,8 @@ public class ContextMeterTests
         ColonyAgentSession session = new(new ScriptedChatClient(), new FakeGameWorld(), () => ToolPermissions.For(ToolCategory.Observe), 8,
             contextWindowLookup: _ => 128000, outputLimitLookup: m => m == "P:small" ? 8192 : 64000) { PreferredModel = "P:big" };
 
-        Assert.That(session.CreateRunOptions(null, "P:small").MaxOutputTokens, Is.EqualTo(8192));
-        Assert.That(session.CreateRunOptions(null, null).MaxOutputTokens, Is.EqualTo(19200), "沒指定模型時用主模型：128k 的 15%");
+        Assert.That(session.CreateRunOptions(reasoningOverride: null, "P:small").MaxOutputTokens, Is.EqualTo(8192));
+        Assert.That(session.CreateRunOptions(reasoningOverride: null, modelToUse: null).MaxOutputTokens, Is.EqualTo(19200), "沒指定模型時用主模型：128k 的 15%");
     }
 
     [Test]

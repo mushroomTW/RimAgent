@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using DevTools.Testing;
 using RimAgent.Game;
 using RimWorld;
@@ -13,6 +14,7 @@ namespace RimAgent.InGameTests;
 [System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All)]
 internal sealed partial class MapWorldTests
 {
+    private const string StockpileKind = "stockpile";
     private static readonly string[] _multiCellFurniture = ["DoubleBed", "Table2x2c", "Table2x4c"];
 
     /// <summary>BuildingInfoMatchesVanillaDefs 中反覆使用的原版建築規格預期關鍵字，避免每次測試都重新建立陣列。</summary>
@@ -81,13 +83,13 @@ internal sealed partial class MapWorldTests
         TerrainDef concrete = DefDatabase<TerrainDef>.GetNamed("Concrete");
         try
         {
-            CommandResult added = _world.AddZone("stockpile", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
+            CommandResult added = _world.AddZone(StockpileKind, new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
             Expect(added, $"Skipped 1 cell (blocked by {wall.LabelNoParenthesis}) at ({cell.x},{cell.z}).");
             DeleteNewZones();
 
             map.terrainGrid.SetTerrain(water, deep);
             map.fogGrid.Refog(CellRect.SingleCell(fogged));
-            added = _world.AddZone("stockpile", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
+            added = _world.AddZone(StockpileKind, new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
             Expect(added, $"1 cell (impassable terrain: {deep.label}) at ({water.x},{water.z})");
             Expect(added, $"1 cell (fogged) at ({fogged.x},{fogged.z})");
             DeleteNewZones();
@@ -129,7 +131,7 @@ internal sealed partial class MapWorldTests
         var failures = new List<string>();
 
         // 越界的矩形整筆不做，也不留下空區域。
-        CommandResult outside = _world.AddZone("stockpile", new CellRectSpec(-2, -2, 0, 0), plantDefName: null);
+        CommandResult outside = _world.AddZone(StockpileKind, new CellRectSpec(-2, -2, 0, 0), plantDefName: null);
         if (outside.Success) failures.Add("out-of-bounds rect was accepted");
         if (map.zoneManager.AllZones.Count != zonesBefore) failures.Add("out-of-bounds rect left a zone behind");
 
@@ -145,7 +147,7 @@ internal sealed partial class MapWorldTests
         Zone zone = null;
         try
         {
-            CommandResult added = _world.AddZone("stockpile", new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
+            CommandResult added = _world.AddZone(StockpileKind, new CellRectSpec(rect.minX, rect.minZ, rect.maxX, rect.maxZ), plantDefName: null);
             if (!added.Success) failures.Add("add failed: " + added.Error);
             zone = map.zoneManager.ZoneAt(rect.CenterCell);
             if (zone is not Zone_Stockpile) failures.Add($"vanilla zone at {rect.CenterCell} is {zone?.GetType().Name ?? "null"}");
@@ -230,12 +232,15 @@ internal sealed partial class MapWorldTests
             var rect = new CellRectSpec(r.minX, r.minZ, r.maxX, r.maxZ);
             _world.AddZone("Stockpile", rect, string.Empty);
             CommandResult refused = _world.AddZone("Growing", rect, string.Empty);
-            System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(refused.Message, @"usable cells: \((\d+),(\d+)\)-\((\d+),(\d+)\)", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
-            if (refused.Success || !m.Success) failures.Add("no suggestion: " + refused.Message);
+            Match m = UsableCellsPattern.Match(refused.Message);
+            if (refused.Success || !m.Success)
+            {
+                failures.Add("no suggestion: " + refused.Message);
+            }
             else
             {
-                int N(int i) => int.Parse(m.Groups[i].Value, System.Globalization.CultureInfo.InvariantCulture);
-                CommandResult added = _world.AddZone("Growing", new CellRectSpec(N(1), N(2), N(3), N(4)), string.Empty);
+                int N(string group) => int.Parse(m.Groups[group].Value, CultureInfo.InvariantCulture);
+                CommandResult added = _world.AddZone("Growing", new CellRectSpec(N("minX"), N("minZ"), N("maxX"), N("maxZ")), string.Empty);
                 if (!added.Success) failures.Add("suggested rectangle refused: " + added.Message);
             }
         }
@@ -246,6 +251,9 @@ internal sealed partial class MapWorldTests
         TestHelpers.AssertNone(failures, "growing zone suggestion");
     }
 
+    [GeneratedRegex(@"usable cells: \((?<minX>\d+),(?<minZ>\d+)\)-\((?<maxX>\d+),(?<maxZ>\d+)\)", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex UsableCellsPattern { get; }
+
     /// <summary>操作點上有石塊時，錯誤要講出那一格與石塊 id；石塊沒有儲存區收時要看得出來；benchmark 還原要清掉新增的區域與標記。</summary>
     [Test]
     public void BlockedInteractionCellNamesTheCellAndChunkStorageIsChecked()
@@ -254,8 +262,7 @@ internal sealed partial class MapWorldTests
         if (TestHelpers.SkipWithoutMap(name)) return;
         Map map = Find.CurrentMap;
         ThingDef bench = DefDatabase<ThingDef>.GetNamed("SimpleResearchBench");
-        CellRect? found = FindFreeRect(map, 6, c => !c.Fogged(map) && c.Standable(map) && map.zoneManager.ZoneAt(c) == null
-            && c.SupportsStructureType(map, TerrainAffordanceDefOf.Medium) && c.GetThingList(map).TrueForAll(t => t is Plant && !t.def.plant.IsTree));
+        CellRect? found = FindFreeRect(map, 6, c => IsEmptyVisibleMediumCell(map, c));
         if (found == null)
         {
             TestHelpers.Skip(name, "no empty visible 6x6 area");
@@ -277,8 +284,12 @@ internal sealed partial class MapWorldTests
         try
         {
             string message = _world.TryPlaceBlueprint(bench.defName, center.x, center.z, 0, "WoodLog", checkOnly: true).Message ?? string.Empty;
-            if (!message.Contains($"({spot.x},{spot.z}) blocked by ", StringComparison.Ordinal) || !message.Contains($"#{chunk.thingIDNumber}", StringComparison.Ordinal))
+            string expectedSpot = string.Create(CultureInfo.InvariantCulture, $"({spot.x},{spot.z}) blocked by ");
+            string expectedId = string.Create(CultureInfo.InvariantCulture, $"#{chunk.thingIDNumber}");
+            if (!message.Contains(expectedSpot, StringComparison.Ordinal) || !message.Contains(expectedId, StringComparison.Ordinal))
+            {
                 failures.Add("interaction cell not named: " + message);
+            }
 
             bool others = map.haulDestinationManager.AllHaulDestinationsListForReading.Any(d => d.HaulDestinationEnabled && d.Accepts(chunk));
             if (!others && _world.WithoutStorage([chunk.thingIDNumber]).Count == 0) failures.Add("reported storage although none accepts the chunk");
@@ -291,10 +302,8 @@ internal sealed partial class MapWorldTests
             existing.Delete();
             pawn?.timetable?.SetAssignment(0, hour == TimeAssignmentDefOf.Joy ? TimeAssignmentDefOf.Work : TimeAssignmentDefOf.Joy);
             snapshot.Restore();
-            if (map.zoneManager.ZoneAt(corner) != existing) failures.Add("deleted zone not restored");
             if (pawn?.timetable?.times[0] != hour) failures.Add("schedule not restored");
-            if (map.zoneManager.AllZones.Contains(zone)) failures.Add("new zone not removed");
-            if (map.designationManager.DesignationOn(chunk, DesignationDefOf.Haul) != null) failures.Add("new designation not removed");
+            VerifySnapshotRestored(map, existing, zone, chunk, corner, failures);
         }
         finally
         {
@@ -302,6 +311,17 @@ internal sealed partial class MapWorldTests
             if (!chunk.Destroyed) chunk.Destroy();
         }
         TestHelpers.AssertNone(failures, "interaction cell and chunk storage");
+    }
+
+    private static bool IsEmptyVisibleMediumCell(Map map, IntVec3 c) =>
+        !c.Fogged(map) && c.Standable(map) && map.zoneManager.ZoneAt(c) == null
+        && c.SupportsStructureType(map, TerrainAffordanceDefOf.Medium) && c.GetThingList(map).TrueForAll(t => t is Plant && !t.def.plant.IsTree);
+
+    private static void VerifySnapshotRestored(Map map, Zone existing, Zone added, Thing chunk, IntVec3 corner, List<string> failures)
+    {
+        if (map.zoneManager.ZoneAt(corner) != existing) failures.Add("deleted zone not restored");
+        if (map.zoneManager.AllZones.Contains(added)) failures.Add("new zone not removed");
+        if (map.designationManager.DesignationOn(chunk, DesignationDefOf.Haul) != null) failures.Add("new designation not removed");
     }
 
     /// <summary>

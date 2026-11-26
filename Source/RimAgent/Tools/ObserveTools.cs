@@ -362,38 +362,59 @@ public sealed class ObserveTools
     private static List<(string Text, int Count)> MergeRuns(List<ThingInfo> things)
     {
         var left = new Dictionary<(string Label, string DefName, bool PlayerOwned, int X, int Z), ThingInfo>();
-        foreach (ThingInfo t in things.Where(t => t.Kind is ThingKind.Building or ThingKind.Mineable && !t.MultiCell && !t.Forbidden && t.Designations.Count == 0)) left[Key(t, 0, 0)] = t;
+        foreach (ThingInfo t in things.Where(IsMergeable)) left[RunKey(t, dx: 0, dz: 0)] = t;
         var merged = new HashSet<ThingInfo>();
         var entries = new List<(string Text, int Count)>();
         foreach (ThingInfo t in things.OrderBy(t => t.Z).ThenBy(t => t.X))
         {
             if (merged.Contains(t)) continue;
             if (entries.Count == MaxObstaclesListed) break;
-            List<ThingInfo> across = Run(t, 1, 0), up = Run(t, 0, 1);
-            List<ThingInfo> run = across.Count >= up.Count ? across : up;
-            if (run.Count < MinRun || run[0] != t)
-            {
-                entries.Add((ToolText.Thing(t), 1));
-                if (run.Count > 0 && run[0] == t) left.Remove(Key(t, 0, 0));
-                continue;
-            }
-            foreach (ThingInfo member in run) left.Remove(Key(member, 0, 0));
-            merged.UnionWith(run);
-            ThingInfo end = run[^1];
-            string owner = string.Empty;
-            if (t.Kind == ThingKind.Building) owner = t.PlayerOwned ? " player-owned" : " not player-owned";
-            entries.Add((string.Create(CultureInfo.InvariantCulture, $"{t.Label} ({t.DefName}) x{run.Count} at {ToolText.Cell(t.X, t.Z)}-{ToolText.Cell(end.X, end.Z)}{owner}"), run.Count));
+            entries.Add(ConsumeRunOrSingle(t, left, merged));
         }
         return entries;
+    }
 
-        List<ThingInfo> Run(ThingInfo start, int dx, int dz)
+    private static bool IsMergeable(ThingInfo t) =>
+        t.Kind is ThingKind.Building or ThingKind.Mineable && !t.MultiCell && !t.Forbidden && t.Designations.Count == 0;
+
+    private static (string Text, int Count) ConsumeRunOrSingle(
+        ThingInfo t,
+        Dictionary<(string Label, string DefName, bool PlayerOwned, int X, int Z), ThingInfo> left,
+        HashSet<ThingInfo> merged)
+    {
+        List<ThingInfo> across = CollectRun(t, dx: 1, dz: 0, left);
+        List<ThingInfo> up = CollectRun(t, dx: 0, dz: 1, left);
+        List<ThingInfo> run = across.Count >= up.Count ? across : up;
+        if (run.Count < MinRun || run[0] != t)
         {
-            var run = new List<ThingInfo>();
-            while (left.TryGetValue(Key(start, dx * run.Count, dz * run.Count), out ThingInfo next)) run.Add(next);
-            return run;
+            if (run.Count > 0 && run[0] == t) left.Remove(RunKey(t, dx: 0, dz: 0));
+            return (ToolText.Thing(t), 1);
         }
+        foreach (ThingInfo member in run) left.Remove(RunKey(member, dx: 0, dz: 0));
+        merged.UnionWith(run);
+        return (FormatMergedRun(t, run), run.Count);
+    }
 
-        static (string Label, string DefName, bool PlayerOwned, int X, int Z) Key(ThingInfo t, int dx, int dz) => (t.Label, t.DefName, t.PlayerOwned, t.X + dx, t.Z + dz);
+    private static List<ThingInfo> CollectRun(
+        ThingInfo start,
+        int dx,
+        int dz,
+        Dictionary<(string Label, string DefName, bool PlayerOwned, int X, int Z), ThingInfo> left)
+    {
+        var run = new List<ThingInfo>();
+        while (left.TryGetValue(RunKey(start, dx * run.Count, dz * run.Count), out ThingInfo next)) run.Add(next);
+        return run;
+    }
+
+    private static (string Label, string DefName, bool PlayerOwned, int X, int Z) RunKey(ThingInfo t, int dx, int dz) =>
+        (t.Label, t.DefName, t.PlayerOwned, t.X + dx, t.Z + dz);
+
+    private static string FormatMergedRun(ThingInfo start, List<ThingInfo> run)
+    {
+        ThingInfo end = run[^1];
+        string owner = string.Empty;
+        if (start.Kind == ThingKind.Building) owner = start.PlayerOwned ? " player-owned" : " not player-owned";
+        return string.Create(CultureInfo.InvariantCulture, $"{start.Label} ({start.DefName}) x{run.Count} at {ToolText.Cell(start.X, start.Z)}-{ToolText.Cell(end.X, end.Z)}{owner}");
     }
 
     private string DescribeCell(int x, int z)
@@ -450,6 +471,27 @@ public sealed class ObserveTools
         IReadOnlyList<CellInfo> cells = _world.GetCells(area);
         var sb = new StringBuilder();
         if (cropNote != null) sb.Append(cropNote).AppendLine();
+        AppendAreaSummary(sb, area, cells);
+        AppendAreaObstacles(sb, cells);
+        AppendLargestBuildable(sb, area, cells);
+
+        sb.Append("Zones: ");
+        List<IGrouping<int, CellInfo>> zones = [.. cells.Where(c => c.Zone != null).GroupBy(c => c.Zone.Id)];
+        sb.Append(zones.Count == 0
+            ? "none"
+            : string.Join("; ", zones.Select(g => string.Create(CultureInfo.InvariantCulture, $"[{g.Key}] {g.First().Zone.Label} ({g.First().Zone.Kind}, {g.Count()} cells inside)"))));
+        sb.AppendLine();
+
+        sb.Append("Rooms: ");
+        List<IGrouping<int, CellInfo>> rooms = [.. cells.Where(c => c.Room != null).GroupBy(c => c.Room.Id)];
+        sb.Append(rooms.Count == 0
+            ? "none"
+            : string.Join("; ", rooms.Select(g => Room(g.First().Room) + $" ({g.Count()} cells inside)")));
+        return sb.ToString().Trim();
+    }
+
+    private static void AppendAreaSummary(StringBuilder sb, CellRectSpec area, IReadOnlyList<CellInfo> cells)
+    {
         sb.Append("Area ").Append(area).Append(": ").Append(cells.Count).Append(" cells");
         sb.Append(" | terrain: ").AppendJoin(", ", cells
             .GroupBy(c => c.Terrain, StringComparer.Ordinal)
@@ -468,7 +510,10 @@ public sealed class ObserveTools
         int fogged = cells.Count(c => c.Fogged);
         if (fogged > 0) sb.Append(" | unexplored: ").Append(fogged);
         sb.AppendLine();
+    }
 
+    private static void AppendAreaObstacles(StringBuilder sb, IReadOnlyList<CellInfo> cells)
+    {
         // 擋路的東西：建築、岩石、植物、物品；殖民者與動物會走開，不算障礙。
         List<ThingInfo> obstacles = [.. cells.SelectMany(c => c.Things)
             .Where(t => t.Kind != ThingKind.Pawn)
@@ -487,7 +532,10 @@ public sealed class ObserveTools
             if (obstacles.Count > listed) sb.Append("; and ").Append(obstacles.Count - listed).Append(" more");
         }
         sb.AppendLine();
+    }
 
+    private static void AppendLargestBuildable(StringBuilder sb, CellRectSpec area, IReadOnlyList<CellInfo> cells)
+    {
         sb.Append("Largest buildable rectangle: ");
         if (LargestBuildable(area, cells, GroundSupport.Light) is CellRectSpec site)
         {
@@ -501,20 +549,6 @@ public sealed class ObserveTools
             sb.Append("none");
         }
         sb.AppendLine();
-
-        sb.Append("Zones: ");
-        List<IGrouping<int, CellInfo>> zones = [.. cells.Where(c => c.Zone != null).GroupBy(c => c.Zone.Id)];
-        sb.Append(zones.Count == 0
-            ? "none"
-            : string.Join("; ", zones.Select(g => string.Create(CultureInfo.InvariantCulture, $"[{g.Key}] {g.First().Zone.Label} ({g.First().Zone.Kind}, {g.Count()} cells inside)"))));
-        sb.AppendLine();
-
-        sb.Append("Rooms: ");
-        List<IGrouping<int, CellInfo>> rooms = [.. cells.Where(c => c.Room != null).GroupBy(c => c.Room.Id)];
-        sb.Append(rooms.Count == 0
-            ? "none"
-            : string.Join("; ", rooms.Select(g => Room(g.First().Room) + $" ({g.Count()} cells inside)")));
-        return sb.ToString().Trim();
     }
 
     internal static string SiteText(CellRectSpec site) =>
@@ -530,20 +564,31 @@ public sealed class ObserveTools
         for (int z = area.MinZ; z <= area.MaxZ; z++)
         {
             for (int i = 0; i < heights.Length; i++) heights[i] = free.Contains((area.MinX + i, z)) ? heights[i] + 1 : 0;
-            for (int left = 0; left < heights.Length; left++)
+            best = BestRectangleInRow(heights, area.MinX, z, width, height, best);
+        }
+        return best;
+    }
+
+    private static CellRectSpec? BestRectangleInRow(int[] heights, int minX, int z, int width, int height, CellRectSpec? best)
+    {
+        for (int left = 0; left < heights.Length; left++)
+        {
+            int tall = heights[left];
+            for (int right = left; right < heights.Length && (tall = Math.Min(tall, heights[right])) > 0; right++)
             {
-                int tall = heights[left];
-                for (int right = left; right < heights.Length && (tall = Math.Min(tall, heights[right])) > 0; right++)
-                {
-                    int wide = right - left + 1;
-                    bool fits = (wide >= width && tall >= height) || (wide >= height && tall >= width);
-                    if (fits && (best is not CellRectSpec b || wide * tall > b.CellCount))
-                        best = new CellRectSpec(area.MinX + left, z - tall + 1, area.MinX + right, z);
-                }
+                int wide = right - left + 1;
+                if (FitsDimensions(wide, tall, width, height) && IsBetterSite(best, wide * tall))
+                    best = new CellRectSpec(minX + left, z - tall + 1, minX + right, z);
             }
         }
         return best;
     }
+
+    private static bool FitsDimensions(int wide, int tall, int width, int height) =>
+        (wide >= width && tall >= height) || (wide >= height && tall >= width);
+
+    private static bool IsBetterSite(CellRectSpec? best, int area) =>
+        best is not CellRectSpec b || area > b.CellCount;
 
     private static string SupportText(GroundSupport support) => support switch
     {
@@ -581,6 +626,11 @@ public sealed class ObserveTools
         if (blocked != null) return blocked;
 
         ScreenshotInfo info = area ? _world.RenderMapArea(rect, safeName) : _world.TakeScreenshot(safeName);
+        return FormatScreenshotResult(info);
+    }
+
+    private static string FormatScreenshotResult(ScreenshotInfo info)
+    {
         if (!info.Success)
         {
             return ToolText.Error(string.IsNullOrEmpty(info.Error) ? "failed to take screenshot." : info.Error);

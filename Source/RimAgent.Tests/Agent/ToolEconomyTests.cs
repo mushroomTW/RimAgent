@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -83,7 +84,7 @@ public class ToolUsageStatsTests
 
         stats.Record([Tool("get_colonists", category: ToolCategory.Combat)], ToolPacks.PackOf);
 
-        Assert.That(stats.FrequentPacks(), Is.EqualTo(new[] { "medical" }));
+        Assert.That(stats.FrequentPacks(), Is.EqualTo((string[])["medical"]));
     }
 
     [Test]
@@ -102,7 +103,7 @@ public class ToolUsageStatsTests
             chatty.Record([Tool("set_medical_care", category: ToolCategory.Medical)], ToolPacks.PackOf);
             chatty.Record([], ToolPacks.PackOf);
         }
-        Assert.That(chatty.FrequentPacks(), Is.EqualTo(new[] { "medical" }), "instructions without tool calls do not dilute the share");
+        Assert.That(chatty.FrequentPacks(), Is.EqualTo((string[])["medical"]), "instructions without tool calls do not dilute the share");
     }
 
     [Test]
@@ -173,7 +174,7 @@ public class FailureLoopGuardTests
         guard.Reset();
 
         string[] notes = new string[FailureLoopGuard.Threshold * 2];
-        for (int i = 0; i < notes.Length; i++) notes[i] = guard.Observe("build", ToolText.Error("cell (" + i + ", 4) is blocked"));
+        for (int i = 0; i < notes.Length; i++) notes[i] = guard.Observe("build", ToolText.Error("cell (" + i.ToString(CultureInfo.InvariantCulture) + ", 4) is blocked"));
 
         Assert.That(notes.Take(FailureLoopGuard.Threshold - 1), Is.All.Null);
         Assert.That(notes[FailureLoopGuard.Threshold - 1], Does.Contain("<loop_guard>"));
@@ -228,12 +229,12 @@ public class FailureLoopGuardTests
     [Test]
     public async Task RectangleStartAcceptsNumberedNames()
     {
-        AIFunction inner = AIFunctionFactory.Create((int x, int z, int x2 = -1) => $"{x},{z},{x2}", "place_blueprint");
+        AIFunction inner = AIFunctionFactory.Create((int x, int z, int x2 = -1) => string.Create(CultureInfo.InvariantCulture, $"{x},{z},{x2}"), "place_blueprint");
         var tool = new LoggingAIFunction(inner, new AgentTranscript(), new FakeGameWorld(), ToolCategory.Observe, ToolRisk.Query, gate: null);
         object result = await tool.InvokeAsync(new AIFunctionArguments { ["x1"] = 110, ["z1"] = 111, ["x2"] = 119 });
         Assert.That(result.ToString(), Is.EqualTo("110,111,119"));
 
-        inner = AIFunctionFactory.Create((int x1, int z1) => $"{x1},{z1}", "inspect_area");
+        inner = AIFunctionFactory.Create((int x1, int z1) => string.Create(CultureInfo.InvariantCulture, $"{x1},{z1}"), "inspect_area");
         tool = new LoggingAIFunction(inner, new AgentTranscript(), new FakeGameWorld(), ToolCategory.Observe, ToolRisk.Query, gate: null);
         Assert.That((await tool.InvokeAsync(new AIFunctionArguments { ["x"] = 1, ["z"] = 2 })).ToString(), Is.EqualTo("1,2"));
     }

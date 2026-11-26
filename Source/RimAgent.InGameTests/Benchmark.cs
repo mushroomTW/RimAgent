@@ -53,6 +53,8 @@ public sealed partial class BenchmarkComponent : GameComponent
     private const string BenchesKey = "benches";
     private const string WallsKey = "walls";
     private const string DoorsKey = "doors";
+    private const string ModelKey = "model";
+    private const string ReasoningKey = "reasoning";
 
     /// <summary>一題：指令、量測（指令前後各量一次）與判分。</summary>
     private sealed class BenchTask
@@ -410,15 +412,15 @@ public sealed partial class BenchmarkComponent : GameComponent
     private static async Task CompareSkillsAsync(bool isolated, int rounds)
     {
         (Dictionary<string, BenchmarkScore> scores, Dictionary<string, List<IReadOnlyDictionary<string, bool?>>> outcomes) = await RunArmsAsync(
-            SkillTier, isolated, rounds, [ArmName(false), ArmName(true)], "SKILLS", (_, arm) =>
+            SkillTier, isolated, rounds, [ArmName(skillsHidden: false), ArmName(skillsHidden: true)], "SKILLS", (_, arm) =>
             {
-                _skillsHidden = arm == ArmName(true);
+                _skillsHidden = arm == ArmName(skillsHidden: true);
                 if (_skillsHidden) RimAgentSettings.HiddenTools = new HashSet<string>(StringComparer.Ordinal) { SkillTools.ToolName };
             });
         if (scores.Count == 0) return;
         string result = string.Join(" | ", scores.Select(p => string.Create(CultureInfo.InvariantCulture,
             $"{p.Key} {p.Value.Passed}/{p.Value.Total}, read the expected skill in {p.Value.ExpectedSkillReads}, read_skill {p.Value.SkillReads}x, tools {p.Value.Tools} (failed {p.Value.Failures}), {p.Value.Seconds:0}s, in {p.Value.Input}, out {p.Value.Output}, {PerPass(p.Value)}")))
-            + " | " + Difference(ArmName(false), ArmName(true), outcomes);
+            + " | " + Difference(ArmName(skillsHidden: false), ArmName(skillsHidden: true), outcomes);
         Log.Warning(LogPrefix + "SKILLS DONE: " + result);
         if (!isolated) Messages.Message("RimAgent.Benchmark.SkillsDone".Translate(result), MessageTypeDefOf.NeutralEvent, historical: false);
     }
@@ -508,7 +510,8 @@ public sealed partial class BenchmarkComponent : GameComponent
 
     private static void Finish(BenchmarkRow row, string failure, int tools, int failures, float seconds, bool invalid = false)
     {
-        row.State = failure == null ? BenchmarkState.Passed : invalid ? BenchmarkState.Invalid : BenchmarkState.Failed;
+        if (failure == null) row.State = BenchmarkState.Passed;
+        else row.State = invalid ? BenchmarkState.Invalid : BenchmarkState.Failed;
         row.Detail = failure;
         row.Tools = tools;
         row.Failures = failures;
@@ -564,182 +567,27 @@ public sealed partial class BenchmarkComponent : GameComponent
         if (_running) return null;
         _running = true;
         RimAgentSettings settings = RimAgentMod.Settings;
-        string savedModel = settings?.agentModel;
-        ReasoningLevel savedReasoning = settings?.reasoning ?? ReasoningLevel.Auto;
-        bool savedRouting = settings?.reasoningRouting ?? false;
-        AgentMode savedMode = settings?.mode ?? AgentMode.Confirm;
-        bool savedCare = settings?.autonomousCare ?? false;
-        bool savedRecord = settings?.recordRuns ?? false;
-        bool savedTime = settings?.ToPermissions().Allows(ToolCategory.Time) ?? true;
-        TimeSpeed savedSpeed = Find.TickManager?.CurTimeSpeed ?? TimeSpeed.Normal;
+        SavedBenchmarkSettings saved = SavedBenchmarkSettings.Capture(settings);
         ColonyAgentSession statsSession = null;
         ToolUsageStats savedStats = null;
         try
         {
             RimAgentGameComponent agent = RimAgentGameComponent.Instance;
-            if (settings == null || agent == null)
-            {
-                Log.Warning(LogPrefix + $"FAIL not started: settings={settings != null}, component={agent != null}");
-                return null;
-            }
-            await ApplyBenchmarkSettingsAsync(settings, isolated);
-            // 標記檔可能換了模型，所以套用設定後才看。
-            if (_surveyTool != null && !agent.Session.ImageInputEnabled)
-            {
-                Log.Warning(LogPrefix + "FAIL survey: the model does not accept images");
-                if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyNeedsImages".Translate(), MessageTypeDefOf.RejectInput, historical: false);
-                return null;
-            }
-
-            string folder = RunLogWriter.DefaultFolder;
-            Directory.CreateDirectory(folder);
-            string resultPath = Path.Combine(folder, "Benchmark.jsonl");
-            string runId = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
-            string modVersion = LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.ModVersion ?? string.Empty;
-            string model = string.IsNullOrWhiteSpace(settings.agentModel) ? "(framework default)" : settings.agentModel;
+            if (!await PrepareRunAsync(settings, agent, isolated)) return null;
 
             ColonyAgentSession session = agent.Session;
             statsSession = session;
             savedStats = session.ToolUsage;
-            string expectedModel = ColonyAgentSession.ResolveModel(settings.agentModel);
-            if (expectedModel == null || RimLLMProvider.GetMaxOutputTokens(expectedModel) == null)
-                Log.Warning(LogPrefix + "output limit unknown for " + (expectedModel ?? "(no model)") + ": refresh the provider's model list in RimLLM Framework settings, or reasoning may use up the default limit");
-            int fallbackTasks = 0;
-            int passedWithoutFallback = 0;
-            var passedByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0, [SkillTier] = 0 };
-            var invalidByTier = new Dictionary<string, int> { [Basic] = 0, [Hard] = 0, [Survey] = 0, [SkillTier] = 0 };
-            int totalTools = 0;
-            int totalFailures = 0;
-            var total = default(ModelUsage);
             BenchTask[] tasks = [.. Tasks.Where(t => tier == null ? t.Tier is Basic or Hard : t.Tier == tier)];
+            RunAccumulator acc = CreateRunAccumulator(settings, tasks, tier);
             _session = session;
             _rows = CreateRows(tasks);
             if (!isolated) Window_BenchmarkProgress.Show(_rows);
-            // 開跑時就取：中途讀了別的檔，成績仍屬於這張地圖。
-            string seed = Find.World?.info?.seedString ?? string.Empty;
-            string biome = Find.CurrentMap?.Biome?.defName ?? string.Empty;
-            int startTick = Current.Game?.tickManager?.TicksGame ?? 0;
-            int configurationErrors = 0;
-            int surveyCalls = 0;
-            int? unknownCalls = 0;
-            int passedByLooking = 0;
-            int skillReads = 0;
-            int expectedSkillReads = 0;
-            var taskOutcomes = new Dictionary<string, bool?>(StringComparer.Ordinal);
-            string taskSet = TaskSetHash(tasks);
-            string tierName = tier ?? "all";
-            string previousTaskSet = PreviousTaskSet(resultPath, tierName);
             for (int i = 0; i < tasks.Length; i++)
             {
-                BenchTask task = tasks[i];
-                if (configurationErrors >= MaxConfigurationErrors)
-                {
-                    invalidByTier[task.Tier]++;
-                    const string skipped = "skipped: the model provider keeps failing";
-                    RecordTaskResult(resultPath, task, skipped, [], 0f, null, default, invalid: true, attempts: 0);
-                    Finish(_rows[i], skipped, 0, 0, 0f, invalid: true);
-                    continue;
-                }
-                _rows[i].State = BenchmarkState.Running;
-                _rows[i].StartedAt = UnityEngine.Time.realtimeSinceStartup;
-                DateTime startedUtc = DateTime.UtcNow;
-                TaskOutcome outcome = await RunTaskAsync(session, task);
-                ModelUsage usage = ReadUsage(folder, startedUtc, expectedModel);
-                int attempts = 1;
-                ModelUsage last = usage;
-                // 金鑰、餘額、模型不存在這類錯誤等 30 秒也不會好。換了備援模型的成績不屬於受測模型，跟服務出錯一樣重跑。
-                if (outcome.ServiceError is { ErrorKind: not AgentErrorKind.Configuration } || usage.FallbackSteps > 0)
-                {
-                    TaskOutcome first = outcome;
-                    attempts++;
-                    Log.Warning(LogPrefix + task.Id + " retrying after " + (outcome.ServiceError != null ? "model service error: " + outcome.ServiceError.Text : "falling back to another model"));
-                    await Task.Delay(ServiceRetryDelay);
-                    startedUtc = DateTime.UtcNow;
-                    outcome = await RunTaskAsync(session, task);
-                    last = ReadUsage(folder, startedUtc, expectedModel);
-                    usage = usage.Plus(last);
-                    outcome = outcome with { Tools = [.. first.Tools, .. outcome.Tools], Seconds = first.Seconds + outcome.Seconds };
-                }
-                (string failure, List<TranscriptEntry> tools, float seconds, string reply, TranscriptEntry serviceError, bool setupFailed) = outcome;
-                bool fellBack = last.FallbackSteps > 0;
-                if (fellBack) failure = "fell back to another model" + (failure == null ? string.Empty : "; " + failure);
-                bool invalid = serviceError != null || setupFailed || fellBack;
-                configurationErrors = serviceError?.ErrorKind == AgentErrorKind.Configuration ? configurationErrors + 1 : 0;
-                total = total.Plus(usage);
-                int failures = RecordTaskResult(resultPath, task, failure, tools, seconds, reply, usage, invalid, attempts);
-                Finish(_rows[i], failure, tools.Count, failures, UnityEngine.Time.realtimeSinceStartup - _rows[i].StartedAt, invalid);
-                SaveScreenshots(Path.Combine(folder, RunLogWriter.FolderName, "benchmark-shots", runId), task.Id, tools);
-                totalTools += tools.Count;
-                totalFailures += failures;
-                if (!invalid) unknownCalls += usage.UnknownCalls;
-                if (usage.FallbackSteps > 0) fallbackTasks++;
-                else if (usage.FallbackSteps == 0 && failure == null) passedWithoutFallback++;
-                surveyCalls += tools.Count(t => t.ToolName == _surveyTool);
-                if (failure == null && tools.Any(t => t.ToolName == _surveyTool && !t.Failed && !t.Cancelled)) passedByLooking++;
-                List<string> read = SkillsRead(tools);
-                skillReads += read.Count;
-                if (task.Skill != null && read.Contains(task.Skill, StringComparer.OrdinalIgnoreCase)) expectedSkillReads++;
-                taskOutcomes[task.Id] = invalid ? null : failure == null;
-                if (failure == null) passedByTier[task.Tier]++;
-                else if (invalid) invalidByTier[task.Tier]++;
+                await RunAndRecordTaskAsync(session, tasks[i], _rows[i], acc);
             }
-
-            var summary = new Dictionary<string, object>
-            {
-                ["run"] = runId,
-                ["modVersion"] = modVersion,
-                ["model"] = model,
-                ["reasoning"] = ReasoningName,
-                ["surveyTool"] = _surveyTool,
-                ["note"] = "summary",
-                ["tier"] = tierName,
-                // 題目換了就不能和之前的成績比；判分邏輯的改動不在雜湊裡，要看 modVersion。
-                ["taskSet"] = taskSet,
-                ["sameTaskSetAsPrevious"] = previousTaskSet == null ? null : previousTaskSet == taskSet,
-                ["passed"] = passedByTier.Values.Sum(),
-                ["total"] = tasks.Length - invalidByTier.Values.Sum(),
-                ["invalid"] = invalidByTier.Values.Sum(),
-                ["basicPassed"] = passedByTier[Basic],
-                ["basicTotal"] = tasks.Count(t => t.Tier == Basic) - invalidByTier[Basic],
-                ["hardPassed"] = passedByTier[Hard],
-                ["hardTotal"] = tasks.Count(t => t.Tier == Hard) - invalidByTier[Hard],
-                ["toolCalls"] = totalTools,
-                ["toolFailures"] = totalFailures,
-                ["unknownCalls"] = unknownCalls,
-                ["surveyCalls"] = surveyCalls,
-                ["passedByLooking"] = passedByLooking,
-                ["skillsHidden"] = _skillsHidden,
-                // 一般題本來就不需要技能，這裡讀得多代表技能描述把模型引錯了方向。
-                ["skillReads"] = skillReads,
-                ["expectedSkillReads"] = expectedSkillReads,
-                ["steps"] = total.Steps,
-                ["in"] = total.Input,
-                ["out"] = total.Output,
-                ["inPerPass"] = passedByTier.Values.Sum() == 0 ? null : total.Input / passedByTier.Values.Sum(),
-                ["outPerPass"] = passedByTier.Values.Sum() == 0 ? null : total.Output / passedByTier.Values.Sum(),
-                ["secondsPerPass"] = passedByTier.Values.Sum() == 0 ? null : Math.Round(_rows.Sum(r => r.Seconds) / passedByTier.Values.Sum(), 1),
-                ["modelsUsed"] = total.Models ?? [],
-                ["fallbackTasks"] = fallbackTasks,
-                ["passedWithoutFallback"] = passedWithoutFallback,
-                // 上限太小時思考會吃光輸出、換成備援模型，換模型數要對照這個看。
-                ["maxOutputTokens"] = session.MaxOutputFor(settings.agentModel),
-                // 地圖不同，難度就不同：兩輪要比較得先確認這幾項相同。
-                ["seed"] = seed,
-                ["biome"] = biome,
-                ["tick"] = startTick
-            };
-            Append(resultPath, summary);
-            if (previousTaskSet != null && previousTaskSet != taskSet)
-                Log.Warning(LogPrefix + "the " + tierName + " task set changed since the last run (" + previousTaskSet + " -> " + taskSet + "): pass rates are not comparable");
-            var score = new BenchmarkScore(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), totalTools, totalFailures, _rows.Sum(r => r.Seconds), total.Input, total.Output, model, surveyCalls, passedByLooking, skillReads, expectedSkillReads) { Outcomes = taskOutcomes };
-            // 比較模式的兩輪不是同一組條件，不能當成這個強度的成績。
-            if (_surveyTool == null && tier != SkillTier) Scores[(tier, Reasoning)] = score;
-            Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary, RunLogWriter.Json));
-            if (!isolated)
-            {
-                Messages.Message("RimAgent.Benchmark.Done".Translate(passedByTier.Values.Sum(), tasks.Length - invalidByTier.Values.Sum(), resultPath), MessageTypeDefOf.NeutralEvent, historical: false);
-            }
-            return score;
+            return FinishRun(acc, tasks, session, settings, tier, isolated);
         }
         catch (Exception ex)
         {
@@ -748,24 +596,264 @@ public sealed partial class BenchmarkComponent : GameComponent
         }
         finally
         {
-            _session = null;
-            statsSession?.ToolUsage = savedStats;
-            foreach (BenchmarkRow row in _rows.Where(x => x.State == BenchmarkState.Running))
-            {
-                Finish(row, "aborted", row.Tools, row.Failures, UnityEngine.Time.realtimeSinceStartup - row.StartedAt);
-            }
-            if (!isolated && settings != null)
-            {
-                settings.agentModel = savedModel;
-                settings.reasoning = savedReasoning;
-                settings.reasoningRouting = savedRouting;
-                settings.mode = savedMode;
-                settings.autonomousCare = savedCare;
-                settings.recordRuns = savedRecord;
-                settings.allowByCategory[(int)ToolCategory.Time] = savedTime;
-                if (Find.TickManager != null) Find.TickManager.CurTimeSpeed = savedSpeed;
-            }
+            RestoreAfterRun(saved, statsSession, savedStats, settings, isolated);
             _running = false;
+        }
+    }
+
+    private sealed class SavedBenchmarkSettings
+    {
+        public string AgentModel { get; init; }
+        public ReasoningLevel SavedReasoning { get; init; }
+        public bool ReasoningRouting { get; init; }
+        public AgentMode Mode { get; init; }
+        public bool AutonomousCare { get; init; }
+        public bool RecordRuns { get; init; }
+        public bool AllowTime { get; init; }
+        public TimeSpeed TimeSpeed { get; init; }
+
+        public static SavedBenchmarkSettings Capture(RimAgentSettings settings) =>
+            new()
+            {
+                AgentModel = settings?.agentModel,
+                SavedReasoning = settings?.reasoning ?? ReasoningLevel.Auto,
+                ReasoningRouting = settings?.reasoningRouting ?? false,
+                Mode = settings?.mode ?? AgentMode.Confirm,
+                AutonomousCare = settings?.autonomousCare ?? false,
+                RecordRuns = settings?.recordRuns ?? false,
+                AllowTime = settings?.ToPermissions().Allows(ToolCategory.Time) ?? true,
+                TimeSpeed = Find.TickManager?.CurTimeSpeed ?? TimeSpeed.Normal
+            };
+    }
+
+    private sealed class RunAccumulator
+    {
+        public string Folder { get; init; }
+        public string ResultPath { get; init; }
+        public string RunId { get; init; }
+        public string ModVersion { get; init; }
+        public string Model { get; init; }
+        public string ExpectedModel { get; init; }
+        public string TierName { get; init; }
+        public string TaskSet { get; init; }
+        public string PriorTaskSet { get; init; }
+        public string Seed { get; init; }
+        public string Biome { get; init; }
+        public int StartTick { get; init; }
+        public Dictionary<string, int> PassedByTier { get; } = new() { [Basic] = 0, [Hard] = 0, [Survey] = 0, [SkillTier] = 0 };
+        public Dictionary<string, int> InvalidByTier { get; } = new() { [Basic] = 0, [Hard] = 0, [Survey] = 0, [SkillTier] = 0 };
+        public Dictionary<string, bool?> TaskOutcomes { get; } = new(StringComparer.Ordinal);
+        public int FallbackTasks { get; set; }
+        public int PassedWithoutFallback { get; set; }
+        public int TotalTools { get; set; }
+        public int TotalFailures { get; set; }
+        public ModelUsage Total { get; set; }
+        public int ConfigurationErrors { get; set; }
+        public int SurveyCalls { get; set; }
+        public int? UnknownCalls { get; set; } = 0;
+        public int PassedByLooking { get; set; }
+        public int SkillReads { get; set; }
+        public int ExpectedSkillReads { get; set; }
+
+        public void RecordTask(BenchTask task, TaskOutcome outcome, ModelUsage usage, bool invalid, int failures)
+        {
+            ConfigurationErrors = outcome.ServiceError?.ErrorKind == AgentErrorKind.Configuration ? ConfigurationErrors + 1 : 0;
+            Total = Total.Plus(usage);
+            TotalTools += outcome.Tools.Count;
+            TotalFailures += failures;
+            if (!invalid) UnknownCalls += usage.UnknownCalls;
+            if (usage.FallbackSteps > 0) FallbackTasks++;
+            else if (usage.FallbackSteps == 0 && outcome.Failure == null) PassedWithoutFallback++;
+            SurveyCalls += outcome.Tools.Count(t => t.ToolName == _surveyTool);
+            if (outcome.Failure == null && outcome.Tools.Any(t => t.ToolName == _surveyTool && !t.Failed && !t.Cancelled)) PassedByLooking++;
+            List<string> read = SkillsRead(outcome.Tools);
+            SkillReads += read.Count;
+            if (task.Skill != null && read.Contains(task.Skill, StringComparer.OrdinalIgnoreCase)) ExpectedSkillReads++;
+            TaskOutcomes[task.Id] = invalid ? null : outcome.Failure == null;
+            if (outcome.Failure == null) PassedByTier[task.Tier]++;
+            else if (invalid) InvalidByTier[task.Tier]++;
+        }
+    }
+
+    private static async Task<bool> PrepareRunAsync(RimAgentSettings settings, RimAgentGameComponent agent, bool isolated)
+    {
+        if (settings == null || agent == null)
+        {
+            Log.Warning(LogPrefix + $"FAIL not started: settings={settings != null}, component={agent != null}");
+            return false;
+        }
+        await ApplyBenchmarkSettingsAsync(settings, isolated);
+        // 標記檔可能換了模型，所以套用設定後才看。
+        if (_surveyTool != null && !agent.Session.ImageInputEnabled)
+        {
+            Log.Warning(LogPrefix + "FAIL survey: the model does not accept images");
+            if (!isolated) Messages.Message("RimAgent.Benchmark.SurveyNeedsImages".Translate(), MessageTypeDefOf.RejectInput, historical: false);
+            return false;
+        }
+        return true;
+    }
+
+    private static RunAccumulator CreateRunAccumulator(RimAgentSettings settings, BenchTask[] tasks, string tier)
+    {
+        string folder = RunLogWriter.DefaultFolder;
+        Directory.CreateDirectory(folder);
+        string resultPath = Path.Combine(folder, "Benchmark.jsonl");
+        string expectedModel = ColonyAgentSession.ResolveModel(settings.agentModel);
+        if (expectedModel == null || RimLLMProvider.GetMaxOutputTokens(expectedModel) == null)
+        {
+            Log.Warning(LogPrefix + "output limit unknown for " + (expectedModel ?? "(no model)") + ": refresh the provider's model list in RimLLM Framework settings, or reasoning may use up the default limit");
+        }
+        string tierName = tier ?? "all";
+        return new RunAccumulator
+        {
+            Folder = folder,
+            ResultPath = resultPath,
+            RunId = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
+            ModVersion = LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.ModVersion ?? string.Empty,
+            Model = string.IsNullOrWhiteSpace(settings.agentModel) ? "(framework default)" : settings.agentModel,
+            ExpectedModel = expectedModel,
+            TierName = tierName,
+            TaskSet = TaskSetHash(tasks),
+            PriorTaskSet = PreviousTaskSet(resultPath, tierName),
+            // 開跑時就取：中途讀了別的檔，成績仍屬於這張地圖。
+            Seed = Find.World?.info?.seedString ?? string.Empty,
+            Biome = Find.CurrentMap?.Biome?.defName ?? string.Empty,
+            StartTick = Current.Game?.tickManager?.TicksGame ?? 0
+        };
+    }
+
+    private static async Task RunAndRecordTaskAsync(ColonyAgentSession session, BenchTask task, BenchmarkRow row, RunAccumulator acc)
+    {
+        if (acc.ConfigurationErrors >= MaxConfigurationErrors)
+        {
+            acc.InvalidByTier[task.Tier]++;
+            const string skipped = "skipped: the model provider keeps failing";
+            RecordTaskResult(acc.ResultPath, task, new TaskOutcome(skipped, [], 0f, Reply: null, ServiceError: null), default, invalid: true, attempts: 0);
+            Finish(row, skipped, 0, 0, 0f, invalid: true);
+            return;
+        }
+        row.State = BenchmarkState.Running;
+        row.StartedAt = UnityEngine.Time.realtimeSinceStartup;
+        (TaskOutcome outcome, ModelUsage usage, ModelUsage last, int attempts) = await RunTaskWithRetryAsync(session, task, acc);
+        bool fellBack = last.FallbackSteps > 0;
+        if (fellBack)
+        {
+            string suffix = outcome.Failure == null ? string.Empty : "; " + outcome.Failure;
+            outcome = outcome with { Failure = "fell back to another model" + suffix };
+        }
+        bool invalid = outcome.ServiceError != null || outcome.SetupFailed || fellBack;
+        int failures = RecordTaskResult(acc.ResultPath, task, outcome, usage, invalid, attempts);
+        Finish(row, outcome.Failure, outcome.Tools.Count, failures, UnityEngine.Time.realtimeSinceStartup - row.StartedAt, invalid);
+        SaveScreenshots(Path.Combine(acc.Folder, RunLogWriter.FolderName, "benchmark-shots", acc.RunId), task.Id, outcome.Tools);
+        acc.RecordTask(task, outcome, usage, invalid, failures);
+    }
+
+    private static async Task<(TaskOutcome Outcome, ModelUsage Usage, ModelUsage Last, int Attempts)> RunTaskWithRetryAsync(
+        ColonyAgentSession session, BenchTask task, RunAccumulator acc)
+    {
+        DateTime startedUtc = DateTime.UtcNow;
+        TaskOutcome outcome = await RunTaskAsync(session, task);
+        ModelUsage usage = ReadUsage(acc.Folder, startedUtc, acc.ExpectedModel);
+        ModelUsage last = usage;
+        int attempts = 1;
+        // 金鑰、餘額、模型不存在這類錯誤等 30 秒也不會好。換了備援模型的成績不屬於受測模型，跟服務出錯一樣重跑。
+        if (outcome.ServiceError is { ErrorKind: not AgentErrorKind.Configuration } || usage.FallbackSteps > 0)
+        {
+            TaskOutcome first = outcome;
+            attempts++;
+            Log.Warning(LogPrefix + task.Id + " retrying after " + (outcome.ServiceError != null ? "model service error: " + outcome.ServiceError.Text : "falling back to another model"));
+            await Task.Delay(ServiceRetryDelay);
+            startedUtc = DateTime.UtcNow;
+            outcome = await RunTaskAsync(session, task);
+            last = ReadUsage(acc.Folder, startedUtc, acc.ExpectedModel);
+            usage = usage.Plus(last);
+            outcome = outcome with { Tools = [.. first.Tools, .. outcome.Tools], Seconds = first.Seconds + outcome.Seconds };
+        }
+        return (outcome, usage, last, attempts);
+    }
+
+    private static BenchmarkScore FinishRun(RunAccumulator acc, BenchTask[] tasks, ColonyAgentSession session, RimAgentSettings settings, string tier, bool isolated)
+    {
+        int passed = acc.PassedByTier.Values.Sum();
+        int totalTasks = tasks.Length - acc.InvalidByTier.Values.Sum();
+        var summary = new Dictionary<string, object>
+        {
+            ["run"] = acc.RunId,
+            ["modVersion"] = acc.ModVersion,
+            [ModelKey] = acc.Model,
+            [ReasoningKey] = ReasoningName,
+            ["surveyTool"] = _surveyTool,
+            ["note"] = "summary",
+            ["tier"] = acc.TierName,
+            // 題目換了就不能和之前的成績比；判分邏輯的改動不在雜湊裡，要看 modVersion。
+            ["taskSet"] = acc.TaskSet,
+            ["sameTaskSetAsPrevious"] = acc.PriorTaskSet == null ? null : acc.PriorTaskSet == acc.TaskSet,
+            ["passed"] = passed,
+            ["total"] = totalTasks,
+            ["invalid"] = acc.InvalidByTier.Values.Sum(),
+            ["basicPassed"] = acc.PassedByTier[Basic],
+            ["basicTotal"] = tasks.Count(t => t.Tier == Basic) - acc.InvalidByTier[Basic],
+            ["hardPassed"] = acc.PassedByTier[Hard],
+            ["hardTotal"] = tasks.Count(t => t.Tier == Hard) - acc.InvalidByTier[Hard],
+            ["toolCalls"] = acc.TotalTools,
+            ["toolFailures"] = acc.TotalFailures,
+            ["unknownCalls"] = acc.UnknownCalls,
+            ["surveyCalls"] = acc.SurveyCalls,
+            ["passedByLooking"] = acc.PassedByLooking,
+            ["skillsHidden"] = _skillsHidden,
+            // 一般題本來就不需要技能，這裡讀得多代表技能描述把模型引錯了方向。
+            ["skillReads"] = acc.SkillReads,
+            ["expectedSkillReads"] = acc.ExpectedSkillReads,
+            ["steps"] = acc.Total.Steps,
+            ["in"] = acc.Total.Input,
+            ["out"] = acc.Total.Output,
+            ["inPerPass"] = passed == 0 ? null : acc.Total.Input / passed,
+            ["outPerPass"] = passed == 0 ? null : acc.Total.Output / passed,
+            ["secondsPerPass"] = passed == 0 ? null : Math.Round(_rows.Sum(r => r.Seconds) / passed, 1, MidpointRounding.ToEven),
+            ["modelsUsed"] = acc.Total.Models ?? [],
+            ["fallbackTasks"] = acc.FallbackTasks,
+            ["passedWithoutFallback"] = acc.PassedWithoutFallback,
+            // 上限太小時思考會吃光輸出、換成備援模型，換模型數要對照這個看。
+            ["maxOutputTokens"] = session.MaxOutputFor(settings.agentModel),
+            // 地圖不同，難度就不同：兩輪要比較得先確認這幾項相同。
+            ["seed"] = acc.Seed,
+            ["biome"] = acc.Biome,
+            ["tick"] = acc.StartTick
+        };
+        Append(acc.ResultPath, summary);
+        if (acc.PriorTaskSet != null && acc.PriorTaskSet != acc.TaskSet)
+        {
+            Log.Warning(LogPrefix + "the " + acc.TierName + " task set changed since the last run (" + acc.PriorTaskSet + " -> " + acc.TaskSet + "): pass rates are not comparable");
+        }
+        var score = new BenchmarkScore(passed, totalTasks, acc.TotalTools, acc.TotalFailures, _rows.Sum(r => r.Seconds), acc.Total.Input, acc.Total.Output, acc.Model, acc.SurveyCalls, acc.PassedByLooking, acc.SkillReads, acc.ExpectedSkillReads) { Outcomes = acc.TaskOutcomes };
+        // 比較模式的兩輪不是同一組條件，不能當成這個強度的成績。
+        if (_surveyTool == null && tier != SkillTier) Scores[(tier, Reasoning)] = score;
+        Log.Warning(LogPrefix + "DONE: " + JsonSerializer.Serialize(summary, RunLogWriter.Json));
+        if (!isolated)
+        {
+            Messages.Message("RimAgent.Benchmark.Done".Translate(passed, totalTasks, acc.ResultPath), MessageTypeDefOf.NeutralEvent, historical: false);
+        }
+        return score;
+    }
+
+    private static void RestoreAfterRun(SavedBenchmarkSettings saved, ColonyAgentSession statsSession, ToolUsageStats savedStats, RimAgentSettings settings, bool isolated)
+    {
+        _session = null;
+        statsSession?.ToolUsage = savedStats;
+        foreach (BenchmarkRow row in _rows.Where(x => x.State == BenchmarkState.Running))
+        {
+            Finish(row, "aborted", row.Tools, row.Failures, UnityEngine.Time.realtimeSinceStartup - row.StartedAt);
+        }
+        if (!isolated && settings != null)
+        {
+            settings.agentModel = saved.AgentModel;
+            settings.reasoning = saved.SavedReasoning;
+            settings.reasoningRouting = saved.ReasoningRouting;
+            settings.mode = saved.Mode;
+            settings.autonomousCare = saved.AutonomousCare;
+            settings.recordRuns = saved.RecordRuns;
+            settings.allowByCategory[(int)ToolCategory.Time] = saved.AllowTime;
+            if (Find.TickManager != null) Find.TickManager.CurTimeSpeed = saved.TimeSpeed;
         }
     }
 
@@ -779,9 +867,9 @@ public sealed partial class BenchmarkComponent : GameComponent
         {
             string text = await File.ReadAllTextAsync(MarkerPath);
             XElement marker = string.IsNullOrWhiteSpace(text) ? null : XDocument.Parse(text).Root;
-            string modelOverride = (string)marker?.Attribute("model");
+            string modelOverride = (string)marker?.Attribute(ModelKey);
             if (!string.IsNullOrEmpty(modelOverride)) settings.agentModel = modelOverride;
-            string level = (string)marker?.Attribute("reasoning");
+            string level = (string)marker?.Attribute(ReasoningKey);
             if (!string.IsNullOrEmpty(level)) Reasoning = level.Equals(nameof(Routing), StringComparison.OrdinalIgnoreCase) ? Routing : Enum.Parse<ReasoningLevel>(level, ignoreCase: true);
         }
         settings.reasoningRouting = Reasoning == Routing;
@@ -795,9 +883,9 @@ public sealed partial class BenchmarkComponent : GameComponent
         Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
     }
 
-    private readonly record struct ModelUsage(long Steps, long Input, long Output, string Reasoning, string[] Models, int? FallbackSteps, string[] StepModels, int? UnknownCalls)
+    private readonly record struct ModelUsage(long Steps, long Input, long Output, string ReasoningUsed, string[] Models, int? FallbackSteps, string[] StepModels, int? UnknownCalls)
     {
-        public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output, other.Reasoning ?? Reasoning,
+        public ModelUsage Plus(ModelUsage other) => new(Steps + other.Steps, Input + other.Input, Output + other.Output, other.ReasoningUsed ?? ReasoningUsed,
             [.. (Models ?? []).Union(other.Models ?? [], StringComparer.Ordinal)], FallbackSteps + other.FallbackSteps, [.. StepModels ?? [], .. other.StepModels ?? []], UnknownCalls + other.UnknownCalls);
     }
 
@@ -814,7 +902,7 @@ public sealed partial class BenchmarkComponent : GameComponent
                 ? null
                 : stepModels.Count(m => !string.Equals(m, expectedModel, StringComparison.OrdinalIgnoreCase));
             return new ModelUsage(e.GetProperty("steps").GetInt64(), e.GetProperty("in").GetInt64(), e.GetProperty("out").GetInt64(),
-                    e.TryGetProperty("reasoning", out JsonElement reasoning) ? reasoning.GetString() : null,
+                    e.TryGetProperty(ReasoningKey, out JsonElement reasoning) ? reasoning.GetString() : null,
                     e.TryGetProperty("models", out JsonElement models) ? [.. models.EnumerateArray().Select(m => m.GetString())] : null,
                     fallbackSteps, [.. stepModels], unknownCalls);
         }
@@ -843,11 +931,11 @@ public sealed partial class BenchmarkComponent : GameComponent
                 if (s.TryGetProperty("agent", out _)) continue;
                 string kind = s.GetProperty("t").GetString();
                 if (kind == "tool") executed.Add(s.GetProperty("call").GetInt32());
-                if (kind != "model") continue;
+                if (kind != ModelKey) continue;
                 unknown += Math.Max(0, requested - (executed.Count - executedBefore));
                 executedBefore = executed.Count;
                 requested = s.TryGetProperty("calls", out JsonElement calls) ? calls.GetArrayLength() : 0;
-                if (s.TryGetProperty("model", out JsonElement m) && m.GetString() is { } name) models.Add(name);
+                if (s.TryGetProperty(ModelKey, out JsonElement m) && m.GetString() is { } name) models.Add(name);
             }
             return (models, unknown);
         }
@@ -862,37 +950,40 @@ public sealed partial class BenchmarkComponent : GameComponent
         map.listerThings.AllThings.Where(t => t is Blueprint or Frame && t.Faction == Faction.OfPlayer);
 
     /// <summary>把單題結果寫進結果檔與日誌；回傳這題失敗的工具呼叫數（取消不算，呼叫了沒有的工具另記在 unknownCalls）。</summary>
-    private static int RecordTaskResult(string resultPath, BenchTask task, string failure, List<TranscriptEntry> tools, float seconds, string reply, ModelUsage usage, bool invalid, int attempts)
+    private static int RecordTaskResult(string resultPath, BenchTask task, TaskOutcome outcome, ModelUsage usage, bool invalid, int attempts)
     {
-        int failures = tools.Count(t => t.Failed && !t.Cancelled);
+        int failures = outcome.Tools.Count(t => t.Failed && !t.Cancelled);
         Append(resultPath, new Dictionary<string, object>
         {
             ["task"] = task.Id,
             ["tier"] = task.Tier,
-            ["reasoning"] = ReasoningName,
+            [ReasoningKey] = ReasoningName,
             ["surveyTool"] = _surveyTool,
             ["skillsHidden"] = _skillsHidden,
             ["expectedSkill"] = task.Skill,
-            ["skillsRead"] = SkillsRead(tools),
-            ["reasoningUsed"] = usage.Reasoning,
+            ["skillsRead"] = SkillsRead(outcome.Tools),
+            ["reasoningUsed"] = usage.ReasoningUsed,
             ["modelsUsed"] = usage.Models ?? [],
             ["stepModels"] = usage.StepModels ?? [],
             ["fallbackSteps"] = usage.FallbackSteps,
-            ["ok"] = failure == null,
+            ["ok"] = outcome.Failure == null,
             ["invalid"] = invalid,
             ["attempts"] = attempts,
-            ["detail"] = failure ?? string.Empty,
-            ["tools"] = tools.Count,
+            ["detail"] = outcome.Failure ?? string.Empty,
+            ["tools"] = outcome.Tools.Count,
             ["toolFailures"] = failures,
             ["unknownCalls"] = usage.UnknownCalls,
             ["steps"] = usage.Steps,
             ["in"] = usage.Input,
             ["out"] = usage.Output,
-            ["toolNames"] = string.Join(',', tools.Select(t => t.ToolName)),
-            ["seconds"] = Math.Round(seconds, 1, MidpointRounding.ToEven),
-            ["reply"] = Short(reply)
+            ["toolNames"] = string.Join(',', outcome.Tools.Select(t => t.ToolName)),
+            ["seconds"] = Math.Round(outcome.Seconds, 1, MidpointRounding.ToEven),
+            ["reply"] = Short(outcome.Reply)
         });
-        Log.Message(LogPrefix + string.Create(CultureInfo.InvariantCulture, $"{task.Tier}/{task.Id}: {(failure == null ? "PASS" : (invalid ? "INVALID " : "FAIL ") + failure)} tools={tools.Count} failed={failures} {seconds:0}s"));
+        string status;
+        if (outcome.Failure == null) status = "PASS";
+        else status = (invalid ? "INVALID " : "FAIL ") + outcome.Failure;
+        Log.Message(LogPrefix + string.Create(CultureInfo.InvariantCulture, $"{task.Tier}/{task.Id}: {status} tools={outcome.Tools.Count} failed={failures} {outcome.Seconds:0}s"));
         return failures;
     }
 
@@ -906,7 +997,7 @@ public sealed partial class BenchmarkComponent : GameComponent
             index++;
             try
             {
-                string path = Regex.Match(tool.Result, @"Screenshot saved: (.+\.png) \(", RegexOptions.None, TimeSpan.FromSeconds(1)).Groups[1].Value;
+                string path = ScreenshotPathPattern.Match(tool.Result).Groups["path"].Value;
                 if (path.Length == 0) continue;
                 if (!Directory.Exists(folder)) PruneScreenshots(Path.GetDirectoryName(folder));
                 Directory.CreateDirectory(folder);
@@ -918,6 +1009,9 @@ public sealed partial class BenchmarkComponent : GameComponent
             }
         }
     }
+
+    [GeneratedRegex(@"Screenshot saved: (?<path>.+\.png) \(", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ScreenshotPathPattern { get; }
 
     private const int MaxScreenshotRuns = 20;
 
@@ -950,7 +1044,9 @@ public sealed partial class BenchmarkComponent : GameComponent
                 JsonElement e = doc.RootElement;
                 if (e.TryGetProperty("note", out JsonElement note) && note.GetString() == "summary"
                     && e.TryGetProperty("tier", out JsonElement t) && t.GetString() == tier)
+                {
                     return e.TryGetProperty("taskSet", out JsonElement hash) ? hash.GetString() : null;
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or JsonException)
@@ -974,66 +1070,73 @@ public sealed partial class BenchmarkComponent : GameComponent
         Map map = Current.Game?.CurrentMap;
         if (map == null || RimAgentGameComponent.Instance?.Session != session)
         {
-            return new TaskOutcome("the game was closed or reloaded", [], 0f, null, null);
+            return new TaskOutcome("the game was closed or reloaded", [], 0f, Reply: null, ServiceError: null);
         }
-        string failure = null;
-        bool setupFailed = false;
-        string reply = null;
-        TranscriptEntry serviceError = null;
-        float seconds = 0f;
-        List<TranscriptEntry> tools = [];
         BenchmarkSnapshot snapshot = null;
         try
         {
             session.Clear();
             // 統計會跨題累積，後面的題目會多出預載的工具包與經驗提示，各題就不能比。
-            session.ToolUsage = new ToolUsageStats(null);
+            session.ToolUsage = new ToolUsageStats(path: null);
             Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
             snapshot = new BenchmarkSnapshot(map);
             string setupError = task.Setup?.Invoke(map);
             if (setupError != null)
             {
-                setupFailed = true;
-                failure = "setup: " + setupError;
+                return new TaskOutcome("setup: " + setupError, [], 0f, Reply: null, ServiceError: null, SetupFailed: true);
             }
-            else
-            {
-                Dictionary<string, int> before = task.Measure(map);
-                int transcriptStart = session.Transcript.Snapshot().Count;
-                float startedAt = UnityEngine.Time.realtimeSinceStartup;
-                using var timeout = new CancellationTokenSource(TaskTimeout);
-                try
-                {
-                    reply = await session.SendAsync(task.Instruction, cancellationToken: timeout.Token);
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(LogPrefix + task.Id + " exception: " + ex.GetType().Name + ": " + ex.Message);
-                }
-                seconds = UnityEngine.Time.realtimeSinceStartup - startedAt;
-                failure = task.Check(before, task.Measure(Find.CurrentMap), reply);
-                if (timeout.IsCancellationRequested)
-                    failure = Fails(string.Create(CultureInfo.InvariantCulture, $"timed out after {TaskTimeout.TotalMinutes:0} min"), failure);
-                List<TranscriptEntry> added = [.. session.Transcript.Snapshot().Skip(transcriptStart)];
-                tools = [.. added.Where(e => e.Kind == TranscriptKind.Tool)];
-                if (failure != null && !timeout.IsCancellationRequested) serviceError = FindServiceError(reply, added);
-                if (serviceError != null) failure = "model service error: " + serviceError.Text + "; " + failure;
-                else if (failure != null && !timeout.IsCancellationRequested && reply == null && added.LastOrDefault(e => e.Kind == TranscriptKind.Error) is { } error)
-                    failure = "ended by error: " + error.Text + "; " + failure;
-            }
+            return await ExecuteTaskAsync(session, task, map);
         }
         catch (Exception ex)
         {
             // 佈置、量測或判分出錯只算這一題失敗，其餘題目與總結照常產出。
-            failure = "exception: " + ex.GetType().Name + ": " + ex.Message;
+            string failure = "exception: " + ex.GetType().Name + ": " + ex.Message;
             Log.Warning(LogPrefix + task.Id + " " + failure);
+            return new TaskOutcome(failure, [], 0f, Reply: null, ServiceError: null);
         }
         finally
         {
             TryCleanUp(task.Id, () => task.Cleanup?.Invoke(map));
             TryCleanUp(task.Id, () => snapshot?.Restore());
         }
-        return new TaskOutcome(failure, tools, seconds, reply, serviceError, setupFailed);
+    }
+
+    private static async Task<TaskOutcome> ExecuteTaskAsync(ColonyAgentSession session, BenchTask task, Map map)
+    {
+        Dictionary<string, int> before = task.Measure(map);
+        int transcriptStart = session.Transcript.Snapshot().Count;
+        float startedAt = UnityEngine.Time.realtimeSinceStartup;
+        string reply = null;
+        using var timeout = new CancellationTokenSource(TaskTimeout);
+        try
+        {
+            reply = await session.SendAsync(task.Instruction, cancellationToken: timeout.Token);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(LogPrefix + task.Id + " exception: " + ex.GetType().Name + ": " + ex.Message);
+        }
+        float seconds = UnityEngine.Time.realtimeSinceStartup - startedAt;
+        string failure = task.Check(before, task.Measure(Find.CurrentMap), reply);
+        if (timeout.IsCancellationRequested)
+        {
+            failure = Fails(string.Create(CultureInfo.InvariantCulture, $"timed out after {TaskTimeout.TotalMinutes:0} min"), failure);
+        }
+        List<TranscriptEntry> added = [.. session.Transcript.Snapshot().Skip(transcriptStart)];
+        List<TranscriptEntry> tools = [.. added.Where(e => e.Kind == TranscriptKind.Tool)];
+        TranscriptEntry serviceError = failure != null && !timeout.IsCancellationRequested ? FindServiceError(reply, added) : null;
+        failure = AnnotateTaskFailure(failure, serviceError, timeout.IsCancellationRequested, reply, added);
+        return new TaskOutcome(failure, tools, seconds, reply, serviceError);
+    }
+
+    private static string AnnotateTaskFailure(string failure, TranscriptEntry serviceError, bool timedOut, string reply, List<TranscriptEntry> added)
+    {
+        if (serviceError != null) return "model service error: " + serviceError.Text + "; " + failure;
+        if (failure != null && !timedOut && reply == null && added.LastOrDefault(e => e.Kind == TranscriptKind.Error) is { } error)
+        {
+            return "ended by error: " + error.Text + "; " + failure;
+        }
+        return failure;
     }
 
     private static void TryCleanUp(string taskId, Action action)

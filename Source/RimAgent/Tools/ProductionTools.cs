@@ -88,7 +88,7 @@ public sealed class ProductionTools
         }
         foreach (KeyValuePair<string, List<int>> group in tablesByRecipes)
         {
-            sb.Append(string.Join(", ", group.Value.Select(id => string.Create(CultureInfo.InvariantCulture, $"[{id}]")))).Append(' ').AppendLine(group.Key.TrimStart('\n'));
+            sb.AppendJoin(", ", group.Value.Select(id => string.Create(CultureInfo.InvariantCulture, $"[{id}]"))).Append(' ').AppendLine(group.Key.TrimStart('\n'));
         }
         return sb.ToString().Trim();
     }

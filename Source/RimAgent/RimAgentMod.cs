@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -253,7 +254,7 @@ public partial class RimAgentMod : Mod
         }
         else if (A2AServerController.RunningPort > 0)
         {
-            listing.Label("RimAgent.Settings.A2ARunning".Translate("http://localhost:" + A2AServerController.RunningPort + "/.well-known/agent-card.json"));
+            listing.Label("RimAgent.Settings.A2ARunning".Translate(string.Create(CultureInfo.InvariantCulture, $"http://localhost:{A2AServerController.RunningPort}/.well-known/agent-card.json")));
         }
         else
         {
