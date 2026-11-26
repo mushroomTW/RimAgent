@@ -17,6 +17,11 @@ internal sealed class ColonyAgentHandler(ColonyInstructionRunner runner) : IAgen
             await updater.RejectAsync(AgentMessage(context, "The message has no text. Send the instruction as a text part."), metadata: null, cancellationToken).ConfigureAwait(false);
             return;
         }
+        if (text.Length > A2AServerHost.MaxInstructionChars)
+        {
+            await updater.RejectAsync(AgentMessage(context, $"The instruction exceeds the {A2AServerHost.MaxInstructionChars} character limit."), metadata: null, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
         try
         {

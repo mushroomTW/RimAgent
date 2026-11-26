@@ -22,9 +22,9 @@ public sealed partial class ColonyAgentSession
     {
         get
         {
-            AgentSession session = _session;
+            AgentSession session = Volatile.Read(ref _session);
             if (session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return [];
-            return provider.GetMessages(session);
+            return [.. provider.GetMessages(session)];
         }
     }
 
@@ -51,7 +51,7 @@ public sealed partial class ColonyAgentSession
         if (string.IsNullOrWhiteSpace(userText)) return null;
         // 紀錄關閉時呼叫端不建脈絡，所以只能單向推導：有脈絡必是自主任務，反之不一定。
         autonomous |= autonomousInfo != null;
-        if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
+        if (!TryBeginExclusiveWork())
         {
             throw new AgentBusyException();
         }
@@ -69,15 +69,16 @@ public sealed partial class ColonyAgentSession
                 OnAccepted = onAccepted,
                 AutonomousInfo = autonomousInfo
             };
-            string reply = await RunInstructionWithImagesAsync(userText.Trim(), options, images, cancellationToken).ConfigureAwait(false);
-            await RunLateInterjectionsAsync(cancellationToken).ConfigureAwait(false);
+            // 不切離主線程：RunLateInterjectionsAsync 內的 _world.TakeNewGameErrors() 需在主線程執行。
+            string reply = await RunInstructionWithImagesAsync(userText.Trim(), options, images, cancellationToken);
+            await RunLateInterjectionsAsync(cancellationToken);
             return reply;
         }
         finally
         {
             // 例外路徑的保險：忙碌結束後不留下永遠送不出的插話。
             _interjections.CloseAndDiscard();
-            Volatile.Write(ref _busy, 0);
+            EndExclusiveWork();
         }
     }
 
@@ -89,7 +90,7 @@ public sealed partial class ColonyAgentSession
         _images.SetPlayerImages(imgs, text.Trim());
         try
         {
-            return await RunInstructionAsync(text.Trim(), options, echo: true, ct).ConfigureAwait(false);
+            return await RunInstructionAsync(text.Trim(), options, echo: true, ct);
         }
         finally
         {
@@ -130,7 +131,7 @@ public sealed partial class ColonyAgentSession
             }
             string next = _interjections.TakeAllOrClose();
             if (next == null) return;
-            await RunInstructionAsync(next, default, echo: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await RunInstructionAsync(next, default, echo: false, cancellationToken: cancellationToken);
         }
     }
 
@@ -165,7 +166,7 @@ public sealed partial class ColonyAgentSession
     {
         ArgumentNullException.ThrowIfNull(text);
         // 新指令取代等待中的確認，先記錄捨棄，再建立新指令的編號。
-        DiscardPendingConfirmation();
+        DiscardPendingConfirmationCore();
         // 句內分類器判定快取不跨指令，下一句重來。
         ResetInstructionCaches();
         int instructionId = Transcript.BeginInstruction();
@@ -193,9 +194,9 @@ public sealed partial class ColonyAgentSession
         {
             // 指令開始前的遊戲錯誤與這句無關，先丟掉；之後每次工具呼叫只回報這段期間新增的。
             _world.TakeNewGameErrors();
-            if (_session == null)
+            if (Volatile.Read(ref _session) == null)
             {
-                _session = await RestoreOrCreateSession(cancellationToken);
+                Volatile.Write(ref _session, await RestoreOrCreateSession(cancellationToken));
             }
 
             AgentResponse response = await RunWithRetryOnContextTooLongAsync(
@@ -357,13 +358,16 @@ public sealed partial class ColonyAgentSession
         CancellationToken cancellationToken)
     {
         RimLLMChatOptions options = await BuildRunOptionsAsync(text, reasoningOverride, cancellationToken).ConfigureAwait(false);
-        // System One 的操作回報只給主 LLM 看：分流與預載判斷看的是原指令。
-        string modelText = DecisionReports.Prepend(DecisionReports.TakeAll(), text);
+        // System One 的操作回報只給主 LLM 看：分流與預載判斷看的是原指令。先偷看、成功才移除，避免請求失敗遺失回報。
+        string reports = DecisionReports.PeekAll(out int reportCount);
+        string modelText = DecisionReports.Prepend(reports, text);
         try
         {
-            return await _agent
+            AgentResponse response = await _agent
                 .RunAsync(modelText, _session, new ChatClientAgentRunOptions(options), cancellationToken)
                 .ConfigureAwait(false);
+            DecisionReports.RemoveFirst(reportCount);
+            return response;
         }
         catch (Exception ex) when (Classify(ex) == AgentErrorKind.ContextTooLong)
         {
@@ -374,15 +378,19 @@ public sealed partial class ColonyAgentSession
             {
                 try
                 {
-                    return await RetryAsync("summarized").ConfigureAwait(false);
+                    AgentResponse retried = await RetryAsync("summarized").ConfigureAwait(false);
+                    DecisionReports.RemoveFirst(reportCount);
+                    return retried;
                 }
                 catch (Exception retry) when (Classify(retry) == AgentErrorKind.ContextTooLong && !RanTools(instructionId))
                 {
                     // 往下清空歷史。
                 }
             }
-            _session = await _agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
-            return await RetryAsync("cleared").ConfigureAwait(false);
+            Volatile.Write(ref _session, await _agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false));
+            AgentResponse cleared = await RetryAsync("cleared").ConfigureAwait(false);
+            DecisionReports.RemoveFirst(reportCount);
+            return cleared;
         }
 
         Task<AgentResponse> RetryAsync(string action)
@@ -524,24 +532,31 @@ public sealed partial class ColonyAgentSession
 
     public void Clear()
     {
-        _router.Reset();
-        if (IsBusy) throw new InvalidOperationException("Cannot clear while RimAgent is working.");
-        // 丟棄 AF session（含歷史），下一次 SendAsync 重建；復原堆疊與等待中的確認一併作廢，對話歸零後「上一句」已無所指。
-        _session = null;
-        _serializedSession = null;
-        _saveSnapshot = null;
-        _tokenUsage.Reset();
-        _pendingConfirmation = null;
-        _pendingGoalObjective = null;
-        _confirmedGoalObjective = null;
-        _goalConfirmationReport = null;
-        ConfirmGate.DiscardPendingApprovals();
-        ConfirmGate.ClearSessionApprovals();
-        ResetInstructionCaches();
-        _registry.Outputs.Clear();
-        UnloadToolPacks();
-        Transcript.Clear();
-        Undo.Clear();
+        if (!TryBeginExclusiveWork()) throw new InvalidOperationException("Cannot clear while RimAgent is working.");
+        try
+        {
+            _router.Reset();
+            // 丟棄 AF session（含歷史），下一次 SendAsync 重建；復原堆疊與等待中的確認一併作廢，對話歸零後「上一句」已無所指。
+            Volatile.Write(ref _session, null);
+            Volatile.Write(ref _serializedSession, null);
+            Volatile.Write(ref _saveSnapshot, null);
+            _tokenUsage.Reset();
+            _pendingConfirmation = null;
+            _pendingGoalObjective = null;
+            _confirmedGoalObjective = null;
+            _goalConfirmationReport = null;
+            ConfirmGate.DiscardPendingApprovals();
+            ConfirmGate.ClearSessionApprovals();
+            ResetInstructionCaches();
+            _registry.Outputs.Clear();
+            UnloadToolPacks();
+            Transcript.Clear();
+            Undo.Clear();
+        }
+        finally
+        {
+            EndExclusiveWork();
+        }
     }
 
     private void ResetInstructionCaches()

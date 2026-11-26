@@ -44,6 +44,7 @@ public sealed class JevDecisionService : IDecisionService
             if (question == null || string.IsNullOrWhiteSpace(question.Id)) continue;
             ProcessQuestion(question, questionSet, nouls, choices, scores);
         }
+        if (nouls.Count == 0 && choices.Count == 0 && scores.Count == 0) return new DecisionResult();
 
         QuestionSetResult result = await CallDecisionServiceAsync(state, questionSet, cancellationToken);
 

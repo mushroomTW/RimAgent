@@ -9,7 +9,7 @@ using Microsoft.Agents.AI;
 
 namespace RimAgent.Agent;
 
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // AF 1.28 將 AgentFileStore 標記為評估中；已鎖定套件版本並以回歸測試保護。
 /// <summary>
 /// agent 的一組記憶工具背後只有一個儲存，這裡把它分成兩個範圍：
 /// 以 global_ 開頭的檔名屬全域記憶（跨存檔，改動後寫回磁碟），其餘屬局內記憶（跟著存檔序列化）。

@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using RimAgent.Agent;
 using RimAgent.Tools;
 using Verse;
@@ -76,7 +77,19 @@ public class RimAgentSettings : ModSettings
 
     public bool a2aServer = false;
     public int a2aPort = DefaultA2APort;
+    public string a2aToken = string.Empty;
 #pragma warning restore S1075
+
+    public string EnsureA2AToken()
+    {
+        if (string.IsNullOrWhiteSpace(a2aToken)) RegenerateA2AToken();
+        return a2aToken;
+    }
+
+    public void RegenerateA2AToken()
+    {
+        a2aToken = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+    }
 
     // 自主模式（排程器）的節奏與配額在設定頁；持續目標另由獨立流程執行並跟著存檔走。
     // 定期巡檢的節奏刻意不在這裡（見 AutonomousScheduler.HeartbeatTicks）：那是 agent 的運轉節奏，
@@ -192,6 +205,9 @@ public class RimAgentSettings : ModSettings
         decisionTriageUpkeep = fresh.decisionTriageUpkeep;
         useLocalSearch = fresh.useLocalSearch;
         searxngUrl = fresh.searxngUrl;
+        a2aServer = fresh.a2aServer;
+        a2aPort = fresh.a2aPort;
+        a2aToken = fresh.a2aToken;
         autonomousCooldownMinutes = fresh.autonomousCooldownMinutes;
         autonomousCare = fresh.autonomousCare;
         confirmAutonomousMajor = fresh.confirmAutonomousMajor;
@@ -306,6 +322,7 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref searxngUrl, "searxngUrl", "http://127.0.0.1:8888");
         Scribe_Values.Look(ref a2aServer, "a2aServer", defaultValue: false);
         Scribe_Values.Look(ref a2aPort, "a2aPort", DefaultA2APort);
+        Scribe_Values.Look(ref a2aToken, "a2aToken", string.Empty);
         Scribe_Values.Look(ref autonomousCooldownMinutes, "autonomousCooldownMinutes", DefaultCooldownMinutes);
         Scribe_Values.Look(ref autonomousCare, "autonomousCare", defaultValue: false);
         // 同上：舊版預設為關，Scribe 預設值維持 false，老玩家升級後不變。
@@ -322,6 +339,7 @@ public class RimAgentSettings : ModSettings
         Scribe_Values.Look(ref windowRectWidth, "windowRectWidth", 620f);
         Scribe_Values.Look(ref windowRectHeight, "windowRectHeight", 460f);
         // 壞存檔可能帶著範圍外的值：讀回後夾取，免得自動壓縮永不觸發或過度積極。
+        a2aPort = UnityEngine.Mathf.Clamp(a2aPort, MinA2APort, MaxA2APort);
         instructionTokenLimitK = UnityEngine.Mathf.Clamp(instructionTokenLimitK, 0, MaxInstructionTokenLimitK);
         autoCompactThreshold = UnityEngine.Mathf.Clamp(autoCompactThreshold, MinAutoCompactThreshold, MaxAutoCompactThreshold);
     }

@@ -21,7 +21,7 @@ public partial class RimAgentGameComponent
         RimAgentSettings settings = RimAgentMod.Settings;
         if (settings == null || !settings.autoTimeSpeed || DateTime.UtcNow < _nextSpeedCheckAt) return;
         _nextSpeedCheckAt = DateTime.UtcNow.AddSeconds(SpeedCheckSeconds);
-        if (_runner.IsRunning || _goalRunning || Find.CurrentMap == null) return;
+        if (_runner.IsRunning || IsGoalRunning || Find.CurrentMap == null) return;
         try
         {
             ColonyAgentSession session = Session;
@@ -44,7 +44,7 @@ public partial class RimAgentGameComponent
         RimAgentSettings settings = RimAgentMod.Settings;
         if (settings == null || !settings.autonomousCare || DateTime.UtcNow < _nextChoiceCheckAt) return;
         _nextChoiceCheckAt = DateTime.UtcNow.AddSeconds(ChoiceCheckSeconds);
-        if (_runner.IsRunning || _goalRunning || Find.CurrentMap == null) return;
+        if (_runner.IsRunning || IsGoalRunning || Find.CurrentMap == null) return;
         if (Find.TickManager.TicksGame < _runner.HoldUntilTick) return;
         try
         {
@@ -147,9 +147,20 @@ public partial class RimAgentGameComponent
     {
         return _runner.RunGuardedAsync(async (generation, token) =>
         {
-            if (signals.HasValue && await TriageSkipsAsync(session, trigger, signals.Value, tick, generation, token)) return;
-            if (!_runner.IsCurrent(generation)) return;
-            await RunAutonomousAsync(new AutonomousRunContext(session, trigger, tick, config, signals, detail), generation, token);
+            try
+            {
+                if (signals.HasValue && await TriageSkipsAsync(session, trigger, signals.Value, tick, generation, token)) return;
+                if (!_runner.IsCurrent(generation)) return;
+                await RunAutonomousAsync(new AutonomousRunContext(session, trigger, tick, config, signals, detail), generation, token);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // 玩家停止或讀檔取消。
+            }
+            catch (Exception ex)
+            {
+                WarnOnce("RimAgent autonomous run failed: " + ex.Message);
+            }
         });
     }
 
@@ -196,10 +207,11 @@ public partial class RimAgentGameComponent
         if (RimAgentMod.Settings?.recordRuns != true) return;
         try
         {
-            _session?.RunLogs?.Note(new RunLogHeader
+            ColonyAgentSession session = _session;
+            session?.RunLogs?.Note(new RunLogHeader
             {
                 Source = "system_one",
-                Mode = _session.Mode.ToString(),
+                Mode = session.Mode.ToString(),
                 Instruction = kind
             }, text);
         }

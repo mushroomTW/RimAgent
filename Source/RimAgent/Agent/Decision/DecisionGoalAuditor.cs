@@ -34,7 +34,6 @@ public sealed class DecisionGoalAuditor
     private readonly IDecisionService _decisionService;
     private readonly Func<IDecisionService> _serviceFactory;
     private readonly Func<string> _criteriaProvider;
-    private IDecisionService _service;
     // 判準與解析結果放同一個不可變物件整個換掉，避免並行時讀到新判準配舊計畫。
     private sealed record ParsedPlan(string Criteria, DecisionPlan Plan);
     private volatile ParsedPlan _parsed;
@@ -59,7 +58,7 @@ public sealed class DecisionGoalAuditor
         ArgumentNullException.ThrowIfNull(reply);
         if (string.IsNullOrWhiteSpace(objective)) return null;
 
-        IDecisionService service = _decisionService ?? ResolveService();
+        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
         if (service == null) return null;
 
         string criteria = _criteriaProvider?.Invoke();
@@ -157,12 +156,6 @@ public sealed class DecisionGoalAuditor
     private static string Escape(string value)
     {
         return (value ?? string.Empty).Replace("<", "\\<", StringComparison.Ordinal);
-    }
-
-    private IDecisionService ResolveService()
-    {
-        if (_service == null) _service = _serviceFactory?.Invoke();
-        return _service;
     }
 
     private DecisionPlan ResolvePlan(string criteria)

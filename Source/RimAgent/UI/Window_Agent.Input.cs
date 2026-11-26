@@ -14,7 +14,6 @@ using Verse;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     private void DrawBottomBar(Rect rect, ColonyAgentSession session)
@@ -66,6 +65,7 @@ public partial class Window_Agent
     private void StopRun()
     {
         CancelRunCts();
+        A2A.A2AServerController.CancelActiveInstruction();
         RimAgentGameComponent component = RimAgentGameComponent.Instance;
         component?.StopAutonomousRun();
         if (component?.IsGoalRunning == true) component.PauseGoal();
@@ -105,8 +105,12 @@ public partial class Window_Agent
             Notice(session, "RimAgent.ImageLimit".Translate(MaxPastedImages));
             return;
         }
-        var thumbnail = new Texture2D(2, 2);
-        thumbnail.LoadImage(jpeg);
+        var thumbnail = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+        if (!thumbnail.LoadImage(jpeg))
+        {
+            UnityEngine.Object.Destroy(thumbnail);
+            return;
+        }
         _pastedImages.Add(new PastedImage { Jpeg = jpeg, Thumbnail = thumbnail });
     }
 

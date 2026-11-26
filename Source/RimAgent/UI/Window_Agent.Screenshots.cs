@@ -14,7 +14,6 @@ using Verse;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     private void DrawScreenshotPreview(Rect rect, string path)
@@ -93,6 +92,11 @@ public partial class Window_Agent
             return;
         }
         _screenshotFailedAt.Remove(path);
+        if (_screenshotTextures.TryGetValue(path, out Texture2D previous))
+        {
+            UnityEngine.Object.Destroy(previous);
+            _screenshotOrder.Remove(path);
+        }
         _screenshotTextures[path] = preview;
         _screenshotOrder.Add(path);
         while (_screenshotOrder.Count > MaxCachedScreenshots)

@@ -17,7 +17,7 @@ internal sealed class AutonomousRunner
     private readonly AutonomousScheduler _scheduler;
     private readonly Func<int?> _currentTick;
     private readonly Action<string> _warn;
-    private CancellationTokenSource? _cts;
+    private volatile CancellationTokenSource? _cts;
 
     /// <summary>
     /// 自主任務從起跑到回寫排程器為止。session 的忙碌旗標在背景執行緒就放開，早於冷卻記錄；
@@ -26,6 +26,7 @@ internal sealed class AutonomousRunner
     private volatile bool _running;
 
     private int _generation;
+    private int _holdUntilTick;
 
     public AutonomousRunner(AutonomousScheduler scheduler, Func<int?> currentTick, Action<string> warn)
     {
@@ -37,12 +38,16 @@ internal sealed class AutonomousRunner
     /// <summary>是否有自主任務正在進行（含 System One 篩選與代答）。</summary>
     public bool IsRunning => _running;
 
-    public int Generation => _generation;
+    public int Generation => Volatile.Read(ref _generation);
 
     /// <summary>設定錯誤後暫停到這個 tick 為止；不存檔，讀檔即恢復。</summary>
-    public int HoldUntilTick { get; private set; }
+    public int HoldUntilTick
+    {
+        get => Volatile.Read(ref _holdUntilTick);
+        private set => Volatile.Write(ref _holdUntilTick, value);
+    }
 
-    public bool IsCurrent(int generation) => generation == _generation;
+    public bool IsCurrent(int generation) => generation == Volatile.Read(ref _generation);
 
     /// <summary>取消進行中的自主任務；收尾時會壓住該條件的重試。</summary>
     public void Stop() => _cts?.Cancel();
@@ -50,7 +55,7 @@ internal sealed class AutonomousRunner
     public void Invalidate()
     {
         _cts?.Cancel();
-        _generation++;
+        Interlocked.Increment(ref _generation);
         _running = false;
     }
 
@@ -61,9 +66,10 @@ internal sealed class AutonomousRunner
     {
         ArgumentNullException.ThrowIfNull(body);
         _running = true;
-        int generation = _generation;
-        _cts = new CancellationTokenSource();
-        CancellationToken token = _cts.Token;
+        int generation = Volatile.Read(ref _generation);
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+        CancellationToken token = cts.Token;
         try
         {
             // 不加 ConfigureAwait(false)：收尾要回主線程，免得與主線程的 Evaluate 同時改排程器狀態。
@@ -72,7 +78,7 @@ internal sealed class AutonomousRunner
         finally
         {
             // 讀檔後新的一輪可能已經開始，舊的 finally 不能把它的旗標關掉。
-            if (generation == _generation) _running = false;
+            if (generation == Volatile.Read(ref _generation)) _running = false;
         }
     }
 
@@ -81,7 +87,7 @@ internal sealed class AutonomousRunner
     {
         ArgumentNullException.ThrowIfNull(request);
         // 起跑前遊戲已被換掉（例如排程器在同一幀觸發後玩家立刻讀檔）：不碰任何狀態。
-        if (generation != _generation) return (false, null);
+        if (!IsCurrent(generation)) return (false, null);
         ColonyAgentSession session = request.Session;
         // 送出前先算好這句會拿到的編號：busy 旗標保證成功送出的那句取的是下一個號；
         // 送完才讀 CurrentInstructionId 的話，玩家在旗標釋放的瞬間送指令會讓我們數到別句。
@@ -96,7 +102,10 @@ internal sealed class AutonomousRunner
                 reasoningOverride: ReasoningLevel.Low,
                 autonomousInfo: request.RunInfo,
                 cancellationToken: cancellationToken);
-            outcome = (true, reply);
+            bool succeeded = reply != null
+                && !cancellationToken.IsCancellationRequested
+                && session.Transcript.ErrorKindOf(instructionId) == null;
+            outcome = (succeeded, reply);
         }
         catch (AgentBusyException)
         {
@@ -113,7 +122,7 @@ internal sealed class AutonomousRunner
             _warn("RimAgent autonomous run failed: " + ex.Message);
         }
         // 讀檔／新局已把這個任務作廢：不要用舊遊戲的結果改新遊戲的排程器或冷卻。
-        if (generation != _generation) return (false, null);
+        if (!IsCurrent(generation)) return (false, null);
         RecordRun(request, cancellationToken.IsCancellationRequested, instructionId);
         return outcome;
     }
@@ -122,7 +131,7 @@ internal sealed class AutonomousRunner
     {
         // 冷卻、定期巡視與重試退避都從任務結束起算：一輪在高速下常跑掉十幾個遊戲小時，
         // 從起跑算的話一結束就全部到期。任務期間玩家退回主選單時沒有遊戲可讀，沿用起跑 tick。
-        int finishTick = _currentTick() ?? request.Tick;
+        int finishTick = Math.Max(request.Tick, _currentTick() ?? request.Tick);
         // 玩家按了停止就壓住該條件的重試（解除前不再跑）：憑 token 判斷，
         // SendAsync 吃掉取消沒擲 OCE 時同樣生效。
         if (stopped) _scheduler.Dismiss(request.Trigger, finishTick);
@@ -137,7 +146,7 @@ internal sealed class AutonomousRunner
         AgentErrorKind? error = transcript.ErrorKindOf(instructionId);
         if (error == AgentErrorKind.RateLimited)
         {
-            HoldUntilTick = request.Tick + RateLimitHoldTicks;
+            HoldUntilTick = finishTick + RateLimitHoldTicks;
             transcript.Add(new TranscriptEntry
             {
                 Kind = TranscriptKind.Notice,
@@ -147,7 +156,7 @@ internal sealed class AutonomousRunner
         }
         if (error != AgentErrorKind.Configuration) return;
         // 這類錯誤幾秒內不會自己好，照常重觸發只會連續失敗。
-        HoldUntilTick = request.Tick + ConfigurationErrorHoldTicks;
+        HoldUntilTick = finishTick + ConfigurationErrorHoldTicks;
         _warn("RimAgent autonomous tasks paused for one in-game day after a provider configuration error.");
         transcript.Add(new TranscriptEntry
         {

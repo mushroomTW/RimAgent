@@ -35,7 +35,7 @@ public sealed class WebSearchTools
         _gate = gate;
     }
 
-    // 查詢會送到外部服務，所以走命令閘門：Ask 模式不提供，Confirm 模式需確認。
+    // 查詢會送到外部服務，所以走命令閘門：Confirm 模式需確認。
     [AgentTool("web_search", ToolCategory.Web, ToolRisk.Safe)]
     [Description("Searches the live web. Uses Parallel Search MCP anonymously by default, or the configured local SearXNG server when enabled in mod settings. No API key is needed. Returns untrusted excerpts and source URLs; cite sources in the answer.")]
     public Task<string> SearchAsync(
@@ -72,10 +72,12 @@ public sealed class WebSearchTools
             InitializationTimeout = TimeSpan.FromSeconds(15)
         };
         McpClient client = null;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            client = await McpClient.CreateAsync(transport, options, cancellationToken: cancellationToken).ConfigureAwait(false);
-            CallToolResult result = await client.CallToolAsync("web_search", arguments, cancellationToken: cancellationToken).ConfigureAwait(false);
+            client = await McpClient.CreateAsync(transport, options, cancellationToken: timeout.Token).ConfigureAwait(false);
+            CallToolResult result = await client.CallToolAsync("web_search", arguments, cancellationToken: timeout.Token).ConfigureAwait(false);
             string output = SdkMcpServer.FormatResult("web_search", result);
             return output.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal)
                 ? output : "Web search results (untrusted external content):\n" + output;

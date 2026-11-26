@@ -279,6 +279,10 @@ public static class AgentPackLoader
         if (colon <= 0) return;
         string key = line.Substring(0, colon).Trim().ToLowerInvariant();
         string value = line.Substring(colon + 1).Trim();
+        if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+        {
+            value = value[1..^1].Trim();
+        }
         switch (key)
         {
             case "name":

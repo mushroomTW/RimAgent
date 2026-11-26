@@ -43,4 +43,17 @@ public class ReplyMarkdownTests
     {
         Assert.That(ReplyMarkdown.EscapeAngleBrackets(reply: null), Is.EqualTo(string.Empty));
     }
+
+    [Test]
+    public void LongLineOfAngleBracketsIsEscapedInLinearTime()
+    {
+        string input = new string(' ', 500) + new string('>', 5000) + " tail <tag>";
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        string output = ReplyMarkdown.EscapeAngleBrackets(input);
+        sw.Stop();
+
+        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(500));
+        Assert.That(output, Does.Contain("＜tag＞"));
+        Assert.That(output.TrimStart(), Does.StartWith(">>>>>"));
+    }
 }

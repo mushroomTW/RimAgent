@@ -62,10 +62,8 @@ public sealed class RiskClassifier : IRiskChecker
         {
             return new RiskVerdict { Risky = true, Failed = true, Reason = "risk check unavailable: classifier prompt is missing" };
         }
-        // 鍵只用「玩家原話＋工具＋參數」：這兩軸（動作危不危險、玩家有沒有要求）由此決定，
-        // 預覽裡的新舊數值是同一動作的當下快照，不影響判定；失敗與無法解析的 verdict 不進快取。
-        string cacheKey = (question.Instruction ?? string.Empty) + "\n" +
-            (question.ToolName ?? string.Empty) + "\n" + (question.Arguments ?? string.Empty);
+        // 動態索引或依當下選取目標的工具（相同參數在不同狀態下目標不同）需納入預覽，其餘工具只看指令＋工具＋參數。
+        string cacheKey = BuildCacheKey(question);
         if (_verdictCache.TryGet(cacheKey, out RiskVerdict cached)) return cached;
         string text;
         try
@@ -103,6 +101,23 @@ public sealed class RiskClassifier : IRiskChecker
     internal void ClearCache()
     {
         _verdictCache.Clear();
+    }
+
+    internal static string BuildCacheKey(RiskQuestion question)
+    {
+        string baseKey = (question.Instruction ?? string.Empty) + "\0" +
+            (question.ToolName ?? string.Empty) + "\0" + (question.Arguments ?? string.Empty);
+        return IncludesPreviewInCacheKey(question.ToolName)
+            ? baseKey + "\0" + (question.Preview ?? string.Empty)
+            : baseKey;
+    }
+
+    private static bool IncludesPreviewInCacheKey(string toolName)
+    {
+        return Tools.AgentToolRegistry.IsGenericActionTool(toolName)
+            || string.Equals(toolName, "delete_bill", StringComparison.Ordinal)
+            || string.Equals(toolName, "choose_option", StringComparison.Ordinal)
+            || string.Equals(toolName, "designate_area", StringComparison.Ordinal);
     }
 
     /// <summary>

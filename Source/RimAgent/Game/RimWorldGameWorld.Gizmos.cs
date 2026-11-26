@@ -213,7 +213,16 @@ internal sealed partial class RimWorldGameWorld
         StopAllTargeting();
         var before = new HashSet<Window>(Find.WindowStack.Windows);
         var watch = new MessageWatch();
-        command.ProcessInput(ev: null);
+        try
+        {
+            command.ProcessInput(ev: null);
+        }
+        catch (Exception ex)
+        {
+            StopAllTargeting();
+            CloseUnsupportedWindows(before, label);
+            return CommandResult.Fail("the button failed: " + ex.Message);
+        }
         CommandResult targeting = FinishTargeting(label, target == null ? (LocalTargetInfo?)null : localTarget, watch, out bool askedForTarget);
         CommandResult windowFailure = CloseUnsupportedWindows(before, label);
         if (targeting != null && !targeting.Success) return targeting;

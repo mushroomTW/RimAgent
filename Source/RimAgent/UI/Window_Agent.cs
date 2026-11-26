@@ -15,7 +15,6 @@ using Verse;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 [StaticConstructorOnStartup]
 public partial class Window_Agent : Window
 {
@@ -238,6 +237,7 @@ public partial class Window_Agent : Window
     {
         RimAgentGameComponent.GameTornDown -= OnGameTornDown;
         CancelRunCts();
+        TakePastedImages();
         ReleaseScreenshotTextures();
     }
 
@@ -245,6 +245,7 @@ public partial class Window_Agent : Window
     {
         foreach (Texture2D texture in _screenshotTextures.Values) UnityEngine.Object.Destroy(texture);
         _screenshotTextures.Clear();
+        _screenshotOrder.Clear();
     }
 
     public static bool IsOpenNow => Find.WindowStack != null && Find.WindowStack.IsOpen<Window_Agent>();

@@ -230,6 +230,13 @@ internal sealed partial class StartupTests
         if (missing.Count > 0) failures.Add($"{language.folderName} is missing {missing.Count}: {string.Join(", ", missing)}");
     }
 
+    /// <summary>主執行緒必須具備 SynchronizationContext，不帶 ConfigureAwait(false) 的續行才能回到遊戲主執行緒碰世界狀態。</summary>
+    [Test]
+    public static void MainThreadHasSynchronizationContext()
+    {
+        Expect.IsNotNull(System.Threading.SynchronizationContext.Current, "Main thread has no SynchronizationContext");
+    }
+
     /// <summary>Agent 主按鈕的 def 已載入，worker 類別解析到 RimAgent 的型別。</summary>
     [Test]
     public static void MainButtonDefIsLoaded()

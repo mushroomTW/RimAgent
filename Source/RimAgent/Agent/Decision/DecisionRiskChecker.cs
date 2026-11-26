@@ -21,7 +21,6 @@ public sealed class DecisionRiskChecker : IRiskChecker
     private readonly Func<string> _criteriaProvider;
     private readonly Func<IReadOnlyList<ChatMessage>> _historyProvider;
     private readonly InstructionCache<RiskVerdict> _verdictCache = new();
-    private IDecisionService _service;
     // 判準與解析結果放同一個不可變物件整個換掉，避免並行時讀到新判準配舊計畫。
     private sealed record ParsedPlan(string Criteria, DecisionPlan Plan);
     private volatile ParsedPlan _parsed;
@@ -48,9 +47,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
     {
         ArgumentNullException.ThrowIfNull(question);
 
-        // 鍵只用「玩家原話＋工具＋參數」：同一命令重試不重複呼叫決策模型
-        string cacheKey = (question.Instruction ?? string.Empty) + "\n" +
-            (question.ToolName ?? string.Empty) + "\n" + (question.Arguments ?? string.Empty);
+        string cacheKey = RiskClassifier.BuildCacheKey(question);
         if (_verdictCache.TryGet(cacheKey, out RiskVerdict cached)) return cached;
 
         // 這句指令已經試過並失敗：不再重試決策模型。
@@ -60,15 +57,15 @@ public sealed class DecisionRiskChecker : IRiskChecker
         }
 
         // 還沒設定決策模型（框架沒啟用供應商、或框架太舊）：不算失敗，下一句還可以再試。
-        IDecisionService service = _decisionService ?? ResolveService();
+        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
         DecisionPlan plan = service == null ? null : CurrentPlan();
         if (plan == null)
         {
             return await FallbackAsync(question, cacheKey, decisionAttempted: false, cancellationToken).ConfigureAwait(false);
         }
 
-        // 前幾句的授權（「之後拆牆都不用問」）只在對話裡，不在這一句的原話。
-        string state = DecisionReasoningRouter.DescribeHistory(_historyProvider?.Invoke()) + RiskClassifier.Describe(question);
+        // 只帶入玩家原話：助理回覆可能含有外部工具的間接注入，不能當成授權依據。
+        string state = DecisionReasoningRouter.DescribeUserHistory(_historyProvider?.Invoke()) + RiskClassifier.Describe(question);
         DecisionResult result;
         try
         {
@@ -147,15 +144,9 @@ public sealed class DecisionRiskChecker : IRiskChecker
     internal static bool IsHighImpactKind(string kind)
     {
         return string.Equals(kind, "irreversible_colony_change", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(kind, "configuration_change", StringComparison.OrdinalIgnoreCase)
             || string.Equals(kind, "external_side_effect", StringComparison.OrdinalIgnoreCase)
             || string.Equals(kind, "data_exfiltration", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>延遲建立決策服務：玩家可能在遊戲進行中才去框架設定好決策模型。</summary>
-    private IDecisionService ResolveService()
-    {
-        if (_service == null) _service = _serviceFactory?.Invoke();
-        return _service;
     }
 
     private DecisionPlan ResolvePlan(string criteria)

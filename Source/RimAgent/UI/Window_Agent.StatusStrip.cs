@@ -14,7 +14,6 @@ using Verse;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     private void DrawStatusStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)

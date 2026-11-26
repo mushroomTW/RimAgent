@@ -642,7 +642,9 @@ public sealed class BuildTools
         [Description("Opposite corner x; same as x1 for one cell.")] int x2,
         [Description("Opposite corner z; same as z1 for one cell.")] int z2)
     {
-        CellRectSpec rect = CellRectSpec.FromCorners(x1, z1, x2, z2);
+        Result<CellRectSpec> resolved = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+        if (!resolved.Success) return resolved.Error;
+        CellRectSpec rect = resolved.Value;
         string blocked = ToolText.Blocked(_gate, $"would cancel blueprints and frames in {rect}.");
         if (blocked != null) return blocked;
         IReadOnlyList<string> removed = _world.RemoveBlueprints(rect);
@@ -1015,17 +1017,21 @@ public sealed class BuildTools
         return (forbidden ? "Forbade " : "Allowed ") + r.Message + ".";
     }
 
-    /// <summary>「wood wall」拆成材料與建築；要先於名稱比對，英文版會直接對到 Wall 而丟掉材料。</summary>
+    /// <summary>「wood wall」「granite blocks wall」拆成材料與建築；要先於名稱比對，英文版會直接對到 Wall 而丟掉材料。</summary>
     private (DefInfo Building, string StuffDefName)? SplitMaterial(string building)
     {
         string name = (building ?? string.Empty).Trim();
-        int space = name.IndexOf(' ', StringComparison.Ordinal);
-        if (space < 0 || _world.Buildables.Any(b => IsNamed(b, name))) return null;
-        string bare = name[(space + 1)..].Trim();
-        List<DefInfo> matches = [.. _world.Buildables.Where(b => IsNamed(b, bare))];
-        if (matches.Count != 1 || _world.GetBuildingInfo(matches[0].DefName) is not { StuffCount: > 0 }) return null;
-        Result<string> material = ResolveStuffDefName(name[..space]);
-        return material.Success ? (matches[0], material.Value) : null;
+        if (name.IndexOf(' ', StringComparison.Ordinal) < 0 || _world.Buildables.Any(b => IsNamed(b, name))) return null;
+        for (int space = name.IndexOf(' ', StringComparison.Ordinal); space >= 0; space = name.IndexOf(' ', space + 1))
+        {
+            string bare = name[(space + 1)..].Trim();
+            if (bare.Length == 0) continue;
+            List<DefInfo> matches = [.. _world.Buildables.Where(b => IsNamed(b, bare))];
+            if (matches.Count != 1 || _world.GetBuildingInfo(matches[0].DefName) is not { StuffCount: > 0 }) continue;
+            Result<string> material = ResolveStuffDefName(name[..space]);
+            if (material.Success) return (matches[0], material.Value);
+        }
+        return null;
     }
 
     private static bool IsNamed(DefInfo def, string name) =>

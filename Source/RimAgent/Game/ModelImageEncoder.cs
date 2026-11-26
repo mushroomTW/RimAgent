@@ -30,6 +30,7 @@ internal static class ModelImageEncoder
 
     public static byte[] FromTexture(Texture2D source, int maxEdge = MaxEdge)
     {
+        ArgumentNullException.ThrowIfNull(source);
         int width = source.width;
         int height = source.height;
         float scale = Math.Min(1f, (float)maxEdge / Math.Max(width, height));
@@ -39,9 +40,10 @@ internal static class ModelImageEncoder
 
         RenderTexture target = RenderTexture.GetTemporary(targetWidth, targetHeight, 0);
         RenderTexture previous = RenderTexture.active;
-        var scaled = new Texture2D(targetWidth, targetHeight, TextureFormat.RGB24, mipChain: false);
+        Texture2D? scaled = null;
         try
         {
+            scaled = new Texture2D(targetWidth, targetHeight, TextureFormat.RGB24, mipChain: false);
             Graphics.Blit(source, target);
             RenderTexture.active = target;
             scaled.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
@@ -52,7 +54,7 @@ internal static class ModelImageEncoder
         {
             RenderTexture.active = previous;
             RenderTexture.ReleaseTemporary(target);
-            Object.Destroy(scaled);
+            if (scaled != null) Object.Destroy(scaled);
         }
     }
 }

@@ -167,13 +167,19 @@ internal sealed class MapShotCapture : MonoBehaviour
     private static void EnsurePatched()
     {
         if (_patched) return;
-        _patched = true;
+        System.Reflection.MethodBase viewRect = AccessTools.PropertyGetter(typeof(MapDrawer), "ViewRect");
+        System.Reflection.MethodBase cull = AccessTools.Method(typeof(DynamicDrawManager), "ComputeCulledThings");
+        if (viewRect == null || cull == null)
+        {
+            throw new MissingMethodException("MapShotCapture could not resolve RimWorld rendering methods to patch.");
+        }
         var harmony = new Harmony("greenmushroom.rimagent.mapshot");
-        harmony.Patch(AccessTools.PropertyGetter(typeof(MapDrawer), "ViewRect"),
+        harmony.Patch(viewRect,
             postfix: new HarmonyMethod(typeof(MapShotCapture), nameof(ViewRectPostfix)));
-        harmony.Patch(AccessTools.Method(typeof(DynamicDrawManager), "ComputeCulledThings"),
+        harmony.Patch(cull,
             prefix: new HarmonyMethod(typeof(MapShotCapture), nameof(CullPrefix)),
             finalizer: new HarmonyMethod(typeof(MapShotCapture), nameof(CullFinalizer)));
+        _patched = true;
     }
 
     private static void ViewRectPostfix(Map ___map, ref CellRect __result)

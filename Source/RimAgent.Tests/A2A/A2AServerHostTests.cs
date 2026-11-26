@@ -227,6 +227,44 @@ public class A2AServerHostTests
             Is.EquivalentTo((string[])[ProtocolBindingNames.JsonRpc, ProtocolBindingNames.Grpc]));
     }
 
+    [Test]
+    public async Task BearerTokenProtectsEndpointAndRejectsOversizedInstruction()
+    {
+        int httpPort = FreePort();
+        int grpcPort = FreePort();
+        await using IAsyncDisposable server = await A2AServerHost.StartAsync(
+            AppContext.BaseDirectory, httpPort, grpcPort, "test",
+            (text, _) => Task.FromResult("ok: " + text),
+            bearerToken: "secret-token-123");
+
+        string url = $"http://localhost:{httpPort}{A2AServerHost.JsonRpcPath}";
+        using var http = new HttpClient();
+
+        using var unauthReq = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\",\"params\":{}}", System.Text.Encoding.UTF8, "application/json")
+        };
+        using HttpResponseMessage unauthResp = await http.SendAsync(unauthReq);
+        Assert.That(unauthResp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "secret-token-123");
+        var client = new A2AClient(new Uri(url), http);
+        SendMessageResponse resp = await client.SendMessageAsync(Request(new string('a', A2AServerHost.MaxInstructionChars + 1)), CancellationToken.None);
+        Assert.That(resp.Task.Status.State, Is.EqualTo(TaskState.Rejected));
+    }
+
+    [Test]
+    public void SettingsGeneratesAndRegeneratesA2ATokenAndCancelWhenIdleIsSafe()
+    {
+        var settings = new RimAgentSettings();
+        string first = settings.EnsureA2AToken();
+        Assert.That(first, Has.Length.EqualTo(64));
+        Assert.That(settings.EnsureA2AToken(), Is.EqualTo(first));
+        settings.RegenerateA2AToken();
+        Assert.That(settings.a2aToken, Is.Not.EqualTo(first).And.Length.EqualTo(64));
+        Assert.DoesNotThrow(A2AServerController.CancelActiveInstruction);
+    }
+
     private static SendMessageRequest Request(string text) => new()
     {
         Message = new Message { MessageId = Guid.NewGuid().ToString("N"), Role = Role.User, Parts = [Part.FromText(text)] },

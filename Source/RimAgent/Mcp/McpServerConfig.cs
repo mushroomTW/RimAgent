@@ -23,6 +23,12 @@ public sealed class McpServerEntry
 public static class McpServerConfig
 {
     public const int DefaultTimeoutSeconds = 30;
+    public const int MaxTimeoutSeconds = 300;
+
+    internal static int ClampTimeoutSeconds(int seconds)
+    {
+        return seconds > 0 ? Math.Min(seconds, MaxTimeoutSeconds) : DefaultTimeoutSeconds;
+    }
 
     private static readonly JsonSerializerOptions DtoOptions = new()
     {
@@ -61,11 +67,12 @@ public static class McpServerConfig
                 error = "servers.json has no \"servers\" array";
                 return false;
             }
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (JsonElement element in list.EnumerateArray())
             {
                 if (element.ValueKind != JsonValueKind.Object) continue;
                 McpServerEntry entry = ParseServerEntry(element);
-                if (entry != null) servers.Add(entry);
+                if (entry != null && seen.Add(entry.Name)) servers.Add(entry);
             }
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException)
@@ -100,7 +107,7 @@ public static class McpServerConfig
                 if (arg.ValueKind == JsonValueKind.String) entry.Args.Add(arg.GetString() ?? string.Empty);
             }
         }
-        entry.TimeoutSeconds = dto.TimeoutSeconds > 0 ? dto.TimeoutSeconds : DefaultTimeoutSeconds;
+        entry.TimeoutSeconds = ClampTimeoutSeconds(dto.TimeoutSeconds);
         return entry;
     }
 }

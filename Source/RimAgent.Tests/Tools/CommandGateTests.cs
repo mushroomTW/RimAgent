@@ -213,12 +213,20 @@ public class CommandGateTests
 
     [TestCase(AgentMode.Autonomous, "mcp_call_tool", false)]
     [TestCase(AgentMode.Confirm, "mcp_call_tool", true)]
+    [TestCase(AgentMode.Execute, "mcp_call_tool", true)]
     [TestCase(AgentMode.Auto, "mcp_call_tool", false)]
     [TestCase(AgentMode.Confirm, "set_work_priorities", false)]
     public void RequiresExplicitConfirmationTests(AgentMode mode, string toolName, bool expected)
     {
         var gate = new ConfirmationGate(() => mode);
         Assert.That(gate.RequiresExplicitConfirmation(toolName), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void UnknownModeFailsClosed()
+    {
+        var gate = new ConfirmationGate(() => (AgentMode)999);
+        Assert.That(gate.AllowCommands(), Is.False);
     }
 
     [Test]

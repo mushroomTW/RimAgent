@@ -11,6 +11,7 @@ public class ReadmeToolCountTests
 {
     [TestCase("README.md", "Tools")]
     [TestCase("README.zh-TW.md", "項工具")]
+    [TestCase("About/About.xml", "specialized tools")]
     public void ToolCountMatchesRegistry(string fileName, string unit)
     {
         // 正式環境一定帶技能提供者（無技能時 read_skill 回「未安裝」），文件數量以此為準。

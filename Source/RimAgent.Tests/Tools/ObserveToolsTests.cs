@@ -513,4 +513,10 @@ public partial class ObserveToolsTests
         Assert.That(text, Does.Contain(", Empire: Knight, honor 3"));
         Assert.That(text.IndexOf("Empire"), Is.EqualTo(text.LastIndexOf("Empire")), "只有第一位殖民者有頭銜");
     }
+
+    [Test]
+    public void FindThingsRejectsPartialNegativeCoordinates()
+    {
+        Assert.That(_tools.FindThings("items", x1: 10, z1: 10, x2: -1, z2: -1), Does.StartWith(ToolText.ErrorPrefix));
+    }
 }

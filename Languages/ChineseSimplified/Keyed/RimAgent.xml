@@ -107,6 +107,11 @@
   <RimAgent.Settings.A2AServer>开启 A2A 服务器（仅限本机）</RimAgent.Settings.A2AServer>
   <RimAgent.Settings.A2AServerTip>其他 agent（例如写程序的助手或其他游戏 agent）可以通过 A2A 协议，用 JSON-RPC 或 gRPC 下指令给 RimAgent。只有这台电脑上的程序连得进来。远程指令按你的权限与确认模式执行。</RimAgent.Settings.A2AServerTip>
   <RimAgent.Settings.A2APort>端口（gRPC 用 {0}）</RimAgent.Settings.A2APort>
+  <RimAgent.Settings.A2AToken>访问令牌：{0}</RimAgent.Settings.A2AToken>
+  <RimAgent.Settings.A2ATokenTip>A2A 的 JSON-RPC 与 gRPC 请求都必须携带 Authorization: Bearer &lt;token&gt; 请求头。重新生成后关闭设置窗口生效。</RimAgent.Settings.A2ATokenTip>
+  <RimAgent.Settings.A2ACopyToken>复制</RimAgent.Settings.A2ACopyToken>
+  <RimAgent.Settings.A2ATokenCopied>已复制 A2A 访问令牌到剪贴板。</RimAgent.Settings.A2ATokenCopied>
+  <RimAgent.Settings.A2ARegenerateToken>重新生成</RimAgent.Settings.A2ARegenerateToken>
   <RimAgent.Settings.A2ARunning>运行中。Agent 卡片：{0}</RimAgent.Settings.A2ARunning>
   <RimAgent.Settings.A2AFailed>无法启动：{0}</RimAgent.Settings.A2AFailed>
   <RimAgent.Settings.A2AApplyOnClose>关闭设置窗口后启动。</RimAgent.Settings.A2AApplyOnClose>
@@ -167,8 +172,8 @@
   <RimAgent.Settings.FrameworkNote>AI 密钥、要用哪家 AI，都在 RimLLM Framework 的设置里。</RimAgent.Settings.FrameworkNote>
 
   <!-- 状态栏与斜线指令 -->
-  <RimAgent.Auto.StatusOn>今日已用 {0}/{1} 次</RimAgent.Auto.StatusOn>
   <RimAgent.Auto.StatusUnlimited>今日自主任务已调用 {0} 次 (无上限)</RimAgent.Auto.StatusUnlimited>
+  <RimAgent.Save.ReloadedNotice>已读回存档 {0}（第 {1}/{2} 次）：{3}</RimAgent.Save.ReloadedNotice>
   <RimAgent.Mode.Status>模式：{0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>推理：{0}</RimAgent.Reasoning.Status>
   <RimAgent.Model.Status>模型：{0}</RimAgent.Model.Status>
@@ -176,7 +181,6 @@
   <RimAgent.Model.DefaultTip>按 RimLLM Framework 的备援链选择模型。</RimAgent.Model.DefaultTip>
   <RimAgent.Model.FollowAgent>默认（Agent 当前模型）</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>跟着 Agent 窗口当前选的模型走；在那边换模型，这里会自动跟上，不必分开设置。Agent 窗口是 Fallback 时，这一格也走备援链。</RimAgent.Model.FollowAgentTip>
-  <RimAgent.Model.Tip>使用：{0}&#10;失败时不改用其他模型；要用备援链请选 Fallback。</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>默认</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>关闭</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>低</RimAgent.Reasoning.Low>

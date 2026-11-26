@@ -179,7 +179,7 @@ RimAgent can act as an [A2A](https://a2a-protocol.org/) server, so other AI agen
 
 ## What It Can Do
 
-All 16 tool categories except Save are enabled by default and can be toggled individually in mod settings, or simultaneously with Allow All / Deny All. The selected execution mode governs how commands are evaluated and run.
+All 16 tool categories except MCP are enabled by default (Recommended preset) and can be toggled individually in mod settings, or switched with permission presets. The selected execution mode governs how commands are evaluated and run.
 
 | Category | Capabilities & Examples |
 | --- | --- |
@@ -194,11 +194,11 @@ All 16 tool categories except Save are enabled by default and can be toggled ind
 | **Zone** | Stockpile and dumping zones, growing zone crop selection, and storage filter criteria |
 | **Production** | Crafting bench inspection, bill creation, recipe configuration, and workload prioritization |
 | **Time** | Game pause, speed multiplier adjustment (1x, 2x, 3x, 4x), and precise waiting for in-game time intervals |
-| **MCP** | Dynamic discovery and execution of external tools from connected local MCP servers |
+| **MCP** | Dynamic discovery and execution of external tools from connected local MCP servers (disabled by default) |
 | **Web** | `web_search` queries online RimWorld documentation and guides via anonymous Parallel Search MCP by default; optional self-hosted SearXNG integration |
 | **Memory** | `file_memory_*` suite reads, lists, searches, writes, edits, and deletes memory notes; files prefixed with `global_` are shared across all saves, while others belong strictly to the active save (up to 30 files per scope) |
 | **Subagents** | `delegate_task` delegates self-contained sub-tasks to specialized subagents defined in `AgentPack/Agents/` |
-| **Save** | Automatic checkpoint creation and death-triggered save recovery using checkpoints or autosaves (disabled by default) |
+| **Save** | Automatic checkpoint creation and death-triggered save recovery using checkpoints or autosaves |
 
 ### Core Subsystems
 
@@ -208,7 +208,7 @@ All 16 tool categories except Save are enabled by default and can be toggled ind
 
 #### Save Checkpoints & Automatic Recovery
 
-The Save category is off by default. When enabled, RimAgent creates a safe daily checkpoint (`RimAgent-<colony>-<tick>`) once per in-game day provided no hostiles, bleeding/downed colonists, or active fires are on the map, retaining the newest 5 checkpoints. `list_saves` displays checkpoints and autosaves belonging to the current colony (correlated via an internal colony identifier). If proactive care is enabled, the death of a colonist initiates an autonomous evaluation where the agent decides whether to invoke `load_save` to revert to an earlier save, passing lessons learned into the reloaded timeline. Each save can be reloaded up to 3 times, after which older saves are locked to enforce permanent consequences. Loading an older save purges newer checkpoints. Reload counts persist until the game process exits. Note that Commitment mode prohibits save/reload interventions.
+When the Save category is enabled, RimAgent creates a safe daily checkpoint (`RimAgent-<colony>-<tick>`) once per in-game day provided no hostiles, bleeding/downed colonists, or active fires are on the map, retaining the newest 5 checkpoints. `list_saves` displays checkpoints and autosaves belonging to the current colony (correlated via an internal colony identifier). If proactive care is enabled, the death of a colonist initiates an autonomous evaluation where the agent decides whether to invoke `load_save` to revert to an earlier save, passing lessons learned into the reloaded timeline. Each save can be reloaded up to 3 times, after which older saves are locked to enforce permanent consequences. Loading an older save purges newer checkpoints. Reload counts persist until the game process exits. Note that Commitment mode prohibits save/reload interventions.
 
 #### Dual-Scope Memory Architecture
 

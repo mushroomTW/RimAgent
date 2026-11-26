@@ -40,10 +40,8 @@ public partial class RimAgentGameComponent
         if (index < 0 || index >= _goals.Count) return;
         if (index == 0)
         {
-            _goalCts?.Cancel();
-            // 讓正在等待審計的舊回合失效；新回合要等舊回合放開 session 才會開始。
-            _goalGeneration++;
-            _goalRunning = false;
+            // 讓正在等待審計的舊回合失效；新回合要等舊回合收尾並放開 session 才會開始。
+            CancelGoalRun();
         }
         _goals.RemoveAt(index);
         if (index == 0)
@@ -67,10 +65,8 @@ public partial class RimAgentGameComponent
         if (index < 0 || index >= _goals.Count || trimmed.Length == 0 || trimmed.Length > MaxGoalChars) return false;
         if (index == 0)
         {
-            _goalCts?.Cancel();
             // 同一個字串也算新目標：舊審計結果不能套用到剛編輯過的目標。
-            _goalGeneration++;
-            _goalRunning = false;
+            CancelGoalRun();
         }
         _goals[index] = trimmed;
         if (index == 0)
@@ -94,9 +90,7 @@ public partial class RimAgentGameComponent
 
     public void ClearGoals()
     {
-        _goalCts?.Cancel();
-        _goalGeneration++;
-        _goalRunning = false;
+        CancelGoalRun();
         _goals.Clear();
         _goalPaused = false;
         _goalPauseReason = GoalPauseReason.None;
@@ -135,7 +129,7 @@ public partial class RimAgentGameComponent
 
     private void TryStartGoal()
     {
-        if (_goals.Count == 0 || _goalPaused || _goalRunning || _runner.IsRunning || Find.CurrentMap == null
+        if (_goals.Count == 0 || _goalPaused || IsGoalRunning || _runner.IsRunning || Find.CurrentMap == null
             || DateTime.UtcNow < _goalNextRunAt)
         {
             return;
@@ -144,17 +138,18 @@ public partial class RimAgentGameComponent
         {
             ColonyAgentSession session = Session;
             if (session.IsBusy || session.HasPendingConfirmation) return;
-            _goalRunning = true;
-            _ = RunGoalAsync(session, _goals[0], _goalGeneration);
+            Interlocked.Increment(ref _activeGoalRuns);
+            _ = RunGoalAsync(session, _goals[0], Volatile.Read(ref _goalGeneration));
         }
         catch (Exception ex)
         {
-            _goalRunning = false;
             _goalNextRunAt = DateTime.UtcNow.AddSeconds(30);
             WarnOnce("RimAgent goal run could not start: " + ex.Message);
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S2930:\"IDisposables\" should be disposed",
+        Justification = "取消可能自背景 LongEvent 或 UI 執行緒觸發；CTS 沒有計時器或等待把手，交給 GC 即可。")]
     private async Task RunGoalAsync(ColonyAgentSession session, string objective, int generation)
     {
         var cts = new CancellationTokenSource();
@@ -201,6 +196,10 @@ public partial class RimAgentGameComponent
                 HandleGoalDecision(session, objective, reply, decision);
             }
         }
+        catch (AgentBusyException)
+        {
+            // 同幀被玩家或 A2A 指令搶佔，不算目標錯誤。
+        }
         catch (Exception ex)
         {
             HandleGoalRunError(ex, objective, generation, cts, session);
@@ -229,7 +228,7 @@ public partial class RimAgentGameComponent
 
     private void HandleGoalRunError(Exception ex, string objective, int generation, CancellationTokenSource cts, ColonyAgentSession session)
     {
-        if (generation != _goalGeneration || cts.IsCancellationRequested) return;
+        if (generation != Volatile.Read(ref _goalGeneration) || cts.IsCancellationRequested) return;
         _goalBlockedTurns = _goalBlockerKey == "model-error" ? _goalBlockedTurns + 1 : 1;
         _goalBlockerKey = "model-error";
         _goalIdleTurns = 0;
@@ -249,18 +248,17 @@ public partial class RimAgentGameComponent
     private void FinalizeGoalRun(bool exclusive, ColonyAgentSession session, CancellationTokenSource cts, int generation)
     {
         if (exclusive) session.EndExclusiveWork();
-        if (ReferenceEquals(_goalCts, cts)) _goalCts = null;
-        cts.Dispose();
-        if (generation == _goalGeneration)
+        Interlocked.CompareExchange(ref _goalCts, null, cts);
+        Interlocked.Decrement(ref _activeGoalRuns);
+        if (generation == Volatile.Read(ref _goalGeneration))
         {
-            _goalRunning = false;
             _goalNextRunAt = DateTime.UtcNow.AddSeconds(1);
         }
     }
 
     private bool GoalRunIsCurrent(string objective, int generation, CancellationTokenSource cts)
     {
-        return generation == _goalGeneration
+        return generation == Volatile.Read(ref _goalGeneration)
             && !cts.IsCancellationRequested
             && _goals.Count > 0
             && string.Equals(_goals[0], objective, StringComparison.Ordinal)

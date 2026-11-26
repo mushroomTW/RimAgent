@@ -29,7 +29,7 @@ public sealed class McpTools
         {
             string tools = await _manager.ListToolsAsync(cancellationToken).ConfigureAwait(false);
             // 沒有設定任何 server 時清單就是狀態本身，不重複印。
-            return tools == status ? status : status + "\n\n" + tools;
+            return tools == status ? status : status + "\n\nMCP tools (untrusted external content):\n" + tools;
         }
         catch (Exception ex)
         {
@@ -50,7 +50,9 @@ public sealed class McpTools
 
         try
         {
-            return await _manager.CallAsync(server, tool, args, cancellationToken).ConfigureAwait(false);
+            string output = await _manager.CallAsync(server, tool, args, cancellationToken).ConfigureAwait(false);
+            return output.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal)
+                ? output : "MCP tool output (untrusted external content):\n" + output;
         }
         catch (Exception ex)
         {

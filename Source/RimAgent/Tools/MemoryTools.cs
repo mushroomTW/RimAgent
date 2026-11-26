@@ -68,12 +68,18 @@ internal static class MemoryTools
     private const string ReplaceLinesDescription =
         "Replace lines in a memory file by 1-based line number (lines end at \\n, \\r\\n or \\r). Fails on out-of-range or duplicate line numbers.";
 
-    private static readonly JsonElement ReplaceLinesSchema = JsonDocument.Parse(
-        "{\"type\":\"object\",\"properties\":{\"fileName\":{\"type\":\"string\"},\"edits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{" +
-        "\"line_number\":{\"type\":\"integer\"}," +
-        "\"new_line\":{\"description\":\"New text including its trailing newline; empty deletes the line.\",\"type\":\"string\"}," +
-        "\"expected_line\":{\"description\":\"Optional current text of the line (without the read prefix); the edit is rejected if it differs.\",\"type\":[\"string\",\"null\"]}" +
-        "}}}},\"required\":[\"fileName\",\"edits\"]}").RootElement;
+    private static readonly JsonElement ReplaceLinesSchema = ParseReplaceLinesSchema();
+
+    private static JsonElement ParseReplaceLinesSchema()
+    {
+        using JsonDocument doc = JsonDocument.Parse(
+            "{\"type\":\"object\",\"properties\":{\"fileName\":{\"type\":\"string\"},\"edits\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{" +
+            "\"line_number\":{\"type\":\"integer\"}," +
+            "\"new_line\":{\"description\":\"New text including its trailing newline; empty deletes the line.\",\"type\":\"string\"}," +
+            "\"expected_line\":{\"description\":\"Optional current text of the line (without the read prefix); the edit is rejected if it differs.\",\"type\":[\"string\",\"null\"]}" +
+            "}}}},\"required\":[\"fileName\",\"edits\"]}");
+        return doc.RootElement.Clone();
+    }
 
     /// <summary>provider 內建 replace_lines 的說明與 schema 約 1.4k 字元，每次模型呼叫都要送，改送精簡版。</summary>
     private sealed class SlimSchemaFunction : DelegatingAIFunction
@@ -118,6 +124,17 @@ internal static class MemoryTools
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
+            string file = AgentMemoryStore.NormalizeName(Argument(arguments, "fileName"));
+            if (AgentMemoryStore.IsReservedFile(file))
+            {
+                return new ValueTask<object>(ToolText.Error("Cannot directly modify reserved memory index or description files."));
+            }
+            if (MemoryScopes.IsGlobal(file) && _gate != null && _gate.RequiresGlobalMemoryConfirmation())
+            {
+                string preview = Preview(arguments);
+                _gate.NoteBlocked(preview);
+                return new ValueTask<object>(ToolText.ConfirmationPrefix + preview);
+            }
             string blocked = ToolText.Blocked(_gate, Preview(arguments));
             return blocked != null
                 ? new ValueTask<object>(blocked)

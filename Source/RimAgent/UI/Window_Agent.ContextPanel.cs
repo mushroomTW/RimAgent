@@ -8,7 +8,6 @@ using Verse;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     /// <summary>各類別是字元估算；供應商有回報總量時按比例縮放，只看分布不看絕對精準度。</summary>

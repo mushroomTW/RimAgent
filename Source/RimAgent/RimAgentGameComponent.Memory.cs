@@ -72,6 +72,7 @@ public partial class RimAgentGameComponent
         List<AgentMemoryEntry> merged = GlobalMemory.Snapshot();
         merged.AddRange(migrated);
         _globalMemory = new AgentMemoryStore(merged);
+        _scopedMemory = null;
         try
         {
             SaveGlobalMemory();

@@ -304,7 +304,7 @@ internal sealed partial class RimWorldGameWorld
         {
             warnings.Add("CaravanFoodWillRotSoonWarningDialog".Translate().Resolve());
         }
-        if (!pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && !p.skills.GetSkill(SkillDefOf.Social).TotallyDisabled))
+        if (!pawns.Any(p => CaravanUtility.IsOwner(p, Faction.OfPlayer) && p.skills?.GetSkill(SkillDefOf.Social)?.TotallyDisabled != true))
         {
             warnings.Add("CaravanIncapableOfSocial".Translate().Resolve());
         }
@@ -434,7 +434,7 @@ internal sealed partial class RimWorldGameWorld
     {
         foreach (Map map in Find.Maps)
         {
-            Lord lord = map.lordManager.lords.FirstOrDefault(l => l.loadID == formingId && l.LordJob is LordJob_FormAndSendCaravan);
+            Lord lord = map.lordManager.lords.FirstOrDefault(l => l.loadID == formingId && l.faction == Faction.OfPlayer && l.LordJob is LordJob_FormAndSendCaravan);
             if (lord == null) continue;
             string names = string.Join(", ", lord.ownedPawns.Select(p => p.LabelShort).ToArray());
             CaravanFormingUtility.StopFormingCaravan(lord);
@@ -462,12 +462,13 @@ internal sealed partial class RimWorldGameWorld
         // 沒在走時 Destination 是上次的殘值（struct 預設是有效的 0 號格），只在 Moving 時讀。
         bool moving = caravan.pather.Moving;
         PlanetTile destination = moving ? caravan.pather.Destination : PlanetTile.Invalid;
+        var tile = caravan.Tile.Tile;
         return new CaravanInfo
         {
             Id = caravan.ID,
             Name = caravan.LabelCap,
             Tile = caravan.Tile,
-            Terrain = caravan.Tile.Tile.PrimaryBiome.LabelCap + ", " + caravan.Tile.Tile.hilliness.GetLabelCap(),
+            Terrain = (tile?.PrimaryBiome?.LabelCap ?? "Unknown") + (tile != null ? ", " + tile.hilliness.GetLabelCap() : string.Empty),
             Members = [.. caravan.PawnsListForReading.Select(ToCaravanMember)],
             Moving = moving,
             Paused = caravan.pather.Paused,

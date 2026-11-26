@@ -69,8 +69,8 @@ public partial class RimAgentGameComponent : GameComponent
         () => DecisionServiceFactory.Create());
     private DateTime _nextDialogRetryAt;
     private const double DialogRetrySeconds = 60;
-    private CancellationTokenSource _goalCts;
-    private bool _goalRunning;
+    private volatile CancellationTokenSource _goalCts;
+    private int _activeGoalRuns;
     private bool _goalPaused;
     private int _goalTurns;
     private int _goalBlockedTurns;
@@ -109,7 +109,8 @@ public partial class RimAgentGameComponent : GameComponent
         });
     /// <summary>統計跨存檔共用同一個檔案；讀檔重建會話時沿用同一個實例，免得兩份各自覆寫。</summary>
     private static readonly Lazy<ToolUsageStats> SharedToolUsage =
-        new(() => new ToolUsageStats(System.IO.Path.Combine(RunLogWriter.DefaultFolder, ToolUsageStats.FileName)));
+        new(() => new ToolUsageStats(System.IO.Path.Combine(RunLogWriter.DefaultFolder, ToolUsageStats.FileName)),
+            LazyThreadSafetyMode.PublicationOnly);
 
     /// <summary>殖民地代號：寫進每份存檔，讀檔重來靠它認出同一局的 autosave；本功能之前的存檔第一次取用時補上。</summary>
     private string _colonyId;
@@ -133,7 +134,7 @@ public partial class RimAgentGameComponent : GameComponent
 
     /// <summary>目前活著的元件；新局／讀檔會建立新的元件，舊的得由這裡找到並收掉。</summary>
     private static RimAgentGameComponent _live;
-    private static bool _menuPatched;
+    private static int _menuPatched;
 
     public static event Action GameTornDown;
 
@@ -151,8 +152,7 @@ public partial class RimAgentGameComponent : GameComponent
     /// </summary>
     private static void EnsureMenuPatched()
     {
-        if (_menuPatched) return;
-        _menuPatched = true;
+        if (Interlocked.Exchange(ref _menuPatched, 1) != 0) return;
         new HarmonyLib.Harmony("greenmushroom.rimagent.lifecycle").Patch(
             HarmonyLib.AccessTools.Method(typeof(GenScene), nameof(GenScene.GoToMainMenu)),
             prefix: new HarmonyLib.HarmonyMethod(typeof(RimAgentGameComponent), nameof(GoToMainMenuPrefix)));
@@ -221,7 +221,7 @@ public partial class RimAgentGameComponent : GameComponent
 
     public IReadOnlyList<string> Goals => _goals;
     public bool GoalPaused => _goalPaused;
-    public bool IsGoalRunning => _goalRunning;
+    public bool IsGoalRunning => Volatile.Read(ref _activeGoalRuns) > 0;
     public GoalPauseReason CurrentGoalPauseReason => _goalPauseReason;
     public int GoalTurns => _goalTurns;
     public int GoalBlockedTurns => _goalBlockedTurns;
@@ -267,7 +267,7 @@ public partial class RimAgentGameComponent : GameComponent
         ExposeGoalState();
         string colonyId = Scribe.mode == LoadSaveMode.Saving ? ColonyId : _colonyId;
         Scribe_Values.Look(ref colonyId, SaveFileScanner.ColonyIdNode);
-        if (Scribe.mode == LoadSaveMode.LoadingVars) _colonyId = colonyId;
+        if (Scribe.mode == LoadSaveMode.LoadingVars) _colonyId = IsValidColonyId(colonyId) ? colonyId : null;
         Scribe_Values.Look(ref _lastCheckpointTick, "lastCheckpointTick", 0);
 
         // 重試表住在唯讀陣列裡，Scribe 過不了：存檔前攤平成清單，讀檔後灌回排程器。
@@ -348,9 +348,7 @@ public partial class RimAgentGameComponent : GameComponent
         _saveMemory = new AgentMemoryStore();
         _pendingGlobalMigration.Clear();
         ResetMemory();
-        _goalCts?.Cancel();
-        _goalGeneration++;
-        _goalRunning = false;
+        CancelGoalRun();
         // 舊的自主任務還握著上一個存檔的 session；先取消，再用 generation 擋住它的收尾與排程器寫入。
         _runner.Invalidate();
         _goalPaused = false;
@@ -376,9 +374,7 @@ public partial class RimAgentGameComponent : GameComponent
         RimWorldGameWorld.ResetAgentUiState();
         _session = null;
         // LoadingVars 已重新載入全域記憶；保留未成功寫入的遷移資料。
-        _goalCts?.Cancel();
-        _goalGeneration++;
-        _goalRunning = false;
+        CancelGoalRun();
         _goalNextRunAt = DateTime.MinValue;
         // 讀檔後舊自主任務的 session 指向舊遊戲；取消並讓它的收尾失效，避免操作到新存檔。
         _runner.Invalidate();
@@ -398,10 +394,26 @@ public partial class RimAgentGameComponent : GameComponent
     /// <summary>玩家指令的那一輪由會話的遊戲綁定擋住（見 RimWorldGameWorld.GetNotReadyReason）。</summary>
     public void PrepareForReload()
     {
-        _goalCts?.Cancel();
-        _goalGeneration++;
-        _goalRunning = false;
+        CancelGoalRun();
         _runner.Invalidate();
+    }
+
+    private void CancelGoalRun()
+    {
+        _goalCts?.Cancel();
+        Interlocked.Increment(ref _goalGeneration);
+    }
+
+    internal static bool IsValidColonyId(string value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length != 8) return false;
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            if (!hex) return false;
+        }
+        return true;
     }
 
     private void ResetMcp()
@@ -449,7 +461,7 @@ public partial class RimAgentGameComponent : GameComponent
         try
         {
             ColonyAgentSession session = Session;
-            if (_runner.IsRunning || _goalRunning || session.IsBusy || session.HasPendingConfirmation) return;
+            if (_runner.IsRunning || IsGoalRunning || session.IsBusy || session.HasPendingConfirmation) return;
             AutonomousConfig config = ToConfig(settings);
             AutonomousSignals signals = GatherSignals();
             AutonomousTrigger trigger = _scheduler.Evaluate(tick, signals, config);
@@ -488,7 +500,7 @@ public partial class RimAgentGameComponent : GameComponent
     private ColonyAgentSession CreateSession()
     {
         IChatClient client = RimLLMProvider.CreateChatClient(ColonyAgentSession.ModId);
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings settings = RimAgentMod.Settings ?? new RimAgentSettings();
         var session = new ColonyAgentSession(
             client,
             new RimWorldGameWorld(Current.Game),
@@ -519,7 +531,11 @@ public partial class RimAgentGameComponent : GameComponent
         session.Reasoning = settings.reasoning;
         session.ReasoningRouting = settings.reasoningRouting;
         session.ConfirmAutonomousMajor = () => settings.confirmAutonomousMajor;
-        if (settings.ClearMissingModels(UI.Window_Agent.ConfiguredModels())) settings.Write();
+        if (settings.ClearMissingModels(UI.Window_Agent.ConfiguredModels()))
+        {
+            try { settings.Write(); }
+            catch (Exception ex) { Log.Warning("RimAgent could not write settings: " + ex.Message); }
+        }
         session.PreferredModel = settings.agentModel;
         _expansions = (ExpansionsLine() + "\n\n" + ModsLine()).Trim();
         session.SubagentExpansions = _expansions;

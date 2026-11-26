@@ -15,17 +15,17 @@ namespace RimAgent.Mcp;
 /// <summary>連線是延遲的（第一次 list／call 才建），逾時與取消直接傳給 SDK。</summary>
 public sealed class SdkMcpServer : IMcpServer
 {
+    private const int MaxOutputChars = 64 * 1024;
     private readonly McpServerEntry _entry;
     private readonly int _timeoutMs;
+    private readonly Lock _gate = new();
     private McpClient _client;
     private bool _disposed;
 
     public SdkMcpServer(McpServerEntry entry)
     {
         _entry = entry ?? throw new ArgumentNullException(nameof(entry));
-        _timeoutMs = _entry.TimeoutSeconds > 0
-            ? _entry.TimeoutSeconds * 1000
-            : McpServerConfig.DefaultTimeoutSeconds * 1000;
+        _timeoutMs = McpServerConfig.ClampTimeoutSeconds(_entry.TimeoutSeconds) * 1000;
     }
 
     public string Name => _entry.Name;
@@ -77,10 +77,19 @@ public sealed class SdkMcpServer : IMcpServer
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
-        McpClient client = _client;
-        _client = null;
+        McpClient client;
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            client = _client;
+            _client = null;
+        }
+        DisposeClientInBackground(client);
+    }
+
+    private static void DisposeClientInBackground(McpClient client)
+    {
         if (client == null) return;
         // 遊戲主線程不等待：SDK 的 dispose 會關行程，OS 回收兜底。
         _ = Task.Run(async () =>
@@ -98,8 +107,11 @@ public sealed class SdkMcpServer : IMcpServer
 
     private async Task<McpClient> EnsureConnectedAsync(CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(_disposed, Name);
-        if (_client != null) return _client;
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, Name);
+            if (_client != null) return _client;
+        }
         var transport = new StdioClientTransport(new StdioClientTransportOptions
         {
             Name = _entry.Name,
@@ -113,7 +125,27 @@ public sealed class SdkMcpServer : IMcpServer
         };
         // transport 的生命週期交給建好的 client；建連失敗時沒有可清的東西，直接往上丟。
         McpClient client = await McpClient.CreateAsync(transport, options, cancellationToken: cancellationToken).ConfigureAwait(false);
-        _client = client;
+        McpClient toDispose = null;
+        bool disposed;
+        lock (_gate)
+        {
+            disposed = _disposed;
+            if (disposed)
+            {
+                toDispose = client;
+            }
+            else if (_client != null)
+            {
+                toDispose = client;
+                client = _client;
+            }
+            else
+            {
+                _client = client;
+            }
+        }
+        DisposeClientInBackground(toDispose);
+        ObjectDisposedException.ThrowIf(disposed, Name);
         return client;
     }
 
@@ -143,9 +175,11 @@ public sealed class SdkMcpServer : IMcpServer
         {
             foreach (ContentBlock block in result.Content)
             {
+                if (sb.Length >= MaxOutputChars) break;
                 AppendContentBlock(sb, block);
             }
         }
+        if (sb.Length > MaxOutputChars) sb.Length = MaxOutputChars;
         string output = sb.ToString().Trim();
         if (output.Length == 0) output = "(empty result)";
         if (result.IsError == true) return ToolText.Error(output);

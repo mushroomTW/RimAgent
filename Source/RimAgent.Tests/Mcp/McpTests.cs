@@ -340,4 +340,26 @@ public class McpToolsTests
         Assert.That(text, Does.Contain("missing servers.json"));
         Assert.That(text.IndexOf("missing servers.json", System.StringComparison.Ordinal), Is.EqualTo(text.LastIndexOf("missing servers.json", System.StringComparison.Ordinal)), "沒有設定時狀態只印一次");
     }
+
+    [Test]
+    public void ConfigDeduplicatesNamesAndClampsTimeout()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "RimMcpReg_" + System.Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            File.WriteAllText(path,
+                "{\"servers\":[" +
+                "{\"name\":\"dup\",\"command\":\"cmd1\",\"timeoutSeconds\":9999999}," +
+                "{\"name\":\"DUP\",\"command\":\"cmd2\",\"timeoutSeconds\":10}]}");
+
+            Assert.That(McpServerConfig.TryLoad(path, out List<McpServerEntry> servers, out _), Is.True);
+            Assert.That(servers.Count, Is.EqualTo(1));
+            Assert.That(servers[0].Command, Is.EqualTo("cmd1"));
+            Assert.That(servers[0].TimeoutSeconds, Is.EqualTo(McpServerConfig.MaxTimeoutSeconds));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

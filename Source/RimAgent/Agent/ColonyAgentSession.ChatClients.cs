@@ -139,13 +139,18 @@ public sealed partial class ColonyAgentSession
             return response;
         }
 
+        private readonly Lock _toolsLock = new();
+
         public void AddTools(IEnumerable<AITool> tools)
         {
-            ChatOptions options = Volatile.Read(ref _current);
-            if (options == null) return;
-            var list = new List<AITool>(options.Tools ?? Array.Empty<AITool>());
-            list.AddRange(tools.Except(list));
-            options.Tools = list;
+            lock (_toolsLock)
+            {
+                ChatOptions options = Volatile.Read(ref _current);
+                if (options == null) return;
+                var list = new List<AITool>(options.Tools ?? Array.Empty<AITool>());
+                list.AddRange(tools.Except(list));
+                options.Tools = list;
+            }
         }
     }
 

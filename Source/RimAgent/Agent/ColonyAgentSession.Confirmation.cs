@@ -27,11 +27,15 @@ public sealed partial class ColonyAgentSession
     /// <returns>執行結果文字；若無等待中的確認則為 null。</returns>
     public async Task<string> ConfirmAsync(bool rememberForSession = false, CancellationToken cancellationToken = default)
     {
-        string text = _pendingConfirmation;
-        if (text == null || !ConfirmGate.HasPendingApprovals) return null;
-        if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
+        if (!TryBeginExclusiveWork())
         {
             throw new AgentBusyException();
+        }
+        string text = _pendingConfirmation;
+        if (text == null || !ConfirmGate.HasPendingApprovals)
+        {
+            EndExclusiveWork();
+            return null;
         }
         int instructionId = Transcript.CurrentInstructionId;
         BeginRunLog(new RunLogHeader
@@ -76,7 +80,7 @@ public sealed partial class ColonyAgentSession
         finally
         {
             EndRunLog(confirmOutcome);
-            Volatile.Write(ref _busy, 0);
+            EndExclusiveWork();
         }
     }
 
@@ -97,6 +101,19 @@ public sealed partial class ColonyAgentSession
     }
 
     public void DiscardPendingConfirmation()
+    {
+        if (!TryBeginExclusiveWork()) return;
+        try
+        {
+            DiscardPendingConfirmationCore();
+        }
+        finally
+        {
+            EndExclusiveWork();
+        }
+    }
+
+    private void DiscardPendingConfirmationCore()
     {
         if (_pendingConfirmation == null) return;
         string instruction = _pendingConfirmation;

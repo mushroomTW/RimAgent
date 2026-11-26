@@ -17,9 +17,8 @@ public sealed class FailureLoopGuard
     private readonly Action<string> _notifyPlayer;
     private readonly System.Threading.Lock _lock = new();
     private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
-    private string? _redirectedKey;
-    private int _redirectedAt;
-    private bool _notified;
+    private readonly Dictionary<string, int> _redirectedAt = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _notified = new(StringComparer.Ordinal);
 
     public FailureLoopGuard(Action<string> notifyPlayer)
     {
@@ -31,9 +30,8 @@ public sealed class FailureLoopGuard
         lock (_lock)
         {
             _counts.Clear();
-            _redirectedKey = null;
-            _redirectedAt = 0;
-            _notified = false;
+            _redirectedAt.Clear();
+            _notified.Clear();
         }
     }
 
@@ -44,18 +42,16 @@ public sealed class FailureLoopGuard
         lock (_lock)
         {
             int count = _counts[key] = _counts.GetValueOrDefault(key) + 1;
-            if (_redirectedKey != null)
+            if (_redirectedAt.TryGetValue(key, out int at))
             {
-                if (!_notified && key == _redirectedKey && count >= _redirectedAt + Threshold)
+                if (count >= at + Threshold && _notified.Add(key))
                 {
-                    _notified = true;
                     _notifyPlayer("RimAgent keeps getting the same error from " + tool + " even after being told to change approach. Press Stop if it does not recover.");
                 }
                 return null;
             }
             if (count != Threshold) return null;
-            _redirectedKey = key;
-            _redirectedAt = count;
+            _redirectedAt[key] = count;
             return "\n\n<loop_guard>\n" + tool + " has now failed " + count.ToString(CultureInfo.InvariantCulture) + " times in this instruction with the same error. " +
                    "Repeating it will not help. Change approach: check your assumptions with an observation tool, use a different tool, " +
                    "or stop and tell the player what is blocking you.\n</loop_guard>";

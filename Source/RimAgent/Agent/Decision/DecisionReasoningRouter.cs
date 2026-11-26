@@ -40,7 +40,6 @@ public sealed class DecisionReasoningRouter
     private readonly Func<IDecisionService> _serviceFactory;
     private readonly Func<RimAgentSettings> _settingsProvider;
     private readonly Func<IReadOnlyList<ChatMessage>> _historyProvider;
-    private IDecisionService _service;
     private DecisionRoute _last;
 
     public const int ShortFollowUpChars = 8;
@@ -75,7 +74,7 @@ public sealed class DecisionReasoningRouter
             };
         }
 
-        IDecisionService service = _decisionService ?? ResolveService();
+        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
         if (service == null)
             return FallbackRoute(fallbackReasoning, "Decision model service is unavailable or not configured.");
 
@@ -153,12 +152,6 @@ public sealed class DecisionReasoningRouter
         };
     }
 
-    private IDecisionService ResolveService()
-    {
-        if (_service == null) _service = _serviceFactory?.Invoke();
-        return _service;
-    }
-
     public static string Describe(string request, IEnumerable<ChatMessage> history = null)
     {
         var sb = new StringBuilder(DescribeHistory(history));
@@ -166,21 +159,38 @@ public sealed class DecisionReasoningRouter
         return sb.ToString();
     }
 
-    /// <summary>最近幾回合對話（玩家原話與 Agent 回覆截頭尾）；思考強度分流與風險審查共用。</summary>
+    /// <summary>最近幾回合對話（玩家原話與 Agent 回覆截頭尾）；思考強度分流使用。</summary>
     public static string DescribeHistory(IEnumerable<ChatMessage> history)
     {
         var sb = new StringBuilder();
-        AppendRecentHistory(sb, history);
+        AppendRecentHistory(sb, history, includeAssistant: true);
         return sb.ToString();
     }
 
-    private static void AppendRecentHistory(StringBuilder sb, IEnumerable<ChatMessage> history)
+    /// <summary>最近幾回合的玩家原話（排除助理回覆，避免間接提示注入偽造授權）；風險審查使用。</summary>
+    public static string DescribeUserHistory(IEnumerable<ChatMessage> history)
+    {
+        var sb = new StringBuilder();
+        AppendRecentHistory(sb, history, includeAssistant: false);
+        return sb.ToString();
+    }
+
+    private static void AppendRecentHistory(StringBuilder sb, IEnumerable<ChatMessage> history, bool includeAssistant)
     {
         if (history == null) return;
-        var relevant = history
-            .Where(m => (m.Role == ChatRole.User || m.Role == ChatRole.Assistant) && !string.IsNullOrWhiteSpace(m.Text))
-            .ToList();
-        int take = Math.Min(relevant.Count, MaxHistoryTurns * 2);
+        List<ChatMessage> relevant;
+        try
+        {
+            relevant = history
+                .Where(m => m != null && (m.Role == ChatRole.User || (includeAssistant && m.Role == ChatRole.Assistant)) && !string.IsNullOrWhiteSpace(m.Text))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException or IndexOutOfRangeException)
+        {
+            return;
+        }
+        int limit = includeAssistant ? MaxHistoryTurns * 2 : MaxHistoryTurns;
+        int take = Math.Min(relevant.Count, limit);
         if (take > 0)
         {
             var slice = relevant.GetRange(relevant.Count - take, take);

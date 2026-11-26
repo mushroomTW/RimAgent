@@ -79,7 +79,8 @@ public sealed class ConfirmationGate
             AgentMode.Execute => invocation != null && (invocation.Risk != ToolRisk.Confirm
                                 || (_autonomousRun && !_confirmAutonomousMajor)
                                 || IsApprovedForSession(invocation.ToolName)),
-            _ => true,
+            AgentMode.Autonomous => true,
+            _ => false,
         };
     }
 
@@ -299,8 +300,15 @@ public sealed class ConfirmationGate
     internal bool RequiresExplicitConfirmation(string toolName)
     {
         return string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
-            && _mode() == AgentMode.Confirm;
+            && _mode() is AgentMode.Confirm or AgentMode.Execute;
     }
+
+    internal bool RequiresGlobalMemoryConfirmation()
+    {
+        return !IsForceExecuting && _mode() is AgentMode.Confirm or AgentMode.Execute;
+    }
+
+    internal bool IsForceExecuting => _invocation.Value?.Forced == true;
 
     internal bool NeedsClassification(ToolRisk risk)
     {

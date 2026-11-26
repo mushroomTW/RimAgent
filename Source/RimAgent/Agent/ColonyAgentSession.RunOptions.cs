@@ -26,7 +26,7 @@ public sealed partial class ColonyAgentSession
 
         PreloadFrequentToolPacks();
         DecisionRoute route = null;
-        if (ReasoningRouting)
+        if (ReasoningRouting && !reasoningOverride.HasValue)
         {
             route = await _router.ResolveAsync(text, cancellationToken).ConfigureAwait(false);
             if (route.Reasoning != ReasoningLevel.Auto)
@@ -169,7 +169,7 @@ public sealed partial class ColonyAgentSession
 
     internal static string FinalAssistantText(IEnumerable<ChatMessage> messages, string fallback)
     {
-        ChatMessage last = messages.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
+        ChatMessage last = messages?.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
         return last != null ? last.Text.Trim() : (fallback ?? string.Empty).Trim();
     }
 

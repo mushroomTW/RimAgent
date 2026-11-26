@@ -13,7 +13,6 @@ using Verse;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     /// <summary>舊 CTS 若還有未完成的工作握著，就先收進 _retiredCts（停止時一併取消）而不 Dispose；工作已結束才安全釋放。</summary>

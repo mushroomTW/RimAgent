@@ -21,18 +21,22 @@ public static class GlobalMemoryFile
     public static AgentMemoryStore Load(string path, out string warning)
     {
         warning = null;
-        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return new AgentMemoryStore();
-        try
+        if (string.IsNullOrEmpty(path)) return new AgentMemoryStore();
+        lock (Gate)
         {
-            var document = JsonSerializer.Deserialize<MemoryDocumentDto>(File.ReadAllText(path, Utf8) ?? string.Empty, Options);
-            return new AgentMemoryStore(ToEntries(document));
-        }
-        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException)
-        {
-            string preserved = path + PreservedSuffix;
-            warning = "global memory " + path + " could not be read (" + ex.Message + "); starting from an empty global memory and keeping the file as " + preserved;
-            Preserve(path, preserved);
-            return new AgentMemoryStore();
+            if (!File.Exists(path)) return new AgentMemoryStore();
+            try
+            {
+                var document = JsonSerializer.Deserialize<MemoryDocumentDto>(File.ReadAllText(path, Utf8) ?? string.Empty, Options);
+                return new AgentMemoryStore(ToEntries(document));
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException)
+            {
+                string preserved = path + PreservedSuffix;
+                warning = "global memory " + path + " could not be read (" + ex.Message + "); starting from an empty global memory and keeping the file as " + preserved;
+                Preserve(path, preserved);
+                return new AgentMemoryStore();
+            }
         }
     }
 

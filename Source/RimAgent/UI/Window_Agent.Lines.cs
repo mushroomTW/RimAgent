@@ -14,7 +14,6 @@ using Verse;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     private static string ActivityText(AgentActivity activity)
@@ -58,7 +57,7 @@ public partial class Window_Agent
 
     private void PruneToolExpanded(IReadOnlyList<TranscriptEntry> entries)
     {
-        if (_toolExpanded.Count == 0) return;
+        if (_toolExpanded.Count == 0 && _groupExpanded.Count == 0) return;
         var live = new HashSet<TranscriptEntry>(entries);
         List<TranscriptEntry> stale = [.. _toolExpanded.Keys.Where(entry => !live.Contains(entry))];
         foreach (TranscriptEntry entry in stale) _toolExpanded.Remove(entry);
@@ -380,8 +379,14 @@ public partial class Window_Agent
 
     private static void LayoutTable(ref TranscriptLine line, float width)
     {
-        var rows = RimLLM_Framework.Mod.RimLLMMarkdownTable.Split(line.Text)[0].Rows;
-        line.Table = RimLLM_Framework.Mod.RimLLMMarkdownTable.Layout(rows, width, RenderCell);
+        var segments = RimLLM_Framework.Mod.RimLLMMarkdownTable.Split(line.Text);
+        if (segments.Count == 0 || segments[0].Rows == null || segments[0].Rows.Count == 0)
+        {
+            line.Height = 0f;
+            line.PlainText = string.Empty;
+            return;
+        }
+        line.Table = RimLLM_Framework.Mod.RimLLMMarkdownTable.Layout(segments[0].Rows, width, RenderCell);
         line.Height = line.Table.Height;
         line.PlainText = line.Table.PlainText;
     }

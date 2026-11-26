@@ -81,4 +81,29 @@ public class DibDecoderTests
         Assert.That(DibDecoder.TryDecode(truncated, out _, out _, out _), Is.False);
         Assert.That(DibDecoder.TryDecode(new byte[10], out _, out _, out _), Is.False);
     }
+
+    [Test]
+    public void CustomBitfieldsMasksAndColorTableOffsetAreHonored()
+    {
+        // 40B header + 12B bitfields (RGBX: R=0x000000FF, G=0x0000FF00, B=0x00FF0000) + 1 color-table entry (4B) + 1 pixel (4B).
+        var dib = new byte[40 + 12 + 4 + 4];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(0, 4), 40);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(4, 4), 1);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(8, 4), 1);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(dib.AsSpan(14, 2), 32);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(16, 4), 3);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(32, 4), 1);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(40, 4), 0x000000FFu);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(44, 4), 0x0000FF00u);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(dib.AsSpan(48, 4), 0x00FF0000u);
+        // Pixel at offset 56: R=11, G=22, B=33, X=0
+        dib[56] = 11;
+        dib[57] = 22;
+        dib[58] = 33;
+        dib[59] = 0;
+
+        Assert.That(DibDecoder.TryDecode(dib, out int w, out int h, out byte[] rgba), Is.True);
+        Assert.That((w, h), Is.EqualTo((1, 1)));
+        Assert.That(rgba, Is.EqualTo(new byte[] { 11, 22, 33, 255 }));
+    }
 }

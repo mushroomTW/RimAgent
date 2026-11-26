@@ -2,7 +2,7 @@
 
 RimAgent operates as a Model Context Protocol (MCP) client over standard I/O (`stdio`), utilizing the official ModelContextProtocol SDK. It launches configured MCP servers as local background processes and exposes their tools to the agent through `mcp_list_tools` and `mcp_call_tool`.
 
-The `Mcp` tool category is enabled by default. Discovering tools (`mcp_list_tools`) is treated as a read-only query; invoking tools (`mcp_call_tool`) carries the `Confirm` risk tier and adheres to the active execution mode.
+The `Mcp` tool category is disabled by default in new installations (Recommended preset) and can be enabled in mod settings. Discovering tools (`mcp_list_tools`) is treated as a read-only query; invoking tools (`mcp_call_tool`) carries the `Confirm` risk tier and adheres to the active execution mode.
 
 ---
 

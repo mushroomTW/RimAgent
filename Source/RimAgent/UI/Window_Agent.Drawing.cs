@@ -14,7 +14,6 @@ using UnityEngine;
 
 namespace RimAgent.UI;
 
-#pragma warning disable S101 // RimWorld Window 類別命名慣例
 public partial class Window_Agent
 {
     // 圓角貼圖（白色，用 GUI.color 上色）：鍵是半徑像素。Unity 內建的圓角 DrawTexture 在遊戲裡不生效，只能自己產生。

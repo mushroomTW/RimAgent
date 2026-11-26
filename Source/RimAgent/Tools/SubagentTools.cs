@@ -210,9 +210,18 @@ public sealed class SubagentTools
         };
         try
         {
-            IChatClient client = _responseObserved == null ? _client : new ObservingChatClient(_client, r => _responseObserved(subagent.Name, r));
-            ChatResponse response = await client.AsMainThreadFunctionInvokingClient(steps)
-                .GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            string previousAgent = _transcript.SwapCurrentAgent(subagent.Name);
+            ChatResponse response;
+            try
+            {
+                IChatClient client = _responseObserved == null ? _client : new ObservingChatClient(_client, r => _responseObserved(subagent.Name, r));
+                response = await client.AsMainThreadFunctionInvokingClient(steps)
+                    .GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _transcript.SwapCurrentAgent(previousAgent);
+            }
             if (response.WereToolsStripped())
                 return ToolText.Error("subagent " + subagent.Name + " could not use tools because the selected provider does not support tool calling; its report was discarded.");
             string report = ColonyAgentSession.FinalAssistantText(response.Messages, response.Text);

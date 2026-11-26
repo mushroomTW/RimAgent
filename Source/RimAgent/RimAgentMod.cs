@@ -87,13 +87,15 @@ public partial class RimAgentMod : Mod
     public RimAgentMod(ModContentPack content) : base(content)
     {
         Settings = GetSettings<RimAgentSettings>();
-        A2AServerController.Apply(content.RootDir, Settings.a2aServer, Settings.a2aPort);
+        string token = Settings.a2aServer ? Settings.EnsureA2AToken() : Settings.a2aToken;
+        A2AServerController.Apply(content.RootDir, Settings.a2aServer, Settings.a2aPort, token);
     }
 
     public override void WriteSettings()
     {
+        if (Settings.a2aServer) Settings.EnsureA2AToken();
         base.WriteSettings();
-        A2AServerController.Apply(Content.RootDir, Settings.a2aServer, Settings.a2aPort);
+        A2AServerController.Apply(Content.RootDir, Settings.a2aServer, Settings.a2aPort, Settings.a2aToken);
     }
 
     public override string SettingsCategory()
@@ -245,9 +247,30 @@ public partial class RimAgentMod : Mod
         listing.GapLine();
         listing.CheckboxLabeled("RimAgent.Settings.A2AServer".Translate(), ref Settings.a2aServer, "RimAgent.Settings.A2AServerTip".Translate());
         if (!Settings.a2aServer) return;
+        string token = Settings.EnsureA2AToken();
         Rect portRow = listing.GetRect(28f);
         Widgets.Label(portRow.LeftHalf(), "RimAgent.Settings.A2APort".Translate(Settings.a2aPort + 1));
         Widgets.TextFieldNumeric(portRow.RightHalf(), ref Settings.a2aPort, ref _a2aPortBuffer, RimAgentSettings.MinA2APort, RimAgentSettings.MaxA2APort);
+        Rect tokenRow = listing.GetRect(28f);
+        const float RegenWidth = 100f;
+        const float CopyWidth = 80f;
+        var regenRect = new Rect(tokenRow.xMax - RegenWidth, tokenRow.y, RegenWidth, 26f);
+        var copyRect = new Rect(regenRect.x - CopyWidth - 6f, tokenRow.y, CopyWidth, 26f);
+        var labelRect = new Rect(tokenRow.x, tokenRow.y + 3f, copyRect.x - tokenRow.x - 8f, 24f);
+        string preview = token.Length > 12 ? token[..8] + "…" + token[^4..] : token;
+        Text.WordWrap = false;
+        Widgets.Label(labelRect, "RimAgent.Settings.A2AToken".Translate(preview).ToString().Truncate(labelRect.width));
+        Text.WordWrap = true;
+        TooltipHandler.TipRegion(labelRect, "RimAgent.Settings.A2ATokenTip".Translate());
+        if (Widgets.ButtonText(copyRect, "RimAgent.Settings.A2ACopyToken".Translate()))
+        {
+            GUIUtility.systemCopyBuffer = token;
+            Messages.Message("RimAgent.Settings.A2ATokenCopied".Translate(), MessageTypeDefOf.TaskCompletion, historical: false);
+        }
+        if (Widgets.ButtonText(regenRect, "RimAgent.Settings.A2ARegenerateToken".Translate()))
+        {
+            Settings.RegenerateA2AToken();
+        }
         if (A2AServerController.LastError is { } error)
         {
             listing.Label("RimAgent.Settings.A2AFailed".Translate(error));

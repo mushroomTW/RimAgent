@@ -26,7 +26,6 @@ public sealed class DecisionAutonomousTriage
     private readonly IDecisionService _decisionService;
     private readonly Func<IDecisionService> _serviceFactory;
     private readonly Func<string> _criteriaProvider;
-    private IDecisionService _service;
 
     public DecisionAutonomousTriage(
         IDecisionService decisionService = null,
@@ -52,7 +51,7 @@ public sealed class DecisionAutonomousTriage
         CancellationToken cancellationToken = default)
     {
         if (!IsTriaged(trigger)) return null;
-        IDecisionService service = _decisionService ?? ResolveService();
+        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
         if (service == null) return null;
         string criteria = _criteriaProvider?.Invoke();
         if (string.IsNullOrWhiteSpace(criteria)) return null;
@@ -109,11 +108,5 @@ public sealed class DecisionAutonomousTriage
             "near mental break {6}. Alerts: {7}.",
             s.ColonistCount, s.FoodNutrition, perColonist, s.HostileCount, s.DownedOrBleedingCount, s.FireCount,
             s.NearMentalBreakCount, string.IsNullOrEmpty(s.Alerts) ? "none" : s.Alerts);
-    }
-
-    private IDecisionService ResolveService()
-    {
-        if (_service == null) _service = _serviceFactory?.Invoke();
-        return _service;
     }
 }

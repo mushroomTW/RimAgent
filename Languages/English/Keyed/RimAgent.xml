@@ -107,6 +107,11 @@
   <RimAgent.Settings.A2AServer>Run the A2A server (this computer only)</RimAgent.Settings.A2AServer>
   <RimAgent.Settings.A2AServerTip>Other agents (for example a coding assistant or another game agent) can send RimAgent instructions over the A2A protocol, using JSON-RPC or gRPC. Only programs on this computer can connect. Remote instructions follow the same permissions and confirmation mode as yours.</RimAgent.Settings.A2AServerTip>
   <RimAgent.Settings.A2APort>Port (gRPC uses {0})</RimAgent.Settings.A2APort>
+  <RimAgent.Settings.A2AToken>Bearer token: {0}</RimAgent.Settings.A2AToken>
+  <RimAgent.Settings.A2ATokenTip>A2A JSON-RPC and gRPC requests must send Authorization: Bearer &lt;token&gt;. Regenerating takes effect after closing this settings window.</RimAgent.Settings.A2ATokenTip>
+  <RimAgent.Settings.A2ACopyToken>Copy</RimAgent.Settings.A2ACopyToken>
+  <RimAgent.Settings.A2ATokenCopied>A2A bearer token copied to clipboard.</RimAgent.Settings.A2ATokenCopied>
+  <RimAgent.Settings.A2ARegenerateToken>Regenerate</RimAgent.Settings.A2ARegenerateToken>
   <RimAgent.Settings.A2ARunning>Running. Agent card: {0}</RimAgent.Settings.A2ARunning>
   <RimAgent.Settings.A2AFailed>Could not start: {0}</RimAgent.Settings.A2AFailed>
   <RimAgent.Settings.A2AApplyOnClose>Starts when you close this settings window.</RimAgent.Settings.A2AApplyOnClose>
@@ -167,8 +172,8 @@
   <RimAgent.Settings.FrameworkNote>AI keys and which AI to use are in the RimLLM Framework settings.</RimAgent.Settings.FrameworkNote>
 
   <!-- Status strip and slash commands -->
-  <RimAgent.Auto.StatusOn>{0}/{1} used today</RimAgent.Auto.StatusOn>
   <RimAgent.Auto.StatusUnlimited>{0} tool calls used today (unlimited)</RimAgent.Auto.StatusUnlimited>
+  <RimAgent.Save.ReloadedNotice>Reloaded {0} (attempt {1}/{2}): {3}</RimAgent.Save.ReloadedNotice>
   <RimAgent.Mode.Status>Mode: {0}</RimAgent.Mode.Status>
   <RimAgent.Reasoning.Status>Reasoning: {0}</RimAgent.Reasoning.Status>
   <RimAgent.Model.Status>Model: {0}</RimAgent.Model.Status>
@@ -176,7 +181,6 @@
   <RimAgent.Model.DefaultTip>Use the RimLLM Framework fallback chain.</RimAgent.Model.DefaultTip>
   <RimAgent.Model.FollowAgent>Default (agent's current model)</RimAgent.Model.FollowAgent>
   <RimAgent.Model.FollowAgentTip>Uses whichever model the Agent window is currently set to, so switching models there carries over automatically. While the Agent window is on Fallback, this role follows the fallback chain too.</RimAgent.Model.FollowAgentTip>
-  <RimAgent.Model.Tip>Uses: {0}&#10;If it fails, no other model is tried. Pick Fallback to use the fallback chain.</RimAgent.Model.Tip>
   <RimAgent.Reasoning.Auto>Default</RimAgent.Reasoning.Auto>
   <RimAgent.Reasoning.Off>Off</RimAgent.Reasoning.Off>
   <RimAgent.Reasoning.Low>Low</RimAgent.Reasoning.Low>

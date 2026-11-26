@@ -210,7 +210,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static IEnumerable<Alert> ActiveAlerts()
     {
-        if (ActiveAlertsField?.GetValue(Find.Alerts) is not IEnumerable<Alert> alerts) return [];
+        if (Find.Alerts == null || ActiveAlertsField?.GetValue(Find.Alerts) is not IEnumerable<Alert> alerts) return [];
         return [.. alerts.Where(a => a != null && a.Active)];
     }
 

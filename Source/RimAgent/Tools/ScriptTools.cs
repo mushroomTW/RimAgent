@@ -78,7 +78,8 @@ internal sealed class ScriptTools
             bool callFailed = text.StartsWith(ToolText.ErrorPrefix, StringComparison.Ordinal);
             if (callFailed) failed++;
             else ok++;
-            sb.Append(ran).Append(". ").Append(call.Function.Name).Append('(').Append(Describe(call.Arguments)).Append("): ")
+            sb.Append(ran).Append(". ").Append(call.Function.Name).Append('(')
+              .Append(LoggingAIFunction.NeutralizeTrustedTags(Describe(call.Arguments))).Append("): ")
               .Append(text.Trim()).AppendLine();
 
             if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))

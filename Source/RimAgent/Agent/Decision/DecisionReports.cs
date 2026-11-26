@@ -24,16 +24,42 @@ public sealed class DecisionReports
         }
     }
 
+    public string PeekAll(out int count)
+    {
+        lock (_gate)
+        {
+            count = _pending.Count;
+            if (count == 0) return null;
+            return FormatReports(_pending);
+        }
+    }
+
+    public void RemoveFirst(int count)
+    {
+        if (count <= 0) return;
+        lock (_gate)
+        {
+            int toRemove = System.Math.Min(count, _pending.Count);
+            if (toRemove > 0) _pending.RemoveRange(0, toRemove);
+        }
+    }
+
     public string TakeAll()
     {
         lock (_gate)
         {
             if (_pending.Count == 0) return null;
-            var sb = new StringBuilder();
-            foreach (string report in _pending) sb.Append("- ").AppendLine(report);
+            string formatted = FormatReports(_pending);
             _pending.Clear();
-            return sb.ToString().TrimEnd();
+            return formatted;
         }
+    }
+
+    private static string FormatReports(List<string> reports)
+    {
+        var sb = new StringBuilder();
+        foreach (string report in reports) sb.Append("- ").AppendLine(report);
+        return sb.ToString().TrimEnd();
     }
 
     public static string Prepend(string reports, string text)

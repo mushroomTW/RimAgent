@@ -19,13 +19,14 @@ public sealed partial class ColonyAgentSession
     /// <summary>讀檔後還沒送過指令時 AF session 尚未重建，原樣帶回讀進來的內容；其餘情況用上一句指令結束時備妥的快照（忙碌中存檔也拿得到上一句為止的歷史）。</summary>
     public string SerializeForSave()
     {
-        if (_session == null) return _serializedSession;
+        AgentSession session = Volatile.Read(ref _session);
+        if (session == null) return Volatile.Read(ref _serializedSession) ?? Volatile.Read(ref _saveSnapshot);
         string snapshot = Volatile.Read(ref _saveSnapshot);
         if (snapshot != null || IsBusy) return snapshot;
         // 快照失敗過（見 PrepareSaveSnapshot）才走到這裡：存檔當下同步序列化一次。
         try
         {
-            return SerializeSession(_session);
+            return SerializeSession(session);
         }
         catch (Exception ex)
         {
@@ -38,10 +39,11 @@ public sealed partial class ColonyAgentSession
     public void RestoreSerializedSession(string serialized)
     {
         if (IsBusy) throw new InvalidOperationException("Cannot restore while RimAgent is working.");
-        _serializedSession = string.IsNullOrWhiteSpace(serialized) ? null : serialized;
+        string normalized = string.IsNullOrWhiteSpace(serialized) ? null : serialized;
+        Volatile.Write(ref _serializedSession, normalized);
         // 讀進來的內容先當快照：讀檔後第一句還在跑時存檔，也不會漏掉舊歷史。
-        _saveSnapshot = _serializedSession;
-        _session = null;
+        Volatile.Write(ref _saveSnapshot, normalized);
+        Volatile.Write(ref _session, null);
         _registry.Outputs.Clear();
         UnloadToolPacks();
     }
@@ -105,18 +107,24 @@ public sealed partial class ColonyAgentSession
 
     private async Task<AgentSession> RestoreOrCreateSession(CancellationToken cancellationToken)
     {
-        string serialized = _serializedSession;
-        _serializedSession = null;
+        string serialized = Volatile.Read(ref _serializedSession);
         if (!string.IsNullOrWhiteSpace(serialized))
         {
             try
             {
                 using JsonDocument document = JsonDocument.Parse(serialized);
-                return await _agent.DeserializeSessionAsync(document.RootElement, jsonSerializerOptions: null, cancellationToken);
+                AgentSession restored = await _agent.DeserializeSessionAsync(document.RootElement, jsonSerializerOptions: null, cancellationToken);
+                Volatile.Write(ref _serializedSession, null);
+                return restored;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 // 舊版存檔或 Agent Framework 升級後無法還原時，安全地退回新會話。
+                Volatile.Write(ref _serializedSession, null);
                 Verse.Log.Warning("RimAgent: failed to restore agent session, starting fresh: " + ex.Message);
             }
         }

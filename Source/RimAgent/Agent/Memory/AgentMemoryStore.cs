@@ -10,7 +10,7 @@ using Verse;
 
 namespace RimAgent.Agent;
 
-#pragma warning disable MAAI001
+#pragma warning disable MAAI001 // AF 1.28 將 AgentFileStore 標記為評估中；已鎖定套件版本並以回歸測試保護。
 /// <summary>FileMemoryProvider 的儲存層：只有平面檔名（provider 的工作資料夾固定為空字串），並在這裡限制檔數與長度。局內記憶跟著存檔走，全域記憶由 <see cref="ScopedMemoryStore"/> 另外寫進磁碟。</summary>
 public class AgentMemoryStore : AgentFileStore
 {
@@ -19,6 +19,8 @@ public class AgentMemoryStore : AgentFileStore
     public const int MaxNameChars = 60;
     /// <summary>描述會逐行列進系統提示的索引，所以壓成單行並截短。</summary>
     public const int MaxDescriptionChars = 200;
+    private const int MaxTotalEntries = MaxFiles * 2 + 2;
+    private const int MaxIndexChars = MaxFiles * (MaxNameChars + MaxDescriptionChars + 16);
     /// <summary>FileMemoryProvider 自動維護的索引檔。</summary>
     public const string IndexFileName = "memories.md";
     private const string DescriptionSuffix = "_description.md";
@@ -46,12 +48,19 @@ public class AgentMemoryStore : AgentFileStore
         if (entry == null || entry.content == null) return;
         string name = NormalizeName(entry.name);
         if (name.Length == 0 || _files.ContainsKey(name)) return;
+        if (IsInvalidName(name) || _files.Count >= MaxTotalEntries)
+        {
+            dropped.Add(name);
+            return;
+        }
         if (IsUserFile(name) && (InvalidUserFile(name, entry.content) != null || UserFileCount() >= MaxFiles))
         {
             dropped.Add(name);
             return;
         }
-        _files[name] = IsDescription(name) ? OneLine(entry.content) : entry.content;
+        string storedContent = IsDescription(name) ? OneLine(entry.content) : entry.content;
+        if (IsIndex(name) && storedContent.Length > MaxIndexChars) storedContent = storedContent[..MaxIndexChars];
+        _files[name] = storedContent;
     }
 
     private void PruneDroppedFilesFromIndex(List<string> dropped)
@@ -108,14 +117,21 @@ public class AgentMemoryStore : AgentFileStore
         // provider 先寫內容、再寫描述、最後重建索引：只在內容這一步拒絕，
         // 描述一律截短而不丟例外，避免內容已存入卻沒進索引。
         if (IsDescription(name)) content = OneLine(content);
+        if (IsIndex(name) && content.Length > MaxIndexChars) content = content[..MaxIndexChars];
         lock (_gate)
         {
+            if (IsInvalidName(name))
+                throw new InvalidOperationException($"Memory file names must be 1-{MaxNameChars} characters without line breaks.");
             if (IsUserFile(name))
             {
                 string invalid = InvalidUserFile(name, content);
                 if (invalid != null) throw new InvalidOperationException(invalid);
                 if (!_files.ContainsKey(name) && UserFileCount() >= MaxFiles)
                     throw new InvalidOperationException($"Memory is full ({MaxFiles} files). Merge or delete a file first.");
+            }
+            else if (!_files.ContainsKey(name) && _files.Count >= MaxTotalEntries)
+            {
+                throw new InvalidOperationException($"Memory is full ({MaxFiles} files). Merge or delete a file first.");
             }
             _files[name] = content;
         }
@@ -124,11 +140,16 @@ public class AgentMemoryStore : AgentFileStore
 
     private static string InvalidUserFile(string name, string content)
     {
-        if (name.Length > MaxNameChars || name.Any(char.IsControl))
+        if (IsInvalidName(name))
             return $"Memory file names must be 1-{MaxNameChars} characters without line breaks.";
         if (content.Length > MaxFileChars)
             return $"Memory file '{name}' exceeds {MaxFileChars} characters. Keep memories short or split them.";
         return null;
+    }
+
+    private static bool IsInvalidName(string name)
+    {
+        return name.Length == 0 || name.Length > MaxNameChars || name.Any(char.IsControl);
     }
 
     private static string OneLine(string text)
@@ -182,6 +203,12 @@ public class AgentMemoryStore : AgentFileStore
     private static bool IsDescription(string name)
     {
         return name.EndsWith(DescriptionSuffix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool IsReservedFile(string path)
+    {
+        string name = NormalizeName(path);
+        return IsIndex(name) || IsDescription(name);
     }
 
     private static bool IsUserFile(string name)

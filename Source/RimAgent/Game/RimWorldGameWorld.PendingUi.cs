@@ -41,6 +41,16 @@ internal sealed partial class RimWorldGameWorld
     private static readonly FieldInfo ConfigureIdeoNext = AccessTools.Field(typeof(Dialog_ConfigureIdeo), "nextAction");
     private static readonly FieldInfo LoadTransferables = AccessTools.Field(typeof(Dialog_LoadTransporters), "transferables");
     private static readonly MethodInfo LoadTryAccept = AccessTools.Method(typeof(Dialog_LoadTransporters), "TryAccept");
+    private static readonly PropertyInfo LordJobWarningText = AccessTools.Property(typeof(Dialog_BeginLordJob), "WarningText");
+    private static readonly FieldInfo NewColonyColonists = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "colonists");
+    private static readonly FieldInfo NewColonyAnimals = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "animals");
+    private static readonly FieldInfo NewColonyRelics = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "relics");
+    private static readonly FieldInfo NewColonyItems = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "items");
+    private static readonly FieldInfo NewColonyCancel = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "cancel");
+    private static readonly FieldInfo NewColonySelected = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "selected");
+    private static readonly FieldInfo NewColonySelectedItemCount = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "selectedItemCount");
+    private static readonly PropertyInfo NewColonyAcceptance = AccessTools.Property(typeof(Dialog_ChooseThingsForNewColony), "AcceptanceReport");
+    private static readonly MethodInfo NewColonyConfirm = AccessTools.Method(typeof(Dialog_ChooseThingsForNewColony), "ConfirmArchonexusSettlementConsequences");
     private static readonly char[] _commaSplit = [','];
 
     /// <summary>由工具開出來的選單、儀式與裝載畫面；玩家自己開的與自己的選目標狀態不算待回應。</summary>
@@ -218,18 +228,18 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>缺人或缺條件的原因，平常只畫在視窗上；原版也靠它把開始鈕變灰。</summary>
     private static string LordJobBlock(Dialog_BeginLordJob dialog)
     {
-        return (AccessTools.Property(typeof(Dialog_BeginLordJob), "WarningText")?.GetValue(dialog) as string)?.StripTags() ?? string.Empty;
+        return (LordJobWarningText?.GetValue(dialog) as string)?.StripTags() ?? string.Empty;
     }
 
-    private static List<Thing> NewColonyList(Dialog_ChooseThingsForNewColony dialog, string field)
+    private static List<Thing> NewColonyList(Dialog_ChooseThingsForNewColony dialog, FieldInfo field)
     {
-        return AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), field)?.GetValue(dialog) as List<Thing> ?? [];
+        return field?.GetValue(dialog) as List<Thing> ?? [];
     }
 
     /// <summary>序號依人、動物、聖物、物品排列，與回答時解析的順序相同。</summary>
     private static List<Thing> NewColonyCandidates(Dialog_ChooseThingsForNewColony dialog)
     {
-        return [.. NewColonyList(dialog, "colonists"), .. NewColonyList(dialog, "animals"), .. NewColonyList(dialog, "relics"), .. NewColonyList(dialog, "items")];
+        return [.. NewColonyList(dialog, NewColonyColonists), .. NewColonyList(dialog, NewColonyAnimals), .. NewColonyList(dialog, NewColonyRelics), .. NewColonyList(dialog, NewColonyItems)];
     }
 
     private static PendingChoiceInfo NewColonyChoice(Dialog_ChooseThingsForNewColony dialog)
@@ -311,7 +321,7 @@ internal sealed partial class RimWorldGameWorld
         {
             FloatMenu menu when AgentWindows.Contains(menu) => AnswerMenu(menu, option, watch),
             Dialog_BeginLordJob lordJob when AgentWindows.Contains(lordJob) => AnswerLordJob(lordJob, option, watch),
-            Dialog_ConfigureIdeo ideo => AnswerConfigureIdeo(ideo),
+            Dialog_ConfigureIdeo ideo => AnswerConfigureIdeo(ideo, option),
             Dialog_ChooseThingsForNewColony colony => AnswerNewColony(colony, option, input, watch),
             Dialog_LoadTransporters load when AgentWindows.Contains(load) => AnswerLoad(load, option, input, watch),
             _ => CommandResult.Fail(ChoiceNotFound)
@@ -523,8 +533,9 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok(WithGameMessages("begun", watch));
     }
 
-    private static CommandResult AnswerConfigureIdeo(Dialog_ConfigureIdeo dialog)
+    private static CommandResult AnswerConfigureIdeo(Dialog_ConfigureIdeo dialog, int option)
     {
+        if (option != 1) return CommandResult.Fail("option must be 1");
         if (ConfigureIdeoNext?.GetValue(dialog) is not Action next) return CommandResult.Fail("this game version does not expose this dialog");
         // 同「下一步」按鈕；沒改任何選擇時它只做這兩件事。
         dialog.Close();
@@ -534,18 +545,18 @@ internal sealed partial class RimWorldGameWorld
 
     private static CommandResult AnswerNewColony(Dialog_ChooseThingsForNewColony dialog, int option, string input, MessageWatch watch)
     {
-        Type type = typeof(Dialog_ChooseThingsForNewColony);
         if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
         {
-            (AccessTools.Field(type, "cancel")?.GetValue(dialog) as Action)?.Invoke();
+            (NewColonyCancel?.GetValue(dialog) as Action)?.Invoke();
             dialog.Close();
             return CommandResult.Ok(CancelLabel);
         }
-        FieldInfo itemCount = AccessTools.Field(type, "selectedItemCount");
-        PropertyInfo acceptance = AccessTools.Property(type, "AcceptanceReport");
-        MethodInfo confirm = AccessTools.Method(type, "ConfirmArchonexusSettlementConsequences");
-        if (AccessTools.Field(type, "selected")?.GetValue(dialog) is not HashSet<Thing> selected || itemCount == null || acceptance == null || confirm == null) return CommandResult.Fail("this game version does not expose this dialog");
+        if (NewColonySelected?.GetValue(dialog) is not HashSet<Thing> selected
+            || NewColonySelectedItemCount == null || NewColonyAcceptance == null || NewColonyConfirm == null)
+        {
+            return CommandResult.Fail("this game version does not expose this dialog");
+        }
 
         List<Thing> candidates = NewColonyCandidates(dialog);
         var picked = new List<Thing>();
@@ -556,23 +567,36 @@ internal sealed partial class RimWorldGameWorld
         }
         // AcceptanceReport 讀的是對話框自己的選取集合，所以先套用；被拒絕就還原，不留下半套選擇。
         var previous = new List<Thing>(selected);
-        object previousItemCount = itemCount.GetValue(dialog);
-        selected.Clear();
-        selected.UnionWith(picked);
-        List<Thing> items = NewColonyList(dialog, "items");
-        itemCount.SetValue(dialog, picked.Count(items.Contains));
-        var report = (AcceptanceReport)acceptance.GetValue(dialog);
-        if (!report.Accepted)
+        object previousItemCount = NewColonySelectedItemCount.GetValue(dialog);
+        void RestoreSelection()
         {
             selected.Clear();
             selected.UnionWith(previous);
-            itemCount.SetValue(dialog, previousItemCount);
+            NewColonySelectedItemCount.SetValue(dialog, previousItemCount);
+        }
+        AcceptanceReport report;
+        try
+        {
+            selected.Clear();
+            selected.UnionWith(picked);
+            List<Thing> items = NewColonyList(dialog, NewColonyItems);
+            NewColonySelectedItemCount.SetValue(dialog, picked.Count(items.Contains));
+            report = (AcceptanceReport)NewColonyAcceptance.GetValue(dialog);
+        }
+        catch (Exception ex)
+        {
+            RestoreSelection();
+            return CommandResult.Fail("selection validation failed: " + ex.Message);
+        }
+        if (!report.Accepted)
+        {
+            RestoreSelection();
             return CommandResult.Fail(report.Reason.NullOrEmpty() ? "the selection is not allowed" : report.Reason.StripTags());
         }
         var colonists = picked.OfType<Pawn>().Where(p => p.IsColonist);
         bool onlySlaves = colonists.Any() && colonists.All(p => p.IsSlaveOfColony);
         // 同「接受」按鈕：後果確認框留給 choose_option。
-        confirm.Invoke(dialog, [picked, onlySlaves]);
+        NewColonyConfirm.Invoke(dialog, [picked, onlySlaves]);
         return CommandResult.Ok(WithGameMessages($"selected {picked.Count}", watch));
     }
 

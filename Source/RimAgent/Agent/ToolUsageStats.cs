@@ -31,6 +31,7 @@ public sealed partial class ToolUsageStats
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private readonly System.Threading.Lock _lock = new();
+    private readonly System.Threading.Lock _saveLock = new();
     private readonly string? _path;
     private ToolUsageData _data;
 
@@ -128,7 +129,12 @@ public sealed partial class ToolUsageStats
         for (int i = 0; i < mainAgentTools.Count; i++)
         {
             TranscriptEntry failed = mainAgentTools[i];
-            if (!failed.Failed || failed.Cancelled) continue;
+            if (!failed.Failed || failed.Cancelled
+                || failed.ToolCategory == ToolCategory.Mcp
+                || failed.ToolCategory == ToolCategory.Web)
+            {
+                continue;
+            }
             string error = Signature(failed.Result);
             string key = failed.ToolName + "\n" + error;
             failuresThisInstruction.Add(key);
@@ -164,15 +170,25 @@ public sealed partial class ToolUsageStats
     private void Save()
     {
         if (_path == null) return;
-        string json;
-        lock (_lock)
+        lock (_saveLock)
         {
-            json = JsonSerializer.Serialize(_data, JsonOptions);
+            string json;
+            lock (_lock)
+            {
+                json = JsonSerializer.Serialize(_data, JsonOptions);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            string temp = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temp, json);
+                File.Move(temp, _path, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temp)) File.Delete(temp);
+            }
         }
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        string temp = _path + ".tmp";
-        File.WriteAllText(temp, json);
-        File.Move(temp, _path, overwrite: true);
     }
 
     private static ToolUsageData Load(string? path)
@@ -182,9 +198,9 @@ public sealed partial class ToolUsageStats
         {
             return JsonSerializer.Deserialize<ToolUsageData>(File.ReadAllText(path)) ?? new ToolUsageData();
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            // 壞掉的統計不影響遊戲：從頭累積。
+            // 壞掉或暫時鎖定的統計不影響遊戲：從頭累積。
             return new ToolUsageData();
         }
     }

@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using A2A;
@@ -19,8 +21,12 @@ public delegate Task<string> ColonyInstructionRunner(string instruction, Cancell
 public static class A2AServerHost
 {
     public const string JsonRpcPath = "/a2a";
+    public const int MaxInstructionChars = 16_000;
+    private const long MaxRequestBodyBytes = 256 * 1024;
+    private const int MaxGrpcMessageBytes = 256 * 1024;
+    private const long MaxConcurrentConnections = 32;
 
-    public static async Task<IAsyncDisposable> StartAsync(string contentRoot, int httpPort, int grpcPort, string version, ColonyInstructionRunner runner)
+    public static async Task<IAsyncDisposable> StartAsync(string contentRoot, int httpPort, int grpcPort, string version, ColonyInstructionRunner runner, string? bearerToken = null)
     {
         ArgumentNullException.ThrowIfNull(runner);
         AgentCard card = CreateCard(httpPort, grpcPort, version);
@@ -32,6 +38,8 @@ public static class A2AServerHost
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
+            kestrel.Limits.MaxRequestBodySize = MaxRequestBodyBytes;
+            kestrel.Limits.MaxConcurrentConnections = MaxConcurrentConnections;
             kestrel.ListenLocalhost(httpPort, o => o.Protocols = HttpProtocols.Http1);
             kestrel.ListenLocalhost(grpcPort, o => o.Protocols = HttpProtocols.Http2);
         });
@@ -39,11 +47,16 @@ public static class A2AServerHost
         builder.Services.AddHostFiltering(o => o.AllowedHosts = ["localhost", "127.0.0.1", "[::1]"]);
         builder.Services.AddSingleton(runner);
         builder.Services.AddA2AAgent<ColonyAgentHandler>(card);
-        builder.Services.AddGrpc();
+        builder.Services.AddGrpc(o => o.MaxReceiveMessageSize = MaxGrpcMessageBytes);
 
         WebApplication app = builder.Build();
         app.UseHostFiltering();
         app.Use(RejectCrossSiteAsync);
+        if (!string.IsNullOrEmpty(bearerToken))
+        {
+            byte[] expected = Encoding.UTF8.GetBytes("Bearer " + bearerToken);
+            app.Use((context, next) => RequireBearerTokenAsync(context, next, expected));
+        }
         app.MapA2A(JsonRpcPath);
         app.MapWellKnownAgentCard(card);
         app.MapGrpcService<A2AGrpcService>();
@@ -74,6 +87,27 @@ public static class A2AServerHost
         if (HttpMethods.IsPost(request.Method) && request.Path.StartsWithSegments(JsonRpcPath, StringComparison.OrdinalIgnoreCase) && !request.HasJsonContentType())
         {
             context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return Task.CompletedTask;
+        }
+        return next(context);
+    }
+
+    private static Task RequireBearerTokenAsync(HttpContext context, RequestDelegate next, byte[] expectedHeader)
+    {
+        if (context.Request.Path.StartsWithSegments("/.well-known", StringComparison.OrdinalIgnoreCase))
+        {
+            return next(context);
+        }
+        string? actual = context.Request.Headers.Authorization;
+        if (string.IsNullOrEmpty(actual))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        }
+        byte[] actualBytes = Encoding.UTF8.GetBytes(actual);
+        if (!CryptographicOperations.FixedTimeEquals(actualBytes, expectedHeader))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return Task.CompletedTask;
         }
         return next(context);

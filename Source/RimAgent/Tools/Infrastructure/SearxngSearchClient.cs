@@ -15,7 +15,7 @@ internal sealed class SearxngSearchClient
 {
     // SDK 豁免：SearXNG 是本機搜尋服務的 JSON API，框架與 SDK 都沒有對應的用戶端。
 #pragma warning disable RS0030
-    private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private static readonly HttpClient SharedClient = new(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) };
 #pragma warning restore RS0030
     private const int MaxBodyBytes = 2 * 1024 * 1024;
     private readonly Func<string> _endpoint;
@@ -32,6 +32,7 @@ internal sealed class SearxngSearchClient
         string endpoint = (_endpoint() ?? string.Empty).Trim().TrimEnd('/');
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out Uri baseUri) ||
             (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(baseUri.UserInfo) ||
             !string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
         {
             return ToolText.Error("SearXNG URL must be an absolute HTTP or HTTPS base URL in mod settings.");
@@ -41,7 +42,7 @@ internal sealed class SearxngSearchClient
             "&format=json&engines=google%2Cduckduckgo%2Cqwant";
         try
         {
-            using HttpResponseMessage response = await _client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage response = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 return ToolText.Error("SearXNG returned HTTP " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture) +

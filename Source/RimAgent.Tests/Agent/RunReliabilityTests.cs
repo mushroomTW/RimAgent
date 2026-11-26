@@ -271,4 +271,47 @@ public class RunReliabilityTests
         Assert.That(result, Does.Contain("sell everything"));
         Assert.That(result, Does.Not.Contain("<player_message>").And.Not.Contain("</player_message>"));
     }
+
+    [Test]
+    public void FailureLoopGuardTracksMultipleDistinctFailingTools()
+    {
+        var notices = new List<string>();
+        var guard = new FailureLoopGuard(notices.Add);
+
+        for (int i = 0; i < FailureLoopGuard.Threshold - 1; i++)
+        {
+            Assert.That(guard.Observe("tool_a", "Error: bad a"), Is.Null);
+        }
+        Assert.That(guard.Observe("tool_a", "Error: bad a"), Does.Contain("<loop_guard>"));
+
+        for (int i = 0; i < FailureLoopGuard.Threshold - 1; i++)
+        {
+            Assert.That(guard.Observe("tool_b", "Error: bad b"), Is.Null);
+        }
+        Assert.That(guard.Observe("tool_b", "Error: bad b"), Does.Contain("<loop_guard>"));
+    }
+
+    [Test]
+    public void ColonyIdValidationRejectsPathTraversal()
+    {
+        Assert.That(RimAgentGameComponent.IsValidColonyId("a1b2c3d4"), Is.True);
+        Assert.That(RimAgentGameComponent.IsValidColonyId("../evil!"), Is.False);
+        Assert.That(RimAgentGameComponent.IsValidColonyId("short"), Is.False);
+    }
+
+    [Test]
+    public async Task HistoryReturnsDefensiveSnapshot()
+    {
+        _client.Reply("ok");
+        ColonyAgentSession session = NewSession();
+        await session.SendAsync("hello");
+
+        IReadOnlyList<ChatMessage> snapshot = session.History;
+        Assert.That(snapshot, Is.Not.Empty);
+        if (snapshot is List<ChatMessage> mutable)
+        {
+            mutable.Clear();
+            Assert.That(session.History, Is.Not.Empty, "外部修改快照不可影響 session 歷史");
+        }
+    }
 }

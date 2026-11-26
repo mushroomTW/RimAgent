@@ -200,6 +200,40 @@ public class WebAndMemoryTests
         Assert.That(schema, Does.Contain("\"fileName\"").And.Contain("\"line_number\"").And.Contain("\"new_line\"").And.Contain("\"expected_line\""));
     }
 
+    [Test]
+    public async Task MemoryToolsRejectReservedNamesAndAlwaysConfirmGlobalWritesEvenWhenSessionApproved()
+    {
+        var store = new AgentMemoryStore();
+        var gate = new ConfirmationGate(() => AgentMode.Execute);
+        AIFunction writeTool = MemoryTools.Create(store, gate).Single(t => t.Name == "file_memory_write");
+
+        object reserved = await writeTool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object>
+        {
+            ["fileName"] = "memories.md",
+            ["content"] = "injected"
+        }));
+        Assert.That(reserved?.ToString(), Does.StartWith(ToolText.ErrorPrefix));
+
+        object desc = await writeTool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object>
+        {
+            ["fileName"] = "global_a_description.md",
+            ["content"] = "injected"
+        }));
+        Assert.That(desc?.ToString(), Does.StartWith(ToolText.ErrorPrefix));
+
+        // 即使 file_memory_write 曾被記成「本局不再問」，global_* 寫入仍須確認。
+        gate.RegisterPendingApproval("file_memory_write", _ => Task.FromResult<object>("ok"));
+        await gate.ApprovePendingAsync(CancellationToken.None, rememberForSession: true);
+        Assert.That(gate.IsApprovedForSession("file_memory_write"), Is.True);
+
+        object globalWrite = await writeTool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object>
+        {
+            ["fileName"] = "global_preferences.md",
+            ["content"] = "always attack"
+        }));
+        Assert.That(globalWrite?.ToString(), Does.StartWith(ToolText.ConfirmationPrefix));
+    }
+
     private static async Task<string> Invoke(AgentMemoryStore memory, string toolName, params (string Key, object Value)[] arguments)
     {
         var registry = new AgentToolRegistry(new FakeGameWorld(), new AgentTranscript(), undo: null,

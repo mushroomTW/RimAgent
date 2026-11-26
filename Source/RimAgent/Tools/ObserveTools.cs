@@ -295,8 +295,13 @@ public sealed class ObserveTools
             Limit = Math.Max(1, Math.Min(200, limit <= 0 ? 20 : limit))
         };
 
-        if (x1 >= 0 && z1 >= 0 && x2 >= 0 && z2 >= 0)
+        bool anyArea = x1 != -1 || z1 != -1 || x2 != -1 || z2 != -1;
+        if (anyArea)
         {
+            if (x1 < 0 || z1 < 0 || x2 < 0 || z2 < 0)
+            {
+                return ToolText.Error("provide all four non-negative coordinates (x1, z1, x2, z2) or omit all of them.");
+            }
             Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
             if (!rect.Success) return rect.Error;
             query.Area = rect.Value;

@@ -725,4 +725,21 @@ public class BuildToolsTests
         Assert.That(text, Does.StartWith("Needs confirmation:").And.Contain("wall"));
         Assert.That(_world.Blueprints, Is.Empty);
     }
+
+    [Test]
+    public void RemoveBlueprintRejectsNegativeCoordinates()
+    {
+        Assert.That(_tools.RemoveBlueprint(-5, 0, 10, 10), Does.StartWith(ToolText.ErrorPrefix));
+    }
+
+    [Test]
+    public void MultiWordStuffPrefixIsSplitFromBuildableName()
+    {
+        _world.BuildingInfos["Wall"] = new BuildingInfo { DefName = "Wall", Label = "wall", StuffCount = 5 };
+
+        string text = _tools.PlaceBlueprint("granite blocks wall", "single", 5, 5, 5, 5, 0, "");
+
+        Assert.That(text, Does.StartWith("Placed 1 wall (BlocksGranite) blueprint(s)"));
+        Assert.That(_world.Blueprints, Does.Contain(("Wall", 5, 5, 0, "BlocksGranite")));
+    }
 }
