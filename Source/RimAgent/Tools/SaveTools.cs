@@ -105,13 +105,20 @@ public sealed class SaveTools
         CommandResult result = _world.LoadGame(target.Name);
         if (!result.Success) return ToolText.Error(result.Message);
 
-        // 比它新的檢查點屬於要放棄的時間線：自己做的檔自己刪；autosave 留著，由紀錄擋住。
-        foreach (SaveSlotInfo newer in saves.Where(s => s.Checkpoint && s.Tick > target.Tick))
-        {
-            _world.DeleteCheckpoint(newer.Name);
-        }
         attempt = _ledger.RecordLoad(target, saves, context.ColonyId, trimmedLesson);
         return string.Create(CultureInfo.InvariantCulture, $"Reloading {target.Name} (attempt {attempt}/{SaveLedger.MaxLoadsPerSave}). This run ends now; the lesson is handed to the reloaded game.");
+    }
+
+    /// <summary>
+    /// 比讀回的存檔新的檢查點屬於要放棄的時間線：自己做的檔自己刪；autosave 留著，由紀錄擋住。
+    /// 等新遊戲載入完才刪：LoadGame 排程後當場就丟掉目前的遊戲，目標存檔若讀不進來，這些檢查點是唯一退路。
+    /// </summary>
+    internal static void DiscardAbandonedCheckpoints(Func<string, CommandResult> deleteCheckpoint, SaveLedger ledger, string? colonyId, int currentTick)
+    {
+        foreach (SaveSlotInfo checkpoint in ledger.TakeCheckpointsToDiscard(colonyId, currentTick))
+        {
+            deleteCheckpoint(checkpoint.Name);
+        }
     }
 
     internal async Task<string> CreateCheckpointAsync(SaveContext context)

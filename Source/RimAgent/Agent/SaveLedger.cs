@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -27,6 +27,7 @@ public sealed class SaveLedger
     private readonly HashSet<string> _abandoned = new(StringComparer.Ordinal);
     private readonly List<ReloadRecord> _history = [];
     private ReloadRecord? _pending;
+    private readonly List<SaveSlotInfo> _toDiscard = [];
 
     private static string KeyOf(SaveSlotInfo save) => save.Name + "@" + save.WrittenUtcTicks.ToString(CultureInfo.InvariantCulture);
 
@@ -66,6 +67,7 @@ public sealed class SaveLedger
                 Attempt = attempt,
                 Lesson = lesson ?? string.Empty
             };
+            _toDiscard.AddRange(colonySaves.Where(s => s.Checkpoint && s.Tick > save.Tick));
             _history.Add(record);
             _pending = record;
             return attempt;
@@ -80,6 +82,27 @@ public sealed class SaveLedger
             ReloadRecord? pending = _pending;
             _pending = null;
             return pending != null && string.Equals(pending.ColonyId, colonyId, StringComparison.Ordinal) ? pending : null;
+        }
+    }
+
+    /// <summary>
+    /// 不論讀進哪一局都要取走：只交給同一局處理的話，讀到別局時清單就遺失，被標為放棄的檔案永遠留在磁碟上。
+    /// 玩家改讀的那一局已經走到（tick 不超過目前）的檢查點仍是現行時間線，解除放棄標記、保留下來。
+    /// </summary>
+    public IReadOnlyList<SaveSlotInfo> TakeCheckpointsToDiscard(string? colonyId, int currentTick)
+    {
+        lock (_gate)
+        {
+            var discard = new List<SaveSlotInfo>();
+            foreach (SaveSlotInfo checkpoint in _toDiscard)
+            {
+                if (string.Equals(checkpoint.ColonyId, colonyId, StringComparison.Ordinal) && checkpoint.Tick <= currentTick)
+                    _abandoned.Remove(KeyOf(checkpoint));
+                else
+                    discard.Add(checkpoint);
+            }
+            _toDiscard.Clear();
+            return discard;
         }
     }
 

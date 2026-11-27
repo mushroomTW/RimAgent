@@ -26,9 +26,10 @@ public static class A2AServerHost
     private const int MaxGrpcMessageBytes = 256 * 1024;
     private const long MaxConcurrentConnections = 32;
 
-    public static async Task<IAsyncDisposable> StartAsync(string contentRoot, int httpPort, int grpcPort, string version, ColonyInstructionRunner runner, string? bearerToken = null)
+    public static async Task<IAsyncDisposable> StartAsync(string contentRoot, int httpPort, int grpcPort, string version, ColonyInstructionRunner runner, string bearerToken)
     {
         ArgumentNullException.ThrowIfNull(runner);
+        ArgumentException.ThrowIfNullOrWhiteSpace(bearerToken);
         AgentCard card = CreateCard(httpPort, grpcPort, version);
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
         {
@@ -52,11 +53,8 @@ public static class A2AServerHost
         WebApplication app = builder.Build();
         app.UseHostFiltering();
         app.Use(RejectCrossSiteAsync);
-        if (!string.IsNullOrEmpty(bearerToken))
-        {
-            byte[] expected = Encoding.UTF8.GetBytes("Bearer " + bearerToken);
-            app.Use((context, next) => RequireBearerTokenAsync(context, next, expected));
-        }
+        byte[] expected = Encoding.UTF8.GetBytes(bearerToken);
+        app.Use((context, next) => RequireBearerTokenAsync(context, next, expected));
         app.MapA2A(JsonRpcPath);
         app.MapWellKnownAgentCard(card);
         app.MapGrpcService<A2AGrpcService>();
@@ -92,20 +90,22 @@ public static class A2AServerHost
         return next(context);
     }
 
-    private static Task RequireBearerTokenAsync(HttpContext context, RequestDelegate next, byte[] expectedHeader)
+    private static Task RequireBearerTokenAsync(HttpContext context, RequestDelegate next, byte[] expectedToken)
     {
         if (context.Request.Path.StartsWithSegments("/.well-known", StringComparison.OrdinalIgnoreCase))
         {
             return next(context);
         }
         string? actual = context.Request.Headers.Authorization;
-        if (string.IsNullOrEmpty(actual))
+        // 驗證方案名稱不分大小寫（RFC 7235 §2.1），用戶端送 "bearer" 也要認得。
+        const string Scheme = "Bearer ";
+        if (string.IsNullOrEmpty(actual) || !actual.StartsWith(Scheme, StringComparison.OrdinalIgnoreCase))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return Task.CompletedTask;
         }
-        byte[] actualBytes = Encoding.UTF8.GetBytes(actual);
-        if (!CryptographicOperations.FixedTimeEquals(actualBytes, expectedHeader))
+        byte[] actualBytes = Encoding.UTF8.GetBytes(actual[Scheme.Length..].Trim());
+        if (!CryptographicOperations.FixedTimeEquals(actualBytes, expectedToken))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return Task.CompletedTask;

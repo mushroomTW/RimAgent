@@ -125,7 +125,9 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok();
     }
 
-    public CommandResult DeleteCheckpoint(string saveName)
+    public CommandResult DeleteCheckpoint(string saveName) => DeleteCheckpointFile(saveName);
+
+    internal static CommandResult DeleteCheckpointFile(string saveName)
     {
         if (!TryParseCheckpointName(saveName, out _, out _)) return CommandResult.Fail("not a RimAgent checkpoint: " + saveName);
         try

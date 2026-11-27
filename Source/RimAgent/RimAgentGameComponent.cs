@@ -388,6 +388,7 @@ public partial class RimAgentGameComponent : GameComponent
         _schedulerWatch = [];
         ResetMcp();
         _pendingReload = SaveLedger.Shared.TakePending(ColonyId);
+        SaveTools.DiscardAbandonedCheckpoints(RimWorldGameWorld.DeleteCheckpointFile, SaveLedger.Shared, ColonyId, Find.TickManager.TicksGame);
     }
 
     /// <summary>玩家指令的那一輪由會話的遊戲綁定擋住（見 RimWorldGameWorld.GetNotReadyReason）。</summary>

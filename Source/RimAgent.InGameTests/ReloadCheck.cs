@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -16,7 +16,8 @@ namespace RimAgent.InGameTests;
 /// <summary>
 /// 讀檔重來的遊戲內檢查（DevTools 測試換不了場景，讀檔只能這樣驗）。只有隔離環境 Config 有標記檔才啟動：
 /// 存檢查點、做一份 autosave、認出兩者屬於這一局，殺掉一位殖民者看死亡任務起跑，
-/// 再用 load_save 讀回檢查點，確認新遊戲裡殖民者活著、收到讀檔通知與教訓、舊會話碰不到新遊戲。
+/// 再用 load_save 讀回檢查點，確認新遊戲裡殖民者活著、收到讀檔通知與教訓、舊會話碰不到新遊戲，
+/// 以及比它新的檢查點在讀檔排程時保留、新遊戲載入後才刪掉。
 /// 不需要模型：工具直接呼叫，自主任務沒有供應商會失敗，但指令文字仍記在對話紀錄裡。
 /// 結果以 "[RimAgent.InGameTests] ReloadCheck PASS/FAIL" 警告輸出，list_test_diagnostics 看得到。
 /// </summary>
@@ -31,6 +32,7 @@ public sealed class ReloadCheckComponent : GameComponent
     // 讀檔會換掉整場遊戲（連同這個元件），進度放在靜態欄位跨讀檔保留。
     private static Phase _phase = Phase.Start;
     private static string _checkpoint;
+    private static string _newerCheckpoint;
     private static int _victimId;
     private static string _victimName;
     private static RimWorldGameWorld _oldWorld;
@@ -155,8 +157,12 @@ public sealed class ReloadCheckComponent : GameComponent
         if (!started) return false;
         agent.StopAutonomousRun();
         _oldWorld = new RimWorldGameWorld(Current.Game);
+        // 檢查點的 tick 取自檔名：複製一份改名成較新的 tick，就是要被放棄的那條時間線。
+        _newerCheckpoint = SaveTools.CheckpointName(_oldWorld.GetSaveContext().ColonyId, Find.TickManager.TicksGame);
+        File.Copy(GenFilePaths.FilePathForSavedGame(_checkpoint), GenFilePaths.FilePathForSavedGame(_newerCheckpoint), overwrite: true);
         string loaded = await new SaveTools(_oldWorld).LoadSave(_checkpoint, "test lesson: keep colonists inside");
         Check(loaded.StartsWith("Reloading", StringComparison.Ordinal), "load_save: " + loaded);
+        Check(File.Exists(GenFilePaths.FilePathForSavedGame(_newerCheckpoint)), "newer checkpoint kept while the reload is only scheduled");
         _phase = Phase.Reloading;
         return true;
     }
@@ -166,7 +172,7 @@ public sealed class ReloadCheckComponent : GameComponent
         Pawn victim = Find.CurrentMap.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.thingIDNumber == _victimId);
         Check(victim != null && !victim.Dead, "victim alive after reload");
         bool notice = agent.Session.Transcript.Snapshot()
-            .Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains("Reloaded " + _checkpoint, StringComparison.Ordinal) && e.Text.Contains("test lesson", StringComparison.Ordinal));
+            .Any(e => e.Kind == TranscriptKind.Notice && e.Text.Contains(_checkpoint, StringComparison.Ordinal) && e.Text.Contains("test lesson", StringComparison.Ordinal));
         bool reloadRun = agent.Session.Transcript.Snapshot()
             .Any(e => e.Kind == TranscriptKind.User && e.Autonomous && e.Text.Contains("test lesson", StringComparison.Ordinal));
         if ((!notice || !reloadRun) && Time.realtimeSinceStartup < 600f) return false;
@@ -175,6 +181,7 @@ public sealed class ReloadCheckComponent : GameComponent
         Check(_oldWorld.GetNotReadyReason()?.Contains("reloaded", StringComparison.Ordinal) == true, "old session blocked: " + _oldWorld.GetNotReadyReason());
         string list = await new SaveTools(new RimWorldGameWorld(Current.Game)).ListSaves();
         Check(list.Contains("reloads used 1/3", StringComparison.Ordinal), "attempt counted: " + list);
+        Check(!File.Exists(GenFilePaths.FilePathForSavedGame(_newerCheckpoint)), "newer checkpoint discarded after the reload");
         Finish();
         return true;
     }

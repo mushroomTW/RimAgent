@@ -152,8 +152,55 @@ public class SaveToolsTests
 
         await _tools.LoadSave("Autosave-1", "lesson");
 
-        Assert.That(_world.Calls, Does.Contain("DeleteCheckpoint(RimAgent-colony1-2000)"));
+        Assert.That(_world.Calls, Has.None.StartsWith("DeleteCheckpoint"), "讀檔只是排程，目標讀不進來時較新的檢查點是唯一退路");
         Assert.That(await _tools.ListSaves(), Does.Not.Contain("Autosave-2"), "被放棄的時間線上的 autosave 不能再讀");
+
+        SaveTools.DiscardAbandonedCheckpoints(_world.DeleteCheckpoint, _ledger, "colony1", currentTick: 1000);
+
+        Assert.That(_world.Calls, Does.Contain("DeleteCheckpoint(RimAgent-colony1-2000)"));
+    }
+
+    [Test]
+    public async Task DiscardKeepsAndRestoresCheckpointsTheLoadedGameAlreadyReached()
+    {
+        AddSave("Autosave-1", 1000);
+        AddSave("RimAgent-colony1-2000", 2000, checkpoint: true);
+        AddSave("RimAgent-colony1-3000", 3000, checkpoint: true);
+        await _tools.LoadSave("Autosave-1", "lesson");
+
+        // 目標讀不進來，玩家自己改讀了 2000 那份：它是現行時間線，不能刪，也要能再被列出、輪替。
+        SaveTools.DiscardAbandonedCheckpoints(_world.DeleteCheckpoint, _ledger, "colony1", currentTick: 2000);
+
+        Assert.That(_world.Calls, Does.Not.Contain("DeleteCheckpoint(RimAgent-colony1-2000)"));
+        Assert.That(_world.Calls, Does.Contain("DeleteCheckpoint(RimAgent-colony1-3000)"));
+        Assert.That(await _tools.ListSaves(), Does.Contain("RimAgent-colony1-2000"));
+    }
+
+    [Test]
+    public async Task DiscardStillRunsWhenAnotherColonyIsLoadedNext()
+    {
+        AddSave("Autosave-1", 1000);
+        AddSave("RimAgent-colony1-2000", 2000, checkpoint: true);
+        await _tools.LoadSave("Autosave-1", "lesson");
+
+        Assert.That(_ledger.TakePending("other"), Is.Null);
+        SaveTools.DiscardAbandonedCheckpoints(_world.DeleteCheckpoint, _ledger, "other", currentTick: 5000);
+
+        Assert.That(_world.Calls, Does.Contain("DeleteCheckpoint(RimAgent-colony1-2000)"));
+    }
+
+    [Test]
+    public async Task DiscardHappensOnlyOnce()
+    {
+        AddSave("Autosave-1", 1000);
+        AddSave("RimAgent-colony1-2000", 2000, checkpoint: true);
+        await _tools.LoadSave("Autosave-1", "lesson");
+
+        SaveTools.DiscardAbandonedCheckpoints(_world.DeleteCheckpoint, _ledger, "colony1", currentTick: 1000);
+        _world.Calls.Clear();
+        SaveTools.DiscardAbandonedCheckpoints(_world.DeleteCheckpoint, _ledger, "colony1", currentTick: 1000);
+
+        Assert.That(_world.Calls, Has.None.StartsWith("DeleteCheckpoint"));
     }
 
     [Test]

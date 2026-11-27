@@ -160,7 +160,7 @@ public static class A2AServerController
     {
         string version = typeof(A2AServerController).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
         // 明確 new：方法群組轉換會被編譯器快取成靜態欄位，RimWorld 啟動掃描欄位型別時就會載入 RimAgent.A2A（見 A2AShippingTests）。
-        return RimAgent.A2A.A2AServerHost.StartAsync(folder, port, port + 1, version, new ColonyInstructionRunner(RunRemoteInstructionAsync), bearerToken);
+        return RimAgent.A2A.A2AServerHost.StartAsync(folder, port, port + 1, version, new ColonyInstructionRunner(RunRemoteInstructionAsync), bearerToken ?? string.Empty);
     }
 
     /// <summary>遠端 agent 送來的一句指令，照玩家在視窗裡送出的方式跑：同樣受權限、模式與確認閘門管控。</summary>
