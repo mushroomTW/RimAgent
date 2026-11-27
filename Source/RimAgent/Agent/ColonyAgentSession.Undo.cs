@@ -83,23 +83,11 @@ public sealed partial class ColonyAgentSession
             var key = (a.PawnId, a.Hour);
             if (blockedAssignments.Contains(key)) continue;
             // 同優先級：玩家手動改過那一小時的作息就不覆寫。
-            if (!string.IsNullOrEmpty(a.NewAssignmentDefName))
+            if (IsAssignmentChangedByPlayer(a, key, updatedAssignments, byId))
             {
-                string? current = null;
-                if (updatedAssignments.TryGetValue(key, out string? updated))
-                {
-                    current = updated;
-                }
-                else if (byId.TryGetValue(a.PawnId, out ColonistInfo? pawn) && pawn.Timetable != null && a.Hour >= 0 && a.Hour < pawn.Timetable.Count)
-                {
-                    current = pawn.Timetable[a.Hour];
-                }
-                if (!string.Equals(current, a.NewAssignmentDefName, StringComparison.Ordinal))
-                {
-                    blockedAssignments.Add(key);
-                    failures.Add(string.Create(CultureInfo.InvariantCulture, $"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten."));
-                    continue;
-                }
+                blockedAssignments.Add(key);
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"{NameOf(names, a.PawnId)} hour {a.Hour}: changed since RimAgent; not overwritten."));
+                continue;
             }
             CommandResult r = _world.SetTimeAssignment(a.PawnId, a.Hour, a.OldAssignmentDefName);
             if (r.Success)
@@ -113,6 +101,22 @@ public sealed partial class ColonyAgentSession
                 failures.Add(string.Create(CultureInfo.InvariantCulture, $"{NameOf(names, a.PawnId)} hour {a.Hour}: {r.Message}"));
             }
         }
+    }
+
+    private static bool IsAssignmentChangedByPlayer(UndoTimeAssignment a, (int, int) key,
+        Dictionary<(int, int), string> updatedAssignments, Dictionary<int, ColonistInfo> byId)
+    {
+        if (string.IsNullOrEmpty(a.NewAssignmentDefName)) return false;
+        string? current = null;
+        if (updatedAssignments.TryGetValue(key, out string? updated))
+        {
+            current = updated;
+        }
+        else if (byId.TryGetValue(a.PawnId, out ColonistInfo? pawn) && pawn.Timetable != null && a.Hour >= 0 && a.Hour < pawn.Timetable.Count)
+        {
+            current = pawn.Timetable[a.Hour];
+        }
+        return !string.Equals(current, a.NewAssignmentDefName, StringComparison.Ordinal);
     }
 
     private int RestorePriorities(UndoFrame frame, Dictionary<int, string> names, Dictionary<int, ColonistInfo> byId,

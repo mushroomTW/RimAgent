@@ -181,9 +181,7 @@ public sealed class BuildTools
         var failures = new List<string>();
         foreach (ThingInfo t in markedTargets)
         {
-            CommandResult r = dk.OnCell
-                ? _world.RemoveDesignationOnCell(t.X, t.Z, dk.DefName)
-                : _world.RemoveDesignationOnThing(t.Id, dk.DefName);
+            CommandResult r = RemoveMark(dk, t);
             if (r.Success) removed++;
             else failures.Add($"{t.Label} at {ToolText.Cell(t.X, t.Z)}: {r.Message}");
         }
@@ -193,6 +191,10 @@ public sealed class BuildTools
         string summary = string.Create(CultureInfo.InvariantCulture, $"Removed {removed} {dk.Verb} mark(s).") + OmittedNote(omitted);
         return failures.Count == 0 ? summary : summary + " Failures: " + string.Join("; ", failures.Take(5));
     }
+
+    private CommandResult RemoveMark(DesignationKind dk, ThingInfo t) => dk.OnCell
+        ? _world.RemoveDesignationOnCell(t.X, t.Z, dk.DefName)
+        : _world.RemoveDesignationOnThing(t.Id, dk.DefName);
 
     [AgentTool("place_blueprint", ToolCategory.Build, ToolRisk.Confirm)]
     [Description("Places build blueprints. shape: single (one thing at x,z), line (straight row from x,z to x2,z2), fill (every cell of the rectangle, e.g. floors), outline (its border, e.g. room walls; add a door on the wall afterwards) or layout (a whole predesigned room: building = layout name, x,z = its center cell, rotation turns the whole room, stuff = one material for walls, doors and furniture, or set each part: \"walls=granite blocks; floor=fine granite tile; furniture=steel\" (any material or floor in the game, modded ones too; omitted parts keep the layout's own); an empty building lists the layouts). To build a room (bedroom, kitchen, workshop, storage, etc.), use a layout by default: list them and pick the closest fit; draw walls with outline only when the player asks for a specific size or shape, or no layout fits. Use single for things larger than 1x1: x,z is its center cell (an even width or depth leaves the extra cell east/north, and rotation can shift it), and the reply lists the rectangle each blueprint covers. All or nothing: if any cell (or any part of a layout) is refused, nothing is placed and the reasons are listed; if space is occupied, also the blocking things with ids and rectangles. Size, cost and rules: lookup_def. North is larger z, east is larger x. Max 400 cells per call.")]

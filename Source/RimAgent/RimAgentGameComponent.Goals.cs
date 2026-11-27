@@ -246,7 +246,7 @@ public partial class RimAgentGameComponent
     private void FinalizeGoalRun(bool exclusive, ColonyAgentSession session, CancellationTokenSource cts, int generation)
     {
         if (exclusive) session.EndExclusiveWork();
-        Interlocked.CompareExchange(ref _goalCts, null, cts);
+        Interlocked.CompareExchange(ref _goalCts, value: null, cts);
         Interlocked.Decrement(ref _activeGoalRuns);
         if (generation == Volatile.Read(ref _goalGeneration))
         {

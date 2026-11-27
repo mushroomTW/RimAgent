@@ -559,13 +559,7 @@ internal sealed partial class RimWorldGameWorld
             return CommandResult.Fail("this game version does not expose this dialog");
         }
 
-        List<Thing> candidates = NewColonyCandidates(dialog);
-        var picked = new List<Thing>();
-        foreach (string part in (input ?? string.Empty).Split(_commaSplit, StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (!int.TryParse(part.Trim(), CultureInfo.InvariantCulture, out int number) || number < 1 || number > candidates.Count) return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
-            if (!picked.Contains(candidates[number - 1])) picked.Add(candidates[number - 1]);
-        }
+        if (ParseNewColonyPicks(input, NewColonyCandidates(dialog), out List<Thing> picked) is { } parseFail) return parseFail;
         // AcceptanceReport 讀的是對話框自己的選取集合，所以先套用；被拒絕就還原，不留下半套選擇。
         var previous = new List<Thing>(selected);
         object? previousItemCount = selectedItemCount.GetValue(dialog);
@@ -599,6 +593,18 @@ internal sealed partial class RimWorldGameWorld
         // 同「接受」按鈕：後果確認框留給 choose_option。
         NewColonyConfirm.Invoke(dialog, [picked, onlySlaves]);
         return CommandResult.Ok(WithGameMessages($"selected {picked.Count}", watch));
+    }
+
+    private static CommandResult? ParseNewColonyPicks(string? input, List<Thing> candidates, out List<Thing> picked)
+    {
+        picked = new List<Thing>();
+        foreach (string part in (input ?? string.Empty).Split(_commaSplit, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!int.TryParse(part.Trim(), CultureInfo.InvariantCulture, out int number) || number < 1 || number > candidates.Count)
+                return CommandResult.Fail($"\"{part.Trim()}\" is not a listed number");
+            if (!picked.Contains(candidates[number - 1])) picked.Add(candidates[number - 1]);
+        }
+        return null;
     }
 
     private static CommandResult AnswerLoad(Dialog_LoadTransporters dialog, int option, string? input, MessageWatch watch)

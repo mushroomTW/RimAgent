@@ -235,7 +235,7 @@ public sealed class McpManager
             if (_clients.TryGetValue(entry.Name, out IMcpServer? running))
             {
                 _lastUsed[entry.Name] = DateTime.UtcNow;
-                return Tuple.Create<IMcpServer, IList<McpServerTool>?>(running, null);
+                return Tuple.Create<IMcpServer, IList<McpServerTool>?>(running, item2: null);
             }
             if (!_connecting.TryGetValue(entry.Name, out inflight))
             {
@@ -249,7 +249,7 @@ public sealed class McpManager
             _ = ConnectNewServerAsync(entry, tcs);
         }
         Tuple<IMcpServer, IList<McpServerTool>?> result = await inflight.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return tcs != null ? result : Tuple.Create<IMcpServer, IList<McpServerTool>?>(result.Item1, null);
+        return tcs != null ? result : Tuple.Create<IMcpServer, IList<McpServerTool>?>(result.Item1, item2: null);
     }
 
     private async Task ConnectNewServerAsync(McpServerEntry entry, TaskCompletionSource<Tuple<IMcpServer, IList<McpServerTool>?>> tcs)

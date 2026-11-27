@@ -179,9 +179,11 @@ public sealed class DecisionReasoningRouter
         List<ChatMessage> relevant;
         try
         {
-            relevant = history
-                .Where(m => m != null && (m.Role == ChatRole.User || (includeAssistant && m.Role == ChatRole.Assistant)) && !string.IsNullOrWhiteSpace(m.Text))
-                .ToList();
+            relevant =
+            [
+                .. history
+                    .Where(m => m != null && (m.Role == ChatRole.User || (includeAssistant && m.Role == ChatRole.Assistant)) && !string.IsNullOrWhiteSpace(m.Text))
+            ];
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException or IndexOutOfRangeException)
         {

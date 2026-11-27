@@ -14,6 +14,8 @@ internal static class DibDecoder
 
     internal const long MaxPixels = 40_000_000;
 
+    private readonly record struct BitfieldMasks(uint R, uint G, uint B);
+
     public static bool TryDecode(byte[]? dib, out int width, out int height, [NotNullWhen(true)] out byte[]? rgba)
     {
         width = 0;
@@ -28,26 +30,8 @@ internal static class DibDecoder
         int rows = Math.Abs(rawHeight);
         if ((long)rawWidth * rows > MaxPixels) return false;
 
-        // 舊式 40 位元組標頭搭配 BI_BITFIELDS 時，標頭後還有三個色彩遮罩；若有調色盤（biClrUsed > 0）亦排在像素資料前。
-        int maskBytes = compression == BiBitfields && headerSize == InfoHeaderSize ? 12 : 0;
-        long offsetLong = (long)headerSize + maskBytes + (long)colorsUsed * 4;
-        if (offsetLong > dib.Length) return false;
-        int offset = (int)offsetLong;
-
-        uint rMask = 0x00FF0000u, gMask = 0x0000FF00u, bMask = 0x000000FFu;
-        bool customMasks = false;
-        if (compression == BiBitfields)
-        {
-            if (dib.Length < InfoHeaderSize + 12) return false;
-            rMask = BitConverter.ToUInt32(dib, InfoHeaderSize);
-            gMask = BitConverter.ToUInt32(dib, InfoHeaderSize + 4);
-            bMask = BitConverter.ToUInt32(dib, InfoHeaderSize + 8);
-            if ((rMask | gMask | bMask) != 0)
-            {
-                if (rMask == 0 || gMask == 0 || bMask == 0) return false;
-                customMasks = rMask != 0x00FF0000u || gMask != 0x0000FF00u || bMask != 0x000000FFu;
-            }
-        }
+        if (!TryComputePixelOffset(dib, headerSize, compression, colorsUsed, out int offset)) return false;
+        if (!TryReadBitfieldMasks(dib, compression, out BitfieldMasks masks, out bool customMasks)) return false;
 
         int bytesPerPixel = bitCount / 8;
         int stride = ((rawWidth * bitCount + 31) / 32) * 4;
@@ -60,7 +44,7 @@ internal static class DibDecoder
             int source = offset + (bottomUp ? row : rows - 1 - row) * stride;
             int target = row * rawWidth * 4;
             if (customMasks)
-                DecodeRowBitfields(dib, source, target, rawWidth, rMask, gMask, bMask, pixels);
+                DecodeRowBitfields(dib, source, target, rawWidth, masks, pixels);
             else
                 DecodeRow(dib, source, target, rawWidth, bytesPerPixel, pixels);
         }
@@ -68,6 +52,36 @@ internal static class DibDecoder
         width = rawWidth;
         height = rows;
         rgba = pixels;
+        return true;
+    }
+
+    private static bool TryComputePixelOffset(byte[] dib, int headerSize, int compression, int colorsUsed, out int offset)
+    {
+        // 舊式 40 位元組標頭搭配 BI_BITFIELDS 時，標頭後還有三個色彩遮罩；若有調色盤（biClrUsed > 0）亦排在像素資料前。
+        int maskBytes = compression == BiBitfields && headerSize == InfoHeaderSize ? 12 : 0;
+        long offsetLong = (long)headerSize + maskBytes + (long)colorsUsed * 4;
+        if (offsetLong > dib.Length)
+        {
+            offset = 0;
+            return false;
+        }
+        offset = (int)offsetLong;
+        return true;
+    }
+
+    private static bool TryReadBitfieldMasks(byte[] dib, int compression, out BitfieldMasks masks, out bool customMasks)
+    {
+        masks = new BitfieldMasks(0x00FF0000u, 0x0000FF00u, 0x000000FFu);
+        customMasks = false;
+        if (compression != BiBitfields) return true;
+        if (dib.Length < InfoHeaderSize + 12) return false;
+        uint rMask = BitConverter.ToUInt32(dib, InfoHeaderSize);
+        uint gMask = BitConverter.ToUInt32(dib, InfoHeaderSize + 4);
+        uint bMask = BitConverter.ToUInt32(dib, InfoHeaderSize + 8);
+        if ((rMask | gMask | bMask) == 0) return true;
+        if (rMask == 0 || gMask == 0 || bMask == 0) return false;
+        masks = new BitfieldMasks(rMask, gMask, bMask);
+        customMasks = rMask != 0x00FF0000u || gMask != 0x0000FF00u || bMask != 0x000000FFu;
         return true;
     }
 
@@ -100,21 +114,21 @@ internal static class DibDecoder
         }
     }
 
-    private static void DecodeRowBitfields(byte[] dib, int source, int target, int rawWidth, uint rMask, uint gMask, uint bMask, byte[] pixels)
+    private static void DecodeRowBitfields(byte[] dib, int source, int target, int rawWidth, BitfieldMasks masks, byte[] pixels)
     {
-        int rShift = BitOperations.TrailingZeroCount(rMask);
-        int gShift = BitOperations.TrailingZeroCount(gMask);
-        int bShift = BitOperations.TrailingZeroCount(bMask);
-        uint rMax = rMask >> rShift;
-        uint gMax = gMask >> gShift;
-        uint bMax = bMask >> bShift;
+        int rShift = BitOperations.TrailingZeroCount(masks.R);
+        int gShift = BitOperations.TrailingZeroCount(masks.G);
+        int bShift = BitOperations.TrailingZeroCount(masks.B);
+        uint rMax = masks.R >> rShift;
+        uint gMax = masks.G >> gShift;
+        uint bMax = masks.B >> bShift;
         for (int x = 0; x < rawWidth; x++)
         {
             uint pixel = BitConverter.ToUInt32(dib, source + x * 4);
             int t = target + x * 4;
-            pixels[t] = ScaleChannel((pixel & rMask) >> rShift, rMax);
-            pixels[t + 1] = ScaleChannel((pixel & gMask) >> gShift, gMax);
-            pixels[t + 2] = ScaleChannel((pixel & bMask) >> bShift, bMax);
+            pixels[t] = ScaleChannel((pixel & masks.R) >> rShift, rMax);
+            pixels[t + 1] = ScaleChannel((pixel & masks.G) >> gShift, gMax);
+            pixels[t + 2] = ScaleChannel((pixel & masks.B) >> bShift, bMax);
             pixels[t + 3] = 255;
         }
     }

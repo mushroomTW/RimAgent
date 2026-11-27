@@ -237,7 +237,7 @@ public class A2AServerHostTests
             (text, _) => Task.FromResult("ok: " + text),
             bearerToken: "secret-token-123");
 
-        string url = $"http://localhost:{httpPort}{A2AServerHost.JsonRpcPath}";
+        string url = string.Create(CultureInfo.InvariantCulture, $"http://localhost:{httpPort}{A2AServerHost.JsonRpcPath}");
         using var http = new HttpClient();
 
         using var unauthReq = new HttpRequestMessage(HttpMethod.Post, url)

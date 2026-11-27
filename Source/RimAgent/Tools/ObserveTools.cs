@@ -293,17 +293,9 @@ public sealed class ObserveTools
             Limit = Math.Max(1, Math.Min(200, limit <= 0 ? 20 : limit))
         };
 
-        bool anyArea = x1 != -1 || z1 != -1 || x2 != -1 || z2 != -1;
-        if (anyArea)
-        {
-            if (x1 < 0 || z1 < 0 || x2 < 0 || z2 < 0)
-            {
-                return ToolText.Error("provide all four non-negative coordinates (x1, z1, x2, z2) or omit all of them.");
-            }
-            Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
-            if (!rect.Success) return rect.Error;
-            query.Area = rect.Value;
-        }
+        Result<CellRectSpec?> area = TryResolveSearchArea(x1, z1, x2, z2);
+        if (!area.Success) return area.Error;
+        query.Area = area.Value;
 
         ThingSearchResult things = _world.FindThings(query);
         if (things.Count == 0)
@@ -330,6 +322,15 @@ public sealed class ObserveTools
     internal static bool TryParseKind(string kind, out ThingKind parsed)
     {
         return Enum.TryParse((kind ?? string.Empty).Trim(), ignoreCase: true, out parsed) && Enum.IsDefined<ThingKind>(parsed);
+    }
+
+    private Result<CellRectSpec?> TryResolveSearchArea(int x1, int z1, int x2, int z2)
+    {
+        if (x1 == -1 && z1 == -1 && x2 == -1 && z2 == -1) return Result<CellRectSpec?>.Ok(value: null);
+        if (x1 < 0 || z1 < 0 || x2 < 0 || z2 < 0)
+            return Result<CellRectSpec?>.Fail(ToolText.Error("provide all four non-negative coordinates (x1, z1, x2, z2) or omit all of them."));
+        Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
+        return rect.Success ? Result<CellRectSpec?>.Ok(rect.Value) : Result<CellRectSpec?>.Fail(rect.Error);
     }
 
     /// <summary>inspect_area 一次最多看的格數（50x50）；再大就是在掃全圖，該改用 find_things。</summary>
@@ -426,7 +427,7 @@ public sealed class ObserveTools
         if (outside != null) return outside;
 
         CellInfo? c = _world.GetCell(x, z);
-        if (c == null) return ToolText.Error($"cell ({x},{z}) is unavailable.");
+        if (c == null) return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"cell ({x},{z}) is unavailable."));
         var sb = new StringBuilder();
         sb.Append("Cell ").Append(ToolText.Cell(c.X, c.Z)).Append(": ").Append(c.Terrain).Append(" (").Append(c.TerrainDefName).Append(')')
           .Append(", fertility ").Append(ToolText.Pct(c.Fertility))

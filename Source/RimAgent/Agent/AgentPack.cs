@@ -276,11 +276,7 @@ public static class AgentPackLoader
         int colon = line.IndexOf(':', StringComparison.Ordinal);
         if (colon <= 0) return;
         string key = line.Substring(0, colon).Trim().ToLowerInvariant();
-        string value = line.Substring(colon + 1).Trim();
-        if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
-        {
-            value = value[1..^1].Trim();
-        }
+        string value = Unquote(line.Substring(colon + 1).Trim());
         switch (key)
         {
             case "name":
@@ -311,6 +307,11 @@ public static class AgentPackLoader
                 break;
         }
     }
+
+    private static string Unquote(string value) =>
+        value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\''))
+            ? value[1..^1].Trim()
+            : value;
 
     /// <summary>Enum.TryParse 會把數字字串也當成合法值；這裡只收名稱。</summary>
     private static bool TryParseName<T>(string value, out T result) where T : struct

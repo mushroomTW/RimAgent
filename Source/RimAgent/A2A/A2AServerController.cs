@@ -26,7 +26,7 @@ public static class A2AServerController
     private static IAsyncDisposable? _server;
     private static int _runningPort;
     private static string? _runningToken;
-    private static DesiredConfig _desired = new(0, null);
+    private static DesiredConfig _desired = new(0, BearerToken: null);
     private static int _workerRunning;
     private static string? _folder;
     private static volatile string? _lastError;
@@ -140,8 +140,8 @@ public static class A2AServerController
             string? simpleName = name.Name;
             if (string.IsNullOrWhiteSpace(simpleName)
                 || simpleName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-                || simpleName.Contains(Path.DirectorySeparatorChar)
-                || simpleName.Contains(Path.AltDirectorySeparatorChar))
+                || simpleName.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || simpleName.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
             {
                 return null;
             }
