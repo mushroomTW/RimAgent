@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,7 +21,7 @@ public partial class Window_Agent
         EnsureTranscriptLines(session.Transcript, width, out bool deferReflow);
 
         float lineWidth = deferReflow ? _linesWidth : width;
-        GetWorkingIndicator(session.IsBusy, session.Activity.Current, width, out string working, out float workingHeight);
+        GetWorkingIndicator(session.IsBusy, session.Activity.Current, width, out string? working, out float workingHeight);
         float total = _linesTotal + (working != null ? workingHeight + EntryGap : 0f);
 
         TranscriptScrollLayout scrollLayout = UpdateScrollPosition(total, width, outRect);
@@ -32,8 +30,8 @@ public partial class Window_Agent
 
         Widgets.BeginScrollView(outRect, ref _scroll, scrollLayout.ViewRect);
         float y = 0f;
-        TranscriptEntry clickedTool = null;
-        TranscriptEntry clickedGroup = null;
+        TranscriptEntry? clickedTool = null;
+        TranscriptEntry? clickedGroup = null;
         var drawContext = new TranscriptDrawContext(visibleTop, visibleBottom, lineWidth, width, scrollLayout.MouseOnJump);
         DrawTranscriptLines(_lines, y, in drawContext, ref clickedTool, ref clickedGroup, out y);
         if (working != null)
@@ -61,7 +59,7 @@ public partial class Window_Agent
         }
     }
 
-    private void DrawTranscriptLines(List<TranscriptLine> lines, float y, in TranscriptDrawContext ctx, ref TranscriptEntry clickedTool, ref TranscriptEntry clickedGroup, out float outY)
+    private void DrawTranscriptLines(List<TranscriptLine> lines, float y, in TranscriptDrawContext ctx, ref TranscriptEntry? clickedTool, ref TranscriptEntry? clickedGroup, out float outY)
     {
         outY = y;
         foreach (TranscriptLine line in lines)
@@ -131,7 +129,7 @@ public partial class Window_Agent
         }
     }
 
-    private void GetWorkingIndicator(bool isBusy, AgentActivity activity, float width, out string working, out float workingHeight)
+    private void GetWorkingIndicator(bool isBusy, AgentActivity? activity, float width, out string? working, out float workingHeight)
     {
         working = null;
         workingHeight = 0f;
@@ -181,8 +179,8 @@ public partial class Window_Agent
         float lineWidth,
         float visibleWidth,
         bool mouseOnJump,
-        ref TranscriptEntry clickedTool,
-        ref TranscriptEntry clickedGroup)
+        ref TranscriptEntry? clickedTool,
+        ref TranscriptEntry? clickedGroup)
     {
         var lineRect = new Rect(0f, y, lineWidth, line.Height);
         switch (line.Kind)
@@ -210,7 +208,7 @@ public partial class Window_Agent
 
     private void DrawScreenshotLine(Rect lineRect, TranscriptLine line)
     {
-        DrawScreenshotPreview(lineRect, line.ImagePath);
+        if (line.ImagePath != null) DrawScreenshotPreview(lineRect, line.ImagePath);
     }
 
     private static void DrawPlayerBubbleLine(Rect lineRect, TranscriptLine line, float y, float visibleWidth)
@@ -218,10 +216,10 @@ public partial class Window_Agent
         float bubbleRight = Mathf.Min(lineRect.xMax, visibleWidth);
         var bubble = new Rect(Mathf.Max(0f, bubbleRight - line.BubbleWidth), y, line.BubbleWidth, line.Height);
         GUI.Box(bubble, GUIContent.none, GetBubbleStyle());
-        DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text, line.PlainText);
+        DrawSelectableLine(bubble.ContractedBy(BubblePadX, BubblePadY), line.Text ?? string.Empty, line.PlainText);
     }
 
-    private void DrawToolGroupHeaderLine(Rect lineRect, TranscriptLine line, bool mouseOnJump, ref TranscriptEntry clickedGroup)
+    private void DrawToolGroupHeaderLine(Rect lineRect, TranscriptLine line, bool mouseOnJump, ref TranscriptEntry? clickedGroup)
     {
         if (!mouseOnJump)
         {
@@ -239,10 +237,10 @@ public partial class Window_Agent
     private static void DrawTableLine(Rect lineRect, TranscriptLine line, bool mouseOnJump)
     {
         if (!mouseOnJump) CopyToolHeaderOnRightClick(lineRect, line.PlainText);
-        line.Table.Draw(lineRect);
+        line.Table?.Draw(lineRect);
     }
 
-    private void DrawToolHeaderLine(Rect lineRect, TranscriptLine line, bool mouseOnJump, ref TranscriptEntry clickedTool)
+    private void DrawToolHeaderLine(Rect lineRect, TranscriptLine line, bool mouseOnJump, ref TranscriptEntry? clickedTool)
     {
         if (!mouseOnJump)
         {
@@ -261,10 +259,10 @@ public partial class Window_Agent
     private const float ShieldSize = 14f;
     /// <summary>有盾牌的列，文字少這麼寬再量高與換行，盾牌才不會壓到字。</summary>
     internal const float ShieldReserve = ShieldSize + 6f;
-    private string _shieldTip;
+    private string? _shieldTip;
 
     /// <summary>自動模式下由決策模型審過風險的工具呼叫；決策模型失敗改用規則分類器時（來源 fallback）不算。</summary>
-    internal static bool ReviewedByDecisionModel(TranscriptEntry entry)
+    internal static bool ReviewedByDecisionModel(TranscriptEntry? entry)
     {
         return entry is { Kind: TranscriptKind.Tool } && entry.RiskCheckSource == "decision";
     }
@@ -273,11 +271,11 @@ public partial class Window_Agent
     {
         if (!line.Reviewed)
         {
-            Widgets.Label(lineRect, line.Text);
+            Widgets.Label(lineRect, line.Text ?? string.Empty);
             return;
         }
-        Widgets.Label(new Rect(lineRect.x, lineRect.y, lineRect.width - ShieldReserve, lineRect.height), line.Text);
-        Rect icon = ShieldRect(lineRect, Text.CalcSize(line.PlainText).x, Text.LineHeight);
+        Widgets.Label(new Rect(lineRect.x, lineRect.y, lineRect.width - ShieldReserve, lineRect.height), line.Text ?? string.Empty);
+        Rect icon = ShieldRect(lineRect, Text.CalcSize(line.PlainText ?? string.Empty).x, Text.LineHeight);
         GUI.color = ToolTextColor;
         GUI.DrawTexture(icon, ShieldTex);
         GUI.color = Color.white;
@@ -293,7 +291,7 @@ public partial class Window_Agent
 
     private static void DrawDefaultLine(Rect lineRect, TranscriptLine line)
     {
-        DrawSelectableLine(lineRect, line.Text, line.PlainText);
+        DrawSelectableLine(lineRect, line.Text ?? string.Empty, line.PlainText);
     }
 
     private void DrawJumpButton(Rect jumpRect)
@@ -317,7 +315,7 @@ public partial class Window_Agent
         return unchecked(now - _settlingSince) >= ReflowDelayMs;
     }
 
-    private static GUIStyle _bubbleStyle;
+    private static GUIStyle? _bubbleStyle;
 
     private static GUIStyle GetBubbleStyle()
     {
@@ -360,7 +358,7 @@ public partial class Window_Agent
     /// Labels 不能框選、TextArea 會連顏色標籤一起複製：彩色 Label 上疊一層同字體同排版、文字平時透明的 TextArea，專供拖選與 Ctrl+C。
     /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
     /// </summary>
-    private static void DrawSelectableLine(Rect rect, string richText, string plainText)
+    private static void DrawSelectableLine(Rect rect, string richText, string? plainText)
     {
         Widgets.Label(rect, richText);
         // 唯讀框選層不需要文字游標：焦點在它身上時 Unity 會畫一條閃爍豎線（如氣泡尾端的游標），
@@ -380,7 +378,7 @@ public partial class Window_Agent
     internal static GUIStyle GetSelectableStyle()
     {
         GameFont font = Text.Font;
-        if (!SelectableStyles.TryGetValue(font, out GUIStyle style) || style == null)
+        if (!SelectableStyles.TryGetValue(font, out GUIStyle? style) || style == null)
         {
             style = new GUIStyle(Text.CurFontStyle)
             {
@@ -406,7 +404,7 @@ public partial class Window_Agent
     /// <summary>
     /// Unity 原生呼叫集中在這一個方法（RuntimeCompatibilityTests 逐一登記這類方法）。
     /// </summary>
-    private static void CopyToolHeaderOnRightClick(Rect rect, string plainText)
+    private static void CopyToolHeaderOnRightClick(Rect rect, string? plainText)
     {
         if (Event.current.type != EventType.MouseDown || Event.current.button != 1) return;
         if (!Mouse.IsOver(rect)) return;

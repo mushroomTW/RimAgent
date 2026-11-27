@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
@@ -28,29 +27,29 @@ internal sealed partial class RimWorldGameWorld
     private const string CancelLabel = "Cancel";
     private const string TileInputHint = "a tile id as printed by list_world_objects or get_world_tile, for example 123 (surface) or Orbit:45";
 
-    private static readonly FieldInfo TilePickerValidator = AccessTools.Field(typeof(TilePicker), "validator");
-    private static readonly FieldInfo TilePickerChosen = AccessTools.Field(typeof(TilePicker), "tileChosen");
-    private static readonly FieldInfo TilePickerTitle = AccessTools.Field(typeof(TilePicker), "title");
-    private static readonly FieldInfo TilePickerAllowEscape = AccessTools.Field(typeof(TilePicker), "allowEscape");
-    private static readonly FieldInfo TargeterCaster = AccessTools.Field(typeof(Targeter), "caster");
-    private static readonly MethodInfo TilePickerStop = AccessTools.Method(typeof(TilePicker), "StopTargetingInt");
-    private static readonly FieldInfo WorldTargeterAction = AccessTools.Field(typeof(WorldTargeter), "action");
-    private static readonly FieldInfo WorldTargeterCanSelect = AccessTools.Field(typeof(WorldTargeter), "canSelectTarget");
-    private static readonly FieldInfo FloatMenuOptions = AccessTools.Field(typeof(FloatMenu), "options");
-    private static readonly FieldInfo LandingMarkerField = AccessTools.Field(typeof(WorldComponent_GravshipController), "landingMarker");
-    private static readonly FieldInfo ConfigureIdeoNext = AccessTools.Field(typeof(Dialog_ConfigureIdeo), "nextAction");
-    private static readonly FieldInfo LoadTransferables = AccessTools.Field(typeof(Dialog_LoadTransporters), "transferables");
-    private static readonly MethodInfo LoadTryAccept = AccessTools.Method(typeof(Dialog_LoadTransporters), "TryAccept");
-    private static readonly PropertyInfo LordJobWarningText = AccessTools.Property(typeof(Dialog_BeginLordJob), "WarningText");
-    private static readonly FieldInfo NewColonyColonists = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "colonists");
-    private static readonly FieldInfo NewColonyAnimals = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "animals");
-    private static readonly FieldInfo NewColonyRelics = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "relics");
-    private static readonly FieldInfo NewColonyItems = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "items");
-    private static readonly FieldInfo NewColonyCancel = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "cancel");
-    private static readonly FieldInfo NewColonySelected = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "selected");
-    private static readonly FieldInfo NewColonySelectedItemCount = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "selectedItemCount");
-    private static readonly PropertyInfo NewColonyAcceptance = AccessTools.Property(typeof(Dialog_ChooseThingsForNewColony), "AcceptanceReport");
-    private static readonly MethodInfo NewColonyConfirm = AccessTools.Method(typeof(Dialog_ChooseThingsForNewColony), "ConfirmArchonexusSettlementConsequences");
+    private static readonly FieldInfo? TilePickerValidator = AccessTools.Field(typeof(TilePicker), "validator");
+    private static readonly FieldInfo? TilePickerChosen = AccessTools.Field(typeof(TilePicker), "tileChosen");
+    private static readonly FieldInfo? TilePickerTitle = AccessTools.Field(typeof(TilePicker), "title");
+    private static readonly FieldInfo? TilePickerAllowEscape = AccessTools.Field(typeof(TilePicker), "allowEscape");
+    private static readonly FieldInfo? TargeterCaster = AccessTools.Field(typeof(Targeter), "caster");
+    private static readonly MethodInfo? TilePickerStop = AccessTools.Method(typeof(TilePicker), "StopTargetingInt");
+    private static readonly FieldInfo? WorldTargeterAction = AccessTools.Field(typeof(WorldTargeter), "action");
+    private static readonly FieldInfo? WorldTargeterCanSelect = AccessTools.Field(typeof(WorldTargeter), "canSelectTarget");
+    private static readonly FieldInfo? FloatMenuOptions = AccessTools.Field(typeof(FloatMenu), "options");
+    private static readonly FieldInfo? LandingMarkerField = AccessTools.Field(typeof(WorldComponent_GravshipController), "landingMarker");
+    private static readonly FieldInfo? ConfigureIdeoNext = AccessTools.Field(typeof(Dialog_ConfigureIdeo), "nextAction");
+    private static readonly FieldInfo? LoadTransferables = AccessTools.Field(typeof(Dialog_LoadTransporters), "transferables");
+    private static readonly MethodInfo? LoadTryAccept = AccessTools.Method(typeof(Dialog_LoadTransporters), "TryAccept");
+    private static readonly PropertyInfo? LordJobWarningText = AccessTools.Property(typeof(Dialog_BeginLordJob), "WarningText");
+    private static readonly FieldInfo? NewColonyColonists = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "colonists");
+    private static readonly FieldInfo? NewColonyAnimals = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "animals");
+    private static readonly FieldInfo? NewColonyRelics = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "relics");
+    private static readonly FieldInfo? NewColonyItems = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "items");
+    private static readonly FieldInfo? NewColonyCancel = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "cancel");
+    private static readonly FieldInfo? NewColonySelected = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "selected");
+    private static readonly FieldInfo? NewColonySelectedItemCount = AccessTools.Field(typeof(Dialog_ChooseThingsForNewColony), "selectedItemCount");
+    private static readonly PropertyInfo? NewColonyAcceptance = AccessTools.Property(typeof(Dialog_ChooseThingsForNewColony), "AcceptanceReport");
+    private static readonly MethodInfo? NewColonyConfirm = AccessTools.Method(typeof(Dialog_ChooseThingsForNewColony), "ConfirmArchonexusSettlementConsequences");
     private static readonly char[] _commaSplit = [','];
 
     /// <summary>由工具開出來的選單、儀式與裝載畫面；玩家自己開的與自己的選目標狀態不算待回應。</summary>
@@ -85,7 +84,7 @@ internal sealed partial class RimWorldGameWorld
     }
 
     /// <summary>選項只能是 1 或 2；其他數字不能被當成主要動作。</summary>
-    private static CommandResult RequireTwoOptions(int option)
+    private static CommandResult? RequireTwoOptions(int option)
     {
         return option is 1 or 2 ? null : CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"option {option} does not exist; choose 1 or 2"));
     }
@@ -119,7 +118,7 @@ internal sealed partial class RimWorldGameWorld
     {
         Targeter targeter = Find.Targeter;
         if (!targeter.IsTargeting) return;
-        Thing caster = TargeterCaster?.GetValue(targeter) as Thing ?? targeter.targetingSource?.Caster;
+        Thing? caster = TargeterCaster?.GetValue(targeter) as Thing ?? targeter.targetingSource?.Caster;
         if (caster is not { Spawned: true } || Find.Selector.IsSelected(caster)) return;
         Find.Selector.ClearSelection();
         Find.Selector.Select(caster, playSound: false, forceDesignatorDeselect: false);
@@ -153,16 +152,16 @@ internal sealed partial class RimWorldGameWorld
                 Options = [.. Buttons("Use the target given as input", CancelLabel)]
             };
         }
-        PendingChoiceInfo landing = LandingChoice();
+        PendingChoiceInfo? landing = LandingChoice();
         if (landing != null) yield return landing;
         foreach (Window window in Find.WindowStack.Windows)
         {
-            PendingChoiceInfo choice = ResolveWindowChoice(window);
+            PendingChoiceInfo? choice = ResolveWindowChoice(window);
             if (choice != null) yield return choice;
         }
     }
 
-    private static PendingChoiceInfo ResolveWindowChoice(Window window) => window switch
+    private static PendingChoiceInfo? ResolveWindowChoice(Window window) => window switch
     {
         FloatMenu menu when AgentWindows.Contains(menu) => MenuChoice(menu),
         Dialog_BeginLordJob lordJob when AgentWindows.Contains(lordJob) => LordJobChoice(lordJob),
@@ -179,7 +178,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static string DescribeActiveTarget()
     {
-        TargetingParameters parameters = ActiveTargetParams(Find.Targeter);
+        TargetingParameters? parameters = ActiveTargetParams(Find.Targeter);
         return parameters == null ? string.Empty : "Accepts: " + DescribeTargets(parameters);
     }
 
@@ -199,7 +198,7 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    private static PendingChoiceInfo MenuChoice(FloatMenu menu)
+    private static PendingChoiceInfo? MenuChoice(FloatMenu menu)
     {
         if (FloatMenuOptions?.GetValue(menu) is not List<FloatMenuOption> options) return null;
         return new PendingChoiceInfo
@@ -231,7 +230,7 @@ internal sealed partial class RimWorldGameWorld
         return (LordJobWarningText?.GetValue(dialog) as string)?.StripTags() ?? string.Empty;
     }
 
-    private static List<Thing> NewColonyList(Dialog_ChooseThingsForNewColony dialog, FieldInfo field)
+    private static List<Thing> NewColonyList(Dialog_ChooseThingsForNewColony dialog, FieldInfo? field)
     {
         return field?.GetValue(dialog) as List<Thing> ?? [];
     }
@@ -259,7 +258,7 @@ internal sealed partial class RimWorldGameWorld
         return string.Join('\n', labels.Select((label, i) => string.Create(CultureInfo.InvariantCulture, $"{i + 1}) {label.StripTags()}")));
     }
 
-    private static PendingChoiceInfo LoadChoice(Dialog_LoadTransporters dialog)
+    private static PendingChoiceInfo? LoadChoice(Dialog_LoadTransporters dialog)
     {
         if (LoadTransferables?.GetValue(dialog) is not List<TransferableOneWay> transferables) return null;
         return new PendingChoiceInfo
@@ -272,9 +271,9 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    private static PendingChoiceInfo LandingChoice()
+    private static PendingChoiceInfo? LandingChoice()
     {
-        WorldComponent_GravshipController controller = Find.GravshipController;
+        WorldComponent_GravshipController? controller = Find.GravshipController;
         if (controller == null || !controller.LandingAreaConfirmationInProgress) return null;
         var marker = LandingMarkerField?.GetValue(controller) as GravshipLandingMarker;
         IntVec3 size = controller.landingMap?.Size ?? IntVec3.Zero;
@@ -293,7 +292,7 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    public CommandResult ChooseOption(string choiceId, int option, string input = null)
+    public CommandResult ChooseOption(string choiceId, int option, string? input = null)
     {
         string id = choiceId?.Trim() ?? string.Empty;
         var before = new HashSet<Window>(Find.WindowStack.Windows);
@@ -305,11 +304,11 @@ internal sealed partial class RimWorldGameWorld
             _agentMapTarget || (!wasMapTarget && Find.Targeter.IsTargeting),
             _agentWorldTarget || (!wasWorldTarget && Find.WorldTargeter.IsTargeting));
         if (_agentMapTarget) KeepCasterSelected();
-        CommandResult windowFailure = CloseUnsupportedWindows(before, "the answer");
+        CommandResult? windowFailure = CloseUnsupportedWindows(before, "the answer");
         return result.Success && windowFailure != null ? windowFailure : result;
     }
 
-    private static CommandResult AnswerPendingUi(string id, int option, string input)
+    private static CommandResult? AnswerPendingUi(string id, int option, string? input)
     {
         var watch = new MessageWatch();
         if (string.Equals(id, TileChoiceId, StringComparison.OrdinalIgnoreCase)) return AnswerTilePicker(option, input, watch);
@@ -328,11 +327,11 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    private static bool TryParseTile(string input, out PlanetTile tile)
+    private static bool TryParseTile(string? input, out PlanetTile tile)
     {
         tile = PlanetTile.Invalid;
         string text = input?.Trim() ?? string.Empty;
-        PlanetLayer layer = Find.WorldGrid.Surface;
+        PlanetLayer? layer = Find.WorldGrid.Surface;
         int colon = text.IndexOf(':', StringComparison.Ordinal);
         if (colon >= 0)
         {
@@ -350,7 +349,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Fail(WithGameMessages(what, watch));
     }
 
-    private static CommandResult AnswerTilePicker(int option, string input, MessageWatch watch)
+    private static CommandResult AnswerTilePicker(int option, string? input, MessageWatch watch)
     {
         if (!Find.TilePicker.Active) return CommandResult.Fail(ChoiceNotFound);
         if (RequireTwoOptions(option) is { } badOption) return badOption;
@@ -371,10 +370,10 @@ internal sealed partial class RimWorldGameWorld
         _agentExpectsTile = false;
         TilePickerStop.Invoke(Find.TilePicker, parameters: null);
         chosen(tile);
-        return CommandResult.Ok(WithGameMessages("tile " + input.Trim(), watch));
+        return CommandResult.Ok(WithGameMessages("tile " + (input ?? string.Empty).Trim(), watch));
     }
 
-    private static CommandResult AnswerWorldTarget(int option, string input, MessageWatch watch)
+    private static CommandResult AnswerWorldTarget(int option, string? input, MessageWatch watch)
     {
         WorldTargeter targeter = Find.WorldTargeter;
         if (!targeter.IsTargeting) return CommandResult.Fail(ChoiceNotFound);
@@ -388,15 +387,15 @@ internal sealed partial class RimWorldGameWorld
             return CommandResult.Fail("this game version does not expose the world targeter");
         if (!TryParseTile(input, out PlanetTile tile)) return CommandResult.Fail("give " + TileInputHint);
         // 同原版點世界地圖：格子上有世界物件就是點到物件。
-        WorldObject worldObject = Find.WorldObjects.ObjectsAt(tile).FirstOrDefault();
+        WorldObject? worldObject = Find.WorldObjects.ObjectsAt(tile).FirstOrDefault();
         GlobalTargetInfo target = worldObject != null ? new GlobalTargetInfo(worldObject) : new GlobalTargetInfo(tile);
         var canSelect = WorldTargeterCanSelect?.GetValue(targeter) as Func<GlobalTargetInfo, bool>;
         if ((canSelect != null && !canSelect(target)) || !action(target)) return Refused($"tile {input} was refused", watch);
         targeter.StopTargeting();
-        return CommandResult.Ok(WithGameMessages("tile " + input.Trim(), watch));
+        return CommandResult.Ok(WithGameMessages("tile " + (input ?? string.Empty).Trim(), watch));
     }
 
-    private static CommandResult AnswerMapTarget(int option, string input, MessageWatch watch)
+    private static CommandResult AnswerMapTarget(int option, string? input, MessageWatch watch)
     {
         Targeter targeter = Find.Targeter;
         if (!targeter.IsTargeting) return CommandResult.Fail(ChoiceNotFound);
@@ -406,12 +405,12 @@ internal sealed partial class RimWorldGameWorld
             targeter.StopTargeting();
             return CommandResult.Ok(CancelLabel);
         }
-        if (!TryParseMapTarget(input, out MapTarget target) || !TryResolveTarget(target, out LocalTargetInfo local, out _))
+        if (!TryParseMapTarget(input, out MapTarget? target) || !TryResolveTarget(target, out LocalTargetInfo local, out _))
         {
             return CommandResult.Fail("give #thing id or x,z");
         }
-        object sourceBefore = targeter.targetingSource;
-        object actionBefore = TargeterActionField?.GetValue(targeter);
+        object? sourceBefore = targeter.targetingSource;
+        object? actionBefore = TargeterActionField?.GetValue(targeter);
         CommandResult applied;
         try
         {
@@ -429,15 +428,15 @@ internal sealed partial class RimWorldGameWorld
         bool chained = targeter.IsTargeting
             && (!ReferenceEquals(targeter.targetingSource, sourceBefore) || !ReferenceEquals(TargeterActionField?.GetValue(targeter), actionBefore));
         if (!chained) targeter.StopTargeting();
-        return CommandResult.Ok(string.IsNullOrEmpty(applied.Message) ? "target " + input.Trim() : applied.Message);
+        return CommandResult.Ok(string.IsNullOrEmpty(applied.Message) ? "target " + (input ?? string.Empty).Trim() : applied.Message);
     }
 
-    private static bool TryParseMapTarget(string input, out MapTarget target)
+    private static bool TryParseMapTarget(string? input, [NotNullWhen(true)] out MapTarget? target)
     {
         target = null;
         string text = input?.Trim().TrimStart('#') ?? string.Empty;
         string[] parts = text.Split(',');
-        Result<MapTarget> parsed;
+        Result<MapTarget?> parsed;
         if (parts.Length == 2 && int.TryParse(parts[0].Trim(), CultureInfo.InvariantCulture, out int x) && int.TryParse(parts[1].Trim(), CultureInfo.InvariantCulture, out int z)) parsed = TargetResolver.ResolveMapTarget(-1, x, z);
         else if (parts.Length == 1 && int.TryParse(text, CultureInfo.InvariantCulture, out int id)) parsed = TargetResolver.ResolveMapTarget(id, -1, -1);
         else return false;
@@ -445,9 +444,9 @@ internal sealed partial class RimWorldGameWorld
         return target != null;
     }
 
-    private static CommandResult AnswerLanding(int option, string input, MessageWatch watch)
+    private static CommandResult AnswerLanding(int option, string? input, MessageWatch watch)
     {
-        WorldComponent_GravshipController controller = Find.GravshipController;
+        WorldComponent_GravshipController? controller = Find.GravshipController;
         if (controller == null || !controller.LandingAreaConfirmationInProgress) return CommandResult.Fail(ChoiceNotFound);
         if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (LandingMarkerField?.GetValue(controller) is not GravshipLandingMarker marker)
@@ -499,7 +498,7 @@ internal sealed partial class RimWorldGameWorld
     private static CommandResult AnswerMenu(FloatMenu menu, int option, MessageWatch watch)
     {
         if (FloatMenuOptions?.GetValue(menu) is not List<FloatMenuOption> options) return CommandResult.Fail("this game version does not expose menus");
-        FloatMenuOption picked = option >= 1 && option <= options.Count ? options[option - 1] : null;
+        FloatMenuOption? picked = option >= 1 && option <= options.Count ? options[option - 1] : null;
         if (picked == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"option {option} does not exist"));
         if (picked.Disabled) return CommandResult.Fail($"\"{picked.Label.StripTags()}\" is disabled");
         string label = picked.Label.StripTags();
@@ -543,7 +542,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok("kept the current ideoligion");
     }
 
-    private static CommandResult AnswerNewColony(Dialog_ChooseThingsForNewColony dialog, int option, string input, MessageWatch watch)
+    private static CommandResult AnswerNewColony(Dialog_ChooseThingsForNewColony dialog, int option, string? input, MessageWatch watch)
     {
         if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
@@ -553,7 +552,9 @@ internal sealed partial class RimWorldGameWorld
             return CommandResult.Ok(CancelLabel);
         }
         if (NewColonySelected?.GetValue(dialog) is not HashSet<Thing> selected
-            || NewColonySelectedItemCount == null || NewColonyAcceptance == null || NewColonyConfirm == null)
+            || NewColonySelectedItemCount is not FieldInfo selectedItemCount
+            || NewColonyAcceptance == null
+            || NewColonyConfirm == null)
         {
             return CommandResult.Fail("this game version does not expose this dialog");
         }
@@ -567,12 +568,12 @@ internal sealed partial class RimWorldGameWorld
         }
         // AcceptanceReport 讀的是對話框自己的選取集合，所以先套用；被拒絕就還原，不留下半套選擇。
         var previous = new List<Thing>(selected);
-        object previousItemCount = NewColonySelectedItemCount.GetValue(dialog);
+        object? previousItemCount = selectedItemCount.GetValue(dialog);
         void RestoreSelection()
         {
             selected.Clear();
             selected.UnionWith(previous);
-            NewColonySelectedItemCount.SetValue(dialog, previousItemCount);
+            selectedItemCount.SetValue(dialog, previousItemCount);
         }
         AcceptanceReport report;
         try
@@ -580,8 +581,8 @@ internal sealed partial class RimWorldGameWorld
             selected.Clear();
             selected.UnionWith(picked);
             List<Thing> items = NewColonyList(dialog, NewColonyItems);
-            NewColonySelectedItemCount.SetValue(dialog, picked.Count(items.Contains));
-            report = (AcceptanceReport)NewColonyAcceptance.GetValue(dialog);
+            selectedItemCount.SetValue(dialog, picked.Count(items.Contains));
+            report = NewColonyAcceptance.GetValue(dialog) is AcceptanceReport r ? r : AcceptanceReport.WasRejected;
         }
         catch (Exception ex)
         {
@@ -600,7 +601,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok(WithGameMessages($"selected {picked.Count}", watch));
     }
 
-    private static CommandResult AnswerLoad(Dialog_LoadTransporters dialog, int option, string input, MessageWatch watch)
+    private static CommandResult AnswerLoad(Dialog_LoadTransporters dialog, int option, string? input, MessageWatch watch)
     {
         if (RequireTwoOptions(option) is { } badOption) return badOption;
         if (option == 2)
@@ -611,17 +612,17 @@ internal sealed partial class RimWorldGameWorld
         if (LoadTransferables?.GetValue(dialog) is not List<TransferableOneWay> transferables || LoadTryAccept == null)
             return CommandResult.Fail("this game version does not expose this dialog");
         // 先全部驗過，再從零開始套用：上一次失敗留下的數量不能混進這次。
-        CommandResult parseFail = ParseLoadCounts(input, transferables, out var counts);
+        CommandResult? parseFail = ParseLoadCounts(input, transferables, out var counts);
         if (parseFail != null) return parseFail;
         foreach (TransferableOneWay row in transferables) row.AdjustTo(0);
         foreach ((TransferableOneWay row, int rowCount) in counts) row.AdjustTo(rowCount);
         // TryAccept 檢查失敗時丟訊息並回傳 false，視窗留著。
-        if (!(bool)LoadTryAccept.Invoke(dialog, parameters: null)) return Refused("the loading was refused", watch);
+        if (LoadTryAccept.Invoke(dialog, parameters: null) is not true) return Refused("the loading was refused", watch);
         dialog.Close(doCloseSound: false);
         return CommandResult.Ok(WithGameMessages("loading started", watch));
     }
 
-    private static CommandResult ParseLoadCounts(string input, List<TransferableOneWay> transferables, out List<(TransferableOneWay Row, int Count)> counts)
+    private static CommandResult? ParseLoadCounts(string? input, List<TransferableOneWay> transferables, out List<(TransferableOneWay Row, int Count)> counts)
     {
         counts = new List<(TransferableOneWay Row, int Count)>();
         foreach (string part in (input ?? string.Empty).Split(_commaSplit, StringSplitOptions.RemoveEmptyEntries))

@@ -44,7 +44,7 @@ public partial class Window_Agent
 
     private static void RunGoal(ColonyAgentSession session, string args)
     {
-        RimAgentGameComponent component = RimAgentGameComponent.Instance;
+        RimAgentGameComponent? component = RimAgentGameComponent.Instance;
         if (component == null) return;
         IReadOnlyList<string> goals = component.Goals;
         switch (SlashCommands.ParseGoal(args, out int index, out string text))

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -29,7 +27,7 @@ public sealed class SkillTools
     {
         IReadOnlyList<AgentSkill> skills = _skills() ?? [];
         string wanted = (skill ?? string.Empty).Trim();
-        AgentSkill match = skills.FirstOrDefault(s =>
+        AgentSkill? match = skills.FirstOrDefault(s =>
             s != null && string.Equals((s.Name ?? string.Empty).Trim(), wanted, StringComparison.OrdinalIgnoreCase));
         if (match == null)
         {

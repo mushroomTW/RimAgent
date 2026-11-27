@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -14,9 +12,9 @@ namespace RimAgent.Tools;
 public sealed class FloatMenuTools
 {
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public FloatMenuTools(IGameWorld world, ConfirmationGate gate = null)
+    public FloatMenuTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -61,7 +59,7 @@ public sealed class FloatMenuTools
         string needle = option?.Trim() ?? string.Empty;
         if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && menu.Options.Where(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase)).Skip(1).Any())
             return ToolText.Error($"{menu.PawnName}'s menu has multiple options named \"{needle}\". Use an option number from list_right_click_menu.");
-        FloatMenuOptionInfo picked = Resolve(menu.Options, needle);
+        FloatMenuOptionInfo? picked = Resolve(menu.Options, needle);
         if (picked == null)
         {
             string options = menu.Options.Count == 0 ? "none" : string.Join("; ", menu.Options.Select(o => o.Number.ToString(CultureInfo.InvariantCulture) + ") " + o.Label));
@@ -72,7 +70,7 @@ public sealed class FloatMenuTools
             return ToolText.Error($"\"{picked.Label}\" is disabled (the game's reason is in the label).");
         }
 
-        string blocked = ToolText.Blocked(_gate, $"would order {menu.PawnName} to \"{picked.Label}\" on {Target(menu, target.Value)}.");
+        string? blocked = ToolText.Blocked(_gate, $"would order {menu.PawnName} to \"{picked.Label}\" on {Target(menu, target.Value)}.");
         if (blocked != null) return blocked;
 
         CommandResult r = _world.UseFloatMenuOption(pawn.Value.Id, target.Value, picked.Number, picked.Label);
@@ -83,17 +81,18 @@ public sealed class FloatMenuTools
 
     private static Result<MapTarget> RequireTarget(int targetId, int x, int z)
     {
-        Result<MapTarget> parsed = TargetResolver.ResolveMapTarget(targetId, x, z);
-        if (parsed.Success && parsed.Value == null)
+        Result<MapTarget?> parsed = TargetResolver.ResolveMapTarget(targetId, x, z);
+        if (!parsed.Success) return Result<MapTarget>.Fail(parsed.Error);
+        if (parsed.Value == null)
             return Result<MapTarget>.Fail(ToolText.Error("give a target: targetId (a thing id) or targetX and targetZ (a cell)."));
-        return parsed;
+        return Result<MapTarget>.Ok(parsed.Value);
     }
 
-    private static FloatMenuOptionInfo Resolve(IReadOnlyList<FloatMenuOptionInfo> options, string needle)
+    private static FloatMenuOptionInfo? Resolve(IReadOnlyList<FloatMenuOptionInfo> options, string needle)
     {
         if (needle.Length == 0) return null;
         if (int.TryParse(needle, CultureInfo.InvariantCulture, out int number)) return options.FirstOrDefault(o => o.Number == number);
-        FloatMenuOptionInfo exact = options.FirstOrDefault(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase));
+        FloatMenuOptionInfo? exact = options.FirstOrDefault(o => string.Equals(o.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return exact;
         List<FloatMenuOptionInfo> partial = [.. options.Where(o => o.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];
         return partial.Count == 1 ? partial[0] : null;

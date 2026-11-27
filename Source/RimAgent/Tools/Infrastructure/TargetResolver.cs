@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -14,13 +12,13 @@ public static class TargetResolver
 
     public static readonly string[] EveryoneKeywords = ["all", "everyone", "*"];
 
-    public static bool IsEveryoneKeyword(string input)
+    public static bool IsEveryoneKeyword(string? input)
     {
         string needle = (input ?? string.Empty).Trim();
         return EveryoneKeywords.Any(k => string.Equals(k, needle, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static Result<ColonistInfo> ResolveColonist(string input, IReadOnlyList<ColonistInfo> colonists)
+    public static Result<ColonistInfo> ResolveColonist(string? input, IReadOnlyList<ColonistInfo> colonists)
     {
         return ResolveEntity(
             input,
@@ -32,19 +30,19 @@ public static class TargetResolver
     }
 
     /// <summary>命令的地圖目標：都沒給回成功但值為 null，由命令決定缺目標算不算錯。</summary>
-    public static Result<MapTarget> ResolveMapTarget(int targetId, int x, int z)
+    public static Result<MapTarget?> ResolveMapTarget(int targetId, int x, int z)
     {
         bool hasThing = targetId >= 0;
         bool hasCell = x >= 0 || z >= 0;
         if (hasThing && hasCell)
-            return Result<MapTarget>.Fail("Error: give either a target thing id or a target cell (x and z), not both.");
+            return Result<MapTarget?>.Fail("Error: give either a target thing id or a target cell (x and z), not both.");
         if (hasCell && (x < 0 || z < 0))
-            return Result<MapTarget>.Fail("Error: a target cell needs both targetX and targetZ.");
-        if (hasThing) return Result<MapTarget>.Ok(MapTarget.OfThing(targetId));
-        return Result<MapTarget>.Ok(hasCell ? MapTarget.OfCell(x, z) : null);
+            return Result<MapTarget?>.Fail("Error: a target cell needs both targetX and targetZ.");
+        if (hasThing) return Result<MapTarget?>.Ok(MapTarget.OfThing(targetId));
+        return Result<MapTarget?>.Ok(hasCell ? MapTarget.OfCell(x, z) : null);
     }
 
-    public static Result<List<ColonistInfo>> ResolveColonists(string input, IReadOnlyList<ColonistInfo> colonists)
+    public static Result<List<ColonistInfo>> ResolveColonists(string? input, IReadOnlyList<ColonistInfo> colonists)
     {
         string needle = (input ?? string.Empty).Trim();
         if (IsEveryoneKeyword(needle))
@@ -68,13 +66,13 @@ public static class TargetResolver
     }
 
     public static Result<T> ResolveEntity<T>(
-        string input,
+        string? input,
         IReadOnlyList<T> candidates,
         Func<T, int> getId,
-        Func<T, IEnumerable<string>> getNames,
+        Func<T, IEnumerable<string?>> getNames,
         Func<T, string> describe,
         string kindLabel,
-        string emptyErrorMessage = null) where T : class
+        string? emptyErrorMessage = null) where T : class
     {
         string needle = (input ?? string.Empty).Trim();
         if (needle.Length == 0)
@@ -84,7 +82,7 @@ public static class TargetResolver
 
         if (int.TryParse(StripIdDecoration(needle), CultureInfo.InvariantCulture, out int id))
         {
-            T byId = candidates.FirstOrDefault(c => getId(c) == id);
+            T? byId = candidates.FirstOrDefault(c => getId(c) == id);
             return byId != null
                 ? Result<T>.Ok(byId)
                 : Result<T>.Fail(string.Create(CultureInfo.InvariantCulture, $"Error: no {kindLabel} has id {id}. {FormatListAll(candidates, describe, kindLabel)}"));
@@ -162,13 +160,13 @@ public static class TargetResolver
             Math.Max(0, rect.MinX), Math.Max(0, rect.MinZ), Math.Min(bounds.Width - 1, rect.MaxX), Math.Min(bounds.Height - 1, rect.MaxZ)));
     }
 
-    public static string CheckCell(int x, int z, MapBounds bounds)
+    public static string? CheckCell(int x, int z, MapBounds bounds)
     {
         if (bounds.Contains(x, z)) return null;
         return string.Create(CultureInfo.InvariantCulture, $"Error: cell ({x},{z}) is outside the map. Valid x is 0-{bounds.Width - 1}, valid z is 0-{bounds.Height - 1}.");
     }
 
-    public static bool IsSelectionKeyword(string area)
+    public static bool IsSelectionKeyword(string? area)
     {
         return string.Equals((area ?? string.Empty).Trim(), SelectionKeyword, StringComparison.OrdinalIgnoreCase);
     }

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Globalization;
 using System.Text;
@@ -23,14 +21,14 @@ public sealed class DecisionAutonomousTriage
     /// <summary>上一輪回覆只留結尾：完成報告通常在最後。</summary>
     public const int LastRunTailChars = 1200;
 
-    private readonly IDecisionService _decisionService;
-    private readonly Func<IDecisionService> _serviceFactory;
-    private readonly Func<string> _criteriaProvider;
+    private readonly IDecisionService? _decisionService;
+    private readonly Func<IDecisionService?>? _serviceFactory;
+    private readonly Func<string?>? _criteriaProvider;
 
     public DecisionAutonomousTriage(
-        IDecisionService decisionService = null,
-        Func<string> criteriaProvider = null,
-        Func<IDecisionService> serviceFactory = null)
+        IDecisionService? decisionService = null,
+        Func<string?>? criteriaProvider = null,
+        Func<IDecisionService?>? serviceFactory = null)
     {
         _decisionService = decisionService;
         _criteriaProvider = criteriaProvider;
@@ -43,17 +41,17 @@ public sealed class DecisionAutonomousTriage
     }
 
     /// <returns>分流裁決結果；不需分流或無服務時回傳 null。</returns>
-    public async Task<TriageVerdict> EvaluateAsync(
+    public async Task<TriageVerdict?> EvaluateAsync(
         AutonomousTrigger trigger,
         AutonomousSignals signals,
-        string lastRunReply,
+        string? lastRunReply,
         float? hoursSinceLastRun,
         CancellationToken cancellationToken = default)
     {
         if (!IsTriaged(trigger)) return null;
-        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
+        IDecisionService? service = _decisionService ?? _serviceFactory?.Invoke();
         if (service == null) return null;
-        string criteria = _criteriaProvider?.Invoke();
+        string? criteria = _criteriaProvider?.Invoke();
         if (string.IsNullOrWhiteSpace(criteria)) return null;
 
         var plan = DecisionPlan.Of(DecisionQuestion.Noul(QuestionId, criteria.Trim()));
@@ -72,12 +70,12 @@ public sealed class DecisionAutonomousTriage
             DecisionDiagnostics.Warn(nameof(DecisionAutonomousTriage), ex);
             return null;
         }
-        if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || answer?.Probability == null) return null;
+        if (result == null || !result.TryGet(QuestionId, out DecisionAnswer? answer) || answer.Probability == null) return null;
         double p = answer.Probability.Value;
         return new TriageVerdict { Probability = p, Skip = p < SkipBelow };
     }
 
-    internal static string Describe(AutonomousTrigger trigger, AutonomousSignals signals, string lastRunReply, float? hoursSinceLastRun)
+    internal static string Describe(AutonomousTrigger trigger, AutonomousSignals signals, string? lastRunReply, float? hoursSinceLastRun)
     {
         var sb = new StringBuilder();
         sb.Append("Condition: ").AppendLine(trigger.ToString());

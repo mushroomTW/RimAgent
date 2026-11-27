@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 
@@ -39,11 +37,11 @@ public sealed class DecisionQuestion
     private string Option(string key)
     {
         if (Options == null) return string.Empty;
-        return Options.TryGetValue(key, out string value) ? value ?? string.Empty : string.Empty;
+        return Options.TryGetValue(key, out string? value) ? value ?? string.Empty : string.Empty;
     }
 
     /// <summary>建一題是非題；兩段說明可省略，省略時模型只看題目敘述。</summary>
-    public static DecisionQuestion Noul(string id, string instructions, string whenTrue = null, string whenFalse = null)
+    public static DecisionQuestion Noul(string? id, string? instructions, string? whenTrue = null, string? whenFalse = null)
     {
         var options = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!string.IsNullOrWhiteSpace(whenTrue)) options["true"] = whenTrue;
@@ -58,7 +56,7 @@ public sealed class DecisionQuestion
     }
 
     /// <summary>建一題選項題；選項的值就是回傳時被選中的那個值。</summary>
-    public static DecisionQuestion Choice(string id, string instructions, IReadOnlyDictionary<string, string> options)
+    public static DecisionQuestion Choice(string? id, string? instructions, IReadOnlyDictionary<string, string>? options)
     {
         return new DecisionQuestion
         {
@@ -69,7 +67,7 @@ public sealed class DecisionQuestion
         };
     }
 
-    public static DecisionQuestion Score(string id, string instructions, IReadOnlyList<string> levels)
+    public static DecisionQuestion Score(string? id, string? instructions, IReadOnlyList<string>? levels)
     {
         return new DecisionQuestion
         {
@@ -88,7 +86,7 @@ public sealed class DecisionPlan
 
     public bool IsEmpty => Questions == null || Questions.Count == 0;
 
-    public static DecisionPlan Of(params DecisionQuestion[] questions)
+    public static DecisionPlan Of(params DecisionQuestion[]? questions)
     {
         return new DecisionPlan { Questions = questions ?? [] };
     }

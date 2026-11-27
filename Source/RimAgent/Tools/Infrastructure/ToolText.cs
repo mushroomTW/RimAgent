@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -28,7 +26,7 @@ internal static class ToolText
     }
 
     /// <summary>呼叫點應在所有參數解析之後、真正動世界之前。</summary>
-    public static string Blocked(ConfirmationGate gate, string preview)
+    public static string? Blocked(ConfirmationGate? gate, string preview)
     {
         if (gate == null || gate.AllowCommands()) return null;
         string blocked = Confirmation(preview);
@@ -58,7 +56,7 @@ internal static class ToolText
         return "(" + x.ToString(CultureInfo.InvariantCulture) + "," + z.ToString(CultureInfo.InvariantCulture) + ")";
     }
 
-    public static string TruncateField(string value, int max)
+    public static string TruncateField(string? value, int max)
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
         return value.Length > max ? value[..max] + "…" : value;

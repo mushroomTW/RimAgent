@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -66,12 +64,12 @@ public partial class Window_Agent
     {
         CancelRunCts();
         A2A.A2AServerController.CancelActiveInstruction();
-        RimAgentGameComponent component = RimAgentGameComponent.Instance;
+        RimAgentGameComponent? component = RimAgentGameComponent.Instance;
         component?.StopAutonomousRun();
         if (component?.IsGoalRunning == true) component.PauseGoal();
     }
 
-    private static GUIStyle _bareTextFieldStyle;
+    private static GUIStyle? _bareTextFieldStyle;
 
     private static GUIStyle GetBareTextFieldStyle()
     {
@@ -96,9 +94,9 @@ public partial class Window_Agent
     {
         Event e = Event.current;
         if (e.type != EventType.KeyDown || e.keyCode != KeyCode.V || !(e.control || e.command)) return;
-        if (session?.ImageInputEnabled != true) return;
-        byte[] jpeg = ClipboardImage.TryRead();
-        if (jpeg.Length == 0) return;
+        if (!session.ImageInputEnabled) return;
+        byte[]? jpeg = ClipboardImage.TryRead();
+        if (jpeg == null || jpeg.Length == 0) return;
         e.Use();
         if (_pastedImages.Count >= MaxPastedImages)
         {
@@ -254,7 +252,7 @@ public partial class Window_Agent
 
     private List<string> SkillMatches()
     {
-        IReadOnlyList<AgentSkill> skills = RimAgentGameComponent.Instance?.Skills;
+        IReadOnlyList<AgentSkill>? skills = RimAgentGameComponent.Instance?.Skills;
         if (skills == null || skills.Count == 0) return [];
         return SlashCommands.MatchSkills(_input, skills.Where(s => s != null).Select(s => s.Name));
     }
@@ -315,7 +313,7 @@ public partial class Window_Agent
             if (first + i == _skillIndex) Widgets.DrawHighlightSelected(row);
 
             // 選單已經在 $ 底下，名稱前不再重複 $；有翻譯就顯示在地化的名稱與說明，玩家自訂的技能沿用 SKILL.md。
-            AgentSkill skill = skills.FirstOrDefault(s => s != null && string.Equals((s.Name ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
+            AgentSkill? skill = skills.FirstOrDefault(s => s != null && string.Equals((s.Name ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase));
             string label = SkillLabel(name);
             float nameWidth = Text.CalcSize(label).x;
             GUI.color = ToolActionColor;
@@ -337,7 +335,7 @@ public partial class Window_Agent
         return ("RimAgent.Skill." + name + ".Label").TryTranslate(out TaggedString label) ? label.ToString() : name;
     }
 
-    private static string SkillDescription(string name, string fallback)
+    private static string SkillDescription(string name, string? fallback)
     {
         return ("RimAgent.Skill." + name + ".Desc").TryTranslate(out TaggedString desc) ? desc.ToString() : fallback ?? string.Empty;
     }

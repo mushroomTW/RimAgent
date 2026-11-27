@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -30,21 +29,21 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
     private readonly IGameWorld _world;
     private readonly ToolCategory _category;
     private readonly ToolRisk _risk;
-    private readonly ConfirmationGate _gate;
-    private readonly IRiskChecker _classifier;
-    private readonly ToolOutputStore _outputs;
-    private readonly PlayerInterjections _interjections;
+    private readonly ConfirmationGate? _gate;
+    private readonly IRiskChecker? _classifier;
+    private readonly ToolOutputStore? _outputs;
+    private readonly PlayerInterjections? _interjections;
     private readonly bool _consumesBudget;
-    private readonly AgentActivityTracker _activity;
-    private readonly FailureLoopGuard _loopGuard;
+    private readonly AgentActivityTracker? _activity;
+    private readonly FailureLoopGuard? _loopGuard;
 
-    private ToolOutputStore Outputs => ToolOutputStore.Current ?? _outputs;
+    private ToolOutputStore? Outputs => ToolOutputStore.Current ?? _outputs;
 
     private bool RequiresExplicitConfirmation =>
         _gate != null && _gate.RequiresExplicitConfirmation(Name);
 
 #pragma warning disable S107 // 建構子參數皆為相依元件，無需重構
-    public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate gate, IRiskChecker classifier = null, ToolOutputStore outputs = null, PlayerInterjections interjections = null, bool consumesBudget = true, AgentActivityTracker activity = null, FailureLoopGuard loopGuard = null)
+    public LoggingAIFunction(AIFunction inner, AgentTranscript transcript, IGameWorld world, ToolCategory category, ToolRisk risk, ConfirmationGate? gate, IRiskChecker? classifier = null, ToolOutputStore? outputs = null, PlayerInterjections? interjections = null, bool consumesBudget = true, AgentActivityTracker? activity = null, FailureLoopGuard? loopGuard = null)
         : base(inner)
     {
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -61,11 +60,11 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
     }
 #pragma warning restore S107
 
-    protected override async ValueTask<object> InvokeCoreAsync(
+    protected override async ValueTask<object?> InvokeCoreAsync(
         AIFunctionArguments arguments,
         CancellationToken cancellationToken)
     {
-        object result;
+        object? result;
         using (_activity?.Begin(AgentActivityKind.Tool, Name))
         {
             result = await InvokeLoggedAsync(arguments, cancellationToken);
@@ -73,10 +72,10 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         // 玩家執行中插話：附在主 Agent 這次的工具結果後面送給模型。只附在送回的文字，
         // 行動紀錄與失敗紀錄都存工具本身的結果。子代理的工具不取，免得話被子代理吃掉。
         bool mainAgent = _transcript.CurrentAgent.Length == 0;
-        string redirect = mainAgent && _loopGuard != null
+        string? redirect = mainAgent && _loopGuard != null
             ? _loopGuard.Observe(Name, result?.ToString())
             : null;
-        string interjection = mainAgent ? _interjections?.TakeAll() : null;
+        string? interjection = mainAgent ? _interjections?.TakeAll() : null;
         if (redirect == null && interjection == null) return result;
         return (result?.ToString() ?? string.Empty) + redirect + (interjection == null ? null : FormatInterjection(interjection));
     }
@@ -93,7 +92,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
                "The player sent this while you were working. Take it into account before your next step; it may change or cancel your current plan.";
     }
 
-    private async Task<object> InvokeLoggedAsync(
+    private async Task<object?> InvokeLoggedAsync(
         AIFunctionArguments arguments,
         CancellationToken cancellationToken)
     {
@@ -111,7 +110,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         };
         string callKey = CallKey(arguments);
 
-        if (TryHandlePreInvocation(entry, callKey, out string earlyResult))
+        if (TryHandlePreInvocation(entry, callKey, out string? earlyResult))
         {
             return earlyResult;
         }
@@ -120,7 +119,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            object result = await InvokeThroughGateAsync(arguments, entry, cancellationToken);
+            object? result = await InvokeThroughGateAsync(arguments, entry, cancellationToken);
             return RecordResult(result, arguments, entry, callKey);
         }
         catch (Exception ex)
@@ -146,34 +145,34 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         foreach ((string name, string alias) in new[] { ("x", "x1"), ("z", "z1"), ("x1", "x"), ("z1", "z") })
         {
             if (!properties.TryGetProperty(name, out _) || properties.TryGetProperty(alias, out _) || arguments.ContainsKey(name)) continue;
-            if (arguments.Remove(alias, out object value)) arguments[name] = value;
+            if (arguments.Remove(alias, out object? value)) arguments[name] = value;
         }
     }
 
     /// <summary>缺必填參數時 MEAI 丟的 ArgumentException 一次只說一個，也不說這個工具要哪些。</summary>
-    private string MissingArguments(AIFunctionArguments arguments)
+    private string? MissingArguments(AIFunctionArguments arguments)
     {
         if (!JsonSchema.TryGetProperty("required", out JsonElement required) || required.ValueKind != JsonValueKind.Array) return null;
-        string[] names = [.. required.EnumerateArray().Select(r => r.GetString())];
+        string[] names = [.. required.EnumerateArray().Select(r => r.GetString()).OfType<string>()];
         string[] missing = [.. names.Where(n => !arguments.ContainsKey(n))];
         return missing.Length == 0 ? null : ToolText.Error($"missing argument(s): {string.Join(", ", missing)}. {Name} always needs: {string.Join(", ", names)} (pass \"\" for text that may be empty).");
     }
 
-    private ValueTask<object> InvokeThroughGateAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
+    private ValueTask<object?> InvokeThroughGateAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
-        if (MissingArguments(arguments) is { } missing) return new ValueTask<object>(missing);
+        if (MissingArguments(arguments) is { } missing) return new ValueTask<object?>(missing);
         if (_gate != null && RequiresExplicitConfirmation)
         {
-            return new ValueTask<object>(InvokeExplicitConfirmationAsync(arguments, cancellationToken));
+            return new ValueTask<object?>(InvokeExplicitConfirmationAsync(_gate, arguments, cancellationToken));
         }
         if (_gate != null && _classifier != null && _gate.NeedsClassification(_risk))
         {
-            return new ValueTask<object>(InvokeClassifiedAsync(arguments, entry, cancellationToken));
+            return new ValueTask<object?>(InvokeClassifiedAsync(_gate, _classifier, arguments, entry, cancellationToken));
         }
         return base.InvokeCoreAsync(arguments, cancellationToken);
     }
 
-    private string RecordResult(object result, AIFunctionArguments arguments, TranscriptEntry entry, string callKey)
+    private string RecordResult(object? result, AIFunctionArguments arguments, TranscriptEntry entry, string callKey)
     {
         string text = ToolOutputLimit.Apply(NeutralizeTrustedTags(AppendGameErrors(result?.ToString() ?? string.Empty)), store: Outputs);
         entry.Result = text;
@@ -189,9 +188,9 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         return text;
     }
 
-    private bool TryHandlePreInvocation(TranscriptEntry entry, string callKey, out string earlyResult)
+    private bool TryHandlePreInvocation(TranscriptEntry entry, string callKey, [NotNullWhen(true)] out string? earlyResult)
     {
-        string notReady = _world.GetNotReadyReason();
+        string? notReady = _world.GetNotReadyReason();
         if (notReady != null)
         {
             entry.Result = ToolText.Error($"the game cannot run tools right now ({notReady}). Tell the player and stop.");
@@ -202,7 +201,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         }
 
         if (_risk != ToolRisk.Query && _gate != null && _gate.Mode != AgentMode.Autonomous
-            && _gate.TryGetFailedCall(Name, callKey, out string previousError))
+            && _gate.TryGetFailedCall(Name, callKey, out string? previousError))
         {
             entry.Result = ToolText.Error("this exact call already failed twice in this instruction and was not run again. " +
                 "Do not repeat it unchanged: use different arguments, try another approach, or stop and tell the player. " +
@@ -228,10 +227,10 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         return false;
     }
 
-    private async Task<object> ExecuteApprovedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
+    private async Task<object?> ExecuteApprovedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
         // 核准路徑不經過 TryHandlePreInvocation；玩家按下確認後遊戲可能已回到主選單或正在讀檔。
-        string notReady = _world.GetNotReadyReason();
+        string? notReady = _world.GetNotReadyReason();
         if (notReady != null)
         {
             string error = ToolText.Error($"the game cannot run tools right now ({notReady}). Tell the player and stop.");
@@ -243,7 +242,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         _gate?.ForceExecute();
         try
         {
-            object result;
+            object? result;
             using (_activity?.Begin(AgentActivityKind.Tool, Name))
             {
                 result = await base.InvokeCoreAsync(arguments, cancellationToken);
@@ -264,33 +263,34 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
     }
 
     /// <summary>確認模式下的 MCP 呼叫：MCP 以使用者權限執行本機程式，即使玩家按過「不再問」也要每次確認。</summary>
-    private async Task<object> InvokeExplicitConfirmationAsync(
+    private async Task<object?> InvokeExplicitConfirmationAsync(
+        ConfirmationGate gate,
         AIFunctionArguments arguments,
         CancellationToken cancellationToken)
     {
-        object preview;
-        _gate.ForcePreview();
+        object? preview;
+        gate.ForcePreview();
         try
         {
             preview = await base.InvokeCoreAsync(arguments, cancellationToken);
         }
         finally
         {
-            _gate.ClearForce();
+            gate.ClearForce();
         }
 
         string text = preview?.ToString() ?? string.Empty;
         if (text.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal))
         {
-            _gate.NoteBlocked(text);
+            gate.NoteBlocked(text);
         }
         return preview;
     }
 
     /// <summary>自動模式：預覽 → 分類 → 執行或擋下。工具的預覽分支不碰世界，靠 CommandGateTests 鎖住。</summary>
-    private async Task<object> InvokeClassifiedAsync(AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
+    private async Task<object?> InvokeClassifiedAsync(ConfirmationGate gate, IRiskChecker classifier, AIFunctionArguments arguments, TranscriptEntry entry, CancellationToken cancellationToken)
     {
-        object previewResult = await InvokePreviewAsync(arguments, cancellationToken);
+        object? previewResult = await InvokePreviewAsync(gate, arguments, cancellationToken);
         string preview = previewResult?.ToString() ?? string.Empty;
         // 沒走到閘門（參數錯、目標不存在）就沒有可判定的命令，原樣回給模型。
         if (!preview.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal)) return previewResult;
@@ -298,7 +298,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
         RiskVerdict verdict;
         using (_activity?.Begin(AgentActivityKind.Checking, Name))
         {
-            verdict = await _classifier.ClassifyAsync(new RiskQuestion
+            verdict = await classifier.ClassifyAsync(new RiskQuestion
             {
                 Instruction = _transcript.CurrentInstructionText,
                 ToolName = Name,
@@ -318,27 +318,27 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
                 + ". This action cannot be confirmed in Auto mode; do not retry it unchanged.");
         }
 
-        _gate.ForceExecute();
+        gate.ForceExecute();
         try
         {
             return await base.InvokeCoreAsync(arguments, cancellationToken);
         }
         finally
         {
-            _gate.ClearForce();
+            gate.ClearForce();
         }
     }
 
-    private async Task<object> InvokePreviewAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    private async Task<object?> InvokePreviewAsync(ConfirmationGate gate, AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        _gate.ForcePreview();
+        gate.ForcePreview();
         try
         {
             return await base.InvokeCoreAsync(arguments, cancellationToken);
         }
         finally
         {
-            _gate.ClearForce();
+            gate.ClearForce();
         }
     }
 
@@ -374,7 +374,7 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
     }
 
     /// <summary>失敗紀錄的鍵依參數名排序，模型重送時常打亂順序，仍視為同一個呼叫。</summary>
-    private static string CallKey(AIFunctionArguments arguments)
+    private static string CallKey(AIFunctionArguments? arguments)
     {
         if (arguments == null || arguments.Count == 0) return string.Empty;
         return string.Join(", ", arguments
@@ -382,12 +382,12 @@ internal sealed partial class LoggingAIFunction : DelegatingAIFunction
             .Select(pair => pair.Key + "=" + (pair.Value?.ToString() ?? "null")));
     }
 
-    private static string FormatArguments(AIFunctionArguments arguments)
+    private static string FormatArguments(AIFunctionArguments? arguments)
     {
         if (arguments == null || arguments.Count == 0) return string.Empty;
 
         var sb = new StringBuilder();
-        foreach (KeyValuePair<string, object> pair in arguments)
+        foreach (KeyValuePair<string, object?> pair in arguments)
         {
             if (sb.Length > 0) sb.Append(", ");
             sb.Append(pair.Key).Append('=').Append(pair.Value?.ToString() ?? "null");

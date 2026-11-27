@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -41,7 +39,7 @@ public partial class Window_Agent
 
     private static Texture2D GetGaugeArc(int percent)
     {
-        if (GaugeArcTex.TryGetValue(percent, out Texture2D cached)) return cached;
+        if (GaugeArcTex.TryGetValue(percent, out Texture2D? cached)) return cached;
         const int size = GaugeTexSize;
         const float half = size / 2f;
         const float outer = half - 1f;

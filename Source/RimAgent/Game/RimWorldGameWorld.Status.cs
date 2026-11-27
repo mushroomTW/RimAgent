@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -43,7 +41,7 @@ internal sealed partial class RimWorldGameWorld
         public int NearMentalBreak;
         public int DownedOrBleeding;
 
-        public void AccumulateColonists(List<Pawn> colonists)
+        public void AccumulateColonists(List<Pawn>? colonists)
         {
             if (colonists == null) return;
             for (int p = 0; p < colonists.Count; p++)
@@ -80,7 +78,7 @@ internal sealed partial class RimWorldGameWorld
     /// </summary>
     internal static Agent.AutonomousSignals GetAutonomousSignals()
     {
-        List<Map> maps = Find.Maps;
+        List<Map>? maps = Find.Maps;
         int hostileCount = 0;
         float foodNutrition = 0f;
         int fireCount = 0;
@@ -109,7 +107,7 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    private static void AccumulateMapSignals(Map map, ref int hostileCount, ref float foodNutrition, ref int fireCount, ref ColonistSignalsAccumulator accumulator)
+    private static void AccumulateMapSignals(Map? map, ref int hostileCount, ref float foodNutrition, ref int fireCount, ref ColonistSignalsAccumulator accumulator)
     {
         if (map == null) return;
         // 地圖層的讀數不包 try：讀一半就把食物當 0 會造成假警報，寧可整次作廢。
@@ -203,7 +201,7 @@ internal sealed partial class RimWorldGameWorld
     // AlertsReadout 的活動清單在 1.6 為私有快取；只讀取遊戲已計算的結果，
     // 找不到欄位時安全地回傳空清單，避免版本差異中斷 agent。
     #pragma warning disable S3011 // RimWorld 私有欄位與方法存取為 Mod 運作必需
-    private static readonly FieldInfo ActiveAlertsField =
+    private static readonly FieldInfo? ActiveAlertsField =
         typeof(AlertsReadout).GetField("activeAlerts", BindingFlags.Instance | BindingFlags.NonPublic);
 
     #pragma warning restore S3011

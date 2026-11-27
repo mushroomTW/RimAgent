@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -17,11 +15,11 @@ namespace RimAgent.Agent;
 public sealed partial class ColonyAgentSession
 {
     /// <summary>讀檔後還沒送過指令時 AF session 尚未重建，原樣帶回讀進來的內容；其餘情況用上一句指令結束時備妥的快照（忙碌中存檔也拿得到上一句為止的歷史）。</summary>
-    public string SerializeForSave()
+    public string? SerializeForSave()
     {
-        AgentSession session = Volatile.Read(ref _session);
+        AgentSession? session = Volatile.Read(ref _session);
         if (session == null) return Volatile.Read(ref _serializedSession) ?? Volatile.Read(ref _saveSnapshot);
-        string snapshot = Volatile.Read(ref _saveSnapshot);
+        string? snapshot = Volatile.Read(ref _saveSnapshot);
         if (snapshot != null || IsBusy) return snapshot;
         // 快照失敗過（見 PrepareSaveSnapshot）才走到這裡：存檔當下同步序列化一次。
         try
@@ -36,10 +34,10 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    public void RestoreSerializedSession(string serialized)
+    public void RestoreSerializedSession(string? serialized)
     {
         if (IsBusy) throw new InvalidOperationException("Cannot restore while RimAgent is working.");
-        string normalized = string.IsNullOrWhiteSpace(serialized) ? null : serialized;
+        string? normalized = string.IsNullOrWhiteSpace(serialized) ? null : serialized;
         Volatile.Write(ref _serializedSession, normalized);
         // 讀進來的內容先當快照：讀檔後第一句還在跑時存檔，也不會漏掉舊歷史。
         Volatile.Write(ref _saveSnapshot, normalized);
@@ -64,7 +62,7 @@ public sealed partial class ColonyAgentSession
     /// <summary>分組快取裡是另一份完整歷史，存進檔案只會讓存檔翻倍，所以序列化前裁掉超量的舊歷史並丟掉它；下次請求時壓縮器會從歷史重建。通常在背景續行上呼叫，不佔主線程。</summary>
     private void PrepareSaveSnapshot()
     {
-        AgentSession session = _session;
+        AgentSession? session = _session;
         if (session == null) return;
         try
         {
@@ -107,7 +105,7 @@ public sealed partial class ColonyAgentSession
 
     private async Task<AgentSession> RestoreOrCreateSession(CancellationToken cancellationToken)
     {
-        string serialized = Volatile.Read(ref _serializedSession);
+        string? serialized = Volatile.Read(ref _serializedSession);
         if (!string.IsNullOrWhiteSpace(serialized))
         {
             try

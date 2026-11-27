@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -14,9 +12,9 @@ namespace RimAgent.Tools;
 public sealed class PrisonerTools
 {
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public PrisonerTools(IGameWorld world, ConfirmationGate gate = null)
+    public PrisonerTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -57,7 +55,7 @@ public sealed class PrisonerTools
         if (!def.Success) return def.Error;
 
         string previous = string.IsNullOrEmpty(pawn.Value.InteractionModeLabel) ? pawn.Value.InteractionMode : pawn.Value.InteractionModeLabel;
-        string blocked = ToolText.Blocked(_gate, $"would set {DisplayName(pawn.Value)}'s interaction {previous} -> {def.Value.Label}.");
+        string? blocked = ToolText.Blocked(_gate, $"would set {DisplayName(pawn.Value)}'s interaction {previous} -> {def.Value.Label}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetPrisonerInteraction(pawn.Value.Id, def.Value.DefName);
@@ -74,7 +72,7 @@ public sealed class PrisonerTools
         Result<PrisonerInfo> pawn = ResolvePrisoner(prisoner, _world.GetPrisoners());
         if (!pawn.Success) return pawn.Error;
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would release {DisplayName(pawn.Value)} [{pawn.Value.Id}]; they leave the colony for good."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would release {DisplayName(pawn.Value)} [{pawn.Value.Id}]; they leave the colony for good."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.ReleasePrisoner(pawn.Value.Id);

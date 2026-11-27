@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using RimAgent.Agent;
@@ -17,7 +15,7 @@ public partial class RimAgentMod
     /// <summary>Dialog_ModSettings 一次只允許一個，開啟框架設定頁會換掉目前這頁（關閉時照常存檔）。</summary>
     private static void OpenFrameworkSettings()
     {
-        Mod framework = LoadedModManager.ModHandles.FirstOrDefault(m =>
+        Mod? framework = LoadedModManager.ModHandles.FirstOrDefault(m =>
             string.Equals(m.Content?.PackageId, FrameworkPackageId, StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrEmpty(m.SettingsCategory()));
         if (framework == null)
@@ -30,26 +28,27 @@ public partial class RimAgentMod
 
     private static void DrawModelRoles(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         listing.Gap();
         listing.Label("RimAgent.Settings.ModelRolesHeader".Translate());
         listing.GapLine();
         DrawModelDropdown(listing, "RimAgent.Settings.SubagentModel".Translate(),
-            () => Settings.subagentModel, v => Settings.subagentModel = v,
+            () => settings.subagentModel, v => settings.subagentModel = v,
             "RimAgent.Settings.SubagentModelTip".Translate(),
-            () => Settings.subagentReasoning, v => Settings.subagentReasoning = v);
+            () => settings.subagentReasoning, v => settings.subagentReasoning = v);
         DrawModelDropdown(listing, "RimAgent.Settings.ClassifierModel".Translate(),
-            () => Settings.classifierModel, v => Settings.classifierModel = v,
+            () => settings.classifierModel, v => settings.classifierModel = v,
             "RimAgent.Settings.ClassifierModelTip".Translate(),
-            () => Settings.classifierReasoning, v => Settings.classifierReasoning = v);
+            () => settings.classifierReasoning, v => settings.classifierReasoning = v);
         DrawModelDropdown(listing, "RimAgent.Settings.CompactModel".Translate(),
-            () => Settings.compactModel, v => Settings.compactModel = v,
+            () => settings.compactModel, v => settings.compactModel = v,
             "RimAgent.Settings.CompactModelTip".Translate(),
-            () => Settings.compactReasoning, v => Settings.compactReasoning = v);
+            () => settings.compactReasoning, v => settings.compactReasoning = v);
     }
 
     private static void DrawModelDropdown(
         Listing_Standard listing, string label, Func<string> current, Action<string> set, string tip,
-        Func<ReasoningLevel> reasoning = null, Action<ReasoningLevel> setReasoning = null)
+        Func<ReasoningLevel>? reasoning = null, Action<ReasoningLevel>? setReasoning = null)
     {
         Rect row = listing.GetRect(28f);
         const float labelWidth = 160f;
@@ -71,7 +70,7 @@ public partial class RimAgentMod
         {
             TooltipHandler.TipRegion(new Rect(row.x, row.y, dropdownRect.xMax - row.x, row.height), tip);
         }
-        if (reasoning != null)
+        if (reasoning != null && setReasoning != null)
         {
             var reasoningRect = new Rect(row.xMax - reasoningWidth, row.y, reasoningWidth, 26f);
             if (Widgets.ButtonText(reasoningRect, ReasoningKey(reasoning()).Translate()))
@@ -83,7 +82,7 @@ public partial class RimAgentMod
         listing.Gap(6f);
     }
 
-    private static string GetModelDropdownDisplayText(string raw)
+    private static string GetModelDropdownDisplayText(string? raw)
     {
         string value = (raw ?? string.Empty).Trim();
         if (value.Length == 0)

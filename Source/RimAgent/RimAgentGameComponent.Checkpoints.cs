@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,7 +17,7 @@ public partial class RimAgentGameComponent
     {
         if (_pendingReload == null && _pendingDeaths.Count == 0) return;
         if (_runner.IsRunning || IsGoalRunning || Find.CurrentMap == null) return;
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings? settings = RimAgentMod.Settings;
         try
         {
             ColonyAgentSession session = Session;
@@ -34,12 +32,12 @@ public partial class RimAgentGameComponent
                     Kind = TranscriptKind.Notice,
                     Text = "RimAgent.Save.ReloadedNotice".Translate(reload.SaveName, reload.Attempt, SaveLedger.MaxLoadsPerSave, reload.Lesson).Resolve()
                 });
-                if (!care) return;
+                if (!care || settings == null) return;
                 _ =RunAutonomousGuardedAsync(session, AutonomousTrigger.Reloaded, Find.TickManager.TicksGame, ToConfig(settings), signals: null,
                     DescribeReloads(SaveLedger.Shared.HistoryOf(ColonyId)));
                 return;
             }
-            if (!care || !settings.GetAllow(ToolCategory.Save))
+            if (!care || settings == null || !settings.GetAllow(ToolCategory.Save))
             {
                 _pendingDeaths.Clear();
                 return;

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,7 +22,7 @@ public static class SaveFileScanner
 
     public readonly struct Scan
     {
-        public Scan(string colonyId, int tick)
+        public Scan(string? colonyId, int tick)
         {
             ColonyId = colonyId ?? string.Empty;
             Tick = tick;
@@ -56,7 +54,7 @@ public static class SaveFileScanner
 
     private static Scan ReadUncached(string path)
     {
-        string colonyId = null;
+        string? colonyId = null;
         int? tick = null;
         var settings = new XmlReaderSettings { IgnoreComments = true, IgnoreWhitespace = true, DtdProcessing = DtdProcessing.Prohibit };
         using XmlReader reader = XmlReader.Create(path, settings);
@@ -71,7 +69,7 @@ public static class SaveFileScanner
         return new Scan(colonyId ?? string.Empty, tick ?? 0);
     }
 
-    private static bool ProcessXmlNode(XmlReader reader, List<string> parents, ref string colonyId, ref int? tick)
+    private static bool ProcessXmlNode(XmlReader reader, List<string> parents, ref string? colonyId, ref int? tick)
     {
         switch (reader.NodeType)
         {
@@ -84,7 +82,7 @@ public static class SaveFileScanner
         return reader.Read();
     }
 
-    private static bool ProcessXmlElement(XmlReader reader, List<string> parents, ref string colonyId, ref int? tick)
+    private static bool ProcessXmlElement(XmlReader reader, List<string> parents, ref string? colonyId, ref int? tick)
     {
         string name = reader.Name;
         if (colonyId == null && name == ColonyIdNode)
@@ -92,7 +90,7 @@ public static class SaveFileScanner
             colonyId = reader.ReadElementContentAsString().Trim();
             return !reader.EOF;
         }
-        string parent = parents.Count > 0 ? parents[parents.Count - 1] : null;
+        string? parent = parents.Count > 0 ? parents[parents.Count - 1] : null;
         if (tick == null && name == TicksNode && parent == TickManagerNode)
         {
             tick = int.TryParse(reader.ReadElementContentAsString().Trim(), CultureInfo.InvariantCulture, out int value) ? value : 0;

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,7 +16,7 @@ public static class GlobalMemoryFile
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>讀取全域記憶；<paramref name="warning"/> 非 null 代表檔案讀不了（原檔已改名保留）。</summary>
-    public static AgentMemoryStore Load(string path, out string warning)
+    public static AgentMemoryStore Load(string? path, out string? warning)
     {
         warning = null;
         if (string.IsNullOrEmpty(path)) return new AgentMemoryStore();
@@ -44,7 +42,7 @@ public static class GlobalMemoryFile
     internal static readonly System.Threading.Lock Gate = new();
 
     /// <summary>寫回全域記憶；先寫暫存檔再原子換檔，任何時間點中斷都至少留著完整的舊檔或新檔。</summary>
-    public static void Save(string path, IReadOnlyList<AgentMemoryEntry> entries)
+    public static void Save(string? path, IReadOnlyList<AgentMemoryEntry>? entries)
     {
         if (string.IsNullOrEmpty(path)) return;
         var document = new MemoryDocumentDto();
@@ -53,7 +51,7 @@ public static class GlobalMemoryFile
             if (entry == null || string.IsNullOrEmpty(entry.name) || entry.content == null) continue;
             document.Files.Add(new MemoryFileDto { Name = entry.name, Content = entry.content });
         }
-        string folder = Path.GetDirectoryName(path);
+        string? folder = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
         // 序列化存檔：多條寫入同時進來時，共用暫存檔會互相覆蓋或搶不到檔案。
         lock (Gate)
@@ -72,7 +70,7 @@ public static class GlobalMemoryFile
         }
     }
 
-    private static List<AgentMemoryEntry> ToEntries(MemoryDocumentDto document)
+    private static List<AgentMemoryEntry> ToEntries(MemoryDocumentDto? document)
     {
         var entries = new List<AgentMemoryEntry>();
         if (document?.Files == null) return entries;
@@ -104,7 +102,7 @@ public static class GlobalMemoryFile
 
     private sealed class MemoryFileDto
     {
-        public string Name { get; set; }
-        public string Content { get; set; }
+        public string? Name { get; set; }
+        public string? Content { get; set; }
     }
 }

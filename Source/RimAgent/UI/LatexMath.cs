@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -99,35 +98,6 @@ internal static class LatexMath
         }
     }
 
-    private static readonly MatchEvaluator FracReplace =
-        m => "(" + m.Groups["a"].Value + ")/(" + m.Groups["b"].Value + ")";
-    private static readonly MatchEvaluator SqrtReplace = m => "√(" + m.Groups["x"].Value + ")";
-    private static readonly MatchEvaluator SqrtSingleReplace = m => "√" + m.Groups["x"].Value;
-    private static readonly MatchEvaluator PlainGroupReplace = m => m.Groups["x"].Value;
-    private static readonly MatchEvaluator SupReplace = m => ConvertScript(m.Groups["x"].Value, superscript: true);
-    private static readonly MatchEvaluator SubReplace = m => ConvertScript(m.Groups["x"].Value, superscript: false);
-    private static readonly MatchEvaluator CommandReplace = m =>
-    {
-        string name = m.Groups["name"].Value;
-        return CommandText.TryGetValue(name, out string plain) ? plain : name;
-    };
-    private static readonly MatchEvaluator EscapedReplace = m => m.Groups["c"].Value;
-
-    private static readonly MathRule[] SegmentRules =
-    [
-        new(FracPattern, FracReplace),
-        new(SqrtBracedPattern, SqrtReplace),
-        new(SqrtSinglePattern, SqrtSingleReplace),
-        new(TextFamilyPattern, PlainGroupReplace),
-        new(SupBracedPattern, SupReplace),
-        new(SupSinglePattern, SupReplace),
-        new(SubBracedPattern, SubReplace),
-        new(SubSinglePattern, SubReplace),
-        new(SpacingPattern, _ => " "),
-        new(CommandPattern, CommandReplace),
-        new(EscapedCharPattern, EscapedReplace),
-    ];
-
     /// <summary>只有遊戲內字體確定顯示得出的符號才進這張表；未知指令去反斜線留原名。</summary>
     private static readonly Dictionary<string, string> CommandText = new(StringComparer.Ordinal)
     {
@@ -146,7 +116,37 @@ internal static class LatexMath
         { "lim", "lim" }, { "min", "min" }, { "max", "max" },
     };
 
-    public static string ConvertMath(string markdown)
+    private static readonly MatchEvaluator FracReplace =
+        m => "(" + m.Groups["a"].Value + ")/(" + m.Groups["b"].Value + ")";
+    private static readonly MatchEvaluator SqrtReplace = m => "√(" + m.Groups["x"].Value + ")";
+    private static readonly MatchEvaluator SqrtSingleReplace = m => "√" + m.Groups["x"].Value;
+    private static readonly MatchEvaluator PlainGroupReplace = m => m.Groups["x"].Value;
+    private static readonly MatchEvaluator SupReplace = m => ConvertScript(m.Groups["x"].Value, superscript: true);
+    private static readonly MatchEvaluator SubReplace = m => ConvertScript(m.Groups["x"].Value, superscript: false);
+    private static readonly MatchEvaluator CommandReplace = m =>
+    {
+        string name = m.Groups["name"].Value;
+        return CommandText.TryGetValue(name, out string? plain) ? plain : name;
+    };
+    private static readonly MatchEvaluator EscapedReplace = m => m.Groups["c"].Value;
+
+    private static readonly MathRule[] SegmentRules =
+    [
+        new(FracPattern, FracReplace),
+        new(SqrtBracedPattern, SqrtReplace),
+        new(SqrtSinglePattern, SqrtSingleReplace),
+        new(TextFamilyPattern, PlainGroupReplace),
+        new(SupBracedPattern, SupReplace),
+        new(SupSinglePattern, SupReplace),
+        new(SubBracedPattern, SubReplace),
+        new(SubSinglePattern, SubReplace),
+        new(SpacingPattern, _ => " "),
+        new(CommandPattern, CommandReplace),
+        new(EscapedCharPattern, EscapedReplace),
+    ];
+
+    [return: NotNullIfNotNull(nameof(markdown))]
+    public static string? ConvertMath(string? markdown)
     {
         if (string.IsNullOrEmpty(markdown)) return markdown;
         if (markdown.IndexOf('$', StringComparison.Ordinal) < 0) return markdown;

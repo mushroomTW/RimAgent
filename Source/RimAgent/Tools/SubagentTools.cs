@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -28,21 +26,21 @@ public sealed class SubagentTools
     public const int MaxTasks = 4;
 
     private readonly IChatClient _client;
-    private readonly Action<string, ChatResponse> _responseObserved;
+    private readonly Action<string, ChatResponse>? _responseObserved;
     private readonly AgentToolRegistry _registry;
     private readonly AgentTranscript _transcript;
     private readonly Func<IReadOnlyList<AgentSubagent>> _subagents;
     private readonly Func<ToolPermissions> _permissions;
-    private readonly Func<string, string> _model;
-    private readonly Func<string, int> _maxOutputFor;
-    private readonly Func<ReasoningLevel> _reasoning;
-    private readonly Func<int?> _remainingBudget;
+    private readonly Func<string, string?>? _model;
+    private readonly Func<string?, int>? _maxOutputFor;
+    private readonly Func<ReasoningLevel>? _reasoning;
+    private readonly Func<int?>? _remainingBudget;
 
 #pragma warning disable S107 // Subagent execution context requires dependencies injected for agent dispatching
     public SubagentTools(IChatClient client, AgentToolRegistry registry, AgentTranscript transcript,
-        Func<IReadOnlyList<AgentSubagent>> subagents, Func<ToolPermissions> permissions,
-        Func<string, string> model = null, Func<ReasoningLevel> reasoning = null,
-        Func<int?> remainingBudget = null, Action<string, ChatResponse> responseObserved = null, Func<string, int> maxOutputFor = null)
+        Func<IReadOnlyList<AgentSubagent>>? subagents, Func<ToolPermissions> permissions,
+        Func<string, string?>? model = null, Func<ReasoningLevel>? reasoning = null,
+        Func<int?>? remainingBudget = null, Action<string, ChatResponse>? responseObserved = null, Func<string?, int>? maxOutputFor = null)
 #pragma warning restore S107
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -58,11 +56,10 @@ public sealed class SubagentTools
         _maxOutputFor = maxOutputFor;
         _client = client;
         _responseObserved = responseObserved;
-        Function = AIFunctionFactory.Create(
-            typeof(SubagentTools).GetMethod(nameof(DelegateTask)), this, ToolName, description: null, serializerOptions: null);
+        Function = AIFunctionFactory.Create(DelegateTask, ToolName);
     }
 
-    public string Expansions { get; set; }
+    public string? Expansions { get; set; }
 
     public AIFunction Function { get; }
 
@@ -75,7 +72,7 @@ public sealed class SubagentTools
         return [.. Subagents.Where(s => s != null && _registry.SelectForSubagent(permissions, s.Categories, s.ReadOnly).Count > 0)];
     }
 
-    public static string Instructions(IReadOnlyList<AgentSubagent> subagents)
+    public static string Instructions(IReadOnlyList<AgentSubagent>? subagents)
     {
         if (subagents == null || subagents.Count == 0) return string.Empty;
         var sb = new StringBuilder("Subagents (hand self-contained work to them with " + ToolName +
@@ -100,7 +97,7 @@ public sealed class SubagentTools
         CancellationToken cancellationToken = default)
     {
         string wanted = (agent ?? string.Empty).Trim();
-        AgentSubagent subagent = Subagents.FirstOrDefault(s =>
+        AgentSubagent? subagent = Subagents.FirstOrDefault(s =>
             s != null && string.Equals(s.Name, wanted, StringComparison.OrdinalIgnoreCase));
         List<string> briefs = [.. (tasks ?? [])
             .Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim())];
@@ -115,7 +112,12 @@ public sealed class SubagentTools
             InstructionId = _transcript.CurrentInstructionId,
             Result = "running…"
         };
-        string error = Validate(subagent, wanted, briefs);
+        if (subagent == null)
+        {
+            string names = string.Join(", ", Subagents.Where(s => s != null).Select(s => s.Name));
+            return RecordFailure(entry, ToolText.Error("unknown subagent '" + wanted + "'. Available: " + (names.Length == 0 ? "none" : names) + "."));
+        }
+        string? error = Validate(briefs);
         if (error != null) return RecordFailure(entry, error);
 
         IList<AITool> tools = _registry.SelectForSubagent(_permissions(), subagent.Categories, subagent.ReadOnly);
@@ -129,7 +131,7 @@ public sealed class SubagentTools
         // 先寫一筆「進行中」，子代理的工具紀錄才會排在它後面，玩家看得出是這次委派做的。
         _transcript.Add(entry);
 
-        string model = _model?.Invoke(subagent.Name);
+        string? model = _model?.Invoke(subagent.Name);
         ReasoningLevel reasoning = subagent.Reasoning ?? _reasoning?.Invoke() ?? ReasoningLevel.Auto;
         // 每個任務的迴圈不超過剩餘額度：額度共用，超過的迭代只會拿到錯誤。
         int steps = remaining.HasValue ? Math.Max(1, Math.Min(MaxSteps, remaining.Value)) : MaxSteps;
@@ -159,7 +161,7 @@ public sealed class SubagentTools
     }
 
     private async Task<string[]> RunAllAsync(
-        AgentSubagent subagent, IList<AITool> tools, List<string> briefs, string model, ReasoningLevel reasoning,
+        AgentSubagent subagent, IList<AITool> tools, List<string> briefs, string? model, ReasoningLevel reasoning,
         int steps, CancellationToken cancellationToken)
     {
         if (briefs.Count > 1 && subagent.ReadOnly)
@@ -174,32 +176,27 @@ public sealed class SubagentTools
         return reports;
     }
 
-    private string Validate(AgentSubagent subagent, string wanted, List<string> briefs)
+    private static string? Validate(List<string> briefs)
     {
-        if (subagent == null)
-        {
-            string names = string.Join(", ", Subagents.Where(s => s != null).Select(s => s.Name));
-            return ToolText.Error("unknown subagent '" + wanted + "'. Available: " + (names.Length == 0 ? "none" : names) + ".");
-        }
         if (briefs.Count == 0) return ToolText.Error("give at least one task brief.");
         if (briefs.Count > MaxTasks) return ToolText.Error("at most " + MaxTasks.ToString(CultureInfo.InvariantCulture) + " tasks per call; split the work into several calls.");
         return null;
     }
 
     private async Task<string> RunOneAsync(AgentSubagent subagent, IList<AITool> tools, string brief,
-        string model, ReasoningLevel reasoning, int steps, CancellationToken cancellationToken)
+        string? model, ReasoningLevel reasoning, int steps, CancellationToken cancellationToken)
     {
         // 每個 brief 一份輸出儲存：平行任務的 out_N 不會互相覆蓋，也看不到主 Agent 的輸出。
         var outputStore = new ToolOutputStore();
         List<AITool> scoped = [.. tools.Select(t => (AITool)new SubagentScopedFunction((AIFunction)t, _transcript, subagent.Name, outputStore))];
+        int outputBudget = _maxOutputFor?.Invoke(model) ?? ColonyAgentSession.DefaultMaxOutputTokens;
         var options = new RimLLMChatOptions
         {
             Tools = scoped,
             ToolMode = ChatToolMode.Auto,
             Temperature = ColonyAgentSession.Temperature,
-            MaxOutputTokens = _maxOutputFor?.Invoke(model) ?? ColonyAgentSession.DefaultMaxOutputTokens
+            MaxOutputTokens = outputBudget
         };
-        int outputBudget = options.MaxOutputTokens.Value;
         ModelSlots.Apply(options, model, reasoning);
         // 思考下限不能蓋過模型上限或視窗預留量，超過會被拒絕或擠爆視窗。
         options.MaxOutputTokens = Math.Min(options.MaxOutputTokens ?? outputBudget, outputBudget);
@@ -210,7 +207,7 @@ public sealed class SubagentTools
         };
         try
         {
-            string previousAgent = _transcript.SwapCurrentAgent(subagent.Name);
+            string? previousAgent = _transcript.SwapCurrentAgent(subagent.Name);
             ChatResponse response;
             try
             {
@@ -242,7 +239,7 @@ public sealed class SubagentTools
         }
     }
 
-    internal static string BuildPrompt(AgentSubagent subagent, string expansions = null)
+    internal static string BuildPrompt(AgentSubagent subagent, string? expansions = null)
     {
         return "You are \"" + subagent.Name + "\", a subagent of RimAgent working in the player's RimWorld colony. " +
             "The main agent delegated one task to you. You cannot talk to the player or ask questions: use your tools, " +
@@ -276,7 +273,7 @@ public sealed class SubagentTools
         }
 
         public override async Task<ChatResponse> GetResponseAsync(
-            IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             ChatResponse response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             try { _observed(response); }
@@ -303,10 +300,10 @@ public sealed class SubagentTools
             _outputs = outputs;
         }
 
-        protected override async ValueTask<object> InvokeCoreAsync(
+        protected override async ValueTask<object?> InvokeCoreAsync(
             AIFunctionArguments arguments, CancellationToken cancellationToken)
         {
-            string previous = _transcript.SwapCurrentAgent(_name);
+            string? previous = _transcript.SwapCurrentAgent(_name);
             using IDisposable scope = ToolOutputStore.EnterScope(_outputs);
             try
             {

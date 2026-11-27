@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -20,7 +18,7 @@ namespace RimAgent;
 
 public partial class RimAgentMod : Mod
 {
-    public static RimAgentSettings Settings { get; internal set; }
+    public static RimAgentSettings? Settings { get; internal set; }
 
     private const float PermissionRowHeight = 46f;
     private const float PermissionColumnGap = 18f;
@@ -63,10 +61,10 @@ public partial class RimAgentMod : Mod
     private const string DecisionDefaultKey = "RimAgent.Settings.DecisionDefault";
 
     // 設定頁每個 IMGUI 事件都會重畫：權限名稱、說明與提示快取起來，免得每幀翻譯。
-    private static string[] _permissionLabels;
-    private static string[] _permissionDescs;
-    private static string[] _permissionTips;
-    private static LoadedLanguage _permissionLanguage;
+    private static string[]? _permissionLabels;
+    private static string[]? _permissionDescs;
+    private static string[]? _permissionTips;
+    private static LoadedLanguage? _permissionLanguage;
 
     // 權限清單預設收合、分頁停在「一般」；只在本次遊戲期間記住，不寫入設定檔。
     private static bool _showPermissionList;
@@ -79,23 +77,24 @@ public partial class RimAgentMod : Mod
     private const float FooterHeight = 52f;
 
     // TextFieldNumeric 需要跨幀保留輸入中的文字。
-    private static string _a2aPortBuffer;
+    private static string? _a2aPortBuffer;
 
     private Vector2 _settingsScrollPosition = Vector2.zero;
     private float _settingsHeight = 960f;
 
     public RimAgentMod(ModContentPack content) : base(content)
     {
-        Settings = GetSettings<RimAgentSettings>();
-        string token = Settings.a2aServer ? Settings.EnsureA2AToken() : Settings.a2aToken;
-        A2AServerController.Apply(content.RootDir, Settings.a2aServer, Settings.a2aPort, token);
+        RimAgentSettings settings = GetSettings<RimAgentSettings>();
+        Settings = settings;
+        string token = settings.a2aServer ? settings.EnsureA2AToken() : settings.a2aToken;
+        A2AServerController.Apply(content.RootDir, settings.a2aServer, settings.a2aPort, token);
     }
 
     public override void WriteSettings()
     {
-        if (Settings.a2aServer) Settings.EnsureA2AToken();
+        if (Settings is { } settings && settings.a2aServer) settings.EnsureA2AToken();
         base.WriteSettings();
-        A2AServerController.Apply(Content.RootDir, Settings.a2aServer, Settings.a2aPort, Settings.a2aToken);
+        if (Settings is { } saved) A2AServerController.Apply(Content.RootDir, saved.a2aServer, saved.a2aPort, saved.a2aToken);
     }
 
     public override string SettingsCategory()
@@ -181,76 +180,80 @@ public partial class RimAgentMod : Mod
 
     private static void DrawAutomation(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         DrawSectionHeader(listing, "RimAgent.Settings.Section2Title".Translate(), "RimAgent.Settings.Section2Hint".Translate());
         DrawAutonomousCare(listing);
 
         DrawSectionHeader(listing, "RimAgent.Settings.Section3Title".Translate(), "RimAgent.Settings.Section3Hint".Translate());
         // 決策模型沒設定好時開關變灰、點不動，下方說明原因並給前往按鈕；存檔裡的值不動，設定好後照原值生效。
-        DecisionAvailability decision = DecisionServiceFactory.GetAvailability();
+        DecisionAvailability? decision = DecisionServiceFactory.GetAvailability();
         bool decisionReady = IsDecisionReady(decision);
-        bool decisionOn = decisionReady && Settings.decisionEnabled;
+        bool decisionOn = decisionReady && settings.decisionEnabled;
         DrawToggleRow(listing, ref decisionOn, "RimAgent.Settings.DecisionEnabled".Translate(),
             "RimAgent.Settings.DecisionEnabledDesc".Translate(), "RimAgent.Settings.DecisionEnabledTip".Translate(), 0f, !decisionReady);
-        if (decisionReady) Settings.decisionEnabled = decisionOn;
+        if (decisionReady) settings.decisionEnabled = decisionOn;
         if (!decisionReady || decisionOn) DrawDecisionStatus(listing, decision);
         DrawDecisionSection(listing);
     }
 
     private static void DrawAdvanced(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         listing.Gap();
         listing.Label("RimAgent.Settings.CompactionHeader".Translate());
         listing.GapLine();
-        listing.CheckboxLabeled("RimAgent.Settings.AutoCompact".Translate(), ref Settings.autoCompact, "RimAgent.Settings.AutoCompactTip".Translate());
-        if (Settings.autoCompact)
+        listing.CheckboxLabeled("RimAgent.Settings.AutoCompact".Translate(), ref settings.autoCompact, "RimAgent.Settings.AutoCompactTip".Translate());
+        if (settings.autoCompact)
         {
-            listing.Label("RimAgent.Settings.AutoCompactThreshold".Translate(Settings.autoCompactThreshold), -1f, "RimAgent.Settings.AutoCompactThresholdTip".Translate());
-            Settings.autoCompactThreshold = Mathf.RoundToInt(listing.Slider(Settings.autoCompactThreshold, RimAgentSettings.MinAutoCompactThreshold, RimAgentSettings.MaxAutoCompactThreshold));
+            listing.Label("RimAgent.Settings.AutoCompactThreshold".Translate(settings.autoCompactThreshold), -1f, "RimAgent.Settings.AutoCompactThresholdTip".Translate());
+            settings.autoCompactThreshold = Mathf.RoundToInt(listing.Slider(settings.autoCompactThreshold, RimAgentSettings.MinAutoCompactThreshold, RimAgentSettings.MaxAutoCompactThreshold));
         }
-        TaggedString tokenLimit = Settings.instructionTokenLimitK == 0
+        TaggedString tokenLimit = settings.instructionTokenLimitK == 0
             ? "RimAgent.Settings.InstructionTokenLimitNone".Translate()
-            : "RimAgent.Settings.InstructionTokenLimit".Translate(Settings.instructionTokenLimitK);
+            : "RimAgent.Settings.InstructionTokenLimit".Translate(settings.instructionTokenLimitK);
         listing.Label(tokenLimit, -1f, "RimAgent.Settings.InstructionTokenLimitTip".Translate());
-        Settings.instructionTokenLimitK = Mathf.RoundToInt(listing.Slider(Settings.instructionTokenLimitK, 0f, RimAgentSettings.MaxInstructionTokenLimitK) / 100f) * 100;
+        settings.instructionTokenLimitK = Mathf.RoundToInt(listing.Slider(settings.instructionTokenLimitK, 0f, RimAgentSettings.MaxInstructionTokenLimitK) / 100f) * 100;
 
         listing.Gap();
         listing.Label("RimAgent.Settings.LayoutsHeader".Translate());
         listing.GapLine();
-        listing.CheckboxLabeled("RimAgent.Settings.Layouts".Translate(), ref Settings.layouts, "RimAgent.Settings.LayoutsTip".Translate());
+        listing.CheckboxLabeled("RimAgent.Settings.Layouts".Translate(), ref settings.layouts, "RimAgent.Settings.LayoutsTip".Translate());
 
         listing.Gap();
         listing.Label("RimAgent.Settings.ImageHeader".Translate());
         listing.GapLine();
-        listing.CheckboxLabeled("RimAgent.Settings.ImageInput".Translate(), ref Settings.imageInput, "RimAgent.Settings.ImageInputTip".Translate());
+        listing.CheckboxLabeled("RimAgent.Settings.ImageInput".Translate(), ref settings.imageInput, "RimAgent.Settings.ImageInputTip".Translate());
 
         DrawRunLogSettings(listing);
     }
 
     private static void DrawWebSearch(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         listing.Gap();
         listing.Label("RimAgent.Settings.WebSearchHeader".Translate());
         listing.GapLine();
-        listing.CheckboxLabeled("RimAgent.Settings.UseLocalSearch".Translate(), ref Settings.useLocalSearch,
+        listing.CheckboxLabeled("RimAgent.Settings.UseLocalSearch".Translate(), ref settings.useLocalSearch,
             "RimAgent.Settings.UseLocalSearchTip".Translate());
-        if (Settings.useLocalSearch)
+        if (settings.useLocalSearch)
         {
             listing.Label("RimAgent.Settings.SearxngUrl".Translate());
-            Settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), Settings.searxngUrl ?? string.Empty);
+            settings.searxngUrl = Widgets.TextField(listing.GetRect(28f), settings.searxngUrl ?? string.Empty);
         }
     }
 
     private static void DrawA2ASettings(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         listing.Gap();
         listing.Label("RimAgent.Settings.A2AHeader".Translate());
         listing.GapLine();
-        listing.CheckboxLabeled("RimAgent.Settings.A2AServer".Translate(), ref Settings.a2aServer, "RimAgent.Settings.A2AServerTip".Translate());
-        if (!Settings.a2aServer) return;
-        string token = Settings.EnsureA2AToken();
+        listing.CheckboxLabeled("RimAgent.Settings.A2AServer".Translate(), ref settings.a2aServer, "RimAgent.Settings.A2AServerTip".Translate());
+        if (!settings.a2aServer) return;
+        string token = settings.EnsureA2AToken();
         Rect portRow = listing.GetRect(28f);
-        Widgets.Label(portRow.LeftHalf(), "RimAgent.Settings.A2APort".Translate(Settings.a2aPort + 1));
-        Widgets.TextFieldNumeric(portRow.RightHalf(), ref Settings.a2aPort, ref _a2aPortBuffer, RimAgentSettings.MinA2APort, RimAgentSettings.MaxA2APort);
+        Widgets.Label(portRow.LeftHalf(), "RimAgent.Settings.A2APort".Translate(settings.a2aPort + 1));
+        Widgets.TextFieldNumeric(portRow.RightHalf(), ref settings.a2aPort, ref _a2aPortBuffer, RimAgentSettings.MinA2APort, RimAgentSettings.MaxA2APort);
         Rect tokenRow = listing.GetRect(28f);
         const float RegenWidth = 100f;
         const float CopyWidth = 80f;
@@ -269,7 +272,7 @@ public partial class RimAgentMod : Mod
         }
         if (Widgets.ButtonText(regenRect, "RimAgent.Settings.A2ARegenerateToken".Translate()))
         {
-            Settings.RegenerateA2AToken();
+            settings.RegenerateA2AToken();
         }
         if (A2AServerController.LastError is { } error)
         {
@@ -287,17 +290,18 @@ public partial class RimAgentMod : Mod
 
     private static void DrawDecisionSection(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         // 主頁關掉決策模型時，這些細節都沒有作用，整段不顯示；
         // 分流靠決策模型分類，沒有可用的決策模型時細項也不顯示。
-        if (Settings.decisionEnabled)
+        if (settings.decisionEnabled)
         {
             listing.Gap();
             listing.Label("RimAgent.Settings.DecisionModelHeader".Translate());
             listing.GapLine();
         }
-        if (Settings.decisionEnabled && DrawDecisionSettings(listing))
+        if (settings.decisionEnabled && DrawDecisionSettings(listing))
         {
-            listing.CheckboxLabeled("RimAgent.Settings.DecisionTriageUpkeep".Translate(), ref Settings.decisionTriageUpkeep,
+            listing.CheckboxLabeled("RimAgent.Settings.DecisionTriageUpkeep".Translate(), ref settings.decisionTriageUpkeep,
                 "RimAgent.Settings.DecisionTriageUpkeepTip".Translate());
             listing.Gap(6f);
             DrawDecisionRoutingSettings(listing);
@@ -306,12 +310,13 @@ public partial class RimAgentMod : Mod
 
     private static void DrawRunLogSettings(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         listing.Gap();
         listing.Label("RimAgent.Settings.RunLogHeader".Translate());
         listing.GapLine();
-        listing.CheckboxLabeled("RimAgent.Settings.RecordRuns".Translate(), ref Settings.recordRuns,
+        listing.CheckboxLabeled("RimAgent.Settings.RecordRuns".Translate(), ref settings.recordRuns,
             "RimAgent.Settings.RecordRunsTip".Translate());
-        if (Settings.recordRuns)
+        if (settings.recordRuns)
         {
             string logFolder = Path.Combine(RunLogWriter.DefaultFolder, RunLogWriter.FolderName);
             string logPath = Path.Combine(logFolder, RunLogWriter.IndexName);
@@ -369,16 +374,17 @@ public partial class RimAgentMod : Mod
 
     private static void DrawAutonomousCare(Listing_Standard listing)
     {
-        bool careWasEnabled = Settings.autonomousCare;
-        DrawToggleCard(listing, ref Settings.autonomousCare, "RimAgent.Settings.AutonomousCare".Translate(),
+        if (Settings is not { } settings) return;
+        bool careWasEnabled = settings.autonomousCare;
+        DrawToggleCard(listing, ref settings.autonomousCare, "RimAgent.Settings.AutonomousCare".Translate(),
             "RimAgent.Settings.AutonomousCareDesc".Translate(), "RimAgent.Settings.AutonomousCareTip".Translate());
-        if (careWasEnabled && !Settings.autonomousCare) RimAgentGameComponent.Instance?.DisableAutonomousCare();
-        if (!Settings.autonomousCare) return;
+        if (careWasEnabled && !settings.autonomousCare) RimAgentGameComponent.Instance?.DisableAutonomousCare();
+        if (!settings.autonomousCare) return;
 
         listing.Gap(4f);
-        DrawToggleRow(listing, ref Settings.confirmAutonomousMajor, "RimAgent.Settings.ConfirmAutonomousMajor".Translate(),
+        DrawToggleRow(listing, ref settings.confirmAutonomousMajor, "RimAgent.Settings.ConfirmAutonomousMajor".Translate(),
             "RimAgent.Settings.ConfirmAutonomousMajorDesc".Translate(), "RimAgent.Settings.ConfirmAutonomousMajorTip".Translate(), SubIndent);
-        DrawToggleRow(listing, ref Settings.autoTimeSpeed, "RimAgent.Settings.AutoTimeSpeed".Translate(),
+        DrawToggleRow(listing, ref settings.autoTimeSpeed, "RimAgent.Settings.AutoTimeSpeed".Translate(),
             "RimAgent.Settings.AutoTimeSpeedDesc".Translate(), "RimAgent.Settings.AutoTimeSpeedTip".Translate(), SubIndent);
 
         listing.Gap(6f);
@@ -393,8 +399,8 @@ public partial class RimAgentMod : Mod
         }
         listing.Gap(2f);
         string hint = "RimAgent.Settings.CooldownHint".Translate();
-        if (!CooldownChoices.Contains(Settings.autonomousCooldownMinutes))
-            hint += " " + "RimAgent.Settings.CooldownCustom".Translate(Settings.autonomousCooldownMinutes);
+        if (!CooldownChoices.Contains(settings.autonomousCooldownMinutes))
+            hint += " " + "RimAgent.Settings.CooldownCustom".Translate(settings.autonomousCooldownMinutes);
         DrawHint(listing, hint, SubIndent, Dim);
     }
 
@@ -415,13 +421,13 @@ public partial class RimAgentMod : Mod
         Text.WordWrap = true;
         TooltipHandler.TipRegion(new Rect(row.x, row.y, noteWidth, row.height), note);
         if (Widgets.ButtonText(goRect, "RimAgent.Settings.GoShort".Translate())) OpenFrameworkSettings();
-        if (Widgets.ButtonText(resetRect, "RimAgent.Settings.ResetDefaults".Translate()))
+        if (Widgets.ButtonText(resetRect, "RimAgent.Settings.ResetDefaults".Translate()) && Settings is { } settings)
         {
             Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation("RimAgent.Settings.ResetDefaultsConfirm".Translate(), () =>
             {
-                bool careWasEnabled = Settings.autonomousCare;
-                Settings.ResetToDefaults();
-                if (careWasEnabled && !Settings.autonomousCare) RimAgentGameComponent.Instance?.DisableAutonomousCare();
+                bool careWasEnabled = settings.autonomousCare;
+                settings.ResetToDefaults();
+                if (careWasEnabled && !settings.autonomousCare) RimAgentGameComponent.Instance?.DisableAutonomousCare();
             }, destructive: true));
         }
     }

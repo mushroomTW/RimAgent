@@ -101,7 +101,7 @@ internal static class ClipboardImage
 
     internal static byte[] FromDib(byte[] dib)
     {
-        if (!DibDecoder.TryDecode(dib, out int width, out int height, out byte[] rgba)) return [];
+        if (!DibDecoder.TryDecode(dib, out int width, out int height, out byte[]? rgba)) return [];
         var texture = new Texture2D(width, height, TextureFormat.RGBA32, mipChain: false);
         try
         {

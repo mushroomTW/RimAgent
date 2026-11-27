@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,11 +20,11 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
     private const string MineDefName = "Mine";
     private const string ColonistNotFound = "colonist not found";
 
-    private readonly Verse.Game _boundGame;
+    private readonly Verse.Game? _boundGame;
 
-    private volatile string _screenshotFolder;
+    private volatile string? _screenshotFolder;
 
-    public RimWorldGameWorld(Verse.Game boundGame = null)
+    public RimWorldGameWorld(Verse.Game? boundGame = null)
     {
         _boundGame = boundGame;
     }
@@ -48,7 +46,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         WarnMissingReflection(LiveMessagesField, "Messages.liveMessages");
     }
 
-    private static void WarnMissingReflection(object member, string name)
+    private static void WarnMissingReflection(object? member, string name)
     {
         if (member == null)
         {
@@ -58,17 +56,17 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         }
     }
 
-    private IReadOnlyList<DefInfo> _workTypes;
-    private IReadOnlyList<DefInfo> _buildables;
-    private IReadOnlyList<DefInfo> _stuffs;
-    private IReadOnlyList<DefInfo> _timeAssignments;
-    private IReadOnlyList<DefInfo> _tradeGoods;
-    private IReadOnlyList<DefInfo> _medicalCareLevels;
-    private IReadOnlyList<DefInfo> _surgeryRecipes;
-    private IReadOnlyList<DefInfo> _prisonerInteractionModes;
-    private IReadOnlyList<DefInfo> _animalTraining;
-    private IReadOnlyList<DefInfo> _storageFilterables;
-    private IReadOnlyList<DefInfo> _growablePlants;
+    private IReadOnlyList<DefInfo>? _workTypes;
+    private IReadOnlyList<DefInfo>? _buildables;
+    private IReadOnlyList<DefInfo>? _stuffs;
+    private IReadOnlyList<DefInfo>? _timeAssignments;
+    private IReadOnlyList<DefInfo>? _tradeGoods;
+    private IReadOnlyList<DefInfo>? _medicalCareLevels;
+    private IReadOnlyList<DefInfo>? _surgeryRecipes;
+    private IReadOnlyList<DefInfo>? _prisonerInteractionModes;
+    private IReadOnlyList<DefInfo>? _animalTraining;
+    private IReadOnlyList<DefInfo>? _storageFilterables;
+    private IReadOnlyList<DefInfo>? _growablePlants;
 
     private static Map Map => Find.CurrentMap;
 
@@ -92,7 +90,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
 
     public CommandResult SetCurrentMap(int mapId)
     {
-        Map map = Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
+        Map? map = Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
         if (map == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no map has id {mapId}"));
         string label = map.Parent?.LabelCap ?? ("Map " + map.uniqueID.ToString(CultureInfo.InvariantCulture));
         if (map == Map) return CommandResult.Ok($"{label} is already the current map.");
@@ -129,7 +127,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         return CommandResult.Ok($"Time speed set to {speed}.");
     }
 
-    public string GetNotReadyReason()
+    public string? GetNotReadyReason()
     {
         // 讀檔期間 ProgramState 會先變成 MapInitializing，這一條已經擋住；不看長事件，
         // 自動存檔排入的那一幀與背景生成新地圖期間當前地圖都還能碰，擋了只會誤殺指令。
@@ -149,7 +147,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         int target = Find.TickManager.TicksGame + Math.Max(0, ticks);
         while (true)
         {
-            string notReady = GetNotReadyReason();
+            string? notReady = GetNotReadyReason();
             // 等待期間讀了別的檔：tick 已換一條時間軸，目標不再有意義。
             if (notReady != null || Current.Game != game) return CommandResult.Fail(notReady ?? "a different game was loaded");
             // 工具都作用在當前地圖：玩家切到別張地圖後，等待中的檢查與之後的指令都會換成那張圖，先回來讓模型知道。
@@ -161,7 +159,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         }
     }
 
-    private LogMessage _lastSeenLog;
+    private LogMessage? _lastSeenLog;
     private int _lastSeenLogRepeats;
 
     public IReadOnlyList<string> TakeNewGameErrors()
@@ -180,7 +178,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
             return errors;
         }
         bool afterLastSeen = _lastSeenLog == null || !messages.Contains(_lastSeenLog);
-        LogMessage last = null;
+        LogMessage? last = null;
         foreach (LogMessage message in messages)
         {
             last = message;
@@ -312,7 +310,7 @@ internal sealed partial class RimWorldGameWorld : IGameWorld
         }
     }
 
-    private static void WarnModError(Pawn pawn, string part, Exception ex)
+    private static void WarnModError(Pawn? pawn, string part, Exception ex)
     {
         // ThingID 只是 defName + 編號，不會再跑進出錯的模組程式。
         string who = pawn?.ThingID ?? "a pawn";
@@ -335,8 +333,8 @@ StringComparer.Ordinal.GetHashCode(("RimAgent:" + part + ":" + who)));
 
     private static bool IsNearMentalBreak(Pawn pawn)
     {
-        Need_Mood mood = pawn.needs?.mood;
-        MentalBreaker breaker = pawn.mindState?.mentalBreaker;
+        Need_Mood? mood = pawn.needs?.mood;
+        MentalBreaker? breaker = pawn.mindState?.mentalBreaker;
         return mood != null && breaker != null && mood.CurLevel < breaker.BreakThresholdMinor;
     }
 
@@ -352,9 +350,9 @@ StringComparer.Ordinal.GetHashCode(("RimAgent:" + part + ":" + who)));
 
     private static string RoyalStatusOf(Pawn pawn)
     {
-        Faction empire = Faction.OfEmpire;
+        Faction? empire = Faction.OfEmpire;
         if (pawn.royalty == null || empire == null) return string.Empty;
-        RoyalTitleDef title = pawn.royalty.GetCurrentTitle(empire);
+        RoyalTitleDef? title = pawn.royalty.GetCurrentTitle(empire);
         int honor = pawn.royalty.GetFavor(empire);
         if (title == null && honor == 0) return string.Empty;
         return string.Create(CultureInfo.InvariantCulture, $"{empire.Name}: {title?.GetLabelFor(pawn) ?? "no title"}, honor {honor}");
@@ -385,12 +383,12 @@ StringComparer.Ordinal.GetHashCode(("RimAgent:" + part + ":" + who)));
         };
     }
 
-    private static Pawn FindColonist(int id)
+    private static Pawn? FindColonist(int id)
     {
         return Map.mapPawns.FreeColonistsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
     }
 
-    private static Thing FindThing(int id)
+    private static Thing? FindThing(int id)
     {
         // 迷霧中的東西玩家看不到，不能被指名操作。
         return Map.listerThings.AllThings.FirstOrDefault(t => t.thingIDNumber == id && t.Spawned && !t.Fogged());

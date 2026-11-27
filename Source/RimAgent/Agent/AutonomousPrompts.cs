@@ -1,4 +1,4 @@
-#nullable disable
+using System.Diagnostics.CodeAnalysis;
 
 namespace RimAgent.Agent;
 
@@ -10,8 +10,9 @@ namespace RimAgent.Agent;
 /// </summary>
 internal static class AutonomousPrompts
 {
-    public static string Build(AutonomousPack pack, AutonomousTrigger trigger)
+    public static string? Build(AutonomousPack? pack, AutonomousTrigger trigger)
     {
+        if (pack?.Tasks == null) return null;
         if (!HasTask(pack, trigger) && !HasTask(pack, AutonomousTrigger.Interval)) return null;
         string task = pack.Tasks[(HasTask(pack, trigger) ? trigger : AutonomousTrigger.Interval).ToString()];
         string preamble = pack.Preamble;
@@ -20,10 +21,9 @@ internal static class AutonomousPrompts
     }
 
     /// <summary>該觸發有無專屬章節（呼叫端藉此判斷是否退回 Interval，退回時警告一次讓拼字錯誤可見）。</summary>
-    public static bool HasTask(AutonomousPack pack, AutonomousTrigger trigger)
+    public static bool HasTask([NotNullWhen(true)] AutonomousPack? pack, AutonomousTrigger trigger)
     {
         if (pack?.Tasks == null) return false;
-        string task;
-        return pack.Tasks.TryGetValue(trigger.ToString(), out task) && !string.IsNullOrWhiteSpace(task);
+        return pack.Tasks.TryGetValue(trigger.ToString(), out string? task) && !string.IsNullOrWhiteSpace(task);
     }
 }

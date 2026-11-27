@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -50,7 +48,7 @@ internal sealed partial class RimWorldGameWorld
         bool tended = false, needsTending = false;
         if (hediff.def.tendable)
         {
-            HediffComp_TendDuration tend = (hediff as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>();
+            HediffComp_TendDuration? tend = (hediff as HediffWithComps)?.TryGetComp<HediffComp_TendDuration>();
             tended = tend != null && tend.IsTended;
             needsTending = !tended && hediff.TendableNow(ignoreTimer: false);
         }
@@ -110,7 +108,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SetMedicalCare(int pawnId, string careDefName)
     {
-        Pawn pawn = FindColonist(pawnId);
+        Pawn? pawn = FindColonist(pawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (pawn.playerSettings == null) return CommandResult.Fail($"{pawn.LabelShort} has no medical care settings");
         object parsed;
@@ -134,14 +132,14 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult ScheduleSurgery(SurgeryRequest request)
     {
-        Pawn pawn = FindColonist(request.PawnId);
+        Pawn? pawn = FindColonist(request.PawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
-        RecipeDef recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(request.RecipeDefName);
+        RecipeDef? recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(request.RecipeDefName);
         if (recipe == null || recipe.workerClass == null || !typeof(Recipe_Surgery).IsAssignableFrom(recipe.workerClass))
             return CommandResult.Fail($"unknown surgery {request.RecipeDefName}");
-        CommandResult researchFail = CheckSurgeryResearch(recipe);
+        CommandResult? researchFail = CheckSurgeryResearch(recipe);
         if (researchFail != null) return researchFail;
-        CommandResult partFail = ResolveSurgeryTargetPart(recipe, pawn, request.BodyPartLabel, out BodyPartRecord part);
+        CommandResult? partFail = ResolveSurgeryTargetPart(recipe, pawn, request.BodyPartLabel, out BodyPartRecord? part);
         if (partFail != null) return partFail;
         if (!recipe.AvailableOnNow(pawn, part))
             return CommandResult.Fail($"{recipe.label} is not available on {pawn.LabelShort} right now");
@@ -159,7 +157,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok(detail);
     }
 
-    private static CommandResult CheckSurgeryResearch(RecipeDef recipe)
+    private static CommandResult? CheckSurgeryResearch(RecipeDef recipe)
     {
         if (recipe.researchPrerequisite != null && !recipe.researchPrerequisite.IsFinished)
             return CommandResult.Fail($"{recipe.label} needs research {recipe.researchPrerequisite.label} first");
@@ -174,7 +172,7 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static CommandResult ResolveSurgeryTargetPart(RecipeDef recipe, Pawn pawn, string wantLabel, out BodyPartRecord part)
+    private static CommandResult? ResolveSurgeryTargetPart(RecipeDef recipe, Pawn pawn, string? wantLabel, out BodyPartRecord? part)
     {
         part = null;
         if (!recipe.targetsBodyPart) return null;

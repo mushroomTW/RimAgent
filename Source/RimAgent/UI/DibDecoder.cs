@@ -1,6 +1,5 @@
-#nullable disable
-
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 
 namespace RimAgent.UI;
@@ -15,7 +14,7 @@ internal static class DibDecoder
 
     internal const long MaxPixels = 40_000_000;
 
-    public static bool TryDecode(byte[] dib, out int width, out int height, out byte[] rgba)
+    public static bool TryDecode(byte[]? dib, out int width, out int height, [NotNullWhen(true)] out byte[]? rgba)
     {
         width = 0;
         height = 0;

@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using RimAgent.Tools;
 
@@ -185,13 +183,13 @@ public sealed class ResearchProjectInfo
 
 public sealed class ResearchInfo
 {
-    public ResearchProjectInfo Current { get; set; }
+    public ResearchProjectInfo? Current { get; set; }
     public IReadOnlyList<ResearchProjectInfo> Available { get; set; } = [];
 }
 
 public sealed class CommandResult : Result<string>
 {
-    private CommandResult(bool success, string message) : base(success, message, message)
+    private CommandResult(bool success, string? message) : base(success, message, message)
     {
     }
 
@@ -223,7 +221,7 @@ public sealed class ScreenshotInfo
     public int Width { get; set; }
     public int Height { get; set; }
     public string Error { get; set; } = string.Empty;
-    public MapShotLayout Layout { get; set; }
+    public MapShotLayout? Layout { get; set; }
 }
 
 public sealed class SaveContext
@@ -231,7 +229,7 @@ public sealed class SaveContext
     public string ColonyId { get; set; } = string.Empty;
     public int Tick { get; set; }
     public bool Permadeath { get; set; }
-    public string SavingBlockedReason { get; set; }
+    public string? SavingBlockedReason { get; set; }
 }
 
 public sealed class SaveSlotInfo

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -13,10 +11,10 @@ public sealed class McpManager
     /// <summary>server 閒置多久視為可關（分鐘）。</summary>
     public static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(10);
 
-    private readonly string _configPath;
+    private readonly string? _configPath;
     private readonly Func<McpServerEntry, IMcpServer> _factory;
     private readonly Lock _gate = new();
-    private List<McpServerEntry> _entries;
+    private List<McpServerEntry>? _entries;
     private volatile bool _loaded;
     private bool _shutdown;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S2930:\"IDisposables\" should be disposed",
@@ -27,14 +25,14 @@ public sealed class McpManager
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _lastUsed =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, Task<Tuple<IMcpServer, IList<McpServerTool>>>> _connecting =
+    private readonly Dictionary<string, Task<Tuple<IMcpServer, IList<McpServerTool>?>>> _connecting =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public McpManager(string configPath) : this(configPath, entry => new SdkMcpServer(entry))
+    public McpManager(string? configPath) : this(configPath, entry => new SdkMcpServer(entry))
     {
     }
 
-    internal McpManager(string configPath, Func<McpServerEntry, IMcpServer> factory)
+    internal McpManager(string? configPath, Func<McpServerEntry, IMcpServer> factory)
     {
         _configPath = configPath;
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -90,11 +88,11 @@ public sealed class McpManager
 
     private async Task AppendServerToolsAsync(StringBuilder sb, McpServerEntry entry, CancellationToken cancellationToken)
     {
-        IMcpServer used = null;
+        IMcpServer? used = null;
         try
         {
             // 首次連線時探測那一趟已經拿到清單，直接用，不多跑一次 list。
-            Tuple<IMcpServer, IList<McpServerTool>> connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
+            Tuple<IMcpServer, IList<McpServerTool>?> connection = await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false);
             used = connection.Item1;
             IList<McpServerTool> tools = connection.Item2
                                           ?? await connection.Item1.ListToolsAsync(cancellationToken).ConfigureAwait(false);
@@ -119,15 +117,15 @@ public sealed class McpManager
         }
     }
 
-    public async Task<string> CallAsync(string server, string tool, string argsJson, CancellationToken cancellationToken)
+    public async Task<string> CallAsync(string? server, string tool, string argsJson, CancellationToken cancellationToken)
     {
         SweepIdle();
         List<McpServerEntry> entries = Entries();
         if (entries.Count == 0) return Status();
-        McpServerEntry entry = entries.Find(e => string.Equals(e.Name, server ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+        McpServerEntry? entry = entries.Find(e => string.Equals(e.Name, server ?? string.Empty, StringComparison.OrdinalIgnoreCase));
         if (entry == null) return Tools.ToolText.Error("unknown MCP server \"" + server + "\".");
         if (!entry.Enabled) return Tools.ToolText.Error("MCP server \"" + entry.Name + "\" is disabled.");
-        IMcpServer connected = null;
+        IMcpServer? connected = null;
         try
         {
             connected = (await EnsureConnectedAsync(entry, cancellationToken).ConfigureAwait(false)).Item1;
@@ -208,13 +206,11 @@ public sealed class McpManager
 
     private List<McpServerEntry> Entries()
     {
-        if (_loaded) return _entries;
+        if (_loaded) return _entries ?? [];
         lock (_gate)
         {
-            if (_loaded) return _entries;
-            List<McpServerEntry> servers;
-            string error;
-            if (McpServerConfig.TryLoad(_configPath, out servers, out error))
+            if (_loaded) return _entries ?? [];
+            if (McpServerConfig.TryLoad(_configPath, out List<McpServerEntry> servers, out string error))
             {
                 _entries = servers;
             }
@@ -229,21 +225,21 @@ public sealed class McpManager
     }
 
     /// <summary>已連上的 server；Item2 只在這次呼叫真的建了連線時帶著探測到的工具清單。</summary>
-    private async Task<Tuple<IMcpServer, IList<McpServerTool>>> EnsureConnectedAsync(McpServerEntry entry, CancellationToken cancellationToken)
+    private async Task<Tuple<IMcpServer, IList<McpServerTool>?>> EnsureConnectedAsync(McpServerEntry entry, CancellationToken cancellationToken)
     {
-        Task<Tuple<IMcpServer, IList<McpServerTool>>> inflight;
-        TaskCompletionSource<Tuple<IMcpServer, IList<McpServerTool>>> tcs = null;
+        Task<Tuple<IMcpServer, IList<McpServerTool>?>>? inflight;
+        TaskCompletionSource<Tuple<IMcpServer, IList<McpServerTool>?>>? tcs = null;
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_shutdown, nameof(McpManager));
-            if (_clients.TryGetValue(entry.Name, out IMcpServer running))
+            if (_clients.TryGetValue(entry.Name, out IMcpServer? running))
             {
                 _lastUsed[entry.Name] = DateTime.UtcNow;
-                return Tuple.Create(running, (IList<McpServerTool>)null);
+                return Tuple.Create<IMcpServer, IList<McpServerTool>?>(running, null);
             }
             if (!_connecting.TryGetValue(entry.Name, out inflight))
             {
-                tcs = new TaskCompletionSource<Tuple<IMcpServer, IList<McpServerTool>>>(TaskCreationOptions.RunContinuationsAsynchronously);
+                tcs = new TaskCompletionSource<Tuple<IMcpServer, IList<McpServerTool>?>>(TaskCreationOptions.RunContinuationsAsynchronously);
                 inflight = tcs.Task;
                 _connecting[entry.Name] = inflight;
             }
@@ -252,27 +248,27 @@ public sealed class McpManager
         {
             _ = ConnectNewServerAsync(entry, tcs);
         }
-        Tuple<IMcpServer, IList<McpServerTool>> result = await inflight.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return tcs != null ? result : Tuple.Create(result.Item1, (IList<McpServerTool>)null);
+        Tuple<IMcpServer, IList<McpServerTool>?> result = await inflight.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return tcs != null ? result : Tuple.Create<IMcpServer, IList<McpServerTool>?>(result.Item1, null);
     }
 
-    private async Task ConnectNewServerAsync(McpServerEntry entry, TaskCompletionSource<Tuple<IMcpServer, IList<McpServerTool>>> tcs)
+    private async Task ConnectNewServerAsync(McpServerEntry entry, TaskCompletionSource<Tuple<IMcpServer, IList<McpServerTool>?>> tcs)
     {
-        IMcpServer server = null;
-        IMcpServer toDispose = null;
+        IMcpServer? server = null;
+        IMcpServer? toDispose = null;
         bool stored = false;
         try
         {
             // 建構只組參數不連線；真正的握手在第一次 list／call 內發生。
             server = _factory(entry);
             // 先做一次 list 確認連線可用，壞 server 在這裡就現形；清單順便交給呼叫端，免得再列一次。
-            IList<McpServerTool> tools = await server.ListToolsAsync(_shutdownCts.Token).ConfigureAwait(false);
+            IList<McpServerTool>? tools = await server.ListToolsAsync(_shutdownCts.Token).ConfigureAwait(false);
             lock (_gate)
             {
                 if (_connecting.TryGetValue(entry.Name, out var current) && ReferenceEquals(current, tcs.Task))
                     _connecting.Remove(entry.Name);
                 ObjectDisposedException.ThrowIf(_shutdown, nameof(McpManager));
-                if (_clients.TryGetValue(entry.Name, out IMcpServer existing))
+                if (_clients.TryGetValue(entry.Name, out IMcpServer? existing))
                 {
                     toDispose = server;
                     server = existing;
@@ -310,7 +306,7 @@ public sealed class McpManager
     {
         lock (_gate)
         {
-            if (_clients.TryGetValue(name, out IMcpServer current) && ReferenceEquals(current, server)) _lastUsed[name] = DateTime.UtcNow;
+            if (_clients.TryGetValue(name, out IMcpServer? current) && ReferenceEquals(current, server)) _lastUsed[name] = DateTime.UtcNow;
         }
     }
 
@@ -318,9 +314,9 @@ public sealed class McpManager
     /// 丟掉 server；帶 <paramref name="failed"/> 時只丟掉那個失敗的實例，
     /// 若登記的已是別的呼叫者重連的新實例就不動它（失敗的舊實例由其建立者自行釋放）。
     /// </summary>
-    private void Drop(string name, IMcpServer failed = null)
+    private void Drop(string name, IMcpServer? failed = null)
     {
-        IMcpServer server = null;
+        IMcpServer? server = null;
         lock (_gate)
         {
             if (_clients.TryGetValue(name, out server))

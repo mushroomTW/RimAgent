@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,7 +20,7 @@ internal sealed partial class RimWorldGameWorld
         var triple = pawn.Name as NameTriple;
         string nick = triple?.Nick ?? string.Empty;
         string first = triple?.First ?? pawn.Name?.ToStringShort ?? pawn.LabelShort;
-        PrisonerInteractionModeDef mode = pawn.guest?.ExclusiveInteractionMode;
+        PrisonerInteractionModeDef? mode = pawn.guest?.ExclusiveInteractionMode;
         return new PrisonerInfo
         {
             Id = pawn.thingIDNumber,
@@ -43,11 +41,11 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SetPrisonerInteraction(int pawnId, string modeDefName)
     {
-        Pawn pawn = FindPrisoner(pawnId);
+        Pawn? pawn = FindPrisoner(pawnId);
         if (pawn == null) return CommandResult.Fail("prisoner not found");
-        PrisonerInteractionModeDef mode = DefDatabase<PrisonerInteractionModeDef>.GetNamedSilentFail(modeDefName);
+        PrisonerInteractionModeDef? mode = DefDatabase<PrisonerInteractionModeDef>.GetNamedSilentFail(modeDefName);
         if (mode == null) return CommandResult.Fail($"unknown prisoner interaction mode {modeDefName}");
-        string hidden = WhyPrisonerModeHidden(pawn, mode);
+        string? hidden = WhyPrisonerModeHidden(pawn, mode);
         if (hidden != null) return CommandResult.Fail(hidden);
         pawn.guest.SetExclusiveInteraction(mode);
         return CommandResult.Ok();
@@ -57,7 +55,7 @@ internal sealed partial class RimWorldGameWorld
     /// 照 ITab_Pawn_Visitor 內 CanUsePrisonerInteractionMode（區域函式，無法直接呼叫）判斷該模式在介面上是否被隱藏。
     /// 傳回 null 代表可用，否則為拒絕原因。
     /// </summary>
-    private static string WhyPrisonerModeHidden(Pawn pawn, PrisonerInteractionModeDef mode)
+    private static string? WhyPrisonerModeHidden(Pawn pawn, PrisonerInteractionModeDef mode)
     {
         string cannot = $"{mode.label} is not available for {pawn.LabelShort}";
         if (!pawn.guest.Recruitable && mode.hideIfNotRecruitable) return $"{cannot}: not recruitable";
@@ -68,7 +66,7 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static string CheckBiotechPrisonerMode(Pawn pawn, PrisonerInteractionModeDef mode, string cannot)
+    private static string? CheckBiotechPrisonerMode(Pawn pawn, PrisonerInteractionModeDef mode, string cannot)
     {
         if (mode.hideIfNoBloodfeeders && pawn.MapHeld != null
             && !(ModsConfig.BiotechActive && pawn.MapHeld.mapPawns.FreeColonistsAndPrisonersSpawned.Any(p => p.IsBloodfeeder())))
@@ -82,7 +80,7 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static string CheckAnomalyPrisonerMode(Pawn pawn, PrisonerInteractionModeDef mode, string cannot)
+    private static string? CheckAnomalyPrisonerMode(Pawn pawn, PrisonerInteractionModeDef mode, string cannot)
     {
         if (mode.hideIfNotStudiableAsPrisoner
             && !(pawn.TryGetComp<CompStudiable>(out CompStudiable studiable) && studiable.EverStudiable()
@@ -96,7 +94,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult ReleasePrisoner(int pawnId)
     {
-        Pawn pawn = FindPrisoner(pawnId);
+        Pawn? pawn = FindPrisoner(pawnId);
         if (pawn == null) return CommandResult.Fail("prisoner not found");
         // 釋放後 HomeFaction／狀態會變，先記下原版 ShouldStayOnMapOnRelease 的條件。
         bool staysOnMap = pawn.IsWildMan() || (pawn.HomeFaction != null && pawn.HomeFaction.IsPlayer);
@@ -113,7 +111,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok($"{pawn.LabelShort} was released and is walking toward the map edge to leave.");
     }
 
-    private static Pawn FindPrisoner(int id)
+    private static Pawn? FindPrisoner(int id)
     {
         return Map.mapPawns.PrisonersOfColonySpawned.FirstOrDefault(p => p.thingIDNumber == id);
     }

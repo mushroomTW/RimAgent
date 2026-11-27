@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -41,12 +39,12 @@ public sealed class RiskClassifier : IRiskChecker
     public const int MaxOutputTokens = ModelSlots.ReasoningOutputFloor;
 
     private readonly IChatClient _client;
-    private readonly Func<string> _modelProvider;
-    private readonly Func<string> _systemPrompt;
-    private readonly Func<bool> _pinned;
+    private readonly Func<string?>? _modelProvider;
+    private readonly Func<string?>? _systemPrompt;
+    private readonly Func<bool>? _pinned;
     private readonly InstructionCache<RiskVerdict> _verdictCache = new();
 
-    public RiskClassifier(IChatClient client, Func<string> modelProvider = null, Func<string> systemPrompt = null, Func<bool> pinned = null)
+    public RiskClassifier(IChatClient client, Func<string?>? modelProvider = null, Func<string?>? systemPrompt = null, Func<bool>? pinned = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _modelProvider = modelProvider;
@@ -57,14 +55,14 @@ public sealed class RiskClassifier : IRiskChecker
     public async Task<RiskVerdict> ClassifyAsync(RiskQuestion question, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(question);
-        string prompt = _systemPrompt?.Invoke();
+        string? prompt = _systemPrompt?.Invoke();
         if (string.IsNullOrWhiteSpace(prompt))
         {
             return new RiskVerdict { Risky = true, Failed = true, Reason = "risk check unavailable: classifier prompt is missing" };
         }
         // 動態索引或依當下選取目標的工具（相同參數在不同狀態下目標不同）需納入預覽，其餘工具只看指令＋工具＋參數。
         string cacheKey = BuildCacheKey(question);
-        if (_verdictCache.TryGet(cacheKey, out RiskVerdict cached)) return cached;
+        if (_verdictCache.TryGet(cacheKey, out RiskVerdict? cached)) return cached;
         string text;
         try
         {
@@ -91,7 +89,7 @@ public sealed class RiskClassifier : IRiskChecker
             return new RiskVerdict { Risky = true, Failed = true, Reason = "risk check unavailable: " + ex.Message };
         }
 
-        RiskVerdict verdict = Parse(text);
+        RiskVerdict? verdict = Parse(text);
         if (verdict == null)
             return new RiskVerdict { Risky = true, Failed = true, Reason = "risk check returned an unreadable answer" };
         if (!verdict.Failed) _verdictCache.Store(cacheKey, verdict);
@@ -112,7 +110,7 @@ public sealed class RiskClassifier : IRiskChecker
             : baseKey;
     }
 
-    private static bool IncludesPreviewInCacheKey(string toolName)
+    private static bool IncludesPreviewInCacheKey(string? toolName)
     {
         return Tools.AgentToolRegistry.IsGenericActionTool(toolName)
             || string.Equals(toolName, "delete_bill", StringComparison.Ordinal)
@@ -132,7 +130,7 @@ public sealed class RiskClassifier : IRiskChecker
                Section("action_preview", q.Preview);
     }
 
-    private static string Section(string tag, string value)
+    private static string Section(string tag, string? value)
     {
         return "<" + tag + ">\n" + Escape(value ?? string.Empty) + "\n</" + tag + ">\n";
     }
@@ -143,7 +141,7 @@ public sealed class RiskClassifier : IRiskChecker
     }
 
     /// <summary>找出回覆裡第一個 JSON 物件；兩個欄位缺一或值不合法就回 null（由呼叫端當失敗處理）。</summary>
-    internal static RiskVerdict Parse(string text)
+    internal static RiskVerdict? Parse(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
         int start = text.IndexOf('{', StringComparison.Ordinal);

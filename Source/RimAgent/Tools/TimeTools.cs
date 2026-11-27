@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -20,11 +18,11 @@ public sealed class TimeTools
     private const int WaitChunkTicks = 250;
 
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
-    private readonly PlayerInterjections _interjections;
-    private readonly AgentTranscript _transcript;
+    private readonly ConfirmationGate? _gate;
+    private readonly PlayerInterjections? _interjections;
+    private readonly AgentTranscript? _transcript;
 
-    public TimeTools(IGameWorld world, ConfirmationGate gate = null, PlayerInterjections interjections = null, AgentTranscript transcript = null)
+    public TimeTools(IGameWorld world, ConfirmationGate? gate = null, PlayerInterjections? interjections = null, AgentTranscript? transcript = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -51,7 +49,7 @@ public sealed class TimeTools
         Result<DefInfo> match = DefResolver.Resolve(want, _world.TimeSpeeds, "time speed");
         if (!match.Success) return match.Error;
 
-        string blocked = ToolText.Blocked(_gate, $"would set time speed {previous} -> {match.Value.Label} ({match.Value.DefName}).");
+        string? blocked = ToolText.Blocked(_gate, $"would set time speed {previous} -> {match.Value.Label} ({match.Value.DefName}).");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetTimeSpeed(match.Value.DefName);
@@ -72,7 +70,7 @@ public sealed class TimeTools
     {
         if (hours < 1 || hours > MaxWaitHours) return ToolText.Error($"hours must be 1-{MaxWaitHours}.");
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would let {hours} in-game hour(s) pass."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would let {hours} in-game hour(s) pass."));
         if (blocked != null) return blocked;
 
         // 分段等：每段之間看一次敵人、倒地流血與火災，任一變多就先回來，不讓模型悶著頭等完整段時間。
@@ -84,7 +82,7 @@ public sealed class TimeTools
         int firesBefore = _world.GetFireCount();
         int total = hours * TicksPerHour;
         int waited = 0;
-        string stopReason = null;
+        string? stopReason = null;
         while (waited < total)
         {
             int chunk = Math.Min(WaitChunkTicks, total - waited);
@@ -111,7 +109,7 @@ public sealed class TimeTools
         return head + "\n" + ObserveTools.FormatOverview(_world);
     }
 
-    private string InterruptionReason(int hostilesBefore, HashSet<int> knownEmergencies, int firesBefore)
+    private string? InterruptionReason(int hostilesBefore, HashSet<int> knownEmergencies, int firesBefore)
     {
         if (_world.GetHostileCount() > hostilesBefore) return "new hostiles appeared";
         IReadOnlyList<int> emergencies = _world.GetColonistsInMedicalEmergency();
@@ -157,7 +155,7 @@ public sealed class TimeTools
 
     internal static string SpeedLabel(string defName, System.Collections.Generic.IReadOnlyList<DefInfo> speeds)
     {
-        DefInfo match = speeds.FirstOrDefault(s => string.Equals(s.DefName, defName, StringComparison.OrdinalIgnoreCase));
+        DefInfo? match = speeds.FirstOrDefault(s => string.Equals(s.DefName, defName, StringComparison.OrdinalIgnoreCase));
         return match != null ? $"{match.Label} ({match.DefName})" : defName;
     }
 }

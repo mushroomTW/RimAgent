@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Globalization;
 
 namespace RimAgent.Tools;
@@ -14,9 +12,10 @@ internal static class ToolOutputLimit
     /// <summary>單次工具結果保留的字元數（約 2000 token）：一輪可能呼叫好幾個工具，還要留空間給歷史與回覆。</summary>
     public const int MaxResultChars = 8000;
 
-    public static string Apply(string text, int maxChars = MaxResultChars, ToolOutputStore store = null)
+    public static string Apply(string? text, int maxChars = MaxResultChars, ToolOutputStore? store = null)
     {
-        if (string.IsNullOrEmpty(text) || text.Length <= maxChars) return text;
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        if (text.Length <= maxChars) return text;
 
         int head = AlignToCharBoundary(text, maxChars / 2);
         int tailStart = AlignToCharBoundary(text, text.Length - (maxChars - maxChars / 2));

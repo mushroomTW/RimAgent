@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 
@@ -63,10 +61,10 @@ internal static class ToolPacks
         "list_gizmos", "use_gizmo", "list_right_click_menu", "use_right_click_option"
     };
 
-    public static string PackOf(string toolName, ToolCategory category)
+    public static string? PackOf(string toolName, ToolCategory category)
     {
         if (MemoryEditTools.Contains(toolName)) return "memory_edit";
         if (InteractTools.Contains(toolName)) return "interact";
-        return ByCategory.TryGetValue(category, out string pack) ? pack : null;
+        return ByCategory.TryGetValue(category, out string? pack) ? pack : null;
     }
 }

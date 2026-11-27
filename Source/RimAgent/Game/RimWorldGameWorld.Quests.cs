@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -99,7 +97,7 @@ internal sealed partial class RimWorldGameWorld
     private static List<QuestRewardInfo> QuestRewardOptions(Quest quest)
     {
         var result = new List<QuestRewardInfo>();
-        QuestPart_Choice choice = quest.PartsListForReading.OfType<QuestPart_Choice>().FirstOrDefault();
+        QuestPart_Choice? choice = quest.PartsListForReading.OfType<QuestPart_Choice>().FirstOrDefault();
         if (choice == null) return result;
         for (int i = 0; i < choice.choices.Count; i++)
         {
@@ -145,7 +143,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>任務分頁在給接受者皇家恩惠前會跳的確認框內容（社交能力、自負個性、影響通靈連結的個性）；沒有則回傳空字串。</summary>
     private static string AccepterWarning(Quest quest, Pawn pawn)
     {
-        QuestPart_GiveRoyalFavor favor = quest.PartsListForReading.OfType<QuestPart_GiveRoyalFavor>().FirstOrDefault();
+        QuestPart_GiveRoyalFavor? favor = quest.PartsListForReading.OfType<QuestPart_GiveRoyalFavor>().FirstOrDefault();
         if (favor == null || !favor.giveToAccepter) return string.Empty;
         NamedArgument pawnArg = pawn.Named("PAWN");
         NamedArgument factionArg = favor.faction.Named("FACTION");
@@ -161,19 +159,19 @@ internal sealed partial class RimWorldGameWorld
         return PlainText(string.Join(' ', warnings));
     }
 
-    private static string PlainText(string text)
+    private static string PlainText(string? text)
     {
         return string.IsNullOrEmpty(text) ? string.Empty : MarkupTags.Replace(text, string.Empty).Trim();
     }
 
-    private static Quest FindQuest(int questId)
+    private static Quest? FindQuest(int questId)
     {
         return Find.QuestManager.QuestsListForReading.FirstOrDefault(q => q.id == questId && !q.hidden && !q.hiddenInUI);
     }
 
     public CommandResult AcceptQuest(int questId, int rewardNumber, int accepterPawnId)
     {
-        Quest quest = FindQuest(questId);
+        Quest? quest = FindQuest(questId);
         if (quest == null) return CommandResult.Fail(QuestNotFound);
         if (quest.State == QuestState.Ongoing) return CommandResult.Fail("the quest is already accepted");
         if (quest.State != QuestState.NotYetAccepted) return CommandResult.Fail("the quest is no longer available: it expired or ended");
@@ -185,8 +183,8 @@ internal sealed partial class RimWorldGameWorld
                 + (reasons.Count > 0 ? string.Join("; ", reasons) : "MessageCannotAcceptQuest".Translate().Resolve()));
         }
 
-        QuestPart_Choice choice = quest.PartsListForReading.OfType<QuestPart_Choice>().FirstOrDefault();
-        QuestPart_Choice.Choice picked = null;
+        QuestPart_Choice? choice = quest.PartsListForReading.OfType<QuestPart_Choice>().FirstOrDefault();
+        QuestPart_Choice.Choice? picked = null;
         bool requiresAccepter = quest.RequiresAccepter;
         if (choice != null)
         {
@@ -195,10 +193,10 @@ internal sealed partial class RimWorldGameWorld
             requiresAccepter = ChoiceRequiresAccepter(quest, choice, picked);
         }
 
-        Pawn accepter = SelectAccepter(quest, requiresAccepter, accepterPawnId);
+        Pawn? accepter = SelectAccepter(quest, requiresAccepter, accepterPawnId);
         if (requiresAccepter && accepter == null) return CommandResult.Fail("the accepter is not a colonist who can accept this quest");
 
-        if (picked != null) choice.Choose(picked);
+        if (choice != null && picked != null) choice.Choose(picked);
         quest.Accept(accepter);
         if (accepter != null)
         {
@@ -207,7 +205,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok(quest.name);
     }
 
-    private static QuestPart_Choice.Choice SelectRewardChoice(QuestPart_Choice choice, int rewardNumber)
+    private static QuestPart_Choice.Choice? SelectRewardChoice(QuestPart_Choice? choice, int rewardNumber)
     {
         if (choice == null) return null;
         if (rewardNumber >= 1 && rewardNumber <= choice.choices.Count) return choice.choices[rewardNumber - 1];
@@ -215,7 +213,7 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static Pawn SelectAccepter(Quest quest, bool requiresAccepter, int accepterPawnId)
+    private static Pawn? SelectAccepter(Quest quest, bool requiresAccepter, int accepterPawnId)
     {
         if (!requiresAccepter) return null;
         return QuestAccepterCandidates(quest).FirstOrDefault(p => p.thingIDNumber == accepterPawnId);
@@ -224,7 +222,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>照任務分頁的拒絕鈕：切換 dismissed，子任務一起跟著。已結束的任務該鈕是刪除，這裡不做。</summary>
     public CommandResult SetQuestDismissed(int questId, bool dismissed)
     {
-        Quest quest = FindQuest(questId);
+        Quest? quest = FindQuest(questId);
         if (quest == null) return CommandResult.Fail(QuestNotFound);
         if (quest.Historical) return CommandResult.Fail("the quest has already expired or ended");
         // 任務分頁只在「可接」與「進行中」列出可拒絕的任務；隱藏或已從介面收起的任務玩家看不到鈕。

@@ -1,8 +1,7 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -34,10 +33,10 @@ internal sealed class ScriptTools
         "\"for_each\":[{\"x\":10,\"z\":5},{\"x\":12,\"z\":5}]}]";
 
     private readonly Func<IList<AITool>> _availableTools;
-    private readonly ToolOutputStore _outputs;
-    private readonly PlayerInterjections _interjections;
+    private readonly ToolOutputStore? _outputs;
+    private readonly PlayerInterjections? _interjections;
 
-    public ScriptTools(Func<IList<AITool>> availableTools, ToolOutputStore outputs = null, PlayerInterjections interjections = null)
+    public ScriptTools(Func<IList<AITool>> availableTools, ToolOutputStore? outputs = null, PlayerInterjections? interjections = null)
     {
         _availableTools = availableTools ?? throw new ArgumentNullException(nameof(availableTools));
         _outputs = outputs;
@@ -46,8 +45,8 @@ internal sealed class ScriptTools
 
     private sealed class Call
     {
-        public AIFunction Function;
-        public Dictionary<string, object> Arguments;
+        public required AIFunction Function;
+        public required Dictionary<string, object?> Arguments;
     }
 
     [Description("Runs several tool calls in order in one step and returns all their results, instead of one call per step. " +
@@ -62,13 +61,13 @@ internal sealed class ScriptTools
         [Description("true keeps going after a failed call; default stops at the first error.")] bool continueOnError = false,
         CancellationToken cancellationToken = default)
     {
-        if (!TryParse(steps, out List<Call> calls, out string error)) return ToolText.Error(error);
+        if (!TryParse(steps, out List<Call> calls, out string? error)) return ToolText.Error(error);
 
         var sb = new StringBuilder();
         int ok = 0;
         int failed = 0;
         int ran = 0;
-        string stopReason = null;
+        string? stopReason = null;
         foreach (Call call in calls)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -110,7 +109,7 @@ internal sealed class ScriptTools
     {
         try
         {
-            object result = await call.Function.InvokeAsync(new AIFunctionArguments(call.Arguments, StringComparer.Ordinal), cancellationToken);
+            object? result = await call.Function.InvokeAsync(new AIFunctionArguments(call.Arguments, StringComparer.Ordinal), cancellationToken);
             return result?.ToString() ?? string.Empty;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -120,7 +119,7 @@ internal sealed class ScriptTools
         }
     }
 
-    private bool TryParse(string steps, out List<Call> calls, out string error)
+    private bool TryParse(string steps, out List<Call> calls, [NotNullWhen(false)] out string? error)
     {
         calls = [];
         error = null;
@@ -163,7 +162,7 @@ internal sealed class ScriptTools
         return true;
     }
 
-    private static bool TryExpandStep(JsonElement step, int index, Dictionary<string, AIFunction> tools, List<Call> calls, out string error)
+    private static bool TryExpandStep(JsonElement step, int index, Dictionary<string, AIFunction> tools, List<Call> calls, [NotNullWhen(false)] out string? error)
     {
         error = null;
         if (step.ValueKind != JsonValueKind.Object
@@ -174,20 +173,20 @@ internal sealed class ScriptTools
             return false;
         }
 
-        string name = toolElement.GetString();
+        string? name = toolElement.GetString();
         if (string.Equals(name, ToolName, StringComparison.Ordinal))
         {
             error = string.Create(CultureInfo.InvariantCulture, $"step {index}: {ToolName} cannot call itself.");
             return false;
         }
-        if (!tools.TryGetValue(name ?? string.Empty, out AIFunction function))
+        if (!tools.TryGetValue(name ?? string.Empty, out AIFunction? function))
         {
             error = string.Create(CultureInfo.InvariantCulture, $"step {index}: tool \"{name}\" is not available. Use the exact name of a tool you can call.");
             return false;
         }
 
         // 與 AIFunctionArguments 使用相同的比較子，呼叫時直接沿用這個字典，不必再複製一份。
-        Dictionary<string, object> baseArgs = new(StringComparer.Ordinal);
+        Dictionary<string, object?> baseArgs = new(StringComparer.Ordinal);
         if (step.TryGetProperty("args", out JsonElement args))
         {
             if (args.ValueKind != JsonValueKind.Object)
@@ -215,7 +214,7 @@ internal sealed class ScriptTools
                 error = string.Create(CultureInfo.InvariantCulture, $"step {index}: every \"for_each\" item must be an object of arguments.");
                 return false;
             }
-            var merged = new Dictionary<string, object>(baseArgs, StringComparer.Ordinal);
+            var merged = new Dictionary<string, object?>(baseArgs, StringComparer.Ordinal);
             Merge(merged, item);
             calls.Add(new Call { Function = function, Arguments = merged });
             if (calls.Count > MaxCalls) return true;
@@ -224,7 +223,7 @@ internal sealed class ScriptTools
     }
 
     /// <summary>引數保留 JsonElement（與模型直接呼叫時相同），交給 AIFunctionFactory 依參數型別轉換。</summary>
-    private static void Merge(Dictionary<string, object> target, JsonElement source)
+    private static void Merge(Dictionary<string, object?> target, JsonElement source)
     {
         foreach (JsonProperty property in source.EnumerateObject())
         {
@@ -232,7 +231,7 @@ internal sealed class ScriptTools
         }
     }
 
-    private static string Describe(Dictionary<string, object> arguments)
+    private static string Describe(Dictionary<string, object?> arguments)
     {
         string text = string.Join(", ", arguments.Select(a => a.Key + "=" + (a.Value is JsonElement e && e.ValueKind == JsonValueKind.String ? e.GetString() : a.Value?.ToString())));
         return ToolText.TruncateField(text, MaxArgsShown);

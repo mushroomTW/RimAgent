@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +15,7 @@ namespace RimAgent.Agent;
 public sealed partial class ColonyAgentSession
 {
     internal async Task<RimLLMChatOptions> BuildRunOptionsAsync(
-        string text,
+        string? text,
         ReasoningLevel? reasoningOverride = null,
         CancellationToken cancellationToken = default)
     {
@@ -25,7 +23,7 @@ public sealed partial class ColonyAgentSession
         _tokenUsage.ResetModel();
 
         PreloadFrequentToolPacks();
-        DecisionRoute route = null;
+        DecisionRoute? route = null;
         if (ReasoningRouting && !reasoningOverride.HasValue)
         {
             route = await _router.ResolveAsync(text, cancellationToken).ConfigureAwait(false);
@@ -63,7 +61,7 @@ public sealed partial class ColonyAgentSession
         return CreateRunOptions(reasoningOverride, PreferredModel);
     }
 
-    internal RimLLMChatOptions CreateRunOptions(ReasoningLevel? reasoningOverride, string modelToUse)
+    internal RimLLMChatOptions CreateRunOptions(ReasoningLevel? reasoningOverride, string? modelToUse)
     {
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, LoadedPacks());
@@ -77,29 +75,29 @@ public sealed partial class ColonyAgentSession
             ? _subagents.Available(permissions)
             : [];
         if (subagents.Count > 0) tools.Add(_subagents.Function);
+        int outputBudget = MaxOutputFor(modelToUse);
         var options = new RimLLMChatOptions
         {
             Tools = tools,
             ToolMode = ChatToolMode.Auto,
             Temperature = Temperature,
-            MaxOutputTokens = MaxOutputFor(modelToUse)
+            MaxOutputTokens = outputBudget
         };
-        int outputBudget = options.MaxOutputTokens.Value;
         ModelSlots.ApplyReasoning(options, reasoningOverride ?? Reasoning);
         // 思考下限不能蓋過模型上限或視窗預留量，超過會被拒絕或擠爆視窗。
-        options.MaxOutputTokens = Math.Min(options.MaxOutputTokens.Value, outputBudget);
+        options.MaxOutputTokens = Math.Min(options.MaxOutputTokens ?? outputBudget, outputBudget);
         ModelSlots.ApplyModel(options, modelToUse);
         options.Instructions = ComposeRunInstructions(permissions, subagents, packs);
         return options;
     }
 
-    private string LoadToolPack(string pack)
+    private string LoadToolPack(string? pack)
     {
         ToolPermissions permissions = _permissions();
         AgentToolRegistry.MainAgentTools selected = _registry.SelectForMainAgent(permissions, loadedPacks: null);
         IReadOnlyList<ToolPacks.Pack> available = selected.Packs;
         string wanted = (pack ?? string.Empty).Trim();
-        ToolPacks.Pack match = available.FirstOrDefault(p => string.Equals(p.Id, wanted, StringComparison.OrdinalIgnoreCase));
+        ToolPacks.Pack? match = available.FirstOrDefault(p => string.Equals(p.Id, wanted, StringComparison.OrdinalIgnoreCase));
         if (match == null)
         {
             return ToolText.Error("unknown or unavailable tool pack \"" + wanted + "\". Available: " +
@@ -125,10 +123,10 @@ public sealed partial class ColonyAgentSession
     private string ComposeRunInstructions(ToolPermissions permissions, IReadOnlyList<AgentSubagent> subagents, IReadOnlyList<ToolPacks.Pack> packs)
     {
         // 提示詞每句現組（agent 層不放 Instructions）：擴充包內容變更後下一句立即生效，不必重建會話。
-        string instructions = null;
+        string? instructions = null;
         if (_instructions != null)
         {
-            string composed = _instructions();
+            string? composed = _instructions();
             if (!string.IsNullOrWhiteSpace(composed)) instructions = composed;
         }
         if (packs.Count > 0)
@@ -141,7 +139,7 @@ public sealed partial class ColonyAgentSession
             // 子代理清單只在擴充包變更時改變，放在易變的記憶索引之前，保住前綴快取。
             instructions = (instructions ?? AgentPromptComposer.FallbackPreamble) + "\n\n" + SubagentTools.Instructions(subagents);
         }
-        string lessons = ToolUsage?.LessonsPrompt();
+        string? lessons = ToolUsage?.LessonsPrompt();
         if (lessons != null)
         {
             // 經驗只在確認或撤下時改變，放在易變的記憶索引之前。
@@ -167,14 +165,14 @@ public sealed partial class ColonyAgentSession
         return FinalAssistantText(response.Messages, response.Text);
     }
 
-    internal static string FinalAssistantText(IEnumerable<ChatMessage> messages, string fallback)
+    internal static string FinalAssistantText(IEnumerable<ChatMessage>? messages, string? fallback)
     {
-        ChatMessage last = messages?.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
+        ChatMessage? last = messages?.LastOrDefault(m => m.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(m.Text));
         return last != null ? last.Text.Trim() : (fallback ?? string.Empty).Trim();
     }
 
     /// <summary>回應是否停在工具迴圈的步數上限（最後一輪被 MEAI 拿掉工具強制作答）；不能用 WereToolsStripped，那代表「供應商不支援工具」，和步數無關。</summary>
-    internal static bool HitStepLimit(IEnumerable<ChatMessage> messages, int limit)
+    internal static bool HitStepLimit(IEnumerable<ChatMessage>? messages, int limit)
     {
         if (limit <= 0 || messages == null) return false;
         int rounds = messages.Count(m => m.Role == ChatRole.Assistant && m.Contents.OfType<FunctionCallContent>().Any());
@@ -185,7 +183,7 @@ public sealed partial class ColonyAgentSession
     private static readonly string[] ToolCallMarkers = ["<tool_call", "<function=", "[TOOL_CALLS]", "<|tool_call", "<|python_tag|>"];
 
     /// <summary>步數用完的最後一輪沒有工具定義，有些模型會把想呼叫的工具寫成純文字；從最早出現的工具呼叫標記起截掉，保留前面的正文（可能是空字串）。</summary>
-    internal static string StripToolCallMarkup(string text)
+    internal static string StripToolCallMarkup(string? text)
     {
         if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
         int cut = text.Length;
@@ -205,20 +203,20 @@ public sealed partial class ColonyAgentSession
     }
 
     // 框架包裝例外時只複製狀態碼，旗標留在內層，所以整條鏈都要看。
-    private static bool IsBalanceExhausted(Exception ex)
+    private static bool IsBalanceExhausted(Exception? ex)
     {
-        for (Exception current = ex; current != null; current = current.InnerException)
+        for (Exception? current = ex; current != null; current = current.InnerException)
         {
             if (current is RimLLMException { IsBalanceExhausted: true }) return true;
         }
         return false;
     }
 
-    internal static AgentErrorKind Classify(Exception ex)
+    internal static AgentErrorKind Classify(Exception? ex)
     {
         if (ex is OperationCanceledException) return AgentErrorKind.Cancelled;
 
-        for (Exception current = ex; current != null; current = current.InnerException)
+        for (Exception? current = ex; current != null; current = current.InnerException)
         {
             if (current is not RimLLMException rim) continue;
             switch (rim.Error)

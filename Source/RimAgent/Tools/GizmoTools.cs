@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -16,9 +14,9 @@ public sealed class GizmoTools
     private const string DialogIdPrefix = "dialog-";
     private const int MaxDescriptionChars = 200;
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public GizmoTools(IGameWorld world, ConfirmationGate gate = null)
+    public GizmoTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -29,9 +27,9 @@ public sealed class GizmoTools
     public string ListGizmos(
         [Description("Thing id from find_things, list_colonists or list_threats.")] int thingId)
     {
-        IReadOnlyList<GizmoInfo> gizmos = _world.GetGizmos(thingId);
+        IReadOnlyList<GizmoInfo>? gizmos = _world.GetGizmos(thingId);
         if (gizmos == null) return NotFound(thingId);
-        string inspect = _world.GetInspectText(thingId);
+        string? inspect = _world.GetInspectText(thingId);
         string status = string.IsNullOrEmpty(inspect) ? string.Empty : string.Create(CultureInfo.InvariantCulture, $"Status of [{thingId}]: {inspect}\n");
         if (gizmos.Count == 0) return status + string.Create(CultureInfo.InvariantCulture, $"[{thingId}] has no command buttons.");
         return status + string.Create(CultureInfo.InvariantCulture, $"Command buttons of [{thingId}]:\n") + string.Join('\n', gizmos.Select(Format));
@@ -46,16 +44,16 @@ public sealed class GizmoTools
         [Description("Target cell x for a button that asks for a target; -1 for none.")] int targetX = -1,
         [Description("Target cell z for a button that asks for a target; -1 for none.")] int targetZ = -1)
     {
-        Result<MapTarget> parsed = TargetResolver.ResolveMapTarget(targetId, targetX, targetZ);
+        Result<MapTarget?> parsed = TargetResolver.ResolveMapTarget(targetId, targetX, targetZ);
         if (!parsed.Success) return parsed.Error;
-        MapTarget target = parsed.Value;
+        MapTarget? target = parsed.Value;
 
-        IReadOnlyList<GizmoInfo> gizmos = _world.GetGizmos(thingId);
+        IReadOnlyList<GizmoInfo>? gizmos = _world.GetGizmos(thingId);
         if (gizmos == null) return NotFound(thingId);
         string needle = gizmo?.Trim() ?? string.Empty;
         if (!int.TryParse(needle, CultureInfo.InvariantCulture, out int _) && gizmos.Where(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase)).Skip(1).Any())
             return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"[{thingId}] has multiple buttons named \"{needle}\". Use a button number from list_gizmos."));
-        GizmoInfo picked = ResolveGizmo(gizmos, gizmo);
+        GizmoInfo? picked = ResolveGizmo(gizmos, gizmo);
         if (picked == null)
         {
             string buttons = gizmos.Count == 0 ? "none" : string.Join("; ", gizmos.Select(g => g.Number.ToString(CultureInfo.InvariantCulture) + ") " + g.Label));
@@ -65,10 +63,10 @@ public sealed class GizmoTools
         {
             return ToolText.Error($"\"{picked.Label}\" is disabled" + (string.IsNullOrEmpty(picked.DisabledReason) ? "." : ": " + picked.DisabledReason));
         }
-        string validationError = ValidateGizmoTarget(picked, target);
+        string? validationError = ValidateGizmoTarget(picked, target);
         if (validationError != null) return ToolText.Error(validationError);
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would press \"{picked.Label}\" on [{thingId}]") + (target == null ? "." : $" aimed at {target}."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would press \"{picked.Label}\" on [{thingId}]") + (target == null ? "." : $" aimed at {target}."));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.UseGizmo(thingId, picked.Number, picked.Label, target);
@@ -85,14 +83,14 @@ public sealed class GizmoTools
         return " A dialog is open and waits for an answer (choose_option):\n" + string.Join("\n\n", dialogs.Select(ChoiceTools.Format));
     }
 
-    private static GizmoInfo ResolveGizmo(IReadOnlyList<GizmoInfo> gizmos, string input)
+    private static GizmoInfo? ResolveGizmo(IReadOnlyList<GizmoInfo> gizmos, string? input)
     {
         string needle = input?.Trim() ?? string.Empty;
         if (needle.Length == 0) return null;
         return Resolve(gizmos, input);
     }
 
-    private static string ValidateGizmoTarget(GizmoInfo picked, MapTarget target)
+    private static string? ValidateGizmoTarget(GizmoInfo picked, MapTarget? target)
     {
         if (picked.Kind == GizmoInfo.UnsupportedKind) return $"\"{picked.Label}\" needs a menu choice or another kind of input that use_gizmo cannot give.";
         if (picked.Kind == GizmoInfo.ToggleKind && target != null) return $"\"{picked.Label}\" is a toggle and takes no target.";
@@ -100,12 +98,12 @@ public sealed class GizmoTools
         return null;
     }
 
-    private static GizmoInfo Resolve(IReadOnlyList<GizmoInfo> gizmos, string input)
+    private static GizmoInfo? Resolve(IReadOnlyList<GizmoInfo> gizmos, string? input)
     {
         string needle = input?.Trim() ?? string.Empty;
         if (needle.Length == 0) return null;
         if (int.TryParse(needle, CultureInfo.InvariantCulture, out int number)) return gizmos.FirstOrDefault(g => g.Number == number);
-        GizmoInfo exact = gizmos.FirstOrDefault(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase));
+        GizmoInfo? exact = gizmos.FirstOrDefault(g => string.Equals(g.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return exact;
         List<GizmoInfo> partial = [.. gizmos.Where(g => g.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];
         return partial.Count == 1 ? partial[0] : null;

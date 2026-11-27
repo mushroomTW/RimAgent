@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Globalization;
 using System.Net.Http;
@@ -18,10 +16,10 @@ internal sealed class SearxngSearchClient
     private static readonly HttpClient SharedClient = new(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) };
 #pragma warning restore RS0030
     private const int MaxBodyBytes = 2 * 1024 * 1024;
-    private readonly Func<string> _endpoint;
+    private readonly Func<string?> _endpoint;
     private readonly HttpClient _client;
 
-    public SearxngSearchClient(Func<string> endpoint = null, HttpClient client = null)
+    public SearxngSearchClient(Func<string?>? endpoint = null, HttpClient? client = null)
     {
         _endpoint = endpoint ?? (() => "http://127.0.0.1:8888");
         _client = client ?? SharedClient;
@@ -30,7 +28,7 @@ internal sealed class SearxngSearchClient
     public async Task<string> SearchAsync(string query, CancellationToken cancellationToken)
     {
         string endpoint = (_endpoint() ?? string.Empty).Trim().TrimEnd('/');
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out Uri baseUri) ||
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out Uri? baseUri) ||
             (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps) ||
             !string.IsNullOrEmpty(baseUri.UserInfo) ||
             !string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
@@ -48,7 +46,7 @@ internal sealed class SearxngSearchClient
                 return ToolText.Error("SearXNG returned HTTP " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture) +
                     ". Check that the service is running and JSON output is enabled.");
             }
-            string body = await ReadLimitedAsync(response.Content, cancellationToken).ConfigureAwait(false);
+            string? body = await ReadLimitedAsync(response.Content, cancellationToken).ConfigureAwait(false);
             return body == null
                 ? ToolText.Error("SearXNG response is larger than " + (MaxBodyBytes / (1024 * 1024)).ToString(CultureInfo.InvariantCulture) + " MB; ignored.")
                 : FormatResults(body);
@@ -71,7 +69,7 @@ internal sealed class SearxngSearchClient
     /// 最多讀 <see cref="MaxBodyBytes"/> 位元組；超過回傳 null。HttpContent.ReadAsStringAsync 沒有大小上限，
     /// 被攔截或設定錯誤的端點可以送無限大的回應。截斷的 JSON 無法解析，所以超過就整個放棄。
     /// </summary>
-    private static async Task<string> ReadLimitedAsync(HttpContent content, CancellationToken cancellationToken)
+    private static async Task<string?> ReadLimitedAsync(HttpContent content, CancellationToken cancellationToken)
     {
         if (content.Headers.ContentLength > MaxBodyBytes) return null;
         await using System.IO.Stream stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -105,7 +103,7 @@ internal sealed class SearxngSearchClient
                 if (result.ValueKind != JsonValueKind.Object || IsBingResult(result)) continue;
                 string title = Field(result, "title");
                 string resultUrl = Field(result, "url");
-                if (title.Length == 0 || !Uri.TryCreate(resultUrl, UriKind.Absolute, out Uri resultUri) ||
+                if (title.Length == 0 || !Uri.TryCreate(resultUrl, UriKind.Absolute, out Uri? resultUri) ||
                     (resultUri.Scheme != Uri.UriSchemeHttp && resultUri.Scheme != Uri.UriSchemeHttps))
                 {
                     continue;

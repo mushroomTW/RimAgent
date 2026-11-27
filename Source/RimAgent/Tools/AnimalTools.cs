@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -16,9 +14,9 @@ public sealed class AnimalTools
     internal const string UnrestrictedKeyword = "unrestricted";
 
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public AnimalTools(IGameWorld world, ConfirmationGate gate = null)
+    public AnimalTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -67,7 +65,7 @@ public sealed class AnimalTools
         if (!target.Success) return target.Error;
         if (!target.Value.Wild) return ToolText.Error($"{target.Value.Name} is already tame.");
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would mark {target.Value.Name} [{target.Value.Id}] for taming."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would mark {target.Value.Name} [{target.Value.Id}] for taming."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.TameAnimal(target.Value.Id);
@@ -89,7 +87,7 @@ public sealed class AnimalTools
         Result<DefInfo> def = DefResolver.Resolve(training, _world.AnimalTraining, "animal training");
         if (!def.Success) return def.Error;
 
-        string blocked = ToolText.Blocked(_gate, $"would {(enable ? "start" : "stop")} training {target.Value.Name} in {def.Value.Label}.");
+        string? blocked = ToolText.Blocked(_gate, $"would {(enable ? "start" : "stop")} training {target.Value.Name} in {def.Value.Label}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetAnimalTraining(target.Value.Id, def.Value.DefName, enable);
@@ -119,7 +117,7 @@ public sealed class AnimalTools
             label = def.Value.Label;
         }
 
-        string blocked = ToolText.Blocked(_gate, $"would set {target.Value.Name}'s allowed area to {(label.Length == 0 ? UnrestrictedKeyword : label)}.");
+        string? blocked = ToolText.Blocked(_gate, $"would set {target.Value.Name}'s allowed area to {(label.Length == 0 ? UnrestrictedKeyword : label)}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetAnimalArea(target.Value.Id, label);

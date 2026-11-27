@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -17,7 +15,7 @@ internal sealed partial class RimWorldGameWorld
 {
     public ResearchInfo GetResearch()
     {
-        ResearchProjectDef current = Find.ResearchManager.GetProject();
+        ResearchProjectDef? current = Find.ResearchManager.GetProject();
         return new ResearchInfo
         {
             Current = current == null ? null : ToResearch(current),
@@ -50,7 +48,7 @@ internal sealed partial class RimWorldGameWorld
         if (want.Length == 0 || string.Equals(want, "none", StringComparison.OrdinalIgnoreCase)
             || string.Equals(want, "stop", StringComparison.OrdinalIgnoreCase))
         {
-            ResearchProjectDef current = Find.ResearchManager.GetProject();
+            ResearchProjectDef? current = Find.ResearchManager.GetProject();
             if (current == null) return CommandResult.Ok("No research is running.");
             Find.ResearchManager.StopProject(current);
             return CommandResult.Ok($"Stopped research {current.label}.");

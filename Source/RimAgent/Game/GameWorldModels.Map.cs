@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace RimAgent.Game;
@@ -151,8 +149,8 @@ public sealed class CellInfo
     public bool Fogged { get; set; }
     /// <summary>太靠近地圖邊緣，遊戲不准建造。</summary>
     public bool NoBuildEdge { get; set; }
-    public ZoneInfo Zone { get; set; }
-    public RoomInfo Room { get; set; }
+    public ZoneInfo? Zone { get; set; }
+    public RoomInfo? Room { get; set; }
     public IReadOnlyList<ThingInfo> Things { get; set; } = [];
 }
 

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -17,17 +15,17 @@ public sealed class WebSearchTools
 {
     private const string SearchEndpoint = "https://search.parallel.ai/mcp";
     private readonly string _sessionId = Guid.NewGuid().ToString("N");
-    private readonly Func<Dictionary<string, object>, CancellationToken, Task<string>> _execute;
+    private readonly Func<Dictionary<string, object?>, CancellationToken, Task<string>> _execute;
     private readonly Func<bool> _useLocalSearch;
     private readonly SearxngSearchClient _local;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
     public WebSearchTools(
-        Func<Dictionary<string, object>, CancellationToken, Task<string>> execute = null,
-        Func<bool> useLocalSearch = null,
-        Func<string> searxngUrl = null,
-        HttpClient localHttpClient = null,
-        ConfirmationGate gate = null)
+        Func<Dictionary<string, object?>, CancellationToken, Task<string>>? execute = null,
+        Func<bool>? useLocalSearch = null,
+        Func<string>? searxngUrl = null,
+        HttpClient? localHttpClient = null,
+        ConfirmationGate? gate = null)
     {
         _execute = execute ?? ExecuteSearchAsync;
         _useLocalSearch = useLocalSearch ?? (() => false);
@@ -45,11 +43,11 @@ public sealed class WebSearchTools
         string term = (query ?? string.Empty).Trim();
         if (term.Length == 0 || term.Length > 200)
             return Task.FromResult(ToolText.Error("query must be 1–200 characters."));
-        string blocked = ToolText.Blocked(_gate, "would search the web for: " + term);
+        string? blocked = ToolText.Blocked(_gate, "would search the web for: " + term);
         if (blocked != null) return Task.FromResult(blocked);
         if (_useLocalSearch()) return _local.SearchAsync(term, cancellationToken);
 
-        var arguments = new Dictionary<string, object>(StringComparer.Ordinal)
+        var arguments = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["objective"] = "Find reliable, current information about: " + term,
             ["search_queries"] = new[] { term },
@@ -58,7 +56,7 @@ public sealed class WebSearchTools
         return _execute(arguments, cancellationToken);
     }
 
-    private static async Task<string> ExecuteSearchAsync(Dictionary<string, object> arguments, CancellationToken cancellationToken)
+    private static async Task<string> ExecuteSearchAsync(Dictionary<string, object?> arguments, CancellationToken cancellationToken)
     {
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
@@ -71,7 +69,7 @@ public sealed class WebSearchTools
             ClientInfo = new Implementation { Name = "RimAgent", Version = "1.0" },
             InitializationTimeout = TimeSpan.FromSeconds(15)
         };
-        McpClient client = null;
+        McpClient? client = null;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
@@ -99,7 +97,7 @@ public sealed class WebSearchTools
         }
     }
 
-    private static async Task TryDisposeAsync(IAsyncDisposable resource)
+    private static async Task TryDisposeAsync(IAsyncDisposable? resource)
     {
         if (resource == null) return;
         try

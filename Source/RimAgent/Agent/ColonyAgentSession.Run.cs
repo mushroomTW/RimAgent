@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,7 +20,7 @@ public sealed partial class ColonyAgentSession
     {
         get
         {
-            AgentSession session = Volatile.Read(ref _session);
+            AgentSession? session = Volatile.Read(ref _session);
             if (session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return [];
             return [.. provider.GetMessages(session)];
         }
@@ -35,16 +33,16 @@ public sealed partial class ColonyAgentSession
     /// <param name="autonomousInfo">自主任務的起跑脈絡，只寫進執行紀錄；帶了就視為自主任務。</param>
     /// <param name="images">玩家貼上的圖片（JPEG）；只在這句指令期間附給模型，不寫進對話歷史。</param>
 #pragma warning disable S107 // 公共方法參數多，但皆為選用參數，呼叫端可省略，無需重構
-    public async Task<string> SendAsync(
+    public async Task<string?> SendAsync(
         string userText,
         bool autonomous = false,
         int? maxToolSteps = null,
         bool goalRun = false,
-        string displayText = null,
+        string? displayText = null,
         ReasoningLevel? reasoningOverride = null,
-        Action onAccepted = null,
-        AutonomousRunInfo autonomousInfo = null,
-        IReadOnlyList<byte[]> images = null,
+        Action? onAccepted = null,
+        AutonomousRunInfo? autonomousInfo = null,
+        IReadOnlyList<byte[]>? images = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(userText);
@@ -70,7 +68,7 @@ public sealed partial class ColonyAgentSession
                 AutonomousInfo = autonomousInfo
             };
             // 不切離主線程：RunLateInterjectionsAsync 內的 _world.TakeNewGameErrors() 需在主線程執行。
-            string reply = await RunInstructionWithImagesAsync(userText.Trim(), options, images, cancellationToken);
+            string? reply = await RunInstructionWithImagesAsync(userText.Trim(), options, images, cancellationToken);
             await RunLateInterjectionsAsync(cancellationToken);
             return reply;
         }
@@ -84,7 +82,7 @@ public sealed partial class ColonyAgentSession
 
 #pragma warning restore S107
 
-    private async Task<string> RunInstructionWithImagesAsync(string text, InstructionOptions options, IReadOnlyList<byte[]> imgs, CancellationToken ct = default)
+    private async Task<string?> RunInstructionWithImagesAsync(string text, InstructionOptions options, IReadOnlyList<byte[]>? imgs, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(text);
         _images.SetPlayerImages(imgs, text.Trim());
@@ -99,7 +97,7 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary>玩家在執行中送出的話：排入佇列，主 Agent 下一個工具結果會帶給模型，沒趕上的在本輪結束後接著當新指令跑。只在 <see cref="SendAsync"/> 執行期間收，其他時候回傳 false，由呼叫端照一般指令送出。</summary>
-    public bool Interject(string text)
+    public bool Interject(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
         string trimmed = text.Trim();
@@ -129,7 +127,7 @@ public sealed partial class ColonyAgentSession
                 DropInterjections("commands are waiting for confirmation; confirm or discard them, then send it again");
                 return;
             }
-            string next = _interjections.TakeAllOrClose();
+            string? next = _interjections.TakeAllOrClose();
             if (next == null) return;
             await RunInstructionAsync(next, default, echo: false, cancellationToken: cancellationToken);
         }
@@ -152,13 +150,13 @@ public sealed partial class ColonyAgentSession
         public bool Autonomous { get; init; }
         public int? MaxToolSteps { get; init; }
         public bool GoalRun { get; init; }
-        public string DisplayText { get; init; }
+        public string? DisplayText { get; init; }
         public ReasoningLevel? ReasoningOverride { get; init; }
-        public Action OnAccepted { get; init; }
-        public AutonomousRunInfo AutonomousInfo { get; init; }
+        public Action? OnAccepted { get; init; }
+        public AutonomousRunInfo? AutonomousInfo { get; init; }
     }
 
-    private async Task<string> RunInstructionAsync(
+    private async Task<string?> RunInstructionAsync(
         string text,
         InstructionOptions options,
         bool echo,
@@ -248,7 +246,7 @@ public sealed partial class ColonyAgentSession
 
     private void AddUserTranscriptEntryIfEcho(
         bool echo,
-        string displayText,
+        string? displayText,
         string text,
         int instructionId,
         bool autonomous,
@@ -270,7 +268,7 @@ public sealed partial class ColonyAgentSession
     private void HandleBlockedConfirmations(
         string text,
         bool goalRun,
-        string displayText,
+        string? displayText,
         int instructionId)
     {
         IReadOnlyList<string> blocked = ConfirmGate.TakeBlocked();
@@ -289,7 +287,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    private string HandleInstructionError(
+    private string? HandleInstructionError(
         Exception ex,
         string text,
         int instructionId,
@@ -320,8 +318,8 @@ public sealed partial class ColonyAgentSession
     /// </summary>
     private void KeepInterruptedSteps(string outcome)
     {
-        if (_session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return;
-        List<ChatMessage> history = provider.GetMessages(_session);
+        if (_session is not { } session || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return;
+        List<ChatMessage> history = provider.GetMessages(session);
         IReadOnlyList<ChatMessage> sent = _runOptions.LastRequest;
         if (sent.Count <= history.Count) return;
         List<ChatMessage> added = [.. sent.Skip(history.Count), .. _runOptions.UnsentStep()];
@@ -329,7 +327,7 @@ public sealed partial class ColonyAgentSession
 
         added.Add(new ChatMessage(ChatRole.Assistant,
             "[This run was interrupted (" + outcome + ") before it finished. Steps above with a result did run; check the current state before repeating anything.]"));
-        provider.SetMessages(_session, [.. history, .. added]);
+        provider.SetMessages(session, [.. history, .. added]);
     }
 
     /// <summary>把迴圈上限設為下一步：MEAI 讓這一步的工具跑完，再拿掉工具要模型收尾，不會留下沒執行的呼叫。</summary>
@@ -359,7 +357,7 @@ public sealed partial class ColonyAgentSession
     {
         RimLLMChatOptions options = await BuildRunOptionsAsync(text, reasoningOverride, cancellationToken).ConfigureAwait(false);
         // System One 的操作回報只給主 LLM 看：分流與預載判斷看的是原指令。先偷看、成功才移除，避免請求失敗遺失回報。
-        string reports = DecisionReports.PeekAll(out int reportCount);
+        string? reports = DecisionReports.PeekAll(out int reportCount);
         string modelText = DecisionReports.Prepend(reports, text);
         try
         {
@@ -405,9 +403,9 @@ public sealed partial class ColonyAgentSession
     private bool RanTools(int instructionId) =>
         Transcript.Snapshot().Any(e => e.Kind == TranscriptKind.Tool && e.InstructionId == instructionId);
 
-    private void RecordModelResponse(string agent, ChatResponse response)
+    private void RecordModelResponse(string? agent, ChatResponse? response)
     {
-        UsageDetails usage = response?.Usage;
+        UsageDetails? usage = response?.Usage;
         Interlocked.Add(ref _instructionTokens, usage?.TotalTokenCount ?? (usage?.InputTokenCount ?? 0) + (usage?.OutputTokenCount ?? 0));
         WriteRunLog(log => log.AddModelResponse(agent, response));
     }
@@ -462,7 +460,7 @@ public sealed partial class ColonyAgentSession
 
     private void WriteRunLog(Action<RunLog> write)
     {
-        RunLog log = _activeRunLog;
+        RunLog? log = _activeRunLog;
         if (log == null) return;
         try
         {
@@ -499,7 +497,7 @@ public sealed partial class ColonyAgentSession
 
     private void RecordToolUsage(int instructionId)
     {
-        ToolUsageStats stats = ToolUsage;
+        ToolUsageStats? stats = ToolUsage;
         if (stats == null) return;
         try
         {

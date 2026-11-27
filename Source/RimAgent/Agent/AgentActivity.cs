@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 
@@ -15,7 +13,7 @@ public enum AgentActivityKind
 
 public sealed class AgentActivity
 {
-    public AgentActivity(AgentActivityKind kind, string toolName)
+    public AgentActivity(AgentActivityKind kind, string? toolName)
     {
         Kind = kind;
         ToolName = toolName ?? string.Empty;
@@ -32,7 +30,7 @@ public sealed class AgentActivityTracker
     private readonly System.Threading.Lock _gate = new();
     private readonly List<AgentActivity> _live = [];
 
-    public AgentActivity Current
+    public AgentActivity? Current
     {
         get
         {
@@ -40,7 +38,7 @@ public sealed class AgentActivityTracker
         }
     }
 
-    public IDisposable Begin(AgentActivityKind kind, string toolName = null)
+    public IDisposable Begin(AgentActivityKind kind, string? toolName = null)
     {
         var activity = new AgentActivity(kind, toolName);
         lock (_gate) _live.Add(activity);
@@ -54,7 +52,7 @@ public sealed class AgentActivityTracker
 
     private sealed class Scope : IDisposable
     {
-        private AgentActivityTracker _owner;
+        private AgentActivityTracker? _owner;
         private readonly AgentActivity _activity;
 
         public Scope(AgentActivityTracker owner, AgentActivity activity)

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -22,9 +20,9 @@ public sealed partial class WorldTools
     private static readonly string[] ObjectKinds = ["all", "player", "faction", "site", "quest", "other"];
 
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public WorldTools(IGameWorld world, ConfirmationGate gate = null)
+    public WorldTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -67,7 +65,7 @@ public sealed partial class WorldTools
         [Description("Only objects whose name, faction, kind or linked quest contains this text; empty for no filter.")] string search = "",
         [Description("How many to list, nearest first (1-100).")] int limit = DefaultObjectLimit)
     {
-        Result<CaravanInfo> from = ResolveCaravan(caravan, _world.GetCaravans(), required: false);
+        Result<CaravanInfo?> from = ResolveCaravan(caravan, _world.GetCaravans(), required: false);
         if (!from.Success) return from.Error;
         string filter = string.IsNullOrWhiteSpace(kind) ? "all" : kind.Trim().ToLowerInvariant();
         if (!ObjectKinds.Contains(filter))
@@ -91,7 +89,7 @@ public sealed partial class WorldTools
           .Append(" from ").Append(origin).Append(survey.OriginIsCaravan ? string.Empty : "; travel times assume a default-speed caravan").AppendLine(":");
         foreach (WorldObjectInfo o in shown)
         {
-            travel.TryGetValue(o.Tile, out TravelEstimateInfo estimate);
+            travel.TryGetValue(o.Tile, out TravelEstimateInfo? estimate);
             sb.Append("- ").AppendLine(FormatObject(o, estimate));
         }
         return sb.ToString().Trim();
@@ -105,7 +103,7 @@ public sealed partial class WorldTools
         [Description("Caravan name or id to measure from and list orders for; empty uses the only caravan if there is exactly one, otherwise no orders are listed.")] string caravan = "")
     {
         IReadOnlyList<CaravanInfo> caravans = _world.GetCaravans();
-        Result<CaravanInfo> from = ResolveCaravan(caravan, caravans, required: false);
+        Result<CaravanInfo?> from = ResolveCaravan(caravan, caravans, required: false);
         if (!from.Success) return from.Error;
         int originId = from.Value?.Id ?? -1;
         Result<int> target = ResolveTile(tile, worldObjectId, caravans, originId);
@@ -120,7 +118,7 @@ public sealed partial class WorldTools
         WorldTileInfo info = _world.GetWorldTile(tileId, originId);
         if (!string.IsNullOrEmpty(info.Error)) return ToolText.Error(info.Error);
         WorldSurveyInfo survey = _world.GetWorldSurvey(originId);
-        TravelEstimateInfo estimate = TravelByTile(originId, [tileId]).Values.FirstOrDefault();
+        TravelEstimateInfo? estimate = TravelByTile(originId, [tileId]).Values.FirstOrDefault();
 
         var sb = new StringBuilder();
         AppendTileInfo(sb, info);
@@ -131,13 +129,13 @@ public sealed partial class WorldTools
         return sb.ToString().Trim();
     }
 
-    private int ResolveOriginTile(Result<CaravanInfo> from)
+    private int ResolveOriginTile(Result<CaravanInfo?> from)
     {
         if (from.Value != null) return from.Value.Tile;
         return _world.GetMaps().FirstOrDefault(m => m.IsCurrent)?.Tile ?? -1;
     }
 
-    private void AppendCaravanOrders(StringBuilder sb, Result<CaravanInfo> from, int tileId)
+    private void AppendCaravanOrders(StringBuilder sb, Result<CaravanInfo?> from, int tileId)
     {
         if (from.Value == null) return;
         CaravanOptionsInfo options = _world.GetCaravanOptions(from.Value.Id, tileId);
@@ -199,7 +197,7 @@ public sealed partial class WorldTools
         [Description("Destination world object id; -1 to use tile.")] int worldObjectId = -1)
     {
         IReadOnlyList<CaravanInfo> caravans = _world.GetCaravans();
-        Result<CaravanInfo> picked = ResolveCaravan(caravan, caravans, required: true);
+        Result<CaravanInfo> picked = RequireCaravan(caravan, caravans);
         if (!picked.Success) return picked.Error;
         CaravanInfo c = picked.Value;
         Result<int> target = ResolveTile(tile, worldObjectId, caravans, c.Id);
@@ -213,13 +211,13 @@ public sealed partial class WorldTools
         FloatMenuOptionInfo order = chosen.Value;
         if (order.Disabled) return ToolText.Error($"\"{order.Label}\" is disabled (the game's reason is in the label).");
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would send {c.Name} [{c.Id}] to tile {target.Value}: \"{order.Label}\"."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would send {c.Name} [{c.Id}] to tile {target.Value}: \"{order.Label}\"."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SendCaravan(c.Id, target.Value, order.Number, order.Label);
         if (!result.Success) return ToolText.Error(result.Message);
         string text = string.Create(CultureInfo.InvariantCulture, $"Ordered {c.Name}: \"{order.Label}\" on tile {target.Value}. {result.Message}");
-        CaravanInfo now = _world.GetCaravans().FirstOrDefault(x => x.Id == c.Id);
+        CaravanInfo? now = _world.GetCaravans().FirstOrDefault(x => x.Id == c.Id);
         if (now != null && now.Moving && now.EtaTicks > 0) text += $"; arrival in {Duration(now.EtaTicks)}";
         return text + "." + GizmoTools.OpenDialogs(_world);
     }
@@ -230,14 +228,14 @@ public sealed partial class WorldTools
         [Description("Caravan name or id; may be empty when there is exactly one caravan.")] string caravan,
         [Description("pause, resume or stop.")] string action)
     {
-        Result<CaravanInfo> picked = ResolveCaravan(caravan, _world.GetCaravans(), required: true);
+        Result<CaravanInfo> picked = RequireCaravan(caravan, _world.GetCaravans());
         if (!picked.Success) return picked.Error;
         CaravanInfo c = picked.Value;
         string verb = (action ?? string.Empty).Trim().ToLowerInvariant();
         if (verb != CaravanMovementAction.Pause && verb != CaravanMovementAction.Resume && verb != CaravanMovementAction.Stop)
             return ToolText.Error($"unknown action \"{action}\". Use pause, resume or stop.");
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would {verb} {c.Name} [{c.Id}] on tile {c.Tile}."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would {verb} {c.Name} [{c.Id}] on tile {c.Tile}."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetCaravanMovement(c.Id, verb);
@@ -251,7 +249,7 @@ public sealed partial class WorldTools
         [Description("Caravan name or id; may be empty when there is exactly one caravan.")] string caravan,
         [Description("settle or camp.")] string action)
     {
-        Result<CaravanInfo> picked = ResolveCaravan(caravan, _world.GetCaravans(), required: true);
+        Result<CaravanInfo> picked = RequireCaravan(caravan, _world.GetCaravans());
         if (!picked.Success) return picked.Error;
         CaravanInfo c = picked.Value;
         string verb = (action ?? string.Empty).Trim().ToLowerInvariant();
@@ -265,7 +263,7 @@ public sealed partial class WorldTools
         }
 
         string members = string.Join(", ", c.Members.Select(m => m.Name).ToArray());
-        string blocked = ToolText.Blocked(_gate, camp
+        string? blocked = ToolText.Blocked(_gate, camp
             ? string.Create(CultureInfo.InvariantCulture, $"would set up camp with {c.Name} [{c.Id}] ({members}) on tile {c.Tile}.")
             : string.Create(CultureInfo.InvariantCulture, $"would found a new colony with {c.Name} [{c.Id}] ({members}) on tile {c.Tile}; the whole caravan moves in."));
         if (blocked != null) return blocked;
@@ -276,34 +274,42 @@ public sealed partial class WorldTools
     }
 
 
+    private static Result<CaravanInfo> RequireCaravan(string? input, IReadOnlyList<CaravanInfo> caravans)
+    {
+        Result<CaravanInfo?> resolved = ResolveCaravan(input, caravans, required: true);
+        return resolved.Value != null
+            ? Result<CaravanInfo>.Ok(resolved.Value)
+            : Result<CaravanInfo>.Fail(resolved.Error);
+    }
+
     /// <summary><paramref name="required"/> 為 false 時，沒有商隊或沒指名（且不只一支）回成功但值為 null，代表從當前地圖量。</summary>
-    internal static Result<CaravanInfo> ResolveCaravan(string input, IReadOnlyList<CaravanInfo> caravans, bool required)
+    internal static Result<CaravanInfo?> ResolveCaravan(string? input, IReadOnlyList<CaravanInfo> caravans, bool required)
     {
         string needle = (input ?? string.Empty).Trim();
         if (caravans.Count == 0)
         {
             return required
-                ? Result<CaravanInfo>.Fail(ToolText.Error("you have no caravans on the world map. Form one with form_caravan."))
-                : Result<CaravanInfo>.Ok(value: null);
+                ? Result<CaravanInfo?>.Fail(ToolText.Error("you have no caravans on the world map. Form one with form_caravan."))
+                : Result<CaravanInfo?>.Ok(value: null);
         }
         if (needle.Length == 0)
         {
-            if (caravans.Count == 1) return Result<CaravanInfo>.Ok(caravans[0]);
+            if (caravans.Count == 1) return Result<CaravanInfo?>.Ok(caravans[0]);
             return required
-                ? Result<CaravanInfo>.Fail(ToolText.Error("name the caravan. Yours: " + Candidates(caravans)))
-                : Result<CaravanInfo>.Ok(value: null);
+                ? Result<CaravanInfo?>.Fail(ToolText.Error("name the caravan. Yours: " + Candidates(caravans)))
+                : Result<CaravanInfo?>.Ok(value: null);
         }
         if (int.TryParse(needle, NumberStyles.Integer, CultureInfo.InvariantCulture, out int id))
         {
-            CaravanInfo byId = caravans.FirstOrDefault(c => c.Id == id);
+            CaravanInfo? byId = caravans.FirstOrDefault(c => c.Id == id);
             return byId != null
-                ? Result<CaravanInfo>.Ok(byId)
-                : Result<CaravanInfo>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no caravan has id {id}. Yours: {Candidates(caravans)}")));
+                ? Result<CaravanInfo?>.Ok(byId)
+                : Result<CaravanInfo?>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no caravan has id {id}. Yours: {Candidates(caravans)}")));
         }
         List<CaravanInfo> exact = [.. caravans.Where(c => string.Equals(c.Name, needle, StringComparison.OrdinalIgnoreCase))];
         List<CaravanInfo> hits = exact.Count > 0 ? exact : [.. caravans.Where(c => c.Name.Contains(needle, StringComparison.OrdinalIgnoreCase))];
-        if (hits.Count == 1) return Result<CaravanInfo>.Ok(hits[0]);
-        return Result<CaravanInfo>.Fail(ToolText.Error(hits.Count == 0
+        if (hits.Count == 1) return Result<CaravanInfo?>.Ok(hits[0]);
+        return Result<CaravanInfo?>.Fail(ToolText.Error(hits.Count == 0
             ? $"no caravan is named \"{needle}\". Yours: {Candidates(caravans)}"
             : $"\"{needle}\" matches several caravans: {Candidates(hits)}. Use the id."));
     }
@@ -323,14 +329,14 @@ public sealed partial class WorldTools
     {
         if (worldObjectId < 0) return Result<int>.Ok(tile >= 0 ? tile : -1);
         int objectTile;
-        CaravanInfo own = caravans.FirstOrDefault(c => c.Id == worldObjectId);
+        CaravanInfo? own = caravans.FirstOrDefault(c => c.Id == worldObjectId);
         if (own != null)
         {
             objectTile = own.Tile;
         }
         else
         {
-            WorldObjectInfo obj = world.GetWorldSurvey(originCaravanId).Objects.FirstOrDefault(o => o.Id == worldObjectId);
+            WorldObjectInfo? obj = world.GetWorldSurvey(originCaravanId).Objects.FirstOrDefault(o => o.Id == worldObjectId);
             if (obj == null)
                 return Result<int>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no world object has id {worldObjectId}. Use list_world_objects to get valid ids.")));
             objectTile = obj.Tile;
@@ -351,7 +357,7 @@ public sealed partial class WorldTools
             if (!int.TryParse(m.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
                 return Result<FloatMenuOptionInfo>.Fail(ToolText.Error($"\"{m.Groups["number"].Value}\" is too large to be an option number; use a number from get_world_tile."));
             string label = m.Groups["label"].Value.Trim();
-            FloatMenuOptionInfo byNumber = options.FirstOrDefault(o => o.Number == number);
+            FloatMenuOptionInfo? byNumber = options.FirstOrDefault(o => o.Number == number);
             if (byNumber == null)
                 return Result<FloatMenuOptionInfo>.Fail(ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"there is no order {number}. Orders now: {OrderList(options)}")));
             if (label.Length > 0 && byNumber.Label.IndexOf(label, StringComparison.OrdinalIgnoreCase) < 0)
@@ -431,7 +437,7 @@ public sealed partial class WorldTools
         return o.Number.ToString(CultureInfo.InvariantCulture) + ") " + (string.IsNullOrEmpty(o.Label) ? "(unnamed)" : o.Label) + (o.Disabled ? " [disabled]" : string.Empty);
     }
 
-    internal static string FormatObject(WorldObjectInfo o, TravelEstimateInfo travel)
+    internal static string FormatObject(WorldObjectInfo o, TravelEstimateInfo? travel)
     {
         var sb = new StringBuilder();
         sb.Append('[').Append(o.Id).Append("] ").Append(o.Label).Append(" (").Append(o.Kind);

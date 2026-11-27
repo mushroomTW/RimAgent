@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,17 +13,17 @@ internal sealed partial class RimWorldGameWorld
 {
     public FloatMenuInfo GetFloatMenuOptions(int colonistId, MapTarget target)
     {
-        Pawn pawn = FindColonist(colonistId);
+        Pawn? pawn = FindColonist(colonistId);
         if (pawn == null) return new FloatMenuInfo { Error = ColonistNotFound };
         var info = new FloatMenuInfo { PawnName = pawn.LabelShort, Drafted = pawn.Drafted };
-        if (!TryResolveTarget(target, out LocalTargetInfo resolved, out string error))
+        if (!TryResolveTarget(target, out LocalTargetInfo resolved, out string? error))
         {
             info.Error = error;
             return info;
         }
         info.TargetLabel = DescribeTarget(resolved);
         List<FloatMenuOption> options = BuildFloatMenu(pawn, resolved, out error);
-        if (options == null)
+        if (error != null)
         {
             info.Error = error;
             return info;
@@ -36,13 +34,13 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult UseFloatMenuOption(int colonistId, MapTarget target, int optionNumber, string label)
     {
-        Pawn pawn = FindColonist(colonistId);
+        Pawn? pawn = FindColonist(colonistId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
-        if (!TryResolveTarget(target, out LocalTargetInfo resolved, out string error)) return CommandResult.Fail(error);
+        if (!TryResolveTarget(target, out LocalTargetInfo resolved, out string? error)) return CommandResult.Fail(error);
         List<FloatMenuOption> options = BuildFloatMenu(pawn, resolved, out error);
-        if (options == null || options.Count == 0) return CommandResult.Fail(error);
+        if (options.Count == 0) return CommandResult.Fail(error ?? $"{pawn.LabelShort} has no right-click options for that target");
 
-        FloatMenuOption option = optionNumber >= 1 && optionNumber <= options.Count ? options[optionNumber - 1] : null;
+        FloatMenuOption? option = optionNumber >= 1 && optionNumber <= options.Count ? options[optionNumber - 1] : null;
         if (option == null || !string.Equals(option.Label.StripTags(), label, StringComparison.OrdinalIgnoreCase))
             return CommandResult.Fail($"{pawn.LabelShort}'s right-click menu changed; call list_right_click_menu again");
         if (option.Disabled) return CommandResult.Fail($"\"{label}\" is disabled");
@@ -63,7 +61,7 @@ internal sealed partial class RimWorldGameWorld
         // 選項若接著要再選目標就留著，由 choose_option 回應；回答不了的視窗才收掉並回報。
         SetTargetingState(Find.Targeter.IsTargeting, Find.WorldTargeter.IsTargeting);
         KeepCasterSelected();
-        CommandResult windowFailure = CloseUnsupportedWindows(before, label);
+        CommandResult? windowFailure = CloseUnsupportedWindows(before, label);
         if (windowFailure != null)
         {
             StopAllTargeting();
@@ -77,7 +75,7 @@ internal sealed partial class RimWorldGameWorld
     /// 不需要滑鼠或框選，只要給殖民者與世界座標；排序同 FloatMenu 建構子（優先度高者在前）。
     /// 殖民者不能下令時原版只丟一則訊息，這裡先問 ShouldGenerateFloatMenuForPawn 取得原因。
     /// </summary>
-    private static List<FloatMenuOption> BuildFloatMenu(Pawn pawn, LocalTargetInfo target, out string error)
+    private static List<FloatMenuOption> BuildFloatMenu(Pawn pawn, LocalTargetInfo target, out string? error)
     {
         error = null;
         AcceptanceReport allowed = FloatMenuMakerMap.ShouldGenerateFloatMenuForPawn(pawn);
@@ -108,7 +106,7 @@ internal sealed partial class RimWorldGameWorld
             // 原版只在多選時問這一份，有些東西（古樞紐核心）的選項只放在這裡，只選一人就看不到。
             var extras = clickPosition.ToIntVec3().GetThingList(pawn.Map).SelectMany(t => t.GetMultiSelectFloatMenuOptions([pawn]));
             extras.Where(e => options.TrueForAll(o => o.Label != e.Label)).ToList().ForEach(e => options.Add(e));
-            return [.. (options ?? [])
+            return [.. options
                 .OrderByDescending(o => o.Priority).ThenByDescending(o => o.orderInPriority)];
         }
         catch (Exception ex)

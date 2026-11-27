@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Collections.Generic;
 
 namespace RimAgent.Game;
@@ -35,11 +33,11 @@ public interface IGameWorld
     ThingSearchResult FindThings(ThingQuery query);
     IReadOnlyList<ThingInfo> GetSelection();
     MapBounds GetMapBounds();
-    CellInfo GetCell(int x, int z);
+    CellInfo? GetCell(int x, int z);
     IReadOnlyList<CellInfo> GetCells(CellRectSpec rect);
     /// <summary>只查承重，不算房間與物品；迷霧格為 null。</summary>
     GroundSupport? GetSupport(int x, int z);
-    string GetNotReadyReason();
+    string? GetNotReadyReason();
 
     /// <summary>
     /// 讓遊戲時間推進 <paramref name="ticks"/> tick 後才完成（不阻塞主線程，遊戲照常跑）。
@@ -80,24 +78,24 @@ public interface IGameWorld
     CommandResult AddDesignationOnThing(int thingId, string designationDefName);
     CommandResult RemoveDesignationOnCell(int x, int z, string designationDefName);
     CommandResult RemoveDesignationOnThing(int thingId, string designationDefName);
-    BuildingInfo GetBuildingInfo(string buildableDefName);
+    BuildingInfo? GetBuildingInfo(string buildableDefName);
     IReadOnlyList<DefInfo> GetLookupCatalog(string kind);
-    DefLookupInfo LookupDef(string kind, string defName);
+    DefLookupInfo? LookupDef(string kind, string defName);
     CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName, bool checkOnly = false);
     IReadOnlyList<LayoutInfo> Layouts { get; }
-    LayoutPlan GetLayoutPlan(string layoutDefName, int x, int z, int rotation);
+    LayoutPlan? GetLayoutPlan(string layoutDefName, int x, int z, int rotation);
     IReadOnlyList<string> RemoveBlueprints(CellRectSpec rect);
     IReadOnlyList<ShipPartInfo> GetShipParts();
     IReadOnlyList<ShipPartRequirement> GetRequiredShipParts();
     CommandResult SetDrafted(int pawnId, bool drafted);
     CommandResult OrderMoveTo(int pawnId, int x, int z);
     CommandResult OrderAttack(int pawnId, int targetId);
-    CommandResult ChooseOption(string choiceId, int option, string input = null);
-    string GetInspectText(int thingId);
+    CommandResult ChooseOption(string choiceId, int option, string? input = null);
+    string? GetInspectText(int thingId);
     IReadOnlyList<QuestInfo> GetQuests();
     CommandResult AcceptQuest(int questId, int rewardNumber, int accepterPawnId);
     CommandResult SetQuestDismissed(int questId, bool dismissed);
-    IReadOnlyList<GizmoInfo> GetGizmos(int thingId);
+    IReadOnlyList<GizmoInfo>? GetGizmos(int thingId);
     /// <summary>
     /// 按一個指令按鈕（依 1 起的序號定位並核對標籤），等同玩家點它。支援按一下、開關與需要地圖目標的按鈕；
     /// 按了開出選單或其他視窗會關回去並回報失敗，開出對話框或確認框則留著給 ChooseOption 回應。
@@ -105,7 +103,7 @@ public interface IGameWorld
     /// 驗證後下令，不合法回失敗並帶原因；沒給 target 則取消選目標並回失敗，說明要什麼目標。
     /// 成功時 Message 為開關的新狀態或目標與遊戲訊息（單純 action 為空字串）。
     /// </summary>
-    CommandResult UseGizmo(int thingId, int gizmoNumber, string label, MapTarget target);
+    CommandResult UseGizmo(int thingId, int gizmoNumber, string label, MapTarget? target);
     /// <summary>
     /// 殖民者對某目標（物件或格子）按右鍵得到的選單，照原版 FloatMenuMakerMap 產生；
     /// 殖民者不存在、無法下令或目標不在地圖上時 Error 帶原因。
@@ -170,12 +168,12 @@ public interface IGameWorld
     CommandResult SetResearch(string researchDefName);
     CommandResult SetCurrentMap(int mapId);
     CommandResult SetTimeSpeed(string speedDefName);
-    ScreenshotInfo TakeScreenshot(string filename = null);
+    ScreenshotInfo TakeScreenshot(string? filename = null);
     /// <summary>
     /// 不動玩家鏡頭，把目前地圖的一塊範圍以俯視角離屏渲染，加上座標格線後存成 PNG（版面見 <see cref="MapShotLayout"/>）。
     /// 範圍需已裁進地圖內。檔案在之後一兩幀渲染完才寫出，回傳的路徑可交給 <see cref="ReadScreenshotFile"/> 重試讀取。
     /// </summary>
-    ScreenshotInfo RenderMapArea(CellRectSpec rect, string filename = null);
+    ScreenshotInfo RenderMapArea(CellRectSpec rect, string? filename = null);
     MapSurvey GetMapSurvey();
     /// <summary>
     /// 讀取遊戲截圖資料夾中的 PNG 原始檔，可在背景執行緒呼叫（解碼與縮圖由呼叫端排回主線程）。

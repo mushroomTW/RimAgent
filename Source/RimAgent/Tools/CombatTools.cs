@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -15,9 +13,9 @@ public sealed class CombatTools
     private static readonly string[] Jobs = ["rescue", "capture", "tend", "strip", "equip", "enter_casket"];
 
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public CombatTools(IGameWorld world, ConfirmationGate gate = null)
+    public CombatTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -33,7 +31,7 @@ public sealed class CombatTools
         if (!pawns.Success) return pawns.Error;
 
         string verbPreview = drafted ? "draft" : "undraft";
-        string blocked = ToolText.Blocked(_gate, $"would {verbPreview} {ToolText.Names(pawns.Value)} (downed members will be skipped).");
+        string? blocked = ToolText.Blocked(_gate, $"would {verbPreview} {ToolText.Names(pawns.Value)} (downed members will be skipped).");
         if (blocked != null) return blocked;
 
         var done = new List<ColonistInfo>();
@@ -63,13 +61,13 @@ public sealed class CombatTools
         [Description("Destination x.")] int x,
         [Description("Destination z.")] int z)
     {
-        string outOfBounds = TargetResolver.CheckCell(x, z, _world.GetMapBounds());
+        string? outOfBounds = TargetResolver.CheckCell(x, z, _world.GetMapBounds());
         if (outOfBounds != null) return outOfBounds;
 
         Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
         if (!pawns.Success) return pawns.Error;
 
-        string blocked = ToolText.Blocked(_gate, $"would order {ToolText.Names(pawns.Value)} to move to {ToolText.Cell(x, z)} (drafted first if needed).");
+        string? blocked = ToolText.Blocked(_gate, $"would order {ToolText.Names(pawns.Value)} to move to {ToolText.Cell(x, z)} (drafted first if needed).");
         if (blocked != null) return blocked;
 
         var moved = new List<ColonistInfo>();
@@ -97,7 +95,7 @@ public sealed class CombatTools
         [Description("Colonist names or ids separated by commas, or \"all\".")] string colonists,
         [Description("Target id from list_threats or find_things.")] int targetId)
     {
-        string targetLabel = ResolveTargetLabel(targetId);
+        string? targetLabel = ResolveTargetLabel(targetId);
         if (targetLabel == null)
         {
             return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no target with id {targetId} on the map. Use list_threats or find_things to get a valid id."));
@@ -106,7 +104,7 @@ public sealed class CombatTools
         Result<List<ColonistInfo>> pawns = TargetResolver.ResolveColonists(colonists, _world.GetColonists());
         if (!pawns.Success) return pawns.Error;
 
-        string attackBlocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed)."));
+        string? attackBlocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would order {ToolText.Names(pawns.Value)} to attack {targetLabel} [{targetId}] (drafted first if needed)."));
         if (attackBlocked != null) return attackBlocked;
 
         var attacking = new List<ColonistInfo>();
@@ -137,7 +135,7 @@ public sealed class CombatTools
         Result<ColonistInfo> pawn = TargetResolver.ResolveColonist(colonist, _world.GetColonists());
         if (!pawn.Success) return pawn.Error;
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would order {pawn.Value.Name} to {kind} [{targetId}]."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would order {pawn.Value.Name} to {kind} [{targetId}]."));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.OrderJob(pawn.Value.Id, kind, targetId);
@@ -145,14 +143,14 @@ public sealed class CombatTools
         return string.Create(CultureInfo.InvariantCulture, $"Ordered {pawn.Value.Name} to {kind} [{targetId}]: {r.Message}.");
     }
 
-    private string ResolveTargetLabel(int targetId)
+    private string? ResolveTargetLabel(int targetId)
     {
-        ThreatInfo threat = _world.GetThreats().FirstOrDefault(t => t.Id == targetId);
+        ThreatInfo? threat = _world.GetThreats().FirstOrDefault(t => t.Id == targetId);
         if (threat != null) return threat.Label;
-        AnimalInfo animal = _world.GetAnimals().FirstOrDefault(a => a.Id == targetId);
+        AnimalInfo? animal = _world.GetAnimals().FirstOrDefault(a => a.Id == targetId);
         if (animal != null) return animal.Name;
         // IGameWorld 沒有依 id 查物件的入口，也沒有 id 篩選：不設上限（Take(int.MaxValue)），免得最近 N 隻之外的有效目標被誤拒。
-        ThingInfo thing = _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = int.MaxValue }).FirstOrDefault(t => t.Id == targetId);
+        ThingInfo? thing = _world.FindThings(new ThingQuery { Kind = ThingKind.Pawn, Limit = int.MaxValue }).FirstOrDefault(t => t.Id == targetId);
         return thing?.Label;
     }
 

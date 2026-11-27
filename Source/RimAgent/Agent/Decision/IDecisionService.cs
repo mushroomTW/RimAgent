@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +14,7 @@ public interface IDecisionService
 /// <summary>決策模型不可用（供應商未啟用、缺金鑰、逾時或回應不合法）；呼叫端據此走既有的備援路徑，而不是讓整句指令失敗。</summary>
 public sealed class DecisionUnavailableException : Exception
 {
-    public DecisionUnavailableException(string message, Exception innerException = null)
+    public DecisionUnavailableException(string message, Exception? innerException = null)
         : base(message, innerException)
     {
     }

@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -92,13 +91,13 @@ internal sealed partial class RimWorldGameWorld
 
         // 成員：只收組隊視窗會列出的人（AllSendablePawns），其餘說明為什麼不行。
         List<Pawn> sendable = Dialog_FormCaravan.AllSendablePawns(map, reform: false);
-        if (!ValidateCaravanPawns(request, sendable, map, draft, out var rejectReason)) return rejectReason;
+        if (!ValidateCaravanPawns(request, sendable, map, draft, out CaravanDraft? rejectReason)) return rejectReason;
 
         // 貨物：與視窗物品頁同一份清單（AddItemsToTransferables），同種物品依原版規則併成一行。
         var items = new List<TransferableOneWay>();
         foreach (Thing thing in CaravanFormingUtility.AllReachableColonyItems(map, allowEvenIfOutsideHomeArea: false, allowEvenIfReserved: false, canMinify: false).ToList())
         {
-            TransferableOneWay transferable = TransferableUtility.TransferableMatching(thing, items, TransferAsOneMode.PodsOrCaravanPacking);
+            TransferableOneWay? transferable = TransferableUtility.TransferableMatching(thing, items, TransferAsOneMode.PodsOrCaravanPacking);
             if (transferable == null)
             {
                 transferable = new TransferableOneWay();
@@ -106,7 +105,7 @@ internal sealed partial class RimWorldGameWorld
             }
             if (!transferable.things.Contains(thing)) transferable.things.Add(thing);
         }
-        CaravanDraft cargoReject = ValidateCaravanCargo(request, items, draft, out var cargoLines);
+        CaravanDraft? cargoReject = ValidateCaravanCargo(request, items, draft, out var cargoLines);
         if (cargoReject != null) return cargoReject;
         draft.Transferables.AddRange(items.Where(t => t.CountToTransfer > 0));
 
@@ -114,23 +113,23 @@ internal sealed partial class RimWorldGameWorld
         return draft;
     }
 
-    private static CaravanDraft ValidateCaravanCargo(CaravanRequest request, List<TransferableOneWay> items, CaravanDraft draft, out List<CaravanPlanCargo> cargoLines)
+    private static CaravanDraft? ValidateCaravanCargo(CaravanRequest request, List<TransferableOneWay> items, CaravanDraft draft, out List<CaravanPlanCargo> cargoLines)
     {
         cargoLines = new List<CaravanPlanCargo>();
         foreach (TradeLine line in request.Cargo ?? [])
         {
-            if (!TryAllocateCargoLine(line, items, out var cargoLine, out var rejectReason)) return RejectCaravan(draft, rejectReason);
+            if (!TryAllocateCargoLine(line, items, out CaravanPlanCargo? cargoLine, out string? rejectReason)) return RejectCaravan(draft, rejectReason);
             cargoLines.Add(cargoLine);
         }
         return null;
     }
 
-    private static bool TryAllocateCargoLine(TradeLine line, List<TransferableOneWay> items, out CaravanPlanCargo cargoLine, out string rejectReason)
+    private static bool TryAllocateCargoLine(TradeLine line, List<TransferableOneWay> items, [NotNullWhen(true)] out CaravanPlanCargo? cargoLine, [NotNullWhen(false)] out string? rejectReason)
     {
         cargoLine = null;
         rejectReason = null;
         int remaining = line.Count;
-        ThingDef def = null;
+        ThingDef? def = null;
         foreach (TransferableOneWay transferable in items)
         {
             if (remaining <= 0) break;
@@ -149,12 +148,12 @@ internal sealed partial class RimWorldGameWorld
         return true;
     }
 
-    private static bool ValidateCaravanPawns(CaravanRequest request, List<Pawn> sendable, Map map, CaravanDraft draft, out CaravanDraft rejectReason)
+    private static bool ValidateCaravanPawns(CaravanRequest request, List<Pawn> sendable, Map map, CaravanDraft draft, [NotNullWhen(false)] out CaravanDraft? rejectReason)
     {
         rejectReason = null;
         foreach (int id in (request.PawnIds ?? []).Distinct())
         {
-            Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
+            Pawn? pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id);
             if (pawn == null) { rejectReason = RejectCaravan(draft, string.Create(CultureInfo.InvariantCulture, $"no pawn with id {id} is on this map")); return false; }
             if (!sendable.Contains(pawn)) { rejectReason = RejectCaravan(draft, $"{pawn.LabelShort} cannot join a caravan: {WhyNotSendable(pawn)}"); return false; }
             // 被徵召的人不吃集結的職責（原版「強制出發」也會先解除徵召）。
@@ -350,7 +349,7 @@ internal sealed partial class RimWorldGameWorld
             blockers.Add("CaravanCouldNotFindPackingSpot".Translate(direction).Resolve());
             return;
         }
-        Pawn roamer = pawns.Find(ropee => AnimalPenUtility.NeedsToBeManagedByRope(ropee) && !pawns.Any(roper => roper.IsColonist
+        Pawn? roamer = pawns.Find(ropee => AnimalPenUtility.NeedsToBeManagedByRope(ropee) && !pawns.Any(roper => roper.IsColonist
             && GatherAnimalsAndSlavesForCaravanUtility.CanRoperTakeAnimalToDest(roper, ropee, exit)
             && GatherAnimalsAndSlavesForCaravanUtility.CanRoperTakeAnimalToDest(roper, ropee, meeting)));
         if (roamer != null)
@@ -434,7 +433,7 @@ internal sealed partial class RimWorldGameWorld
     {
         foreach (Map map in Find.Maps)
         {
-            Lord lord = map.lordManager.lords.FirstOrDefault(l => l.loadID == formingId && l.faction == Faction.OfPlayer && l.LordJob is LordJob_FormAndSendCaravan);
+            Lord? lord = map.lordManager.lords.FirstOrDefault(l => l.loadID == formingId && l.faction == Faction.OfPlayer && l.LordJob is LordJob_FormAndSendCaravan);
             if (lord == null) continue;
             string names = string.Join(", ", lord.ownedPawns.Select(p => p.LabelShort).ToArray());
             CaravanFormingUtility.StopFormingCaravan(lord);
@@ -444,7 +443,7 @@ internal sealed partial class RimWorldGameWorld
     }
 
 
-    private static Caravan FindPlayerCaravan(int id)
+    private static Caravan? FindPlayerCaravan(int id)
     {
         return Find.WorldObjects.Caravans.FirstOrDefault(c => c.ID == id && c.IsPlayerControlled);
     }
@@ -493,7 +492,7 @@ internal sealed partial class RimWorldGameWorld
     }
 
     /// <summary>抵達動作的標籤；模組的動作可能在欄位為空時丟例外，當作沒有。</summary>
-    private static string SafeArrivalActionLabel(CaravanArrivalAction action)
+    private static string SafeArrivalActionLabel(CaravanArrivalAction? action)
     {
         if (action == null) return string.Empty;
         try
@@ -530,7 +529,7 @@ internal sealed partial class RimWorldGameWorld
     {
         public string Label = string.Empty;
         public bool Disabled;
-        public Action Run;
+        public Action? Run;
     }
 
     /// <summary>
@@ -584,7 +583,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CaravanOptionsInfo GetCaravanOptions(int caravanId, int tile)
     {
-        Caravan caravan = FindPlayerCaravan(caravanId);
+        Caravan? caravan = FindPlayerCaravan(caravanId);
         if (caravan == null) return new CaravanOptionsInfo { Error = CaravanNotFound };
         PlanetTile to = ToPlanetTile(tile, caravan.Tile);
         if (!TileInWorld(to)) return new CaravanOptionsInfo { Error = string.Create(CultureInfo.InvariantCulture, $"tile {tile} does not exist on this layer of the world"), CaravanName = caravan.LabelCap };
@@ -597,12 +596,12 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SendCaravan(int caravanId, int tile, int optionNumber, string label)
     {
-        Caravan caravan = FindPlayerCaravan(caravanId);
+        Caravan? caravan = FindPlayerCaravan(caravanId);
         if (caravan == null) return CommandResult.Fail(CaravanNotFound);
         PlanetTile to = ToPlanetTile(tile, caravan.Tile);
         if (!TileInWorld(to)) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"tile {tile} does not exist on this layer of the world"));
         List<CaravanOrder> orders = BuildCaravanOrders(caravan, to);
-        CaravanOrder order = optionNumber >= 1 && optionNumber <= orders.Count ? orders[optionNumber - 1] : null;
+        CaravanOrder? order = optionNumber >= 1 && optionNumber <= orders.Count ? orders[optionNumber - 1] : null;
         if (order == null || !string.Equals(order.Label, label, StringComparison.OrdinalIgnoreCase))
         {
             return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"{caravan.LabelCap}'s orders for tile {tile} changed; call get_world_tile again"));
@@ -616,17 +615,17 @@ internal sealed partial class RimWorldGameWorld
         // 先記下出發前的移動狀態：本來就在走的篷車不能因為「正在移動」就被當成這道命令生效。
         bool wasMoving = caravan.pather.Moving;
         PlanetTile destinationBefore = caravan.pather.Destination;
-        CommandResult runFail = RunCaravanOrder(order, label);
+        CommandResult? runFail = RunCaravanOrder(order, label);
         if (runFail != null) return runFail;
 
         // 命令若接著要選目標或開別的視窗，這裡沒辦法回應，收掉並回報；確認框與對話留著給 ChooseOption。
         bool targeting = Find.Targeter.IsTargeting || Find.WorldTargeter.IsTargeting;
         StopAllTargeting();
-        CommandResult windowFailure = CloseUnsupportedWindows(before, label);
+        CommandResult? windowFailure = CloseUnsupportedWindows(before, label);
         // 命令已經執行：若篷車已出發／離開世界地圖，後續的目標或視窗只是多餘的附帶步驟，不能回報成單純失敗。
         bool orderTookEffect = caravan.Destroyed || !caravan.Spawned
             || (caravan.pather.Moving && (!wasMoving || caravan.pather.Destination != destinationBefore));
-        CommandResult disruption = HandleFollowUpDisruptions(targeting, windowFailure, orderTookEffect, label, watch);
+        CommandResult? disruption = HandleFollowUpDisruptions(targeting, windowFailure, orderTookEffect, label, watch);
         if (disruption != null)
         {
             return disruption;
@@ -634,7 +633,7 @@ internal sealed partial class RimWorldGameWorld
         return FinalizeCaravanSend(caravan, to, startedOnTile, before, watch, label);
     }
 
-    private static CommandResult HandleFollowUpDisruptions(bool targeting, CommandResult windowFailure, bool orderTookEffect, string label, MessageWatch watch)
+    private static CommandResult? HandleFollowUpDisruptions(bool targeting, CommandResult? windowFailure, bool orderTookEffect, string label, MessageWatch watch)
     {
         if (targeting)
         {
@@ -665,11 +664,11 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Fail(WithGameMessages($"{caravan.LabelCap} did not start moving", watch));
     }
 
-    private static CommandResult RunCaravanOrder(CaravanOrder order, string label)
+    private static CommandResult? RunCaravanOrder(CaravanOrder order, string label)
     {
         try
         {
-            order.Run();
+            order.Run?.Invoke();
             return null;
         }
         catch (Exception ex)
@@ -681,7 +680,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SetCaravanMovement(int caravanId, string action)
     {
-        Caravan caravan = FindPlayerCaravan(caravanId);
+        Caravan? caravan = FindPlayerCaravan(caravanId);
         if (caravan == null) return CommandResult.Fail(CaravanNotFound);
         Caravan_PathFollower pather = caravan.pather;
         switch (action)
@@ -707,7 +706,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SettleCaravan(int caravanId, string action)
     {
-        Caravan caravan = FindPlayerCaravan(caravanId);
+        Caravan? caravan = FindPlayerCaravan(caravanId);
         if (caravan == null) return CommandResult.Fail(CaravanNotFound);
         bool camp = action == CaravanSettleAction.Camp;
         if (!camp && action != CaravanSettleAction.Settle) return CommandResult.Fail($"unknown action \"{action}\"");
@@ -728,7 +727,7 @@ internal sealed partial class RimWorldGameWorld
             Log.Warning("RimAgent: caravan " + verb + " threw: " + ex);
             return CommandResult.Fail($"could not {verb} in the game: {ex.Message}");
         }
-        CommandResult windowFailure = CloseUnsupportedWindows(before, verb);
+        CommandResult? windowFailure = CloseUnsupportedWindows(before, verb);
         if (windowFailure != null) return windowFailure;
         if (Find.WindowStack.Windows.Any(w => !before.Contains(w)))
             return CommandResult.Ok(WithGameMessages(string.Create(CultureInfo.InvariantCulture, $"The game asks to confirm before {caravan.LabelCap} can {verb} on tile {caravan.Tile.tileId}"), watch));

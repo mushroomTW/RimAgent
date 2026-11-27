@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -15,7 +13,7 @@ namespace RimAgent.Game;
 
 internal sealed partial class RimWorldGameWorld
 {
-    public ScreenshotInfo TakeScreenshot(string filename = null)
+    public ScreenshotInfo TakeScreenshot(string? filename = null)
     {
         try
         {
@@ -44,7 +42,7 @@ internal sealed partial class RimWorldGameWorld
     public byte[] ReadScreenshotFile(string filePath)
     {
         // 只讀遊戲自己的截圖資料夾，避免工具結果被拿來讀任意檔案。資料夾在截圖時於主線程記下，這裡可在背景執行緒呼叫；還沒截過圖就沒有可讀的檔。
-        string fullPath = UI.TranscriptScreenshot.ResolveInFolder(filePath, _screenshotFolder);
+        string? fullPath = UI.TranscriptScreenshot.ResolveInFolder(filePath, _screenshotFolder);
         if (fullPath == null) return [];
         try
         {

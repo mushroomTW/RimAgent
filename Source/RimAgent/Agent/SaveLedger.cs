@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -28,7 +26,7 @@ public sealed class SaveLedger
     /// <summary>讀回較早的存檔時，比它新的存檔屬於被放棄的那條時間線，不能再讀。</summary>
     private readonly HashSet<string> _abandoned = new(StringComparer.Ordinal);
     private readonly List<ReloadRecord> _history = [];
-    private ReloadRecord _pending;
+    private ReloadRecord? _pending;
 
     private static string KeyOf(SaveSlotInfo save) => save.Name + "@" + save.WrittenUtcTicks.ToString(CultureInfo.InvariantCulture);
 
@@ -42,7 +40,7 @@ public sealed class SaveLedger
         lock (_gate) return _abandoned.Contains(KeyOf(save));
     }
 
-    public SaveSlotInfo ExhaustedBlocker(SaveSlotInfo save, IEnumerable<SaveSlotInfo> colonySaves)
+    public SaveSlotInfo? ExhaustedBlocker(SaveSlotInfo save, IEnumerable<SaveSlotInfo> colonySaves)
     {
         lock (_gate)
         {
@@ -54,7 +52,7 @@ public sealed class SaveLedger
     }
 
     /// <summary>記下一次讀檔並回傳這是第幾次；比它新的存檔標為放棄，並留給讀檔後的新遊戲接手。</summary>
-    public int RecordLoad(SaveSlotInfo save, IEnumerable<SaveSlotInfo> colonySaves, string colonyId, string lesson)
+    public int RecordLoad(SaveSlotInfo save, IEnumerable<SaveSlotInfo> colonySaves, string? colonyId, string? lesson)
     {
         lock (_gate)
         {
@@ -75,17 +73,17 @@ public sealed class SaveLedger
     }
 
     /// <summary>讀檔完成後取走剛才那次讀檔；別局（玩家中途自己讀了別的檔）的紀錄直接丟掉。</summary>
-    public ReloadRecord TakePending(string colonyId)
+    public ReloadRecord? TakePending(string? colonyId)
     {
         lock (_gate)
         {
-            ReloadRecord pending = _pending;
+            ReloadRecord? pending = _pending;
             _pending = null;
             return pending != null && string.Equals(pending.ColonyId, colonyId, StringComparison.Ordinal) ? pending : null;
         }
     }
 
-    public IReadOnlyList<ReloadRecord> HistoryOf(string colonyId)
+    public IReadOnlyList<ReloadRecord> HistoryOf(string? colonyId)
     {
         lock (_gate) return [.. _history.Where(r => string.Equals(r.ColonyId, colonyId, StringComparison.Ordinal))];
     }

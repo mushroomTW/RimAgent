@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -63,7 +61,7 @@ internal sealed partial class RimWorldGameWorld
         bool growing = string.Equals(kind, "Growing", StringComparison.OrdinalIgnoreCase);
         if (!stockpile && !growing) return CommandResult.Fail($"unknown zone kind {kind}. Use stockpile or growing.");
 
-        CommandResult plantResult = TryResolveGrowingPlant(growing, plantDefName, out ThingDef plant);
+        CommandResult? plantResult = TryResolveGrowingPlant(growing, plantDefName, out ThingDef? plant);
         if (plantResult != null) return plantResult;
 
         // 格子能不能畫區域交給原版 designator 判斷（迷霧、地圖邊緣禁區、不可重疊的物件、種植區的肥沃度）。
@@ -87,7 +85,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok("Added " + string.Join(", ", added.ToArray()) + "." + skippedText);
     }
 
-    private static CommandResult TryResolveGrowingPlant(bool growing, string plantDefName, out ThingDef plant)
+    private static CommandResult? TryResolveGrowingPlant(bool growing, string? plantDefName, out ThingDef? plant)
     {
         plant = null;
         if (growing && !string.IsNullOrEmpty(plantDefName))
@@ -113,13 +111,13 @@ internal sealed partial class RimWorldGameWorld
             for (int z = rect.MinZ; z <= rect.MaxZ; z++)
             {
                 var cell = new IntVec3(x, 0, z);
-                string why = GetCellSkipReason(map, cell, designator, growing);
+                string? why = GetCellSkipReason(map, cell, designator, growing);
                 if (why == null)
                 {
                     cells.Add(cell);
                     continue;
                 }
-                if (!reasons.TryGetValue(why, out List<IntVec3> at)) reasons[why] = at = [];
+                if (!reasons.TryGetValue(why, out List<IntVec3>? at)) reasons[why] = at = [];
                 at.Add(cell);
             }
         }
@@ -127,7 +125,7 @@ internal sealed partial class RimWorldGameWorld
         return cells;
     }
 
-    private static string GetCellSkipReason(Map map, IntVec3 cell, Designator_ZoneAdd designator, bool growing)
+    private static string? GetCellSkipReason(Map map, IntVec3 cell, Designator_ZoneAdd designator, bool growing)
     {
         if (!cell.InBounds(map)) return "outside the map";
         if (map.zoneManager.ZoneAt(cell) is Zone existing) return $"already in zone \"{existing.label}\"";
@@ -139,7 +137,7 @@ internal sealed partial class RimWorldGameWorld
     private const int MaxZoneSuggestionSide = 20;
 
     /// <summary>整塊都不能畫時，列出附近同樣大小、可用格最多的矩形；inspect_area 只給肥沃格數，模型無從得知在哪。</summary>
-    private static string NearbyZoneRects(Map map, CellRectSpec rect, Designator_ZoneAdd designator, ThingDef plant)
+    private static string NearbyZoneRects(Map map, CellRectSpec rect, Designator_ZoneAdd designator, ThingDef? plant)
     {
         int width = Math.Min(rect.MaxX - rect.MinX + 1, MaxZoneSuggestionSide), height = Math.Min(rect.MaxZ - rect.MinZ + 1, MaxZoneSuggestionSide);
         var center = new IntVec3((rect.MinX + rect.MaxX) / 2, 0, (rect.MinZ + rect.MaxZ) / 2);
@@ -175,7 +173,7 @@ internal sealed partial class RimWorldGameWorld
     }
 
     // 二維前綴和：每個候選矩形的可用格數都是常數時間。
-    private static int[,] BuildUsablePrefixSum(Map map, CellRect area, Designator_ZoneAdd designator, ThingDef plant)
+    private static int[,] BuildUsablePrefixSum(Map map, CellRect area, Designator_ZoneAdd designator, ThingDef? plant)
     {
         int[,] sum = new int[area.Width + 1, area.Height + 1];
         for (int x = 0; x < area.Width; x++)
@@ -239,7 +237,7 @@ internal sealed partial class RimWorldGameWorld
         // 迷霧裡的東西不能洩漏。
         if (cell.Fogged(map)) return "fogged";
         if (cell.InNoZoneEdgeArea(map)) return "at the map edge";
-        Thing blocker = cell.GetThingList(map).FirstOrDefault(t => !t.def.CanOverlapZones);
+        Thing? blocker = cell.GetThingList(map).FirstOrDefault(t => !t.def.CanOverlapZones);
         if (blocker != null) return "blocked by " + blocker.LabelNoParenthesis;
         TerrainDef terrain = cell.GetTerrain(map);
         if (terrain.passability == Traversability.Impassable) return "impassable terrain: " + terrain.label;
@@ -248,7 +246,7 @@ internal sealed partial class RimWorldGameWorld
         return growing && cell.GetFertility(map) < minFertility ? "not fertile enough" : "not allowed here";
     }
 
-    private static Zone CreateZoneInstance(Map map, bool stockpile, ThingDef plant)
+    private static Zone CreateZoneInstance(Map map, bool stockpile, ThingDef? plant)
     {
         if (stockpile)
         {
@@ -261,7 +259,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult DeleteZone(int zoneId)
     {
-        Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
+        Zone? zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
         if (zone == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no zone has id {zoneId}"));
         string label = zone.label;
         // 原生刪除路徑：Zone.Delete() 清格子並經 Deregister() 走 ZoneManager.DeregisterZone。
@@ -269,9 +267,9 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok(string.Create(CultureInfo.InvariantCulture, $"Deleted zone [{zoneId}] {label}. Stored items stay on the ground."));
     }
 
-    public CommandResult SetZoneFilter(int zoneId, IReadOnlyList<string> allowDefNames, IReadOnlyList<string> disallowDefNames)
+    public CommandResult SetZoneFilter(int zoneId, IReadOnlyList<string>? allowDefNames, IReadOnlyList<string>? disallowDefNames)
     {
-        Zone zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
+        Zone? zone = Map.zoneManager.AllZones.FirstOrDefault(z => z.ID == zoneId);
         if (zone == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no zone has id {zoneId}"));
         if (zone is not Zone_Stockpile stockpile) return CommandResult.Fail($"{zone.label} is not a stockpile and has no storage filter");
         List<string> allows = [.. (allowDefNames ?? [])];
@@ -281,12 +279,12 @@ internal sealed partial class RimWorldGameWorld
         var removed = new List<ThingDef>();
         foreach (string defName in allows.Concat(disallows))
         {
-            ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(defName);
+            ThingDef? def = DefDatabase<ThingDef>.GetNamedSilentFail(defName);
             if (def == null) return CommandResult.Fail($"unknown stored item {defName}");
             // 與 StorageFilterables 一致：只有物品能放進儲存篩選器。
             if (def.category != ThingCategory.Item) return CommandResult.Fail($"{defName} is not a storable item");
         }
-        string conflict = allows.FirstOrDefault(a => disallows.Any(d => string.Equals(a, d, StringComparison.OrdinalIgnoreCase)));
+        string? conflict = allows.FirstOrDefault(a => disallows.Any(d => string.Equals(a, d, StringComparison.OrdinalIgnoreCase)));
         if (conflict != null) return CommandResult.Fail($"{conflict} is listed as both allowed and disallowed");
         foreach (string defName in allows)
         {

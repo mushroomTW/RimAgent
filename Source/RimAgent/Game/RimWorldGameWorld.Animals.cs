@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -47,7 +45,7 @@ internal sealed partial class RimWorldGameWorld
     public CommandResult TameAnimal(int pawnId)
     {
         Map map = Map;
-        Pawn pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == pawnId && p.RaceProps.Animal && !p.Fogged());
+        Pawn? pawn = map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == pawnId && p.RaceProps.Animal && !p.Fogged());
         if (pawn == null) return CommandResult.Fail("animal not found");
         if (pawn.Dead) return CommandResult.Fail($"{pawn.LabelShort} is dead");
         if (pawn.Faction == Faction.OfPlayer) return CommandResult.Fail($"{pawn.LabelShort} is already tame");
@@ -64,9 +62,9 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SetAnimalTraining(int pawnId, string trainableDefName, bool enable)
     {
-        Pawn pawn = FindColonyAnimal(pawnId);
+        Pawn? pawn = FindColonyAnimal(pawnId);
         if (pawn == null) return CommandResult.Fail("colony animal not found");
-        TrainableDef training = DefDatabase<TrainableDef>.GetNamedSilentFail(trainableDefName);
+        TrainableDef? training = DefDatabase<TrainableDef>.GetNamedSilentFail(trainableDefName);
         if (training == null) return CommandResult.Fail($"unknown animal training {trainableDefName}");
         if (pawn.training == null) return CommandResult.Fail($"{pawn.LabelShort} cannot be trained");
         if (enable)
@@ -87,7 +85,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SetAnimalArea(int pawnId, string areaLabel)
     {
-        Pawn pawn = FindColonyAnimal(pawnId);
+        Pawn? pawn = FindColonyAnimal(pawnId);
         if (pawn == null) return CommandResult.Fail("colony animal not found");
         if (pawn.playerSettings == null) return CommandResult.Fail($"{pawn.LabelShort} has no area settings");
         string label = (areaLabel ?? string.Empty).Trim();
@@ -96,13 +94,13 @@ internal sealed partial class RimWorldGameWorld
             pawn.playerSettings.AreaRestrictionInPawnCurrentMap = null;
             return CommandResult.Ok($"{pawn.LabelShort}'s allowed area is now unrestricted.");
         }
-        Area area = Map.areaManager.AllAreas.FirstOrDefault(a => a.AssignableAsAllowed() && string.Equals(a.Label, label, StringComparison.OrdinalIgnoreCase));
+        Area? area = Map.areaManager.AllAreas.FirstOrDefault(a => a.AssignableAsAllowed() && string.Equals(a.Label, label, StringComparison.OrdinalIgnoreCase));
         if (area == null) return CommandResult.Fail($"unknown animal area {label}");
         pawn.playerSettings.AreaRestrictionInPawnCurrentMap = area;
         return CommandResult.Ok($"{pawn.LabelShort}'s allowed area is now {area.Label}.");
     }
 
-    private static Pawn FindColonyAnimal(int id)
+    private static Pawn? FindColonyAnimal(int id)
     {
         return Map.mapPawns.AllPawnsSpawned.FirstOrDefault(p => p.thingIDNumber == id && p.RaceProps.Animal && p.Faction == Faction.OfPlayer);
     }

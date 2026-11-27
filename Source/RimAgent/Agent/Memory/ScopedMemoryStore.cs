@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,10 +17,10 @@ public sealed class ScopedMemoryStore : AgentMemoryStore
 {
     private readonly AgentMemoryStore _saveScope;
     private readonly AgentMemoryStore _globalScope;
-    private readonly Action _persistGlobal;
+    private readonly Action? _persistGlobal;
 
-    public ScopedMemoryStore(AgentMemoryStore saveScope, AgentMemoryStore globalScope, Action persistGlobal = null)
-        : base((List<AgentMemoryEntry>)null)
+    public ScopedMemoryStore(AgentMemoryStore? saveScope, AgentMemoryStore? globalScope, Action? persistGlobal = null)
+        : base((List<AgentMemoryEntry>?)null)
     {
         _saveScope = saveScope ?? new AgentMemoryStore();
         _globalScope = globalScope ?? new AgentMemoryStore();
@@ -54,7 +52,7 @@ public sealed class ScopedMemoryStore : AgentMemoryStore
         if (global) PersistGlobal();
     }
 
-    public override Task<string> ReadAsync(string path, CancellationToken cancellationToken = default)
+    public override Task<string?> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
         return ScopeOf(path, out _).ReadAsync(path, cancellationToken);
     }

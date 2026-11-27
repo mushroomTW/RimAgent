@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.ComponentModel;
 using System.Globalization;
@@ -17,9 +15,9 @@ internal sealed class ToolOutputTools
 
     private const int ExcerptChars = 400;
 
-    private readonly ToolOutputStore _store;
+    private readonly ToolOutputStore? _store;
 
-    public ToolOutputTools(ToolOutputStore store = null)
+    public ToolOutputTools(ToolOutputStore? store = null)
     {
         _store = store;
     }
@@ -34,7 +32,7 @@ internal sealed class ToolOutputTools
         [Description("Character offset to start from; the note gives where the omitted part begins.")] int offset = 0,
         [Description("Optional text; returns matching lines with their offsets instead of a slice.")] string find = "")
     {
-        if (!Store.TryGet(id, out string text))
+        if (!Store.TryGet(id, out string? text))
         {
             return ToolText.Error("no saved output \"" + id + "\". Saved outputs last only for this conversation and only the latest " +
                 ToolOutputStore.Capacity.ToString(CultureInfo.InvariantCulture) + " are kept; run the original tool again.");

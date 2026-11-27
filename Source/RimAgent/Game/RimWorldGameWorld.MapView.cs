@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,7 +17,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>天然地面算「可耕地」的肥沃度下限（原版礫石、多石土壤 70%，沙地遠低於此）。</summary>
     private const float SoilFertility = 0.7f;
 
-    public ScreenshotInfo RenderMapArea(CellRectSpec rect, string filename = null)
+    public ScreenshotInfo RenderMapArea(CellRectSpec rect, string? filename = null)
     {
         try
         {
@@ -49,7 +47,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>已預約但可能尚未寫出的截圖路徑；檔案要過幾幀才寫入，只靠 File.Exists 會讓同秒的兩次請求撞名。</summary>
     private static readonly HashSet<string> ReservedScreenshotPaths = new(StringComparer.OrdinalIgnoreCase);
 
-    private string ReserveScreenshotPath(string filename)
+    private string ReserveScreenshotPath(string? filename)
     {
         string baseName = Tools.ObserveTools.ResolveScreenshotName(filename);
         string folder = GenFilePaths.ScreenshotFolderPath;
@@ -89,12 +87,13 @@ internal sealed partial class RimWorldGameWorld
         var rooms = new Dictionary<int, RoomInfo>();
         List<RoomInfo> indoor = [.. map.regionGrid.AllRooms
             .Where(r => !r.PsychologicallyOutdoors && !r.TouchesMapEdge && r.CellCount > 0 && !r.Fogged)
-            .Select(r => ToRoom(r, rooms))];
+            .Select(r => ToRoom(r, rooms))
+            .OfType<RoomInfo>()];
 
-        Area_Home home = map.areaManager.Home;
+        Area_Home? home = map.areaManager.Home;
         CellRectSpec? homeRect = null;
         int homeCells = home?.TrueCount ?? 0;
-        if (homeCells > 0) homeRect = Extents(home.ActiveCells);
+        if (home != null && homeCells > 0) homeRect = Extents(home.ActiveCells);
 
         return new MapSurvey
         {
@@ -121,9 +120,9 @@ internal sealed partial class RimWorldGameWorld
         Dictionary<ThingDef, short> resourceIndex, List<string> resourceLabels)
     {
         thickRoof[i] = map.roofGrid.RoofAt(i)?.isThickRoof == true;
-        Building edifice = map.edificeGrid[i];
-        BuildingProperties building = edifice?.def.building;
-        if (building != null && building.isNaturalRock)
+        Building? edifice = map.edificeGrid[i];
+        BuildingProperties? building = edifice?.def.building;
+        if (edifice != null && building != null && building.isNaturalRock)
         {
             cells[i] = SurveyCell.Rock;
             if (building.isResourceRock)
@@ -150,7 +149,7 @@ internal sealed partial class RimWorldGameWorld
     /// 沒有建築的格子依地形分類：水看 Water 標籤與可否通行；人造地板要同時不是天然、且是鋪在上層的地板或地基
     /// （模組的天然地形忘了標 natural 時才不會被當成地板）；其餘看肥沃度。
     /// </summary>
-    private static SurveyCell ClassifyTerrain(TerrainDef terrain)
+    private static SurveyCell ClassifyTerrain(TerrainDef? terrain)
     {
         if (terrain == null) return SurveyCell.Barren;
         if (terrain.IsWater) return terrain.passability == Traversability.Impassable ? SurveyCell.DeepWater : SurveyCell.ShallowWater;

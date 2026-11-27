@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Collections.Generic;
 using System.Text;
 
@@ -14,7 +12,7 @@ public sealed class DecisionReports
     private readonly System.Threading.Lock _gate = new();
     private readonly List<string> _pending = [];
 
-    public void Add(string report)
+    public void Add(string? report)
     {
         if (string.IsNullOrWhiteSpace(report)) return;
         lock (_gate)
@@ -24,7 +22,7 @@ public sealed class DecisionReports
         }
     }
 
-    public string PeekAll(out int count)
+    public string? PeekAll(out int count)
     {
         lock (_gate)
         {
@@ -44,7 +42,7 @@ public sealed class DecisionReports
         }
     }
 
-    public string TakeAll()
+    public string? TakeAll()
     {
         lock (_gate)
         {
@@ -62,7 +60,7 @@ public sealed class DecisionReports
         return sb.ToString().TrimEnd();
     }
 
-    public static string Prepend(string reports, string text)
+    public static string Prepend(string? reports, string text)
     {
         if (string.IsNullOrEmpty(reports)) return text;
         return "<system_one_actions>\nSince your last instruction, the fast decision model (System One) took these actions on its own. " +

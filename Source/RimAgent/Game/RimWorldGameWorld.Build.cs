@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,7 +17,7 @@ internal sealed partial class RimWorldGameWorld
         Map map = Map;
         var cell = new IntVec3(x, 0, z);
         if (!cell.InBounds(map)) return CommandResult.Fail("cell is outside the map");
-        DesignationDef def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
+        DesignationDef? def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
         if (def == null) return CommandResult.Fail($"unknown designation {designationDefName}");
         if (def.targetType != Verse.TargetType.Cell) return CommandResult.Fail($"designation {designationDefName} applies to objects, not cells. Use the object id instead");
         if (map.designationManager.DesignationAt(cell, def) != null) return CommandResult.Ok();
@@ -45,14 +43,14 @@ internal sealed partial class RimWorldGameWorld
     public CommandResult AddDesignationOnThing(int thingId, string designationDefName)
     {
         Map map = Map;
-        Thing thing = FindThing(thingId);
+        Thing? thing = FindThing(thingId);
         if (thing == null) return CommandResult.Fail("object not found on the map");
-        DesignationDef def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
+        DesignationDef? def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
         if (def == null) return CommandResult.Fail($"unknown designation {designationDefName}");
         if (def.targetType != Verse.TargetType.Thing) return CommandResult.Fail($"designation {designationDefName} applies to cells, not objects. Use the cell coordinates instead");
         if (map.designationManager.DesignationOn(thing, def) != null) return CommandResult.Ok();
 
-        string blocked = WhyNotDesignatable(thing, def);
+        string? blocked = WhyNotDesignatable(thing, def);
         if (blocked != null) return CommandResult.Fail(blocked);
 
         map.designationManager.AddDesignation(new Designation(thing, def));
@@ -64,8 +62,8 @@ internal sealed partial class RimWorldGameWorld
         Map map = Map;
         var cell = new IntVec3(x, 0, z);
         if (!cell.InBounds(map)) return CommandResult.Fail("cell is outside the map");
-        DesignationDef def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
-        Designation existing = def == null ? null : map.designationManager.DesignationAt(cell, def);
+        DesignationDef? def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
+        Designation? existing = def == null ? null : map.designationManager.DesignationAt(cell, def);
         if (existing == null) return CommandResult.Fail("no such designation there");
         map.designationManager.RemoveDesignation(existing);
         return CommandResult.Ok();
@@ -74,10 +72,10 @@ internal sealed partial class RimWorldGameWorld
     public CommandResult RemoveDesignationOnThing(int thingId, string designationDefName)
     {
         Map map = Map;
-        Thing thing = FindThing(thingId);
+        Thing? thing = FindThing(thingId);
         if (thing == null) return CommandResult.Fail("object not found on the map");
-        DesignationDef def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
-        Designation existing = null;
+        DesignationDef? def = DefDatabase<DesignationDef>.GetNamedSilentFail(designationDefName);
+        Designation? existing = null;
         if (def != null) existing = map.designationManager.DesignationOn(thing, def);
         if (existing == null) return CommandResult.Fail("no such designation on it");
         map.designationManager.RemoveDesignation(existing);
@@ -87,13 +85,13 @@ internal sealed partial class RimWorldGameWorld
     public CommandResult TryPlaceBlueprint(string buildableDefName, int x, int z, int rotation, string stuffDefName, bool checkOnly = false)
     {
         Map map = Map;
-        BuildableDef def = (BuildableDef)DefDatabase<ThingDef>.GetNamedSilentFail(buildableDefName)
+        BuildableDef? def = (BuildableDef?)DefDatabase<ThingDef>.GetNamedSilentFail(buildableDefName)
                            ?? DefDatabase<TerrainDef>.GetNamedSilentFail(buildableDefName);
         if (def == null) return CommandResult.Fail($"unknown buildable {buildableDefName}");
         if (!def.BuildableByPlayer) return CommandResult.Fail($"{def.label} cannot be built by the player");
         if (!def.IsResearchFinished) return CommandResult.Fail($"{def.label} requires research that is not finished");
 
-        ThingDef stuff = null;
+        ThingDef? stuff = null;
         if (def.MadeFromStuff)
         {
             stuff = string.IsNullOrEmpty(stuffDefName)
@@ -106,7 +104,7 @@ internal sealed partial class RimWorldGameWorld
         var cell = new IntVec3(x, 0, z);
         var rot = new Rot4(rotation);
         AcceptanceReport report = GenConstruct.CanPlaceBlueprintAt(def, cell, rot, map, godMode: false, thingToIgnore: null, thing: null, stuff);
-        CommandResult reportFail = HandleBlueprintReport(def, report, cell, rot, map, stuff);
+        CommandResult? reportFail = HandleBlueprintReport(def, report, cell, rot, map, stuff);
         if (reportFail != null) return reportFail;
 
         if (checkOnly) return CommandResult.Ok();
@@ -114,7 +112,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok();
     }
 
-    private static CommandResult HandleBlueprintReport(BuildableDef def, AcceptanceReport report, IntVec3 cell, Rot4 rot, Map map, ThingDef stuff)
+    private static CommandResult? HandleBlueprintReport(BuildableDef def, AcceptanceReport report, IntVec3 cell, Rot4 rot, Map map, ThingDef? stuff)
     {
         if (!report.Accepted)
         {
@@ -152,7 +150,7 @@ internal sealed partial class RimWorldGameWorld
     /// SpaceAlreadyOccupied 迴圈相同（CanPlaceBlueprintOver）；多格物件在每格都有登記，以 id 去重。
     /// 地板（TerrainDef）另有地基例外，這裡不處理，直接不列。
     /// </summary>
-    private static string DescribeBlockers(BuildableDef def, IntVec3 center, Rot4 rot, Map map, ThingDef stuff)
+    private static string DescribeBlockers(BuildableDef def, IntVec3 center, Rot4 rot, Map map, ThingDef? stuff)
     {
         if (def is not ThingDef) return string.Empty;
         var seen = new HashSet<int>();
@@ -167,7 +165,7 @@ internal sealed partial class RimWorldGameWorld
         return " (blocked by: " + string.Join("; ", parts) + (extra > 0 ? string.Create(CultureInfo.InvariantCulture, $"; +{extra} more") : string.Empty) + ")";
     }
 
-    private static void ProcessBlockersAtCell(IntVec3 c, Map map, BuildableDef def, ThingDef stuff, HashSet<int> seen, List<string> parts, ref int extra)
+    private static void ProcessBlockersAtCell(IntVec3 c, Map map, BuildableDef def, ThingDef? stuff, HashSet<int> seen, List<string> parts, ref int extra)
     {
         List<Thing> things = c.GetThingList(map);
         for (int i = 0; i < things.Count; i++)
@@ -212,7 +210,7 @@ internal sealed partial class RimWorldGameWorld
         foreach (Thing t in map.listerThings.AllThings)
         {
             // 藍圖與框架的 def 是自己的，真正要蓋的東西在 entityDefToBuild。
-            ThingDef def = t is Blueprint || t is Frame ? t.def.entityDefToBuild as ThingDef : t.def;
+            ThingDef? def = t is Blueprint || t is Frame ? t.def.entityDefToBuild as ThingDef : t.def;
             if (def?.building == null || !def.building.shipPart) continue;
             CellRect r = t.OccupiedRect();
                 ShipPartState state;
@@ -238,11 +236,11 @@ internal sealed partial class RimWorldGameWorld
         return parts;
     }
 
-    private static string InteractionBlocker(IntVec3 cell, Map map)
+    private static string? InteractionBlocker(IntVec3 cell, Map map)
     {
         if (!cell.InBounds(map)) return "the map edge";
         if (!cell.Impassable(map)) return null;
-        Thing blocker = cell.GetThingList(map).FirstOrDefault(t => t.def.passability == Traversability.Impassable);
+        Thing? blocker = cell.GetThingList(map).FirstOrDefault(t => t.def.passability == Traversability.Impassable);
         return blocker?.LabelNoCount ?? cell.GetTerrain(map).label;
     }
 
@@ -251,14 +249,14 @@ internal sealed partial class RimWorldGameWorld
         return [.. ShipUtility.RequiredParts().Select(p => new ShipPartRequirement { DefName = p.Key.defName, Label = p.Key.label ?? p.Key.defName, Count = p.Value })];
     }
 
-    public BuildingInfo GetBuildingInfo(string buildableDefName)
+    public BuildingInfo? GetBuildingInfo(string buildableDefName)
     {
-        BuildableDef def = (BuildableDef)DefDatabase<ThingDef>.GetNamedSilentFail(buildableDefName)
-                           ?? DefDatabase<TerrainDef>.GetNamedSilentFail(buildableDefName);
+        BuildableDef? def = (BuildableDef?)DefDatabase<ThingDef>.GetNamedSilentFail(buildableDefName)
+                            ?? DefDatabase<TerrainDef>.GetNamedSilentFail(buildableDefName);
         if (def == null) return null;
         var thing = def as ThingDef;
         IntVec2 size = def.Size;
-        CompProperties_Power power = thing?.GetCompProperties<CompProperties_Power>();
+        CompProperties_Power? power = thing?.GetCompProperties<CompProperties_Power>();
         var interaction = new List<(int X, int Z)>();
         if (thing != null && thing.hasInteractionCell) interaction.Add((thing.interactionCellOffset.x, thing.interactionCellOffset.z));
         if (thing?.multipleInteractionCellOffsets != null) interaction.AddRange(thing.multipleInteractionCellOffsets.Select(o => (o.x, o.z)));
@@ -285,7 +283,7 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    private static string WhyNotDesignatable(Thing thing, DesignationDef def)
+    private static string? WhyNotDesignatable(Thing thing, DesignationDef def)
     {
         switch (def.defName)
         {

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -19,7 +17,7 @@ public partial class Window_Agent
     private void DrawScreenshotPreview(Rect rect, string path)
     {
         DrawRoundedBox(rect, ControlBgColor, ControlBorderColor);
-        Texture2D texture = GetScreenshotTexture(path);
+        Texture2D? texture = GetScreenshotTexture(path);
         if (texture != null)
         {
             GUI.color = Color.white;
@@ -33,9 +31,9 @@ public partial class Window_Agent
         GUI.color = Color.white;
     }
 
-    private Texture2D GetScreenshotTexture(string path)
+    private Texture2D? GetScreenshotTexture(string path)
     {
-        if (_screenshotTextures.TryGetValue(path, out Texture2D cached))
+        if (_screenshotTextures.TryGetValue(path, out Texture2D? cached))
         {
             // 用到的移到最後：看得到的截圖永遠是最近用過的，淘汰不會輪到它們。
             // 比較方式要與字典一致（不分大小寫），否則同一張圖會在清單裡重複。
@@ -69,30 +67,31 @@ public partial class Window_Agent
     {
         if (_screenshotRead == null)
         {
-            string pending = _pendingScreenshot;
+            string? pending = _pendingScreenshot;
             _pendingScreenshot = null;
             if (pending == null || _screenshotTextures.ContainsKey(pending)) return;
             _readingScreenshot = pending;
-            _screenshotRead = Task.Run(() => File.Exists(pending) ? File.ReadAllBytes(pending) : null, CancellationToken.None);
+            _screenshotRead = Task.Run<byte[]?>(() => File.Exists(pending) ? File.ReadAllBytes(pending) : null, CancellationToken.None);
             return;
         }
         if (!_screenshotRead.IsCompleted) return;
-        string path = _readingScreenshot;
+        string? path = _readingScreenshot;
         // 讀檔失敗（IO、權限）時 Task 為 faulted，當作讀不到。
         #pragma warning disable VSTHRD002 // 上一行已確認 Task 完成，此處不會阻塞
-        byte[] bytes = _screenshotRead.Status == TaskStatus.RanToCompletion ? _screenshotRead.Result : null;
+        byte[]? bytes = _screenshotRead.Status == TaskStatus.RanToCompletion ? _screenshotRead.Result : null;
         #pragma warning restore VSTHRD002
         _screenshotRead = null;
         _readingScreenshot = null;
+        if (path == null) return;
 
-        Texture2D preview = TryCreatePreviewTexture(bytes);
+        Texture2D? preview = TryCreatePreviewTexture(bytes);
         if (preview == null)
         {
             _screenshotFailedAt[path] = Environment.TickCount;
             return;
         }
         _screenshotFailedAt.Remove(path);
-        if (_screenshotTextures.TryGetValue(path, out Texture2D previous))
+        if (_screenshotTextures.TryGetValue(path, out Texture2D? previous))
         {
             UnityEngine.Object.Destroy(previous);
             _screenshotOrder.Remove(path);
@@ -108,10 +107,10 @@ public partial class Window_Agent
         }
     }
 
-    private static Texture2D TryCreatePreviewTexture(byte[] bytes)
+    private static Texture2D? TryCreatePreviewTexture(byte[]? bytes)
     {
         if (bytes == null) return null;
-        Texture2D full = null;
+        Texture2D? full = null;
         try
         {
             full = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
@@ -138,7 +137,7 @@ public partial class Window_Agent
         }
 
         RenderTexture previous = RenderTexture.active;
-        RenderTexture step = null;
+        RenderTexture? step = null;
         try
         {
             Texture source = full;

@@ -1,6 +1,5 @@
-﻿#nullable disable
-
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -18,7 +17,8 @@ public partial class RimAgentMod
 {
     private static void DrawPresetCards(Listing_Standard listing)
     {
-        RimAgentSettings.PermissionPreset? current = Settings.MatchPreset();
+        if (Settings is not { } settings) return;
+        RimAgentSettings.PermissionPreset? current = settings.MatchPreset();
         Rect row = listing.GetRect(PresetCardHeight);
         float width = (row.width - PresetCardGap * (Presets.Length - 1)) / Presets.Length;
         for (int i = 0; i < Presets.Length; i++)
@@ -55,7 +55,7 @@ public partial class RimAgentMod
             Text.Font = GameFont.Small;
             GUI.color = Color.white;
 
-            if (Widgets.ButtonInvisible(card)) Settings.ApplyPreset(preset);
+            if (Widgets.ButtonInvisible(card)) settings.ApplyPreset(preset);
         }
         if (current == null)
         {
@@ -66,6 +66,7 @@ public partial class RimAgentMod
 
     private static void DrawPermissionList(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         listing.Gap(8f);
         if (DrawExpandButton(listing, _showPermissionList, "RimAgent.Settings.PermissionListShow".Translate(), "RimAgent.Settings.PermissionListHide".Translate(), tip: null))
         {
@@ -89,7 +90,7 @@ public partial class RimAgentMod
                 int index = (int)members[i];
                 var cell = new Rect(grid.x + (i % 2) * (columnWidth + PermissionColumnGap), grid.y + (i / 2) * PermissionRowHeight, columnWidth, PermissionRowHeight - 4f);
                 Widgets.DrawBoxSolid(new Rect(cell.x, cell.y, 3f, cell.height), color);
-                bool allowed = Settings.GetAllow(members[i]);
+                bool allowed = settings.GetAllow(members[i]);
                 Widgets.CheckboxDraw(cell.x + 10f, cell.y + 3f, allowed, disabled: false);
                 float textX = cell.x + 42f;
                 float textWidth = cell.xMax - textX;
@@ -106,16 +107,17 @@ public partial class RimAgentMod
                     Widgets.DrawHighlight(cell);
                     TooltipHandler.TipRegion(cell, _permissionTips[index]);
                 }
-                if (Widgets.ButtonInvisible(cell)) Settings.SetAllow(members[i], !allowed);
+                if (Widgets.ButtonInvisible(cell)) settings.SetAllow(members[i], !allowed);
             }
         }
     }
 
     /// <summary>名稱、一行說明與完整提示只在語言變了才重組；提示最前面放名稱與說明，截斷時仍看得到全文。</summary>
+    [MemberNotNull(nameof(_permissionLabels), nameof(_permissionDescs), nameof(_permissionTips))]
     private static void EnsurePermissionLabels()
     {
         LoadedLanguage language = LanguageDatabase.activeLanguage;
-        if (_permissionLabels != null && language == _permissionLanguage) return;
+        if (_permissionLabels != null && _permissionDescs != null && _permissionTips != null && language == _permissionLanguage) return;
         _permissionLanguage = language;
         _permissionLabels = new string[Categories.Length];
         _permissionDescs = new string[Categories.Length];

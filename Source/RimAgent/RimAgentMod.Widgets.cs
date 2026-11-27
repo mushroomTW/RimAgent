@@ -43,7 +43,7 @@ public partial class RimAgentMod
 
     private static void DrawCooldownSegment(Rect segRow, float segX, float segWidth, int minutes)
     {
-        bool on = Settings.autonomousCooldownMinutes == minutes;
+        bool on = Settings?.autonomousCooldownMinutes == minutes;
         var seg = new Rect(segX, segRow.y, segWidth - 2f, segRow.height);
         Widgets.DrawBoxSolid(seg, on ? SelectedFill : PanelFill);
         GUI.color = on ? Gold : PanelBorder;
@@ -59,7 +59,7 @@ public partial class RimAgentMod
             Widgets.DrawHighlight(seg);
             TooltipHandler.TipRegion(seg, "RimAgent.Settings.AutoCooldownTip".Translate());
         }
-        if (Widgets.ButtonInvisible(seg)) Settings.autonomousCooldownMinutes = minutes;
+        if (Widgets.ButtonInvisible(seg) && Settings != null) Settings.autonomousCooldownMinutes = minutes;
     }
 
     private static void DrawToggleCard(Listing_Standard listing, ref bool value, string title, string desc, string tip)
@@ -113,7 +113,7 @@ public partial class RimAgentMod
         listing.Gap(4f);
     }
 
-    private static bool DrawExpandButton(Listing_Standard listing, bool expanded, string showLabel, string hideLabel, string tip)
+    private static bool DrawExpandButton(Listing_Standard listing, bool expanded, string showLabel, string hideLabel, string? tip)
     {
         Rect row = listing.GetRect(30f);
         // ButtonText 靠左對齊時文字貼著框線；按鈕只畫底，文字另外留邊距畫，放不下就截斷。

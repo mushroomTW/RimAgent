@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -46,7 +44,7 @@ public class RimAgentSettings : ModSettings
         return string.Equals(value, FollowAgentModel, StringComparison.Ordinal);
     }
 
-    public string ResolveModelSlot(string slot, string currentAgentModel = null)
+    public string ResolveModelSlot(string? slot, string? currentAgentModel = null)
     {
         string value = (slot ?? string.Empty).Trim();
         if (value.Length == 0) return string.Empty;
@@ -57,12 +55,12 @@ public class RimAgentSettings : ModSettings
         return value;
     }
 
-    public string ResolveClassifierModel(string currentAgentModel = null)
+    public string ResolveClassifierModel(string? currentAgentModel = null)
     {
         return ResolveModelSlot(classifierModel, currentAgentModel);
     }
 
-    public string ResolveSubagentModel(string currentAgentModel = null)
+    public string ResolveSubagentModel(string? currentAgentModel = null)
     {
         return ResolveModelSlot(subagentModel, currentAgentModel);
     }
@@ -248,7 +246,7 @@ public class RimAgentSettings : ModSettings
         allowByCategory[(int)category] = value;
     }
 
-    public bool ClearMissingModels(IReadOnlyCollection<string> configuredModels)
+    public bool ClearMissingModels(IReadOnlyCollection<string?>? configuredModels)
     {
         if (configuredModels == null || configuredModels.Count == 0) return false;
         bool cleared = false;
@@ -258,11 +256,11 @@ public class RimAgentSettings : ModSettings
         compactModel = Keep(compactModel, FollowAgentModel);
         return cleared;
 
-        string Keep(string slot, string replacement)
+        string Keep(string? slot, string replacement)
         {
-            string current = slot?.Trim();
-            if (string.IsNullOrEmpty(current) || IsModelSentinel(current)) return slot;
-            if (configuredModels.Any(model => string.Equals(model?.Trim(), current, StringComparison.OrdinalIgnoreCase))) return slot;
+            string? current = slot?.Trim();
+            if (string.IsNullOrEmpty(current) || IsModelSentinel(current)) return slot ?? string.Empty;
+            if (configuredModels.Any(model => string.Equals(model?.Trim(), current, StringComparison.OrdinalIgnoreCase))) return slot ?? string.Empty;
             cleared = true;
             return replacement;
         }

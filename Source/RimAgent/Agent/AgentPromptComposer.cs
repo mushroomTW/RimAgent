@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -20,7 +18,7 @@ public static class AgentPromptComposer
         "List the layouts with an empty building and pick the closest fit; place walls, doors and furniture one by one only when the player asks for a specific size or shape, or no layout fits.";
 
     /// <summary>房型開關開著，且玩家沒關掉建造類工具（關掉時模型拿不到 place_blueprint）才附 <see cref="LayoutsHint"/>。</summary>
-    public static bool LayoutsHintApplies(bool layoutsOn, RimAgent.Tools.ToolPermissions permissions)
+    public static bool LayoutsHintApplies(bool layoutsOn, RimAgent.Tools.ToolPermissions? permissions)
     {
         return layoutsOn && (permissions == null || permissions.Allows(RimAgent.Tools.ToolCategory.Build));
     }
@@ -28,7 +26,7 @@ public static class AgentPromptComposer
     public const int MaxSkillsChars = 8000;
 
     /// <summary>易變的記憶索引由呼叫端接在尾端，保住前綴快取。</summary>
-    public static string ComposeWithSkillIndex(string preamble, string playerNotes, string conduct, IReadOnlyList<AgentSkill> skills, string expansions = null, bool layouts = false)
+    public static string ComposeWithSkillIndex(string? preamble, string? playerNotes, string? conduct, IReadOnlyList<AgentSkill>? skills, string? expansions = null, bool layouts = false)
     {
         var sb = new StringBuilder(preamble ?? string.Empty);
         if (!string.IsNullOrWhiteSpace(expansions))
@@ -52,7 +50,7 @@ public static class AgentPromptComposer
     }
 
     /// <summary>DLC 名稱用 defName，不隨遊戲語言變動；本體不列。整場遊戲不變，不破壞前綴快取。</summary>
-    public static string FormatExpansions(IReadOnlyList<(string Name, bool IsCore, bool IsActive)> expansions)
+    public static string FormatExpansions(IReadOnlyList<(string Name, bool IsCore, bool IsActive)>? expansions)
     {
         var dlcs = (expansions ?? []).Where(e => !e.IsCore).ToList();
         List<string> active = [.. dlcs.Where(e => e.IsActive).Select(e => e.Name)];
@@ -69,7 +67,7 @@ public static class AgentPromptComposer
     public const int MaxModsChars = 1500;
 
     /// <summary>模組清單整場遊戲不變，不破壞前綴快取；超過上限只列前面的名稱並附剩餘數量。</summary>
-    public static string FormatMods(IReadOnlyList<string> modNames)
+    public static string FormatMods(IReadOnlyList<string>? modNames)
     {
         if (modNames == null || modNames.Count == 0) return string.Empty;
         var shown = new List<string>();
@@ -87,7 +85,7 @@ public static class AgentPromptComposer
                "lookup_def with kind=mod shows what a mod adds and which game code it patches.";
     }
 
-    private static void AppendSkillIndex(StringBuilder sb, IReadOnlyList<AgentSkill> skills)
+    private static void AppendSkillIndex(StringBuilder sb, IReadOnlyList<AgentSkill>? skills)
     {
         if (skills == null || skills.Count == 0) return;
         var section = new StringBuilder();
@@ -116,7 +114,7 @@ public static class AgentPromptComposer
         return true;
     }
 
-    private static string TrimTrailingWhitespace(string value)
+    private static string TrimTrailingWhitespace(string? value)
     {
         return (value ?? string.Empty).TrimEnd('\r', '\n', ' ', '\t');
     }

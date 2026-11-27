@@ -1,6 +1,5 @@
-#nullable disable
-
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -16,7 +15,7 @@ internal sealed partial class RimWorldGameWorld
 {
     public CommandResult SetDrafted(int pawnId, bool drafted)
     {
-        Pawn pawn = FindColonist(pawnId);
+        Pawn? pawn = FindColonist(pawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (pawn.drafter == null) return CommandResult.Fail($"{pawn.LabelShort} cannot be drafted");
         if (pawn.Downed && drafted) return CommandResult.Fail($"{pawn.LabelShort} is downed");
@@ -27,7 +26,7 @@ internal sealed partial class RimWorldGameWorld
     public CommandResult OrderMoveTo(int pawnId, int x, int z)
     {
         Map map = Map;
-        Pawn pawn = FindColonist(pawnId);
+        Pawn? pawn = FindColonist(pawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (!pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is not drafted");
         var cell = new IntVec3(x, 0, z);
@@ -44,10 +43,10 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult OrderAttack(int pawnId, int targetId)
     {
-        Pawn pawn = FindColonist(pawnId);
+        Pawn? pawn = FindColonist(pawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (!pawn.Drafted) return CommandResult.Fail($"{pawn.LabelShort} is not drafted");
-        Thing target = FindThing(targetId);
+        Thing? target = FindThing(targetId);
         if (target == null) return CommandResult.Fail("target not found on the map");
         // 不打自己人、囚犯與友好派系：模型一次幻覺就能開火，那是外交事件。無派系的野生動物照舊可打（狩獵）。
         if (target.Faction == Faction.OfPlayer) return CommandResult.Fail($"{target.LabelShort} belongs to the colony");
@@ -64,11 +63,11 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult OrderJob(int pawnId, string job, int targetId)
     {
-        Pawn pawn = FindColonist(pawnId);
+        Pawn? pawn = FindColonist(pawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (pawn.Downed) return CommandResult.Fail($"{pawn.LabelShort} is downed");
         if (!pawn.health.capacities.CapableOf(PawnCapacityDefOf.Manipulation)) return CommandResult.Fail($"{pawn.LabelShort} cannot use their hands");
-        Thing target = FindThing(targetId);
+        Thing? target = FindThing(targetId);
         if (target == null) return CommandResult.Fail("target not found on the map");
         if (!pawn.CanReach(target, PathEndMode.ClosestTouch, Danger.Deadly)) return CommandResult.Fail($"{pawn.LabelShort} cannot reach {target.LabelShort}");
 
@@ -85,7 +84,7 @@ internal sealed partial class RimWorldGameWorld
     }
 
     // 以下檢查照遊戲的右鍵選單（FloatMenuOptionProvider_*），只拒絕會惹惱派系或需要玩家另外確認的情況。
-    private static CommandResult OrderRescue(Pawn pawn, Pawn patient)
+    private static CommandResult OrderRescue(Pawn pawn, Pawn? patient)
     {
         if (patient == null) return CommandResult.Fail("only pawns can be rescued");
         // 任務地圖上等人救的難民走「提供幫助」，救了就加入。
@@ -99,15 +98,15 @@ internal sealed partial class RimWorldGameWorld
         if (!HealthAIUtility.CanRescueNow(pawn, patient, forced: true)) return CommandResult.Fail($"{pawn.LabelShort} cannot rescue {patient.LabelShort} right now");
         if (patient.playerSettings?.medCare == MedicalCareCategory.NoCare) return CommandResult.Fail($"{patient.LabelShort}'s medical care is set to no care");
 
-        Building_Bed bed = RestUtility.FindBedFor(patient, pawn, checkSocialProperness: false)
-                           ?? RestUtility.FindBedFor(patient, pawn, checkSocialProperness: false, ignoreOtherReservations: true);
+        Building_Bed? bed = RestUtility.FindBedFor(patient, pawn, checkSocialProperness: false)
+                            ?? RestUtility.FindBedFor(patient, pawn, checkSocialProperness: false, ignoreOtherReservations: true);
         if (bed == null) return CommandResult.Fail(patient.RaceProps.Animal ? "no free animal bed" : "no free bed for them; build or free a bed first");
         Job rescue = JobMaker.MakeJob(JobDefOf.Rescue, patient, bed);
         rescue.count = 1;
         return TakeOrderedJob(pawn, rescue, string.Create(CultureInfo.InvariantCulture, $"carrying {patient.LabelShort} to {bed.LabelShort} at ({bed.Position.x}, {bed.Position.z})"));
     }
 
-    private static CommandResult OrderCapture(Pawn pawn, Pawn prisoner)
+    private static CommandResult OrderCapture(Pawn pawn, Pawn? prisoner)
     {
         if (prisoner == null) return CommandResult.Fail("only pawns can be captured");
         if (!prisoner.CanBeCaptured()) return CommandResult.Fail($"{prisoner.LabelShort} cannot be captured (they must be downed and not already the colony's)");
@@ -118,8 +117,8 @@ internal sealed partial class RimWorldGameWorld
         }
         if (!HealthAIUtility.CanRescueNow(pawn, prisoner, forced: true)) return CommandResult.Fail($"{pawn.LabelShort} cannot capture {prisoner.LabelShort} right now");
 
-        Building_Bed bed = RestUtility.FindBedFor(prisoner, pawn, checkSocialProperness: false, ignoreOtherReservations: false, GuestStatus.Prisoner)
-                           ?? RestUtility.FindBedFor(prisoner, pawn, checkSocialProperness: false, ignoreOtherReservations: true, GuestStatus.Prisoner);
+        Building_Bed? bed = RestUtility.FindBedFor(prisoner, pawn, checkSocialProperness: false, ignoreOtherReservations: false, GuestStatus.Prisoner)
+                            ?? RestUtility.FindBedFor(prisoner, pawn, checkSocialProperness: false, ignoreOtherReservations: true, GuestStatus.Prisoner);
         if (bed == null) return CommandResult.Fail("no free prisoner bed; set a bed for prisoners first");
         Job capture = JobMaker.MakeJob(JobDefOf.Capture, prisoner, bed);
         capture.count = 1;
@@ -128,22 +127,22 @@ internal sealed partial class RimWorldGameWorld
         return TakeOrderedJob(pawn, capture, note);
     }
 
-    private static CommandResult OrderTend(Pawn doctor, Pawn patient)
+    private static CommandResult OrderTend(Pawn doctor, Pawn? patient)
     {
-        if (!ValidateTendOrder(doctor, patient, out string failReason))
+        if (!ValidateTendOrder(doctor, patient, out string? failReason))
         {
             return CommandResult.Fail(failReason);
         }
 
         // 找藥與建工作同 WorkGiver_Tend：藥在別人身上（背包、架子）時第三個目標是它的持有者。
-        Thing medicine = HealthAIUtility.FindBestMedicine(doctor, patient);
+        Thing? medicine = HealthAIUtility.FindBestMedicine(doctor, patient);
         Job tend = CreateTendJob(patient, medicine);
         tend.count = 1;
         tend.draftedTend = doctor.Drafted;
         return TakeOrderedJob(doctor, tend, $"tending {patient.LabelShort} " + (medicine == null ? "without medicine" : "with " + medicine.def.label));
     }
 
-    private static bool ValidateTendOrder(Pawn doctor, Pawn patient, out string failReason)
+    private static bool ValidateTendOrder(Pawn doctor, [NotNullWhen(true)] Pawn? patient, [NotNullWhen(false)] out string? failReason)
     {
         failReason = null;
         if (patient == null) { failReason = "only pawns can be tended"; return false; }
@@ -157,7 +156,7 @@ internal sealed partial class RimWorldGameWorld
         return true;
     }
 
-    private static Job CreateTendJob(Pawn patient, Thing medicine)
+    private static Job CreateTendJob(Pawn patient, Thing? medicine)
     {
         if (medicine == null)
         {
@@ -174,7 +173,7 @@ internal sealed partial class RimWorldGameWorld
     {
         if (!StrippableUtility.CanBeStrippedByColony(target)) return CommandResult.Fail($"{target.LabelShort} cannot be stripped by the colony");
         if (target is Pawn living && living.HasExtraHomeFaction()) return CommandResult.Fail($"{target.LabelShort} is quest-related");
-        Pawn owner = target as Pawn ?? (target as Corpse)?.InnerPawn;
+        Pawn? owner = target as Pawn ?? (target as Corpse)?.InnerPawn;
         if (owner?.Faction != null && owner.Faction != Faction.OfPlayer && !owner.Faction.HostileTo(Faction.OfPlayer))
         {
             return CommandResult.Fail($"stripping {target.LabelShort} would hurt relations with {owner.Faction.Name}; refused");

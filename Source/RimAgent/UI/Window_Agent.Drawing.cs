@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -39,7 +37,7 @@ public partial class Window_Agent
         GUI.color = oldColor;
     }
 
-    private static Texture2D _shieldTex;
+    private static Texture2D? _shieldTex;
 
     /// <summary>盾牌外框：上緣平、兩側直到一半，再收成底部尖端。程式產生，免得多出貨一張圖。</summary>
     private static Texture2D ShieldTex => _shieldTex ??= BuildShieldTex(32);
@@ -80,7 +78,7 @@ public partial class Window_Agent
 
     private static Texture2D GetRoundedTex(Dictionary<int, Texture2D> cache, int r, bool ring)
     {
-        if (cache.TryGetValue(r, out Texture2D cached)) return cached;
+        if (cache.TryGetValue(r, out Texture2D? cached)) return cached;
         int size = r * 2 + 2;
         float half = size / 2f;
         var texture = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false)

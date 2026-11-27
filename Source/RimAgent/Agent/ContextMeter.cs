@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,16 +12,16 @@ internal sealed class ContextMeter
 {
     private readonly System.Threading.Lock _gate = new();
     private readonly ConditionalWeakTable<AIContent, StrongBox<long>> _measured = new();
-    private Dictionary<AIContent, long> _sent;
+    private Dictionary<AIContent, long>? _sent;
     private long? _lastReal;
-    private string _model;
+    private string? _model;
 
     public long? LastReal
     {
         get { lock (_gate) return _lastReal; }
     }
 
-    public void Observe(IEnumerable<ChatMessage> sent, long? realInputTokens, string model)
+    public void Observe(IEnumerable<ChatMessage>? sent, long? realInputTokens, string? model)
     {
         List<AIContent> contents = Distinct(sent);
         lock (_gate)
@@ -34,14 +32,13 @@ internal sealed class ContextMeter
                 return;
             }
             long real = realInputTokens.Value;
-            bool sameModel = _sent != null && _lastReal.HasValue && string.Equals(_model, model, StringComparison.OrdinalIgnoreCase);
             // 第一次請求含工具定義，工具的真實格式化開銷不明，拆不出訊息本身的大小。
-            if (sameModel)
+            if (_sent is { } previousSent && _lastReal is { } lastReal && string.Equals(_model, model, StringComparison.OrdinalIgnoreCase))
             {
                 var current = new HashSet<AIContent>(contents, ReferenceEqualityComparer.Instance);
-                List<AIContent> added = [.. contents.Where(c => !_sent.ContainsKey(c))];
-                List<AIContent> removed = [.. _sent.Keys.Where(c => !current.Contains(c))];
-                long addedReal = real - _lastReal.Value + removed.Sum(c => _sent[c]);
+                List<AIContent> added = [.. contents.Where(c => !previousSent.ContainsKey(c))];
+                List<AIContent> removed = [.. previousSent.Keys.Where(c => !current.Contains(c))];
+                long addedReal = real - lastReal + removed.Sum(c => previousSent[c]);
                 Attribute(added, removed, addedReal);
             }
             _sent = contents.ToDictionary<AIContent, AIContent, long>(c => c, SizeOf, ReferenceEqualityComparer.Instance);
@@ -52,7 +49,7 @@ internal sealed class ContextMeter
 
     /// <summary>模型這次的回覆會原樣出現在下一次請求裡，用供應商回報的輸出 token 當它的大小。</summary>
     /// <remarks>供應商有回報思考 token 時，思考不會原樣送回，從總數扣掉、也不分給思考內容。</remarks>
-    public void ObserveOutput(IEnumerable<ChatMessage> reply, long? outputTokens, long? reasoningTokens = null)
+    public void ObserveOutput(IEnumerable<ChatMessage>? reply, long? outputTokens, long? reasoningTokens = null)
     {
         if (!outputTokens.HasValue || outputTokens.Value <= 0) return;
         List<AIContent> contents = Distinct(reply);
@@ -69,7 +66,7 @@ internal sealed class ContextMeter
     /// 對照上次請求檢視歷史：排在已送出內容之前、卻不在上次請求裡的，是被壓縮折掉的；
     /// 之後的是還沒送出的新內容，<c>Pending</c> 為它們的大小（沒有錨點時為 null）。
     /// </summary>
-    public (HashSet<AIContent> Folded, long? Pending) Inspect(IEnumerable<ChatMessage> history)
+    public (HashSet<AIContent> Folded, long? Pending) Inspect(IEnumerable<ChatMessage>? history)
     {
         List<AIContent> contents = Distinct(history);
         var folded = new HashSet<AIContent>(ReferenceEqualityComparer.Instance);
@@ -89,7 +86,7 @@ internal sealed class ContextMeter
     }
 
     /// <summary>依上次真實值推算這批訊息送出時的輸入 token；沒有錨點時為 null。</summary>
-    public long? Project(IEnumerable<ChatMessage> next)
+    public long? Project(IEnumerable<ChatMessage>? next)
     {
         List<AIContent> contents = Distinct(next);
         lock (_gate)
@@ -103,10 +100,10 @@ internal sealed class ContextMeter
     }
 
     /// <summary>由供應商用量推回的真實大小；沒推過的內容為 null。</summary>
-    public long? Measured(AIContent content)
+    public long? Measured(AIContent? content)
     {
         if (content == null) return null;
-        lock (_gate) return _measured.TryGetValue(content, out StrongBox<long> box) ? box.Value : null;
+        lock (_gate) return _measured.TryGetValue(content, out StrongBox<long>? box) ? box.Value : null;
     }
 
     public void Reset()
@@ -114,7 +111,7 @@ internal sealed class ContextMeter
         lock (_gate) ClearAnchor();
     }
 
-    internal static long Estimate(AIContent content)
+    internal static long Estimate(AIContent? content)
     {
         return content switch
         {
@@ -129,7 +126,7 @@ internal sealed class ContextMeter
 
     private long SizeOf(AIContent content)
     {
-        return _measured.TryGetValue(content, out StrongBox<long> box) ? box.Value : Estimate(content);
+        return _measured.TryGetValue(content, out StrongBox<long>? box) ? box.Value : Estimate(content);
     }
 
     /// <summary>圖片等非文字內容估不出 token，兩邊數量不同時差值裡混著它們的真實大小，這一步不分配。</summary>
@@ -164,7 +161,7 @@ internal sealed class ContextMeter
         _model = null;
     }
 
-    private static List<AIContent> Distinct(IEnumerable<ChatMessage> messages)
+    private static List<AIContent> Distinct(IEnumerable<ChatMessage>? messages)
     {
         var seen = new HashSet<AIContent>(ReferenceEqualityComparer.Instance);
         var list = new List<AIContent>();

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -31,37 +29,37 @@ public sealed class DecisionGoalAuditor
     public const int ReplyTailChars = 8000;
     private static readonly string[] _newlineSplit = ["\r\n", "\r", "\n"];
 
-    private readonly IDecisionService _decisionService;
-    private readonly Func<IDecisionService> _serviceFactory;
-    private readonly Func<string> _criteriaProvider;
+    private readonly IDecisionService? _decisionService;
+    private readonly Func<IDecisionService?>? _serviceFactory;
+    private readonly Func<string?>? _criteriaProvider;
     // 判準與解析結果放同一個不可變物件整個換掉，避免並行時讀到新判準配舊計畫。
     private sealed record ParsedPlan(string Criteria, DecisionPlan Plan);
-    private volatile ParsedPlan _parsed;
+    private volatile ParsedPlan? _parsed;
 
     public DecisionGoalAuditor(
-        IDecisionService decisionService = null,
-        Func<string> criteriaProvider = null,
-        Func<IDecisionService> serviceFactory = null)
+        IDecisionService? decisionService = null,
+        Func<string?>? criteriaProvider = null,
+        Func<IDecisionService?>? serviceFactory = null)
     {
         _decisionService = decisionService;
         _criteriaProvider = criteriaProvider;
         _serviceFactory = serviceFactory;
     }
 
-    public async Task<GoalAuditResult> AuditAsync(
+    public async Task<GoalAuditResult?> AuditAsync(
         string objective,
         string reply,
-        string toolEvidence = null,
+        string? toolEvidence = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(objective);
         ArgumentNullException.ThrowIfNull(reply);
         if (string.IsNullOrWhiteSpace(objective)) return null;
 
-        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
+        IDecisionService? service = _decisionService ?? _serviceFactory?.Invoke();
         if (service == null) return null;
 
-        string criteria = _criteriaProvider?.Invoke();
+        string? criteria = _criteriaProvider?.Invoke();
         if (string.IsNullOrWhiteSpace(criteria)) return null;
 
         DecisionPlan plan = ResolvePlan(criteria);
@@ -84,9 +82,9 @@ public sealed class DecisionGoalAuditor
         }
 
         if (result == null ||
-            !result.TryGet("all_done", out DecisionAnswer allDoneAnswer) || allDoneAnswer?.Probability == null ||
-            !result.TryGet("remaining", out DecisionAnswer remainingAnswer) || remainingAnswer?.Probability == null ||
-            !result.TryGet("needs_user", out DecisionAnswer needsUserAnswer) || needsUserAnswer?.Probability == null)
+            !result.TryGet("all_done", out DecisionAnswer? allDoneAnswer) || allDoneAnswer.Probability == null ||
+            !result.TryGet("remaining", out DecisionAnswer? remainingAnswer) || remainingAnswer.Probability == null ||
+            !result.TryGet("needs_user", out DecisionAnswer? needsUserAnswer) || needsUserAnswer.Probability == null)
         {
             return null;
         }
@@ -131,7 +129,7 @@ public sealed class DecisionGoalAuditor
         return string.Create(CultureInfo.InvariantCulture, $"Decision audit verified that all requirements are complete (all_done: {pAllDone:0%}).");
     }
 
-    public static string Describe(string objective, string reply, string toolEvidence = null)
+    public static string Describe(string objective, string reply, string? toolEvidence = null)
     {
         string trimmedReply = (reply ?? string.Empty).Trim();
         if (trimmedReply.Length > ReplyHeadChars + ReplyTailChars)
@@ -153,14 +151,14 @@ public sealed class DecisionGoalAuditor
         return "<" + tag + ">\n" + Escape(value ?? string.Empty) + "\n</" + tag + ">\n";
     }
 
-    private static string Escape(string value)
+    private static string Escape(string? value)
     {
         return (value ?? string.Empty).Replace("<", "\\<", StringComparison.Ordinal);
     }
 
     private DecisionPlan ResolvePlan(string criteria)
     {
-        ParsedPlan current = _parsed;
+        ParsedPlan? current = _parsed;
         if (current == null || !string.Equals(current.Criteria, criteria, StringComparison.Ordinal))
         {
             current = new ParsedPlan(criteria, ParsePlan(criteria));
@@ -169,7 +167,7 @@ public sealed class DecisionGoalAuditor
         return current.Plan;
     }
 
-    public static DecisionPlan ParsePlan(string markdown)
+    public static DecisionPlan ParsePlan(string? markdown)
     {
         if (string.IsNullOrWhiteSpace(markdown)) return DecisionPlan.Of();
 
@@ -186,10 +184,10 @@ public sealed class DecisionGoalAuditor
         string needsUserWhenFalse = "The agent is not waiting for player guidance or input to proceed.";
 
         string[] lines = markdown.Split(_newlineSplit, StringSplitOptions.None);
-        string currentSection = null;
+        string? currentSection = null;
         var sectionLines = new List<string>();
 
-        void ProcessSection(string section, List<string> slines)
+        void ProcessSection(string? section, List<string> slines)
         {
             if (string.IsNullOrEmpty(section)) return;
             string key = section.Trim().ToLowerInvariant();

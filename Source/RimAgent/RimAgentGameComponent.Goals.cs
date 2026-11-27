@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -158,8 +156,8 @@ public partial class RimAgentGameComponent
         try
         {
             int instructionId = session.Transcript.CurrentInstructionId + 1;
-            string confirmationReport = session.PeekGoalConfirmationReport(objective);
-            string reply = await session.SendAsync(
+            string? confirmationReport = session.PeekGoalConfirmationReport(objective);
+            string? reply = await session.SendAsync(
                 GoalProgress.BuildPrompt(objective, confirmationReport, _goalNeedsVerification, _goalAuditNote),
                 goalRun: true, displayText: objective, cancellationToken: cts.Token);
             if (reply != null && confirmationReport != null) session.TakeGoalConfirmationReport(objective);
@@ -179,7 +177,7 @@ public partial class RimAgentGameComponent
                 _goalTurns, _goalBlockedTurns, reply, session.HasPendingConfirmation, hasToolEvidence,
                 _goalBlockerKey, _goalIdleTurns, usedTool);
 
-            GoalAuditResult audit = await EvaluateGoalAuditAsync(
+            GoalAuditResult? audit = await EvaluateGoalAuditAsync(
                 session, entries, instructionId, objective, reply, decision, cts);
 
             // 等待審計期間玩家可能編輯、刪除或暫停目標；即使是同一個字串也不能沿用舊結果。
@@ -211,14 +209,14 @@ public partial class RimAgentGameComponent
     }
 
     #pragma warning disable VSTHRD202 // 保留 async：整理工具證據的例外要放進 Task，與稽核失敗走同一條處理路徑。
-    private async Task<GoalAuditResult> EvaluateGoalAuditAsync(
+    private async Task<GoalAuditResult?> EvaluateGoalAuditAsync(
         ColonyAgentSession session, IReadOnlyList<TranscriptEntry> entries, int instructionId,
-        string objective, string reply, GoalTurnDecision decision, CancellationTokenSource cts)
+        string objective, string? reply, GoalTurnDecision decision, CancellationTokenSource cts)
     {
         // 審計只能否決完成：沒有工具證據的「完成」在 AfterTurn 就不算完成，也不送審計升級。
         // 有待確認的命令時目標還沒走完，稽核只會看到半截的結果：不稽核。
         if (reply == null || session.HasPendingConfirmation || !decision.Complete) return null;
-        DecisionGoalAuditor auditor = GoalAuditor;
+        DecisionGoalAuditor? auditor = GoalAuditor;
         if (auditor == null) return null;
         string toolEvidence = GoalProgress.BuildAuditEvidence(entries, instructionId);
         // 稽核回來後要繼續在主線程處理目標狀態；切到執行緒池會讓後續的存檔／UI 更新離開主線程。
@@ -275,7 +273,7 @@ public partial class RimAgentGameComponent
             && !e.Failed && !(e.Result ?? string.Empty).StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal));
     }
 
-    internal void HandleGoalDecision(ColonyAgentSession session, string objective, string reply, GoalTurnDecision decision)
+    internal void HandleGoalDecision(ColonyAgentSession session, string objective, string? reply, GoalTurnDecision decision)
     {
         _goalTurns = decision.Turns;
         _goalBlockedTurns = decision.BlockedTurns;
@@ -320,7 +318,7 @@ public partial class RimAgentGameComponent
     internal void HandleAuditedGoalDecision(
         ColonyAgentSession session,
         string objective,
-        string reply,
+        string? reply,
         GoalTurnDecision decision,
         GoalAuditResult audit,
         GoalAuditVerdict verdict)
@@ -389,7 +387,7 @@ public partial class RimAgentGameComponent
         });
     }
 
-    private void ApplyAuditContinue(ColonyAgentSession session, string objective, string reply, GoalTurnDecision decision, GoalAuditResult audit)
+    private void ApplyAuditContinue(ColonyAgentSession session, string objective, string? reply, GoalTurnDecision decision, GoalAuditResult audit)
     {
         // 稽核否決完成不等於把原本的暫停條件吃掉：回合上限、連續阻礙、連續沒有
         // 有效工具行動都要照原樣暫停，否則目標可能一直空轉。
@@ -438,7 +436,7 @@ public partial class RimAgentGameComponent
 
     private static void DetermineGoalPauseDetails(
         GoalTurnDecision decision,
-        string reply,
+        string? reply,
         string objective,
         out GoalPauseReason reason,
         out string noticeText)

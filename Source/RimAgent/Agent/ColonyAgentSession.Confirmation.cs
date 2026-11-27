@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -25,13 +23,13 @@ public sealed partial class ColonyAgentSession
     /// 只記工具名稱，重開遊戲即失效；MCP 工具永遠不記。
     /// </param>
     /// <returns>執行結果文字；若無等待中的確認則為 null。</returns>
-    public async Task<string> ConfirmAsync(bool rememberForSession = false, CancellationToken cancellationToken = default)
+    public async Task<string?> ConfirmAsync(bool rememberForSession = false, CancellationToken cancellationToken = default)
     {
         if (!TryBeginExclusiveWork())
         {
             throw new AgentBusyException();
         }
-        string text = _pendingConfirmation;
+        string? text = _pendingConfirmation;
         if (text == null || !ConfirmGate.HasPendingApprovals)
         {
             EndExclusiveWork();
@@ -45,7 +43,7 @@ public sealed partial class ColonyAgentSession
             Mode = Mode.ToString(),
             Source = "confirmation"
         });
-        string goalObjective = _pendingGoalObjective;
+        string? goalObjective = _pendingGoalObjective;
         string confirmOutcome = "confirmation_failed";
         try
         {
@@ -84,7 +82,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    private void ReportConfirmation(string text, TranscriptKind kind, AgentErrorKind errorKind, string goalObjective, int instructionId)
+    private void ReportConfirmation(string text, TranscriptKind kind, AgentErrorKind errorKind, string? goalObjective, int instructionId)
     {
         if (goalObjective != null)
         {

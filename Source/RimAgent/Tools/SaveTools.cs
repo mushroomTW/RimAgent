@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -21,10 +19,10 @@ public sealed class SaveTools
     private const int MaxLessonChars = 1000;
 
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
     private readonly SaveLedger _ledger;
 
-    public SaveTools(IGameWorld world, ConfirmationGate gate = null, SaveLedger ledger = null)
+    public SaveTools(IGameWorld world, ConfirmationGate? gate = null, SaveLedger? ledger = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -53,7 +51,7 @@ public sealed class SaveTools
             sb.Append("- ").Append(save.Name).Append(save.Checkpoint ? " [checkpoint]" : " [autosave]")
                 .Append(": ").Append(FormatTime(save.Tick, context.Tick))
                 .Append(", reloads used ").Append(_ledger.LoadsOf(save)).Append('/').Append(SaveLedger.MaxLoadsPerSave);
-            string refusal = LoadRefusal(save, saves);
+            string? refusal = LoadRefusal(save, saves);
             sb.AppendLine(refusal == null ? ", can be loaded" : ", locked: " + refusal);
         }
         return sb.ToString().TrimEnd();
@@ -65,11 +63,11 @@ public sealed class SaveTools
     public async Task<string> SaveGame()
     {
         SaveContext context = _world.GetSaveContext();
-        string refusal = SaveRefusal(context);
+        string? refusal = SaveRefusal(context);
         if (refusal != null) return ToolText.Error(refusal);
 
         string name = CheckpointName(context.ColonyId, context.Tick);
-        string blocked = ToolText.Blocked(_gate, $"would save checkpoint {name}.");
+        string? blocked = ToolText.Blocked(_gate, $"would save checkpoint {name}.");
         if (blocked != null) return blocked;
 
         return await CreateCheckpointAsync(context);
@@ -89,17 +87,17 @@ public sealed class SaveTools
         SaveContext context = _world.GetSaveContext();
         if (context.Permadeath) return ToolText.Error("this is a commitment-mode game; it cannot be reloaded.");
         List<SaveSlotInfo> saves = await ColonySavesAsync(context);
-        SaveSlotInfo target = saves.FirstOrDefault(s => string.Equals(s.Name, (save ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase));
+        SaveSlotInfo? target = saves.FirstOrDefault(s => string.Equals(s.Name, (save ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase));
         if (target == null)
         {
             string known = saves.Count == 0 ? "none" : string.Join(", ", saves.Select(s => s.Name));
             return ToolText.Error($"no save of this colony named '{save}'. Saves: {known}.");
         }
-        string refusal = LoadRefusal(target, saves);
+        string? refusal = LoadRefusal(target, saves);
         if (refusal != null) return ToolText.Error($"{target.Name} cannot be loaded: {refusal}.");
 
         int attempt = _ledger.LoadsOf(target) + 1;
-        string blocked = ToolText.Blocked(_gate,
+        string? blocked = ToolText.Blocked(_gate,
             string.Create(CultureInfo.InvariantCulture, $"would reload {target.Name} ({FormatTime(target.Tick, context.Tick)}), attempt {attempt}/{SaveLedger.MaxLoadsPerSave}; everything after it is lost."));
         if (blocked != null) return blocked;
 
@@ -131,7 +129,7 @@ public sealed class SaveTools
         return $"Saved checkpoint {name}.";
     }
 
-    internal string SaveRefusal(SaveContext context)
+    internal string? SaveRefusal(SaveContext context)
     {
         if (context.Permadeath) return "this is a commitment-mode game; the game manages its only save";
         if (context.SavingBlockedReason != null) return "the game cannot save right now: " + context.SavingBlockedReason;
@@ -141,9 +139,9 @@ public sealed class SaveTools
         return null;
     }
 
-    private string LoadRefusal(SaveSlotInfo save, IReadOnlyList<SaveSlotInfo> colonySaves)
+    private string? LoadRefusal(SaveSlotInfo save, IReadOnlyList<SaveSlotInfo> colonySaves)
     {
-        SaveSlotInfo blocker = _ledger.ExhaustedBlocker(save, colonySaves);
+        SaveSlotInfo? blocker = _ledger.ExhaustedBlocker(save, colonySaves);
         if (blocker == null) return null;
         return ReferenceEquals(blocker, save)
             ? $"all {SaveLedger.MaxLoadsPerSave} reloads used; accept the loss and keep playing"

@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,24 +13,24 @@ public sealed class DecisionRiskChecker : IRiskChecker
     public const double AuthorizedThreshold = 0.7;
     private static readonly string[] _newlineSplit = ["\r\n", "\r", "\n"];
 
-    private readonly IDecisionService _decisionService;
-    private readonly Func<IDecisionService> _serviceFactory;
-    private readonly IRiskChecker _fallback;
-    private readonly Func<string> _criteriaProvider;
-    private readonly Func<IReadOnlyList<ChatMessage>> _historyProvider;
+    private readonly IDecisionService? _decisionService;
+    private readonly Func<IDecisionService?>? _serviceFactory;
+    private readonly IRiskChecker? _fallback;
+    private readonly Func<string?>? _criteriaProvider;
+    private readonly Func<IReadOnlyList<ChatMessage>?>? _historyProvider;
     private readonly InstructionCache<RiskVerdict> _verdictCache = new();
     // 判準與解析結果放同一個不可變物件整個換掉，避免並行時讀到新判準配舊計畫。
     private sealed record ParsedPlan(string Criteria, DecisionPlan Plan);
-    private volatile ParsedPlan _parsed;
+    private volatile ParsedPlan? _parsed;
     private bool _decisionFailed;
 
     /// <param name="serviceFactory">執行期建立決策服務；回 null 代表玩家還沒設定決策模型。</param>
     public DecisionRiskChecker(
-        IDecisionService decisionService = null,
-        IRiskChecker fallback = null,
-        Func<string> decisionRiskCriteria = null,
-        Func<IDecisionService> serviceFactory = null,
-        Func<IReadOnlyList<ChatMessage>> historyProvider = null)
+        IDecisionService? decisionService = null,
+        IRiskChecker? fallback = null,
+        Func<string?>? decisionRiskCriteria = null,
+        Func<IDecisionService?>? serviceFactory = null,
+        Func<IReadOnlyList<ChatMessage>?>? historyProvider = null)
     {
         _historyProvider = historyProvider;
         _decisionService = decisionService;
@@ -48,7 +46,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
         ArgumentNullException.ThrowIfNull(question);
 
         string cacheKey = RiskClassifier.BuildCacheKey(question);
-        if (_verdictCache.TryGet(cacheKey, out RiskVerdict cached)) return cached;
+        if (_verdictCache.TryGet(cacheKey, out RiskVerdict? cached)) return cached;
 
         // 這句指令已經試過並失敗：不再重試決策模型。
         if (_decisionFailed)
@@ -57,9 +55,9 @@ public sealed class DecisionRiskChecker : IRiskChecker
         }
 
         // 還沒設定決策模型（框架沒啟用供應商、或框架太舊）：不算失敗，下一句還可以再試。
-        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
-        DecisionPlan plan = service == null ? null : CurrentPlan();
-        if (plan == null)
+        IDecisionService? service = _decisionService ?? _serviceFactory?.Invoke();
+        DecisionPlan? plan = service == null ? null : CurrentPlan();
+        if (service == null || plan == null)
         {
             return await FallbackAsync(question, cacheKey, decisionAttempted: false, cancellationToken).ConfigureAwait(false);
         }
@@ -83,8 +81,8 @@ public sealed class DecisionRiskChecker : IRiskChecker
         }
 
         if (result == null ||
-            !result.TryGet("risk", out DecisionAnswer riskAnswer) || riskAnswer?.Probability == null ||
-            !result.TryGet("authorized", out DecisionAnswer authAnswer) || authAnswer?.Probability == null)
+            !result.TryGet("risk", out DecisionAnswer? riskAnswer) || riskAnswer.Probability == null ||
+            !result.TryGet("authorized", out DecisionAnswer? authAnswer) || authAnswer.Probability == null)
         {
             _decisionFailed = true;
             return await FallbackAsync(question, cacheKey, decisionAttempted: true, cancellationToken).ConfigureAwait(false);
@@ -95,9 +93,9 @@ public sealed class DecisionRiskChecker : IRiskChecker
         return verdict;
     }
 
-    private DecisionPlan CurrentPlan()
+    private DecisionPlan? CurrentPlan()
     {
-        string criteria = _criteriaProvider?.Invoke();
+        string? criteria = _criteriaProvider?.Invoke();
         if (string.IsNullOrWhiteSpace(criteria)) return null;
         DecisionPlan plan = ResolvePlan(criteria);
         return plan.IsEmpty ? null : plan;
@@ -109,7 +107,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
         bool authorized = pAuth >= AuthorizedThreshold;
 
         string kind = string.Empty;
-        if (result.TryGet("kind", out DecisionAnswer kindAnswer) && !string.IsNullOrWhiteSpace(kindAnswer.Value))
+        if (result.TryGet("kind", out DecisionAnswer? kindAnswer) && !string.IsNullOrWhiteSpace(kindAnswer.Value))
         {
             kind = kindAnswer.Value.Trim();
         }
@@ -151,7 +149,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
 
     private DecisionPlan ResolvePlan(string criteria)
     {
-        ParsedPlan current = _parsed;
+        ParsedPlan? current = _parsed;
         if (current == null || !string.Equals(current.Criteria, criteria, StringComparison.Ordinal))
         {
             current = new ParsedPlan(criteria, ParsePlan(criteria));
@@ -171,8 +169,8 @@ public sealed class DecisionRiskChecker : IRiskChecker
                 // 從沒試過決策模型（玩家還沒設定）就只是走 LLM 分類器，不是「決策失敗後的退路」。
                 if (decisionAttempted) verdict.Source = "fallback";
                 if (!verdict.Failed) _verdictCache.Store(cacheKey, verdict);
+                return verdict;
             }
-            return verdict;
         }
 
         return new RiskVerdict
@@ -194,7 +192,7 @@ public sealed class DecisionRiskChecker : IRiskChecker
     }
 
     /// <summary>支援 ## risk、## authorized、## kind 三個區段，缺漏時以內建預設值兜底；判準文字與提示詞檔一致用英文，因為它要送給決策模型。</summary>
-    public static DecisionPlan ParsePlan(string markdown)
+    public static DecisionPlan ParsePlan(string? markdown)
     {
         if (string.IsNullOrWhiteSpace(markdown)) return DecisionPlan.Of();
 
@@ -210,10 +208,10 @@ public sealed class DecisionRiskChecker : IRiskChecker
         Dictionary<string, string> kindOptions = DefaultKindOptions();
 
         string[] lines = markdown.Split(_newlineSplit, StringSplitOptions.None);
-        string currentSection = null;
+        string? currentSection = null;
         var sectionLines = new List<string>();
 
-        void ProcessSection(string section, List<string> slines)
+        void ProcessSection(string? section, List<string> slines)
         {
             if (string.IsNullOrEmpty(section)) return;
             string key = section.Trim().ToLowerInvariant();

@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -15,13 +13,13 @@ namespace RimAgent;
 
 public partial class RimAgentMod
 {
-    private static bool IsDecisionReady(DecisionAvailability availability)
+    private static bool IsDecisionReady(DecisionAvailability? availability)
     {
         return availability != null && availability.Enabled && !string.IsNullOrWhiteSpace(availability.Model)
             && (!availability.RequiresKey || availability.HasKey);
     }
 
-    private static void DrawDecisionStatus(Listing_Standard listing, DecisionAvailability availability)
+    private static void DrawDecisionStatus(Listing_Standard listing, DecisionAvailability? availability)
     {
         string statusText;
         bool ok = false;
@@ -35,8 +33,9 @@ public partial class RimAgentMod
         }
         else
         {
-            string prov = string.IsNullOrEmpty(Settings.decisionProvider) ? availability.ProviderId : Settings.decisionProvider;
-            string mdl = string.IsNullOrEmpty(Settings.decisionModel) ? (availability.Model ?? "default") : Settings.decisionModel;
+            RimAgentSettings? settings = Settings;
+            string prov = string.IsNullOrEmpty(settings?.decisionProvider) ? availability.ProviderId : settings.decisionProvider;
+            string mdl = string.IsNullOrEmpty(settings?.decisionModel) ? (availability.Model ?? "default") : settings.decisionModel;
             statusText = "RimAgent.Settings.DecisionStatusEnabled".Translate(prov, mdl);
             ok = true;
         }
@@ -59,7 +58,7 @@ public partial class RimAgentMod
 
     private static bool DrawDecisionSettings(Listing_Standard listing)
     {
-        DecisionAvailability availability = DecisionServiceFactory.GetAvailability();
+        DecisionAvailability? availability = DecisionServiceFactory.GetAvailability();
 
         DrawDecisionProviderRow(listing);
 
@@ -69,34 +68,36 @@ public partial class RimAgentMod
 
     private static void DrawDecisionProviderRow(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         // 這裡只讓玩家選擇「本模組不使用決策模型」；關掉後整段隱藏，可在主頁的決策模型開關重新啟用。
-        DrawDecisionDropdownRow(listing, "RimAgent.Settings.DecisionProvider", Settings.decisionProvider, "RimAgent.Settings.DecisionProviderTip",
+        DrawDecisionDropdownRow(listing, "RimAgent.Settings.DecisionProvider", settings.decisionProvider, "RimAgent.Settings.DecisionProviderTip",
             () =>
             [
-                new(DecisionDefaultKey.Translate(), () => Settings.decisionProvider = string.Empty),
-                new("RimAgent.Settings.DecisionProviderNone".Translate(), () => Settings.decisionEnabled = false)
+                new(DecisionDefaultKey.Translate(), () => settings.decisionProvider = string.Empty),
+                new("RimAgent.Settings.DecisionProviderNone".Translate(), () => settings.decisionEnabled = false)
             ]);
     }
 
     /// <summary>決策模型下拉：只列框架給出的模型（玩家在 RimLLM 決策分頁設定的那個），不另外向伺服器拉清單。</summary>
-    private static void DrawDecisionModelRow(Listing_Standard listing, DecisionAvailability availability)
+    private static void DrawDecisionModelRow(Listing_Standard listing, DecisionAvailability? availability)
     {
-        DrawDecisionDropdownRow(listing, "RimAgent.Settings.DecisionModel", Settings.decisionModel, "RimAgent.Settings.DecisionModelTip", () =>
+        if (Settings is not { } settings) return;
+        DrawDecisionDropdownRow(listing, "RimAgent.Settings.DecisionModel", settings.decisionModel, "RimAgent.Settings.DecisionModelTip", () =>
         {
             var options = new List<FloatMenuOption>
             {
-                new(DecisionDefaultKey.Translate(), () => Settings.decisionModel = string.Empty)
+                new(DecisionDefaultKey.Translate(), () => settings.decisionModel = string.Empty)
             };
-            string frameworkModel = availability?.Enabled == true ? availability.Model : null;
+            string? frameworkModel = availability?.Enabled == true ? availability.Model : null;
             if (!string.IsNullOrEmpty(frameworkModel))
             {
-                options.Add(new FloatMenuOption(frameworkModel, () => Settings.decisionModel = frameworkModel));
+                options.Add(new FloatMenuOption(frameworkModel, () => settings.decisionModel = frameworkModel));
             }
             return options;
         });
     }
 
-    private static void DrawDecisionDropdownRow(Listing_Standard listing, string labelKey, string current, string tipKey, Func<List<FloatMenuOption>> options)
+    private static void DrawDecisionDropdownRow(Listing_Standard listing, string labelKey, string? current, string tipKey, Func<List<FloatMenuOption>> options)
     {
         const float labelWidth = 160f;
         Rect row = listing.GetRect(28f);
@@ -151,17 +152,18 @@ public partial class RimAgentMod
 
     private static void DrawDecisionRoutingSettings(Listing_Standard listing)
     {
+        if (Settings is not { } settings) return;
         listing.Label(
-            "RimAgent.Settings.DecisionMinConfidence".Translate(Settings.decisionRoutingMinConfidence.ToString("P0", CultureInfo.CurrentCulture)),
+            "RimAgent.Settings.DecisionMinConfidence".Translate(settings.decisionRoutingMinConfidence.ToString("P0", CultureInfo.CurrentCulture)),
             -1f,
             "RimAgent.Settings.DecisionMinConfidenceTip".Translate());
-        Settings.decisionRoutingMinConfidence = listing.Slider(Settings.decisionRoutingMinConfidence, 0f, 1f);
+        settings.decisionRoutingMinConfidence = listing.Slider(settings.decisionRoutingMinConfidence, 0f, 1f);
 
         DrawReasoningRow(
             listing,
             "RimAgent.Settings.DecisionFallbackReasoning".Translate(),
-            () => Settings.decisionFallbackReasoning,
-            v => Settings.decisionFallbackReasoning = v,
+            () => settings.decisionFallbackReasoning,
+            v => settings.decisionFallbackReasoning = v,
             "RimAgent.Settings.DecisionFallbackReasoningTip".Translate());
     }
 }

@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -96,24 +94,24 @@ public partial class Window_Agent : Window
     private struct TranscriptLine
     {
         public LineKind Kind;
-        public string Text;
-        public string PlainText;
+        public string? Text;
+        public string? PlainText;
         public float Height;
         public float BubbleWidth;
-        public string ImagePath;
+        public string? ImagePath;
         /// <summary>這行屬於哪筆紀錄；ToolHeader 點擊時靠它找出同一筆的所有行，只重排那一筆。</summary>
-        public TranscriptEntry Entry;
+        public TranscriptEntry? Entry;
         /// <summary>ToolGroupHeader 專用：這組的第一筆工具紀錄，同時是展開狀態的鍵。</summary>
-        public TranscriptEntry GroupFirst;
+        public TranscriptEntry? GroupFirst;
         /// <summary>工具摘要列或群組摘要列後面畫盾牌：決策模型審過這次（或這組裡的）工具呼叫。</summary>
         public bool Reviewed;
         public bool TurnStart;
-        public RimLLM_Framework.Mod.RimLLMMarkdownTable Table;
+        public RimLLM_Framework.Mod.RimLLMMarkdownTable? Table;
     }
 
     private static readonly List<string> InputHistory = [];
-    private static Texture2D _iconTex;
-    private static Texture2D _discTex;
+    private static Texture2D? _iconTex;
+    private static Texture2D? _discTex;
     private static Texture2D IconTex => _iconTex ??= LoadedModManager.GetMod<RimAgentMod>()?.Content?.ModMetaData?.Icon
         ?? ContentFinder<Texture2D>.Get("UI/Buttons/MainButtons/RimAgent");
 
@@ -127,10 +125,10 @@ public partial class Window_Agent : Window
     private Vector2 _avatarPos;
     private Vector2 _laidOutPos;
     private bool _bubbleOnLeft = true;
-    private string _bubbleText;
+    private string? _bubbleText;
     private int _bubbleState = -1;
-    private AgentActivity _bubbleActivity;
-    private string _bubbleMeasuredText;
+    private AgentActivity? _bubbleActivity;
+    private string? _bubbleMeasuredText;
     private float _bubbleWidth;
 
     private string _input = string.Empty;
@@ -139,8 +137,8 @@ public partial class Window_Agent : Window
 
     private sealed class PastedImage
     {
-        public byte[] Jpeg;
-        public Texture2D Thumbnail;
+        public required byte[] Jpeg;
+        public required Texture2D Thumbnail;
     }
 
     private readonly List<PastedImage> _pastedImages = new();
@@ -154,7 +152,7 @@ public partial class Window_Agent : Window
     private readonly Dictionary<TranscriptEntry, bool> _toolExpanded = [];
     private readonly Dictionary<TranscriptEntry, bool> _groupExpanded = [];
     // 逐步排版時正在累積的連續工具群組；逐字稿重排時歸零。
-    private TranscriptEntry _groupFirst;
+    private TranscriptEntry? _groupFirst;
     private int _groupHeaderIndex = -1;
     private int _groupCount;
     private int _groupFailed;
@@ -168,9 +166,9 @@ public partial class Window_Agent : Window
     /// <summary>最近用到的排在最後；繪製時會把用到的移到最後，淘汰從最前面開始。</summary>
     private readonly List<string> _screenshotOrder = [];
     private readonly Dictionary<string, int> _screenshotFailedAt = new(StringComparer.OrdinalIgnoreCase);
-    private string _pendingScreenshot;
-    private string _readingScreenshot;
-    private Task<byte[]> _screenshotRead;
+    private string? _pendingScreenshot;
+    private string? _readingScreenshot;
+    private Task<byte[]?>? _screenshotRead;
     // 每個 IMGUI 事件都會重畫；帶參數的翻譯字串只在值變了才重組，免得每幀配置一堆字串。
     private readonly TextCache<AgentMode> _modeLabel = new();
     private readonly TextCache<int> _reasoningLabel = new();
@@ -178,14 +176,14 @@ public partial class Window_Agent : Window
     private TextCache<string> _modelLabel = new();
     private float _modelLabelWidth = -1f;
     private readonly TextCache<int> _autoUsageLabel = new();
-    private AgentActivity _workingActivity;
+    private AgentActivity? _workingActivity;
     private int _workingPhase = -1;
-    private string _workingText;
+    private string? _workingText;
     private readonly TextCache<bool> _jumpLabel = new();
-    private string _toolToggleTip;
+    private string? _toolToggleTip;
     private float _workingHeight;
     private float _workingHeightWidth = -1f;
-    private string _workingHeightText;
+    private string? _workingHeightText;
     private float _settlingWidth = -1f;
     private int _settlingSince;
     private float _linesTotal;
@@ -193,11 +191,11 @@ public partial class Window_Agent : Window
     private int _linesEntryCount = -1;
     private int _linesTranscriptVersion = -1;
     private int _linesTranscriptEpoch = -1;
-    private AgentTranscript _linesTranscript;
+    private AgentTranscript? _linesTranscript;
     private readonly HashSet<int> _combatNoted = [];
-    private string _capabilityWarning;
+    private string? _capabilityWarning;
     private DateTime _nextCapabilityProbe;
-    private CancellationTokenSource _cts;
+    private CancellationTokenSource? _cts;
     /// <summary>被新一輪取代、但舊工作可能還在跑的 CTS 與其工作；停止時一併取消，工作結束後釋放。</summary>
     private readonly List<(CancellationTokenSource Cts, Task Work)> _retiredCts = [];
     private int _slashIndex;
@@ -205,8 +203,8 @@ public partial class Window_Agent : Window
     private bool _posInitialized;
     // 發射後不管的請求：async 方法的 throw 變成 faulted Task，同步 try/catch 抓不到，
     // 這裡在主線程逐幀收割，faulted 才補忙碌提示（Translate 只能在主線程呼叫）。
-    private Task _observedTask;
-    private ColonyAgentSession _observedSession;
+    private Task? _observedTask;
+    private ColonyAgentSession? _observedSession;
 
     protected override float Margin => 0f;
 
@@ -252,7 +250,7 @@ public partial class Window_Agent : Window
 
     public static void Toggle()
     {
-        Window_Agent existing = Find.WindowStack.WindowOfType<Window_Agent>();
+        Window_Agent? existing = Find.WindowStack.WindowOfType<Window_Agent>();
         if (existing is { _collapsed: true })
         {
             existing.Expand();
@@ -275,7 +273,7 @@ public partial class Window_Agent : Window
 
     protected override void SetInitialSizeAndPosition()
     {
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings? settings = RimAgentMod.Settings;
         windowRect = settings != null
             ? settings.GetWindowBounds(Verse.UI.screenWidth, Verse.UI.screenHeight)
             : new Rect(10f, 40f, RimAgentSettings.DefaultWindowWidth, RimAgentSettings.DefaultWindowHeight);
@@ -350,7 +348,7 @@ public partial class Window_Agent : Window
 
         DrawCustomWindowFrame(inRect);
 
-        RimAgentGameComponent component = RimAgentGameComponent.Instance;
+        RimAgentGameComponent? component = RimAgentGameComponent.Instance;
         if (component == null || Find.CurrentMap == null)
         {
             var emptyRect = inRect.ContractedBy(12f);

@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -35,7 +33,7 @@ public sealed partial class ColonyAgentSession
     // 所以刻意不實作 IDisposable：DelegatingChatClient.Dispose 會連內層一起釋放。
     private readonly ChatClientAgent _agent;
     private readonly RunOptionsCapture _runOptions;
-    private readonly FunctionInvokingChatClient _invoking;
+    private readonly FunctionInvokingChatClient? _invoking;
     private readonly AIFunction _toolPackLoader;
     /// <summary>run_script：一步依序執行多個工具呼叫；只給主 Agent。</summary>
     private readonly AIFunction _scriptRunner;
@@ -60,27 +58,27 @@ public sealed partial class ColonyAgentSession
     private readonly AgentMemoryStore _memory;
     private readonly PlayerInterjections _interjections = new();
     private readonly FailureLoopGuard _loopGuard;
-    private readonly Func<string> _instructions;
-    private AgentSession _session;
+    private readonly Func<string?>? _instructions;
+    private AgentSession? _session;
     private long _instructionTokens;
     private bool _tokenBudgetReached;
-    private string _serializedSession;
+    private string? _serializedSession;
     /// <summary>每句指令結束時備妥的存檔內容；存檔直接取用，不在主線程序列化，也不因忙碌而漏存。</summary>
-    private string _saveSnapshot;
+    private string? _saveSnapshot;
     private bool _snapshotWarningShown;
     private int _busy;
     private int _maxSteps;
-    private RunLog _activeRunLog;
+    private RunLog? _activeRunLog;
     private bool _runLogWarningShown;
 
     /// <summary>可選的獨立執行紀錄；預設不記錄，由遊戲設定決定。</summary>
-    public Func<bool> RunLoggingEnabled { get; set; }
-    public RunLogWriter RunLogs { get; set; }
+    public Func<bool>? RunLoggingEnabled { get; set; }
+    public RunLogWriter? RunLogs { get; set; }
 
-    public ToolUsageStats ToolUsage { get; set; }
+    public ToolUsageStats? ToolUsage { get; set; }
 
     /// <summary>單句指令（含子代理）的 token 上限；0 為不限。</summary>
-    public Func<long> InstructionTokenBudget { get; set; }
+    public Func<long>? InstructionTokenBudget { get; set; }
 
     /// <param name="innerClient">框架交出的 IChatClient（測試時為假 client）；這裡再包上工具迴圈。</param>
     /// <param name="permissions">每次送出時讀取的權限，讓設定頁的變更下一句立即生效。</param>
@@ -98,7 +96,7 @@ public sealed partial class ColonyAgentSession
     /// <param name="decisionService">測試用決策模型服務；null 則透過 DecisionServiceFactory 建立。</param>
     /// <param name="router">測試用決策模型分流器；null 則透過 DecisionServiceFactory 建立。</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S107:Methods should not have too many parameters", Justification = "DI constructor with optional dependencies for testing")]
-    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode> mode = null, Func<string> instructions = null, McpManager mcp = null, IChatClient classifierClient = null, Func<string> classifierModel = null, Func<string> classifierPrompt = null, Func<string, int?> contextWindowLookup = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skillsProvider = null, Func<IReadOnlyList<AgentSubagent>> subagentsProvider = null, ModelRouting routing = null, Func<string> decisionRiskCriteria = null, IDecisionService decisionService = null, DecisionReasoningRouter router = null, Func<string, bool?> visionLookup = null, Func<string, int?> outputLimitLookup = null)
+    public ColonyAgentSession(IChatClient innerClient, IGameWorld world, Func<ToolPermissions> permissions, int maxSteps, Func<AgentMode>? mode = null, Func<string?>? instructions = null, McpManager? mcp = null, IChatClient? classifierClient = null, Func<string?>? classifierModel = null, Func<string?>? classifierPrompt = null, Func<string, int?>? contextWindowLookup = null, AgentMemoryStore? memory = null, Func<bool>? useLocalSearch = null, Func<string>? searxngUrl = null, Func<IReadOnlyList<AgentSkill>>? skillsProvider = null, Func<IReadOnlyList<AgentSubagent>>? subagentsProvider = null, ModelRouting? routing = null, Func<string?>? decisionRiskCriteria = null, IDecisionService? decisionService = null, DecisionReasoningRouter? router = null, Func<string, bool?>? visionLookup = null, Func<string, int?>? outputLimitLookup = null)
     {
         ArgumentNullException.ThrowIfNull(innerClient);
         ArgumentNullException.ThrowIfNull(world);
@@ -155,11 +153,11 @@ public sealed partial class ColonyAgentSession
     /// <summary>風險分類器；有判準檔時外包一層決策模型，決策模型不可用時退回分類器。</summary>
     private static IRiskChecker CreateRiskChecker(
         IChatClient classifierClient,
-        Func<string> classifierModel,
-        Func<string> classifierPrompt,
-        ModelRouting routing,
-        Func<string> decisionRiskCriteria,
-        IDecisionService decisionService,
+        Func<string?>? classifierModel,
+        Func<string?>? classifierPrompt,
+        ModelRouting? routing,
+        Func<string?>? decisionRiskCriteria,
+        IDecisionService? decisionService,
         Func<IReadOnlyList<ChatMessage>> history)
     {
         // 分類器自己設模型（classifierModel），思考強度由模型槽包裝補上。
@@ -203,14 +201,14 @@ public sealed partial class ColonyAgentSession
         Dictionary<string, string> results = new(StringComparer.Ordinal);
         foreach (FunctionResultContent result in group.Messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>())
         {
-            results[result.CallId] = result.Result?.ToString() ?? string.Empty;
+            if (result.CallId != null) results[result.CallId] = result.Result?.ToString() ?? string.Empty;
         }
         var sb = new StringBuilder("[Tool Calls] (older results shortened; look things up again if the details matter, but do not repeat commands that already ran)");
         foreach (FunctionCallContent call in group.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>())
         {
             string arguments = call.Arguments == null ? string.Empty
                 : string.Join(", ", call.Arguments.Select(a => a.Key + "=" + a.Value));
-            string result = results.GetValueOrDefault(call.CallId, string.Empty);
+            string result = call.CallId != null && results.TryGetValue(call.CallId, out string? found) ? found : string.Empty;
             string shown = ToolText.TruncateField(result, FoldedResultChars);
             sb.Append('\n').Append(call.Name).Append('(').Append(ToolText.TruncateField(arguments, FoldedArgumentChars)).Append("): ").Append(shown);
             Match saved = SavedOutput.Match(result);
@@ -223,9 +221,9 @@ public sealed partial class ColonyAgentSession
     /// <summary>經行動紀錄包裝：展開會出現在對話裡，也能順帶送達玩家插話；不碰遊戲世界，不扣自主模式的工具額度。</summary>
     private LoggingAIFunction CreateToolPackLoader(IGameWorld world)
     {
+        var tools = new ToolPackTools(LoadToolPack);
         return new LoggingAIFunction(
-            AIFunctionFactory.Create(typeof(ToolPackTools).GetMethod(nameof(ToolPackTools.LoadToolpack)),
-                new ToolPackTools(LoadToolPack), ToolPackTools.ToolName, description: null, serializerOptions: null),
+            AIFunctionFactory.Create(tools.LoadToolpack, ToolPackTools.ToolName),
             Transcript, world, ToolCategory.Observe, ToolRisk.Query, ConfirmGate, classifier: null, _registry.Outputs, _interjections,
             consumesBudget: false, activity: Activity);
     }
@@ -233,8 +231,8 @@ public sealed partial class ColonyAgentSession
     /// <summary>腳本工具：每步呼叫登錄表裡的原工具（含未公告的工具包），照常受權限、模式、閘門與紀錄管控。</summary>
     private AIFunction CreateScriptRunner()
     {
-        return AIFunctionFactory.Create(typeof(ScriptTools).GetMethod(nameof(ScriptTools.RunScript)),
-            new ScriptTools(() => _registry.Select(_permissions()), _registry.Outputs, _interjections), ScriptTools.ToolName, description: null, serializerOptions: null);
+        var tools = new ScriptTools(() => _registry.Select(_permissions()), _registry.Outputs, _interjections);
+        return AIFunctionFactory.Create(tools.RunScript, ScriptTools.ToolName);
     }
 
     /// <summary>建構時不綁 tools（每輪經 RunOptions 傳，權限變更下一句生效）。提示詞只走 run 層 Instructions：AF 1.28 的 ChatClientAgent 會把 agent 層與 run 層 Instructions 以換行串接而非覆寫，agent 層再放保底前情會讓它每句重複一次。</summary>
@@ -247,13 +245,13 @@ public sealed partial class ColonyAgentSession
         });
     }
 
-    public string CurrentAgentModel => _tokenUsage.LastModel;
+    public string? CurrentAgentModel => _tokenUsage.LastModel;
 
     public AgentTranscript Transcript { get; }
 
     public AgentActivityTracker Activity { get; } = new AgentActivityTracker();
 
-    public Func<bool> ConfirmAutonomousMajor { get; set; }
+    public Func<bool>? ConfirmAutonomousMajor { get; set; }
 
     public WorkUndoStack Undo { get; }
 
@@ -261,10 +259,10 @@ public sealed partial class ColonyAgentSession
 
     public AgentMode Mode => ConfirmGate.Mode;
 
-    private string _pendingConfirmation;
-    private string _pendingGoalObjective;
-    private string _confirmedGoalObjective;
-    private string _goalConfirmationReport;
+    private string? _pendingConfirmation;
+    private string? _pendingGoalObjective;
+    private string? _confirmedGoalObjective;
+    private string? _goalConfirmationReport;
 
     public bool HasPendingConfirmation => _pendingConfirmation != null;
 
@@ -272,15 +270,15 @@ public sealed partial class ColonyAgentSession
     public bool HasPendingGoalConfirmation => _pendingConfirmation != null && _pendingGoalObjective != null;
 
     /// <summary>查看確認結果但先保留，避免模型請求失敗時遺失。</summary>
-    public string PeekGoalConfirmationReport(string objective)
+    public string? PeekGoalConfirmationReport(string? objective)
     {
         return _confirmedGoalObjective == objective ? _goalConfirmationReport : null;
     }
 
-    public string TakeGoalConfirmationReport(string objective)
+    public string? TakeGoalConfirmationReport(string? objective)
     {
         if (PeekGoalConfirmationReport(objective) == null) return null;
-        string report = _goalConfirmationReport;
+        string? report = _goalConfirmationReport;
         _confirmedGoalObjective = null;
         _goalConfirmationReport = null;
         return report;
@@ -313,8 +311,8 @@ public sealed partial class ColonyAgentSession
     /// 優先使用的模型（"供應商:模型"）；空白代表交給框架備援鏈。每句指令組請求時讀取，由 GameComponent 從設定同步。
     /// 玩家指令、自主任務與 <c>/compact</c> 摘要共用它；風險分類器另走自己的設定。
     /// </summary>
-    private string _preferredModel;
-    public string PreferredModel
+    private string? _preferredModel;
+    public string? PreferredModel
     {
         get => _preferredModel;
         set
@@ -326,7 +324,7 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary>本局 DLC 啟用狀況的一行說明，交給子代理提示詞；主提示詞由 GameComponent 自己組。建立會話時在主線程設定一次。</summary>
-    public string SubagentExpansions
+    public string? SubagentExpansions
     {
         get => _subagents.Expansions;
         set => _subagents.Expansions = value;

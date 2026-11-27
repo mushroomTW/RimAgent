@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -14,7 +12,7 @@ namespace RimAgent.Agent;
 public static class ModelSlots
 {
     /// <summary>空白模型不動 <see cref="ChatOptions.ModelId"/>（交給框架備援鏈），其餘覆寫。</summary>
-    public static void Apply(ChatOptions options, string model, ReasoningLevel reasoning)
+    public static void Apply(ChatOptions options, string? model, ReasoningLevel reasoning)
     {
         ArgumentNullException.ThrowIfNull(options);
         ApplyModel(options, model);
@@ -22,9 +20,9 @@ public static class ModelSlots
     }
 
     /// <summary>指定了具體模型就嚴格釘選，失敗時不改走備援鏈。</summary>
-    public static void ApplyModel(ChatOptions options, string model, bool pin = true)
+    public static void ApplyModel(ChatOptions options, string? model, bool pin = true)
     {
-        string trimmed = model?.Trim();
+        string? trimmed = model?.Trim();
         // 哨兵值不是模型名稱：呼叫端若漏了 ResolveModelSlot，也不能把 =agent／=auto 送進框架。
         if (string.IsNullOrWhiteSpace(trimmed) || RimAgentSettings.IsModelSentinel(trimmed)) return;
         options.ModelId = trimmed;
@@ -32,9 +30,9 @@ public static class ModelSlots
     }
 
     /// <summary>是不是框架釘得住的具體模型（"供應商:模型"）；空白、哨兵值、備援鏈別名與不帶供應商的名稱都不是。</summary>
-    internal static bool IsPinned(string model)
+    internal static bool IsPinned(string? model)
     {
-        string trimmed = model?.Trim();
+        string? trimmed = model?.Trim();
         return !string.IsNullOrEmpty(trimmed)
             && !RimAgentSettings.IsModelSentinel(trimmed)
             && !RimLLMChatOptions.IsFallbackModelId(trimmed)
@@ -86,8 +84,9 @@ public static class ModelSlots
         }
         var carrier = new RimLLMChatOptions();
         set(carrier);
-        if (options.AdditionalProperties == null) options.AdditionalProperties = [];
-        foreach (KeyValuePair<string, object> pair in carrier.AdditionalProperties)
+        if (carrier.AdditionalProperties == null) return;
+        options.AdditionalProperties ??= [];
+        foreach (KeyValuePair<string, object?> pair in carrier.AdditionalProperties)
         {
             options.AdditionalProperties[pair.Key] = pair.Value;
         }
@@ -97,21 +96,21 @@ public static class ModelSlots
 /// <summary>每次呼叫重讀設定，改完下一次生效；任一項為 null 視為「不指定」：模型走呼叫端原設定或框架備援鏈、思考強度為 Auto。</summary>
 public sealed class ModelRouting
 {
-    public Func<bool> ClassifierPinned { get; set; }
-    public Func<ReasoningLevel> ClassifierReasoning { get; set; }
-    public Func<string> CompactModel { get; set; }
-    public Func<ReasoningLevel> CompactReasoning { get; set; }
-    public Func<string, string> SubagentModel { get; set; }
-    public Func<ReasoningLevel> SubagentReasoning { get; set; }
+    public Func<bool>? ClassifierPinned { get; set; }
+    public Func<ReasoningLevel>? ClassifierReasoning { get; set; }
+    public Func<string?>? CompactModel { get; set; }
+    public Func<ReasoningLevel>? CompactReasoning { get; set; }
+    public Func<string, string?>? SubagentModel { get; set; }
+    public Func<ReasoningLevel>? SubagentReasoning { get; set; }
 }
 
 /// <summary>替不接受 ChatOptions 的呼叫端（AF 的摘要策略）或只設了部分選項的呼叫端（分類器）套上模型槽；每次請求重讀槽值。</summary>
 internal sealed class ModelSlotChatClient : DelegatingChatClient
 {
-    private readonly Func<string> _model;
-    private readonly Func<ReasoningLevel> _reasoning;
+    private readonly Func<string?>? _model;
+    private readonly Func<ReasoningLevel>? _reasoning;
 
-    public ModelSlotChatClient(IChatClient innerClient, Func<string> model, Func<ReasoningLevel> reasoning)
+    public ModelSlotChatClient(IChatClient innerClient, Func<string?>? model, Func<ReasoningLevel>? reasoning)
         : base(innerClient)
     {
         _model = model;
@@ -120,7 +119,7 @@ internal sealed class ModelSlotChatClient : DelegatingChatClient
 
     public override Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
-        ChatOptions options = null,
+        ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         return base.GetResponseAsync(messages, Slotted(options), cancellationToken);
@@ -128,14 +127,14 @@ internal sealed class ModelSlotChatClient : DelegatingChatClient
 
     public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
-        ChatOptions options = null,
+        ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         // 串流路徑同樣要套槽值，否則走串流的呼叫端會悄悄略過指定的模型與思考強度。
         return base.GetStreamingResponseAsync(messages, Slotted(options), cancellationToken);
     }
 
-    private ChatOptions Slotted(ChatOptions options)
+    private ChatOptions Slotted(ChatOptions? options)
     {
         // Clone：呼叫端的 options 可能被重用（分類器每次新建，但 AF 摘要策略不保證）。
         ChatOptions slotted = options?.Clone() ?? new ChatOptions();

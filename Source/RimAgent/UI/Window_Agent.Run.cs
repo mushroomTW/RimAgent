@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +16,7 @@ public partial class Window_Agent
     /// <summary>舊 CTS 若還有未完成的工作握著，就先收進 _retiredCts（停止時一併取消）而不 Dispose；工作已結束才安全釋放。</summary>
     private CancellationTokenSource BeginRunCts()
     {
-        CancellationTokenSource old = _cts;
+        CancellationTokenSource? old = _cts;
         if (old != null)
         {
             if (_observedTask == null || _observedTask.IsCompleted) old.Dispose();
@@ -54,15 +52,15 @@ public partial class Window_Agent
 
     private void DrainObservedTask()
     {
-        Task task = _observedTask;
+        Task? task = _observedTask;
         if (task == null || !task.IsCompleted) return;
         _observedTask = null;
-        ColonyAgentSession session = _observedSession;
+        ColonyAgentSession? session = _observedSession;
         _observedSession = null;
         if (task.IsFaulted && session != null)
         {
             // 只有「同幀被自主任務搶先」的忙碌衝突才提示忙碌；其他失敗留下紀錄並顯示一般錯誤。
-            Exception error = task.Exception?.GetBaseException();
+            Exception? error = task.Exception?.GetBaseException();
             if (error is AgentBusyException)
             {
                 Notice(session, "RimAgent.Slash.Busy".Translate());
@@ -120,13 +118,13 @@ public partial class Window_Agent
 
     private void HandleSlashOrSend(ColonyAgentSession session, string text, List<byte[]> images)
     {
-        if (SlashCommands.TryParse(text, out SlashCommand command, out string args))
+        if (SlashCommands.TryParse(text, out SlashCommand? command, out string args))
         {
             if (command != null) RunSlash(session, command, args);
             else Notice(session, "RimAgent.Slash.Unknown".Translate(text));
             return;
         }
-        string display = images.Count == 0 ? null : text + " " + "RimAgent.ImagesAttached".Translate(images.Count);
+        string? display = images.Count == 0 ? null : text + " " + "RimAgent.ImagesAttached".Translate(images.Count);
         Observe(session, session.SendAsync(text, displayText: display, images: images, cancellationToken: BeginRunCts().Token));
     }
 
@@ -134,7 +132,7 @@ public partial class Window_Agent
     {
         _nextCapabilityProbe = DateTime.UtcNow.AddSeconds(2);
         // 框架換掉模型後，清掉 RimAgent 殘留的舊指定，免得繼續打不存在的模型。
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings? settings = RimAgentMod.Settings;
         try
         {
             if (settings != null && settings.ClearMissingModels(ConfiguredModels())) TryWriteSettings(settings);
@@ -177,7 +175,7 @@ public partial class Window_Agent
     {
         // StrictModel 自框架 2026.11.24.2 起才有：先碰一次，太舊時由 ProbeCapabilities 顯示提示。
         _ = new RimLLMChatOptions { StrictModel = true };
-        string model = RimAgentMod.Settings?.agentModel;
+        string? model = RimAgentMod.Settings?.agentModel;
         return RimLLMProvider.GetEffectiveCapabilities(string.IsNullOrWhiteSpace(model) ? null : model.Trim()).SupportsFunctionCalling;
     }
 }

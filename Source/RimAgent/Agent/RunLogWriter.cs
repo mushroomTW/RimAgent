@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,7 +20,7 @@ public sealed class RunLogHeader
     public string Mode { get; init; } = string.Empty;
     public string Source { get; init; } = string.Empty;
     public string Instruction { get; init; } = string.Empty;
-    public AutonomousRunInfo Autonomous { get; init; }
+    public AutonomousRunInfo? Autonomous { get; init; }
 }
 
 /// <summary>指令文字會被截斷（共用通則在前），觸發原因要在這裡另記，才能事後比對重試與施工進度。</summary>
@@ -46,9 +44,9 @@ public sealed class RunLog
     private readonly Dictionary<TranscriptEntry, int> _calls = [];
     private readonly Dictionary<string, int> _lastStepOf = new(StringComparer.Ordinal);
     private readonly SortedSet<string> _models = new(StringComparer.Ordinal);
-    private StreamWriter _stream;
-    private string _lastModelText;
-    private string _reasoning;
+    private StreamWriter? _stream;
+    private string? _lastModelText;
+    private string? _reasoning;
     private int _steps;
     private long _inputTokens;
     private long _outputTokens;
@@ -60,7 +58,7 @@ public sealed class RunLog
         _startedUtc = startedUtc;
         _stream = new StreamWriter(stream, RunLogWriter.Utf8) { AutoFlush = true };
         Header = header;
-        Write(new
+        Write(_stream, new
         {
             t = "run",
             ts = startedUtc,
@@ -76,13 +74,13 @@ public sealed class RunLog
     public RunLogHeader Header { get; }
 
     /// <summary>這句實際用的思考強度；<paramref name="route"/> 是自動分流的結果，固定強度時為 null。</summary>
-    public void AddReasoning(ReasoningLevel level, DecisionRoute route)
+    public void AddReasoning(ReasoningLevel level, DecisionRoute? route)
     {
         lock (_gate)
         {
             if (_stream == null) return;
             _reasoning = level.ToString();
-            Write(new
+            Write(_stream, new
             {
                 t = "reasoning",
                 at = Elapsed(),
@@ -95,7 +93,7 @@ public sealed class RunLog
         }
     }
 
-    public void AddModelResponse(string agent, ChatResponse response)
+    public void AddModelResponse(string? agent, ChatResponse? response)
     {
         if (response == null) return;
         lock (_gate)
@@ -109,7 +107,7 @@ public sealed class RunLog
             _outputTokens += response.Usage?.OutputTokenCount ?? 0;
             string[] calls = [.. (response.Messages ?? []).Where(m => m?.Contents != null)
                 .SelectMany(m => m.Contents).OfType<FunctionCallContent>().Select(c => c.Name)];
-            Write(new
+            Write(_stream, new
             {
                 t = "model",
                 at = Elapsed(),
@@ -141,7 +139,7 @@ public sealed class RunLog
                     AddTool(entry);
                     return;
                 default:
-                    Write(new
+                    Write(_stream, new
                     {
                         t = "msg",
                         at = Elapsed(),
@@ -166,12 +164,13 @@ public sealed class RunLog
 
     private void AddTool(TranscriptEntry entry)
     {
+        if (_stream == null) return;
         if (!_calls.TryGetValue(entry, out int call))
         {
             call = _calls.Count + 1;
             _calls[entry] = call;
         }
-        Write(new
+        Write(_stream, new
         {
             t = "tool",
             at = Elapsed(),
@@ -238,17 +237,17 @@ public sealed class RunLog
         }
     }
 
-    public static string Limit(string value) => ToolText.TruncateField(value, MaxFieldChars);
+    public static string Limit(string? value) => ToolText.TruncateField(value, MaxFieldChars);
 
-    private void Write(object value) => _stream.WriteLine(Serialize(value));
+    private static void Write(StreamWriter stream, object value) => stream.WriteLine(Serialize(value));
 
     private static string Serialize(object value) => JsonSerializer.Serialize(value, RunLogWriter.Json);
 
     private double Elapsed() => Math.Round((DateTime.UtcNow - _startedUtc).TotalSeconds, 1, MidpointRounding.ToEven);
 
-    private static string NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
-    private static object Arguments(TranscriptEntry entry)
+    private static object? Arguments(TranscriptEntry entry)
     {
         if (entry.ArgumentValues is { Count: > 0 } values)
         {
@@ -309,7 +308,7 @@ public sealed class RunLogWriter
     public string Folder { get; }
     public string IndexPath { get; }
     public string ModVersion { get; init; } = string.Empty;
-    public Func<int?> GameTick { get; init; }
+    public Func<int?>? GameTick { get; init; }
     public int MaxRuns { get; init; } = DefaultMaxRuns;
 
     internal int? Tick()
@@ -381,7 +380,8 @@ public sealed class RunLogWriter
     private void ArchiveLocked(string file, string summary)
     {
         string active = ActivePath(file);
-        Directory.CreateDirectory(Path.GetDirectoryName(ArchivedPath(file)));
+        string? archivedDir = Path.GetDirectoryName(ArchivedPath(file));
+        if (!string.IsNullOrEmpty(archivedDir)) Directory.CreateDirectory(archivedDir);
         // 先搬再記索引，記不進去就搬回來：兩步任一失敗都留在 active，下次啟動收尾時補記，不會遺漏或重複。
         File.Move(active, ArchivedPath(file));
         try
@@ -420,7 +420,7 @@ public sealed class RunLogWriter
     /// <summary>正常結束時最後一行就是索引內容；當機的沒有結尾，由已寫出的事件補出同樣的欄位。</summary>
     private static string Summarize(string path, string file)
     {
-        string first = null, last = null;
+        string? first = null, last = null;
         var state = new CrashSummaryState();
         foreach (string line in File.ReadLines(path, Utf8))
         {
@@ -442,7 +442,7 @@ public sealed class RunLogWriter
             trigger = run["autonomous"]?["trigger"],
             attempt = run["autonomous"]?["attempt"],
             ver = run["ver"],
-            text = ToolText.TruncateField((string)run["text"], MaxIndexTextChars),
+            text = ToolText.TruncateField((string?)run["text"], MaxIndexTextChars),
             outcome = "crashed",
             secs = state.Secs,
             models = state.Models,
@@ -460,7 +460,7 @@ public sealed class RunLogWriter
     {
         public Dictionary<int, JsonObject> Tools { get; } = [];
         public SortedSet<string> Models { get; } = new(StringComparer.Ordinal);
-        public string Reasoning { get; private set; }
+        public string? Reasoning { get; private set; }
         public int Steps { get; private set; }
         public long Input { get; private set; }
         public long Output { get; private set; }
@@ -471,19 +471,19 @@ public sealed class RunLogWriter
             try
             {
                 Secs = (double?)e["at"] ?? Secs;
-                switch ((string)e["t"])
+                switch ((string?)e["t"])
                 {
                     case "tool":
-                        Tools[(int)e["call"]] = e;
+                        if ((int?)e["call"] is { } callId) Tools[callId] = e;
                         break;
                     case "reasoning":
-                        Reasoning = (string)e["level"];
+                        Reasoning = (string?)e["level"];
                         break;
                     case "model":
                         Steps++;
                         Input += (long?)e["in"] ?? 0;
                         Output += (long?)e["out"] ?? 0;
-                        if ((string)e["model"] is { } model) Models.Add(model);
+                        if ((string?)e["model"] is { } model) Models.Add(model);
                         break;
                     default:
                         break;
@@ -498,7 +498,7 @@ public sealed class RunLogWriter
 
     private static bool IsCancelled(JsonObject tool) => (bool?)tool["cancelled"] == true;
 
-    private static JsonObject Parse(string line)
+    private static JsonObject Parse(string? line)
     {
         try
         {
@@ -576,12 +576,12 @@ public sealed class RunLogWriter
         File.Move(temp, IndexPath, overwrite: true);
         _notes = kept.Count(l => !IsRun(l));
         _runs = kept.Count - _notes;
-        string[] files = [.. dropped.Select(l => Parse(l)["file"]?.ToString()).Where(f => !string.IsNullOrEmpty(f))
+        string[] files = [.. dropped.Select(l => Parse(l)["file"]?.ToString()).OfType<string>().Where(f => f.Length > 0)
             .Select(ArchivedPath)
             // 索引可能被手改過，只刪紀錄資料夾底下的檔案。
             .Where(p => p.StartsWith(Folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))];
         foreach (string path in files) TryDelete(() => File.Delete(path));
-        foreach (string day in files.Select(Path.GetDirectoryName).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (string day in files.Select(Path.GetDirectoryName).OfType<string>().Where(d => d.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             // 還有檔案的資料夾刪不掉，正好略過。
             TryDelete(() => Directory.Delete(day));

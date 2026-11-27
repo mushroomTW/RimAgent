@@ -38,7 +38,7 @@ public static class DecisionModelTester
         var timer = Stopwatch.StartNew();
         try
         {
-            IDecisionService service = DecisionServiceFactory.Create();
+            IDecisionService? service = DecisionServiceFactory.Create();
             if (service == null)
             {
                 _outcome = TestOutcome.Unavailable;
@@ -57,7 +57,7 @@ public static class DecisionModelTester
             DecisionResult result = await service.EvaluateAsync("A clear day at noon.", plan, cts.Token).ConfigureAwait(false);
             timer.Stop();
 
-            if (!result.TryGet(QuestionId, out DecisionAnswer answer))
+            if (!result.TryGet(QuestionId, out DecisionAnswer? answer))
             {
                 _outcome = TestOutcome.NoAnswer;
                 return;

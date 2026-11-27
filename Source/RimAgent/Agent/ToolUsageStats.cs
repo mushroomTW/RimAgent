@@ -177,7 +177,7 @@ public sealed partial class ToolUsageStats
             {
                 json = JsonSerializer.Serialize(_data, JsonOptions);
             }
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            if (Path.GetDirectoryName(_path) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
             string temp = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {

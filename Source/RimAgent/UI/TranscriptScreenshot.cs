@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -10,26 +8,26 @@ namespace RimAgent.UI;
 internal static partial class TranscriptScreenshot
 {
 
-    public static string TryParseSavedPath(string result)
+    public static string? TryParseSavedPath(string? result)
     {
         Match match = SavedResult.Match(result ?? string.Empty);
         return match.Success ? match.Groups["path"].Value : null;
     }
 
-    public static string TryParseScriptSavedPath(string scriptResult)
+    public static string? TryParseScriptSavedPath(string? scriptResult)
     {
         MatchCollection matches = ScriptSavedLine.Matches(scriptResult ?? string.Empty);
         return matches.Count == 0 ? null : matches[matches.Count - 1].Groups["path"].Value;
     }
 
-    public static string TryGetPath(TranscriptEntry entry, string screenshotFolder)
+    public static string? TryGetPath(TranscriptEntry? entry, string? screenshotFolder)
     {
         if (entry == null || entry.Failed || entry.ToolName != "take_screenshot") return null;
         return ResolveInFolder(TryParseSavedPath(entry.Result), screenshotFolder);
     }
 
     /// <summary>工具結果與模型輸出都不可信，讀檔前一律經此檢查，避免被拿來讀任意檔案。</summary>
-    public static string ResolveInFolder(string path, string screenshotFolder)
+    public static string? ResolveInFolder(string? path, string? screenshotFolder)
     {
         if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(screenshotFolder)) return null;
         try

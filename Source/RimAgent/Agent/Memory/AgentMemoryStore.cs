@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,7 +28,7 @@ public class AgentMemoryStore : AgentFileStore
     private readonly Lock _gate = new();
     private readonly int _droppedOnLoad;
 
-    public AgentMemoryStore(List<AgentMemoryEntry> entries = null)
+    public AgentMemoryStore(List<AgentMemoryEntry>? entries = null)
     {
         if (entries == null) return;
         var dropped = new List<string>();
@@ -43,7 +41,7 @@ public class AgentMemoryStore : AgentFileStore
         PruneDroppedFilesFromIndex(dropped);
     }
 
-    private void ProcessEntryOnLoad(AgentMemoryEntry entry, List<string> dropped)
+    private void ProcessEntryOnLoad(AgentMemoryEntry? entry, List<string> dropped)
     {
         if (entry == null || entry.content == null) return;
         string name = NormalizeName(entry.name);
@@ -65,7 +63,7 @@ public class AgentMemoryStore : AgentFileStore
 
     private void PruneDroppedFilesFromIndex(List<string> dropped)
     {
-        if (dropped.Count == 0 || !_files.TryGetValue(IndexFileName, out string index)) return;
+        if (dropped.Count == 0 || !_files.TryGetValue(IndexFileName, out string? index)) return;
 
         _files[IndexFileName] = string.Join('\n', index.Split('\n')
             .Where(line => !dropped.Any(name => line.Contains("**" + name + "**", StringComparison.OrdinalIgnoreCase))));
@@ -83,7 +81,7 @@ public class AgentMemoryStore : AgentFileStore
     {
         get
         {
-            lock (_gate) return _files.TryGetValue(IndexFileName, out string index) ? index : string.Empty;
+            lock (_gate) return _files.TryGetValue(IndexFileName, out string? index) ? index : string.Empty;
         }
     }
 
@@ -107,7 +105,7 @@ public class AgentMemoryStore : AgentFileStore
 
     private string DescriptionOf(string name)
     {
-        return _files.TryGetValue(DescriptionFileName(name), out string description) ? description : string.Empty;
+        return _files.TryGetValue(DescriptionFileName(name), out string? description) ? description : string.Empty;
     }
 
     public override Task WriteAsync(string path, string content, CancellationToken cancellationToken = default)
@@ -124,7 +122,7 @@ public class AgentMemoryStore : AgentFileStore
                 throw new InvalidOperationException($"Memory file names must be 1-{MaxNameChars} characters without line breaks.");
             if (IsUserFile(name))
             {
-                string invalid = InvalidUserFile(name, content);
+                string? invalid = InvalidUserFile(name, content);
                 if (invalid != null) throw new InvalidOperationException(invalid);
                 if (!_files.ContainsKey(name) && UserFileCount() >= MaxFiles)
                     throw new InvalidOperationException($"Memory is full ({MaxFiles} files). Merge or delete a file first.");
@@ -138,7 +136,7 @@ public class AgentMemoryStore : AgentFileStore
         return Task.CompletedTask;
     }
 
-    private static string InvalidUserFile(string name, string content)
+    private static string? InvalidUserFile(string name, string content)
     {
         if (IsInvalidName(name))
             return $"Memory file names must be 1-{MaxNameChars} characters without line breaks.";
@@ -152,15 +150,15 @@ public class AgentMemoryStore : AgentFileStore
         return name.Length == 0 || name.Length > MaxNameChars || name.Any(char.IsControl);
     }
 
-    private static string OneLine(string text)
+    private static string OneLine(string? text)
     {
         string line = string.Join(' ', (text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
         return line.Length > MaxDescriptionChars ? line[..MaxDescriptionChars] + "..." : line;
     }
 
-    public override Task<string> ReadAsync(string path, CancellationToken cancellationToken = default)
+    public override Task<string?> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return Task.FromResult(_files.TryGetValue(NormalizeName(path), out string content) ? content : null);
+        lock (_gate) return Task.FromResult(_files.TryGetValue(NormalizeName(path), out string? content) ? content : null);
     }
 
     public override Task<bool> DeleteAsync(string path, CancellationToken cancellationToken = default)
@@ -216,7 +214,7 @@ public class AgentMemoryStore : AgentFileStore
         return !IsIndex(name) && !IsDescription(name);
     }
 
-    internal static string NormalizeName(string path)
+    internal static string NormalizeName(string? path)
     {
         return (path ?? string.Empty).Replace('\\', '/').Trim().Trim('/');
     }
@@ -226,8 +224,8 @@ public class AgentMemoryStore : AgentFileStore
 public sealed class AgentMemoryEntry : IExposable
 {
     #pragma warning disable S1104 // Required for RimWorld Scribe serialization via ref parameter
-    public string name;
-    public string content;
+    public string? name;
+    public string? content;
     #pragma warning restore S1104
 
     public void ExposeData()

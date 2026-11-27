@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -50,7 +48,7 @@ public sealed class TranscriptEntry
     public ToolRisk ToolRisk { get; set; }
     public string Arguments { get; set; } = string.Empty;
     /// <summary>原始引數，執行紀錄才能存成結構化 JSON；不存檔。</summary>
-    public IDictionary<string, object> ArgumentValues { get; set; }
+    public IDictionary<string, object?>? ArgumentValues { get; set; }
     public string Result { get; set; } = string.Empty;
     public bool Failed { get; set; }
     /// <summary>因停止或取消而中斷（也算 <see cref="Failed"/>），統計成功率時應與工具本身的失敗分開。</summary>
@@ -81,10 +79,10 @@ public sealed class AgentTranscript
     private int _version;
     private int _epoch;
     // 子代理與主 Agent 共用同一組工具實例，靠呼叫流程上的 AsyncLocal 分辨是誰呼叫的；並行的子代理各有一份。
-    private readonly AsyncLocal<string> _agent = new();
+    private readonly AsyncLocal<string?> _agent = new();
 
     /// <summary>新增或更新項目後呼叫（第二個參數為 true 代表更新既有項目）；在鎖外呼叫，可能來自任何執行緒。</summary>
-    public Action<TranscriptEntry, bool> Observer { get; set; }
+    public Action<TranscriptEntry, bool>? Observer { get; set; }
 
     public int Version
     {
@@ -162,9 +160,9 @@ public sealed class AgentTranscript
     public string CurrentAgent => _agent.Value ?? string.Empty;
 
     /// <summary>設定目前呼叫流程的子代理並回傳原值；呼叫端要在 finally 以原值還原。</summary>
-    internal string SwapCurrentAgent(string name)
+    internal string? SwapCurrentAgent(string? name)
     {
-        string previous = _agent.Value;
+        string? previous = _agent.Value;
         _agent.Value = name;
         return previous;
     }
@@ -207,7 +205,7 @@ public sealed class AgentTranscript
     {
         lock (_gate)
         {
-            TranscriptEntry error = _entries.LastOrDefault(e => e.Kind == TranscriptKind.Error && e.InstructionId == instructionId);
+            TranscriptEntry? error = _entries.LastOrDefault(e => e.Kind == TranscriptKind.Error && e.InstructionId == instructionId);
             return error?.ErrorKind;
         }
     }

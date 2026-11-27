@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -40,12 +38,12 @@ internal sealed class MapShotCapture : MonoBehaviour
     private static readonly List<MapShotCapture> Active = new();
     private static bool _patched;
 
-    private Map _map;
+    private Map? _map;
     private CellRect _bounds;
-    private MapShotLayout _layout;
-    private string _path;
-    private Camera _camera;
-    private RenderTexture _target;
+    private MapShotLayout? _layout;
+    private string? _path;
+    private Camera? _camera;
+    private RenderTexture? _target;
     private int _renders;
     private int _startFrame;
 
@@ -113,8 +111,9 @@ internal sealed class MapShotCapture : MonoBehaviour
 
     private void Save()
     {
-        Texture2D rendered = null;
-        Texture2D composed = null;
+        if (_target == null || _layout == null || _path == null) return;
+        Texture2D? rendered = null;
+        Texture2D? composed = null;
         try
         {
             rendered = _target.CreateTexture2D(TextureFormat.RGBA32);
@@ -167,8 +166,8 @@ internal sealed class MapShotCapture : MonoBehaviour
     private static void EnsurePatched()
     {
         if (_patched) return;
-        System.Reflection.MethodBase viewRect = AccessTools.PropertyGetter(typeof(MapDrawer), "ViewRect");
-        System.Reflection.MethodBase cull = AccessTools.Method(typeof(DynamicDrawManager), "ComputeCulledThings");
+        System.Reflection.MethodBase? viewRect = AccessTools.PropertyGetter(typeof(MapDrawer), "ViewRect");
+        System.Reflection.MethodBase? cull = AccessTools.Method(typeof(DynamicDrawManager), "ComputeCulledThings");
         if (viewRect == null || cull == null)
         {
             throw new MissingMethodException("MapShotCapture could not resolve RimWorld rendering methods to patch.");

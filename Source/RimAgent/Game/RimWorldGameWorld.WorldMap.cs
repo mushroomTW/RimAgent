@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -15,7 +13,7 @@ namespace RimAgent.Game;
 
 internal sealed partial class RimWorldGameWorld
 {
-    private static PlanetTile ResolveOrigin(int originCaravanId, out Caravan caravan, out string label)
+    private static PlanetTile ResolveOrigin(int originCaravanId, out Caravan? caravan, out string label)
     {
         caravan = originCaravanId >= 0 ? FindPlayerCaravan(originCaravanId) : null;
         if (caravan != null)
@@ -23,7 +21,7 @@ internal sealed partial class RimWorldGameWorld
             label = caravan.LabelCap;
             return caravan.Tile;
         }
-        Map map = Find.CurrentMap;
+        Map? map = Find.CurrentMap;
         if (map == null)
         {
             label = "no map";
@@ -46,14 +44,14 @@ internal sealed partial class RimWorldGameWorld
     private static string DescribeWorldTile(PlanetTile tile)
     {
         if (!TileInWorld(tile)) return "no tile";
-        WorldObject obj = Find.WorldObjects.ObjectsAt(tile).FirstOrDefault(o => o is not Caravan);
+        WorldObject? obj = Find.WorldObjects.ObjectsAt(tile).FirstOrDefault(o => o is not Caravan);
         string text = "tile " + tile.tileId.ToString(CultureInfo.InvariantCulture) + " (" + tile.Tile.PrimaryBiome.LabelCap + ")";
         return obj == null ? text : obj.LabelCap + " [" + obj.ID.ToString(CultureInfo.InvariantCulture) + "], " + text;
     }
 
     public WorldSurveyInfo GetWorldSurvey(int originCaravanId)
     {
-        PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan fromCaravan, out string label);
+        PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan? fromCaravan, out string label);
         Dictionary<int, List<WorldObjectQuestLink>> quests = QuestLinksByWorldObject();
         var objects = new List<WorldObjectInfo>();
         foreach (WorldObject obj in Find.WorldObjects.AllWorldObjects)
@@ -93,7 +91,7 @@ internal sealed partial class RimWorldGameWorld
             Hostile = faction != null && faction != Faction.OfPlayer && faction.HostileTo(Faction.OfPlayer),
             HasMap = obj is MapParent mapParent && mapParent.HasMap,
             DistanceTiles = origin.Valid ? Find.WorldGrid.ApproxDistanceInTiles(origin, obj.Tile) : 0f,
-            Quests = quests.TryGetValue(obj.ID, out List<WorldObjectQuestLink> links) ? links : []
+            Quests = quests.TryGetValue(obj.ID, out List<WorldObjectQuestLink>? links) ? links : []
         };
         if (obj is Site site)
         {
@@ -115,7 +113,7 @@ internal sealed partial class RimWorldGameWorld
             {
                 foreach (int id in quest.QuestLookTargets.Where(t => t.HasWorldObject).Select(t => t.WorldObject).Where(o => o != null).Select(obj => obj.ID).Distinct())
                 {
-                    if (!links.TryGetValue(id, out List<WorldObjectQuestLink> list)) links[id] = list = [];
+                    if (!links.TryGetValue(id, out List<WorldObjectQuestLink>? list)) links[id] = list = [];
                     list.Add(new WorldObjectQuestLink { QuestId = quest.id, QuestName = PlainText(quest.name), Active = quest.State == QuestState.Ongoing });
                 }
             }
@@ -129,7 +127,7 @@ internal sealed partial class RimWorldGameWorld
 
     public IReadOnlyList<TravelEstimateInfo> GetTravelEstimates(int originCaravanId, IReadOnlyList<int> tiles)
     {
-        PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan fromCaravan, out string _);
+        PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan? fromCaravan, out string _);
         var result = new List<TravelEstimateInfo>();
         foreach (int id in tiles)
         {
@@ -150,7 +148,7 @@ internal sealed partial class RimWorldGameWorld
 
     public WorldTileInfo GetWorldTile(int tile, int originCaravanId)
     {
-        PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan _, out string _);
+        PlanetTile origin = ResolveOrigin(originCaravanId, out Caravan? _, out string _);
         PlanetTile pt = ToPlanetTile(tile, origin);
         if (!TileInWorld(pt))
             return new WorldTileInfo { Tile = tile, Error = string.Create(CultureInfo.InvariantCulture, $"tile {tile} does not exist on this layer of the world (valid ids are 0 to {pt.Layer.TilesCount - 1})") };
@@ -172,7 +170,7 @@ internal sealed partial class RimWorldGameWorld
             reason.Append(settleFailReason);
         }
         Dictionary<int, List<WorldObjectQuestLink>> quests = QuestLinksByWorldObject();
-        Landmark landmark = data.Landmark;
+        Landmark? landmark = data.Landmark;
         string landmarkText;
         if (landmark == null) landmarkText = string.Empty;
         else if (landmark.name.NullOrEmpty()) landmarkText = landmark.def.label;

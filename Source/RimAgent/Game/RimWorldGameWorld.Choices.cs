@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -18,16 +16,16 @@ internal sealed partial class RimWorldGameWorld
     // 抉擇對話框：DiaOption 的文字與觸發、對話框目前的節點與標題都是 protected。
     // 只讀取、觸發遊戲原生的選項；找不到成員時視為沒有可回應的抉擇，避免版本差異中斷 agent。
     #pragma warning disable S3011 // RimWorld 私有欄位與方法存取為 Mod 運作必需
-    private static readonly FieldInfo DiaOptionTextField =
+    private static readonly FieldInfo? DiaOptionTextField =
         typeof(DiaOption).GetField("text", BindingFlags.Instance | BindingFlags.NonPublic);
 
-    private static readonly MethodInfo DiaOptionActivateMethod =
+    private static readonly MethodInfo? DiaOptionActivateMethod =
         typeof(DiaOption).GetMethod("Activate", BindingFlags.Instance | BindingFlags.NonPublic);
 
-    private static readonly FieldInfo NodeTreeCurNodeField =
+    private static readonly FieldInfo? NodeTreeCurNodeField =
         typeof(Dialog_NodeTree).GetField("curNode", BindingFlags.Instance | BindingFlags.NonPublic);
 
-    private static readonly FieldInfo NodeTreeTitleField =
+    private static readonly FieldInfo? NodeTreeTitleField =
         typeof(Dialog_NodeTree).GetField("title", BindingFlags.Instance | BindingFlags.NonPublic);
 
     #pragma warning restore S3011
@@ -44,7 +42,7 @@ internal sealed partial class RimWorldGameWorld
         List<PendingChoiceInfo> result = [.. PendingUiChoices()];
         foreach (Dialog_NodeTree dialog in Find.WindowStack.Windows.OfType<Dialog_NodeTree>())
         {
-            DiaNode node = CurrentNode(dialog);
+            DiaNode? node = CurrentNode(dialog);
             if (node == null) continue;
             result.Add(new PendingChoiceInfo
             {
@@ -84,19 +82,19 @@ internal sealed partial class RimWorldGameWorld
     {
         if (TryParseChoiceId(id, DialogChoicePrefix, out int windowId))
         {
-            Window window = Find.WindowStack.Windows.FirstOrDefault(w => w.ID == windowId);
+            Window? window = Find.WindowStack.Windows.FirstOrDefault(w => w.ID == windowId);
             if (window is Dialog_MessageBox box) return PressMessageBoxButton(box, option);
             return window is Dialog_NodeTree dialog ? ActivateOption(dialog, option, closeOnFail: false) : CommandResult.Fail(ChoiceNotFound);
         }
         if (TryParseChoiceId(id, LetterChoicePrefix, out int letterId))
         {
-            ChoiceLetter letter = Find.LetterStack.LettersListForReading.OfType<ChoiceLetter>()
+            ChoiceLetter? letter = Find.LetterStack.LettersListForReading.OfType<ChoiceLetter>()
                 .FirstOrDefault(l => l.ID == letterId && IsDecisionLetter(l));
             if (letter == null) return CommandResult.Fail(ChoiceNotFound);
             // 照玩家的流程：打開信件，由遊戲組好對話框並設好每個選項的歸屬，再按選項。
             var before = new HashSet<Window>(Find.WindowStack.Windows);
             letter.OpenLetter();
-            Dialog_NodeTree dialog = Find.WindowStack.Windows.OfType<Dialog_NodeTree>().LastOrDefault(w => !before.Contains(w));
+            Dialog_NodeTree? dialog = Find.WindowStack.Windows.OfType<Dialog_NodeTree>().LastOrDefault(w => !before.Contains(w));
             return dialog == null
                 ? CommandResult.Fail("the letter did not open a choice dialog")
                 : ActivateOption(dialog, option, closeOnFail: true);
@@ -120,12 +118,12 @@ internal sealed partial class RimWorldGameWorld
                && int.TryParse(id[prefix.Length..], CultureInfo.InvariantCulture, out number);
     }
 
-    private static DiaNode CurrentNode(Dialog_NodeTree dialog)
+    private static DiaNode? CurrentNode(Dialog_NodeTree dialog)
     {
         return NodeTreeCurNodeField?.GetValue(dialog) as DiaNode;
     }
 
-    private static string LimitChoiceText(string text)
+    private static string LimitChoiceText(string? text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
         return text.Length <= ChoiceTextLimit ? text : text[..ChoiceTextLimit] + "…";
@@ -156,9 +154,9 @@ internal sealed partial class RimWorldGameWorld
     }
 
     /// <summary>確認框的按鈕：1＝A（通常是確定）、2＝B（通常是取消）、3＝C；沒有的按鈕不列。</summary>
-    private static List<(int Number, string Text, Action Action, bool Close)> MessageBoxButtons(Dialog_MessageBox box)
+    private static List<(int Number, string Text, Action? Action, bool Close)> MessageBoxButtons(Dialog_MessageBox box)
     {
-        var buttons = new List<(int, string, Action, bool)> { (1, box.buttonAText ?? "OK", box.buttonAAction, true) };
+        var buttons = new List<(int, string, Action?, bool)> { (1, box.buttonAText ?? "OK", box.buttonAAction, true) };
         if (box.buttonBText != null) buttons.Add((2, box.buttonBText, box.buttonBAction, true));
         if (!box.buttonCText.NullOrEmpty()) buttons.Add((3, box.buttonCText, box.buttonCAction, box.buttonCClose));
         return buttons;
@@ -167,7 +165,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>照 Dialog_MessageBox 按鈕被點的順序：先跑按鈕動作，再關視窗。</summary>
     private static CommandResult PressMessageBoxButton(Dialog_MessageBox box, int option)
     {
-        foreach ((int number, string text, Action action, bool close) in MessageBoxButtons(box))
+        foreach ((int number, string text, Action? action, bool close) in MessageBoxButtons(box))
         {
             if (number != option) continue;
             action?.Invoke();
@@ -184,9 +182,9 @@ internal sealed partial class RimWorldGameWorld
             if (closeOnFail) dialog.Close(doCloseSound: false);
             return CommandResult.Fail("this game version does not expose dialog options");
         }
-        List<DiaOption> options = CurrentNode(dialog)?.options;
-        DiaOption chosen = options != null && option >= 1 && option <= options.Count ? options[option - 1] : null;
-        string error = null;
+        List<DiaOption>? options = CurrentNode(dialog)?.options;
+        DiaOption? chosen = options != null && option >= 1 && option <= options.Count ? options[option - 1] : null;
+        string? error = null;
         if (chosen == null)
         {
             error = string.Create(CultureInfo.InvariantCulture, $"option {option} does not exist");
@@ -199,11 +197,11 @@ internal sealed partial class RimWorldGameWorld
         {
             error = string.Create(CultureInfo.InvariantCulture, $"option {option} is disabled") + (string.IsNullOrEmpty(chosen.disabledReason) ? string.Empty : ": " + chosen.disabledReason);
         }
-        if (error != null)
+        if (error != null || chosen == null)
         {
             // 為了按選項才打開的信件對話框要關回去，不留一個擋住遊戲的視窗。
             if (closeOnFail) dialog.Close(doCloseSound: false);
-            return CommandResult.Fail(error);
+            return CommandResult.Fail(error ?? "option does not exist");
         }
         string label = OptionText(chosen);
         DiaOptionActivateMethod.Invoke(chosen, parameters: null);

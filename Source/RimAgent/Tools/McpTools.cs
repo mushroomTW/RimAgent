@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.ComponentModel;
 using System.Threading;
@@ -12,9 +10,9 @@ namespace RimAgent.Tools;
 public sealed class McpTools
 {
     private readonly McpManager _manager;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public McpTools(McpManager manager, ConfirmationGate gate = null)
+    public McpTools(McpManager manager, ConfirmationGate? gate = null)
     {
         _manager = manager ?? throw new ArgumentNullException(nameof(manager));
         _gate = gate;
@@ -45,7 +43,7 @@ public sealed class McpTools
         [Description("Tool arguments as a JSON object string, e.g. \"{\\\"url\\\": \\\"https://example.com\\\"}\".")] string args,
         CancellationToken cancellationToken)
     {
-        string blocked = ToolText.Blocked(_gate, $"would call MCP tool {tool} on server {server} with {(string.IsNullOrWhiteSpace(args) ? "no arguments" : args)}.");
+        string? blocked = ToolText.Blocked(_gate, $"would call MCP tool {tool} on server {server} with {(string.IsNullOrWhiteSpace(args) ? "no arguments" : args)}.");
         if (blocked != null) return blocked;
 
         try

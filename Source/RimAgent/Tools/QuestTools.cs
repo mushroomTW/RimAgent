@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -17,9 +15,9 @@ public sealed class QuestTools
     private const int MaxDetailDescriptionChars = 1500;
     private const float TicksPerHour = 2500f;
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public QuestTools(IGameWorld world, ConfirmationGate gate = null)
+    public QuestTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -34,7 +32,7 @@ public sealed class QuestTools
         IReadOnlyList<QuestInfo> quests = _world.GetQuests();
         if (questId != 0)
         {
-            QuestInfo one = quests.FirstOrDefault(q => q.Id == questId);
+            QuestInfo? one = quests.FirstOrDefault(q => q.Id == questId);
             return one == null ? NotFound(questId) : Format(one, MaxDetailDescriptionChars);
         }
 
@@ -51,16 +49,16 @@ public sealed class QuestTools
     public string AcceptQuest(
         [Description("Quest id from list_quests.")] int questId,
         [Description("Reward choice number from list_quests; only needed when the quest offers several choices.")] int reward = 0,
-        [Description("Accepter colonist name, nickname or id from list_quests; only needed when the quest needs an accepter. With a single eligible colonist it is picked automatically.")] string accepter = null)
+        [Description("Accepter colonist name, nickname or id from list_quests; only needed when the quest needs an accepter. With a single eligible colonist it is picked automatically.")] string? accepter = null)
     {
-        QuestInfo quest = _world.GetQuests().FirstOrDefault(q => q.Id == questId);
+        QuestInfo? quest = _world.GetQuests().FirstOrDefault(q => q.Id == questId);
         if (quest == null) return NotFound(questId);
         if (quest.State != QuestInfo.AvailableState)
             return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] is already accepted."));
         if (!quest.CanAccept)
             return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] cannot be accepted now: {Requirements(quest)}"));
 
-        QuestRewardInfo option = null;
+        QuestRewardInfo? option = null;
         if (quest.RewardOptions.Count > 0)
         {
             option = SelectRewardOption(quest, reward);
@@ -74,7 +72,7 @@ public sealed class QuestTools
             return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"quest \"{quest.Name}\" [{quest.Id}] has no reward choices."));
         }
 
-        QuestAccepterInfo picked = null;
+        QuestAccepterInfo? picked = null;
         if (option?.RequiresAccepter ?? quest.RequiresAccepter)
         {
             Result<QuestAccepterInfo> resolved = ResolveAccepter(quest, accepter);
@@ -83,7 +81,7 @@ public sealed class QuestTools
         }
 
         string preview = string.Create(CultureInfo.InvariantCulture, $"would accept quest \"{quest.Name}\" [{quest.Id}]") + RewardClause(option) + AccepterClause(picked) + ". This cannot be undone.";
-        string blocked = ToolText.Blocked(_gate, preview);
+        string? blocked = ToolText.Blocked(_gate, preview);
         if (blocked != null) return blocked;
 
         CommandResult r = _world.AcceptQuest(quest.Id, option?.Number ?? 0, picked?.Id ?? 0);
@@ -92,7 +90,7 @@ public sealed class QuestTools
         return string.IsNullOrEmpty(picked?.Warning) ? summary : summary + " Warning from the game: " + picked.Warning;
     }
 
-    private static QuestRewardInfo SelectRewardOption(QuestInfo quest, int reward)
+    private static QuestRewardInfo? SelectRewardOption(QuestInfo quest, int reward)
     {
         if (quest.RewardOptions.Count == 0) return null;
         if (quest.RewardOptions.Count == 1 && reward <= 1) return quest.RewardOptions[0];
@@ -106,7 +104,7 @@ public sealed class QuestTools
         [Description("Quest id from list_quests.")] int questId,
         [Description("True dismisses the quest, false restores a dismissed one.")] bool dismissed = true)
     {
-        QuestInfo quest = _world.GetQuests().FirstOrDefault(q => q.Id == questId);
+        QuestInfo? quest = _world.GetQuests().FirstOrDefault(q => q.Id == questId);
         if (quest == null) return NotFound(questId);
         // 只有尚未接受的任務能被拒絕；但進行中的任務若曾被收起來，仍可取消。
         if (dismissed && quest.State != QuestInfo.AvailableState)
@@ -114,7 +112,7 @@ public sealed class QuestTools
         string verb = dismissed ? "dismissed" : "restored";
         if (quest.Dismissed == dismissed) return string.Create(CultureInfo.InvariantCulture, $"Quest \"{quest.Name}\" [{quest.Id}] is already {(dismissed ? "dismissed" : "not dismissed")}.");
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would mark quest \"{quest.Name}\" [{quest.Id}] as {verb}."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would mark quest \"{quest.Name}\" [{quest.Id}] as {verb}."));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.SetQuestDismissed(quest.Id, dismissed);
@@ -127,7 +125,7 @@ public sealed class QuestTools
         return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"no available or active quest with id {questId}. Call list_quests for the current ids."));
     }
 
-    private static Result<QuestAccepterInfo> ResolveAccepter(QuestInfo quest, string accepter)
+    private static Result<QuestAccepterInfo> ResolveAccepter(QuestInfo quest, string? accepter)
     {
         if (quest.Accepters.Count == 0)
         {
@@ -147,13 +145,13 @@ public sealed class QuestTools
         if (!string.IsNullOrEmpty(a.FullName)) yield return a.FullName;
     }
 
-    private static string RewardClause(QuestRewardInfo option)
+    private static string RewardClause(QuestRewardInfo? option)
     {
         if (option == null || option.Rewards.Count == 0) return string.Empty;
         return " for reward " + option.Number.ToString(CultureInfo.InvariantCulture) + " (" + string.Join("; ", option.Rewards) + ")";
     }
 
-    private static string AccepterClause(QuestAccepterInfo accepter)
+    private static string AccepterClause(QuestAccepterInfo? accepter)
     {
         if (accepter == null) return string.Empty;
         string clause = " with " + accepter.Name + " as the accepter";

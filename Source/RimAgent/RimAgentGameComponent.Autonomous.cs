@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -18,7 +16,7 @@ public partial class RimAgentGameComponent
     /// <summary>Agent 或目標正在跑時不碰速度，由它們自己管。</summary>
     private void TickAutoTimeSpeed()
     {
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings? settings = RimAgentMod.Settings;
         if (settings == null || !settings.autoTimeSpeed || DateTime.UtcNow < _nextSpeedCheckAt) return;
         _nextSpeedCheckAt = DateTime.UtcNow.AddSeconds(SpeedCheckSeconds);
         if (_runner.IsRunning || IsGoalRunning || Find.CurrentMap == null) return;
@@ -28,7 +26,7 @@ public partial class RimAgentGameComponent
             if (session.IsBusy || session.HasPendingConfirmation) return;
             bool safe = AutoTimeSpeed.IsSafe(
                 _autoWorld.GetHostileCount(), _autoWorld.GetFireCount(), _autoWorld.GetColonistsInMedicalEmergency().Count);
-            string target = _autoSpeed.Step(
+            string? target = _autoSpeed.Step(
                 _autoWorld.GetTimeSpeed().Current, safe, DateTime.UtcNow, () => ObserveTools.FormatOverview(_autoWorld));
             if (target != null) _autoWorld.SetTimeSpeed(target);
         }
@@ -41,7 +39,7 @@ public partial class RimAgentGameComponent
     /// <summary>放在 Update 而不是 Tick：對話框會暫停遊戲，暫停時 GameComponentTick 不跑；也不走排程器冷卻，因暫停中 tick 不前進。</summary>
     private void TryStartChoiceRun()
     {
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings? settings = RimAgentMod.Settings;
         if (settings == null || !settings.autonomousCare || DateTime.UtcNow < _nextChoiceCheckAt) return;
         _nextChoiceCheckAt = DateTime.UtcNow.AddSeconds(ChoiceCheckSeconds);
         if (_runner.IsRunning || IsGoalRunning || Find.CurrentMap == null) return;
@@ -143,7 +141,7 @@ public partial class RimAgentGameComponent
         _seenChoices.Clear();
     }
 
-    private Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, string detail = null)
+    private Task RunAutonomousGuardedAsync(ColonyAgentSession session, AutonomousTrigger trigger, int tick, AutonomousConfig config, AutonomousSignals? signals, string? detail = null)
     {
         return _runner.RunGuardedAsync(async (generation, token) =>
         {
@@ -182,16 +180,16 @@ public partial class RimAgentGameComponent
     /// <summary>決策模型不可用時回傳 false（照常叫主 LLM）。</summary>
     private async Task<bool> TriageSkipsAsync(ColonyAgentSession session, AutonomousTrigger trigger, AutonomousSignals signals, int tick, int generation, CancellationToken cancellationToken)
     {
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings? settings = RimAgentMod.Settings;
         if (settings == null || !settings.decisionTriageUpkeep || !DecisionAutonomousTriage.IsTriaged(trigger)) return false;
-        string lastReply = null;
+        string? lastReply = null;
         float? hoursAgo = null;
         if (_lastAutoReplies.TryGetValue(trigger, out (string Reply, int Tick) last))
         {
             lastReply = last.Reply;
             hoursAgo = Math.Max(0, tick - last.Tick) / 2500f;
         }
-        TriageVerdict verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo, cancellationToken);
+        TriageVerdict? verdict = await Triage.EvaluateAsync(trigger, signals, lastReply, hoursAgo, cancellationToken);
         if (!_runner.IsCurrent(generation) || verdict == null || !verdict.Skip) return false;
         _scheduler.Defer(trigger, CurrentTick() ?? tick);
         string notice = $"System One judged that {DescribeGiveUp(trigger)} needs no action yet " +
@@ -207,7 +205,7 @@ public partial class RimAgentGameComponent
         if (RimAgentMod.Settings?.recordRuns != true) return;
         try
         {
-            ColonyAgentSession session = _session;
+            ColonyAgentSession? session = _session;
             session?.RunLogs?.Note(new RunLogHeader
             {
                 Source = "system_one",
@@ -225,10 +223,10 @@ public partial class RimAgentGameComponent
     private async Task RunAutonomousAsync(AutonomousRunContext run, int generation, CancellationToken token)
     {
         if (!_runner.IsCurrent(generation)) return;
-        string instruction = BuildAutonomousInstruction(run.Trigger);
+        string? instruction = BuildAutonomousInstruction(run.Trigger);
         if (string.IsNullOrWhiteSpace(instruction)) return;
         if (!string.IsNullOrEmpty(run.Detail)) instruction += "\n\n" + run.Detail;
-        (bool completed, string reply) = await _runner.RunTaskAsync(new AutonomousRunRequest
+        (bool completed, string? reply) = await _runner.RunTaskAsync(new AutonomousRunRequest
         {
             Session = run.Session,
             Trigger = run.Trigger,
@@ -247,17 +245,17 @@ public partial class RimAgentGameComponent
         int Tick,
         AutonomousConfig Config,
         AutonomousSignals? Signals,
-        string Detail);
+        string? Detail);
 
-    private string BuildAutonomousInstruction(AutonomousTrigger trigger)
+    private string? BuildAutonomousInstruction(AutonomousTrigger trigger)
     {
-        AutonomousPack pack = _pack?.Autonomous;
+        AutonomousPack? pack = _pack?.Autonomous;
         if (pack != null && !AutonomousPrompts.HasTask(pack, trigger) && AutonomousPrompts.HasTask(pack, AutonomousTrigger.Interval))
         {
             // 章節缺失（通常是拼字錯誤）時 Build 會靜默退回 Interval：警告一次讓問題可見。
             WarnOnce("RimAgent autonomous task missing section for " + trigger + ", falling back to Interval");
         }
-        string instruction = AutonomousPrompts.Build(pack, trigger);
+        string? instruction = AutonomousPrompts.Build(pack, trigger);
         if (string.IsNullOrWhiteSpace(instruction))
         {
             // 自主任務文案缺檔：送空話只會燒 API，直接跳過本輪（沿用錯誤節流，只記一種一次）。
@@ -266,7 +264,7 @@ public partial class RimAgentGameComponent
         return instruction;
     }
 
-    private void HandleAutonomousReply(AutonomousTrigger trigger, string reply, int generation)
+    private void HandleAutonomousReply(AutonomousTrigger trigger, string? reply, int generation)
     {
         if (DecisionAutonomousTriage.IsTriaged(trigger) && _runner.IsCurrent(generation) && Current.Game != null)
         {
@@ -288,7 +286,7 @@ public partial class RimAgentGameComponent
         };
     }
 
-    internal static string FormatRetryDetail(AutonomousTrigger trigger, int attempt, AutonomousSignals signals)
+    internal static string? FormatRetryDetail(AutonomousTrigger trigger, int attempt, AutonomousSignals signals)
     {
         bool alert = trigger is AutonomousTrigger.Alert or AutonomousTrigger.CriticalAlert;
         if (attempt <= 1) return alert ? "Active alerts: " + signals.Alerts : null;

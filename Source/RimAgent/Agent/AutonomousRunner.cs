@@ -95,7 +95,7 @@ internal sealed class AutonomousRunner
         (bool Completed, string? Reply) outcome = (false, null);
         try
         {
-            string reply = await session.SendAsync(
+            string? reply = await session.SendAsync(
                 request.Instruction,
                 autonomous: true,
                 maxToolSteps: request.MaxToolSteps,

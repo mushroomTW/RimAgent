@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using RimWorld;
@@ -17,7 +15,7 @@ internal sealed partial class RimWorldGameWorld
     /// <summary>只開放本模組的房型，原版與其他模組的 PrefabDef 多半是遺跡、地圖生成用的。</summary>
     private const string LayoutPrefix = "RimAgent_";
 
-    private static IReadOnlyList<LayoutInfo> _layouts;
+    private static IReadOnlyList<LayoutInfo>? _layouts;
 
     public IReadOnlyList<LayoutInfo> Layouts => _layouts ??=
         [.. DefDatabase<PrefabDef>.AllDefsListForReading
@@ -31,9 +29,9 @@ internal sealed partial class RimWorldGameWorld
                 Height = d.size.z
             })];
 
-    public LayoutPlan GetLayoutPlan(string layoutDefName, int x, int z, int rotation)
+    public LayoutPlan? GetLayoutPlan(string layoutDefName, int x, int z, int rotation)
     {
-        PrefabDef prefab = DefDatabase<PrefabDef>.GetNamedSilentFail(layoutDefName);
+        PrefabDef? prefab = DefDatabase<PrefabDef>.GetNamedSilentFail(layoutDefName);
         if (prefab == null || !prefab.defName.StartsWith(LayoutPrefix, StringComparison.Ordinal)) return null;
 
         var pos = new IntVec3(x, 0, z);

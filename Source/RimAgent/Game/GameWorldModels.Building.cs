@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace RimAgent.Game;
@@ -57,7 +55,7 @@ public sealed class ShipPartInfo
     public ShipPartState State { get; set; }
     public CellRectSpec Rect { get; set; }
     public (int X, int Z)? InteractionCell { get; set; }
-    public string InteractionBlockedBy { get; set; }
+    public string? InteractionBlockedBy { get; set; }
 }
 
 public sealed class ShipPartRequirement

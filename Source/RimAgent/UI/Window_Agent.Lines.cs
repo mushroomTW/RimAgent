@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +14,7 @@ namespace RimAgent.UI;
 
 public partial class Window_Agent
 {
-    private static string ActivityText(AgentActivity activity)
+    private static string ActivityText(AgentActivity? activity)
     {
         if (activity == null) return "RimAgent.Working".Translate().ToString();
         return activity.Kind switch
@@ -119,7 +117,7 @@ public partial class Window_Agent
                && ContinuesProcess(entries, from) && ProcessHasPending(entries, from);
     }
 
-    private string _toolGroupToggleTip;
+    private string? _toolGroupToggleTip;
 
     private bool TrackToolGroup(IReadOnlyList<TranscriptEntry> entries, int index, float width)
     {
@@ -240,7 +238,7 @@ public partial class Window_Agent
             total += line.Height + EntryGap + (turnStart ? TurnGap : 0f);
             turnStart = false;
         }
-        string screenshotPath = collapsedGroup ? null : TranscriptScreenshot.TryGetPath(entry, GenFilePaths.ScreenshotFolderPath);
+        string? screenshotPath = collapsedGroup ? null : TranscriptScreenshot.TryGetPath(entry, GenFilePaths.ScreenshotFolderPath);
         if (screenshotPath != null)
         {
             float imageHeight = Mathf.Clamp(width * 0.5625f, 120f, 320f);
@@ -283,7 +281,7 @@ public partial class Window_Agent
     {
         if (entry.Kind != TranscriptKind.Tool) return false;
         if (_toolExpanded.TryGetValue(entry, out bool expanded)) return expanded;
-        return entry.Result.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal);
+        return entry.Result?.StartsWith(ToolText.ConfirmationPrefix, StringComparison.Ordinal) == true;
     }
 
     private static IEnumerable<(string Text, LineKind Kind)> Render(TranscriptEntry entry, bool toolExpanded, HashSet<int> combatNoted)
@@ -379,14 +377,21 @@ public partial class Window_Agent
 
     private static void LayoutTable(ref TranscriptLine line, float width)
     {
-        var segments = RimLLM_Framework.Mod.RimLLMMarkdownTable.Split(line.Text);
-        if (segments.Count == 0 || segments[0].Rows == null || segments[0].Rows.Count == 0)
+        if (string.IsNullOrEmpty(line.Text))
         {
             line.Height = 0f;
             line.PlainText = string.Empty;
             return;
         }
-        line.Table = RimLLM_Framework.Mod.RimLLMMarkdownTable.Layout(segments[0].Rows, width, RenderCell);
+        var segments = RimLLM_Framework.Mod.RimLLMMarkdownTable.Split(line.Text);
+        IReadOnlyList<string[]>? rows = segments.Count > 0 ? segments[0].Rows : null;
+        if (rows == null || rows.Count == 0)
+        {
+            line.Height = 0f;
+            line.PlainText = string.Empty;
+            return;
+        }
+        line.Table = RimLLM_Framework.Mod.RimLLMMarkdownTable.Layout(rows, width, RenderCell);
         line.Height = line.Table.Height;
         line.PlainText = line.Table.PlainText;
     }
@@ -415,7 +420,8 @@ public partial class Window_Agent
                     + " " + EscapeRichText(entry.Arguments) + ColorTagClose, LineKind.Text);
             }
 
-            string resultStr = entry.Result.Length > MaxResultChars ? entry.Result[..MaxResultChars] + "…" : entry.Result;
+            string rawResult = entry.Result ?? string.Empty;
+            string resultStr = rawResult.Length > MaxResultChars ? rawResult[..MaxResultChars] + "…" : rawResult;
             string resColorHex = entry.Failed ? EmergencyHex : SubTextHex;
             yield return (ColorTagPrefix + resColorHex + ">" + "RimAgent.Tool.Result".Translate()
                 + " " + EscapeRichText(resultStr) + ColorTagClose, LineKind.Text);
@@ -463,7 +469,7 @@ public partial class Window_Agent
         };
     }
 
-    private static string EscapeRichText(string value)
+    private static string EscapeRichText(string? value)
     {
         return (value ?? string.Empty).Replace('<', '＜').Replace('>', '＞');
     }
@@ -483,14 +489,14 @@ public partial class Window_Agent
     private static bool? _markdownAvailable;
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static string RenderReply(string text)
+    private static string RenderReply(string? text)
     {
         if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
         if (_markdownAvailable == false) return text;
         try
         {
             // 先把 $...$／$$...$$ 數學轉成易讀純文字：框架的 Markdig 管線沒有數學擴充。
-            string rich = RimLLM_Framework.Mod.RimLLMMarkdown.ToRichText(LatexMath.ConvertMath(text));
+            string? rich = RimLLM_Framework.Mod.RimLLMMarkdown.ToRichText(LatexMath.ConvertMath(text));
             _markdownAvailable = true;
             return rich ?? text;
         }
@@ -524,12 +530,12 @@ public partial class Window_Agent
     private sealed class TextCache<TKey>
     {
         private bool _hasValue;
-        private TKey _key;
-        private string _text;
+        private TKey? _key;
+        private string _text = string.Empty;
 
         public string Get(TKey key, Func<TKey, string> build)
         {
-            if (!_hasValue || !EqualityComparer<TKey>.Default.Equals(_key, key))
+            if (!_hasValue || !EqualityComparer<TKey?>.Default.Equals(_key, key))
             {
                 _key = key;
                 _text = build(key);

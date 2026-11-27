@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -20,12 +18,12 @@ namespace RimAgent.Agent;
 public sealed partial class ColonyAgentSession
 {
     /// <summary>復原上一個有工作設定改動的指令；沒東西可復原回傳 null，呼叫者應在主線程。</summary>
-    public string UndoLast()
+    public string? UndoLast()
     {
         if (!TryBeginExclusiveWork()) throw new InvalidOperationException("Cannot undo while RimAgent is working.");
         try
         {
-            UndoFrame frame = Undo.Pop();
+            UndoFrame? frame = Undo.Pop();
             if (frame == null) return null;
 
             List<ColonistInfo> colonists = [.. _world.GetColonists()];
@@ -72,7 +70,7 @@ public sealed partial class ColonyAgentSession
 
     private static string NameOf(Dictionary<int, string> names, int pawnId)
     {
-        return names.TryGetValue(pawnId, out string name) ? name : ("[" + pawnId.ToString(CultureInfo.InvariantCulture) + "]");
+        return names.TryGetValue(pawnId, out string? name) ? name : ("[" + pawnId.ToString(CultureInfo.InvariantCulture) + "]");
     }
 
     private void RestoreAssignments(UndoFrame frame, Dictionary<int, string> names, Dictionary<int, ColonistInfo> byId,
@@ -87,12 +85,12 @@ public sealed partial class ColonyAgentSession
             // 同優先級：玩家手動改過那一小時的作息就不覆寫。
             if (!string.IsNullOrEmpty(a.NewAssignmentDefName))
             {
-                string current = null;
-                if (updatedAssignments.TryGetValue(key, out string updated))
+                string? current = null;
+                if (updatedAssignments.TryGetValue(key, out string? updated))
                 {
                     current = updated;
                 }
-                else if (byId.TryGetValue(a.PawnId, out ColonistInfo pawn) && pawn?.Timetable != null && a.Hour >= 0 && a.Hour < pawn.Timetable.Count)
+                else if (byId.TryGetValue(a.PawnId, out ColonistInfo? pawn) && pawn.Timetable != null && a.Hour >= 0 && a.Hour < pawn.Timetable.Count)
                 {
                     current = pawn.Timetable[a.Hour];
                 }
@@ -126,8 +124,8 @@ public sealed partial class ColonyAgentSession
             UndoWorkPriority p = frame.Priorities[i];
             var key = (p.PawnId, p.WorkTypeDefName);
             if (blockedPriorities.Contains(key)) continue;
-            byId.TryGetValue(p.PawnId, out ColonistInfo pawn);
-            WorkPriorityInfo current = pawn?.WorkPriorities?.FirstOrDefault(w =>
+            byId.TryGetValue(p.PawnId, out ColonistInfo? pawn);
+            WorkPriorityInfo? current = pawn?.WorkPriorities?.FirstOrDefault(w =>
                 string.Equals(w.WorkTypeDefName, p.WorkTypeDefName, StringComparison.Ordinal));
             // 復原只覆寫 Agent 真的寫入的那個值；玩家在這之後手動改過就保留玩家的選擇。
             if (p.NewPriority >= 0 && (current == null || current.Priority != p.NewPriority))

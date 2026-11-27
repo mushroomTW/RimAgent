@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,15 +36,15 @@ public static class McpServerConfig
     #pragma warning disable S1144, S3459 // 由 System.Text.Json 反序列化賦值
     private sealed class ServerDto
     {
-        public string Name { get; set; }
-        public string Command { get; set; }
-        public List<JsonElement> Args { get; set; }
+        public string? Name { get; set; }
+        public string? Command { get; set; }
+        public List<JsonElement>? Args { get; set; }
         public bool Enabled { get; set; }
         public int TimeoutSeconds { get; set; }
     }
     #pragma warning restore S1144, S3459
 
-    public static bool TryLoad(string path, out List<McpServerEntry> servers, out string error)
+    public static bool TryLoad(string? path, out List<McpServerEntry> servers, out string error)
     {
         servers = [];
         error = string.Empty;
@@ -71,7 +69,7 @@ public static class McpServerConfig
             foreach (JsonElement element in list.EnumerateArray())
             {
                 if (element.ValueKind != JsonValueKind.Object) continue;
-                McpServerEntry entry = ParseServerEntry(element);
+                McpServerEntry? entry = ParseServerEntry(element);
                 if (entry != null && seen.Add(entry.Name)) servers.Add(entry);
             }
         }
@@ -84,9 +82,9 @@ public static class McpServerConfig
     }
 
     /// <summary>單條反序列化失敗（型別不合等）視同壞條目跳過，不連累整檔。</summary>
-    private static McpServerEntry ParseServerEntry(JsonElement element)
+    private static McpServerEntry? ParseServerEntry(JsonElement element)
     {
-        ServerDto dto;
+        ServerDto? dto;
         try
         {
             dto = JsonSerializer.Deserialize<ServerDto>(element.GetRawText(), DtoOptions);
@@ -95,8 +93,9 @@ public static class McpServerConfig
         {
             return null;
         }
-        string name = (dto?.Name ?? string.Empty).Trim();
-        string command = (dto?.Command ?? string.Empty).Trim();
+        if (dto == null) return null;
+        string name = (dto.Name ?? string.Empty).Trim();
+        string command = (dto.Command ?? string.Empty).Trim();
         if (name.Length == 0 || command.Length == 0) return null;
 
         var entry = new McpServerEntry { Name = name, Command = command, Enabled = dto.Enabled };

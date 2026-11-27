@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -15,9 +13,9 @@ public sealed class ObserveTools
 {
     private const int MaxResearchListed = 30;
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public ObserveTools(IGameWorld world, ConfirmationGate gate = null)
+    public ObserveTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -186,7 +184,7 @@ public sealed class ObserveTools
             defName = match.Value.DefName;
         }
 
-        string blocked = ToolText.Blocked(_gate, $"would switch research {previous} -> {(IsStopWord(want) ? "none" : defName)}.");
+        string? blocked = ToolText.Blocked(_gate, $"would switch research {previous} -> {(IsStopWord(want) ? "none" : defName)}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetResearch(defName);
@@ -200,7 +198,7 @@ public sealed class ObserveTools
     }
 
     /// <summary>未完成目錄對不到時，若是已研究完的專案就明講，免得模型以為名稱寫錯而一直換著猜。</summary>
-    private string FinishedResearchError(string want)
+    private string? FinishedResearchError(string want)
     {
         Result<DefInfo> finished = DefResolver.Resolve(want, _world.FinishedResearchProjects, "research project");
         if (!finished.Success) return null;
@@ -235,7 +233,7 @@ public sealed class ObserveTools
         Result<MapInfo> match = ResolveMap(map, _world.GetMaps());
         if (!match.Success) return match.Error;
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would switch current map to [{match.Value.Id}] {match.Value.Label}."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would switch current map to [{match.Value.Id}] {match.Value.Label}."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetCurrentMap(match.Value.Id);
@@ -256,11 +254,11 @@ public sealed class ObserveTools
         if (needle.Length == 0) return Result<MapInfo>.Fail("Error: map name is empty.");
         if (int.TryParse(needle, CultureInfo.InvariantCulture, out int id))
         {
-            MapInfo byId = maps.FirstOrDefault(m => m.Id == id);
+            MapInfo? byId = maps.FirstOrDefault(m => m.Id == id);
             if (byId != null) return Result<MapInfo>.Ok(byId);
             return Result<MapInfo>.Fail(string.Create(CultureInfo.InvariantCulture, $"Error: no map has id {id}."));
         }
-        MapInfo exact = maps.FirstOrDefault(m => string.Equals(m.Label, needle, StringComparison.OrdinalIgnoreCase));
+        MapInfo? exact = maps.FirstOrDefault(m => string.Equals(m.Label, needle, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return Result<MapInfo>.Ok(exact);
         List<MapInfo> contains = [.. maps.Where(m => m.Label.Contains(needle, StringComparison.OrdinalIgnoreCase))];
         if (contains.Count == 1) return Result<MapInfo>.Ok(contains[0]);
@@ -346,7 +344,7 @@ public sealed class ObserveTools
     /// 純看的工具遇到超額矩形時，從西南角裁成每邊最多 <see cref="MaxSide"/> 格並附註，
     /// 不直接報錯：模型最常犯的是角落含頭尾的差一格（51x51），整次失敗只會浪費一輪。
     /// </summary>
-    internal static CellRectSpec CropOversized(CellRectSpec rect, int maxCells, out string note)
+    internal static CellRectSpec CropOversized(CellRectSpec rect, int maxCells, out string? note)
     {
         note = null;
         if (rect.CellCount <= maxCells) return rect;
@@ -407,7 +405,7 @@ public sealed class ObserveTools
         Dictionary<(string Label, string DefName, bool PlayerOwned, int X, int Z), ThingInfo> left)
     {
         var run = new List<ThingInfo>();
-        while (left.TryGetValue(RunKey(start, dx * run.Count, dz * run.Count), out ThingInfo next)) run.Add(next);
+        while (left.TryGetValue(RunKey(start, dx * run.Count, dz * run.Count), out ThingInfo? next)) run.Add(next);
         return run;
     }
 
@@ -424,10 +422,11 @@ public sealed class ObserveTools
 
     private string DescribeCell(int x, int z)
     {
-        string outside = TargetResolver.CheckCell(x, z, _world.GetMapBounds());
+        string? outside = TargetResolver.CheckCell(x, z, _world.GetMapBounds());
         if (outside != null) return outside;
 
-        CellInfo c = _world.GetCell(x, z);
+        CellInfo? c = _world.GetCell(x, z);
+        if (c == null) return ToolText.Error($"cell ({x},{z}) is unavailable.");
         var sb = new StringBuilder();
         sb.Append("Cell ").Append(ToolText.Cell(c.X, c.Z)).Append(": ").Append(c.Terrain).Append(" (").Append(c.TerrainDefName).Append(')')
           .Append(", fertility ").Append(ToolText.Pct(c.Fertility))
@@ -471,7 +470,7 @@ public sealed class ObserveTools
         if (x1 == x2 && z1 == z2) return DescribeCell(x1, z1);
         Result<CellRectSpec> rect = TargetResolver.ResolveRect(x1, z1, x2, z2, _world.GetMapBounds());
         if (!rect.Success) return rect.Error;
-        CellRectSpec area = CropOversized(rect.Value, MaxInspectedCells, out string cropNote);
+        CellRectSpec area = CropOversized(rect.Value, MaxInspectedCells, out string? cropNote);
 
         IReadOnlyList<CellInfo> cells = _world.GetCells(area);
         var sb = new StringBuilder();
@@ -481,17 +480,17 @@ public sealed class ObserveTools
         AppendLargestBuildable(sb, area, cells);
 
         sb.Append("Zones: ");
-        List<IGrouping<int, CellInfo>> zones = [.. cells.Where(c => c.Zone != null).GroupBy(c => c.Zone.Id)];
+        List<IGrouping<int, ZoneInfo>> zones = [.. cells.Select(c => c.Zone).OfType<ZoneInfo>().GroupBy(z => z.Id)];
         sb.Append(zones.Count == 0
             ? "none"
-            : string.Join("; ", zones.Select(g => string.Create(CultureInfo.InvariantCulture, $"[{g.Key}] {g.First().Zone.Label} ({g.First().Zone.Kind}, {g.Count()} cells inside)"))));
+            : string.Join("; ", zones.Select(g => string.Create(CultureInfo.InvariantCulture, $"[{g.Key}] {g.First().Label} ({g.First().Kind}, {g.Count()} cells inside)"))));
         sb.AppendLine();
 
         sb.Append("Rooms: ");
-        List<IGrouping<int, CellInfo>> rooms = [.. cells.Where(c => c.Room != null).GroupBy(c => c.Room.Id)];
+        List<IGrouping<int, RoomInfo>> rooms = [.. cells.Select(c => c.Room).OfType<RoomInfo>().GroupBy(r => r.Id)];
         sb.Append(rooms.Count == 0
             ? "none"
-            : string.Join("; ", rooms.Select(g => Room(g.First().Room) + $" ({g.Count()} cells inside)")));
+            : string.Join("; ", rooms.Select(g => Room(g.First()) + $" ({g.Count()} cells inside)")));
         return sb.ToString().Trim();
     }
 
@@ -606,7 +605,7 @@ public sealed class ObserveTools
     [AgentTool("take_screenshot", ToolCategory.Observe, ToolRisk.Safe)]
     [Description("Saves a screenshot to disk and returns the file path. When your model accepts images, the image is shown to you right after this result; otherwise only the player can see it. With no rectangle it captures the player's screen as it is, including open windows. With a rectangle it renders that part of the current map from straight above without moving the player's camera, north up, with yellow coordinate lines and x (bottom) / z (left) labels for orientation; a cell read off the image is often one or two cells wrong, so confirm exact cells with a text tool, if you have one, before placing anything; unexplored fog shows as black. The whole map fits in one image (about 4 pixels per cell on a 250x250 map), good for layout and terrain; zoom into about 50x50 cells to see individual walls, doors and furniture. Corners outside the map are clamped, so 0,0,999,999 means the whole map.")]
     public string TakeScreenshot(
-        [Description("File name without directory or .png; empty uses a timestamped name.")] string name = null,
+        [Description("File name without directory or .png; empty uses a timestamped name.")] string? name = null,
         [Description("Rectangle corner x; leave all four corners at -1 to capture the player's screen instead.")] int x1 = -1,
         [Description("Rectangle corner z.")] int z1 = -1,
         [Description("Opposite corner x.")] int x2 = -1,
@@ -627,7 +626,7 @@ public sealed class ObserveTools
         }
 
         string safeName = ResolveScreenshotName(name);
-        string blocked = ToolText.Blocked(_gate, $"would take screenshot to disk as \"{safeName}.png\".");
+        string? blocked = ToolText.Blocked(_gate, $"would take screenshot to disk as \"{safeName}.png\".");
         if (blocked != null) return blocked;
 
         ScreenshotInfo info = area ? _world.RenderMapArea(rect, safeName) : _world.TakeScreenshot(safeName);
@@ -641,7 +640,7 @@ public sealed class ObserveTools
             return ToolText.Error(string.IsNullOrEmpty(info.Error) ? "failed to take screenshot." : info.Error);
         }
         string saved = string.Create(CultureInfo.InvariantCulture, $"Screenshot saved: {info.FilePath} ({info.Width}x{info.Height})");
-        MapShotLayout layout = info.Layout;
+        MapShotLayout? layout = info.Layout;
         if (layout == null) return saved;
 
         string view = string.Create(CultureInfo.InvariantCulture, $"Map view of {layout.Rect}, north up, {layout.PixelsPerCell} px per cell. Terrain colors blend about a third of a cell across their edges. ");
@@ -656,7 +655,7 @@ public sealed class ObserveTools
             + string.Create(CultureInfo.InvariantCulture, $"and the south edge of cells whose z is a multiple of {layout.GridStep}; the number beside each line is that x (bottom margin) or z (left margin).");
     }
 
-    internal static string ResolveScreenshotName(string input)
+    internal static string ResolveScreenshotName(string? input)
     {
         string name = (input ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(name))

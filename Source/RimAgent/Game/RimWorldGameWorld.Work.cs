@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -30,7 +28,7 @@ internal sealed partial class RimWorldGameWorld
 
     public IReadOnlyList<BillInfo> GetBills(int tableId)
     {
-        IBillGiver giver = FindBillGiver(tableId);
+        IBillGiver? giver = FindBillGiver(tableId);
         if (giver == null) return [];
         var bills = new List<BillInfo>();
         for (int i = 0; i < giver.BillStack.Bills.Count; i++)
@@ -65,10 +63,10 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult AddBill(int tableId, string recipeDefName, int count)
     {
-        IBillGiver giver = FindBillGiver(tableId);
+        IBillGiver? giver = FindBillGiver(tableId);
         if (giver == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no work table has id {tableId}"));
         var table = (Thing)giver;
-        RecipeDef recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(recipeDefName);
+        RecipeDef? recipe = DefDatabase<RecipeDef>.GetNamedSilentFail(recipeDefName);
         if (recipe == null) return CommandResult.Fail($"unknown bill recipe {recipeDefName}");
         if (!table.def.AllRecipes.Contains(recipe))
             return CommandResult.Fail($"{table.LabelCap} cannot make {recipe.ProducedThingDef?.label ?? recipe.label}");
@@ -86,7 +84,7 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult DeleteBill(int tableId, int index)
     {
-        IBillGiver giver = FindBillGiver(tableId);
+        IBillGiver? giver = FindBillGiver(tableId);
         if (giver == null) return CommandResult.Fail(string.Create(CultureInfo.InvariantCulture, $"no work table has id {tableId}"));
         var table = (Thing)giver;
         if (index < 1 || index > giver.BillStack.Bills.Count)
@@ -97,7 +95,7 @@ internal sealed partial class RimWorldGameWorld
         return CommandResult.Ok($"Deleted bill {label} from {table.LabelCap}. Materials already gathered stay where they are.");
     }
 
-    private static IBillGiver FindBillGiver(int id)
+    private static IBillGiver? FindBillGiver(int id)
     {
         return Map.listerBuildings.allBuildingsColonist
             .Where(b => b is IBillGiver)
@@ -107,10 +105,10 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SetWorkPriority(int pawnId, string workTypeDefName, int priority)
     {
-        Pawn pawn = FindColonist(pawnId);
+        Pawn? pawn = FindColonist(pawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (pawn.workSettings == null) return CommandResult.Fail($"{pawn.LabelShort} has no work settings");
-        WorkTypeDef workType = DefDatabase<WorkTypeDef>.GetNamedSilentFail(workTypeDefName);
+        WorkTypeDef? workType = DefDatabase<WorkTypeDef>.GetNamedSilentFail(workTypeDefName);
         if (workType == null) return CommandResult.Fail($"unknown work type {workTypeDefName}");
         if (pawn.WorkTypeIsDisabled(workType)) return CommandResult.Fail($"{pawn.LabelShort} is incapable of {workType.label}");
 
@@ -147,10 +145,10 @@ internal sealed partial class RimWorldGameWorld
 
     public CommandResult SetTimeAssignment(int pawnId, int hour, string assignmentDefName)
     {
-        Pawn pawn = FindColonist(pawnId);
+        Pawn? pawn = FindColonist(pawnId);
         if (pawn == null) return CommandResult.Fail(ColonistNotFound);
         if (pawn.timetable == null) return CommandResult.Fail($"{pawn.LabelShort} has no schedule");
-        TimeAssignmentDef assignment = DefDatabase<TimeAssignmentDef>.GetNamedSilentFail(assignmentDefName);
+        TimeAssignmentDef? assignment = DefDatabase<TimeAssignmentDef>.GetNamedSilentFail(assignmentDefName);
         if (assignment == null) return CommandResult.Fail($"unknown time assignment {assignmentDefName}");
         if (hour < 0 || hour > 23) return CommandResult.Fail("hour must be 0-23");
         pawn.timetable.SetAssignment(hour, assignment);

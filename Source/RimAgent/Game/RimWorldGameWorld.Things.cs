@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -89,7 +87,7 @@ internal sealed partial class RimWorldGameWorld
         return new MapBounds { Width = size.x, Height = size.z };
     }
 
-    public CellInfo GetCell(int x, int z)
+    public CellInfo? GetCell(int x, int z)
     {
         return ToCell(new IntVec3(x, 0, z), Map, []);
     }
@@ -121,7 +119,7 @@ internal sealed partial class RimWorldGameWorld
     {
         TerrainDef terrain = c.GetTerrain(map);
         bool fogged = c.Fogged(map);
-        Zone zone = c.GetZone(map);
+        Zone? zone = c.GetZone(map);
         return new CellInfo
         {
             X = c.x,
@@ -154,17 +152,17 @@ internal sealed partial class RimWorldGameWorld
         return GroundSupport.None;
     }
 
-    private static string RoofLabel(RoofDef roof)
+    private static string RoofLabel(RoofDef? roof)
     {
         if (roof == null) return string.Empty;
         if (!roof.isNatural) return "constructed";
         return roof.isThickRoof ? "overhead mountain" : "natural";
     }
 
-    private static RoomInfo ToRoom(Room room, Dictionary<int, RoomInfo> cache)
+    private static RoomInfo? ToRoom(Room? room, Dictionary<int, RoomInfo> cache)
     {
         if (room == null) return null;
-        if (cache.TryGetValue(room.ID, out RoomInfo cached)) return cached;
+        if (cache.TryGetValue(room.ID, out RoomInfo? cached)) return cached;
         CellRect extents = room.ExtentsClose;
         var info = new RoomInfo
         {

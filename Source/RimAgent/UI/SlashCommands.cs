@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 
@@ -44,19 +43,19 @@ public static class SlashCommands
     /// <summary>復原不是指令：狀態列在有可復原的操作時顯示按鈕（見 Window_Agent.DrawUndoButton）。</summary>
     public static readonly IReadOnlyList<SlashCommand> All = [Goal, Clear, Compact, Stop];
 
-    public static bool IsTypingName(string input)
+    public static bool IsTypingName([NotNullWhen(true)] string? input)
     {
         return input != null && input.Length > 0 && input[0] == '/' && input.IndexOf(' ', StringComparison.Ordinal) < 0;
     }
 
-    public static List<SlashCommand> Match(string input)
+    public static List<SlashCommand> Match(string? input)
     {
         if (!IsTypingName(input)) return [];
         string prefix = input.Substring(1);
         return [.. All.Where(c => c.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))];
     }
 
-    public static bool TryParse(string input, out SlashCommand command, out string args)
+    public static bool TryParse(string? input, out SlashCommand? command, out string args)
     {
         args = string.Empty;
         string text = (input ?? string.Empty).Trim();
@@ -72,7 +71,7 @@ public static class SlashCommands
         return true;
     }
 
-    public static bool TryGetSkillToken(string input, out string prefix, out int start)
+    public static bool TryGetSkillToken([NotNullWhen(true)] string? input, out string prefix, out int start)
     {
         prefix = string.Empty;
         start = -1;
@@ -84,16 +83,17 @@ public static class SlashCommands
         return true;
     }
 
-    public static List<string> MatchSkills(string input, IEnumerable<string> skillNames)
+    public static List<string> MatchSkills(string? input, IEnumerable<string?>? skillNames)
     {
         if (!TryGetSkillToken(input, out string prefix, out _) || skillNames == null) return [];
         return [.. skillNames
-            .Where(n => !string.IsNullOrWhiteSpace(n) && n.Trim().IndexOfAny([' ', (char)9]) < 0
-                        && n.Trim().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            .Select(n => n.Trim())];
+            .OfType<string>()
+            .Select(n => n.Trim())
+            .Where(n => n.Length > 0 && n.IndexOfAny([' ', (char)9]) < 0
+                        && n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))];
     }
 
-    public static GoalAction ParseGoal(string args, out int index, out string text)
+    public static GoalAction ParseGoal(string? args, out int index, out string text)
     {
         index = 0;
         text = (args ?? string.Empty).Trim();

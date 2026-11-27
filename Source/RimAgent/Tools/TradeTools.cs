@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -19,9 +17,9 @@ public sealed partial class TradeTools
     private const string SilverDefName = "Silver";
 
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public TradeTools(IGameWorld world, ConfirmationGate gate = null)
+    public TradeTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -60,7 +58,7 @@ public sealed partial class TradeTools
             return ToolText.Error("nothing to buy or sell. Give at least one item, e.g. buys \"steel x50\".");
         }
 
-        TraderInfo deal = _world.GetTraders()
+        TraderInfo? deal = _world.GetTraders()
             .FirstOrDefault(t => string.Equals(t.Id, (trader ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase));
         if (deal == null)
         {
@@ -90,7 +88,7 @@ public sealed partial class TradeTools
         var parts = new List<string>();
         if (request.Buys.Count > 0) parts.Add("buy " + string.Join(", ", request.Buys.Select(l => $"{l.DefName} x{l.Count}")));
         if (request.Sells.Count > 0) parts.Add("sell " + string.Join(", ", request.Sells.Select(l => $"{l.DefName} x{l.Count}")));
-        string blocked = ToolText.Blocked(_gate, $"would trade with {deal.Name} [{deal.Id}] (negotiator {pawn.Name}): {string.Join("; ", parts)}.");
+        string? blocked = ToolText.Blocked(_gate, $"would trade with {deal.Name} [{deal.Id}] (negotiator {pawn.Name}): {string.Join("; ", parts)}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.ExecuteTrade(request);
@@ -156,7 +154,7 @@ public sealed partial class TradeTools
     {
         if (string.IsNullOrWhiteSpace(negotiator))
         {
-            ColonistInfo defaultPawn = _world.GetColonists().Where(c => !c.Downed).OrderByDescending(SocialLevel).FirstOrDefault();
+            ColonistInfo? defaultPawn = _world.GetColonists().Where(c => !c.Downed).OrderByDescending(SocialLevel).FirstOrDefault();
             if (defaultPawn == null) return Result<ColonistInfo>.Fail(ToolText.Error("no colonist is available to negotiate."));
             return Result<ColonistInfo>.Ok(defaultPawn);
         }
@@ -168,7 +166,7 @@ public sealed partial class TradeTools
 
     private static int SocialLevel(ColonistInfo c)
     {
-        SkillInfo social = c.Skills.FirstOrDefault(s => string.Equals(s.DefName, "Social", StringComparison.OrdinalIgnoreCase));
+        SkillInfo? social = c.Skills.FirstOrDefault(s => string.Equals(s.DefName, "Social", StringComparison.OrdinalIgnoreCase));
         return social != null ? social.Level : 0;
     }
 

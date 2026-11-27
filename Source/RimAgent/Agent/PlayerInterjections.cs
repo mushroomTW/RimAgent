@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Collections.Generic;
 
 namespace RimAgent.Agent;
@@ -57,7 +55,7 @@ public sealed class PlayerInterjections
         }
     }
 
-    public string TakeAll()
+    public string? TakeAll()
     {
         lock (_lock)
         {
@@ -66,11 +64,11 @@ public sealed class PlayerInterjections
     }
 
     /// <summary>有待送的就取走並維持開放；沒有就關閉並回傳 null。兩者同一把鎖，收尾時不會漏掉剛送進來的話。</summary>
-    public string TakeAllOrClose()
+    public string? TakeAllOrClose()
     {
         lock (_lock)
         {
-            string text = TakeAllLocked();
+            string? text = TakeAllLocked();
             if (text == null) _open = false;
             return text;
         }
@@ -87,7 +85,7 @@ public sealed class PlayerInterjections
         }
     }
 
-    private string TakeAllLocked()
+    private string? TakeAllLocked()
     {
         if (_pending.Count == 0) return null;
         string text = string.Join("\n\n", _pending);

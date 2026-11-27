@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -21,10 +19,10 @@ public sealed partial class ColonyAgentSession
     private sealed class TokenTrackingChatClient : DelegatingChatClient
     {
         private long _lastInputTokens = -1;
-        private string _lastModel;
-        public string LastModel => Volatile.Read(ref _lastModel);
+        private string? _lastModel;
+        public string? LastModel => Volatile.Read(ref _lastModel);
         public void ResetModel() => Volatile.Write(ref _lastModel, null);
-        public Action<ChatResponse> ResponseObserved { get; set; }
+        public Action<ChatResponse>? ResponseObserved { get; set; }
 
         public TokenTrackingChatClient(IChatClient innerClient) : base(innerClient) { }
 
@@ -48,17 +46,17 @@ public sealed partial class ColonyAgentSession
 
         public override async Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
-            ChatOptions options = null,
+            ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             IList<ChatMessage> sent = messages as IList<ChatMessage> ?? [.. messages];
             ChatResponse response = await base.GetResponseAsync(sent, options, cancellationToken).ConfigureAwait(false);
-            Volatile.Write(ref _lastModel, response?.ModelId);
-            long? tokens = response?.Usage?.InputTokenCount;
+            Volatile.Write(ref _lastModel, response.ModelId);
+            long? tokens = response.Usage?.InputTokenCount;
             Interlocked.Exchange(ref _lastInputTokens, tokens.HasValue && tokens.Value >= 0 ? tokens.Value : -1);
             // 備援可能換成別的模型回答，以回應的 ModelId 為準；要求的 ModelId 只在回應沒帶時補位。
-            Meter.Observe(sent, tokens, response?.ModelId ?? options?.ModelId);
-            Meter.ObserveOutput(response?.Messages, response?.Usage?.OutputTokenCount, response?.Usage?.ReasoningTokenCount);
+            Meter.Observe(sent, tokens, response.ModelId ?? options?.ModelId);
+            Meter.ObserveOutput(response.Messages, response.Usage?.OutputTokenCount, response.Usage?.ReasoningTokenCount);
             try { ResponseObserved?.Invoke(response); }
             catch { /* 選用紀錄失敗不影響模型回覆。 */ }
             return response;
@@ -69,10 +67,10 @@ public sealed partial class ColonyAgentSession
     private sealed class RunOptionsCapture : DelegatingChatClient
     {
         private readonly Action<int, ChatResponse> _responseObserved;
-        private readonly ConcurrentDictionary<string, object> _results = new(StringComparer.Ordinal);
-        private ChatResponse _lastResponse;
-        private ChatOptions _current;
-        private List<ChatMessage> _lastRequest;
+        private readonly ConcurrentDictionary<string, object?> _results = new(StringComparer.Ordinal);
+        private ChatResponse? _lastResponse;
+        private ChatOptions? _current;
+        private List<ChatMessage>? _lastRequest;
         private int _steps;
 
         public RunOptionsCapture(IChatClient innerClient, Action<int, ChatResponse> responseObserved) : base(innerClient)
@@ -86,12 +84,12 @@ public sealed partial class ColonyAgentSession
         /// <summary>還沒送回模型的那一步：呼叫與已有的結果，缺的補上說明，讓呼叫與結果成對。</summary>
         public IReadOnlyList<ChatMessage> UnsentStep()
         {
-            ChatResponse response = Volatile.Read(ref _lastResponse);
+            ChatResponse? response = Volatile.Read(ref _lastResponse);
             if (response == null) return [];
             List<FunctionCallContent> calls = [.. response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>()];
             if (calls.Count == 0) return [];
             return [.. response.Messages, new ChatMessage(ChatRole.Tool, [.. calls.Select(c => (AIContent)new FunctionResultContent(
-                c.CallId, _results.TryGetValue(c.CallId, out object result) ? result : "Interrupted: no result; this call may or may not have run."))])];
+                c.CallId, _results.TryGetValue(c.CallId ?? string.Empty, out object? result) ? result : "Interrupted: no result; this call may or may not have run."))])];
         }
 
         public void RecordToolResults(FunctionInvokingChatClient invoking)
@@ -101,15 +99,15 @@ public sealed partial class ColonyAgentSession
             {
                 try
                 {
-                    object result = inner == null
+                    object? result = inner == null
                         ? await context.Function.InvokeAsync(context.Arguments, cancellationToken).ConfigureAwait(false)
                         : await inner(context, cancellationToken).ConfigureAwait(false);
-                    _results[context.CallContent.CallId] = result;
+                    _results[context.CallContent.CallId ?? string.Empty] = result;
                     return result;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _results[context.CallContent.CallId] = "Error: " + ex.Message;
+                    _results[context.CallContent.CallId ?? string.Empty] = "Error: " + ex.Message;
                     throw;
                 }
             };
@@ -125,7 +123,7 @@ public sealed partial class ColonyAgentSession
 
         public override async Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
-            ChatOptions options = null,
+            ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             List<ChatMessage> sent = [.. messages];
@@ -145,7 +143,7 @@ public sealed partial class ColonyAgentSession
         {
             lock (_toolsLock)
             {
-                ChatOptions options = Volatile.Read(ref _current);
+                ChatOptions? options = Volatile.Read(ref _current);
                 if (options == null) return;
                 var list = new List<AITool>(options.Tools ?? Array.Empty<AITool>());
                 list.AddRange(tools.Except(list));
@@ -169,13 +167,13 @@ public sealed partial class ColonyAgentSession
 
         public override Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
-            ChatOptions options = null,
+            ChatOptions? options = null,
             CancellationToken cancellationToken = default)
             => base.GetResponseAsync(Isolate(messages), options, cancellationToken);
 
         public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
             IEnumerable<ChatMessage> messages,
-            ChatOptions options = null,
+            ChatOptions? options = null,
             CancellationToken cancellationToken = default)
             => base.GetStreamingResponseAsync(Isolate(messages), options, cancellationToken);
 
@@ -196,9 +194,9 @@ public sealed partial class ColonyAgentSession
     private sealed class ThinkingActivityClient : DelegatingChatClient
     {
         private readonly AgentActivityTracker _activity;
-        private readonly AgentTranscript _transcript;
+        private readonly AgentTranscript? _transcript;
 
-        public ThinkingActivityClient(IChatClient innerClient, AgentActivityTracker activity, AgentTranscript transcript = null) : base(innerClient)
+        public ThinkingActivityClient(IChatClient innerClient, AgentActivityTracker activity, AgentTranscript? transcript = null) : base(innerClient)
         {
             _activity = activity;
             _transcript = transcript;
@@ -206,7 +204,7 @@ public sealed partial class ColonyAgentSession
 
         public override async Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
-            ChatOptions options = null,
+            ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             ChatResponse response;
@@ -218,7 +216,7 @@ public sealed partial class ColonyAgentSession
             return response;
         }
 
-        private void RecordReasoning(ChatResponse response)
+        private void RecordReasoning(ChatResponse? response)
         {
             if (_transcript == null || response?.Messages == null) return;
             string reasoning = string.Join("\n\n", response.Messages

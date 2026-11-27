@@ -14,7 +14,7 @@ public static class MemoryScopes
     /// <summary>系統提示裡的索引筆數上限；兩個範圍都滿時也要全部列得進去。</summary>
     public const int MaxIndexEntries = AgentMemoryStore.MaxFiles * 2;
 
-    public static bool IsGlobal(string name)
+    public static bool IsGlobal(string? name)
     {
         return AgentMemoryStore.NormalizeName(name).StartsWith(GlobalPrefix, StringComparison.OrdinalIgnoreCase);
     }

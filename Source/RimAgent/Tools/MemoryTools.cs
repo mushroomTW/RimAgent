@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -49,7 +47,7 @@ internal static class MemoryTools
         throw new InvalidOperationException("Unknown FileMemoryProvider tool: " + name);
     }
 
-    public static List<AIFunction> Create(AgentMemoryStore store, ConfirmationGate gate)
+    public static List<AIFunction> Create(AgentMemoryStore store, ConfirmationGate? gate)
     {
 #pragma warning disable MAAI001, VSTHRD002 // VSTHRD002：同步等待的前提見下方註解
         var provider = new FileMemoryProvider(store ?? throw new ArgumentNullException(nameof(store)));
@@ -59,7 +57,7 @@ internal static class MemoryTools
         // 同步等待：前提是 provider 只回傳工具清單、不 await 需要回到主執行緒的工作；升級 SDK 時要重新確認。
         AIContext provided = provider.InvokingAsync(context).AsTask().GetAwaiter().GetResult();
 #pragma warning restore MAAI001, VSTHRD002
-        return [.. provided.Tools.OfType<AIFunction>()
+        return [.. (provided.Tools ?? []).OfType<AIFunction>()
             .Where(tool => Risks.ContainsKey(tool.Name))
             .Select(tool => tool.Name == "file_memory_replace_lines" ? new SlimSchemaFunction(tool, ReplaceLinesDescription, ReplaceLinesSchema) : tool)
             .Select(tool => RiskOf(tool.Name) == ToolRisk.Query ? tool : new GatedMemoryFunction(tool, gate))];
@@ -100,44 +98,44 @@ internal static class MemoryTools
     /// <summary>極小 stub：只為 FileMemoryProvider 建立 InvokingContext；任何實際呼叫都代表誤用。</summary>
     private sealed class NoOpChatClient : IChatClient
     {
-        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException("This client only hosts FileMemoryProvider tool creation.");
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-            IEnumerable<ChatMessage> messages, ChatOptions options = null, CancellationToken cancellationToken = default)
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException("This client only hosts FileMemoryProvider tool creation.");
 
-        public object GetService(Type serviceType, object serviceKey = null) => null;
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
         public void Dispose() { }
     }
 
     private sealed class GatedMemoryFunction : DelegatingAIFunction
     {
-        private readonly ConfirmationGate _gate;
+        private readonly ConfirmationGate? _gate;
 
-        public GatedMemoryFunction(AIFunction inner, ConfirmationGate gate) : base(inner)
+        public GatedMemoryFunction(AIFunction inner, ConfirmationGate? gate) : base(inner)
         {
             _gate = gate;
         }
 
-        protected override ValueTask<object> InvokeCoreAsync(
+        protected override ValueTask<object?> InvokeCoreAsync(
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
             string file = AgentMemoryStore.NormalizeName(Argument(arguments, "fileName"));
             if (AgentMemoryStore.IsReservedFile(file))
             {
-                return new ValueTask<object>(ToolText.Error("Cannot directly modify reserved memory index or description files."));
+                return new ValueTask<object?>(ToolText.Error("Cannot directly modify reserved memory index or description files."));
             }
             if (MemoryScopes.IsGlobal(file) && _gate != null && _gate.RequiresGlobalMemoryConfirmation())
             {
                 string preview = Preview(arguments);
                 _gate.NoteBlocked(preview);
-                return new ValueTask<object>(ToolText.ConfirmationPrefix + preview);
+                return new ValueTask<object?>(ToolText.ConfirmationPrefix + preview);
             }
-            string blocked = ToolText.Blocked(_gate, Preview(arguments));
+            string? blocked = ToolText.Blocked(_gate, Preview(arguments));
             return blocked != null
-                ? new ValueTask<object>(blocked)
+                ? new ValueTask<object?>(blocked)
                 : base.InvokeCoreAsync(arguments, cancellationToken);
         }
 
@@ -157,9 +155,9 @@ internal static class MemoryTools
             }
         }
 
-        private static string Argument(AIFunctionArguments arguments, string name)
+        private static string Argument(AIFunctionArguments? arguments, string name)
         {
-            return arguments != null && arguments.TryGetValue(name, out object value) ? value?.ToString() ?? string.Empty : string.Empty;
+            return arguments != null && arguments.TryGetValue(name, out object? value) ? value?.ToString() ?? string.Empty : string.Empty;
         }
     }
 }

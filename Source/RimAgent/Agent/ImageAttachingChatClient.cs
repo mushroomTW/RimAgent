@@ -1,8 +1,7 @@
-#nullable disable
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -34,11 +33,11 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
 
     private readonly Func<bool> _enabled;
-    private readonly Func<string, Task<byte[]>> _load;
+    private readonly Func<string, Task<byte[]?>> _load;
     private readonly ConcurrentDictionary<string, byte[]> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _failedPaths = new(StringComparer.OrdinalIgnoreCase);
-    private volatile IReadOnlyList<byte[]> _playerImages;
-    private volatile string _instructionText;
+    private volatile IReadOnlyList<byte[]>? _playerImages;
+    private volatile string? _instructionText;
 
     /// <summary>
     /// 設定本句指令要附的玩家圖片（JPEG）；指令結束時以 null 清除。
@@ -46,7 +45,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
     /// （而不是最後一則使用者訊息，後者可能是後來才加入的訊息）；找不到或沒給時退回最後一則。
     /// 每次呼叫也清掉讀圖失敗的記錄，讓失敗只在同一句指令內不重試。
     /// </summary>
-    public void SetPlayerImages(IReadOnlyList<byte[]> images, string instructionText = null)
+    public void SetPlayerImages(IReadOnlyList<byte[]>? images, string? instructionText = null)
     {
         _playerImages = images != null && images.Count > 0 ? images : null;
         _instructionText = string.IsNullOrWhiteSpace(instructionText) ? null : instructionText.Trim();
@@ -54,7 +53,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
     }
 
     /// <param name="load">讀取並縮圖（須排到主線程）；尚未寫完回傳空陣列。</param>
-    public ImageAttachingChatClient(IChatClient innerClient, Func<bool> enabled, Func<string, Task<byte[]>> load)
+    public ImageAttachingChatClient(IChatClient innerClient, Func<bool> enabled, Func<string, Task<byte[]?>> load)
         : base(innerClient)
     {
         _enabled = enabled ?? throw new ArgumentNullException(nameof(enabled));
@@ -63,7 +62,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
 
     public override async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
-        ChatOptions options = null,
+        ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         IEnumerable<ChatMessage> prepared = await AttachAsync(messages, cancellationToken).ConfigureAwait(false);
@@ -72,7 +71,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
-        ChatOptions options = null,
+        ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         IEnumerable<ChatMessage> prepared = await AttachAsync(messages, cancellationToken).ConfigureAwait(false);
@@ -82,14 +81,15 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         }
     }
 
-    internal async Task<IEnumerable<ChatMessage>> AttachAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken)
+    internal async Task<IEnumerable<ChatMessage>> AttachAsync(IEnumerable<ChatMessage>? messages, CancellationToken cancellationToken)
     {
-        if (messages == null || !_enabled()) return messages;
+        if (messages == null) return [];
+        if (!_enabled()) return messages;
         List<ChatMessage> list = messages as List<ChatMessage> ?? [.. messages];
         int lastUser = list.FindLastIndex(m => m.Role == ChatRole.User);
-        List<ChatMessage> copy = null;
+        List<ChatMessage>? copy = null;
 
-        IReadOnlyList<byte[]> playerImages = _playerImages;
+        IReadOnlyList<byte[]>? playerImages = _playerImages;
         if (playerImages != null && lastUser >= 0)
         {
             int target = FindInstructionMessage(list, lastUser);
@@ -97,9 +97,9 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
             copy[target] = WithImages(list[target], playerImages);
         }
 
-        if (TryFindLatestScreenshot(list, lastUser + 1, out int toolIndex, out string path))
+        if (TryFindLatestScreenshot(list, lastUser + 1, out int toolIndex, out string? path))
         {
-            byte[] image = await LoadAsync(path, cancellationToken).ConfigureAwait(false);
+            byte[]? image = await LoadAsync(path, cancellationToken).ConfigureAwait(false);
             if (image != null)
             {
                 // 插在同一批工具訊息之後：工具訊息必須緊接著發出呼叫的助理訊息。
@@ -118,7 +118,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
 
     private int FindInstructionMessage(List<ChatMessage> list, int lastUser)
     {
-        string text = _instructionText;
+        string? text = _instructionText;
         if (text == null) return lastUser;
         for (int i = lastUser; i >= 0; i--)
         {
@@ -145,7 +145,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
     }
 
     /// <summary>從後往前找本輪最新一次成功的截圖結果；run_script 裡的截圖步驟也算。</summary>
-    private static bool TryFindLatestScreenshot(List<ChatMessage> list, int start, out int toolIndex, out string path)
+    private static bool TryFindLatestScreenshot(List<ChatMessage> list, int start, out int toolIndex, [NotNullWhen(true)] out string? path)
     {
         var screenshotCalls = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (FunctionCallContent call in list.Skip(start)
@@ -160,7 +160,7 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         for (int i = list.Count - 1; i >= start && screenshotCalls.Count > 0; i--)
         {
             if (list[i].Role != ChatRole.Tool) continue;
-            if (TryParseScreenshotResult(list[i], screenshotCalls, out string foundPath))
+            if (TryParseScreenshotResult(list[i], screenshotCalls, out string? foundPath))
             {
                 path = foundPath;
                 toolIndex = i;
@@ -172,12 +172,12 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         return false;
     }
 
-    private static bool TryParseScreenshotResult(ChatMessage toolMsg, Dictionary<string, string> screenshotCalls, out string path)
+    private static bool TryParseScreenshotResult(ChatMessage toolMsg, Dictionary<string, string> screenshotCalls, [NotNullWhen(true)] out string? path)
     {
         foreach (FunctionResultContent result in toolMsg.Contents.OfType<FunctionResultContent>().Reverse())
         {
-            if (result.CallId == null || !screenshotCalls.TryGetValue(result.CallId, out string tool)) continue;
-            string text = result.Result?.ToString();
+            if (result.CallId == null || !screenshotCalls.TryGetValue(result.CallId, out string? tool)) continue;
+            string? text = result.Result?.ToString();
             path = tool == ScreenshotToolName
                 ? TranscriptScreenshot.TryParseSavedPath(text)
                 : TranscriptScreenshot.TryParseScriptSavedPath(text);
@@ -187,14 +187,14 @@ internal sealed class ImageAttachingChatClient : DelegatingChatClient
         return false;
     }
 
-    private async Task<byte[]> LoadAsync(string path, CancellationToken cancellationToken)
+    private async Task<byte[]?> LoadAsync(string path, CancellationToken cancellationToken)
     {
-        if (_cache.TryGetValue(path, out byte[] cached)) return cached;
+        if (_cache.TryGetValue(path, out byte[]? cached)) return cached;
         // 這句指令內已確定讀不到：迴圈每一輪都會再進來，不要每次重試 20 次 × 100ms。
         if (_failedPaths.ContainsKey(path)) return null;
         for (int attempt = 0; attempt < MaxLoadAttempts; attempt++)
         {
-            byte[] image = await _load(path).ConfigureAwait(false);
+            byte[]? image = await _load(path).ConfigureAwait(false);
             if (image is { Length: > 0 })
             {
                 if (_cache.Count >= MaxCachedImages) _cache.Clear();

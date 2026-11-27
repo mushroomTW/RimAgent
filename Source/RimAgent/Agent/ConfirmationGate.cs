@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,13 +13,13 @@ public sealed class ConfirmationGate
 {
     private sealed class PendingApproval
     {
-        public string ToolName;
-        public Func<CancellationToken, Task<object>> ExecuteAsync;
+        public required string ToolName;
+        public required Func<CancellationToken, Task<object?>> ExecuteAsync;
     }
 
     private sealed class InvocationState
     {
-        public string ToolName;
+        public string? ToolName;
         public ToolRisk Risk;
         // 自動模式兩段式：false＝強制預覽（不記入 blocked）、true＝強制執行、null＝照模式判斷。
         public bool? Forced;
@@ -33,7 +32,7 @@ public sealed class ConfirmationGate
     // 玩家按下「不再問」的工具；只活在這場遊戲的記憶體裡，不進存檔。
     private readonly HashSet<string> _sessionApproved = new(StringComparer.Ordinal);
     // 不在工具呼叫期間（例如直接建構工具的測試）時只有完整權限模式放行命令（見 AllowCommands）。
-    private readonly AsyncLocal<InvocationState> _invocation = new();
+    private readonly AsyncLocal<InvocationState?> _invocation = new();
     private int _lastApprovalExecutedCount;
     // -1 代表本輪不限制；自主排程器會在送出前設成當日剩餘工具額度。
     private int _remainingToolCalls = -1;
@@ -42,7 +41,7 @@ public sealed class ConfirmationGate
     private readonly InstructionCache<FailedCall> _failedCalls = new();
 
     /// <param name="mode">未提供時採最保守的確認模式。</param>
-    public ConfirmationGate(Func<AgentMode> mode)
+    public ConfirmationGate(Func<AgentMode>? mode)
     {
         _mode = mode ?? (() => AgentMode.Confirm);
     }
@@ -69,7 +68,7 @@ public sealed class ConfirmationGate
 
     public bool AllowCommands()
     {
-        InvocationState invocation = _invocation.Value;
+        InvocationState? invocation = _invocation.Value;
         if (invocation?.Forced.HasValue == true) return invocation.Forced.Value;
         return _mode() switch
         {
@@ -84,7 +83,7 @@ public sealed class ConfirmationGate
         };
     }
 
-    public void NoteBlocked(string preview)
+    public void NoteBlocked(string? preview)
     {
         // 強制預覽那一段只是為了拿預覽文字給分類器看，還沒決定要不要擋，先不記。
         if (_invocation.Value?.Forced == false) return;
@@ -94,7 +93,7 @@ public sealed class ConfirmationGate
         }
     }
 
-    internal void RegisterPendingApproval(string toolName, Func<CancellationToken, Task<object>> executeAsync)
+    internal void RegisterPendingApproval(string toolName, Func<CancellationToken, Task<object?>>? executeAsync)
     {
         if (executeAsync == null) return;
         lock (_gate)
@@ -132,10 +131,11 @@ public sealed class ConfirmationGate
             try
             {
                 // 核准後會直接執行工具；續行必須留在呼叫端的主線程，否則第二批命令會落到執行緒池碰遊戲狀態。
-                object result = await approval.ExecuteAsync(cancellationToken);
+                object? result = await approval.ExecuteAsync(cancellationToken);
                 // 工具通常以錯誤文字回報失敗而非拋出例外；失敗不可記成永久放行。
-                if ((result?.ToString() ?? string.Empty).StartsWith("Error: ", StringComparison.Ordinal))
-                    throw new InvalidOperationException(result.ToString());
+                string resultText = result?.ToString() ?? string.Empty;
+                if (resultText.StartsWith("Error: ", StringComparison.Ordinal))
+                    throw new InvalidOperationException(resultText);
             }
             catch
             {
@@ -164,14 +164,14 @@ public sealed class ConfirmationGate
     /// 記住「工具名稱」等於對之後所有外部呼叫放行，因此永遠不記。
     /// 通用按鈕通道每次按的東西都不同，也不記。
     /// </summary>
-    private static bool CanRememberForSession(string toolName)
+    private static bool CanRememberForSession(string? toolName)
     {
         return !string.IsNullOrEmpty(toolName)
             && !string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
             && !AgentToolRegistry.IsGenericActionTool(toolName);
     }
 
-    internal bool IsApprovedForSession(string toolName)
+    internal bool IsApprovedForSession(string? toolName)
     {
         if (string.IsNullOrEmpty(toolName)) return false;
         lock (_gate) return _sessionApproved.Contains(toolName);
@@ -259,9 +259,9 @@ public sealed class ConfirmationGate
     }
 
     /// <summary>同一句內一模一樣的呼叫是否已失敗到不該再跑；模型常把同一組失敗參數重送十幾次直到額度用完。允許原樣重試一次（涵蓋格子被小人暫時擋住這類很快會好的失敗），第三次起才擋。</summary>
-    internal bool TryGetFailedCall(string toolName, string arguments, out string error)
+    internal bool TryGetFailedCall(string? toolName, string? arguments, [NotNullWhen(true)] out string? error)
     {
-        if (_failedCalls.TryGet(QueryCacheKey(toolName, arguments), out FailedCall failed) && failed.Count >= MaxIdenticalFailures)
+        if (_failedCalls.TryGet(QueryCacheKey(toolName, arguments), out FailedCall? failed) && failed.Count >= MaxIdenticalFailures)
         {
             error = failed.Error;
             return true;
@@ -270,12 +270,12 @@ public sealed class ConfirmationGate
         return false;
     }
 
-    internal void StoreFailedCall(string toolName, string arguments, string error)
+    internal void StoreFailedCall(string? toolName, string? arguments, string? error)
     {
         if (string.IsNullOrEmpty(error)) return;
         string key = QueryCacheKey(toolName, arguments);
         _failedCalls.AddOrUpdate(key, (exists, previous) =>
-            new FailedCall { Count = (exists ? previous.Count : 0) + 1, Error = error });
+            new FailedCall { Count = (exists && previous != null ? previous.Count : 0) + 1, Error = error });
     }
 
     private const int MaxIdenticalFailures = 2;
@@ -283,7 +283,7 @@ public sealed class ConfirmationGate
     private sealed class FailedCall
     {
         public int Count;
-        public string Error;
+        public required string Error;
     }
 
     /// <summary>命令成功改動了世界（或遊戲時間推進）：先前失敗的呼叫可能已能成功，紀錄作廢。</summary>
@@ -292,12 +292,12 @@ public sealed class ConfirmationGate
         _failedCalls.Clear();
     }
 
-    private static string QueryCacheKey(string toolName, string arguments)
+    private static string QueryCacheKey(string? toolName, string? arguments)
     {
         return (toolName ?? string.Empty) + "\n" + (arguments ?? string.Empty);
     }
 
-    internal bool RequiresExplicitConfirmation(string toolName)
+    internal bool RequiresExplicitConfirmation(string? toolName)
     {
         return string.Equals(toolName, "mcp_call_tool", StringComparison.Ordinal)
             && _mode() is AgentMode.Confirm or AgentMode.Execute;
@@ -316,7 +316,7 @@ public sealed class ConfirmationGate
             && risk != ToolRisk.Query;
     }
 
-    internal void BeginInvocation(string toolName, ToolRisk risk)
+    internal void BeginInvocation(string? toolName, ToolRisk risk)
     {
         _invocation.Value = new InvocationState { ToolName = toolName, Risk = risk };
     }

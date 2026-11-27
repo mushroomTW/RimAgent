@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -14,9 +12,9 @@ namespace RimAgent.Tools;
 public sealed class ZoneTools
 {
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public ZoneTools(IGameWorld world, ConfirmationGate gate = null)
+    public ZoneTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -49,7 +47,7 @@ public sealed class ZoneTools
         [Description("Opposite corner z.")] int z2,
         [Description("Plant to grow: name or defName, e.g. \"rice\" or \"Plant_Rice\"; growing zones only. Empty keeps the game's default.")] string plant = "")
     {
-        string canonical = CanonicalKind(kind);
+        string? canonical = CanonicalKind(kind);
         if (canonical == null) return ToolText.Error($"unknown zone kind \"{kind}\". Use stockpile or growing.");
         if (!string.IsNullOrWhiteSpace(plant) && canonical != "Growing")
         {
@@ -68,7 +66,7 @@ public sealed class ZoneTools
         }
 
         string growing = plantDef.Length > 0 ? $" growing {plantDef}" : string.Empty;
-        string blocked = ToolText.Blocked(_gate, $"would add a {canonical.ToLowerInvariant()} zone over {rect.Value}{growing}.");
+        string? blocked = ToolText.Blocked(_gate, $"would add a {canonical.ToLowerInvariant()} zone over {rect.Value}{growing}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.AddZone(canonical, rect.Value, plantDef);
@@ -84,7 +82,7 @@ public sealed class ZoneTools
         Result<ZoneInfo> target = ResolveZone(zone, _world.GetZones());
         if (!target.Success) return target.Error;
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would delete zone [{target.Value.Id}] {target.Value.Label} ({target.Value.CellCount} cells)."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would delete zone [{target.Value.Id}] {target.Value.Label} ({target.Value.CellCount} cells)."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.DeleteZone(target.Value.Id);
@@ -114,7 +112,7 @@ public sealed class ZoneTools
         var parts = new List<string>();
         if (allows.Value.Count > 0) parts.Add("allow " + string.Join(", ", allows.Value.Select(d => d.Label)));
         if (disallows.Value.Count > 0) parts.Add("disallow " + string.Join(", ", disallows.Value.Select(d => d.Label)));
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would change zone [{target.Value.Id}] {target.Value.Label}'s filter: {string.Join("; ", parts)}."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would change zone [{target.Value.Id}] {target.Value.Label}'s filter: {string.Join("; ", parts)}."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetZoneFilter(
@@ -125,7 +123,7 @@ public sealed class ZoneTools
         return result.Message;
     }
 
-    private static string CanonicalKind(string kind)
+    private static string? CanonicalKind(string? kind)
     {
         string needle = (kind ?? string.Empty).Trim();
         if (string.Equals(needle, "stockpile", StringComparison.OrdinalIgnoreCase)) return "Stockpile";

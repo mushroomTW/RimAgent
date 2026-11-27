@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -99,12 +97,12 @@ public sealed partial class ColonyAgentSession
             : [];
         if (subagents.Count > 0) tools.Add(_subagents.Function);
 
-        string core = null;
+        string? core = null;
         if (_instructions != null) core = _instructions();
         if (string.IsNullOrWhiteSpace(core)) core = AgentPromptComposer.FallbackPreamble;
-        string packIndex = selected.Packs.Count > 0 ? ToolPackTools.Index(selected.Packs) : null;
-        string subagentText = subagents.Count > 0 ? SubagentTools.Instructions(subagents) : null;
-        string memory = null;
+        string? packIndex = selected.Packs.Count > 0 ? ToolPackTools.Index(selected.Packs) : null;
+        string? subagentText = subagents.Count > 0 ? SubagentTools.Instructions(subagents) : null;
+        string? memory = null;
         if (permissions.Allows(ToolCategory.Memory)) memory = MemoryTools.Instructions + "\n\n" + _memory.Index;
 
         long toolTokens = tools.Sum(EstimateToolTokens);
@@ -199,7 +197,7 @@ public sealed partial class ColonyAgentSession
             foreach (AIContent content in message.Contents)
             {
                 if (folded.Contains(content)) continue;
-                HistoryTally target = content switch
+                HistoryTally? target = content switch
                 {
                     TextContent when message.Role == ChatRole.User => user,
                     TextContent or TextReasoningContent => assistant,
@@ -213,7 +211,7 @@ public sealed partial class ColonyAgentSession
         }
     }
 
-    internal static long EstimateTokens(string text)
+    internal static long EstimateTokens(string? text)
     {
         if (string.IsNullOrEmpty(text)) return 0;
         long wide = text.Count(c => c >= 0x2E80);
@@ -243,7 +241,7 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary><paramref name="model"/> 不是具體模型（跟隨主模型或走備援鏈）時查目前的主模型。</summary>
-    internal int MaxOutputFor(string model)
+    internal int MaxOutputFor(string? model)
     {
         try
         {
@@ -257,7 +255,7 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary>這份請求可能由誰回答：釘選的模型只有自己。</summary>
-    internal static IEnumerable<string> OutputCandidates(string model, string current, Func<List<string>> fallbackChain)
+    internal static IEnumerable<string?> OutputCandidates(string? model, string? current, Func<List<string>> fallbackChain)
     {
         if (ModelSlots.IsPinned(model)) return [model];
         List<string> chain;
@@ -267,10 +265,10 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary>沒指定模型時框架失敗會沿備援鏈換模型重送同一份 options，取所有候選中最小的預算，換到誰都不會超過上限。</summary>
-    internal static int OutputBudgetFor(IEnumerable<string> candidates, Func<string, int?> windowLookup, Func<string, int?> limitLookup)
+    internal static int OutputBudgetFor(IEnumerable<string?> candidates, Func<string, int?> windowLookup, Func<string, int?> limitLookup)
     {
         int? minimum = null;
-        foreach (string model in candidates.Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (string model in DistinctModels(candidates))
         {
             int budget = OutputBudget(windowLookup(model), limitLookup(model));
             if (!minimum.HasValue || budget < minimum.Value) minimum = budget;
@@ -303,7 +301,7 @@ public sealed partial class ColonyAgentSession
     {
         try
         {
-            string current = ResolveCurrentModel();
+            string? current = ResolveCurrentModel();
             return current == null ? null : MinimumKnownContextWindow([current], _contextWindowLookup);
         }
         catch (InvalidOperationException)
@@ -321,7 +319,7 @@ public sealed partial class ColonyAgentSession
             bool? known = null;
             try
             {
-                string current = ResolveCurrentModel();
+                string? current = ResolveCurrentModel();
                 if (current != null) known = _visionLookup(current);
             }
             catch (InvalidOperationException)
@@ -333,7 +331,7 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary>讀檔在背景執行緒；解碼、縮圖與 JPEG 編碼要用 Unity API，排回主線程。檔案還沒寫完時回傳空陣列。</summary>
-    private static async Task<byte[]> LoadScreenshotForModelAsync(IGameWorld world, string path)
+    private static async Task<byte[]?> LoadScreenshotForModelAsync(IGameWorld world, string path)
     {
         byte[] png = await Task.Run(() => world.ReadScreenshotFile(path)).ConfigureAwait(false);
         if (png.Length == 0) return png;
@@ -341,13 +339,13 @@ public sealed partial class ColonyAgentSession
     }
 
     /// <summary>目前主模型（"供應商:模型"）：有指定就用它，跟隨框架時是備援鏈第一個；都沒有時為 null。</summary>
-    private string ResolveCurrentModel() => ResolveModel(PreferredModel);
+    private string? ResolveCurrentModel() => ResolveModel(PreferredModel);
 
     /// <summary>空白、哨兵值或備援鏈別名時取框架備援鏈的第一個；都沒有時回傳 null。</summary>
-    internal static string ResolveModel(string preferred)
+    internal static string? ResolveModel(string? preferred)
     {
-        RimAgentSettings settings = RimAgentMod.Settings;
-        string model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
+        RimAgentSettings? settings = RimAgentMod.Settings;
+        string? model = settings != null ? settings.ResolveModelSlot(preferred) : preferred;
         if (!string.IsNullOrWhiteSpace(model) && !RimAgentSettings.IsModelSentinel(model) && !RimLLMChatOptions.IsFallbackModelId(model.Trim())) return model.Trim();
         List<string> candidates;
         try { candidates = RimLLMProvider.GetFallbackChain(); }
@@ -355,15 +353,26 @@ public sealed partial class ColonyAgentSession
         return candidates.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
     }
 
-    internal static int? MinimumKnownContextWindow(IEnumerable<string> candidates, Func<string, int?> lookup)
+    internal static int? MinimumKnownContextWindow(IEnumerable<string?> candidates, Func<string, int?> lookup)
     {
         int? minimum = null;
-        foreach (string model in candidates.Where(m => !string.IsNullOrWhiteSpace(m)).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (string model in DistinctModels(candidates))
         {
-            int? window = lookup(model.Trim());
+            int? window = lookup(model);
             if (window > 0 && (!minimum.HasValue || window.Value < minimum.Value)) minimum = window;
         }
         return minimum;
+    }
+
+    private static IEnumerable<string> DistinctModels(IEnumerable<string?> candidates)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+            string model = candidate.Trim();
+            if (seen.Add(model)) yield return model;
+        }
     }
 
 #pragma warning restore MAAI001
@@ -392,7 +401,7 @@ public sealed partial class ColonyAgentSession
     /// 注意：此處不呼叫 Verse 翻譯（背景續行執行緒不安全），訊息維持英文，
     /// 與 <see cref="ConfirmAsync"/>、<see cref="UndoLast"/> 的 session 層訊息一致。
     /// </summary>
-    public async Task<string> CompactAsync(CancellationToken cancellationToken = default)
+    public async Task<string?> CompactAsync(CancellationToken cancellationToken = default)
     {
         if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
         {
@@ -402,10 +411,11 @@ public sealed partial class ColonyAgentSession
         try
         {
             var provider = _agent.ChatHistoryProvider as InMemoryChatHistoryProvider;
-            List<ChatMessage> before = provider != null && _session != null
-                ? [.. provider.GetMessages(_session)]
+            AgentSession? session = _session;
+            List<ChatMessage> before = provider != null && session != null
+                ? [.. provider.GetMessages(session)]
                 : [];
-            if (before.Count == 0)
+            if (provider == null || session == null || before.Count == 0)
             {
                 AddNotice("Nothing to compact: model history is empty.");
                 return null;
@@ -418,7 +428,7 @@ public sealed partial class ColonyAgentSession
                 AddNotice($"No compaction: model history still has {before.Count} messages. It may already be compact, or the summarizer failed; the history was not changed.");
                 return null;
             }
-            provider.SetMessages(_session, [.. after]);
+            provider.SetMessages(session, [.. after]);
             _tokenUsage.Reset();
             // 展開紀錄多半已被摘要掉，包跟著收回，工具清單回到精簡狀態。
             UnloadToolPacks();
@@ -461,8 +471,8 @@ public sealed partial class ColonyAgentSession
     /// <summary>供應商回報超出視窗時先折成摘要；摘要也失敗（歷史太短或摘要本身超出視窗）才丟掉歷史。</summary>
     private async Task<bool> TrySummarizeHistoryAsync(CancellationToken cancellationToken)
     {
-        if (_session == null || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return false;
-        List<ChatMessage> before = [.. provider.GetMessages(_session)];
+        if (_session is not { } session || _agent.ChatHistoryProvider is not InMemoryChatHistoryProvider provider) return false;
+        List<ChatMessage> before = [.. provider.GetMessages(session)];
         if (before.Count == 0) return false;
         try
         {
@@ -470,7 +480,7 @@ public sealed partial class ColonyAgentSession
             // 摘要策略會吞掉失敗，也可能吞掉取消；停止時不可往下清空歷史。
             cancellationToken.ThrowIfCancellationRequested();
             if (after.Count >= before.Count) return false;
-            provider.SetMessages(_session, after);
+            provider.SetMessages(session, after);
             _tokenUsage.Reset();
             return true;
         }

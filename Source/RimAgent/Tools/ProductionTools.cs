@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -14,9 +12,9 @@ namespace RimAgent.Tools;
 public sealed class ProductionTools
 {
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public ProductionTools(IGameWorld world, ConfirmationGate gate = null)
+    public ProductionTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -69,7 +67,7 @@ public sealed class ProductionTools
             string recipes = Recipes(t.Id, MaxRecipesPerTable);
             if (recipes.Length > 0)
             {
-                if (!tablesByRecipes.TryGetValue(recipes, out List<int> ids)) tablesByRecipes[recipes] = ids = [];
+                if (!tablesByRecipes.TryGetValue(recipes, out List<int>? ids)) tablesByRecipes[recipes] = ids = [];
                 ids.Add(t.Id);
             }
             sb.Append('[').Append(t.Id).Append("] ").Append(t.Label);
@@ -107,7 +105,7 @@ public sealed class ProductionTools
         if (!def.Success) return def.Error + string.Create(CultureInfo.InvariantCulture, $" Only the recipes of {target.Value.Label} [{target.Value.Id}] were searched.");
         if (count < 1) return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"count must be at least 1, not {count}."));
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would add bill {def.Value.Label} x{count} on {target.Value.Label} [{target.Value.Id}]."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would add bill {def.Value.Label} x{count} on {target.Value.Label} [{target.Value.Id}]."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.AddBill(target.Value.Id, def.Value.DefName, count);
@@ -130,7 +128,7 @@ public sealed class ProductionTools
         if (expected.Length > 0)
         {
             List<BillInfo> current = [.. _world.GetBills(target.Value.Id)];
-            BillInfo atNumber = current.FirstOrDefault(b => b.Index == bill);
+            BillInfo? atNumber = current.FirstOrDefault(b => b.Index == bill);
             if (atNumber != null && !atNumber.Label.Contains(expected, StringComparison.OrdinalIgnoreCase))
             {
                 string now = string.Join(", ", current.Select(b => string.Create(CultureInfo.InvariantCulture, $"[{b.Index}] {b.Label}")));
@@ -138,7 +136,7 @@ public sealed class ProductionTools
             }
         }
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would delete bill [{bill}] from {target.Value.Label} [{target.Value.Id}]."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would delete bill [{bill}] from {target.Value.Label} [{target.Value.Id}]."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.DeleteBill(target.Value.Id, bill);

@@ -1,8 +1,7 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -15,11 +14,11 @@ public sealed class WorkTools
 {
     private sealed class WorkPriorityChange
     {
-        public ColonistInfo Colonist;
-        public DefInfo Work;
+        public required ColonistInfo Colonist;
+        public required DefInfo Work;
         public int Priority;
         public int Previous;
-        public string PreviousLabel;
+        public required string PreviousLabel;
 
         public string Describe()
         {
@@ -28,10 +27,10 @@ public sealed class WorkTools
     }
 
     private readonly IGameWorld _world;
-    private readonly WorkUndoStack _undo;
-    private readonly ConfirmationGate _gate;
+    private readonly WorkUndoStack? _undo;
+    private readonly ConfirmationGate? _gate;
 
-    public WorkTools(IGameWorld world, WorkUndoStack undo = null, ConfirmationGate gate = null)
+    public WorkTools(IGameWorld world, WorkUndoStack? undo = null, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _undo = undo;
@@ -46,19 +45,19 @@ public sealed class WorkTools
         string[] parts = (assignments ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return ToolText.Error("assignments is empty. Use colonist:work=priority; colonist:work=priority.");
 
-        if (!TryParseAllAssignments(parts, out List<WorkPriorityChange> changes, out string parseError))
+        if (!TryParseAllAssignments(parts, out List<WorkPriorityChange> changes, out string? parseError))
         {
             return ToolText.Error(parseError);
         }
 
-        string blocked = ToolText.Blocked(_gate, "would set " + string.Join("; ", changes.Select(c => c.Describe())) + ".");
+        string? blocked = ToolText.Blocked(_gate, "would set " + string.Join("; ", changes.Select(c => c.Describe())) + ".");
         if (blocked != null) return blocked;
 
         // 1/2/4 可能讓遊戲自動開啟手動優先級；先記下來，復原時才不會留下副作用。
         bool oldUseWorkPriorities = _world.UseWorkPriorities;
         var applied = new List<WorkPriorityChange>();
         var notes = new List<string>();
-        string applyError = ApplyWorkPriorityChanges(changes, applied, notes);
+        string? applyError = ApplyWorkPriorityChanges(changes, applied, notes);
         if (applyError != null)
         {
             // 整批回滾時，也把 Agent 為了 1/2/4 打開的手動優先級還原，別留下半套副作用。
@@ -78,13 +77,13 @@ public sealed class WorkTools
         return "Set " + string.Join("; ", applied.Select(c => c.Describe())) + "." + suffix;
     }
 
-    private bool TryParseAllAssignments(string[] parts, out List<WorkPriorityChange> changes, out string error)
+    private bool TryParseAllAssignments(string[] parts, out List<WorkPriorityChange> changes, [NotNullWhen(false)] out string? error)
     {
         changes = [];
         error = null;
         foreach (string raw in parts)
         {
-            if (!TryParseAssignment(raw, out WorkPriorityChange change, out string err))
+            if (!TryParseAssignment(raw, out WorkPriorityChange? change, out string? err))
             {
                 error = err;
                 return false;
@@ -94,7 +93,7 @@ public sealed class WorkTools
         return true;
     }
 
-    private string ApplyWorkPriorityChanges(List<WorkPriorityChange> changes, List<WorkPriorityChange> applied, List<string> notes)
+    private string? ApplyWorkPriorityChanges(List<WorkPriorityChange> changes, List<WorkPriorityChange> applied, List<string> notes)
     {
         foreach (WorkPriorityChange change in changes)
         {
@@ -125,7 +124,7 @@ public sealed class WorkTools
         ["Artistic"] = "Art"
     };
 
-    private bool TryParseAssignment(string raw, out WorkPriorityChange change, out string error)
+    private bool TryParseAssignment(string raw, [NotNullWhen(true)] out WorkPriorityChange? change, [NotNullWhen(false)] out string? error)
     {
         change = null;
         error = null;
@@ -157,7 +156,7 @@ public sealed class WorkTools
         }
         string workName = part.Substring(colon + 1, equals - colon - 1).Trim();
         Result<DefInfo> work = DefResolver.Resolve(workName, _world.WorkTypes, "work type");
-        if (DefResolver.IsNoMatch(work) && SkillToWorkType.TryGetValue(workName, out string workAlias))
+        if (DefResolver.IsNoMatch(work) && SkillToWorkType.TryGetValue(workName, out string? workAlias))
         {
             work = DefResolver.Resolve(workAlias, _world.WorkTypes, "work type");
         }
@@ -166,7 +165,7 @@ public sealed class WorkTools
             error = work.Error;
             return false;
         }
-        WorkPriorityInfo current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
+        WorkPriorityInfo? current = pawn.Value.WorkPriorities.FirstOrDefault(w =>
             string.Equals(w.WorkTypeDefName, work.Value.DefName, StringComparison.OrdinalIgnoreCase));
         if (current != null && current.Disabled)
         {
@@ -243,7 +242,7 @@ public sealed class WorkTools
 
         string schedulePreview = string.Create(CultureInfo.InvariantCulture, $"would set hours {startHour}-{(endHour + 23) % 24} ") +
             $"({hours.Count} hours) to {assign.Value.Label} for {ToolText.Names(pawns.Value)}.";
-        string blockedSchedule = ToolText.Blocked(_gate, schedulePreview);
+        string? blockedSchedule = ToolText.Blocked(_gate, schedulePreview);
         if (blockedSchedule != null) return blockedSchedule;
 
         var failures = new List<string>();

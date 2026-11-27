@@ -23,6 +23,35 @@ public partial class ArchitectureBoundaryTests
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture)]
     private static partial Regex GameApiReferenceRegex { get; }
 
+    [GeneratedRegex(@"^\s*#\s*nullable\s+disable\b", RegexOptions.CultureInvariant | RegexOptions.Multiline)]
+    private static partial Regex NullableDisableRegex { get; }
+
+    [TestCase("RimAgent")]
+    [TestCase("RimAgent.A2A")]
+    public void NoNullableDisableDirectivesInProductionCode(string projectDirectory)
+    {
+        string sourceDir = Path.GetDirectoryName(FindSourceRoot());
+        string root = Path.Combine(sourceDir, projectDirectory);
+        var violations = new List<string>();
+        foreach (string file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(root, file);
+            if (relative.StartsWith("obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || relative.StartsWith("bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            string code = StripCommentsAndLiterals(File.ReadAllText(file));
+            if (NullableDisableRegex.IsMatch(code))
+            {
+                violations.Add(Path.GetRelativePath(sourceDir, file));
+            }
+        }
+
+        Assert.That(violations, Is.Empty,
+            "產品程式碼已全面啟用 Nullable，不得再新增 #nullable disable。");
+    }
+
     [TestCase("Tools")]
     [TestCase("Mcp")]
     public void DirectoryDoesNotReferenceGameApi(string directory)

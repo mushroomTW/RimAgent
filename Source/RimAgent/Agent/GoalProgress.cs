@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -30,11 +28,11 @@ public readonly struct GoalTurnDecision
     public readonly bool Pause;
     public readonly bool Blocked;
     public readonly bool NoProgress;
-    public readonly string BlockerKey;
+    public readonly string? BlockerKey;
 
     #pragma warning disable S107 // 狀態物件包含完整輪次決策資料
     public GoalTurnDecision(int turns, int blockedTurns, bool complete, bool pause,
-        bool blocked = false, string blockerKey = null,
+        bool blocked = false, string? blockerKey = null,
         int idleTurns = 0, bool noProgress = false)
     {
         Turns = turns;
@@ -56,8 +54,8 @@ public static partial class GoalProgress
     public const int MaxConsecutiveBlocks = 3;
     public const int MaxIdleTurns = 3;
 
-    public static string BuildPrompt(string objective, string confirmationReport = null,
-        bool needsVerification = false, string auditNote = null)
+    public static string BuildPrompt(string? objective, string? confirmationReport = null,
+        bool needsVerification = false, string? auditNote = null)
     {
         string confirmed = string.IsNullOrWhiteSpace(confirmationReport) ? string.Empty
             : "\n\nThe player responded to a confirmation from the previous turn. These are its actual execution results "
@@ -90,7 +88,7 @@ public static partial class GoalProgress
         return GoalAuditVerdict.Continue;
     }
 
-    public static GoalTurnStatus ParseStatus(string reply)
+    public static GoalTurnStatus ParseStatus(string? reply)
     {
         if (string.IsNullOrEmpty(reply)) return GoalTurnStatus.Continue;
         Match match = StatusMarker.Match(reply.TrimEnd(' ', '\t', '\r', '\n'));
@@ -100,7 +98,7 @@ public static partial class GoalProgress
         return value == "BLOCKED" ? GoalTurnStatus.Blocked : GoalTurnStatus.Continue;
     }
 
-    public static string VisibleReply(string reply)
+    public static string VisibleReply(string? reply)
     {
         string trimmed = (reply ?? string.Empty).TrimEnd(' ', '\t', '\r', '\n');
         Match match = StatusMarker.Match(trimmed);
@@ -108,7 +106,7 @@ public static partial class GoalProgress
     }
 
     /// <summary>完成證據必須是本輪最後一次實際修改後的成功查詢。</summary>
-    public static bool HasVerificationEvidence(IEnumerable<TranscriptEntry> entries, int instructionId)
+    public static bool HasVerificationEvidence(IEnumerable<TranscriptEntry>? entries, int instructionId)
     {
         bool verified = false;
         if (entries == null) return false;
@@ -134,7 +132,7 @@ public static partial class GoalProgress
     public const int AuditEvidenceMaxEntries = 20;
     public const int AuditEvidenceResultChars = 600;
 
-    public static string BuildAuditEvidence(IEnumerable<TranscriptEntry> entries, int instructionId)
+    public static string BuildAuditEvidence(IEnumerable<TranscriptEntry>? entries, int instructionId)
     {
         if (entries == null) return string.Empty;
         var relevant = new List<TranscriptEntry>();
@@ -168,8 +166,8 @@ public static partial class GoalProgress
     }
 
     #pragma warning disable S107 // 評估決策需傳入輪次相關各狀態變數
-    public static GoalTurnDecision AfterTurn(int previousTurns, int previousBlocks, string reply,
-        bool waitingConfirmation, bool hasToolEvidence, string previousBlockerKey = null,
+    public static GoalTurnDecision AfterTurn(int previousTurns, int previousBlocks, string? reply,
+        bool waitingConfirmation, bool hasToolEvidence, string? previousBlockerKey = null,
         int previousIdleTurns = 0, bool usedTool = false)
     {
         if (waitingConfirmation)
@@ -184,7 +182,7 @@ public static partial class GoalProgress
         {
             return new GoalTurnDecision(turns, 0, complete: true, pause: false);
         }
-        string blockerKey = DetermineBlockerKey(reply, status);
+        string? blockerKey = DetermineBlockerKey(reply, status);
         int blocks = DetermineBlocks(previousBlocks, previousBlockerKey, blockerKey);
         bool blocked = blocks >= MaxConsecutiveBlocks;
         bool turnLimit = turns >= MaxTurns;
@@ -195,14 +193,14 @@ public static partial class GoalProgress
     }
     #pragma warning restore S107
 
-    private static string DetermineBlockerKey(string reply, GoalTurnStatus status)
+    private static string? DetermineBlockerKey(string? reply, GoalTurnStatus status)
     {
         if (reply == null) return "model-error";
         if (status == GoalTurnStatus.Blocked) return GetBlockerKey(reply);
         return null;
     }
 
-    private static int DetermineBlocks(int previousBlocks, string previousBlockerKey, string blockerKey)
+    private static int DetermineBlocks(int previousBlocks, string? previousBlockerKey, string? blockerKey)
     {
         if (blockerKey == null) return 0;
         return string.Equals(previousBlockerKey, blockerKey, StringComparison.Ordinal) ? previousBlocks + 1 : 1;
@@ -216,7 +214,7 @@ public static partial class GoalProgress
         return "unspecified";
     }
 
-    private static string EscapeXml(string value)
+    private static string EscapeXml(string? value)
     {
         return (value ?? string.Empty).Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal).Replace(">", "&gt;", StringComparison.Ordinal);
     }

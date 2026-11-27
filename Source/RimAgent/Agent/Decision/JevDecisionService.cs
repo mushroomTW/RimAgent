@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -13,14 +11,14 @@ namespace RimAgent.Agent;
 /// <summary>TypeSafeAI 的型別只出現在方法內（不進任何欄位）：RimWorld 啟動時會掃描組件的欄位型別並要求全部能解析，欄位直接引用 SDK 型別會讓載入順序變成硬性相依。</summary>
 public sealed class JevDecisionService : IDecisionService
 {
-    private readonly RimLLMDecisionClient _client;
-    private readonly Func<string> _providerId;
-    private readonly Func<string> _model;
+    private readonly RimLLMDecisionClient? _client;
+    private readonly Func<string?>? _providerId;
+    private readonly Func<string?>? _model;
 
     /// <param name="client">框架的決策服務；null 代表不可用。</param>
     /// <param name="providerId">要用的決策供應商 id；null 或空字串代表沿用框架啟用的那一個。</param>
     /// <param name="model">要用的模型名稱；null 或空字串代表沿用該供應商設定的模型。</param>
-    public JevDecisionService(RimLLMDecisionClient client, Func<string> providerId = null, Func<string> model = null)
+    public JevDecisionService(RimLLMDecisionClient? client, Func<string?>? providerId = null, Func<string?>? model = null)
     {
         _client = client;
         _providerId = providerId;
@@ -46,7 +44,7 @@ public sealed class JevDecisionService : IDecisionService
         }
         if (nouls.Count == 0 && choices.Count == 0 && scores.Count == 0) return new DecisionResult();
 
-        QuestionSetResult result = await CallDecisionServiceAsync(state, questionSet, cancellationToken);
+        QuestionSetResult result = await CallDecisionServiceAsync(_client, state, questionSet, cancellationToken);
 
         var answers = new Dictionary<string, DecisionAnswer>(StringComparer.Ordinal);
         ProcessNoulAnswers(result, nouls, answers);
@@ -55,17 +53,17 @@ public sealed class JevDecisionService : IDecisionService
         return new DecisionResult(answers);
     }
 
-    private async Task<QuestionSetResult> CallDecisionServiceAsync(string state, QuestionSet questionSet, CancellationToken cancellationToken)
+    private async Task<QuestionSetResult> CallDecisionServiceAsync(RimLLMDecisionClient client, string state, QuestionSet questionSet, CancellationToken cancellationToken)
     {
         try
         {
-            string provider = _providerId?.Invoke();
-            string model = _model?.Invoke();
+            string? provider = _providerId?.Invoke();
+            string? model = _model?.Invoke();
             // 未指定供應商時走 EvaluateAsync，才能使用 RimLLM Framework 的決策備援鏈；
             // 呼叫端明確指定供應商時才走 EvaluateWithProviderAsync（依框架契約不換家）。
             return await (string.IsNullOrWhiteSpace(provider)
-                ? _client.EvaluateAsync(state, questionSet, model, cancellationToken)
-                : _client.EvaluateWithProviderAsync(state, questionSet, provider, model, cancellationToken))
+                ? client.EvaluateAsync(state, questionSet, model, cancellationToken)
+                : client.EvaluateWithProviderAsync(state, questionSet, provider, model, cancellationToken))
                 .ConfigureAwait(false);
         }
         catch (RimLLMException ex)
@@ -177,7 +175,7 @@ public sealed class JevDecisionService : IDecisionService
     }
 
     /// <summary>是非題的單段說明；空白時回 null，讓 SDK 視為沒帶這段判準。</summary>
-    private static TypeSafeContent? OptionalText(string text)
+    private static TypeSafeContent? OptionalText(string? text)
     {
         return string.IsNullOrWhiteSpace(text) ? (TypeSafeContent?)null : TypeSafeContent.FromText(text);
     }

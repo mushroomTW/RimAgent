@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -16,14 +14,14 @@ internal sealed partial class RimWorldGameWorld
     private const int MaxListedPatchedTypes = 15;
     private const int MaxListedPatchedMethods = 4;
 
-    private static DefLookupInfo LookupMod(string packageId)
+    private static DefLookupInfo? LookupMod(string packageId)
     {
-        ModContentPack mod = LoadedModManager.RunningModsListForReading.FirstOrDefault(m =>
+        ModContentPack? mod = LoadedModManager.RunningModsListForReading.FirstOrDefault(m =>
             string.Equals(m.PackageIdPlayerFacing, packageId, StringComparison.OrdinalIgnoreCase));
         if (mod == null) return null;
 
         var facts = new List<string>();
-        string authors = mod.ModMetaData?.AuthorsString;
+        string? authors = mod.ModMetaData?.AuthorsString;
         if (!string.IsNullOrWhiteSpace(authors)) facts.Add("Authors: " + authors);
 
         List<string> defTypes = [.. mod.AllDefs
@@ -59,13 +57,13 @@ internal sealed partial class RimWorldGameWorld
         var byType = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         foreach (MethodBase original in Harmony.GetAllPatchedMethods())
         {
-            Patches info = Harmony.GetPatchInfo(original);
+            Patches? info = Harmony.GetPatchInfo(original);
             if (info == null) continue;
             bool ours = info.Prefixes.Concat(info.Postfixes).Concat(info.Transpilers).Concat(info.Finalizers)
                 .Any(p => p.PatchMethod?.DeclaringType != null && own.Contains(p.PatchMethod.DeclaringType.Assembly));
             if (!ours || original.DeclaringType == null) continue;
             string type = original.DeclaringType.Name;
-            if (!byType.TryGetValue(type, out SortedSet<string> methods)) byType[type] = methods = new SortedSet<string>(StringComparer.Ordinal);
+            if (!byType.TryGetValue(type, out SortedSet<string>? methods)) byType[type] = methods = new SortedSet<string>(StringComparer.Ordinal);
             methods.Add(original.Name);
         }
         return [.. byType

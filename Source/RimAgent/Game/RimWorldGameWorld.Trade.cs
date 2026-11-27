@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -89,21 +87,21 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    public CommandResult ExecuteTrade(TradeRequest request)
+    public CommandResult ExecuteTrade(TradeRequest? request)
     {
-        CommandResult linesResult = ValidateTradeLines(request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells);
-        if (linesResult != null) return linesResult;
+        CommandResult? linesResult = ValidateTradeLines(request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells);
+        if (linesResult != null || request == null) return linesResult ?? CommandResult.Fail("no trade requested");
 
         // 玩家手動開著交易窗時不搶 TradeSession，否則對方的結算會被掀掉。
         if (TradeSession.Active) return CommandResult.Fail("a trade window is already open. Close it first.");
 
-        ITrader trader = FindTrader(request.TraderId);
-        CommandResult traderResult = ValidateTrader(trader, request.TraderId);
-        if (traderResult != null) return traderResult;
+        ITrader? trader = FindTrader(request.TraderId);
+        CommandResult? traderResult = ValidateTrader(trader, request.TraderId);
+        if (traderResult != null || trader == null) return traderResult ?? CommandResult.Fail("trader missing");
 
-        Pawn negotiator = FindColonist(request.NegotiatorPawnId);
-        CommandResult negResult = ValidateNegotiator(negotiator, trader);
-        if (negResult != null) return negResult;
+        Pawn? negotiator = FindColonist(request.NegotiatorPawnId);
+        CommandResult? negResult = ValidateNegotiator(negotiator, trader);
+        if (negResult != null || negotiator == null) return negResult ?? CommandResult.Fail("negotiator missing");
 
         // 之後全走遊戲的原生結算：價格、銀兩與物品交割都由 TradeDeal 處理，
         // 這裡只做「先驗證全部、再一次交割」，餘額或庫存不足整筆不做。
@@ -111,10 +109,10 @@ internal sealed partial class RimWorldGameWorld
         try
         {
             TradeDeal deal = TradeSession.deal;
-            CommandResult allocResult = ApplyAllocations(deal, trader, buys, sells);
+            CommandResult? allocResult = ApplyAllocations(deal, trader, buys, sells);
             if (allocResult != null) return allocResult;
 
-            CommandResult affordResult = ValidateAffordability(deal, trader, out int colonySilver, out int postDealSilver);
+            CommandResult? affordResult = ValidateAffordability(deal, trader, out int colonySilver, out int postDealSilver);
             if (affordResult != null) return affordResult;
 
             // 交割前先把收據算好：銀兩實際變動取自貨幣行的公式值，品項數量即交割數量。
@@ -133,18 +131,18 @@ internal sealed partial class RimWorldGameWorld
         }
     }
 
-    private static CommandResult ApplyAllocations(TradeDeal deal, ITrader trader, IReadOnlyList<TradeLine> buys, IReadOnlyList<TradeLine> sells)
+    private static CommandResult? ApplyAllocations(TradeDeal deal, ITrader trader, IReadOnlyList<TradeLine> buys, IReadOnlyList<TradeLine> sells)
     {
         var buyAllocations = new Dictionary<Tradeable, int>();
         var sellAllocations = new Dictionary<Tradeable, int>();
         foreach (TradeLine line in buys)
         {
-            string fail = Allocate(buyAllocations, deal, line, buy: true, TraderLabel(trader));
+            string? fail = Allocate(buyAllocations, deal, line, buy: true, TraderLabel(trader));
             if (fail != null) return CommandResult.Fail(fail);
         }
         foreach (TradeLine line in sells)
         {
-            string fail = Allocate(sellAllocations, deal, line, buy: false, TraderLabel(trader));
+            string? fail = Allocate(sellAllocations, deal, line, buy: false, TraderLabel(trader));
             if (fail != null) return CommandResult.Fail(fail);
         }
         foreach (Tradeable row in buyAllocations.Keys.Concat(sellAllocations.Keys).Distinct())
@@ -158,10 +156,10 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static CommandResult ValidateAffordability(TradeDeal deal, ITrader trader, out int colonySilver, out int postDealSilver)
+    private static CommandResult? ValidateAffordability(TradeDeal deal, ITrader trader, out int colonySilver, out int postDealSilver)
     {
         deal.UpdateCurrencyCount();
-        Tradeable currency = deal.CurrencyTradeable;
+        Tradeable? currency = deal.CurrencyTradeable;
         colonySilver = currency != null ? currency.CountHeldBy(Transactor.Colony) : 0;
         postDealSilver = currency != null ? currency.CountPostDealFor(Transactor.Colony) : 0;
         if (currency == null || postDealSilver < 0)
@@ -176,7 +174,7 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static string Allocate(Dictionary<Tradeable, int> allocations, TradeDeal deal, TradeLine line, bool buy, string traderLabel)
+    private static string? Allocate(Dictionary<Tradeable, int> allocations, TradeDeal deal, TradeLine line, bool buy, string traderLabel)
     {
         List<Tradeable> rows = [.. deal.AllTradeables.Where(r => !r.IsCurrency && r.ThingDef != null && string.Equals(r.ThingDef.defName, line.DefName, StringComparison.OrdinalIgnoreCase))];
         int rest = line.Count;
@@ -223,7 +221,7 @@ internal sealed partial class RimWorldGameWorld
         return trader.TraderName;
     }
 
-    private static CommandResult ValidateTradeLines(TradeRequest request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells)
+    private static CommandResult? ValidateTradeLines(TradeRequest? request, out IReadOnlyList<TradeLine> buys, out IReadOnlyList<TradeLine> sells)
     {
         buys = request?.Buys ?? [];
         sells = request?.Sells ?? [];
@@ -239,7 +237,7 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static CommandResult ValidateTrader(ITrader trader, string traderId)
+    private static CommandResult? ValidateTrader(ITrader? trader, string traderId)
     {
         if (trader == null) return CommandResult.Fail($"trader \"{traderId}\" was not found. List the traders again to get a valid id.");
         if (!trader.CanTradeNow) return CommandResult.Fail($"{TraderLabel(trader)} cannot trade right now.");
@@ -247,7 +245,7 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static CommandResult ValidateNegotiator(Pawn negotiator, ITrader trader)
+    private static CommandResult? ValidateNegotiator(Pawn? negotiator, ITrader trader)
     {
         if (negotiator == null) return CommandResult.Fail("negotiator was not found among the colonists.");
         if (negotiator.Downed) return CommandResult.Fail($"{negotiator.LabelShort} is downed and cannot negotiate.");
@@ -261,10 +259,10 @@ internal sealed partial class RimWorldGameWorld
         return null;
     }
 
-    private static ITrader FindTrader(string id)
+    private static ITrader? FindTrader(string id)
     {
         Map map = Map;
-        TradeShip ship = map.passingShipManager.passingShips.OfType<TradeShip>()
+        TradeShip? ship = map.passingShipManager.passingShips.OfType<TradeShip>()
             .FirstOrDefault(s => s.GetUniqueLoadID() == id);
         if (ship != null) return ship;
 

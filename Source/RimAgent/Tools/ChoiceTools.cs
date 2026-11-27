@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -16,9 +14,9 @@ public sealed class ChoiceTools
 {
     internal const string DialogIdPrefix = "dialog-";
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public ChoiceTools(IGameWorld world, ConfirmationGate gate = null)
+    public ChoiceTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -38,12 +36,12 @@ public sealed class ChoiceTools
     public string ChooseOption(
         [Description("Choice id from list_pending_choices, e.g. \"letter-12\".")] string choiceId,
         [Description("Option number from list_pending_choices.")] int option,
-        [Description("Only when the choice shows an Input line: the tile, target or selection in that format.")] string input = null)
+        [Description("Only when the choice shows an Input line: the tile, target or selection in that format.")] string? input = null)
     {
         string id = choiceId?.Trim() ?? string.Empty;
-        PendingChoiceInfo choice = _world.GetPendingChoices().FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
+        PendingChoiceInfo? choice = _world.GetPendingChoices().FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
         if (choice == null) return ToolText.Error($"no pending choice with id \"{id}\". Call list_pending_choices for the current ids.");
-        ChoiceOptionInfo picked = choice.Options.FirstOrDefault(o => o.Number == option);
+        ChoiceOptionInfo? picked = choice.Options.FirstOrDefault(o => o.Number == option);
         if (picked == null)
         {
             return ToolText.Error(string.Create(CultureInfo.InvariantCulture, $"\"{choice.Title}\" has no option {option}. Options: ") + string.Join("; ", choice.Options.Select(FormatOption)));
@@ -54,7 +52,7 @@ public sealed class ChoiceTools
         string inputPart = string.IsNullOrEmpty(input) ? string.Empty : $" Input: {input}.";
         string textPart = string.IsNullOrEmpty(choice.Text) ? string.Empty : "\n" + choice.Text;
         string given = inputPart + textPart;
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would answer \"{choice.Title}\" with option {option}: {picked.Text}.{given}"));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would answer \"{choice.Title}\" with option {option}: {picked.Text}.{given}"));
         if (blocked != null) return blocked;
 
         CommandResult r = _world.ChooseOption(choice.Id, option, input);

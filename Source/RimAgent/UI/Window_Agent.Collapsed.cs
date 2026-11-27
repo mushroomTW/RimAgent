@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -77,13 +75,13 @@ public partial class Window_Agent
     /// <summary>泡泡只在有話要說時出現：等待確認 > 執行中的動作 > 有新訊息。</summary>
     private void UpdateBubbleText()
     {
-        ColonyAgentSession session = RimAgentGameComponent.Instance?.Session;
+        ColonyAgentSession? session = RimAgentGameComponent.Instance?.Session;
         if (session == null)
         {
             _bubbleText = null;
             return;
         }
-        AgentActivity activity = session.Activity.Current;
+        AgentActivity? activity = session.Activity.Current;
         int state;
         if (session.HasPendingConfirmation) state = 1;
         else if (session.IsBusy) state = 2;
@@ -132,7 +130,7 @@ public partial class Window_Agent
 
     private void DrawCollapsedIcon(Rect inRect)
     {
-        ColonyAgentSession session = RimAgentGameComponent.Instance?.Session;
+        ColonyAgentSession? session = RimAgentGameComponent.Instance?.Session;
         bool busy = session?.IsBusy == true;
         bool pending = session?.HasPendingConfirmation == true;
         bool unread = session != null && session.Transcript.Version != _collapsedVersion;

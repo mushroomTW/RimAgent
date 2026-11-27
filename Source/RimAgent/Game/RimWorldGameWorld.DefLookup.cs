@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -21,7 +19,7 @@ internal sealed partial class RimWorldGameWorld
     private const int MaxListedNames = 10;
 
     // 原版私有方法：資訊卡的說明列 + StatDef 數值 + 材料係數。用反射呼叫才能與資訊卡一致；找不到時只剩 SpecialDisplayStats。
-    private static readonly MethodInfo StatsToDrawMethod =
+    private static readonly MethodInfo? StatsToDrawMethod =
         AccessTools.Method(typeof(StatsReportUtility), "StatsToDraw", [typeof(Def), typeof(ThingDef)]);
 
     private readonly Dictionary<string, IReadOnlyList<DefInfo>> _lookupCatalogs = new(StringComparer.OrdinalIgnoreCase);
@@ -29,14 +27,14 @@ internal sealed partial class RimWorldGameWorld
     public IReadOnlyList<DefInfo> GetLookupCatalog(string kind)
     {
         string key = kind ?? string.Empty;
-        if (_lookupCatalogs.TryGetValue(key, out IReadOnlyList<DefInfo> cached)) return cached;
+        if (_lookupCatalogs.TryGetValue(key, out IReadOnlyList<DefInfo>? cached)) return cached;
         if (string.Equals(key, DefLookupKind.Mod, StringComparison.OrdinalIgnoreCase))
         {
             List<DefInfo> mods = [.. LoadedModManager.RunningModsListForReading.Select(m => new DefInfo(m.PackageIdPlayerFacing, m.Name))];
             _lookupCatalogs[key] = mods;
             return mods;
         }
-        IEnumerable<Def> defs = key.ToLowerInvariant() switch
+        IEnumerable<Def>? defs = key.ToLowerInvariant() switch
         {
             // 藍圖、框架與屍體會讓名稱比對出一堆同名候選（「muffalo corpse」），不收。
             DefLookupKind.Thing => DefDatabase<ThingDef>.AllDefsListForReading.Where(d =>
@@ -53,10 +51,10 @@ internal sealed partial class RimWorldGameWorld
         return catalog;
     }
 
-    public DefLookupInfo LookupDef(string kind, string defName)
+    public DefLookupInfo? LookupDef(string kind, string defName)
     {
         if (string.Equals(kind, DefLookupKind.Mod, StringComparison.OrdinalIgnoreCase)) return LookupMod(defName);
-        Def def = (kind ?? string.Empty).ToLowerInvariant() switch
+        Def? def = (kind ?? string.Empty).ToLowerInvariant() switch
         {
             DefLookupKind.Thing => DefDatabase<ThingDef>.GetNamedSilentFail(defName),
             DefLookupKind.Terrain => DefDatabase<TerrainDef>.GetNamedSilentFail(defName),
@@ -67,7 +65,7 @@ internal sealed partial class RimWorldGameWorld
         if (def == null) return null;
 
         // 用材料做的東西沒給材料時，部分數值算不出來；資訊卡同樣以預設材料顯示。
-        ThingDef stuff = def is ThingDef { MadeFromStuff: true } made ? GenStuff.DefaultStuffFor(made) : null;
+        ThingDef? stuff = def is ThingDef { MadeFromStuff: true } made ? GenStuff.DefaultStuffFor(made) : null;
         var facts = new List<string>();
         if (def.modContentPack is { IsOfficialMod: false } source)
         {
@@ -83,7 +81,7 @@ internal sealed partial class RimWorldGameWorld
 
         return new DefLookupInfo
         {
-            Kind = kind.ToLowerInvariant(),
+            Kind = (kind ?? string.Empty).ToLowerInvariant(),
             DefName = def.defName,
             Label = def.label ?? def.defName,
             Description = (def.description ?? string.Empty).StripTags().Trim(),
@@ -92,13 +90,13 @@ internal sealed partial class RimWorldGameWorld
         };
     }
 
-    private static List<DefStatEntry> InfoCardStats(Def def, ThingDef stuff)
+    private static List<DefStatEntry> InfoCardStats(Def def, ThingDef? stuff)
     {
         var entries = new List<StatDrawEntry>();
         StatRequest req = def is BuildableDef buildable ? StatRequest.For(buildable, stuff) : StatRequest.ForEmpty();
         AddSafely(entries, () => def.SpecialDisplayStats(req));
         // StatsToDraw 第一個一定是說明列（DescriptionEntry），說明已另外輸出，跳過。
-        if (StatsToDrawMethod != null) AddSafely(entries, () => ((IEnumerable<StatDrawEntry>)StatsToDrawMethod.Invoke(null, [def, stuff])).Skip(1));
+        if (StatsToDrawMethod != null) AddSafely(entries, () => (StatsToDrawMethod.Invoke(null, [def, stuff]) as IEnumerable<StatDrawEntry>)?.Skip(1) ?? []);
 
         var stats = new List<(int Order, int Priority, DefStatEntry Entry)>();
         foreach (StatDrawEntry e in entries)
@@ -158,13 +156,13 @@ internal sealed partial class RimWorldGameWorld
 
     private static IEnumerable<string> PlantFacts(List<ThingDef> things, ThingDef def)
     {
-        string plants = NameList(things.Where(d => d.plant?.harvestedThingDef == def), d => string.Create(CultureInfo.InvariantCulture, $"{Name(d)} (yield {d.plant.harvestYield:0.#})"));
+        string? plants = NameList(things.Where(d => d.plant?.harvestedThingDef == def), d => string.Create(CultureInfo.InvariantCulture, $"{Name(d)} (yield {d.plant.harvestYield:0.#})"));
         if (plants != null) yield return "Harvested from: " + plants + ".";
     }
 
     private static IEnumerable<string> MineableFacts(List<ThingDef> things, ThingDef def)
     {
-        string rocks = NameList(things.Where(d => d.building?.mineableThing == def), d => string.Create(CultureInfo.InvariantCulture, $"{Name(d)} (yield {d.building.mineableYield})"));
+        string? rocks = NameList(things.Where(d => d.building?.mineableThing == def), d => string.Create(CultureInfo.InvariantCulture, $"{Name(d)} (yield {d.building.mineableYield})"));
         if (rocks != null) yield return "Mined from: " + rocks + ".";
     }
 
@@ -187,14 +185,14 @@ internal sealed partial class RimWorldGameWorld
 
     private static IEnumerable<string> IngredientFacts(ThingDef def)
     {
-        string ingredientIn = NameList(DefDatabase<RecipeDef>.AllDefsListForReading.Where(r =>
+        string? ingredientIn = NameList(DefDatabase<RecipeDef>.AllDefsListForReading.Where(r =>
             r.ingredients != null && r.ingredients.Any(i => i.IsFixedIngredient && i.FixedIngredient == def)), r => r.label ?? r.defName);
         if (ingredientIn != null) yield return "Ingredient of recipes: " + ingredientIn + ".";
     }
 
     private static IEnumerable<string> BuildFacts(List<ThingDef> things, ThingDef def)
     {
-        string builds = NameList(things.Where(d => d.BuildableByPlayer && CostsInclude(d, def))
+        string? builds = NameList(things.Where(d => d.BuildableByPlayer && CostsInclude(d, def))
             .Cast<BuildableDef>()
             .Concat(DefDatabase<TerrainDef>.AllDefsListForReading.Where(d => d.BuildableByPlayer && CostsInclude(d, def))), Name);
         if (builds != null) yield return "Used to build: " + builds + ".";
@@ -214,7 +212,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static IEnumerable<string> ResearchFacts(ResearchProjectDef def)
     {
-        string status = ResearchStatus(def);
+        string? status = ResearchStatus(def);
         if (status != null) yield return status;
         yield return string.Create(CultureInfo.InvariantCulture, $"Cost: {def.CostApparent:0}") + (def.knowledgeCategory != null ? $" ({def.knowledgeCategory.label} knowledge)" : string.Empty) + $"; tech level {def.techLevel.ToString().ToLowerInvariant()}.";
         List<ResearchProjectDef> prerequisites = [.. (def.prerequisites ?? []).Concat(def.hiddenPrerequisites ?? []).Distinct()];
@@ -222,7 +220,7 @@ internal sealed partial class RimWorldGameWorld
         if (def.requiredResearchBuilding != null) yield return "Needs research bench: " + Name(def.requiredResearchBuilding) + ".";
         if (!def.requiredResearchFacilities.NullOrEmpty()) yield return "Needs bench facilities: " + string.Join(", ", def.requiredResearchFacilities.Select(Name)) + ".";
         if (def.TechprintCount > 0) yield return string.Create(CultureInfo.InvariantCulture, $"Needs {def.TechprintCount} techprint(s)") + (Current.ProgramState == ProgramState.Playing ? string.Create(CultureInfo.InvariantCulture, $", {def.TechprintsApplied} applied.") : ".");
-        string unlocks = NameList(def.UnlockedDefs ?? [], d => d.label ?? d.defName);
+        string? unlocks = NameList(def.UnlockedDefs ?? [], d => d.label ?? d.defName);
         if (unlocks != null) yield return "Unlocks: " + unlocks + ".";
     }
 
@@ -241,7 +239,7 @@ internal sealed partial class RimWorldGameWorld
 
     private static bool CostsInclude(BuildableDef def, ThingDef material) => def.CostList != null && def.CostList.Any(c => c.thingDef == material);
 
-    private static string ResearchStatus(ResearchProjectDef def)
+    private static string? ResearchStatus(ResearchProjectDef def)
     {
         if (Current.ProgramState != ProgramState.Playing) return null;
         if (def.IsFinished) return "Status: finished.";
@@ -267,11 +265,11 @@ internal sealed partial class RimWorldGameWorld
 
     private static void AddNames(List<string> into, string how, IEnumerable<ThingDef> sources)
     {
-        string names = NameList(sources, Name);
+        string? names = NameList(sources, Name);
         if (names != null) into.Add(how + " " + names);
     }
 
-    private static string NameList<T>(IEnumerable<T> items, Func<T, string> name)
+    private static string? NameList<T>(IEnumerable<T> items, Func<T, string> name)
     {
         List<string> names = [.. items.Select(name).Distinct(StringComparer.Ordinal)];
         if (names.Count == 0) return null;

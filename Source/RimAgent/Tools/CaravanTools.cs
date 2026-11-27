@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -15,9 +13,9 @@ namespace RimAgent.Tools;
 public sealed partial class CaravanTools
 {
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public CaravanTools(IGameWorld world, ConfirmationGate gate = null)
+    public CaravanTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -65,7 +63,7 @@ public sealed partial class CaravanTools
                          $"({ToolText.Num(plan.DistanceTiles)} tiles, {WorldTools.Duration(plan.EtaTicks)}); mass {ToolText.Num(plan.MassUsage)}/{ToolText.Num(plan.MassCapacity)} kg, " +
                          $"{FoodText(plan.FoodDays)} of food. The members gather at a meeting point and leave the map together; it takes game time." +
                          (plan.Warnings.Count > 0 ? " Warnings: " + string.Join("; ", plan.Warnings.ToArray()) + "." : string.Empty);
-        string blocked = ToolText.Blocked(_gate, preview);
+        string? blocked = ToolText.Blocked(_gate, preview);
         if (blocked != null) return blocked;
 
         CommandResult result = _world.FormCaravan(request);
@@ -85,7 +83,7 @@ public sealed partial class CaravanTools
         if (!picked.Success) return picked.Error;
         FormingCaravanInfo f = picked.Value;
 
-        string blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would stop forming the caravan [{f.Id}] with {string.Join(", ", f.Members.Select(m => m.Name).ToArray())}; they drop the cargo and resume normal work."));
+        string? blocked = ToolText.Blocked(_gate, string.Create(CultureInfo.InvariantCulture, $"would stop forming the caravan [{f.Id}] with {string.Join(", ", f.Members.Select(m => m.Name).ToArray())}; they drop the cargo and resume normal work."));
         if (blocked != null) return blocked;
 
         CommandResult result = _world.CancelFormingCaravan(f.Id);
@@ -96,7 +94,7 @@ public sealed partial class CaravanTools
 
     private sealed class Prepared
     {
-        public CaravanRequest Request;
+        public required CaravanRequest Request;
     }
 
     private Result<Prepared> Prepare(string colonists, string animals, string cargo, string prisoners, int tile, int worldObjectId)
@@ -207,7 +205,7 @@ public sealed partial class CaravanTools
                 return Result<List<TradeLine>>.Fail(def.Error +
                     " Only items in colony storage or the home area that nobody has reserved can be carried; furniture such as bedrolls must be uninstalled first.");
             }
-            TradeLine existing = lines.FirstOrDefault(l => string.Equals(l.DefName, def.Value.DefName, StringComparison.OrdinalIgnoreCase));
+            TradeLine? existing = lines.FirstOrDefault(l => string.Equals(l.DefName, def.Value.DefName, StringComparison.OrdinalIgnoreCase));
             if (existing == null) lines.Add(new TradeLine { DefName = def.Value.DefName, Count = line.Count });
             else existing.Count += line.Count;
         }

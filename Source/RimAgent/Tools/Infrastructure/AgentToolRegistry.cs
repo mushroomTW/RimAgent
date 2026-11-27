@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,7 +25,7 @@ public sealed class ToolPermissions
         }
     }
 
-    public static ToolPermissions For(params ToolCategory[] enabled)
+    public static ToolPermissions For(params ToolCategory[]? enabled)
     {
         var permissions = new ToolPermissions();
         if (enabled == null) return permissions;
@@ -58,32 +56,32 @@ public sealed class AgentToolRegistry
 {
     private sealed class Entry
     {
-        public string Name;
+        public required string Name;
         public ToolCategory Category;
         public ToolRisk Risk;
-        public AITool Tool;
-        public string Pack;
+        public required AITool Tool;
+        public string? Pack;
     }
 
     private readonly List<Entry> _tools = [];
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
-    private readonly IRiskChecker _classifier;
-    private readonly PlayerInterjections _interjections;
-    private readonly FailureLoopGuard _loopGuard;
-    private readonly AgentActivityTracker _activity;
+    private readonly ConfirmationGate? _gate;
+    private readonly IRiskChecker? _classifier;
+    private readonly PlayerInterjections? _interjections;
+    private readonly FailureLoopGuard? _loopGuard;
+    private readonly AgentActivityTracker? _activity;
 
     public AgentToolRegistry(IGameWorld world, AgentTranscript transcript) : this(world, transcript, undo: null, gate: null)
     {
     }
 
-    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo)
+    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack? undo)
         : this(world, transcript, undo, gate: null)
     {
     }
 
 #pragma warning disable S107 // Tool registry aggregates all domain tool implementations
-    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack undo, ConfirmationGate gate, Mcp.McpManager mcp = null, IRiskChecker classifier = null, AgentMemoryStore memory = null, Func<bool> useLocalSearch = null, Func<string> searxngUrl = null, Func<IReadOnlyList<AgentSkill>> skills = null, PlayerInterjections interjections = null, AgentActivityTracker activity = null, Func<bool> layoutsEnabled = null, FailureLoopGuard loopGuard = null)
+    public AgentToolRegistry(IGameWorld world, AgentTranscript transcript, WorkUndoStack? undo, ConfirmationGate? gate, Mcp.McpManager? mcp = null, IRiskChecker? classifier = null, AgentMemoryStore? memory = null, Func<bool>? useLocalSearch = null, Func<string>? searxngUrl = null, Func<IReadOnlyList<AgentSkill>>? skills = null, PlayerInterjections? interjections = null, AgentActivityTracker? activity = null, Func<bool>? layoutsEnabled = null, FailureLoopGuard? loopGuard = null)
 #pragma warning restore S107
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -129,13 +127,13 @@ public sealed class AgentToolRegistry
     /// <summary>主 Agent 被截斷的工具結果原文；子代理各自用自己的 store，避免讀到別人的輸出。</summary>
     internal ToolOutputStore Outputs { get; } = new ToolOutputStore();
 
-    private IReadOnlyList<AITool> _allTools;
-    private IReadOnlyList<AgentToolDescriptor> _descriptors;
+    private IReadOnlyList<AITool>? _allTools;
+    private IReadOnlyList<AgentToolDescriptor>? _descriptors;
 
-    public IReadOnlyList<AITool> All => _allTools ?? (_allTools = [.. _tools.Select(t => t.Tool)]);
+    public IReadOnlyList<AITool> All => _allTools ??= [.. _tools.Select(t => t.Tool)];
 
     public IReadOnlyList<AgentToolDescriptor> Descriptors =>
-        _descriptors ?? (_descriptors = [.. _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk))]);
+        _descriptors ??= [.. _tools.Select(t => new AgentToolDescriptor(t.Name, t.Category, t.Risk))];
 
     /// <summary>依權限挑選完整工具清單；模式只管怎麼執行，不影響清單。</summary>
     public IList<AITool> Select(ToolPermissions permissions)
@@ -150,14 +148,14 @@ public sealed class AgentToolRegistry
         public IReadOnlyList<ToolPacks.Pack> Packs = [];
     }
 
-    internal MainAgentTools SelectForMainAgent(ToolPermissions permissions, ICollection<string> loadedPacks)
+    internal MainAgentTools SelectForMainAgent(ToolPermissions permissions, ICollection<string>? loadedPacks)
     {
         var result = new MainAgentTools();
         foreach (Entry t in WithOutputReader(Allowed(permissions)))
         {
             if (t.Pack != null)
             {
-                if (!result.PackTools.TryGetValue(t.Pack, out List<AITool> tools))
+                if (!result.PackTools.TryGetValue(t.Pack, out List<AITool>? tools))
                 {
                     tools = [];
                     result.PackTools[t.Pack] = tools;
@@ -190,7 +188,7 @@ public sealed class AgentToolRegistry
     }
 
     /// <summary>子代理專用版本；輸出儲存由 <see cref="SubagentTools"/> 在每次任務的呼叫流程上指定。</summary>
-    public IList<AITool> SelectForSubagent(ToolPermissions permissions, IReadOnlyList<ToolCategory> categories, bool readOnly)
+    public IList<AITool> SelectForSubagent(ToolPermissions permissions, IReadOnlyList<ToolCategory>? categories, bool readOnly)
     {
         ArgumentNullException.ThrowIfNull(permissions);
         var scoped = new ToolPermissions { Hidden = permissions.Hidden };
@@ -213,7 +211,7 @@ public sealed class AgentToolRegistry
         "choose_option"
     };
 
-    public static bool IsGenericActionTool(string name)
+    public static bool IsGenericActionTool(string? name)
     {
         return !string.IsNullOrEmpty(name) && GenericActionToolNames.Contains(name);
     }
@@ -239,7 +237,7 @@ public sealed class AgentToolRegistry
 
             // 說明交給 AIFunctionFactory 從 [Description] 讀取（description 傳 null）；
             // 建造工具在房型開關關掉時另給一段不提 layout 的說明。
-            string description = (target as BuildTools)?.DescriptionOverride(attribute.Name);
+            string? description = (target as BuildTools)?.DescriptionOverride(attribute.Name);
             AIFunction function = AIFunctionFactory.Create(method, target, attribute.Name, description, serializerOptions: null);
             Add(function, attribute.Category, attribute.Risk, transcript);
         }

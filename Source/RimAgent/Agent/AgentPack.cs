@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -63,7 +61,7 @@ public static class AgentPackLoader
     internal const string AutonomousFileName = "Autonomous.en.md";
     private const string PromptsFolderName = "Prompts";
 
-    public static AgentPack Load(string rootDir)
+    public static AgentPack Load(string? rootDir)
     {
         var pack = new AgentPack();
         if (string.IsNullOrEmpty(rootDir)) return pack;
@@ -157,11 +155,11 @@ public static class AgentPackLoader
     }
 
     /// <summary>切 `## 名稱` 章節；第一個標題之前是共用通則（<paramref name="preamble"/>）。同名以後者為準、key 嚴格比對；每行 Trim 後重組，縮排會被壓平，提示詞檔避免用縮排語法。</summary>
-    internal static IDictionary<string, string> ParseSections(string text, out string preamble)
+    internal static IDictionary<string, string> ParseSections(string? text, out string preamble)
     {
         var sections = new Dictionary<string, string>(StringComparer.Ordinal);
         var intro = new System.Text.StringBuilder();
-        string current = null;
+        string? current = null;
         var body = new System.Text.StringBuilder();
         bool inComment = false;
         List<string> lines = [.. Lines(text)];
@@ -197,7 +195,7 @@ public static class AgentPackLoader
         return sections;
     }
 
-    private static void FlushSection(Dictionary<string, string> sections, ref string current, System.Text.StringBuilder body)
+    private static void FlushSection(Dictionary<string, string> sections, ref string? current, System.Text.StringBuilder body)
     {
         if (current == null) return;
         if (current.Length > 0 && body.Length > 0)
@@ -209,7 +207,7 @@ public static class AgentPackLoader
     }
 
     /// <summary>只讀子代理（設定頁用，不必讀整個擴充包）；缺檔、壞檔一樣視為空。</summary>
-    public static IReadOnlyList<AgentSubagent> LoadSubagentsOnly(string rootDir)
+    public static IReadOnlyList<AgentSubagent> LoadSubagentsOnly(string? rootDir)
     {
         if (string.IsNullOrEmpty(rootDir)) return [];
         try
@@ -365,7 +363,7 @@ public static class AgentPackLoader
         }
     }
 
-    private static IEnumerable<string> Lines(string text)
+    private static IEnumerable<string> Lines(string? text)
     {
         foreach (string rawLine in (text ?? string.Empty).Split('\n'))
         {

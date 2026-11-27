@@ -1,18 +1,19 @@
-#nullable disable
+using System.Diagnostics.CodeAnalysis;
 
 namespace RimAgent.Tools;
 
 public class Result<T>
 {
-    protected Result(bool success, T value, string error)
+    protected Result(bool success, T? value, string? error)
     {
         Success = success;
         Value = value;
         Error = error ?? string.Empty;
     }
 
+    [MemberNotNullWhen(true, nameof(Value))]
     public bool Success { get; }
-    public T Value { get; }
+    public T? Value { get; }
     public string Error { get; }
 
     public static Result<T> Ok(T value)

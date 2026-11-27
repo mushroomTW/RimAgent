@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -15,9 +13,9 @@ public sealed class MedicalTools
     internal const int MaxConditionsListed = 30;
 
     private readonly IGameWorld _world;
-    private readonly ConfirmationGate _gate;
+    private readonly ConfirmationGate? _gate;
 
-    public MedicalTools(IGameWorld world, ConfirmationGate gate = null)
+    public MedicalTools(IGameWorld world, ConfirmationGate? gate = null)
     {
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _gate = gate;
@@ -37,7 +35,7 @@ public sealed class MedicalTools
 
         // 舊值要在命令之前抓：轉接層回傳的物件可能就是之後被改動的那一個。
         string previous = CareLabel(pawn.Value.MedicalCare);
-        string blocked = ToolText.Blocked(_gate, $"would set {pawn.Value.Name}'s medical care {previous} -> {care.Value.Label}.");
+        string? blocked = ToolText.Blocked(_gate, $"would set {pawn.Value.Name}'s medical care {previous} -> {care.Value.Label}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.SetMedicalCare(pawn.Value.Id, care.Value.DefName);
@@ -137,7 +135,7 @@ public sealed class MedicalTools
             BodyPartLabel = (part ?? string.Empty).Trim()
         };
         string where = request.BodyPartLabel.Length > 0 ? $" ({request.BodyPartLabel})" : string.Empty;
-        string blocked = ToolText.Blocked(_gate, $"would schedule {recipe.Value.Label} on {pawn.Value.Name}{where}.");
+        string? blocked = ToolText.Blocked(_gate, $"would schedule {recipe.Value.Label} on {pawn.Value.Name}{where}.");
         if (blocked != null) return blocked;
 
         CommandResult result = _world.ScheduleSurgery(request);
@@ -148,13 +146,13 @@ public sealed class MedicalTools
     /// <summary>沒有健康資料（世界沒回傳）視為健康，不炸。</summary>
     private static bool HasProblems(ColonistInfo c, Dictionary<int, ColonistHealthInfo> health)
     {
-        return health.TryGetValue(c.Id, out ColonistHealthInfo h)
+        return health.TryGetValue(c.Id, out ColonistHealthInfo? h)
             && (h.Conditions.Count > 0 || h.PendingSurgeries.Count > 0);
     }
 
     private string CareLabel(string defName)
     {
-        DefInfo match = _world.MedicalCareLevels.FirstOrDefault(d => string.Equals(d.DefName, defName, StringComparison.OrdinalIgnoreCase));
+        DefInfo? match = _world.MedicalCareLevels.FirstOrDefault(d => string.Equals(d.DefName, defName, StringComparison.OrdinalIgnoreCase));
         return match != null ? match.Label : defName;
     }
 }

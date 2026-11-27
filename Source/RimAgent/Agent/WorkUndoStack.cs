@@ -1,5 +1,3 @@
-#nullable disable
-
 using System.Collections.Generic;
 using System.Linq;
 using Verse;
@@ -17,7 +15,7 @@ public sealed class UndoWorkPriority : IExposable
     public void ExposeData()
     {
         int pawnId = PawnId;
-        string workType = WorkTypeDefName;
+        string? workType = WorkTypeDefName;
         int oldPriority = OldPriority;
         int newPriority = NewPriority;
         Scribe_Values.Look(ref pawnId, "pawnId");
@@ -43,8 +41,8 @@ public sealed class UndoTimeAssignment : IExposable
     {
         int pawnId = PawnId;
         int hour = Hour;
-        string assignment = OldAssignmentDefName;
-        string newAssignment = NewAssignmentDefName;
+        string? assignment = OldAssignmentDefName;
+        string? newAssignment = NewAssignmentDefName;
         Scribe_Values.Look(ref pawnId, "pawnId");
         Scribe_Values.Look(ref hour, "hour");
         Scribe_Values.Look(ref assignment, "oldAssignmentDefName");
@@ -72,9 +70,9 @@ public sealed class UndoFrame : IExposable
 
     public void ExposeData()
     {
-        string label = Label;
-        List<UndoWorkPriority> priorities = Priorities;
-        List<UndoTimeAssignment> assignments = Assignments;
+        string? label = Label;
+        List<UndoWorkPriority>? priorities = Priorities;
+        List<UndoTimeAssignment>? assignments = Assignments;
         bool hasOldUse = OldUseWorkPriorities.HasValue;
         bool oldUse = OldUseWorkPriorities ?? false;
         bool hasNewUse = NewUseWorkPriorities.HasValue;
@@ -101,7 +99,7 @@ public sealed class WorkUndoStack
 
     private readonly System.Threading.Lock _gate = new();
     private readonly List<UndoFrame> _frames = [];
-    private UndoFrame _open;
+    private UndoFrame? _open;
 
     public bool CanUndo
     {
@@ -169,11 +167,11 @@ public sealed class WorkUndoStack
         }
     }
 
-    public void EndFrame(string label)
+    public void EndFrame(string? label)
     {
         lock (_gate)
         {
-            UndoFrame frame = _open;
+            UndoFrame? frame = _open;
             _open = null;
             if (frame == null || frame.IsEmpty) return;
             frame.Label = label ?? string.Empty;
@@ -182,7 +180,7 @@ public sealed class WorkUndoStack
         }
     }
 
-    public UndoFrame Pop()
+    public UndoFrame? Pop()
     {
         lock (_gate)
         {
@@ -218,7 +216,7 @@ public sealed class WorkUndoStack
         }
     }
 
-    public void Restore(IEnumerable<UndoFrame> frames)
+    public void Restore(IEnumerable<UndoFrame>? frames)
     {
         lock (_gate)
         {

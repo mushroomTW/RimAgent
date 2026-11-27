@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +16,7 @@ public partial class Window_Agent
 {
     private void DrawStatusStrip(Rect rect, RimAgentGameComponent component, ColonyAgentSession session)
     {
-        RimAgentSettings settings = RimAgentMod.Settings;
+        RimAgentSettings? settings = RimAgentMod.Settings;
         var modeRect = new Rect(rect.x, rect.y, DropdownWidth, rect.height);
         // 執行或思考中也能切換：模式、思考強度與模型都是即時同步，下一次呼叫生效。
         bool enabled = settings != null;
@@ -67,7 +65,7 @@ public partial class Window_Agent
     private readonly TextCache<int> _undoLabel = new();
     private float _undoLabelWidth;
 
-    private void DrawModeButton(Rect modeRect, bool enabled, RimAgentSettings settings, ColonyAgentSession session)
+    private void DrawModeButton(Rect modeRect, bool enabled, RimAgentSettings? settings, ColonyAgentSession session)
     {
         string modeStatus = _modeLabel.Get(session.Mode, mode => "RimAgent.Mode.Status".Translate(ModeLabel(mode)).ToString());
         if (DrawUnifiedButton(modeRect, modeStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
@@ -85,7 +83,7 @@ public partial class Window_Agent
         if (Mouse.IsOver(modeRect)) TooltipHandler.TipRegion(modeRect, ModeDescription(session.Mode));
     }
 
-    private Rect DrawReasoningButton(Rect reasoningRect, bool enabled, RimAgentSettings settings)
+    private Rect DrawReasoningButton(Rect reasoningRect, bool enabled, RimAgentSettings? settings)
     {
         ReasoningLevel current = settings != null ? settings.reasoning : ReasoningLevel.Auto;
         bool routing = settings != null && settings.reasoningRouting;
@@ -104,7 +102,7 @@ public partial class Window_Agent
         return reasoningRect;
     }
 
-    private static void DrawReasoningMenu(Rect reasoningRect, string reasoningStatus, bool enabled, RimAgentSettings settings)
+    private static void DrawReasoningMenu(Rect reasoningRect, string reasoningStatus, bool enabled, RimAgentSettings? settings)
     {
         if (DrawUnifiedButton(reasoningRect, reasoningStatus, ControlBorderColor, TitleColor, enabled, GameFont.Tiny))
         {
@@ -124,7 +122,7 @@ public partial class Window_Agent
         }
     }
 
-    private void DrawModelButton(Rect modelRect, bool enabled, RimAgentSettings settings)
+    private void DrawModelButton(Rect modelRect, bool enabled, RimAgentSettings? settings)
     {
         string model = settings != null ? settings.agentModel ?? string.Empty : string.Empty;
         if (Mathf.Abs(modelRect.width - _modelLabelWidth) >= 0.5f)
@@ -202,14 +200,14 @@ public partial class Window_Agent
         return RimAgentMod.ReasoningKey(level).Translate();
     }
 
-    private static void SetMode(RimAgentSettings settings, AgentMode mode)
+    private static void SetMode(RimAgentSettings? settings, AgentMode mode)
     {
         if (settings == null || settings.mode == mode) return;
         settings.mode = mode;
         settings.Write();
     }
 
-    private static void SetReasoning(RimAgentSettings settings, ReasoningLevel level)
+    private static void SetReasoning(RimAgentSettings? settings, ReasoningLevel level)
     {
         if (settings == null || (settings.reasoning == level && !settings.reasoningRouting)) return;
         settings.reasoning = level;
@@ -217,14 +215,14 @@ public partial class Window_Agent
         settings.Write();
     }
 
-    private static void SetReasoningRouting(RimAgentSettings settings)
+    private static void SetReasoningRouting(RimAgentSettings? settings)
     {
         if (settings == null || settings.reasoningRouting) return;
         settings.reasoningRouting = true;
         settings.Write();
     }
 
-    private void SetModel(RimAgentSettings settings, string model)
+    private void SetModel(RimAgentSettings? settings, string model)
     {
         if (settings == null || string.Equals(settings.agentModel, model, StringComparison.Ordinal)) return;
         settings.agentModel = model;
@@ -232,7 +230,7 @@ public partial class Window_Agent
         ProbeCapabilities();
     }
 
-    private static string ModelShortName(string model)
+    private static string ModelShortName(string? model)
     {
         if (string.IsNullOrWhiteSpace(model)) return "RimAgent.Model.Default".Translate();
         string trimmed = model.Trim();

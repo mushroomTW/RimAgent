@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -19,7 +17,7 @@ public sealed class SdkMcpServer : IMcpServer
     private readonly McpServerEntry _entry;
     private readonly int _timeoutMs;
     private readonly Lock _gate = new();
-    private McpClient _client;
+    private McpClient? _client;
     private bool _disposed;
 
     public SdkMcpServer(McpServerEntry entry)
@@ -57,7 +55,7 @@ public sealed class SdkMcpServer : IMcpServer
         try
         {
             McpClient client = await EnsureConnectedAsync(timeout.Token).ConfigureAwait(false);
-            Dictionary<string, object> args = ParseArgs(argsJson);
+            Dictionary<string, object?> args = ParseArgs(argsJson);
             CallToolResult result = await client.CallToolAsync(tool, args, cancellationToken: timeout.Token).ConfigureAwait(false);
             return FormatResult(tool, result);
         }
@@ -77,7 +75,7 @@ public sealed class SdkMcpServer : IMcpServer
 
     public void Dispose()
     {
-        McpClient client;
+        McpClient? client;
         lock (_gate)
         {
             if (_disposed) return;
@@ -88,7 +86,7 @@ public sealed class SdkMcpServer : IMcpServer
         DisposeClientInBackground(client);
     }
 
-    private static void DisposeClientInBackground(McpClient client)
+    private static void DisposeClientInBackground(McpClient? client)
     {
         if (client == null) return;
         // 遊戲主線程不等待：SDK 的 dispose 會關行程，OS 回收兜底。
@@ -125,7 +123,7 @@ public sealed class SdkMcpServer : IMcpServer
         };
         // transport 的生命週期交給建好的 client；建連失敗時沒有可清的東西，直接往上丟。
         McpClient client = await McpClient.CreateAsync(transport, options, cancellationToken: cancellationToken).ConfigureAwait(false);
-        McpClient toDispose = null;
+        McpClient? toDispose = null;
         bool disposed;
         lock (_gate)
         {
@@ -149,9 +147,9 @@ public sealed class SdkMcpServer : IMcpServer
         return client;
     }
 
-    internal static Dictionary<string, object> ParseArgs(string argsJson)
+    internal static Dictionary<string, object?> ParseArgs(string? argsJson)
     {
-        var args = new Dictionary<string, object>(StringComparer.Ordinal);
+        var args = new Dictionary<string, object?>(StringComparer.Ordinal);
         if (string.IsNullOrWhiteSpace(argsJson)) return args;
         using (JsonDocument doc = JsonDocument.Parse(argsJson))
         {
@@ -167,7 +165,7 @@ public sealed class SdkMcpServer : IMcpServer
         return args;
     }
 
-    internal static string FormatResult(string tool, CallToolResult result)
+    internal static string FormatResult(string tool, CallToolResult? result)
     {
         if (result == null) return ToolText.Error("MCP tool " + tool + " returned nothing.");
         var sb = new StringBuilder();
@@ -186,7 +184,7 @@ public sealed class SdkMcpServer : IMcpServer
         return output;
     }
 
-    private static void AppendContentBlock(StringBuilder sb, ContentBlock block)
+    private static void AppendContentBlock(StringBuilder sb, ContentBlock? block)
     {
         if (block is TextContentBlock text)
         {

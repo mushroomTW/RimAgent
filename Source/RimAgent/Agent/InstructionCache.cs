@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace RimAgent.Agent;
 
@@ -16,7 +15,7 @@ internal sealed class InstructionCache<TValue>
         new(StringComparer.Ordinal);
     private readonly System.Threading.Lock _gate = new();
 
-    public bool TryGet(string key, out TValue value)
+    public bool TryGet(string? key, [MaybeNullWhen(false)] out TValue value)
     {
         lock (_gate)
         {
@@ -24,7 +23,7 @@ internal sealed class InstructionCache<TValue>
         }
     }
 
-    public void Store(string key, TValue value)
+    public void Store(string? key, TValue value)
     {
         lock (_gate)
         {
@@ -35,12 +34,12 @@ internal sealed class InstructionCache<TValue>
         }
     }
 
-    public void AddOrUpdate(string key, Func<bool, TValue, TValue> update)
+    public void AddOrUpdate(string? key, Func<bool, TValue?, TValue> update)
     {
         lock (_gate)
         {
             key ??= string.Empty;
-            bool exists = _entries.TryGetValue(key, out TValue previous);
+            bool exists = _entries.TryGetValue(key, out TValue? previous);
             if (!exists && _entries.Count >= MaxEntries) return;
             _entries[key] = update(exists, previous);
         }

@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading;
 
@@ -22,7 +21,7 @@ internal sealed class ToolOutputStore
     public const int MaxTotalChars = 2000000;
 
     // 子代理與主 Agent 共用同一批工具實例；用呼叫流程上的 AsyncLocal 分流，平行任務不會互相寫入。
-    private static readonly AsyncLocal<ToolOutputStore> Scoped = new();
+    private static readonly AsyncLocal<ToolOutputStore?> Scoped = new();
 
     private readonly Lock _lock = new();
     private readonly Dictionary<string, string> _outputs = [];
@@ -30,21 +29,21 @@ internal sealed class ToolOutputStore
     private int _next;
     private long _totalChars;
 
-    public static ToolOutputStore Current => Scoped.Value;
+    public static ToolOutputStore? Current => Scoped.Value;
 
     public static IDisposable EnterScope(ToolOutputStore store)
     {
         ArgumentNullException.ThrowIfNull(store);
-        ToolOutputStore previous = Scoped.Value;
+        ToolOutputStore? previous = Scoped.Value;
         Scoped.Value = store;
         return new ScopeExit(previous);
     }
 
     private sealed class ScopeExit : IDisposable
     {
-        private readonly ToolOutputStore _previous;
+        private readonly ToolOutputStore? _previous;
 
-        public ScopeExit(ToolOutputStore previous)
+        public ScopeExit(ToolOutputStore? previous)
         {
             _previous = previous;
         }
@@ -79,7 +78,7 @@ internal sealed class ToolOutputStore
         }
     }
 
-    public bool TryGet(string id, out string text)
+    public bool TryGet(string? id, [NotNullWhen(true)] out string? text)
     {
         lock (_lock)
         {

@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -36,19 +34,19 @@ public sealed class DecisionReasoningRouter
         ["high"] = "Deep: risky or far-reaching decisions, combat, or long multi-step plans."
     };
 
-    private readonly IDecisionService _decisionService;
-    private readonly Func<IDecisionService> _serviceFactory;
-    private readonly Func<RimAgentSettings> _settingsProvider;
-    private readonly Func<IReadOnlyList<ChatMessage>> _historyProvider;
-    private DecisionRoute _last;
+    private readonly IDecisionService? _decisionService;
+    private readonly Func<IDecisionService?>? _serviceFactory;
+    private readonly Func<RimAgentSettings?> _settingsProvider;
+    private readonly Func<IReadOnlyList<ChatMessage>?>? _historyProvider;
+    private DecisionRoute? _last;
 
     public const int ShortFollowUpChars = 8;
 
     public DecisionReasoningRouter(
-        IDecisionService decisionService = null,
-        Func<IDecisionService> serviceFactory = null,
-        Func<RimAgentSettings> settingsProvider = null,
-        Func<IReadOnlyList<ChatMessage>> historyProvider = null)
+        IDecisionService? decisionService = null,
+        Func<IDecisionService?>? serviceFactory = null,
+        Func<RimAgentSettings?>? settingsProvider = null,
+        Func<IReadOnlyList<ChatMessage>?>? historyProvider = null)
     {
         _decisionService = decisionService;
         _serviceFactory = serviceFactory;
@@ -57,13 +55,13 @@ public sealed class DecisionReasoningRouter
     }
 
     #pragma warning disable VSTHRD202 // 保留 async：讀設定與建題目的例外要放進 Task，不在呼叫當下同步拋出。
-    public async Task<DecisionRoute> ResolveAsync(string request, CancellationToken ct = default)
+    public async Task<DecisionRoute> ResolveAsync(string? request, CancellationToken ct = default)
     {
-        RimAgentSettings settings = _settingsProvider?.Invoke();
+        RimAgentSettings? settings = _settingsProvider?.Invoke();
         ReasoningLevel fallbackReasoning = settings?.decisionFallbackReasoning ?? ReasoningLevel.Auto;
         float minConfidence = settings != null ? settings.decisionRoutingMinConfidence : 0.6f;
 
-        DecisionRoute last = _last;
+        DecisionRoute? last = _last;
         if (last != null && IsShortFollowUp(request))
         {
             return new DecisionRoute
@@ -74,7 +72,7 @@ public sealed class DecisionReasoningRouter
             };
         }
 
-        IDecisionService service = _decisionService ?? _serviceFactory?.Invoke();
+        IDecisionService? service = _decisionService ?? _serviceFactory?.Invoke();
         if (service == null)
             return FallbackRoute(fallbackReasoning, "Decision model service is unavailable or not configured.");
 
@@ -92,7 +90,7 @@ public sealed class DecisionReasoningRouter
     /// <summary>清空對話後，短句不再是上一句的後續。</summary>
     internal void Reset() => _last = null;
 
-    internal static bool IsShortFollowUp(string request)
+    internal static bool IsShortFollowUp(string? request)
     {
         string text = request?.Trim() ?? string.Empty;
         return text.Length > 0 && text.Length <= ShortFollowUpChars;
@@ -114,7 +112,7 @@ public sealed class DecisionReasoningRouter
             return FallbackRoute(fallbackReasoning, "Decision model evaluation failed: " + ex.Message);
         }
 
-        if (result == null || !result.TryGet(QuestionId, out DecisionAnswer answer) || !TryParseLevel(answer?.Value, out ReasoningLevel level))
+        if (result == null || !result.TryGet(QuestionId, out DecisionAnswer? answer) || !TryParseLevel(answer.Value, out ReasoningLevel level))
         {
             return FallbackRoute(fallbackReasoning, "Decision model returned no reasoning level.");
         }
@@ -134,10 +132,10 @@ public sealed class DecisionReasoningRouter
         };
     }
 
-    private static bool TryParseLevel(string value, out ReasoningLevel level)
+    private static bool TryParseLevel(string? value, out ReasoningLevel level)
     {
         level = ReasoningLevel.Auto;
-        string key = value?.Trim();
+        string? key = value?.Trim();
         return !string.IsNullOrEmpty(key) && Levels.ContainsKey(key) && Enum.TryParse(key, ignoreCase: true, out level);
     }
 
@@ -152,7 +150,7 @@ public sealed class DecisionReasoningRouter
         };
     }
 
-    public static string Describe(string request, IEnumerable<ChatMessage> history = null)
+    public static string Describe(string? request, IEnumerable<ChatMessage>? history = null)
     {
         var sb = new StringBuilder(DescribeHistory(history));
         sb.Append("<instruction>\n").Append(Escape(request?.Trim() ?? string.Empty)).Append("\n</instruction>");
@@ -160,7 +158,7 @@ public sealed class DecisionReasoningRouter
     }
 
     /// <summary>最近幾回合對話（玩家原話與 Agent 回覆截頭尾）；思考強度分流使用。</summary>
-    public static string DescribeHistory(IEnumerable<ChatMessage> history)
+    public static string DescribeHistory(IEnumerable<ChatMessage>? history)
     {
         var sb = new StringBuilder();
         AppendRecentHistory(sb, history, includeAssistant: true);
@@ -168,14 +166,14 @@ public sealed class DecisionReasoningRouter
     }
 
     /// <summary>最近幾回合的玩家原話（排除助理回覆，避免間接提示注入偽造授權）；風險審查使用。</summary>
-    public static string DescribeUserHistory(IEnumerable<ChatMessage> history)
+    public static string DescribeUserHistory(IEnumerable<ChatMessage>? history)
     {
         var sb = new StringBuilder();
         AppendRecentHistory(sb, history, includeAssistant: false);
         return sb.ToString();
     }
 
-    private static void AppendRecentHistory(StringBuilder sb, IEnumerable<ChatMessage> history, bool includeAssistant)
+    private static void AppendRecentHistory(StringBuilder sb, IEnumerable<ChatMessage>? history, bool includeAssistant)
     {
         if (history == null) return;
         List<ChatMessage> relevant;
@@ -218,7 +216,7 @@ public sealed class DecisionReasoningRouter
         }
     }
 
-    private static string Escape(string value)
+    private static string Escape(string? value)
     {
         return (value ?? string.Empty).Replace("<", "\\<", StringComparison.Ordinal);
     }

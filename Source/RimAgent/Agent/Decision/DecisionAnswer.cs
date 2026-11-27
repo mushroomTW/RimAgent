@@ -1,7 +1,6 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace RimAgent.Agent;
 
@@ -13,7 +12,7 @@ public sealed class DecisionAnswer
     public double? Probability { get; init; }
 
     /// <summary>Choice：被選中的選項值。Score：被評的等級。</summary>
-    public string Value { get; init; }
+    public string? Value { get; init; }
 
     /// <summary>Score 題目回傳的分數；其他題型沒有這個值。</summary>
     public double? Score { get; init; }
@@ -29,7 +28,7 @@ public sealed class DecisionResult
 {
     private readonly Dictionary<string, DecisionAnswer> _answers;
 
-    public DecisionResult(IReadOnlyDictionary<string, DecisionAnswer> answers = null)
+    public DecisionResult(IReadOnlyDictionary<string, DecisionAnswer>? answers = null)
     {
         _answers = answers == null
             ? new Dictionary<string, DecisionAnswer>(StringComparer.Ordinal)
@@ -38,7 +37,7 @@ public sealed class DecisionResult
 
     public IReadOnlyDictionary<string, DecisionAnswer> Answers => _answers;
 
-    public bool TryGet(string id, out DecisionAnswer answer)
+    public bool TryGet(string? id, [NotNullWhen(true)] out DecisionAnswer? answer)
     {
         if (string.IsNullOrEmpty(id))
         {
@@ -48,8 +47,8 @@ public sealed class DecisionResult
         return _answers.TryGetValue(id, out answer);
     }
 
-    public DecisionAnswer Get(string id)
+    public DecisionAnswer? Get(string? id)
     {
-        return TryGet(id, out DecisionAnswer answer) ? answer : null;
+        return TryGet(id, out DecisionAnswer? answer) ? answer : null;
     }
 }

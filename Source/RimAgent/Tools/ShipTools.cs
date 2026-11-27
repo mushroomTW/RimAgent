@@ -1,5 +1,3 @@
-#nullable disable
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -48,7 +46,7 @@ public sealed class ShipTools
             .Select(r => (r.Label, Missing: r.Count - groups[0].Count(p => p.DefName == r.DefName)))
             .Where(m => m.Missing > 0)
             .Select(m => string.Create(CultureInfo.InvariantCulture, $"Missing from group 1: {m.Missing} {m.Label}.")));
-        problems.AddRange(parts.Select(p => DescribeBlockedEntry(p, parts)).Where(text => text != null));
+        problems.AddRange(parts.Select(p => DescribeBlockedEntry(p, parts)).OfType<string>());
 
         if (problems.Count == 0) return sb.Append("Layout OK: every required part is connected and casket entry cells are free.").ToString();
         sb.AppendLine("Problems:");
@@ -140,12 +138,12 @@ public sealed class ShipTools
         return string.Join(" and ", steps);
     }
 
-    private static string DescribeBlockedEntry(ShipPartInfo part, IReadOnlyList<ShipPartInfo> parts)
+    private static string? DescribeBlockedEntry(ShipPartInfo part, IReadOnlyList<ShipPartInfo> parts)
     {
         if (part.InteractionCell is not { } cell) return null;
         // 藍圖與框架不擋路，世界那邊看不出來，完工後才會擋住，所以要比對其他零件。休眠艙可穿過，不算阻擋。
-        ShipPartInfo cover = parts.FirstOrDefault(p => p != part && p.DefName != "Ship_CryptosleepCasket" && p.Rect.Contains(cell.X, cell.Z));
-        string blocker = cover != null ? $"{cover.Label} {cover.Rect}" : part.InteractionBlockedBy;
+        ShipPartInfo? cover = parts.FirstOrDefault(p => p != part && p.DefName != "Ship_CryptosleepCasket" && p.Rect.Contains(cell.X, cell.Z));
+        string? blocker = cover != null ? $"{cover.Label} {cover.Rect}" : part.InteractionBlockedBy;
         return blocker == null ? null : string.Create(CultureInfo.InvariantCulture, $"{part.Label} #{part.Id}: colonists enter from {ToolText.Cell(cell.X, cell.Z)}, which is blocked by {blocker}. Without entry the casket cannot be boarded.");
     }
 }
